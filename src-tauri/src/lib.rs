@@ -45,6 +45,16 @@ fn get_server_secret(state: tauri::State<'_, Mutex<ServerState>>) -> String {
     state.lock().unwrap().secret.clone()
 }
 
+#[tauri::command]
+fn save_file_to_downloads(filename: String, content: String) -> Result<String, String> {
+    let downloads_dir = dirs::download_dir()
+        .ok_or_else(|| "Could not determine Downloads directory".to_string())?;
+    let path = downloads_dir.join(&filename);
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 fn show_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         #[cfg(target_os = "macos")]
@@ -300,7 +310,7 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_server_port, get_server_secret])
+        .invoke_handler(tauri::generate_handler![get_server_port, get_server_secret, save_file_to_downloads])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
