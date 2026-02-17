@@ -63,10 +63,11 @@ type JSONLRecord = SDKMessage & {
 
 /**
  * Encode a file path for use in Claude's directory structure.
- * Claude uses a simple encoding where / becomes -
+ * Claude uses a simple encoding where path separators become -
+ * Handles both / (Unix) and \ (Windows) separators.
  */
 function encodePathForClaude(path: string): string {
-	return path.replace(/\//g, "-");
+	return path.replace(/[/\\]/g, "-");
 }
 
 /**

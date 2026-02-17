@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
 	getLastMessageError,
@@ -16,7 +16,8 @@ describe("persistence", () => {
 
 			// Should remove leading slash and replace remaining slashes with dashes
 			assert.ok(result.includes("home-user-workspace"));
-			assert.ok(result.includes(".claude/projects"));
+			// path.join produces OS-native separators
+			assert.ok(result.includes(`.claude${sep}projects`));
 		});
 
 		it("handles root directory", () => {
@@ -24,7 +25,7 @@ describe("persistence", () => {
 			const result = getSessionDirectoryForCwd(cwd);
 
 			// Root should become empty string after removing leading slash
-			assert.ok(result.includes(".claude/projects"));
+			assert.ok(result.includes(`.claude${sep}projects`));
 		});
 
 		it("handles nested paths", () => {

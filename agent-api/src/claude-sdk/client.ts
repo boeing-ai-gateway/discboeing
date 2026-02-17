@@ -1,4 +1,5 @@
 import { access, constants } from "node:fs/promises";
+import { delimiter, join as pathJoin, sep } from "node:path";
 import {
 	type Options,
 	query,
@@ -53,39 +54,49 @@ async function findClaudeCLI(): Promise<string | null> {
 		return process.env.CLAUDE_CLI_PATH;
 	}
 
+	const isWindows = process.platform === "win32";
+	// On Windows, also check for .cmd and .exe extensions
+	const binaryNames = isWindows
+		? ["claude.cmd", "claude.exe", "claude"]
+		: ["claude"];
+
 	// Build list of paths to check (PATH + common locations)
 	const pathsToCheck: string[] = [];
 
 	// Add directories from PATH environment variable
+	// Use path.delimiter (';' on Windows, ':' on Unix)
 	if (process.env.PATH) {
-		const pathDirs = process.env.PATH.split(":");
+		const pathDirs = process.env.PATH.split(delimiter);
 		for (const dir of pathDirs) {
 			if (dir) {
-				pathsToCheck.push(`${dir}/claude`);
+				for (const bin of binaryNames) {
+					pathsToCheck.push(pathJoin(dir, bin));
+				}
 			}
 		}
 	}
 
 	// Add common installation locations as fallback
-	const commonPaths = [
-		process.env.HOME ? `${process.env.HOME}/.local/bin/claude` : null,
-		"/usr/bin/claude",
-		"/usr/local/bin/claude",
-		"/opt/homebrew/bin/claude",
-	].filter(Boolean) as string[];
+	if (!isWindows) {
+		const commonPaths = [
+			process.env.HOME ? `${process.env.HOME}/.local/bin/claude` : null,
+			"/usr/bin/claude",
+			"/usr/local/bin/claude",
+			"/opt/homebrew/bin/claude",
+		].filter(Boolean) as string[];
 
-	// Add common paths if not already in pathsToCheck
-	for (const commonPath of commonPaths) {
-		if (!pathsToCheck.includes(commonPath)) {
-			pathsToCheck.push(commonPath);
+		for (const commonPath of commonPaths) {
+			if (!pathsToCheck.includes(commonPath)) {
+				pathsToCheck.push(commonPath);
+			}
 		}
 	}
 
 	// Try each path in order
 	for (const path of pathsToCheck) {
 		try {
-			// Check if file exists and is executable
-			await access(path, constants.X_OK);
+			// On Windows, check existence only (X_OK is not reliable)
+			await access(path, isWindows ? constants.F_OK : constants.X_OK);
 			console.log(`[SDK] Found Claude CLI at: ${path}`);
 			return path;
 		} catch {

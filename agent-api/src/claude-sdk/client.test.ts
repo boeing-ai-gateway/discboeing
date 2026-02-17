@@ -383,6 +383,9 @@ describe("ClaudeSDKClient session restoration after restart", () => {
 	const CLAUDE_SESSION_ID = "test-claude-session-uuid-123";
 	const DISCOBOT_SESSION_ID = "my-discobot-session";
 
+	let savedHome: string | undefined;
+	let savedUserProfile: string | undefined;
+
 	before(() => {
 		// Create test directories
 		mkdirSync(join(CLAUDE_PROJECTS_DIR, ENCODED_CWD), { recursive: true });
@@ -391,7 +394,11 @@ describe("ClaudeSDKClient session restoration after restart", () => {
 		// Set env vars to use test files
 		process.env.SESSION_FILE = testSessionFile;
 		process.env.MESSAGES_FILE = testMessagesFile;
+		// Save and override home directory (USERPROFILE takes precedence on Windows)
+		savedHome = process.env.HOME;
+		savedUserProfile = process.env.USERPROFILE;
 		process.env.HOME = TEST_DATA_DIR;
+		process.env.USERPROFILE = TEST_DATA_DIR;
 	});
 
 	beforeEach(async () => {
@@ -421,7 +428,12 @@ describe("ClaudeSDKClient session restoration after restart", () => {
 		// Restore env vars
 		delete process.env.SESSION_FILE;
 		delete process.env.MESSAGES_FILE;
-		delete process.env.HOME;
+		process.env.HOME = savedHome;
+		if (savedUserProfile !== undefined) {
+			process.env.USERPROFILE = savedUserProfile;
+		} else {
+			delete process.env.USERPROFILE;
+		}
 	});
 
 	/**
