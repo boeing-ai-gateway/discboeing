@@ -565,7 +565,7 @@ export function ConsolidatedDiffView() {
 	// Refetch patch hashes whenever session or diff entries change
 	React.useEffect(() => {
 		if (!selectedSessionId || diffEntries.length === 0) {
-			setFilePatchHashes(new Map());
+			setFilePatchHashes((prev) => (prev.size === 0 ? prev : new Map()));
 			return;
 		}
 

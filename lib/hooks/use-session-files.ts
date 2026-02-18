@@ -402,10 +402,13 @@ export function useSessionFiles(sessionId: string | null, loadAllFiles = true) {
 		[loadingPaths],
 	);
 
+	// Memoize diff entries to avoid creating a new empty array on every render
+	const diffEntries = useMemo(() => diffData?.files || [], [diffData?.files]);
+
 	// For backwards compatibility, extract just the paths
 	const changedFilePaths = useMemo(
-		() => (diffData?.files || []).map((f) => f.path),
-		[diffData?.files],
+		() => diffEntries.map((f) => f.path),
+		[diffEntries],
 	);
 
 	return {
@@ -415,7 +418,7 @@ export function useSessionFiles(sessionId: string | null, loadAllFiles = true) {
 		/** Changed file paths (for backwards compatibility) */
 		changedFiles: changedFilePaths,
 		/** Full diff entries with status information */
-		diffEntries: diffData?.files || [],
+		diffEntries,
 		expandedPaths,
 		expandDirectory,
 		collapseDirectory,
