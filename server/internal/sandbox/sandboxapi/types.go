@@ -210,6 +210,49 @@ type CommitsErrorResponse struct {
 }
 
 // ============================================================================
+// AskUserQuestion Types
+// ============================================================================
+
+// AskUserQuestionOption represents a single choice for a clarifying question.
+type AskUserQuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// AskUserQuestion represents a single clarifying question from Claude.
+type AskUserQuestion struct {
+	Question    string                  `json:"question"`
+	Header      string                  `json:"header"`
+	Options     []AskUserQuestionOption `json:"options"`
+	MultiSelect bool                    `json:"multiSelect"`
+}
+
+// PendingQuestion is the pending AskUserQuestion payload returned by GET /chat/question.
+// Question is nil when no question is pending.
+type PendingQuestion struct {
+	ToolUseID string            `json:"toolUseID"`
+	Questions []AskUserQuestion `json:"questions"`
+}
+
+// PendingQuestionResponse is the GET /chat/question response body.
+// When queried with toolUseID, includes a Status field ("pending" or "answered").
+type PendingQuestionResponse struct {
+	Status   string           `json:"status,omitempty"` // "pending" or "answered" (when toolUseID query param is used)
+	Question *PendingQuestion `json:"question"`         // nil if no question is pending
+}
+
+// AnswerQuestionRequest is the POST /chat/answer request body.
+type AnswerQuestionRequest struct {
+	ToolUseID string            `json:"toolUseID"`
+	Answers   map[string]string `json:"answers"`
+}
+
+// AnswerQuestionResponse is the POST /chat/answer response body.
+type AnswerQuestionResponse struct {
+	Success bool `json:"success"`
+}
+
+// ============================================================================
 // Service Types
 // ============================================================================
 

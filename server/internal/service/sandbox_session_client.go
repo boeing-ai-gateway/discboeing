@@ -110,6 +110,21 @@ func (c *SessionClient) CancelCompletion(ctx context.Context) (*CancelCompletion
 	})
 }
 
+// GetQuestion returns the pending AskUserQuestion, or nil question if none is waiting.
+// When toolUseID is non-empty, queries for a specific question by approval ID.
+func (c *SessionClient) GetQuestion(ctx context.Context, toolUseID string) (*sandboxapi.PendingQuestionResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.PendingQuestionResponse, error) {
+		return c.inner.GetQuestion(ctx, c.sessionID, toolUseID)
+	})
+}
+
+// AnswerQuestion submits the user's answer to a pending AskUserQuestion.
+func (c *SessionClient) AnswerQuestion(ctx context.Context, req *sandboxapi.AnswerQuestionRequest) (*sandboxapi.AnswerQuestionResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.AnswerQuestionResponse, error) {
+		return c.inner.AnswerQuestion(ctx, c.sessionID, req)
+	})
+}
+
 // ListFiles lists directory contents in the sandbox.
 func (c *SessionClient) ListFiles(ctx context.Context, path string, includeHidden bool) (*sandboxapi.ListFilesResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.ListFilesResponse, error) {

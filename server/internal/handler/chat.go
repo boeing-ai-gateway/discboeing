@@ -11,6 +11,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -325,6 +326,77 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// ChatQuestion returns the current pending AskUserQuestion for a session.
+// GET /api/chat/{sessionId}/question?toolUseID=xxx
+// When toolUseID is provided:
+//   - Returns { status: "pending", question: {...} } if that question is still waiting
+//   - Returns { status: "answered", question: null } if already answered or unknown
+//
+// When toolUseID is omitted (legacy):
+//   - Returns { question: {...} } or { question: null }
+func (h *Handler) ChatQuestion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := r.PathValue("sessionId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+
+	toolUseID := r.URL.Query().Get("toolUseID")
+
+	result, err := h.chatService.GetQuestion(ctx, projectID, sessionID, toolUseID)
+	if err != nil {
+		log.Printf("[ChatQuestion] Error: %v", err)
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
+// ChatAnswer submits answers to a pending AskUserQuestion for a session.
+// POST /api/chat/{sessionId}/answer
+func (h *Handler) ChatAnswer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := r.PathValue("sessionId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+
+	var req sandboxapi.AnswerQuestionRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.ToolUseID == "" {
+		h.Error(w, http.StatusBadRequest, "toolUseID is required")
+		return
+	}
+	if req.Answers == nil {
+		h.Error(w, http.StatusBadRequest, "answers is required")
+		return
+	}
+
+	result, err := h.chatService.AnswerQuestion(ctx, projectID, sessionID, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrNoActiveCompletion) {
+			h.Error(w, http.StatusNotFound, "no pending question for this toolUseID")
+			return
+		}
+		log.Printf("[ChatAnswer] Error: %v", err)
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
 }
 
 // writeSSEError sends an error SSE event in UIMessage Stream format.

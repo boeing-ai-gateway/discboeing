@@ -635,6 +635,47 @@ export interface ServiceOutputEvent {
 }
 
 // ============================================================================
+// AskUserQuestion Types
+// ============================================================================
+
+/** A single choice option for a clarifying question */
+export interface AskUserQuestionOption {
+	label: string;
+	description: string;
+}
+
+/** A single clarifying question from Claude */
+export interface AskUserQuestion {
+	question: string;
+	header: string;
+	options: AskUserQuestionOption[];
+	multiSelect: boolean;
+}
+
+/** A pending AskUserQuestion waiting for user answers */
+export interface PendingQuestion {
+	toolUseID: string;
+	questions: AskUserQuestion[];
+}
+
+/** Response from GET /chat/{sessionId}/question?toolUseID=xxx */
+export interface PendingQuestionResponse {
+	status: "pending" | "answered";
+	question: PendingQuestion | null;
+}
+
+/** Request body for POST /chat/{sessionId}/answer */
+export interface AnswerQuestionRequest {
+	toolUseID: string;
+	answers: Record<string, string>;
+}
+
+/** Response from POST /chat/{sessionId}/answer */
+export interface AnswerQuestionResponse {
+	success: boolean;
+}
+
+// ============================================================================
 // UI Types
 // ============================================================================
 

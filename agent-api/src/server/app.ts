@@ -34,6 +34,7 @@ import type {
 } from "../api/types.js";
 import { authMiddleware } from "../auth/middleware.js";
 import { ClaudeSDKClient } from "../claude-sdk/client.js";
+import { questionManager } from "../claude-sdk/question-manager.js";
 import { checkCredentialsChanged } from "../credentials/credentials.js";
 import {
 	getManagedService,
@@ -275,6 +276,48 @@ export function createApp(options: AppOptions) {
 	// DELETE /chat - Clear default session and messages
 	app.delete("/chat", async (c) => handleDeleteChat(c));
 
+	// Helper to handle GET /chat/question for both default and session-specific routes
+	// Supports ?toolUseID=xxx to query for a specific question by approval ID.
+	// Returns { status: "pending", question: {...} } if the question is still pending,
+	// or { status: "answered", question: null } if already answered or unknown.
+	const handleGetQuestion = (c: Context) => {
+		const toolUseID = c.req.query("toolUseID");
+		const pending = questionManager.getPendingQuestion();
+
+		if (toolUseID) {
+			if (pending && pending.toolUseID === toolUseID) {
+				return c.json({ status: "pending", question: pending });
+			}
+			return c.json({ status: "answered", question: null });
+		}
+
+		// Legacy: return whatever is pending (no status field)
+		return c.json({ question: pending });
+	};
+
+	// Helper to handle POST /chat/answer for both default and session-specific routes
+	const handlePostAnswer = async (c: Context) => {
+		const body = await c.req.json<{
+			toolUseID: string;
+			answers: Record<string, string>;
+		}>();
+		const { toolUseID, answers } = body;
+		if (!toolUseID || !answers) {
+			return c.json({ error: "toolUseID and answers are required" }, 400);
+		}
+		const success = questionManager.submitAnswer(toolUseID, answers);
+		if (!success) {
+			return c.json({ error: "No pending question for this toolUseID" }, 404);
+		}
+		return c.json({ success: true });
+	};
+
+	// GET /chat/question - Return the current pending AskUserQuestion (null if none)
+	app.get("/chat/question", (c) => handleGetQuestion(c));
+
+	// POST /chat/answer - Submit answers to a pending AskUserQuestion
+	app.post("/chat/answer", async (c) => handlePostAnswer(c));
+
 	// Session-specific routes
 	// GET /sessions/:id/chat - Return messages for specific session
 	app.get("/sessions/:id/chat", async (c) => {
@@ -293,6 +336,12 @@ export function createApp(options: AppOptions) {
 		const sessionId = c.req.param("id");
 		return handleDeleteChat(c, sessionId);
 	});
+
+	// GET /sessions/:id/chat/question - Return pending question for a specific session
+	app.get("/sessions/:id/chat/question", (c) => handleGetQuestion(c));
+
+	// POST /sessions/:id/chat/answer - Submit answer for a specific session
+	app.post("/sessions/:id/chat/answer", async (c) => handlePostAnswer(c));
 
 	// =========================================================================
 	// File System Endpoints

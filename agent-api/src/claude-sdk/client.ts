@@ -11,6 +11,7 @@ import type { Agent } from "../agent/interface.js";
 import type { Session } from "../agent/session.js";
 import type { ModelInfo } from "../api/types.js";
 import {
+	addCompletionEvent,
 	clearSession as clearStoredSession,
 	getSessionData,
 	type SessionData as StoreSessionData,
@@ -25,6 +26,10 @@ import {
 	loadFullSessionData,
 	type SessionData,
 } from "./persistence.js";
+import {
+	type AskUserQuestionInput,
+	questionManager,
+} from "./question-manager.js";
 import {
 	createTranslationState,
 	type TranslationState,
@@ -329,13 +334,59 @@ export class ClaudeSDKClient implements Agent {
 			pathToClaudeCodeExecutable: this.claudeCliPath ?? "",
 			// Pass abort controller to SDK for proper cancellation
 			abortController: this.activeAbortController,
-			// Use canUseTool to intercept tool calls and auto-approve them
-			// This allows us to capture tool I/O while maintaining automatic execution
+			// Use canUseTool to intercept tool calls.
+			// For AskUserQuestion we emit a question chunk to the SSE stream and block
+			// until the user submits an answer via POST /chat/answer.
+			// All other tools are auto-approved.
 			canUseTool: async (toolName, input, options) => {
 				console.log(
 					`[SDK] canUseTool: ${toolName}, toolUseID: ${options.toolUseID}`,
 				);
-				// Always approve - we just want to intercept for logging
+
+				if (toolName === "AskUserQuestion") {
+					const questionInput = input as unknown as AskUserQuestionInput;
+
+					// Register the question in QuestionManager BEFORE emitting the chunk,
+					// so the GET /chat/question endpoint can return it immediately when
+					// the frontend queries after seeing the approval-requested state.
+					const answerPromise = questionManager.waitForAnswer(
+						options.toolUseID,
+						questionInput.questions,
+					);
+
+					// Emit a standard tool-approval-request chunk.
+					// The AI SDK will create an approval-requested tool part in UIMessage.parts,
+					// which persists across page refreshes. The frontend detects this and queries
+					// GET /chat/question?toolUseID=xxx for the actual questions.
+					addCompletionEvent({
+						type: "tool-approval-request",
+						toolCallId: options.toolUseID,
+						approvalId: options.toolUseID,
+					} as unknown as UIMessageChunk);
+
+					console.log(
+						`[SDK] AskUserQuestion: emitted tool-approval-request, waiting for user answer (toolUseID: ${options.toolUseID})`,
+					);
+
+					// Block until the frontend submits an answer.
+					// No timeout - we wait indefinitely until answered or cancelled.
+					const answers = await answerPromise;
+
+					console.log(
+						`[SDK] AskUserQuestion: received answer for toolUseID ${options.toolUseID}`,
+					);
+
+					return {
+						behavior: "allow" as const,
+						updatedInput: {
+							questions: questionInput.questions,
+							answers,
+						} as unknown as Record<string, unknown>,
+						toolUseID: options.toolUseID,
+					};
+				}
+
+				// Auto-approve all other tools
 				// Note: updatedInput is required by the SDK's runtime Zod schema even though TypeScript marks it optional
 				return {
 					behavior: "allow" as const,
@@ -448,6 +499,12 @@ export class ClaudeSDKClient implements Agent {
 	async cancel(sessionId?: string): Promise<void> {
 		if (this.activeAbortController) {
 			console.log("[SDK] Cancelling active prompt via abortController");
+
+			// Cancel any pending AskUserQuestion before aborting the SDK query.
+			// This causes the canUseTool promise to reject with a "cancelled" error
+			// which propagates as a clean stop through the completion runner.
+			questionManager.cancelAll();
+
 			// Abort the SDK query - the SDK will clean up resources properly
 			this.activeAbortController.abort();
 			this.activeAbortController = null;
@@ -462,6 +519,9 @@ export class ClaudeSDKClient implements Agent {
 	}
 
 	async clearSession(sessionId?: string): Promise<void> {
+		// Cancel any pending AskUserQuestion before clearing the session
+		questionManager.cancelAll();
+
 		const sid = sessionId || this.currentSessionId || this.DEFAULT_SESSION_ID;
 		const ctx = this.sessions.get(sid);
 		if (ctx) {

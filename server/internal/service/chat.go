@@ -330,6 +330,42 @@ func (c *ChatService) CancelCompletion(ctx context.Context, projectID, sessionID
 }
 
 // ============================================================================
+// AskUserQuestion Methods
+// ============================================================================
+
+// GetQuestion returns the current pending AskUserQuestion from the sandbox.
+// When toolUseID is non-empty, queries for a specific question by approval ID.
+// Returns nil question if no question is waiting.
+func (c *ChatService) GetQuestion(ctx context.Context, projectID, sessionID, toolUseID string) (*sandboxapi.PendingQuestionResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetQuestion(ctx, toolUseID)
+}
+
+// AnswerQuestion submits answers to a pending AskUserQuestion.
+func (c *ChatService) AnswerQuestion(ctx context.Context, projectID, sessionID string, req *sandboxapi.AnswerQuestionRequest) (*sandboxapi.AnswerQuestionResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.AnswerQuestion(ctx, req)
+}
+
+// ============================================================================
 // File System Methods
 // ============================================================================
 

@@ -14,6 +14,8 @@ export class FileConflictError extends Error {
 
 import type {
 	Agent,
+	AnswerQuestionRequest,
+	AnswerQuestionResponse,
 	AuthProvider,
 	CancelChatResponse,
 	ChatMessage,
@@ -35,6 +37,7 @@ import type {
 	OAuthExchangeRequest,
 	OAuthExchangeResponse,
 	OAuthRefreshResponse,
+	PendingQuestionResponse,
 	ProviderStatus,
 	ProvidersResponse,
 	ReadSessionFileResponse,
@@ -315,6 +318,36 @@ class ApiClient {
 	async cancelChat(sessionId: string): Promise<CancelChatResponse> {
 		return this.fetch(`/chat/${sessionId}/cancel`, {
 			method: "POST",
+		});
+	}
+
+	/**
+	 * Get the pending AskUserQuestion for a specific approval ID.
+	 * @param sessionId Session ID
+	 * @param toolUseID The tool use / approval ID to query for
+	 * @returns { status: "pending", question } if still waiting, { status: "answered", question: null } if resolved
+	 */
+	async getChatQuestion(
+		sessionId: string,
+		toolUseID: string,
+	): Promise<PendingQuestionResponse> {
+		return this.fetch<PendingQuestionResponse>(
+			`/chat/${sessionId}/question?toolUseID=${encodeURIComponent(toolUseID)}`,
+		);
+	}
+
+	/**
+	 * Submit answers to a pending AskUserQuestion.
+	 * @param sessionId Session ID
+	 * @param data Answer payload with toolUseID and answers map
+	 */
+	async submitChatAnswer(
+		sessionId: string,
+		data: AnswerQuestionRequest,
+	): Promise<AnswerQuestionResponse> {
+		return this.fetch<AnswerQuestionResponse>(`/chat/${sessionId}/answer`, {
+			method: "POST",
+			body: JSON.stringify(data),
 		});
 	}
 

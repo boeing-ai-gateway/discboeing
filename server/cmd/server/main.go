@@ -1357,6 +1357,34 @@ func main() {
 					},
 				},
 			})
+
+			// Chat question endpoint - poll for pending AskUserQuestion
+			projReg.Register(r, routes.Route{
+				Method: "GET", Pattern: "/chat/{sessionId}/question",
+				Handler: h.ChatQuestion,
+				Meta: routes.Meta{
+					Group:       "Chat",
+					Description: "Get pending AskUserQuestion (null if none)",
+					Params: []routes.Param{
+						{Name: "projectId", Example: "local"},
+						{Name: "sessionId", Example: "abc123"},
+					},
+				},
+			})
+
+			// Chat answer endpoint - submit answer to pending AskUserQuestion
+			projReg.Register(r, routes.Route{
+				Method: "POST", Pattern: "/chat/{sessionId}/answer",
+				Handler: h.ChatAnswer,
+				Meta: routes.Meta{
+					Group:       "Chat",
+					Description: "Submit answers to a pending AskUserQuestion",
+					Params: []routes.Param{
+						{Name: "projectId", Example: "local"},
+						{Name: "sessionId", Example: "abc123"},
+					},
+				},
+			})
 		})
 	})
 

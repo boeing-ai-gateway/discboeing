@@ -505,6 +505,110 @@ func (c *SandboxChatClient) CancelCompletion(ctx context.Context, sessionID stri
 }
 
 // ============================================================================
+// AskUserQuestion Methods
+// ============================================================================
+
+// GetQuestion returns the pending AskUserQuestion, or nil question if none is waiting.
+// When toolUseID is non-empty, queries for a specific question by approval ID.
+func (c *SandboxChatClient) GetQuestion(ctx context.Context, sessionID string, toolUseID string) (*sandboxapi.PendingQuestionResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		client, err := c.getHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		url := "http://sandbox/chat/question"
+		if toolUseID != "" {
+			url += "?toolUseID=" + toolUseID
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get question: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.PendingQuestionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// AnswerQuestion submits the user's answer to a pending AskUserQuestion.
+func (c *SandboxChatClient) AnswerQuestion(ctx context.Context, sessionID string, req *sandboxapi.AnswerQuestionRequest) (*sandboxapi.AnswerQuestionResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		client, err := c.getHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", "http://sandbox/chat/answer", bytes.NewReader(body))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		if err := c.applyRequestAuth(ctx, httpReq, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(httpReq)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to answer question: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNoActiveCompletion
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.AnswerQuestionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ============================================================================
 // File System Methods
 // ============================================================================
 
