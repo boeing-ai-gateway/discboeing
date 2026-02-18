@@ -268,6 +268,14 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		// Channel not ready yet - we have a stream, set up SSE
 	}
 
+	// Mark session as running if it isn't already. The session status poller
+	// handles resetting back to ready once the agent-api completion finishes.
+	if existingSession.Status != model.SessionStatusRunning {
+		if _, err := h.sessionService.UpdateStatus(ctx, projectID, sessionID, model.SessionStatusRunning, nil); err != nil {
+			log.Printf("[ChatStream] Warning: failed to update session %s status to running: %v", sessionID, err)
+		}
+	}
+
 	// Set up SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
