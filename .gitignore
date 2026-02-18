@@ -55,5 +55,8 @@ agent/agent
 # SSH Key
 server/ssh_host_key
 
+# Python virtual environment
+.venv/
+
 # Test DB script
 /test.db.sql
