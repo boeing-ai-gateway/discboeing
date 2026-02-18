@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/obot-platform/discobot/server/internal/store"
 )
 
 // ChatRequest represents the request body for the chat endpoint.
@@ -66,7 +68,13 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	// Check if session exists
 	existingSession, err := h.chatService.GetSessionByID(ctx, sessionID)
-	if err == nil {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		// Unexpected error (DB failure, context cancelled, etc.) — don't fall through
+		h.Error(w, http.StatusInternalServerError, "failed to look up session")
+		return
+	}
+
+	if existingSession != nil {
 		// Session exists - validate it belongs to this project
 		if existingSession.ProjectID != projectID {
 			h.Error(w, http.StatusForbidden, "session does not belong to this project")
@@ -112,21 +120,41 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
 	w.Header().Set("x-vercel-ai-ui-message-stream", "v1")
 
+	// Create a context that won't be cancelled when the client disconnects.
+	// This ensures sandbox creation and message sending complete even if the
+	// client aborts the SSE request. The explicit cancel endpoint (/chat/{id}/cancel)
+	// is the only way to stop a running chat completion.
+	//
+	// We derive a cancellable child context (streamCtx) so that when the handler
+	// exits, we clean up the SSE reader goroutine via streamCancel().
+	sendCtx := context.WithoutCancel(ctx)
+	streamCtx, streamCancel := context.WithCancel(sendCtx)
+
 	// Send messages to sandbox and get raw SSE stream
 	// ChatService handles session state reconciliation (starting stopped containers, etc.)
 	// Pass the model and reasoning flag from the request
-	sseCh, err := h.chatService.SendToSandbox(ctx, projectID, sessionID, req.Messages, req.Model, req.Reasoning)
+	sseCh, err := h.chatService.SendToSandbox(streamCtx, projectID, sessionID, req.Messages, req.Model, req.Reasoning)
 	if err != nil {
+		streamCancel()
 		writeSSEErrorAndDone(w, err.Error())
 		return
 	}
 
-	// Defer resetting the status back to ready when the chat completes
+	// Track whether the completion finished naturally (DONE or channel closed).
+	// Only reset session status to "ready" when it actually finishes.
+	// If the client disconnects early, status stays "running" because
+	// the sandbox is still processing the completion.
+	completionDone := false
 	defer func() {
-		// Reset session status to ready after chat completion
-		// UpdateStatus now automatically publishes SSE event
-		if _, err := h.sessionService.UpdateStatus(ctx, projectID, sessionID, model.SessionStatusReady, nil); err != nil {
-			log.Printf("[Chat] Warning: failed to reset session %s status to ready: %v", sessionID, err)
+		streamCancel()
+		if completionDone {
+			// Reset session status to ready after chat completion
+			// Use sendCtx (not request ctx) since the request may already be cancelled
+			if _, err := h.sessionService.UpdateStatus(sendCtx, projectID, sessionID, model.SessionStatusReady, nil); err != nil {
+				log.Printf("[Chat] Warning: failed to reset session %s status to ready: %v", sessionID, err)
+			}
+		} else {
+			log.Printf("[Chat] Client disconnected before completion finished for session %s, status remains running", sessionID)
 		}
 	}()
 
@@ -146,12 +174,14 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		case line, ok := <-sseCh:
 			if !ok {
 				// Channel closed without explicit DONE
+				completionDone = true
 				_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 				flusher.Flush()
 				return
 			}
 			if line.Done {
 				// Container sent [DONE] signal
+				completionDone = true
 				log.Printf("[Chat] Received [DONE] signal from sandbox")
 				_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 				flusher.Flush()
@@ -173,7 +203,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 					startEvent.MessageMetadata != nil && startEvent.MessageMetadata.Model != "" {
 					modelID := startEvent.MessageMetadata.Model
 					go func() {
-						if err := h.chatService.UpdateSessionModel(ctx, sessionID, modelID); err != nil {
+						if err := h.chatService.UpdateSessionModel(sendCtx, sessionID, modelID); err != nil {
 							log.Printf("[Chat] Warning: failed to update session model for %s: %v", sessionID, err)
 						} else {
 							log.Printf("[Chat] Updated session %s with actual model: %s", sessionID, modelID)
