@@ -272,8 +272,6 @@ export const WorkspaceForm = React.forwardRef<
 			request.provider = provider;
 		}
 		onSubmit(request);
-
-		setInput("");
 	}, [validation.isValid, inputType, input, provider, onSubmit]);
 
 	// Expose submit and isValid to parent via ref
@@ -403,6 +401,12 @@ export const WorkspaceForm = React.forwardRef<
 					)}
 				</div>
 			</div>
+
+			{inputType === "local" && (
+				<p className="text-xs text-muted-foreground">
+					Point to a new or empty directory to create a fresh git repository.
+				</p>
+			)}
 
 			{hasMultipleProviders && (
 				<div className="space-y-3">

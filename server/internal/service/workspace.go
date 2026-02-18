@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -81,7 +83,9 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, workspaceID string)
 	return s.mapWorkspace(ctx, ws), nil
 }
 
-// CreateWorkspace creates a new workspace with initializing status
+// CreateWorkspace creates a new workspace with initializing status.
+// For local paths: if the directory does not exist or is empty, it will be
+// created and initialized as a new git repository automatically.
 func (s *WorkspaceService) CreateWorkspace(ctx context.Context, projectID, path, sourceType, provider string) (*Workspace, error) {
 	// Expand ~ to home directory for local paths
 	if sourceType == "local" {
@@ -91,21 +95,91 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, projectID, path,
 		}
 		path = expandedPath
 
-		// Validate that the directory exists and is a git repository
-		if _, err := os.Stat(path); err != nil {
-			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("directory does not exist: %s", path)
-			}
-			return nil, fmt.Errorf("failed to access directory: %w", err)
+		info, statErr := os.Stat(path)
+		dirMissing := os.IsNotExist(statErr)
+
+		if !dirMissing && statErr != nil {
+			return nil, fmt.Errorf("failed to access directory: %w", statErr)
 		}
 
-		// Check for .git directory
-		gitDir := filepath.Join(path, ".git")
-		if _, err := os.Stat(gitDir); err != nil {
-			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("not a git repository: directory must contain a .git folder")
+		// Determine whether we need to init a new git repo:
+		// - directory doesn't exist yet, or
+		// - directory exists but is completely empty
+		needsInit := false
+		if dirMissing {
+			// Validate parent directory exists before creating
+			parentDir := filepath.Dir(path)
+			if _, err := os.Stat(parentDir); err != nil {
+				if os.IsNotExist(err) {
+					return nil, fmt.Errorf("parent directory does not exist: %s", parentDir)
+				}
+				return nil, fmt.Errorf("failed to access parent directory: %w", err)
 			}
-			return nil, fmt.Errorf("failed to check git repository: %w", err)
+			needsInit = true
+		} else if info.IsDir() {
+			entries, err := os.ReadDir(path)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read directory: %w", err)
+			}
+			needsInit = len(entries) == 0
+		}
+
+		if needsInit {
+			// Create the directory if it doesn't exist
+			if dirMissing {
+				if err := os.MkdirAll(path, 0755); err != nil {
+					return nil, fmt.Errorf("failed to create directory: %w", err)
+				}
+			}
+
+			// Initialize git repository
+			cmd := exec.CommandContext(ctx, "git", "init")
+			cmd.Dir = path
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				// Clean up only if we created the directory
+				if dirMissing {
+					_ = os.RemoveAll(path)
+				}
+				return nil, fmt.Errorf("failed to initialize git repository: %v: %s", err, stderr.String())
+			}
+
+			// Create an initial empty commit so there is always a valid HEAD.
+			// Without this the commit API cannot function because it requires a
+			// base commit SHA to hand to the agent.
+			gitUserName, gitUserEmail := s.gitProvider.GetUserConfig(ctx)
+			if gitUserName == "" {
+				gitUserName = "Discobot"
+			}
+			if gitUserEmail == "" {
+				gitUserEmail = "discobot@localhost"
+			}
+			initCommit := exec.CommandContext(ctx, "git",
+				"-c", "user.name="+gitUserName,
+				"-c", "user.email="+gitUserEmail,
+				"commit", "--allow-empty", "-m", "Initial commit",
+			)
+			initCommit.Dir = path
+			var commitStderr bytes.Buffer
+			initCommit.Stderr = &commitStderr
+			if err := initCommit.Run(); err != nil {
+				if dirMissing {
+					_ = os.RemoveAll(path)
+				}
+				return nil, fmt.Errorf("failed to create initial commit: %v: %s", err, commitStderr.String())
+			}
+
+			log.Printf("Initialized new git repository: %s", path)
+		} else {
+			// Directory exists and is non-empty — require a .git folder
+			gitDir := filepath.Join(path, ".git")
+			if _, err := os.Stat(gitDir); err != nil {
+				if os.IsNotExist(err) {
+					return nil, fmt.Errorf("not a git repository: directory must contain a .git folder")
+				}
+				return nil, fmt.Errorf("failed to check git repository: %w", err)
+			}
 		}
 	}
 

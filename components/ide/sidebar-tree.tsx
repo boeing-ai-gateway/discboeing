@@ -239,27 +239,27 @@ const WorkspaceNode = React.memo(function WorkspaceNode({
 					) : (
 						<ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 					)}
-					{getWorkspaceStatusIndicator(workspace.status) ??
-						(isRenaming ? (
-							<input
-								ref={inputRef}
-								type="text"
-								value={editedName}
-								onChange={(e) => setEditedName(e.target.value)}
-								onKeyDown={handleKeyDown}
-								onBlur={saveRename}
-								onClick={(e) => e.stopPropagation()}
-								className="flex-1 min-w-0 px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-ring ml-5"
-								placeholder={workspace.displayName || workspace.path}
-							/>
-						) : (
-							<WorkspaceDisplay
-								workspace={workspace}
-								iconSize={16}
-								iconClassName="h-4 w-4"
-								textClassName="font-mono text-sm"
-							/>
-						))}
+					{isRenaming ? (
+						<input
+							ref={inputRef}
+							type="text"
+							value={editedName}
+							onChange={(e) => setEditedName(e.target.value)}
+							onKeyDown={handleKeyDown}
+							onBlur={saveRename}
+							onClick={(e) => e.stopPropagation()}
+							className="flex-1 min-w-0 px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-ring ml-5"
+							placeholder={workspace.displayName || workspace.path}
+						/>
+					) : (
+						<WorkspaceDisplay
+							workspace={workspace}
+							iconSize={16}
+							iconClassName="h-4 w-4"
+							textClassName="font-mono text-sm"
+						/>
+					)}
+					{getWorkspaceStatusIndicator(workspace.status)}
 				</div>
 				{!isRenaming && (
 					<div className="flex items-center gap-0.5">
