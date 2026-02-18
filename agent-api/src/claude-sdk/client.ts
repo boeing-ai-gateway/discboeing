@@ -1,5 +1,5 @@
 import { access, constants } from "node:fs/promises";
-import { delimiter, join as pathJoin, sep } from "node:path";
+import { delimiter, join as pathJoin } from "node:path";
 import {
 	type Options,
 	query,
