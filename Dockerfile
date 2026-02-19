@@ -223,6 +223,10 @@ CMD ["/opt/discobot/bin/discobot-agent"]
 # This stage is completely independent from the runtime image
 FROM ubuntu:24.04 AS vz-rootfs-builder
 
+# Docker image to preload into the VM at build time (pulled via crane as OCI tarball)
+# Defaults to the main tag of the discobot runtime image
+ARG PRELOAD_IMAGE=ghcr.io/obot-platform/discobot:main
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -244,12 +248,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     docker.io \
     iptables \
     # Minimal essential tools
+    curl \
     socat \
     # e2fsprogs for mkfs.ext4 to format data disk
     e2fsprogs \
     # udev for device enumeration
     udev \
     && rm -rf /var/lib/apt/lists/*
+
+# Pull the preload image as an OCI tarball using crane
+# crane is a standalone tool from go-containerregistry that doesn't need Docker daemon
+# TARGETARCH is automatically set by Docker buildx (amd64 or arm64)
+ARG TARGETARCH
+RUN set -ex \
+    # Install crane from go-containerregistry releases with checksum verification
+    && CRANE_VERSION="v0.20.7" \
+    # Map Docker TARGETARCH to crane release filename arch
+    && if [ "${TARGETARCH}" = "amd64" ]; then \
+        CRANE_ARCH="x86_64"; \
+        CRANE_SHA256="8ef3564d264e6b5ca93f7b7f5652704c4dd29d33935aff6947dd5adefd05953e"; \
+    else \
+        CRANE_ARCH="${TARGETARCH}"; \
+        CRANE_SHA256="b04ee6e4904d9219c76383f5b73521a63f69ecc93c0b1840846eebfd071a6355"; \
+    fi \
+    && curl -fsSL -o /tmp/crane.tar.gz \
+        "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
+    && echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/crane.tar.gz -C /usr/local/bin crane \
+    && chmod +x /usr/local/bin/crane \
+    && rm -f /tmp/crane.tar.gz \
+    # Pull the image as an OCI tarball for the target architecture
+    && echo "Pulling ${PRELOAD_IMAGE} for linux/${TARGETARCH}..." \
+    && crane pull --platform "linux/${TARGETARCH}" "${PRELOAD_IMAGE}" /preload-image.tar \
+    && echo "Preload image saved to /preload-image.tar" \
+    # Save the image reference for the boot-time load script
+    && echo "${PRELOAD_IMAGE}" > /preload-image-tag \
+    # Clean up crane binary (not needed at runtime)
+    && rm -f /usr/local/bin/crane
 
 # Create /var skeleton for first-boot initialization
 # This is copied to /var after the data disk is mounted
@@ -260,12 +295,13 @@ COPY vm-assets/fstab /etc/fstab
 COPY vm-assets/systemd/docker-vsock-proxy.service /etc/systemd/system/
 COPY vm-assets/systemd/init-var.service /etc/systemd/system/
 COPY vm-assets/systemd/mount-home.service /etc/systemd/system/
+COPY vm-assets/systemd/preload-image.service /etc/systemd/system/
 COPY vm-assets/systemd/docker.service.d/ /etc/systemd/system/docker.service.d/
 COPY vm-assets/systemd/containerd.service.d/ /etc/systemd/system/containerd.service.d/
 COPY vm-assets/network/20-dhcp.network /etc/systemd/network/
-COPY vm-assets/scripts/init-var.sh /usr/local/bin/
-COPY vm-assets/scripts/mount-home.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/init-var.sh /usr/local/bin/mount-home.sh
+COPY --chmod=755 vm-assets/scripts/init-var.sh /usr/local/bin/
+COPY --chmod=755 vm-assets/scripts/mount-home.sh /usr/local/bin/
+COPY --chmod=755 vm-assets/scripts/preload-image.sh /usr/local/bin/
 
 # Configure systemd for VM environment
 RUN set -ex \
@@ -282,9 +318,10 @@ RUN set -ex \
     # Enable /var initialization and home mount services
     && systemctl enable init-var.service \
     && systemctl enable mount-home.service \
-    # Enable Docker service and vsock proxy
+    # Enable Docker service, vsock proxy, and preloaded image loader
     && systemctl enable docker \
-    && systemctl enable docker-vsock-proxy
+    && systemctl enable docker-vsock-proxy \
+    && systemctl enable preload-image
 
 # Create discobot user (UID 1000)
 RUN useradd -m -s /bin/bash -u 1000 discobot || \
