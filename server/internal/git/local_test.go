@@ -38,6 +38,7 @@ func runGit(t *testing.T, dir string, args ...string) string {
 
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Env = cleanGitEnv()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v failed: %v\nOutput: %s", args, err, output)

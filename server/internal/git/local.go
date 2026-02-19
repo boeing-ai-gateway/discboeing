@@ -722,12 +722,27 @@ func (p *LocalProvider) ApplyPatches(ctx context.Context, workspaceID string, pa
 
 // --- Internal helpers ---
 
+// cleanGitEnv returns the current environment with GIT_* variables removed that
+// are set by git during hook execution (e.g., GIT_DIR, GIT_INDEX_FILE).
+// Without this, subprocess git commands may operate on the wrong repository
+// when the server or tests run inside a git hook context.
+func cleanGitEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_") {
+			env = append(env, e)
+		}
+	}
+	return env
+}
+
 // runGit runs a git command.
 func (p *LocalProvider) runGit(ctx context.Context, workDir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
+	cmd.Env = cleanGitEnv()
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -745,6 +760,7 @@ func (p *LocalProvider) runGitWithStdin(ctx context.Context, workDir string, std
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
+	cmd.Env = cleanGitEnv()
 
 	cmd.Stdin = bytes.NewReader(stdin)
 
@@ -764,6 +780,7 @@ func (p *LocalProvider) runGitOutput(ctx context.Context, workDir string, args .
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
+	cmd.Env = cleanGitEnv()
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
