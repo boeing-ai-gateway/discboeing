@@ -16,6 +16,12 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
+// Minimum terminal dimensions to prevent zero-size PTY
+const (
+	minTermRows = 20
+	minTermCols = 80
+)
+
 // upgrader configures the WebSocket upgrader.
 // Origin checking is handled by the CORS middleware in the router,
 // so we allow all origins here to avoid duplicate validation.
@@ -52,14 +58,14 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get terminal dimensions from query params
+	// Get terminal dimensions from query params, enforcing minimum size
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
-	if rows == 0 {
-		rows = 24
+	if rows < minTermRows {
+		rows = minTermRows
 	}
-	if cols == 0 {
-		cols = 80
+	if cols < minTermCols {
+		cols = minTermCols
 	}
 
 	// Check if root access is requested
@@ -155,6 +161,13 @@ func handleTerminalSession(ctx context.Context, pty sandbox.PTY, conn *websocket
 				if err := json.Unmarshal(msg.Data, &resize); err != nil {
 					log.Printf("failed to unmarshal resize: %v", err)
 					continue
+				}
+				// Enforce minimum terminal size to prevent zero-dimension PTY
+				if resize.Cols < minTermCols {
+					resize.Cols = minTermCols
+				}
+				if resize.Rows < minTermRows {
+					resize.Rows = minTermRows
 				}
 				if err := pty.Resize(ctx, resize.Rows, resize.Cols); err != nil {
 					log.Printf("PTY resize error: %v", err)

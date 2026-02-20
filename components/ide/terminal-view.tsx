@@ -180,6 +180,11 @@ export const TerminalView = React.forwardRef<
 	// Send resize event to WebSocket (debounced)
 	const resizeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 	const sendResize = React.useCallback((rows: number, cols: number) => {
+		// Don't send resize if terminal is too small (e.g. collapsed/hidden container)
+		if (rows < 20 || cols < 80) {
+			return;
+		}
+
 		// Avoid sending duplicate resize events
 		if (
 			lastSizeRef.current?.rows === rows &&
