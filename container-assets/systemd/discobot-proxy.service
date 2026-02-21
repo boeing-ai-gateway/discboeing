@@ -1,0 +1,16 @@
+[Unit]
+Description=Discobot HTTP proxy (MITM + Docker registry caching)
+After=discobot-setup.service
+Requires=discobot-setup.service
+
+[Service]
+Type=simple
+ExecStart=/opt/discobot/bin/proxy -config /.data/proxy/config.yaml
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

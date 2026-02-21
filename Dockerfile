@@ -110,8 +110,12 @@ FROM ubuntu:24.04 AS runtime
 # Label for image identification and cleanup
 LABEL io.discobot.sandbox-image=true
 
+# Tell systemd it's running inside a container
+ENV container=docker
+
 # Install all apt packages first for better layer caching
 # (apt-get changes infrequently; binary copies change with each code change)
+# systemd + dbus: init system for managing services (PID 1)
 # git is needed for workspace cloning
 # socat is needed for vsock forwarding in VZ VMs
 # fuse3 is needed for agentfs FUSE filesystem
@@ -130,6 +134,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    dbus \
     docker-buildx \
     docker.io \
     fuse3 \
@@ -147,6 +152,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     socat \
     sqlite3 \
     sudo \
+    systemd \
+    systemd-sysv \
     vim \
     && curl -fsSL https://deb.nodesource.com/setup_25.x | bash - \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true \
@@ -212,6 +219,23 @@ COPY --from=proxy-builder /proxy /opt/discobot/bin/proxy
 COPY --from=agent-builder /discobot-agent /opt/discobot/bin/discobot-agent
 RUN chmod +x /opt/discobot/bin/*
 
+# Copy systemd service files for container service management
+COPY container-assets/systemd/ /etc/systemd/system/
+
+# Configure systemd for container environment
+RUN systemctl mask \
+    getty@.service \
+    serial-getty@.service \
+    # Mask system Docker/containerd services — we manage dockerd ourselves
+    docker.service \
+    docker.socket \
+    containerd.service \
+    && systemctl enable \
+    discobot-setup.service \
+    discobot-proxy.service \
+    discobot-dockerd.service \
+    discobot-agent-api.service
+
 # Add discobot binaries and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
 # Set PNPM_HOME to use persistent storage for pnpm cache/store
@@ -225,10 +249,10 @@ WORKDIR /workspace
 
 EXPOSE 3002
 
-# Use discobot-agent as PID 1 init process
-# It handles signal forwarding, process reaping, and user switching
-# Container starts as root; discobot-agent switches to discobot user for the API
-CMD ["/opt/discobot/bin/discobot-agent"]
+# systemd as PID 1 — manages discobot services (setup, proxy, dockerd, agent-api)
+# SIGRTMIN+3 tells systemd to shut down cleanly (used by docker stop)
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
 
 # Stage 5: VZ root filesystem builder with systemd and Docker
 # Build with: docker build --target vz-image --output type=local,dest=. .

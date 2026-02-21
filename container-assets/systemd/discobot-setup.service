@@ -1,0 +1,23 @@
+[Unit]
+Description=Discobot container initialization (workspace, overlayfs, certs)
+DefaultDependencies=no
+After=local-fs.target
+Before=discobot-proxy.service discobot-dockerd.service discobot-agent-api.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Forward Docker container environment variables to this service.
+# Docker sets env vars on PID 1 (systemd) via /proc/1/environ (null-separated).
+# Convert to newline-separated file so all discobot services can use EnvironmentFile=.
+ExecStartPre=/bin/bash -c 'mkdir -p /run/discobot && tr "\\0" "\\n" < /proc/1/environ > /run/discobot/container-env'
+EnvironmentFile=/run/discobot/container-env
+
+ExecStart=/opt/discobot/bin/discobot-agent setup
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

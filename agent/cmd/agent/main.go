@@ -259,12 +259,21 @@ func mountAgentFSAtPath(sessionID, mountPath string, u *userInfo) error {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "proxy" {
-		if err := runProxy(); err != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent-proxy: %v\n", err)
-			os.Exit(1)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "proxy":
+			if err := runProxy(); err != nil {
+				fmt.Fprintf(os.Stderr, "discobot-agent-proxy: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "setup":
+			if err := runSetup(); err != nil {
+				fmt.Fprintf(os.Stderr, "discobot-agent: setup failed: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	if err := run(); err != nil {
@@ -464,6 +473,270 @@ func run() error {
 	fmt.Printf("discobot-agent: [%.3fs] total startup time\n", time.Since(startupStart).Seconds())
 	fmt.Printf("discobot-agent: starting agent API\n")
 	return runAgent(agentBinary, userInfo, dockerCmd, proxyCmd)
+}
+
+// runSetup performs container initialization as a oneshot systemd service.
+// It does all setup steps (workspace, overlayfs, certs, etc.) then writes
+// environment files for other systemd services and exits.
+func runSetup() error {
+	startupStart := time.Now()
+	fmt.Printf("discobot-agent: setup beginning at %s\n", startupStart.Format(time.RFC3339))
+
+	// Change to root directory to avoid issues with overlayfs mounting
+	if err := os.Chdir("/"); err != nil {
+		return fmt.Errorf("failed to chdir to /: %w", err)
+	}
+
+	// Step 0: Fix localhost resolution
+	if err := fixLocalhostResolution(); err != nil {
+		fmt.Printf("discobot-agent: warning: failed to fix localhost resolution: %v\n", err)
+	}
+
+	// Fix MTU for nested Docker
+	if err := fixMTUForNestedDocker(); err != nil {
+		fmt.Printf("discobot-agent: warning: failed to fix MTU for nested Docker: %v\n", err)
+	}
+
+	// Determine configuration from environment
+	runAsUser := envOrDefault("AGENT_USER", defaultUser)
+	sessionID := os.Getenv("SESSION_ID")
+	workspacePath := os.Getenv("WORKSPACE_PATH")
+	workspaceCommit := os.Getenv("WORKSPACE_COMMIT")
+
+	if sessionID == "" {
+		return fmt.Errorf("SESSION_ID environment variable is required")
+	}
+
+	userInfo, err := lookupUser(runAsUser)
+	if err != nil {
+		return fmt.Errorf("failed to lookup user %s: %w", runAsUser, err)
+	}
+
+	// Step 0: Setup git safe.directory
+	stepStart := time.Now()
+	if err := setupGitSafeDirectories(workspacePath); err != nil {
+		return fmt.Errorf("git safe.directory setup failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] git safe.directory setup completed\n", time.Since(stepStart).Seconds())
+
+	// Step 1: Setup base home directory
+	stepStart = time.Now()
+	if err := setupBaseHome(userInfo); err != nil {
+		return fmt.Errorf("base home setup failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
+
+	// Step 2: Clone workspace
+	stepStart = time.Now()
+	if err := setupWorkspace(workspacePath, workspaceCommit, userInfo); err != nil {
+		return fmt.Errorf("workspace setup failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] workspace setup completed\n", time.Since(stepStart).Seconds())
+
+	// Step 3: Detect and setup filesystem
+	fsType := detectFilesystemType(sessionID)
+
+	stepStart = time.Now()
+	switch fsType {
+	case fsTypeAgentFS:
+		fmt.Printf("discobot-agent: agentfs session detected, migrating to overlayfs\n")
+		if err := os.MkdirAll(agentFSDir, 0755); err != nil {
+			return fmt.Errorf("failed to create agentfs directory: %w", err)
+		}
+		if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
+			return fmt.Errorf("failed to chown agentfs directory: %w", err)
+		}
+		if err := initAgentFS(sessionID, userInfo); err != nil {
+			return fmt.Errorf("agentfs init failed: %w", err)
+		}
+		if err := migrateAgentFSToOverlayFS(sessionID, userInfo); err != nil {
+			return fmt.Errorf("migration from agentfs to overlayfs failed: %w", err)
+		}
+
+	case fsTypeOverlayFS:
+		fmt.Printf("discobot-agent: using OverlayFS (new session)\n")
+		if err := setupOverlayFS(sessionID, userInfo); err != nil {
+			return fmt.Errorf("overlayfs setup failed: %w", err)
+		}
+		if err := mountOverlayFS(sessionID); err != nil {
+			fmt.Printf("discobot-agent: overlayfs failed, falling back to agentfs: %v\n", err)
+			if cleanErr := os.RemoveAll(filepath.Join(overlayFSDir, sessionID)); cleanErr != nil {
+				fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to cleanup overlayfs directory: %v\n", cleanErr)
+			}
+			if err := os.MkdirAll(agentFSDir, 0755); err != nil {
+				return fmt.Errorf("failed to create agentfs directory: %w", err)
+			}
+			if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
+				return fmt.Errorf("failed to chown agentfs directory: %w", err)
+			}
+			if err := initAgentFS(sessionID, userInfo); err != nil {
+				return fmt.Errorf("agentfs init failed: %w", err)
+			}
+			if err := mountAgentFS(sessionID, userInfo); err != nil {
+				return fmt.Errorf("agentfs mount (fallback) failed: %w", err)
+			}
+		}
+	}
+	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (%s)\n", time.Since(stepStart).Seconds(), fsType)
+
+	// Step 4: Mount cache directories
+	stepStart = time.Now()
+	if err := mountCacheDirectories(); err != nil {
+		fmt.Printf("discobot-agent: Cache mount failed: %v\n", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
+
+	// Step 5: Create /workspace symlink
+	stepStart = time.Now()
+	if err := createWorkspaceSymlink(); err != nil {
+		return fmt.Errorf("symlink creation failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] workspace symlink created\n", time.Since(stepStart).Seconds())
+
+	// Step 5.5: Run session hooks
+	stepStart = time.Now()
+	runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
+	fmt.Printf("discobot-agent: [%.3fs] session hooks dispatched\n", time.Since(stepStart).Seconds())
+
+	// Step 6: Setup proxy configuration
+	stepStart = time.Now()
+	if err := setupProxyConfig(userInfo); err != nil {
+		fmt.Printf("discobot-agent: Proxy config setup failed: %v\n", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] proxy config setup completed\n", time.Since(stepStart).Seconds())
+
+	// Step 7: Generate CA certificate
+	stepStart = time.Now()
+	if err := setupProxyCertificate(); err != nil {
+		fmt.Printf("discobot-agent: Proxy certificate setup failed: %v\n", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
+
+	// Step 8: Write Docker daemon configuration
+	stepStart = time.Now()
+	if err := writeDockerDaemonConfig(); err != nil {
+		fmt.Printf("discobot-agent: Docker daemon config failed: %v\n", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] Docker daemon config written\n", time.Since(stepStart).Seconds())
+
+	// Step 9: Write environment files for systemd services
+	stepStart = time.Now()
+	if err := writeProxyEnvironmentFile(); err != nil {
+		fmt.Printf("discobot-agent: warning: failed to write proxy env file: %v\n", err)
+	}
+	if err := writeAgentEnvironmentFile(userInfo); err != nil {
+		return fmt.Errorf("failed to write agent environment file: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] environment files written\n", time.Since(stepStart).Seconds())
+
+	fmt.Printf("discobot-agent: [%.3fs] setup completed successfully\n", time.Since(startupStart).Seconds())
+	return nil
+}
+
+// writeDockerDaemonConfig creates /etc/docker/daemon.json with MTU derived from
+// the current interface. This is called during setup so dockerd can start with
+// the correct configuration.
+func writeDockerDaemonConfig() error {
+	// Check if dockerd is on PATH
+	if _, err := exec.LookPath("dockerd"); err != nil {
+		return fmt.Errorf("dockerd not found on PATH: %w", err)
+	}
+
+	// Ensure directories exist
+	if err := os.MkdirAll("/etc/docker", 0755); err != nil {
+		return fmt.Errorf("failed to create /etc/docker: %w", err)
+	}
+
+	dockerDataDir := filepath.Join(dataDir, "docker")
+	if err := os.MkdirAll(dockerDataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create docker data dir: %w", err)
+	}
+
+	// Read current MTU from eth0
+	mtuBytes, err := os.ReadFile("/sys/class/net/eth0/mtu")
+	if err != nil {
+		return fmt.Errorf("failed to read current MTU: %w", err)
+	}
+	currentMTU, err := strconv.Atoi(strings.TrimSpace(string(mtuBytes)))
+	if err != nil {
+		return fmt.Errorf("failed to parse MTU: %w", err)
+	}
+
+	// Subtract overhead for Docker networking
+	dockerMTU := currentMTU - 100
+	if dockerMTU < 1200 {
+		dockerMTU = 1200
+	}
+
+	daemonConfig := map[string]interface{}{
+		"mtu": dockerMTU,
+	}
+	configBytes, err := json.MarshalIndent(daemonConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal daemon config: %w", err)
+	}
+	if err := os.WriteFile("/etc/docker/daemon.json", configBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write daemon.json: %w", err)
+	}
+	fmt.Printf("discobot-agent: configured Docker daemon with MTU=%d (interface MTU: %d, overhead: 100)\n", dockerMTU, currentMTU)
+
+	return nil
+}
+
+// writeProxyEnvironmentFile writes proxy environment variables to /run/discobot/proxy-env
+// so the dockerd service can use them for image pulls through the proxy.
+func writeProxyEnvironmentFile() error {
+	// Check if proxy binary exists
+	if _, err := os.Stat(proxyBinary); err != nil {
+		return fmt.Errorf("proxy binary not found: %w", err)
+	}
+
+	proxyEnvPath := "/run/discobot/proxy-env"
+	if err := os.MkdirAll(filepath.Dir(proxyEnvPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	var lines []string
+	for _, envVar := range getProxyEnvVars() {
+		lines = append(lines, envVar)
+	}
+
+	if err := os.WriteFile(proxyEnvPath, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write proxy env file: %w", err)
+	}
+
+	fmt.Printf("discobot-agent: proxy environment written to %s\n", proxyEnvPath)
+
+	// Also set proxy in /etc/profile.d for login shells
+	if err := setProxyInProfile(); err != nil {
+		fmt.Printf("discobot-agent: warning: failed to set proxy in /etc/profile.d: %v\n", err)
+	}
+
+	return nil
+}
+
+// writeAgentEnvironmentFile writes the environment file used by the
+// discobot-agent-api systemd service at /run/discobot/agent-env.
+func writeAgentEnvironmentFile(u *userInfo) error {
+	envPath := "/run/discobot/agent-env"
+	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Build the environment for the agent-api service
+	env := buildChildEnv(u, true)
+
+	var lines []string
+	for _, e := range env {
+		lines = append(lines, e)
+	}
+
+	if err := os.WriteFile(envPath, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write agent env file: %w", err)
+	}
+
+	fmt.Printf("discobot-agent: agent environment written to %s\n", envPath)
+	return nil
 }
 
 // fixLocalhostResolution modifies /etc/hosts to ensure localhost resolves to IPv4 (127.0.0.1).
@@ -1166,52 +1439,13 @@ func startDockerDaemon(proxyEnabled bool) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("failed to create /var/run: %w", err)
 	}
 
-	// Create Docker daemon configuration with MTU based on current interface MTU
-	// Docker containers need a lower MTU than the host interface to account for
-	// additional overhead (VXLAN, overlay networks, etc.)
-	if err := os.MkdirAll("/etc/docker", 0755); err != nil {
-		return nil, fmt.Errorf("failed to create /etc/docker: %w", err)
-	}
-
-	// Read current MTU from eth0 to calculate appropriate Docker MTU
-	mtuBytes, err := os.ReadFile("/sys/class/net/eth0/mtu")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read current MTU: %w", err)
-	}
-	currentMTU, err := strconv.Atoi(strings.TrimSpace(string(mtuBytes)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse MTU: %w", err)
-	}
-
-	// Subtract overhead for Docker networking (typically 50-100 bytes)
-	// We use 100 to be conservative and ensure packets don't fragment
-	dockerMTU := currentMTU - 100
-	if dockerMTU < 1200 {
-		dockerMTU = 1200 // Ensure minimum viable MTU
-	}
-
-	daemonConfig := map[string]interface{}{
-		"mtu": dockerMTU,
-	}
-	configBytes, err := json.MarshalIndent(daemonConfig, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal daemon config: %w", err)
-	}
-	if err := os.WriteFile("/etc/docker/daemon.json", configBytes, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write daemon.json: %w", err)
-	}
-	fmt.Printf("discobot-agent: configured Docker daemon with MTU=%d (interface MTU: %d, overhead: 100)\n", dockerMTU, currentMTU)
-
-	// Start dockerd in the background
-	// Use --storage-driver=overlay2 which works well in containers
-	// Use /.data/docker for persistent storage
-	dockerDataDir := filepath.Join(dataDir, "docker")
-	if err := os.MkdirAll(dockerDataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create docker data dir: %w", err)
+	// Write Docker daemon configuration (MTU, etc.)
+	if err := writeDockerDaemonConfig(); err != nil {
+		return nil, fmt.Errorf("failed to write docker daemon config: %w", err)
 	}
 
 	cmd := exec.Command(dockerdPath,
-		"--data-root", dockerDataDir,
+		"--data-root", filepath.Join(dataDir, "docker"),
 		"--storage-driver", "overlay2",
 		"--host", "unix://"+dockerSocketPath,
 		"--log-level", "error",

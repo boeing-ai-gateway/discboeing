@@ -335,6 +335,8 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	}
 
 	// Host configuration with resource limits
+	// Privileged mode (set below) grants all capabilities and device access,
+	// so explicit CapAdd and device mappings are not needed.
 	hostConfig := &containerTypes.HostConfig{
 		// Mount the data volume for persistent storage
 		Mounts: []mount.Mount{
@@ -343,18 +345,20 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 				Source: dataVolName,
 				Target: dataVolumePath,
 			},
-		},
-		// CAP_SYS_ADMIN is required for FUSE mounts (agentfs)
-		CapAdd: []string{"SYS_ADMIN"},
-		// /dev/fuse device is required for FUSE filesystems
-		Resources: containerTypes.Resources{
-			Devices: []containerTypes.DeviceMapping{
-				{
-					PathOnHost:        "/dev/fuse",
-					PathInContainer:   "/dev/fuse",
-					CgroupPermissions: "rwm",
-				},
+			// systemd needs read-write access to the host cgroup hierarchy
+			{
+				Type:     mount.TypeBind,
+				Source:   "/sys/fs/cgroup",
+				Target:   "/sys/fs/cgroup",
+				ReadOnly: false,
 			},
+		},
+		// Share host cgroup namespace (required for systemd in container)
+		CgroupnsMode: containerTypes.CgroupnsModeHost,
+		// systemd requires tmpfs on /run and /run/lock
+		Tmpfs: map[string]string{
+			"/run":      "exec,mode=755",
+			"/run/lock": "exec,mode=755",
 		},
 	}
 
