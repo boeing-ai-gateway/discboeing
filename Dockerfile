@@ -77,7 +77,10 @@ WORKDIR /tmp
 RUN bun install --frozen-lockfile 2>/dev/null || bun install \
     && CLI_VERSION=$(cat node_modules/@anthropic-ai/claude-agent-sdk/package.json | grep -o '"claudeCodeVersion": "[^"]*"' | cut -d'"' -f4) \
     && echo "$CLI_VERSION" > /cli-version \
-    && echo "Claude Code CLI version from SDK: $CLI_VERSION"
+    && echo "Claude Code CLI version from SDK: $CLI_VERSION" \
+    && OC_VERSION=$(cat node_modules/@opencode-ai/sdk/package.json | grep -o '"version": "[^"]*"' | head -1 | cut -d'"' -f4) \
+    && echo "$OC_VERSION" > /opencode-version \
+    && echo "OpenCode CLI version from SDK: $OC_VERSION"
 
 # Stage 3: Build the Bun standalone binary (glibc)
 FROM oven/bun:1.3.9 AS bun-builder
@@ -120,6 +123,7 @@ LABEL io.discobot.sandbox-image=true
 # rsync is needed for agentfs to overlayfs migration
 # Copy the extracted CLI version from version-extractor stage
 COPY --from=version-extractor /cli-version /tmp/cli-version
+COPY --from=version-extractor /opencode-version /tmp/opencode-version
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
@@ -149,10 +153,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && apt-get install -y --no-install-recommends nodejs \
     # Install Claude Code CLI with version derived from SDK (0.2.X -> 2.1.X)
     && CLI_VERSION=$(cat /tmp/cli-version) \
+    && OC_VERSION=$(cat /tmp/opencode-version) \
     && echo "Installing Claude Code CLI version: $CLI_VERSION" \
-    && npm install -g @anthropic-ai/claude-code@${CLI_VERSION} @zed-industries/claude-code-acp pnpm \
+    && echo "Installing OpenCode CLI version: $OC_VERSION" \
+    && npm install -g @anthropic-ai/claude-code@${CLI_VERSION} @zed-industries/claude-code-acp pnpm opencode-ai@${OC_VERSION} \
     # Install latest stable Go
     && GO_VERSION=$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1) \
+    && GO_VERSION=go1.25.7 \
     && curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xz \
     # Install uv (Python package installer) to /usr/local/bin
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
@@ -163,8 +170,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 # Create discobot user (UID 1000)
 # Handle case where UID 1000 might already be taken by another user
 RUN (useradd -m -s /bin/bash -u 1000 discobot 2>/dev/null \
-        || (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discobot) \
-        || useradd -m -s /bin/bash discobot)
+    || (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discobot) \
+    || useradd -m -s /bin/bash discobot)
 
 # Explicitly deny sudo access for discobot user
 RUN echo 'discobot ALL=(ALL) !ALL' > /etc/sudoers.d/discobot-deny \
@@ -181,10 +188,10 @@ RUN su - discobot -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs 
 RUN mkdir -p /home/discobot/.npm-global/bin \
     && chown -R discobot:discobot /home/discobot/.npm-global \
     && printf '%s\n' \
-        '# npm global packages directory' \
-        'export NPM_CONFIG_PREFIX="/home/discobot/.npm-global"' \
-        'export PATH="/home/discobot/.npm-global/bin:$PATH"' \
-        > /etc/profile.d/npm-global.sh \
+    '# npm global packages directory' \
+    'export NPM_CONFIG_PREFIX="/home/discobot/.npm-global"' \
+    'export PATH="/home/discobot/.npm-global/bin:$PATH"' \
+    > /etc/profile.d/npm-global.sh \
     && chmod 644 /etc/profile.d/npm-global.sh
 
 # Copy container-specific agent configuration (Claude Code commands, etc.)
@@ -272,14 +279,14 @@ RUN set -ex \
     && CRANE_VERSION="v0.20.7" \
     # Map Docker TARGETARCH to crane release filename arch
     && if [ "${TARGETARCH}" = "amd64" ]; then \
-        CRANE_ARCH="x86_64"; \
-        CRANE_SHA256="8ef3564d264e6b5ca93f7b7f5652704c4dd29d33935aff6947dd5adefd05953e"; \
+    CRANE_ARCH="x86_64"; \
+    CRANE_SHA256="8ef3564d264e6b5ca93f7b7f5652704c4dd29d33935aff6947dd5adefd05953e"; \
     else \
-        CRANE_ARCH="${TARGETARCH}"; \
-        CRANE_SHA256="b04ee6e4904d9219c76383f5b73521a63f69ecc93c0b1840846eebfd071a6355"; \
+    CRANE_ARCH="${TARGETARCH}"; \
+    CRANE_SHA256="b04ee6e4904d9219c76383f5b73521a63f69ecc93c0b1840846eebfd071a6355"; \
     fi \
     && curl -fsSL -o /tmp/crane.tar.gz \
-        "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
+    "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
     && echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/crane.tar.gz -C /usr/local/bin crane \
     && chmod +x /usr/local/bin/crane \
@@ -314,14 +321,14 @@ COPY --chmod=755 vm-assets/scripts/preload-image.sh /usr/local/bin/
 RUN set -ex \
     # Disable unnecessary systemd services (but keep network services)
     && systemctl mask \
-        getty@.service \
-        serial-getty@.service \
+    getty@.service \
+    serial-getty@.service \
     # Enable network services for connectivity
     && systemctl enable \
-        systemd-networkd \
-        systemd-resolved \
-        systemd-timesyncd \
-        fstrim.timer \
+    systemd-networkd \
+    systemd-resolved \
+    systemd-timesyncd \
+    fstrim.timer \
     # Enable /var initialization and home mount services
     && systemctl enable init-var.service \
     && systemctl enable mount-home.service \
@@ -383,10 +390,10 @@ RUN set -ex \
     && echo "Rootfs size: ${ROOTFS_SIZE_MB}MB" \
     && echo "Creating SquashFS image with zstd compression..." \
     && mksquashfs /rootfs /rootfs.squashfs \
-        -comp zstd \
-        -Xcompression-level 19 \
-        -noappend \
-        -info \
+    -comp zstd \
+    -Xcompression-level 19 \
+    -noappend \
+    -info \
     && SQUASHFS_SIZE_MB=$(du -m /rootfs.squashfs | cut -f1) \
     && RATIO=$((100 - (SQUASHFS_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
     && echo "SquashFS image: ${SQUASHFS_SIZE_MB}MB (${RATIO}% reduction)"
