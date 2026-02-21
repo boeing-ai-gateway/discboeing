@@ -1,6 +1,6 @@
 module github.com/obot-platform/discobot
 
-go 1.25.7
+go 1.26
 
 require (
 	github.com/Code-Hex/vz/v3 v3.7.1

@@ -187,7 +187,7 @@ Multi-stage build producing multiple binaries:
 FROM rust:alpine AS agentfs-builder
 
 # Stage 2: Build proxy (Go - static)
-FROM golang:1.25 AS proxy-builder
+FROM golang:1.26 AS proxy-builder
 
 # Stage 3: Build discobot-agent-api (Bun/glibc - dynamic)
 FROM oven/bun:1.3.9 AS bun-builder

@@ -35,7 +35,7 @@ RUN cargo build --release --no-default-features \
     && strip /build/agentfs-bin
 
 # Stage 2: Build the proxy from source
-FROM golang:1.25 AS proxy-builder
+FROM golang:1.26 AS proxy-builder
 
 WORKDIR /build
 
@@ -52,7 +52,7 @@ COPY proxy/ ./proxy/
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
 # Stage 2b: Build the agent init process from source
-FROM golang:1.25 AS agent-builder
+FROM golang:1.26 AS agent-builder
 
 WORKDIR /build
 
@@ -159,7 +159,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && npm install -g @anthropic-ai/claude-code@${CLI_VERSION} @zed-industries/claude-code-acp pnpm opencode-ai@${OC_VERSION} \
     # Install latest stable Go
     && GO_VERSION=$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1) \
-    && GO_VERSION=go1.25.7 \
     && curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xz \
     # Install uv (Python package installer) to /usr/local/bin
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
