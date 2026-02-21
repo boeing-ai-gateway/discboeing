@@ -5,6 +5,7 @@ import {
 	ChevronRight,
 	Columns2,
 	Loader2,
+	RefreshCw,
 	Rows2,
 	Save,
 	X,
@@ -43,6 +44,7 @@ import {
 	usePersistedState,
 } from "@/lib/hooks/use-persisted-state";
 import {
+	invalidateSessionFiles,
 	useSessionFileContent,
 	useSessionFileDiff,
 	useSessionFiles,
@@ -816,6 +818,20 @@ export function ConsolidatedDiffView() {
 					)}
 				</div>
 				<div className="flex items-center gap-2">
+					{/* Refresh diffs */}
+					<Button
+						variant="ghost"
+						size="sm"
+						className="h-6 px-1.5"
+						onClick={() => {
+							if (selectedSessionId) {
+								invalidateSessionFiles(selectedSessionId);
+							}
+						}}
+						title="Refresh diffs"
+					>
+						<RefreshCw className="h-3.5 w-3.5" />
+					</Button>
 					{/* Diff style toggle */}
 					<div className="flex items-center rounded-md border border-border bg-background">
 						<Button
