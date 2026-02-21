@@ -105,6 +105,24 @@ describe("getSessionStatusIndicator", () => {
 		assert.ok(svg.classList.contains("fill-green-500"), "Should be filled");
 	});
 
+	it("should show clock icon for pending commit status", () => {
+		const session = createMockSession(
+			SessionStatus.READY,
+			CommitStatus.PENDING,
+		);
+		const { container } = render(getSessionStatusIndicator(session));
+		const svg = container.querySelector("svg");
+		assert.ok(svg, "Should render an SVG icon");
+		assert.ok(
+			svg.classList.contains("text-blue-500"),
+			"Should show commit status (blue)",
+		);
+		assert.ok(
+			!svg.classList.contains("animate-spin"),
+			"Should not be spinning",
+		);
+	});
+
 	it("should prioritize commit status over session status", () => {
 		const session = createMockSession(
 			SessionStatus.READY,

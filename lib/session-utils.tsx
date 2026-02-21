@@ -1,4 +1,11 @@
-import { AlertCircle, Check, Circle, Loader2, Pause } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	Circle,
+	Clock,
+	Loader2,
+	Pause,
+} from "lucide-react";
 import {
 	CommitStatus,
 	SessionStatus as SessionStatusConstants,
@@ -53,10 +60,10 @@ export function getSessionStatusIndicator(
 	const iconSize = size === "small" ? "h-2.5 w-2.5" : "h-3.5 w-3.5";
 	const smallIconSize = size === "small" ? "h-2.5 w-2.5" : "h-3 w-3";
 	// Show commit status indicator if commit is in progress, failed, or completed
-	if (
-		session.commitStatus === CommitStatus.PENDING ||
-		session.commitStatus === CommitStatus.COMMITTING
-	) {
+	if (session.commitStatus === CommitStatus.PENDING) {
+		return <Clock className={`${iconSize} text-blue-500`} />;
+	}
+	if (session.commitStatus === CommitStatus.COMMITTING) {
 		return <Loader2 className={`${iconSize} text-blue-500 animate-spin`} />;
 	}
 	if (session.commitStatus === CommitStatus.FAILED) {

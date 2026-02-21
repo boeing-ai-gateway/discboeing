@@ -2,6 +2,7 @@ import {
 	Check,
 	ChevronLeft,
 	ChevronRight,
+	Clock,
 	Copy,
 	FileCode,
 	FileMinus,
@@ -62,10 +63,12 @@ export function SessionViewHeader() {
 	const { diffStats } = useSessionFiles(selectedSessionId, false);
 
 	// Check if session is in a commit state
+	const isSessionCommitPending =
+		selectedSession?.commitStatus === CommitStatus.PENDING;
 	const isSessionCommitting =
-		selectedSession?.commitStatus === CommitStatus.PENDING ||
 		selectedSession?.commitStatus === CommitStatus.COMMITTING;
-	const showCommitLoading = isCommitting || isSessionCommitting;
+	const showCommitBusy =
+		isCommitting || isSessionCommitPending || isSessionCommitting;
 
 	// Terminal reconnect handler
 	const handleTerminalReconnect = React.useCallback(() => {
@@ -409,15 +412,21 @@ export function SessionViewHeader() {
 							size="sm"
 							className="h-6 text-xs gap-1"
 							onClick={handleCommit}
-							disabled={showCommitLoading || !selectedSessionId}
+							disabled={showCommitBusy || !selectedSessionId}
 							title="Commit changes"
 						>
-							{showCommitLoading ? (
+							{isSessionCommitPending ? (
+								<Clock className="h-3.5 w-3.5" />
+							) : showCommitBusy ? (
 								<Loader2 className="h-3.5 w-3.5 animate-spin" />
 							) : (
 								<GitCommitHorizontal className="h-3.5 w-3.5" />
 							)}
-							{showCommitLoading ? "Committing..." : "Commit"}
+							{isSessionCommitPending
+								? "Pending..."
+								: showCommitBusy
+									? "Committing..."
+									: "Commit"}
 						</Button>
 					)}
 					{selectedSessionId && (
