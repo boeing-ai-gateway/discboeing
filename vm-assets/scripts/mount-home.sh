@@ -5,7 +5,7 @@ set -e
 
 # Parse discobot.homedir= from kernel command line
 HOMEDIR=""
-for param in $(cat /proc/cmdline); do
+for param in $(< /proc/cmdline); do
     case "$param" in
         discobot.homedir=*)
             HOMEDIR="${param#discobot.homedir=}"
