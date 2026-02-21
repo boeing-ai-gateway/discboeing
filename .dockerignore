@@ -29,9 +29,6 @@ src-tauri/resources
 # Workspaces (cloned repos)
 server/workspaces
 
-# AgentFS cache
-.agentfs
-
 # IDE / editor tools
 .idea
 .vscode

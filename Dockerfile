@@ -1,40 +1,4 @@
-# Stage 1: Build agentfs from source
-# Using Alpine-based Rust for musl static linking - produces a fully static binary
-FROM rust:alpine AS agentfs-builder
-
-# Install build dependencies for static linking
-# openssl-libs-static and xz-static provide static libraries (.a files) on Alpine
-RUN apk add --no-cache \
-    git \
-    pkgconfig \
-    musl-dev \
-    openssl-dev \
-    openssl-libs-static \
-    xz-dev \
-    xz-static
-
-WORKDIR /build
-
-# Clone agentfs from upstream tursodatabase (PR #271)
-RUN git clone https://github.com/tursodatabase/agentfs.git \
-    && cd agentfs \
-    && git fetch origin pull/271/head:pr-271 \
-    && git checkout pr-271
-
-WORKDIR /build/agentfs/cli
-
-# Configure static linking for OpenSSL and LZMA
-ENV OPENSSL_STATIC=1
-ENV LZMA_API_STATIC=1
-
-# Build with static linking and no sandbox feature (removes libunwind dependency)
-# --no-default-features disables the sandbox feature which requires reverie/libunwind
-# musl + static OpenSSL/LZMA produces a fully static binary with no runtime dependencies
-RUN cargo build --release --no-default-features \
-    && cp target/release/agentfs /build/agentfs-bin \
-    && strip /build/agentfs-bin
-
-# Stage 2: Build the proxy from source
+# Stage 1: Build the proxy from source
 FROM golang:1.26 AS proxy-builder
 
 WORKDIR /build
@@ -51,7 +15,7 @@ COPY proxy/ ./proxy/
 # Build the proxy binary
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
-# Stage 2b: Build the agent init process from source
+# Stage 1b: Build the agent init process from source
 FROM golang:1.26 AS agent-builder
 
 WORKDIR /build
@@ -69,7 +33,7 @@ COPY agent/ ./agent/
 # The go:embed directive will include agent/internal/proxy/default-config.yaml
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-agent ./agent/cmd/agent
 
-# Stage 2c: Extract Claude CLI version from SDK package metadata
+# Stage 1c: Extract Claude CLI version from SDK package metadata
 # The SDK's package.json contains "claudeCodeVersion" field declaring compatible CLI version
 FROM oven/bun:1.3.9-alpine AS version-extractor
 COPY agent-api/package.json agent-api/bun.lock* /tmp/
@@ -82,7 +46,7 @@ RUN bun install --frozen-lockfile 2>/dev/null || bun install \
     && echo "$OC_VERSION" > /opencode-version \
     && echo "OpenCode CLI version from SDK: $OC_VERSION"
 
-# Stage 3: Build the Bun standalone binary (glibc)
+# Stage 2: Build the Bun standalone binary (glibc)
 FROM oven/bun:1.3.9 AS bun-builder
 
 WORKDIR /app
@@ -104,7 +68,7 @@ RUN bun build ./src/index.ts \
     --minify \
     --outfile=discobot-agent-api
 
-# Stage 4: Minimal Ubuntu runtime
+# Stage 3: Minimal Ubuntu runtime
 FROM ubuntu:24.04 AS runtime
 
 # Label for image identification and cleanup
@@ -118,13 +82,11 @@ ENV container=docker
 # systemd + dbus: init system for managing services (PID 1)
 # git is needed for workspace cloning
 # socat is needed for vsock forwarding in VZ VMs
-# fuse3 is needed for agentfs FUSE filesystem
 # nodejs is needed for claude-code-acp
 # pnpm is needed for package management
 # docker.io provides dockerd daemon and docker CLI (runs inside container with privileged mode)
 # docker-buildx is needed for multi-arch builds and advanced build features
 # iptables is needed by dockerd for network management
-# rsync is needed for agentfs to overlayfs migration
 # Copy the extracted CLI version from version-extractor stage
 COPY --from=version-extractor /cli-version /tmp/cli-version
 COPY --from=version-extractor /opencode-version /tmp/opencode-version
@@ -137,7 +99,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     dbus \
     docker-buildx \
     docker.io \
-    fuse3 \
     git \
     iptables \
     jq \
@@ -148,7 +109,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     python3 \
     python3-pip \
     python3-venv \
-    rsync \
     socat \
     sqlite3 \
     sudo \
@@ -169,9 +129,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xz \
     # Install uv (Python package installer) to /usr/local/bin
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
-    && rm -rf /var/lib/apt/lists/* /root/.npm \
-    # Enable user_allow_other in fuse.conf (required for --allow-root mount option)
-    && echo 'user_allow_other' >> /etc/fuse.conf
+    && rm -rf /var/lib/apt/lists/* /root/.npm
 
 # Create discobot user (UID 1000)
 # Handle case where UID 1000 might already be taken by another user
@@ -224,16 +182,14 @@ COPY container-assets/systemd/ /etc/systemd/system/
 
 # Configure systemd for container environment
 RUN systemctl mask \
+    console-getty.service \
     getty@.service \
     serial-getty@.service \
-    # Mask system Docker/containerd services — we manage dockerd ourselves
-    docker.service \
-    docker.socket \
-    containerd.service \
+    systemd-logind.service \
     && systemctl enable \
     discobot-setup.service \
     discobot-proxy.service \
-    discobot-dockerd.service \
+    docker.service \
     discobot-agent-api.service
 
 # Add discobot binaries and npm global bin to PATH
@@ -254,7 +210,7 @@ EXPOSE 3002
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 
-# Stage 5: VZ root filesystem builder with systemd and Docker
+# Stage 4: VZ root filesystem builder with systemd and Docker
 # Build with: docker build --target vz-image --output type=local,dest=. .
 # This creates a minimal systemd-based system with Docker daemon for macOS Virtualization.framework
 # This stage is completely independent from the runtime image
@@ -369,7 +325,7 @@ RUN useradd -m -s /bin/bash -u 1000 discobot || \
 RUN mkdir -p /.data /.workspace /workspace /Users \
     && chown discobot:discobot /.data /workspace
 
-# Stage 6: Extract kernel and initrd, create root filesystem image
+# Stage 5: Extract kernel and initrd, create root filesystem image
 FROM ubuntu:24.04 AS vz-image-builder
 
 # Install tools for image creation and kernel extraction
@@ -421,7 +377,7 @@ RUN set -ex \
     && RATIO=$((100 - (SQUASHFS_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
     && echo "SquashFS image: ${SQUASHFS_SIZE_MB}MB (${RATIO}% reduction)"
 
-# Stage 7: Output stage with kernel and SquashFS root filesystem (no initrd needed)
+# Stage 6: Output stage with kernel and SquashFS root filesystem (no initrd needed)
 FROM scratch AS vz-image
 COPY --from=vz-image-builder /vmlinuz /vmlinuz
 COPY --from=vz-image-builder /kernel-version /kernel-version

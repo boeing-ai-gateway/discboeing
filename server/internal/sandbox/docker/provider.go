@@ -297,7 +297,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	// Build environment variables
 	var env []string
 
-	// Add session ID (required by discobot-agent for AgentFS database naming)
+	// Add session ID (required by discobot-agent for filesystem setup)
 	env = append(env, fmt.Sprintf("SESSION_ID=%s", sessionID))
 
 	// Add hashed secret as DISCOBOT_SECRET env var

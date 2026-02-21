@@ -1,7 +1,7 @@
 // Package main is the entry point for the discobot-agent init process.
 // This binary runs as PID 1 in the container and handles:
 // - Home directory initialization and workspace cloning
-// - Filesystem setup (OverlayFS for new sessions, AgentFS for existing)
+// - Filesystem setup (OverlayFS for copy-on-write session isolation)
 // - Process reaping (zombie collection)
 // - User switching from root to discobot
 // - Child process management with pdeathsig
@@ -66,197 +66,10 @@ const (
 	baseHomeDir     = "/.data/discobot"           // Base home directory (copied from /home/discobot)
 	workspaceDir    = "/.data/discobot/workspace" // Workspace inside home
 	stagingDir      = "/.data/discobot/workspace.staging"
-	agentFSDir      = "/.data/.agentfs"
-	overlayFSDir    = "/.data/.overlayfs"
-	mountHome       = "/home/discobot"    // Where agentfs/overlayfs mounts
-	symlinkPath     = "/workspace"        // Symlink to /home/discobot/workspace
-	tempMigrationFS = "/.data/.migration" // Temporary mount point for migration
+	overlayFSDir = "/.data/.overlayfs"
+	mountHome    = "/home/discobot"   // Where overlayfs mounts
+	symlinkPath  = "/workspace"       // Symlink to /home/discobot/workspace
 )
-
-// filesystemType represents the type of filesystem to use for session isolation
-type filesystemType int
-
-const (
-	fsTypeOverlayFS filesystemType = iota
-	fsTypeAgentFS
-)
-
-func (f filesystemType) String() string {
-	switch f {
-	case fsTypeOverlayFS:
-		return "overlayfs"
-	case fsTypeAgentFS:
-		return "agentfs"
-	default:
-		return "unknown"
-	}
-}
-
-// detectFilesystemType determines which filesystem to use based on existing data.
-// If an agentfs database exists for the session, use agentfs for backwards compatibility.
-// Otherwise, use overlayfs for new sessions.
-func detectFilesystemType(sessionID string) filesystemType {
-	// Check for environment variable override
-	if fsOverride := os.Getenv("DISCOBOT_FILESYSTEM"); fsOverride != "" {
-		switch strings.ToLower(fsOverride) {
-		case "agentfs":
-			fmt.Printf("discobot-agent: filesystem override: agentfs\n")
-			return fsTypeAgentFS
-		case "overlayfs":
-			fmt.Printf("discobot-agent: filesystem override: overlayfs\n")
-			return fsTypeOverlayFS
-		}
-	}
-
-	// Check if migration marker exists (session has already been migrated)
-	migrationMarker := filepath.Join(overlayFSDir, sessionID, ".migrated")
-	if _, err := os.Stat(migrationMarker); err == nil {
-		fmt.Printf("discobot-agent: session already migrated to overlayfs\n")
-		return fsTypeOverlayFS
-	}
-
-	// Default: check for existing agentfs database
-	dbPath := filepath.Join(agentFSDir, sessionID+".db")
-	if _, err := os.Stat(dbPath); err == nil {
-		return fsTypeAgentFS
-	}
-	return fsTypeOverlayFS
-}
-
-// migrateAgentFSToOverlayFS migrates an existing agentfs session to overlayfs.
-// It mounts agentfs at a temporary location, creates overlayfs at the target,
-// rsyncs the data, and marks the migration as complete.
-func migrateAgentFSToOverlayFS(sessionID string, userInfo *userInfo) error {
-	fmt.Printf("discobot-agent: starting migration from agentfs to overlayfs for session %s\n", sessionID)
-
-	// Ensure migration directory exists with correct ownership
-	if err := os.MkdirAll(tempMigrationFS, 0755); err != nil {
-		return fmt.Errorf("failed to create migration directory: %w", err)
-	}
-	if err := os.Chown(tempMigrationFS, userInfo.uid, userInfo.gid); err != nil {
-		return fmt.Errorf("failed to chown migration directory: %w", err)
-	}
-
-	// Step 1: Mount agentfs at temporary location
-	fmt.Printf("discobot-agent: mounting agentfs at temporary location %s\n", tempMigrationFS)
-	if err := mountAgentFSAtPath(sessionID, tempMigrationFS, userInfo); err != nil {
-		return fmt.Errorf("failed to mount agentfs for migration: %w", err)
-	}
-
-	// Ensure cleanup on error
-	defer func() {
-		fmt.Printf("discobot-agent: unmounting temporary agentfs\n")
-		if err := syscall.Unmount(tempMigrationFS, 0); err != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to unmount %s: %v\n", tempMigrationFS, err)
-		}
-	}()
-
-	// Step 2: Setup overlayfs directories at target location
-	fmt.Printf("discobot-agent: setting up overlayfs for migration\n")
-	if err := setupOverlayFS(sessionID, userInfo); err != nil {
-		return fmt.Errorf("failed to setup overlayfs for migration: %w", err)
-	}
-
-	// Step 3: Mount overlayfs at target
-	fmt.Printf("discobot-agent: mounting overlayfs at %s\n", mountHome)
-	if err := mountOverlayFS(sessionID); err != nil {
-		// Clean up overlayfs directories if mount fails
-		if cleanErr := os.RemoveAll(filepath.Join(overlayFSDir, sessionID)); cleanErr != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to cleanup overlayfs directory: %v\n", cleanErr)
-		}
-		return fmt.Errorf("failed to mount overlayfs for migration: %w", err)
-	}
-
-	// Ensure overlayfs cleanup on error
-	defer func() {
-		// Only unmount if we're returning an error (normal path will keep it mounted)
-		if r := recover(); r != nil {
-			fmt.Printf("discobot-agent: unmounting overlayfs due to panic\n")
-			if unmountErr := syscall.Unmount(mountHome, 0); unmountErr != nil {
-				fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to unmount overlayfs: %v\n", unmountErr)
-			}
-			panic(r)
-		}
-	}()
-
-	// Step 4: Rsync from temp agentfs to target overlayfs
-	fmt.Printf("discobot-agent: syncing data from agentfs to overlayfs (this may take a while)\n")
-	rsyncCmd := exec.Command("rsync",
-		"-a",                // archive mode (preserve permissions, timestamps, etc.)
-		"--delete",          // delete files in destination that don't exist in source
-		tempMigrationFS+"/", // source (trailing slash is important for rsync)
-		mountHome+"/",       // destination
-	)
-	rsyncCmd.Stdout = os.Stdout
-	rsyncCmd.Stderr = os.Stderr
-	if err := rsyncCmd.Run(); err != nil {
-		if unmountErr := syscall.Unmount(mountHome, 0); unmountErr != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to unmount overlayfs: %v\n", unmountErr)
-		}
-		if cleanErr := os.RemoveAll(filepath.Join(overlayFSDir, sessionID)); cleanErr != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to cleanup overlayfs directory: %v\n", cleanErr)
-		}
-		return fmt.Errorf("rsync failed: %w", err)
-	}
-
-	fmt.Printf("discobot-agent: data sync completed successfully\n")
-
-	// Step 5: Unmount temporary agentfs
-	fmt.Printf("discobot-agent: unmounting temporary agentfs\n")
-	if err := syscall.Unmount(tempMigrationFS, 0); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to unmount temporary agentfs: %v\n", err)
-		// Continue anyway - this is not fatal
-	}
-
-	// Step 6: Create migration marker
-	migrationMarker := filepath.Join(overlayFSDir, sessionID, ".migrated")
-	fmt.Printf("discobot-agent: creating migration marker at %s\n", migrationMarker)
-	if err := os.WriteFile(migrationMarker, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to create migration marker: %v\n", err)
-		// Continue anyway - the migration is complete
-	}
-
-	fmt.Printf("discobot-agent: migration completed successfully\n")
-	fmt.Printf("discobot-agent: note: agentfs database is preserved at %s for backup\n", filepath.Join(agentFSDir, sessionID+".db"))
-
-	return nil
-}
-
-// mountAgentFSAtPath mounts agentfs at a specific path (used for migration)
-func mountAgentFSAtPath(sessionID, mountPath string, u *userInfo) error {
-	const maxRetries = 10
-
-	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		fmt.Printf("discobot-agent: mounting agentfs %s at %s (attempt %d/%d)\n", sessionID, mountPath, attempt, maxRetries)
-
-		cmd := exec.Command("agentfs", "mount", "-a", "--allow-root", sessionID, mountPath)
-		cmd.Dir = dataDir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Credential: &syscall.Credential{
-				Uid:    uint32(u.uid),
-				Gid:    uint32(u.gid),
-				Groups: u.groups,
-			},
-		}
-
-		if err := cmd.Run(); err != nil {
-			lastErr = err
-			fmt.Fprintf(os.Stderr, "discobot-agent: agentfs mount attempt %d failed: %v\n", attempt, err)
-			if attempt < maxRetries {
-				time.Sleep(time.Second)
-			}
-			continue
-		}
-
-		fmt.Printf("discobot-agent: agentfs mounted successfully at %s\n", mountPath)
-		return nil
-	}
-
-	return fmt.Errorf("agentfs mount failed after %d retries: %w", maxRetries, lastErr)
-}
 
 func main() {
 	if len(os.Args) > 1 {
@@ -352,64 +165,17 @@ func run() error {
 	}
 	fmt.Printf("discobot-agent: [%.3fs] workspace setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 3: Detect filesystem type (overlayfs for new sessions, agentfs for existing)
-	fsType := detectFilesystemType(sessionID)
-
-	// Step 4: Setup and mount filesystem based on type
+	// Step 3: Setup and mount OverlayFS for copy-on-write session isolation
 	stepStart = time.Now()
-	switch fsType {
-	case fsTypeAgentFS:
-		fmt.Printf("discobot-agent: agentfs session detected, migrating to overlayfs\n")
+	fmt.Printf("discobot-agent: using OverlayFS\n")
 
-		// Ensure agentfs directory exists with correct ownership
-		if err := os.MkdirAll(agentFSDir, 0755); err != nil {
-			return fmt.Errorf("failed to create agentfs directory: %w", err)
-		}
-		if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
-			return fmt.Errorf("failed to chown agentfs directory: %w", err)
-		}
-
-		// Initialize agentfs database if needed (as discobot user)
-		if err := initAgentFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("agentfs init failed: %w", err)
-		}
-
-		// Perform migration from agentfs to overlayfs
-		if err := migrateAgentFSToOverlayFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("migration from agentfs to overlayfs failed: %w", err)
-		}
-
-	case fsTypeOverlayFS:
-		fmt.Printf("discobot-agent: using OverlayFS (new session)\n")
-
-		// Setup overlayfs directory structure
-		if err := setupOverlayFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("overlayfs setup failed: %w", err)
-		}
-
-		// Mount overlayfs over /home/discobot
-		if err := mountOverlayFS(sessionID); err != nil {
-			// Fallback to agentfs if overlayfs fails
-			fmt.Printf("discobot-agent: overlayfs failed, falling back to agentfs: %v\n", err)
-			if cleanErr := os.RemoveAll(filepath.Join(overlayFSDir, sessionID)); cleanErr != nil {
-				fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to cleanup overlayfs directory: %v\n", cleanErr)
-			}
-
-			if err := os.MkdirAll(agentFSDir, 0755); err != nil {
-				return fmt.Errorf("failed to create agentfs directory: %w", err)
-			}
-			if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
-				return fmt.Errorf("failed to chown agentfs directory: %w", err)
-			}
-			if err := initAgentFS(sessionID, userInfo); err != nil {
-				return fmt.Errorf("agentfs init failed: %w", err)
-			}
-			if err := mountAgentFS(sessionID, userInfo); err != nil {
-				return fmt.Errorf("agentfs mount (fallback) failed: %w", err)
-			}
-		}
+	if err := setupOverlayFS(sessionID, userInfo); err != nil {
+		return fmt.Errorf("overlayfs setup failed: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (%s)\n", time.Since(stepStart).Seconds(), fsType)
+	if err := mountOverlayFS(sessionID); err != nil {
+		return fmt.Errorf("overlayfs mount failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
 
 	// Step 4.5: Mount cache directories on top of the overlay
 	stepStart = time.Now()
@@ -533,51 +299,17 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-agent: [%.3fs] workspace setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 3: Detect and setup filesystem
-	fsType := detectFilesystemType(sessionID)
-
+	// Step 3: Setup and mount OverlayFS for copy-on-write session isolation
 	stepStart = time.Now()
-	switch fsType {
-	case fsTypeAgentFS:
-		fmt.Printf("discobot-agent: agentfs session detected, migrating to overlayfs\n")
-		if err := os.MkdirAll(agentFSDir, 0755); err != nil {
-			return fmt.Errorf("failed to create agentfs directory: %w", err)
-		}
-		if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
-			return fmt.Errorf("failed to chown agentfs directory: %w", err)
-		}
-		if err := initAgentFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("agentfs init failed: %w", err)
-		}
-		if err := migrateAgentFSToOverlayFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("migration from agentfs to overlayfs failed: %w", err)
-		}
+	fmt.Printf("discobot-agent: using OverlayFS\n")
 
-	case fsTypeOverlayFS:
-		fmt.Printf("discobot-agent: using OverlayFS (new session)\n")
-		if err := setupOverlayFS(sessionID, userInfo); err != nil {
-			return fmt.Errorf("overlayfs setup failed: %w", err)
-		}
-		if err := mountOverlayFS(sessionID); err != nil {
-			fmt.Printf("discobot-agent: overlayfs failed, falling back to agentfs: %v\n", err)
-			if cleanErr := os.RemoveAll(filepath.Join(overlayFSDir, sessionID)); cleanErr != nil {
-				fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to cleanup overlayfs directory: %v\n", cleanErr)
-			}
-			if err := os.MkdirAll(agentFSDir, 0755); err != nil {
-				return fmt.Errorf("failed to create agentfs directory: %w", err)
-			}
-			if err := os.Chown(agentFSDir, userInfo.uid, userInfo.gid); err != nil {
-				return fmt.Errorf("failed to chown agentfs directory: %w", err)
-			}
-			if err := initAgentFS(sessionID, userInfo); err != nil {
-				return fmt.Errorf("agentfs init failed: %w", err)
-			}
-			if err := mountAgentFS(sessionID, userInfo); err != nil {
-				return fmt.Errorf("agentfs mount (fallback) failed: %w", err)
-			}
-		}
+	if err := setupOverlayFS(sessionID, userInfo); err != nil {
+		return fmt.Errorf("overlayfs setup failed: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (%s)\n", time.Since(stepStart).Seconds(), fsType)
+	if err := mountOverlayFS(sessionID); err != nil {
+		return fmt.Errorf("overlayfs mount failed: %w", err)
+	}
+	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
 
 	// Step 4: Mount cache directories
 	stepStart = time.Now()
@@ -879,7 +611,7 @@ func setupGitSafeDirectories(workspacePath string) error {
 		"/.workspace/.git",                    // Git directory (some operations check .git specifically)
 		workspaceDir,                          // /.data/discobot/workspace
 		stagingDir,                            // /.data/discobot/workspace.staging (used during clone)
-		filepath.Join(mountHome, "workspace"), // /home/discobot/workspace (after agentfs mount)
+		filepath.Join(mountHome, "workspace"), // /home/discobot/workspace (after overlayfs mount)
 		symlinkPath,                           // /workspace symlink
 	}
 
@@ -1151,106 +883,6 @@ func chownRecursive(path string, uid, gid int) error {
 		}
 		return os.Lchown(name, uid, gid)
 	})
-}
-
-// initAgentFS initializes the agentfs database if it doesn't exist
-func initAgentFS(sessionID string, u *userInfo) error {
-	dbPath := filepath.Join(agentFSDir, sessionID+".db")
-
-	// Check if database already exists
-	if _, err := os.Stat(dbPath); err == nil {
-		fmt.Printf("discobot-agent: agentfs database already exists at %s\n", dbPath)
-		return nil
-	}
-
-	fmt.Printf("discobot-agent: initializing agentfs for session %s\n", sessionID)
-
-	cmd := exec.Command("agentfs", "init", "--base", baseHomeDir, sessionID)
-	cmd.Dir = dataDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{
-			Uid:    uint32(u.uid),
-			Gid:    uint32(u.gid),
-			Groups: u.groups,
-		},
-	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("agentfs init failed: %w", err)
-	}
-
-	fmt.Printf("discobot-agent: agentfs initialized successfully\n")
-	return nil
-}
-
-// mountAgentFS mounts the agentfs database over /home/discobot
-// It retries up to 10 times, then attempts foreground mode for debug output
-func mountAgentFS(sessionID string, u *userInfo) error {
-	const maxRetries = 10
-
-	// Try mounting in daemon mode (with -a flag) up to maxRetries times
-	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		fmt.Printf("discobot-agent: mounting agentfs %s at %s (attempt %d/%d)\n", sessionID, mountHome, attempt, maxRetries)
-
-		// -a: auto-unmount on exit (daemon mode)
-		// --allow-root: allow root to access the FUSE mount
-		cmd := exec.Command("agentfs", "mount", "-a", "--allow-root", sessionID, mountHome)
-		cmd.Dir = dataDir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Credential: &syscall.Credential{
-				Uid:    uint32(u.uid),
-				Gid:    uint32(u.gid),
-				Groups: u.groups,
-			},
-		}
-
-		if err := cmd.Run(); err != nil {
-			lastErr = err
-			fmt.Fprintf(os.Stderr, "discobot-agent: agentfs mount attempt %d failed: %v\n", attempt, err)
-			if attempt < maxRetries {
-				time.Sleep(time.Second) // Brief delay before retry
-			}
-			continue
-		}
-
-		fmt.Printf("discobot-agent: agentfs mounted successfully\n")
-		return nil
-	}
-
-	// All retries failed - try foreground mode to capture debug output
-	fmt.Fprintf(os.Stderr, "discobot-agent: ERROR: agentfs mount failed %d times\n", maxRetries)
-	fmt.Fprintf(os.Stderr, "discobot-agent: attempting foreground mount to capture debug logs...\n")
-
-	// Run with -f flag for foreground mode to capture debug output
-	cmd := exec.Command("agentfs", "mount", "-a", "-f", "--allow-root", sessionID, mountHome)
-	cmd.Dir = dataDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{
-			Uid:    uint32(u.uid),
-			Gid:    uint32(u.gid),
-			Groups: u.groups,
-		},
-	}
-
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: foreground mount also failed: %v\n", err)
-		fmt.Fprintf(os.Stderr, "discobot-agent: sleeping forever for debug (docker exec to investigate)\n")
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig)
-		<-sig
-		// Won't reach here, but return for completeness
-		return fmt.Errorf("agentfs mount failed after %d retries and foreground attempt: %w", maxRetries, lastErr)
-	}
-
-	// Foreground mount succeeded (unexpected but handle it)
-	fmt.Printf("discobot-agent: agentfs foreground mount succeeded\n")
-	return nil
 }
 
 // setupOverlayFS creates the directory structure for overlayfs

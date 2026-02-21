@@ -44,9 +44,6 @@ next-env.d.ts
 # VZ build artifacts (rootfs image, kernel)
 /src-tauri/resources
 
-# Agent filesystem cache
-.agentfs/
-
 # Binaries
 proxy/discobot-proxy
 server/server
