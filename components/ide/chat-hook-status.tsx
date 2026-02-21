@@ -66,7 +66,10 @@ export function ChatHookStatus({
 	const [isExpanded, setIsExpanded] = React.useState(false);
 
 	const hooks = Object.values(hooksStatus?.hooks ?? {});
-	const passedCount = hooks.filter((h) => h.lastResult === "success").length;
+	const pendingSet = new Set(hooksStatus?.pendingHooks ?? []);
+	const passedCount = hooks.filter(
+		(h) => h.lastResult === "success" && !pendingSet.has(h.hookId),
+	).length;
 	const totalCount = hooks.length;
 	const hasFailures = hooks.some((h) => h.lastResult === "failure");
 	const hasRunning = hooks.some((h) => h.lastResult === "running");
@@ -135,9 +138,7 @@ export const HookStatusButton = React.memo(function HookStatusButton() {
 			) : (
 				<Zap className="h-3.5 w-3.5 text-green-500" />
 			)}
-			<span className="text-xs font-medium">
-				{passedCount}/{totalCount}
-			</span>
+			<span className="text-xs font-medium">{passedCount}</span>
 		</Button>
 	);
 });
@@ -154,9 +155,10 @@ export const HookStatusPanel = React.memo(function HookStatusPanel({
 	hooksStatus,
 }: HookStatusPanelProps) {
 	const context = useHookStatusContext();
-	const [selectedHook, setSelectedHook] = React.useState<HookRunStatus | null>(
-		null,
-	);
+	const [selectedHook, setSelectedHook] = React.useState<{
+		hook: HookRunStatus;
+		isPending: boolean;
+	} | null>(null);
 
 	if (!context) {
 		return null;
@@ -188,7 +190,12 @@ export const HookStatusPanel = React.memo(function HookStatusPanel({
 									key={hook.hookId}
 									hook={hook}
 									isPending={pendingSet.has(hook.hookId)}
-									onClick={() => setSelectedHook(hook)}
+									onClick={() =>
+										setSelectedHook({
+											hook,
+											isPending: pendingSet.has(hook.hookId),
+										})
+									}
 								/>
 							))}
 						</QueueList>
@@ -196,7 +203,8 @@ export const HookStatusPanel = React.memo(function HookStatusPanel({
 				</QueueSection>
 			</div>
 			<HookDetailDialog
-				hook={selectedHook}
+				hook={selectedHook?.hook ?? null}
+				isPending={selectedHook?.isPending ?? false}
 				sessionId={sessionId}
 				onClose={() => setSelectedHook(null)}
 			/>
@@ -281,10 +289,12 @@ function HookStatusItem({
 
 function HookDetailDialog({
 	hook,
+	isPending,
 	sessionId,
 	onClose,
 }: {
 	hook: HookRunStatus | null;
+	isPending: boolean;
 	sessionId: string | null;
 	onClose: () => void;
 }) {
@@ -343,7 +353,7 @@ function HookDetailDialog({
 	const isRunning = hook.lastResult === "running";
 	const isSuccess = hook.lastResult === "success";
 	const isFailure = hook.lastResult === "failure";
-	const canRerun = isFailure && !rerunning;
+	const canRerun = (isFailure || isPending) && !rerunning;
 
 	return (
 		<Dialog open={!!hook} onOpenChange={(open) => !open && onClose()}>
@@ -351,6 +361,7 @@ function HookDetailDialog({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<HookStatusIcon
+							isPending={isPending}
 							isRunning={isRunning}
 							isSuccess={isSuccess}
 							isFailure={isFailure}
@@ -368,6 +379,7 @@ function HookDetailDialog({
 				{/* Stats row */}
 				<div className="flex items-center gap-4 text-sm">
 					<StatusBadge
+						isPending={isPending}
 						isRunning={isRunning}
 						isSuccess={isSuccess}
 						isFailure={isFailure}
@@ -449,16 +461,20 @@ function OutputWithLineNumbers({ output }: { output: string }) {
 }
 
 function HookStatusIcon({
+	isPending,
 	isRunning,
 	isSuccess,
 	isFailure,
 }: {
+	isPending?: boolean;
 	isRunning: boolean;
 	isSuccess: boolean;
 	isFailure: boolean;
 }) {
 	if (isRunning)
 		return <Loader2 className="h-5 w-5 text-blue-500 animate-spin shrink-0" />;
+	if (isPending)
+		return <Clock className="h-5 w-5 text-muted-foreground shrink-0" />;
 	if (isSuccess)
 		return <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />;
 	if (isFailure) return <XCircle className="h-5 w-5 text-red-500 shrink-0" />;
@@ -466,10 +482,12 @@ function HookStatusIcon({
 }
 
 function StatusBadge({
+	isPending,
 	isRunning,
 	isSuccess,
 	isFailure,
 }: {
+	isPending?: boolean;
 	isRunning: boolean;
 	isSuccess: boolean;
 	isFailure: boolean;
@@ -479,6 +497,13 @@ function StatusBadge({
 			<span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-blue-500/10 text-blue-500">
 				<Loader2 className="h-3 w-3 animate-spin" />
 				Running
+			</span>
+		);
+	}
+	if (isPending) {
+		return (
+			<span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
+				Pending
 			</span>
 		);
 	}
