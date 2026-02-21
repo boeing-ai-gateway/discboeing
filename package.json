@@ -41,7 +41,7 @@
 		"check:skills": ".claude/scripts/validate-skills.sh",
 		"format": "biome format . --write",
 		"typecheck": "tsc --noEmit",
-		"ci": "pnpm check:fix && pnpm test:unit && pnpm build:frontend && ([ \"$CI\" = \"true\" ] && git diff --exit-code || true)",
+		"ci": "pnpm check && pnpm test:unit && pnpm build:frontend && ([ \"$CI\" = \"true\" ] && git diff --exit-code || true)",
 		"tauri": "tauri",
 		"refresh-models": "./scripts/refresh-models-data.sh"
 	},

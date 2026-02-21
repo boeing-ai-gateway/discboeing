@@ -60,7 +60,7 @@ node --import ./test/setup.js --import tsx --test lib/hooks/use-messages.test.ts
 ### CI
 
 ```bash
-pnpm ci                 # Full CI pipeline: check:fix → test:unit → build
+pnpm ci                 # Full CI pipeline: check → test:unit → build
 ```
 
 ## Architecture
