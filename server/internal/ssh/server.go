@@ -325,7 +325,7 @@ func (h *sessionHandler) handleSessionChannel(newChannel ssh.NewChannel) {
 			if req.WantReply {
 				_ = req.Reply(true, nil)
 			}
-			h.runExec(channel, command, envVars)
+			h.runExec(channel, command, ptyReq, envVars)
 			return
 
 		case "subsystem":
@@ -402,7 +402,7 @@ func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVa
 	sendExitStatus(channel, uint32(exitCode))
 }
 
-func (h *sessionHandler) runExec(channel ssh.Channel, command string, envVars map[string]string) {
+func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *ptyRequest, envVars map[string]string) {
 	ctx := context.Background()
 
 	// Get user for this session (uid:gid format)
@@ -412,6 +412,7 @@ func (h *sessionHandler) runExec(channel ssh.Channel, command string, envVars ma
 	stream, err := h.provider.ExecStream(ctx, h.sessionID, []string{"sh", "-c", command}, sandbox.ExecStreamOptions{
 		Env:  envVars,
 		User: user,
+		TTY:  ptyReq != nil,
 	})
 
 	if err != nil {

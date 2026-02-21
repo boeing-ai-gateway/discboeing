@@ -277,11 +277,12 @@ type PTY interface {
 	Wait(ctx context.Context) (int, error)
 }
 
-// ExecStreamOptions configures streaming command execution (no TTY).
+// ExecStreamOptions configures streaming command execution.
 type ExecStreamOptions struct {
 	WorkDir string            // Working directory for command
 	Env     map[string]string // Additional environment variables
 	User    string            // User to run as (empty = default)
+	TTY     bool              // Allocate a pseudo-terminal for the command
 }
 
 // Stream represents a bidirectional stream to a command (no TTY).

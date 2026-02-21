@@ -1151,7 +1151,7 @@ func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []strin
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          false, // No TTY for binary-safe streaming
+		Tty:          opts.TTY,
 		Env:          env,
 		User:         opts.User,
 		WorkingDir:   opts.WorkDir,
@@ -1163,10 +1163,24 @@ func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []strin
 	}
 
 	resp, err := p.client.ContainerExecAttach(ctx, execCreate.ID, containerTypes.ExecStartOptions{
-		Tty: false,
+		Tty: opts.TTY,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach exec: %w", err)
+	}
+
+	if opts.TTY {
+		// In TTY mode, stdout and stderr are merged into a single stream.
+		// Read directly from the hijacked connection (no demultiplexing).
+		return &dockerStream{
+			client:       p.client,
+			execID:       execCreate.ID,
+			hijacked:     resp,
+			stdoutReader: nil,
+			stderrReader: nil,
+			tty:          true,
+			closeOnce:    sync.Once{},
+		}, nil
 	}
 
 	// Create pipes for demultiplexed stdout and stderr
@@ -1379,21 +1393,28 @@ func (p *dockerPTY) Wait(ctx context.Context) (int, error) {
 	}
 }
 
-// dockerStream implements sandbox.Stream for Docker exec sessions without TTY.
+// dockerStream implements sandbox.Stream for Docker exec sessions.
 type dockerStream struct {
 	client       *client.Client
 	execID       string
 	hijacked     types.HijackedResponse
 	stdoutReader *io.PipeReader
 	stderrReader *io.PipeReader
+	tty          bool
 	closeOnce    sync.Once
 }
 
 func (s *dockerStream) Read(b []byte) (int, error) {
+	if s.tty {
+		return s.hijacked.Reader.Read(b)
+	}
 	return s.stdoutReader.Read(b)
 }
 
 func (s *dockerStream) Stderr() io.Reader {
+	if s.tty {
+		return nil
+	}
 	return s.stderrReader
 }
 
