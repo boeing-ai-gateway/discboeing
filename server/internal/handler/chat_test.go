@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -282,11 +283,11 @@ func TestChat_ClientDisconnect_StatusRemainsRunning(t *testing.T) {
 	// is in the streaming loop when we cancel the request context.
 	sseStarted := make(chan struct{})
 	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat" && r.Method == "POST" {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST" {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
-		if r.URL.Path == "/chat" && r.Method == "GET" {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" {
 			if r.Header.Get("Accept") == "text/event-stream" {
 				w.Header().Set("Content-Type", "text/event-stream")
 				w.WriteHeader(http.StatusOK)

@@ -123,7 +123,7 @@ func TestChatStream_ActiveStream_FirstMessageConsumed(t *testing.T) {
 
 	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only handle GET /chat for SSE streams
-		if r.Method != "GET" || r.URL.Path != "/chat" {
+		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/chat") {
 			http.NotFound(w, r)
 			return
 		}
@@ -224,7 +224,7 @@ func TestChatStream_ActiveStream_SlowMessages(t *testing.T) {
 
 	// Configure mock sandbox to send messages with delays
 	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/chat" {
+		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/chat") {
 			http.NotFound(w, r)
 			return
 		}
@@ -315,7 +315,7 @@ func TestChatStream_ActiveStream_OnlyDone(t *testing.T) {
 
 	// Configure mock sandbox to send only DONE signal
 	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/chat" {
+		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/chat") {
 			http.NotFound(w, r)
 			return
 		}

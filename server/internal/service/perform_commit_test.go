@@ -228,13 +228,13 @@ func (h *mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer h.mu.Unlock()
 
 	switch {
-	case r.URL.Path == "/chat" && r.Method == "POST":
+	case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST":
 		h.chatRequests = append(h.chatRequests, r.URL.String())
 		// POST returns 202 Accepted, then client does GET for SSE stream
 		w.WriteHeader(http.StatusAccepted)
 		return
 
-	case r.URL.Path == "/chat" && r.Method == "GET":
+	case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET":
 		// GET returns SSE stream
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
@@ -800,12 +800,12 @@ type trackingHandler struct {
 
 func (h *trackingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case r.URL.Path == "/chat" && r.Method == "POST":
+	case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST":
 		if h.onChat != nil {
 			h.onChat(w, r)
 		}
-	case r.URL.Path == "/chat" && r.Method == "GET":
-		// Return SSE stream for GET /chat
+	case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET":
+		// Return SSE stream for GET /:agent/chat
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")

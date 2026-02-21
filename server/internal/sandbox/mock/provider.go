@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -718,14 +719,15 @@ func (w *pipeResponseWriter) ensureHeaderReady() {
 }
 
 // defaultMockHandler returns a handler that responds like a basic sandbox.
-// POST /chat returns 202 Accepted, GET /chat returns 200 with SSE stream.
+// POST /:agent/chat returns 202 Accepted, GET /:agent/chat returns 200 with SSE stream.
 // Also supports file endpoints for testing.
+// Uses HasSuffix for agent-prefixed paths (e.g., /claude-code/chat).
 func defaultMockHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
-		case r.URL.Path == "/chat":
+		case strings.HasSuffix(r.URL.Path, "/chat"):
 			if r.Method == "POST" {
 				w.WriteHeader(http.StatusAccepted)
 				return

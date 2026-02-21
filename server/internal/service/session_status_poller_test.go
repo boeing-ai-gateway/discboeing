@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestSessionStatusPoller_MarksStaleSessions(t *testing.T) {
 
 	// Create mock agent API that returns isRunning: false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
 				IsRunning:    false,
@@ -136,7 +137,7 @@ func TestSessionStatusPoller_RaceCondition_AgentNotStarted(t *testing.T) {
 	// Simulate agent API that hasn't started completion yet
 	var agentStarted atomic.Bool
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			// Return isRunning based on whether agent has started
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
@@ -250,7 +251,7 @@ func TestSessionStatusPoller_MultipleSessionsAfterChatFinishes(t *testing.T) {
 
 	// Create mock agent API with per-session state
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			// Extract session ID from somewhere - in reality this comes from the sandbox routing
 			// For this test, we'll use a simple approach
 			w.Header().Set("Content-Type", "application/json")

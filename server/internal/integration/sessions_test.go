@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -335,7 +336,7 @@ func TestListMessages(t *testing.T) {
 
 	// Set up mock sandbox HTTP server that responds to /chat
 	mockSandboxServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat" && r.Method == "GET" && r.Header.Get("Accept") != "text/event-stream" {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" && r.Header.Get("Accept") != "text/event-stream" {
 			// Return empty messages array
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -581,7 +582,7 @@ func TestCommitSession_SendsCommitMessageToAgent(t *testing.T) {
 
 	// Set up a custom HTTP handler to capture messages sent to /chat
 	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat" && r.Method == "POST" {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST" {
 			// Capture the request body
 			body, _ := io.ReadAll(r.Body)
 			r.Body.Close()
@@ -598,7 +599,7 @@ func TestCommitSession_SendsCommitMessageToAgent(t *testing.T) {
 			return
 		}
 
-		if r.URL.Path == "/chat" && r.Method == "GET" {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" {
 			// Return SSE stream with DONE
 			if r.Header.Get("Accept") == "text/event-stream" {
 				w.Header().Set("Content-Type", "text/event-stream")

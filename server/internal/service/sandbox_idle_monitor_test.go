@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 
 	// Create mock agent API that returns not running
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
 				IsRunning:    false,
@@ -152,7 +153,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 
 	// Create mock agent API that returns running completion
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			completionID := "active-completion"
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
@@ -253,7 +254,7 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 	var stopCalled atomic.Bool
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
 				IsRunning:    false,
@@ -477,7 +478,7 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 	var stopCount atomic.Int32
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/chat/status" {
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(sandboxapi.ChatStatusResponse{
 				IsRunning:    false,

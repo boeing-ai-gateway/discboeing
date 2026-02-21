@@ -50,15 +50,24 @@ func MakeCredentialFetcher(s *store.Store, credSvc *CredentialService) Credentia
 type SandboxChatClient struct {
 	provider          sandbox.Provider
 	credentialFetcher CredentialFetcher
+	agentType         string // Agent type for URL routing (e.g., "claude-code", "opencode")
 }
 
 // NewSandboxChatClient creates a new sandbox chat client.
 // The fetcher parameter is optional - if nil, credentials will not be automatically fetched.
-func NewSandboxChatClient(provider sandbox.Provider, fetcher CredentialFetcher) *SandboxChatClient {
+// agentType specifies the agent implementation to use (e.g., "claude-code", "opencode").
+func NewSandboxChatClient(provider sandbox.Provider, fetcher CredentialFetcher, agentType string) *SandboxChatClient {
 	return &SandboxChatClient{
 		provider:          provider,
 		credentialFetcher: fetcher,
+		agentType:         agentType,
 	}
+}
+
+// agentURL returns a URL prefixed with the agent type for agent-specific routes.
+// For example, agentURL("/chat") returns "http://sandbox/claude-code/chat".
+func (c *SandboxChatClient) agentURL(path string) string {
+	return "http://sandbox/" + c.agentType + path
 }
 
 // isRetryableError checks if an error is a transient protocol error that should be retried.
@@ -232,7 +241,7 @@ func (c *SandboxChatClient) SendMessages(ctx context.Context, sessionID string, 
 
 		// Create the HTTP request (fresh each attempt since body reader is consumed)
 		// URL host is ignored - the client's transport handles routing to the sandbox
-		req, err := http.NewRequestWithContext(ctx, "POST", "http://sandbox/chat", bytes.NewReader(bodyBytes))
+		req, err := http.NewRequestWithContext(ctx, "POST", c.agentURL("/chat"), bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -281,7 +290,7 @@ func (c *SandboxChatClient) GetStream(ctx context.Context, sessionID string, opt
 		}
 
 		// URL host is ignored - the client's transport handles routing to the sandbox
-		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/chat", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", c.agentURL("/chat"), nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -372,7 +381,7 @@ func (c *SandboxChatClient) GetMessages(ctx context.Context, sessionID string, o
 		}
 
 		// URL host is ignored - the client's transport handles routing to the sandbox
-		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/chat", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", c.agentURL("/chat"), nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -416,7 +425,7 @@ func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID string)
 			return nil, 0, err
 		}
 
-		url := "http://sandbox/chat/status"
+		url := c.agentURL("/chat/status")
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
@@ -466,7 +475,7 @@ func (c *SandboxChatClient) CancelCompletion(ctx context.Context, sessionID stri
 			return nil, 0, err
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", "http://sandbox/chat/cancel", nil)
+		req, err := http.NewRequestWithContext(ctx, "POST", c.agentURL("/chat/cancel"), nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -517,7 +526,7 @@ func (c *SandboxChatClient) GetQuestion(ctx context.Context, sessionID string, t
 			return nil, 0, err
 		}
 
-		url := "http://sandbox/chat/question"
+		url := c.agentURL("/chat/question")
 		if toolUseID != "" {
 			url += "?toolUseID=" + toolUseID
 		}
@@ -569,7 +578,7 @@ func (c *SandboxChatClient) AnswerQuestion(ctx context.Context, sessionID string
 			return nil, 0, err
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", "http://sandbox/chat/answer", bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.agentURL("/chat/answer"), bytes.NewReader(body))
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -907,7 +916,7 @@ func (c *SandboxChatClient) GetModels(ctx context.Context, sessionID string) (*s
 			return nil, 0, err
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/models", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", c.agentURL("/models"), nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
