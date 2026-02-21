@@ -4,9 +4,13 @@
  * Add your provider here to run contract tests against it.
  */
 
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Agent } from "../../src/agent/interface.js";
 import type { UIMessage } from "../../src/api/types.js";
 import { ClaudeSDKClient } from "../../src/claude-sdk/client.js";
+import { OpenCodeClient } from "../../src/opencode-sdk/client.js";
 
 export interface ProviderConfig {
 	name: string;
@@ -16,6 +20,7 @@ export interface ProviderConfig {
 		simple: UIMessage;
 		withTools: UIMessage;
 		continuation: UIMessage;
+		withQuestion: UIMessage;
 	};
 }
 
@@ -59,16 +64,71 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
 					},
 				],
 			},
+			withQuestion: {
+				id: "msg-q",
+				role: "user",
+				parts: [
+					{
+						type: "text",
+						text: "Before doing anything else, ask me a multiple choice question about my preferred programming language. Options should be: Python, JavaScript, Go. Wait for my answer, then confirm what I chose.",
+					},
+				],
+			},
 		},
 	},
 
-	// Add more providers here:
-	// "my-provider": {
-	//   name: "MyProvider",
-	//   createAgent: () => new MyProviderAgent({ /* config */ }),
-	//   requiredEnvVars: ["MY_API_KEY"],
-	//   testMessages: { ... },
-	// },
+	opencode: (() => {
+		// Single shared temp dir so session mappings persist across createAgent() calls
+		const dataDir = mkdtempSync(join(tmpdir(), "opencode-test-"));
+		return {
+			name: "OpenCodeClient",
+			createAgent: () =>
+				new OpenCodeClient({
+					cwd: process.cwd(),
+					model: process.env.AGENT_MODEL,
+					env: process.env as Record<string, string>,
+					dataDir,
+				}),
+			requiredEnvVars: ["ANTHROPIC_API_KEY"],
+			testMessages: {
+				simple: {
+					id: "msg-1",
+					role: "user",
+					parts: [{ type: "text", text: "Say exactly: 'TEST_OK'" }],
+				},
+				withTools: {
+					id: "msg-2",
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: "Use Bash to run 'echo hello' and show the output. Be concise.",
+						},
+					],
+				},
+				continuation: {
+					id: "msg-3",
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: "What did I ask you to say in the first message?",
+						},
+					],
+				},
+				withQuestion: {
+					id: "msg-q",
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: "Before doing anything else, ask me a multiple choice question about my preferred programming language. Options should be: Python, JavaScript, Go. Wait for my answer, then confirm what I chose.",
+						},
+					],
+				},
+			},
+		};
+	})(),
 };
 
 export function getProvider(name: string): ProviderConfig {

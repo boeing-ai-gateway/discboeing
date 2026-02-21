@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { Agent } from "../../src/agent/interface.js";
 import type { ModelInfo, UIMessageChunk } from "../../src/api/types.js";
+import { questionManager } from "../../src/claude-sdk/question-manager.js";
 import { getProvider } from "./agent-provider-registry.js";
 
 const PROVIDER_NAME = process.env.PROVIDER || "claude-sdk";
@@ -730,6 +731,196 @@ describe(`Agent Interface Contract: ${provider.name}`, () => {
 
 			const env = agent.getEnvironment();
 			assert.equal(env.WORKFLOW_VAR, "test");
+		});
+	});
+
+	// ==========================================================================
+	// PERMISSION AUTO-APPROVAL
+	// ==========================================================================
+
+	describe("Permission Auto-Approval", () => {
+		let sessionId: string;
+
+		beforeEach(async () => {
+			await agent.connect();
+			const session = agent.createSession();
+			sessionId = session.id;
+		});
+
+		it("auto-approves tool permissions", async () => {
+			// Send a prompt that triggers tool use. If permissions aren't
+			// auto-approved, the tool call will block and the test will timeout.
+			const gen = agent.prompt(provider.testMessages.withTools, sessionId);
+			const chunks = await collectChunks(gen);
+
+			// Verify the full tool lifecycle completed:
+			// tool-input-start → tool-input-available → tool-output-available
+			const hasToolStart = chunks.some((c) => c.type === "tool-input-start");
+			const hasToolInput = chunks.some(
+				(c) => c.type === "tool-input-available",
+			);
+			const hasToolOutput = chunks.some(
+				(c) => c.type === "tool-output-available",
+			);
+
+			assert.ok(hasToolStart, "Should have tool-input-start chunk");
+			assert.ok(hasToolInput, "Should have tool-input-available chunk");
+			assert.ok(
+				hasToolOutput,
+				"Should have tool-output-available chunk (proves permission was auto-approved)",
+			);
+		});
+	});
+
+	// ==========================================================================
+	// QUESTION HANDLING
+	// ==========================================================================
+
+	describe("Question Handling", () => {
+		let sessionId: string;
+
+		beforeEach(async () => {
+			await agent.connect();
+			const session = agent.createSession();
+			sessionId = session.id;
+			// Ensure no leftover pending questions from previous tests
+			questionManager.cancelAll();
+		});
+
+		it("question manager has no pending questions initially", () => {
+			assert.equal(questionManager.getPendingQuestion(), null);
+		});
+
+		it("cancel clears pending question state", async () => {
+			// Start a prompt and immediately cancel
+			const gen = agent.prompt(provider.testMessages.simple, sessionId);
+			// Don't await — cancel right away
+			const collectPromise = collectChunks(gen, 30000).catch(() => {});
+			await agent.cancel(sessionId);
+			await collectPromise;
+
+			assert.equal(
+				questionManager.getPendingQuestion(),
+				null,
+				"Pending questions should be cleared after cancel",
+			);
+		});
+
+		it("submitAnswer resolves waitForAnswer", async () => {
+			const toolUseID = "test-question-1";
+			const testQuestions = [
+				{
+					question: "What language?",
+					header: "Language",
+					options: [
+						{ label: "Python", description: "Python language" },
+						{ label: "JavaScript", description: "JS language" },
+					],
+					multiSelect: false,
+				},
+			];
+
+			// Start waiting for an answer in the background
+			const answerPromise = questionManager.waitForAnswer(
+				toolUseID,
+				testQuestions,
+			);
+
+			// Verify the question is now pending
+			const pending = questionManager.getPendingQuestion();
+			assert.ok(pending, "Should have a pending question");
+			assert.equal(pending.toolUseID, toolUseID);
+			assert.equal(pending.questions.length, 1);
+			assert.equal(pending.questions[0].question, "What language?");
+
+			// Submit an answer
+			const submitted = questionManager.submitAnswer(toolUseID, {
+				"0": "Python",
+			});
+			assert.ok(
+				submitted,
+				"submitAnswer should return true for matching question",
+			);
+
+			// The promise should resolve with the answer
+			const answers = await answerPromise;
+			assert.deepEqual(answers, { "0": "Python" });
+
+			// No more pending questions
+			assert.equal(questionManager.getPendingQuestion(), null);
+		});
+
+		it("cancelAll rejects pending questions", async () => {
+			const toolUseID = "test-question-2";
+			const testQuestions = [
+				{
+					question: "Pick one",
+					header: "Choice",
+					options: [
+						{ label: "A", description: "Option A" },
+						{ label: "B", description: "Option B" },
+					],
+					multiSelect: false,
+				},
+			];
+
+			const answerPromise = questionManager.waitForAnswer(
+				toolUseID,
+				testQuestions,
+			);
+
+			// Cancel all pending questions
+			questionManager.cancelAll();
+
+			// The promise should reject with a cancellation error
+			await assert.rejects(answerPromise, (error: Error) => {
+				assert.ok(
+					error.message.includes("cancelled"),
+					"Error message should contain 'cancelled'",
+				);
+				return true;
+			});
+
+			assert.equal(questionManager.getPendingQuestion(), null);
+		});
+
+		it("forwards questions and completes after answer", async () => {
+			// Send a prompt designed to trigger a question from the agent.
+			// This is inherently non-deterministic — the LLM may answer directly.
+			const gen = agent.prompt(provider.testMessages.withQuestion, sessionId);
+
+			let questionReceived = false;
+
+			// Run prompt collection and question answering concurrently
+			const [chunks] = await Promise.all([
+				collectChunks(gen, 120000),
+				(async () => {
+					// Poll for a question from the agent
+					for (let i = 0; i < 120; i++) {
+						const pending = questionManager.getPendingQuestion();
+						if (pending) {
+							questionReceived = true;
+							// Answer with the first option
+							const firstOption =
+								pending.questions[0]?.options[0]?.label || "Python";
+							questionManager.submitAnswer(pending.toolUseID, {
+								"0": firstOption,
+							});
+							return;
+						}
+						await new Promise((r) => setTimeout(r, 1000));
+					}
+				})(),
+			]);
+
+			// The prompt should always complete
+			assert.ok(chunks.length > 0, "Should have received response chunks");
+
+			if (!questionReceived) {
+				console.log(
+					"  ⚠️  LLM did not ask a question — question forwarding not exercised this run",
+				);
+			}
 		});
 	});
 });
