@@ -200,7 +200,7 @@ RUN systemctl mask \
     discobot-agent-api.service \
     x11-display.socket \
     x11vnc.socket \
-    websockify.service
+    websockify.socket
 
 # Add discobot binaries and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts

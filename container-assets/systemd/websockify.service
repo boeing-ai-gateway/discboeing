@@ -1,13 +1,9 @@
 [Unit]
 Description=WebSocket to VNC proxy (websockify)
-# Bridges WebSocket connections on port 6080 to VNC on port 5900.
-# x11vnc.socket handles on-demand start of x11vnc → xvfb when a connection arrives.
+Requires=websockify.socket
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/websockify 6080 localhost:5900
+ExecStart=/usr/bin/websockify --fd 3 localhost:5900
 Restart=on-failure
 RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
