@@ -1,0 +1,12 @@
+[Unit]
+Description=X11 display :99 socket activation
+# When an X11 program connects to DISPLAY=:99, systemd intercepts the connection
+# and starts x11-display.service which proxies it to Xvfb
+
+[Socket]
+ListenStream=/tmp/.X11-unix/X99
+SocketMode=0777
+DirectoryMode=0777
+
+[Install]
+WantedBy=sockets.target

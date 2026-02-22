@@ -115,6 +115,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     systemd \
     systemd-sysv \
     vim \
+    python3-websockify \
+    x11vnc \
+    xvfb \
     && curl -fsSL https://deb.nodesource.com/setup_25.x | bash - \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true \
     && apt-get install -y --no-install-recommends nodejs \
@@ -194,7 +197,10 @@ RUN systemctl mask \
     discobot-setup.service \
     discobot-proxy.service \
     docker.socket \
-    discobot-agent-api.service
+    discobot-agent-api.service \
+    x11-display.socket \
+    x11vnc.socket \
+    websockify.service
 
 # Add discobot binaries and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
@@ -203,11 +209,12 @@ RUN systemctl mask \
 # Claude CLI is installed to /usr/local/bin (already in default PATH)
 ENV NPM_CONFIG_PREFIX="/home/discobot/.npm-global"
 ENV PNPM_HOME="/.data/pnpm"
+ENV DISPLAY=:99
 ENV PATH="/home/discobot/.cargo/bin:/usr/local/go/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
 
 WORKDIR /workspace
 
-EXPOSE 3002
+EXPOSE 3002 5900
 
 # systemd as PID 1 — manages discobot services (setup, proxy, dockerd, agent-api)
 # SIGRTMIN+3 tells systemd to shut down cleanly (used by docker stop)

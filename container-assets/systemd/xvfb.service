@@ -1,0 +1,13 @@
+[Unit]
+Description=Xvfb virtual X11 framebuffer on display :99
+# Only started on-demand via x11-display.socket or x11vnc.socket dependencies
+# Xvfb binds to TCP port 6099 (display :99) so systemd-socket-proxyd can forward
+# X11 unix socket connections to it
+
+[Service]
+Type=simple
+# Remove stale X11 lock file and socket that would prevent Xvfb from starting
+ExecStartPre=-/bin/rm -f /tmp/.X11-unix/X99 /tmp/.X99-lock
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1280x1024x24 -ac -listen tcp -nolisten local
+Restart=on-failure
+RestartSec=2

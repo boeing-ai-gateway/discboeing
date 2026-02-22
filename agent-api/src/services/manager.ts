@@ -73,6 +73,16 @@ export type StopServiceResult =
 // Public API
 // ============================================================================
 
+/** Built-in desktop service — VNC via websockify on port 6080 */
+const DESKTOP_SERVICE: Service = {
+	id: "desktop",
+	name: "Desktop",
+	http: 6080,
+	path: "",
+	status: "running",
+	passive: true,
+};
+
 /**
  * Get all services (discovered + runtime state)
  */
@@ -80,14 +90,17 @@ export async function getServices(workspaceRoot: string): Promise<Service[]> {
 	const servicesDir = join(workspaceRoot, SERVICES_DIR);
 	const discoveredServices = await discoverServices(servicesDir);
 
-	// Merge with runtime state
-	return discoveredServices.map((service) => {
-		const managed = runningServices.get(service.id);
-		if (managed) {
-			return { ...managed.service };
-		}
-		return service;
-	});
+	// Merge with runtime state, prepend built-in desktop service
+	return [
+		DESKTOP_SERVICE,
+		...discoveredServices.map((service) => {
+			const managed = runningServices.get(service.id);
+			if (managed) {
+				return { ...managed.service };
+			}
+			return service;
+		}),
+	];
 }
 
 /**
@@ -98,6 +111,11 @@ export async function getService(
 	workspaceRoot: string,
 	serviceId: string,
 ): Promise<Service | null> {
+	// Built-in desktop service
+	if (serviceId === "desktop") {
+		return { ...DESKTOP_SERVICE };
+	}
+
 	// Check running services first
 	const managed = runningServices.get(serviceId);
 	if (managed) {
