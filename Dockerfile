@@ -167,8 +167,8 @@ COPY --chown=discobot:discobot container-assets/docs.txt /discobot/docs.txt
 # /.data      - persistent storage (Docker volume or VZ disk)
 # /.workspace - base workspace (read-only)
 # /workspace  - project root (writable)
-RUN mkdir -p /.data /.workspace /workspace /opt/discobot/bin \
-    && chown discobot:discobot /.data /workspace
+RUN mkdir -p /.data /.workspace /opt/discobot/bin \
+    && chown discobot:discobot /.data
 
 # Copy binaries to /opt/discobot/bin
 # (placed after apt-get so code changes don't invalidate apt cache)
@@ -189,7 +189,7 @@ RUN systemctl mask \
     && systemctl enable \
     discobot-setup.service \
     discobot-proxy.service \
-    docker.service \
+    docker.socket \
     discobot-agent-api.service
 
 # Add discobot binaries and npm global bin to PATH
