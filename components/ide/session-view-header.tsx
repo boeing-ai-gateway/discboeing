@@ -9,6 +9,7 @@ import {
 	FilePlus,
 	GitCommitHorizontal,
 	Loader2,
+	Monitor,
 	PanelRightClose,
 	RefreshCw,
 	Square,
@@ -204,6 +205,15 @@ export function SessionViewHeader() {
 						onClick={() => setActiveView("terminal")}
 					>
 						Terminal
+					</Button>
+					<Button
+						variant={activeView === "desktop" ? "secondary" : "ghost"}
+						size="sm"
+						className="h-6 text-xs shrink-0 gap-1"
+						onClick={() => setActiveView("desktop")}
+					>
+						<Monitor className="h-3 w-3" />
+						Desktop
 					</Button>
 					{diffStats && diffStats.filesChanged > 0 && (
 						<Button

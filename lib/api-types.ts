@@ -738,6 +738,7 @@ export interface HookRerunResponse {
 export type ActiveView =
 	| "chat"
 	| "terminal"
+	| "desktop"
 	| "consolidated-diff"
 	| `service:${string}`
 	| `file:${string}`;

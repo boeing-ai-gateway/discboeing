@@ -1,6 +1,7 @@
 import * as React from "react";
 import { ChatPanel } from "@/components/ide/chat-panel";
 import { ConsolidatedDiffView } from "@/components/ide/consolidated-diff-view";
+import { DesktopView } from "@/components/ide/desktop-view";
 import { DiffContent } from "@/components/ide/diff-content";
 import { FilePanel } from "@/components/ide/file-panel";
 import { ResizeHandle } from "@/components/ide/resize-handle";
@@ -66,6 +67,7 @@ export function SessionView({
 		terminalRoot,
 		terminalRef,
 		setTerminalStatus,
+		desktopMounted,
 		services,
 		activeServiceId,
 		mountedServices,
@@ -219,6 +221,20 @@ export function SessionView({
 												onToggleChat={() => setActiveView("chat")}
 												hideHeader
 												onConnectionStatusChange={setTerminalStatus}
+											/>
+										</div>
+									)}
+									{/* Desktop - lazy mounted, stays mounted once viewed */}
+									{desktopMounted && selectedSessionId && (
+										<div
+											className={cn(
+												"absolute inset-0",
+												activeView !== "desktop" && "hidden",
+											)}
+										>
+											<DesktopView
+												sessionId={selectedSessionId}
+												className="h-full"
 											/>
 										</div>
 									)}

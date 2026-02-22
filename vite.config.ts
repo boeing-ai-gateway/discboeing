@@ -1,8 +1,28 @@
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import "dotenv/config";
+
+// Fix @novnc/novnc CJS build: its babel transpilation incorrectly emits
+// top-level `await` in a non-async CJS context, which Rollup cannot parse.
+// We intercept the file load and replace the broken await with a sync default.
+function fixNoVncCjs(): Plugin {
+	return {
+		name: "fix-novnc-cjs",
+		enforce: "pre",
+		load(id) {
+			if (id.includes("@novnc/novnc") && id.endsWith("browser.js")) {
+				const code = readFileSync(id, "utf-8");
+				return code.replace(
+					/= await _checkWebCodecsH264DecodeSupport\(\)/g,
+					"= false",
+				);
+			}
+		},
+	};
+}
 
 // Plugin to inject React DevTools script before React loads
 function reactDevTools(): Plugin {
@@ -23,6 +43,7 @@ function reactDevTools(): Plugin {
 
 export default defineConfig({
 	plugins: [
+		fixNoVncCjs(),
 		react({
 			babel: {
 				plugins: [["babel-plugin-react-compiler", {}]],
@@ -81,6 +102,31 @@ export default defineConfig({
 	// Handle SSE streaming properly
 	optimizeDeps: {
 		exclude: ["@tauri-apps/api", "@tauri-apps/plugin-shell"],
+		// Fix @novnc/novnc CJS build for esbuild pre-bundling (dev mode).
+		// Same issue as the fixNoVncCjs Rollup plugin above, but for esbuild.
+		esbuildOptions: {
+			plugins: [
+				{
+					name: "fix-novnc-cjs",
+					setup(build) {
+						build.onLoad(
+							{ filter: /browser\.js$/, namespace: "file" },
+							(args) => {
+								if (!args.path.includes("@novnc/novnc")) return;
+								const code = readFileSync(args.path, "utf-8");
+								return {
+									contents: code.replace(
+										/= await _checkWebCodecsH264DecodeSupport\(\)/g,
+										"= false",
+									),
+									loader: "js",
+								};
+							},
+						);
+					},
+				},
+			],
+		},
 	},
 	// Clear screen disabled for better logging during dev
 	clearScreen: false,

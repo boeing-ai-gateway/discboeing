@@ -61,6 +61,9 @@ export interface SessionViewContextValue {
 	setTerminalRoot: (root: boolean) => void;
 	setTerminalStatus: (status: ConnectionStatus) => void;
 
+	// Desktop state
+	desktopMounted: boolean;
+
 	// Services state
 	services: ReturnType<typeof useServices>["services"];
 	activeServiceId: string | null;
@@ -245,6 +248,15 @@ export function SessionViewProvider({
 		}
 	}, [activeView, terminalMounted]);
 
+	// Desktop state (lazy mounted like terminal)
+	const [desktopMounted, setDesktopMounted] = React.useState(false);
+
+	React.useEffect(() => {
+		if (activeView === "desktop" && !desktopMounted) {
+			setDesktopMounted(true);
+		}
+	}, [activeView, desktopMounted]);
+
 	// Services state
 	const { services, startService, stopService } =
 		useServices(selectedSessionId);
@@ -355,6 +367,7 @@ export function SessionViewProvider({
 			terminalRef,
 			setTerminalRoot,
 			setTerminalStatus,
+			desktopMounted,
 			services,
 			activeServiceId,
 			mountedServices,
@@ -385,6 +398,7 @@ export function SessionViewProvider({
 			terminalMounted,
 			terminalRoot,
 			terminalStatus,
+			desktopMounted,
 			services,
 			activeServiceId,
 			mountedServices,
