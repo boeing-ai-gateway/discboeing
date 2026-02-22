@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -447,10 +448,16 @@ func runSessionHook(hookPath string, config hookConfig, workspacePath, sessionID
 // but do not block the agent from starting. Hooks with blocking: true in their front
 // matter run synchronously before the agent starts.
 // Failures are logged and persisted to ~/.discobot/{sessionId}/hooks/status.json.
-func runSessionHooks(workspacePath string, u *userInfo) {
+//
+// Returns a wait function that blocks until all background (non-blocking) hooks
+// have completed. Callers that exit shortly after (e.g. oneshot systemd services)
+// must call the returned function to avoid killing in-flight hooks.
+func runSessionHooks(workspacePath string, u *userInfo) func() {
+	noop := func() {}
+
 	paths, configs := discoverSessionHooks(workspacePath)
 	if len(paths) == 0 {
-		return
+		return noop
 	}
 
 	fmt.Printf("discobot-agent: found %d session hook(s)\n", len(paths))
@@ -505,20 +512,27 @@ func runSessionHooks(workspacePath string, u *userInfo) {
 	}
 
 	// Phase 2: Launch non-blocking hooks in a background goroutine
-	if len(backgroundHooks) > 0 {
-		fmt.Printf("discobot-agent: launching %d non-blocking session hook(s) in background\n", len(backgroundHooks))
-		go func() {
-			succeeded, failed := 0, 0
-			for _, h := range backgroundHooks {
-				if runSessionHook(h.path, h.config, workspacePath, sessionID, dataDir, u) {
-					succeeded++
-				} else {
-					failed++
-				}
-			}
-			fmt.Printf("discobot-agent: background session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
-		}()
+	if len(backgroundHooks) == 0 {
+		return noop
 	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	fmt.Printf("discobot-agent: launching %d non-blocking session hook(s) in background\n", len(backgroundHooks))
+	go func() {
+		defer wg.Done()
+		succeeded, failed := 0, 0
+		for _, h := range backgroundHooks {
+			if runSessionHook(h.path, h.config, workspacePath, sessionID, dataDir, u) {
+				succeeded++
+			} else {
+				failed++
+			}
+		}
+		fmt.Printf("discobot-agent: background session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
+	}()
+
+	return wg.Wait
 }
 
 // buildHookEnv creates the environment for session hooks.

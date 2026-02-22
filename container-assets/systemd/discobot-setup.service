@@ -5,7 +5,8 @@ After=local-fs.target
 Before=discobot-proxy.service docker.service discobot-agent-api.service
 
 [Service]
-Type=oneshot
+Type=notify
+NotifyAccess=main
 RemainAfterExit=yes
 
 # Forward Docker container environment variables to this service.

@@ -194,8 +194,9 @@ func run() error {
 
 	// Step 5.5: Run session hooks from .discobot/hooks/
 	// Blocking hooks run synchronously here; non-blocking hooks launch in background goroutines.
+	// The process stays alive as PID 1, so background hooks can complete without waiting.
 	stepStart = time.Now()
-	runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
+	_ = runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
 	fmt.Printf("discobot-agent: [%.3fs] session hooks dispatched\n", time.Since(stepStart).Seconds())
 
 	// Step 6: Setup proxy configuration (uses embedded defaults only for security)
@@ -326,8 +327,9 @@ func runSetup() error {
 	fmt.Printf("discobot-agent: [%.3fs] workspace symlink created\n", time.Since(stepStart).Seconds())
 
 	// Step 5.5: Run session hooks
+	// In oneshot mode we must wait for background hooks before the process exits.
 	stepStart = time.Now()
-	runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
+	waitHooks := runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
 	fmt.Printf("discobot-agent: [%.3fs] session hooks dispatched\n", time.Since(stepStart).Seconds())
 
 	// Step 6: Setup proxy configuration
@@ -361,7 +363,44 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-agent: [%.3fs] environment files written\n", time.Since(stepStart).Seconds())
 
+	// Notify systemd that setup is complete so dependent services can start
+	// while background session hooks continue running.
 	fmt.Printf("discobot-agent: [%.3fs] setup completed successfully\n", time.Since(startupStart).Seconds())
+	if err := sdNotifyReady(); err != nil {
+		fmt.Printf("discobot-agent: warning: sd_notify failed: %v\n", err)
+	}
+
+	// Wait for any background session hooks to finish before exiting,
+	// otherwise the process exit will kill in-flight hooks.
+	stepStart = time.Now()
+	waitHooks()
+	if d := time.Since(stepStart); d > 50*time.Millisecond {
+		fmt.Printf("discobot-agent: [%.3fs] waited for background session hooks\n", d.Seconds())
+	}
+
+	return nil
+}
+
+// sdNotifyReady sends READY=1 to the systemd notification socket, signalling
+// that the service has finished its critical startup. This unblocks dependent
+// units (e.g. discobot-proxy, discobot-agent-api) while the process continues
+// running to drain background work like session hooks.
+// If NOTIFY_SOCKET is not set (e.g. running outside systemd), this is a no-op.
+func sdNotifyReady() error {
+	socketPath := os.Getenv("NOTIFY_SOCKET")
+	if socketPath == "" {
+		return nil
+	}
+
+	conn, err := net.Dial("unixgram", socketPath)
+	if err != nil {
+		return fmt.Errorf("dial %s: %w", socketPath, err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte("READY=1")); err != nil {
+		return fmt.Errorf("write READY=1: %w", err)
+	}
 	return nil
 }
 
