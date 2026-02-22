@@ -13,10 +13,59 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
-// serviceSubdomainPattern matches {session-id}-svc-{service-id}.* subdomains.
+// svcSegmentPattern matches a single hostname segment of the form {session-id}-svc-{service-id}.
 // Session IDs are 10-26 alphanumeric chars (case-insensitive in URLs).
 // Service IDs are normalized lowercase (a-z0-9_- only).
-var serviceSubdomainPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)\.`)
+var svcSegmentPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)$`)
+
+// parseServiceSubdomain finds the outermost (rightmost) service subdomain in the hostname.
+// This supports nested Discobot instances where the hostname looks like:
+//
+//	{inner-session}-svc-{inner-svc}.{outer-session}-svc-{outer-svc}.base.domain:port
+//
+// Returns sessionID, serviceID, innerHost (host with matched segment removed), and ok.
+func parseServiceSubdomain(host string) (sessionID, serviceID, innerHost string, ok bool) {
+	// Split host:port — find the last colon that looks like a port separator
+	hostWithoutPort := host
+	portSuffix := ""
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		maybePort := host[idx+1:]
+		isPort := len(maybePort) > 0
+		for _, c := range maybePort {
+			if c < '0' || c > '9' {
+				isPort = false
+				break
+			}
+		}
+		if isPort {
+			hostWithoutPort = host[:idx]
+			portSuffix = host[idx:] // includes the colon
+		}
+	}
+
+	parts := strings.Split(hostWithoutPort, ".")
+
+	// Iterate from right to left, find the first (outermost) segment matching the pattern.
+	for i := len(parts) - 1; i >= 0; i-- {
+		matches := svcSegmentPattern.FindStringSubmatch(parts[i])
+		if matches == nil {
+			continue
+		}
+
+		sessionID = matches[1]
+		serviceID = matches[2]
+
+		// Build inner host: all segments except the matched one, plus port
+		innerParts := make([]string, 0, len(parts)-1)
+		innerParts = append(innerParts, parts[:i]...)
+		innerParts = append(innerParts, parts[i+1:]...)
+		innerHost = strings.Join(innerParts, ".") + portSuffix
+		ok = true
+		return
+	}
+
+	return "", "", "", false
+}
 
 // findSessionID finds the actual session ID with correct casing.
 // DNS/URLs are case-insensitive, so we need to do a case-insensitive lookup.
@@ -61,18 +110,15 @@ func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID 
 func ServiceProxy(provider sandbox.Provider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			host := r.Host
-
-			// Try to match service subdomain pattern
-			matches := serviceSubdomainPattern.FindStringSubmatch(host)
-			if matches == nil {
+			// Parse the outermost (rightmost) service subdomain from the host.
+			// This correctly handles nested Discobot instances where the host looks like:
+			// {inner-session}-svc-{inner-svc}.{outer-session}-svc-{outer-svc}.base:port
+			urlSessionID, serviceID, innerHost, ok := parseServiceSubdomain(r.Host)
+			if !ok {
 				// Not a service subdomain, continue to next handler
 				next.ServeHTTP(w, r)
 				return
 			}
-
-			urlSessionID := matches[1]
-			serviceID := matches[2]
 			ctx := r.Context()
 
 			// Find the actual session ID with correct casing
@@ -116,6 +162,10 @@ func ServiceProxy(provider sandbox.Provider) func(http.Handler) http.Handler {
 					req.Header.Set("X-Forwarded-Path", r.URL.Path)
 					req.Header.Set("X-Forwarded-Host", r.Host)
 					req.Header.Set("X-Forwarded-Proto", getScheme(r))
+
+					// Pass the inner host (host with our service subdomain stripped) so that
+					// nested Discobot instances can parse their own service subdomains.
+					req.Header.Set("X-Service-Host", innerHost)
 
 					// Preserve or append X-Forwarded-For
 					clientIP := r.RemoteAddr
