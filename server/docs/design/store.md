@@ -27,24 +27,37 @@ This module provides the data access layer using GORM for database operations.
 │  │  - JobMethods                                            │  │
 │  │  - EventMethods                                          │  │
 │  └──────────────────────────────────────────────────────────┘  │
-│                           │                                      │
-│                           ▼                                      │
-│                    GORM (*gorm.DB)                              │
-│                           │                                      │
-│                           ▼                                      │
-│              PostgreSQL / SQLite                                │
+│                        │         │                               │
+│                  writes│         │reads                          │
+│                        ▼         ▼                               │
+│              writeDB (*gorm.DB)  readDB (*gorm.DB)             │
+│              MaxOpenConns(1)     MaxOpenConns(4)                │
+│              _txlock=immediate   query_only(1)                  │
+│                        │         │                               │
+│                        ▼         ▼                               │
+│              PostgreSQL / SQLite (WAL mode)                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+For SQLite, separate read and write connection pools avoid contention:
+the write pool serializes all writes through a single connection with
+`_txlock=immediate`, while the read pool allows concurrent reads via
+WAL mode. The read pool uses `query_only(1)` as a safety net.
+For PostgreSQL, both pools point to the same `*gorm.DB` instance.
 
 ## Store Structure
 
 ```go
 type Store struct {
-    db *gorm.DB
+    writeDB *gorm.DB
+    readDB  *gorm.DB
 }
 
-func New(db *gorm.DB) *Store {
-    return &Store{db: db}
+func New(writeDB, readDB *gorm.DB) *Store {
+    if readDB == nil {
+        readDB = writeDB
+    }
+    return &Store{writeDB: writeDB, readDB: readDB}
 }
 ```
 
@@ -338,27 +351,18 @@ func (s *Store) GetEventsSince(ctx context.Context, projectID string, sequence u
 ## Database Connection
 
 ```go
-func Connect(dsn string) *gorm.DB {
-    var db *gorm.DB
-    var err error
-
-    if strings.HasPrefix(dsn, "postgres") {
-        db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-    } else {
-        db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-    }
-
-    if err != nil {
-        log.Fatal("Failed to connect database:", err)
-    }
-
-    // Configure connection pool
-    sqlDB, _ := db.DB()
-    sqlDB.SetMaxOpenConns(25)
-    sqlDB.SetMaxIdleConns(5)
-
-    return db
+// database.DB holds separate read/write pools for SQLite.
+type DB struct {
+    *gorm.DB         // write pool
+    ReadDB  *gorm.DB // read pool (nil for PostgreSQL)
+    Driver  string
 }
+
+// For SQLite, New() creates two pools:
+//   Write: MaxOpenConns(1), _txlock=immediate
+//   Read:  MaxOpenConns(4), _pragma=query_only(1)
+// For PostgreSQL, a single pool is used for both.
+func New(cfg *config.Config) (*DB, error) { ... }
 ```
 
 ## Migrations
@@ -426,7 +430,7 @@ func (s *Store) GetWorkspace(ctx context.Context, id string) (*Workspace, error)
 func NewMock() *Store {
     db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
     Migrate(db)
-    return New(db)
+    return New(db, nil) // nil readDB falls back to single pool (required for :memory:)
 }
 
 func TestStore_CreateWorkspace(t *testing.T) {

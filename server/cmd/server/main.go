@@ -90,8 +90,8 @@ func main() {
 		log.Println("Authentication disabled - using anonymous user mode")
 	}
 
-	// Create store
-	s := store.New(db.DB)
+	// Create store with separate read/write pools for SQLite
+	s := store.New(db.DB, db.ReadDB)
 
 	// Initialize git provider (required)
 	// Create workspace source for git provider to lookup workspace info

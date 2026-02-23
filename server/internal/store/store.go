@@ -17,25 +17,32 @@ var (
 )
 
 // Store wraps GORM DB for database operations.
+// For SQLite, writeDB and readDB point to separate connection pools;
+// for PostgreSQL (or in-memory tests), they point to the same instance.
 type Store struct {
-	db *gorm.DB
+	writeDB *gorm.DB
+	readDB  *gorm.DB
 }
 
-// New creates a new Store with the given GORM DB.
-func New(db *gorm.DB) *Store {
-	return &Store{db: db}
+// New creates a new Store with separate write and read GORM DBs.
+// If readDB is nil, the writeDB is used for both reads and writes.
+func New(writeDB, readDB *gorm.DB) *Store {
+	if readDB == nil {
+		readDB = writeDB
+	}
+	return &Store{writeDB: writeDB, readDB: readDB}
 }
 
-// DB returns the underlying GORM DB for advanced queries.
+// DB returns the underlying write GORM DB for advanced queries.
 func (s *Store) DB() *gorm.DB {
-	return s.db
+	return s.writeDB
 }
 
 // --- Users ---
 
 func (s *Store) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	var user model.User
-	if err := s.db.WithContext(ctx).First(&user, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&user, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -46,7 +53,7 @@ func (s *Store) GetUserByID(ctx context.Context, id string) (*model.User, error)
 
 func (s *Store) GetUserByProviderID(ctx context.Context, provider, providerID string) (*model.User, error) {
 	var user model.User
-	if err := s.db.WithContext(ctx).First(&user, "provider = ? AND provider_id = ?", provider, providerID).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&user, "provider = ? AND provider_id = ?", provider, providerID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -56,22 +63,22 @@ func (s *Store) GetUserByProviderID(ctx context.Context, provider, providerID st
 }
 
 func (s *Store) CreateUser(ctx context.Context, user *model.User) error {
-	return s.db.WithContext(ctx).Create(user).Error
+	return s.writeDB.WithContext(ctx).Create(user).Error
 }
 
 func (s *Store) UpdateUser(ctx context.Context, user *model.User) error {
-	return s.db.WithContext(ctx).Save(user).Error
+	return s.writeDB.WithContext(ctx).Save(user).Error
 }
 
 // --- User Sessions ---
 
 func (s *Store) CreateUserSession(ctx context.Context, session *model.UserSession) error {
-	return s.db.WithContext(ctx).Create(session).Error
+	return s.writeDB.WithContext(ctx).Create(session).Error
 }
 
 func (s *Store) GetUserSessionByToken(ctx context.Context, tokenHash string) (*model.UserSession, error) {
 	var session model.UserSession
-	if err := s.db.WithContext(ctx).Preload("User").First(&session, "token_hash = ?", tokenHash).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).Preload("User").First(&session, "token_hash = ?", tokenHash).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -81,18 +88,18 @@ func (s *Store) GetUserSessionByToken(ctx context.Context, tokenHash string) (*m
 }
 
 func (s *Store) DeleteUserSession(ctx context.Context, tokenHash string) error {
-	return s.db.WithContext(ctx).Delete(&model.UserSession{}, "token_hash = ?", tokenHash).Error
+	return s.writeDB.WithContext(ctx).Delete(&model.UserSession{}, "token_hash = ?", tokenHash).Error
 }
 
 func (s *Store) DeleteExpiredUserSessions(ctx context.Context) error {
-	return s.db.WithContext(ctx).Delete(&model.UserSession{}, "expires_at < ?", time.Now()).Error
+	return s.writeDB.WithContext(ctx).Delete(&model.UserSession{}, "expires_at < ?", time.Now()).Error
 }
 
 // --- Projects ---
 
 func (s *Store) GetProjectByID(ctx context.Context, id string) (*model.Project, error) {
 	var project model.Project
-	if err := s.db.WithContext(ctx).First(&project, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&project, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -103,7 +110,7 @@ func (s *Store) GetProjectByID(ctx context.Context, id string) (*model.Project, 
 
 func (s *Store) ListProjectsByUser(ctx context.Context, userID string) ([]*model.Project, error) {
 	var projects []*model.Project
-	err := s.db.WithContext(ctx).
+	err := s.readDB.WithContext(ctx).
 		Joins("JOIN project_members ON project_members.project_id = projects.id").
 		Where("project_members.user_id = ?", userID).
 		Find(&projects).Error
@@ -111,15 +118,15 @@ func (s *Store) ListProjectsByUser(ctx context.Context, userID string) ([]*model
 }
 
 func (s *Store) CreateProject(ctx context.Context, project *model.Project) error {
-	return s.db.WithContext(ctx).Create(project).Error
+	return s.writeDB.WithContext(ctx).Create(project).Error
 }
 
 func (s *Store) UpdateProject(ctx context.Context, project *model.Project) error {
-	return s.db.WithContext(ctx).Save(project).Error
+	return s.writeDB.WithContext(ctx).Save(project).Error
 }
 
 func (s *Store) DeleteProject(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete all related records explicitly (no cascade in schema)
 		// Order matters due to foreign key relationships
 
@@ -176,7 +183,7 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 
 func (s *Store) GetProjectMember(ctx context.Context, projectID, userID string) (*model.ProjectMember, error) {
 	var member model.ProjectMember
-	if err := s.db.WithContext(ctx).First(&member, "project_id = ? AND user_id = ?", projectID, userID).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&member, "project_id = ? AND user_id = ?", projectID, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -187,23 +194,23 @@ func (s *Store) GetProjectMember(ctx context.Context, projectID, userID string) 
 
 func (s *Store) ListProjectMembers(ctx context.Context, projectID string) ([]*model.ProjectMember, error) {
 	var members []*model.ProjectMember
-	err := s.db.WithContext(ctx).Preload("User").Where("project_id = ?", projectID).Find(&members).Error
+	err := s.readDB.WithContext(ctx).Preload("User").Where("project_id = ?", projectID).Find(&members).Error
 	return members, err
 }
 
 func (s *Store) CreateProjectMember(ctx context.Context, member *model.ProjectMember) error {
-	return s.db.WithContext(ctx).Create(member).Error
+	return s.writeDB.WithContext(ctx).Create(member).Error
 }
 
 func (s *Store) DeleteProjectMember(ctx context.Context, projectID, userID string) error {
-	return s.db.WithContext(ctx).Delete(&model.ProjectMember{}, "project_id = ? AND user_id = ?", projectID, userID).Error
+	return s.writeDB.WithContext(ctx).Delete(&model.ProjectMember{}, "project_id = ? AND user_id = ?", projectID, userID).Error
 }
 
 // --- Project Invitations ---
 
 func (s *Store) GetInvitationByToken(ctx context.Context, token string) (*model.ProjectInvitation, error) {
 	var invitation model.ProjectInvitation
-	if err := s.db.WithContext(ctx).First(&invitation, "token = ?", token).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&invitation, "token = ?", token).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -213,18 +220,18 @@ func (s *Store) GetInvitationByToken(ctx context.Context, token string) (*model.
 }
 
 func (s *Store) CreateInvitation(ctx context.Context, invitation *model.ProjectInvitation) error {
-	return s.db.WithContext(ctx).Create(invitation).Error
+	return s.writeDB.WithContext(ctx).Create(invitation).Error
 }
 
 func (s *Store) DeleteInvitation(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&model.ProjectInvitation{}, "id = ?", id).Error
+	return s.writeDB.WithContext(ctx).Delete(&model.ProjectInvitation{}, "id = ?", id).Error
 }
 
 // --- Workspaces ---
 
 func (s *Store) GetWorkspaceByID(ctx context.Context, id string) (*model.Workspace, error) {
 	var workspace model.Workspace
-	if err := s.db.WithContext(ctx).First(&workspace, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&workspace, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -235,26 +242,26 @@ func (s *Store) GetWorkspaceByID(ctx context.Context, id string) (*model.Workspa
 
 func (s *Store) ListWorkspacesByProject(ctx context.Context, projectID string) ([]*model.Workspace, error) {
 	var workspaces []*model.Workspace
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&workspaces).Error
+	err := s.readDB.WithContext(ctx).Where("project_id = ?", projectID).Find(&workspaces).Error
 	return workspaces, err
 }
 
 func (s *Store) ListWorkspacesByProvider(ctx context.Context, provider string) ([]*model.Workspace, error) {
 	var workspaces []*model.Workspace
-	err := s.db.WithContext(ctx).Where("provider = ?", provider).Find(&workspaces).Error
+	err := s.readDB.WithContext(ctx).Where("provider = ?", provider).Find(&workspaces).Error
 	return workspaces, err
 }
 
 func (s *Store) CreateWorkspace(ctx context.Context, workspace *model.Workspace) error {
-	return s.db.WithContext(ctx).Create(workspace).Error
+	return s.writeDB.WithContext(ctx).Create(workspace).Error
 }
 
 func (s *Store) UpdateWorkspace(ctx context.Context, workspace *model.Workspace) error {
-	return s.db.WithContext(ctx).Save(workspace).Error
+	return s.writeDB.WithContext(ctx).Save(workspace).Error
 }
 
 func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete messages and terminal history for all sessions in this workspace
 		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.Message{}).Error; err != nil {
 			return err
@@ -277,7 +284,7 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 
 func (s *Store) GetSessionByID(ctx context.Context, id string) (*model.Session, error) {
 	var session model.Session
-	if err := s.db.WithContext(ctx).First(&session, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&session, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -289,28 +296,28 @@ func (s *Store) GetSessionByID(ctx context.Context, id string) (*model.Session, 
 // ListSessionsByWorkspace returns all sessions for a workspace.
 func (s *Store) ListSessionsByWorkspace(ctx context.Context, workspaceID string) ([]*model.Session, error) {
 	var sessions []*model.Session
-	err := s.db.WithContext(ctx).Where("workspace_id = ?", workspaceID).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("workspace_id = ?", workspaceID).Find(&sessions).Error
 	return sessions, err
 }
 
 // ListSessionsByStatuses returns all sessions with any of the given statuses.
 func (s *Store) ListSessionsByStatuses(ctx context.Context, statuses []string) ([]*model.Session, error) {
 	var sessions []*model.Session
-	err := s.db.WithContext(ctx).Where("status IN ?", statuses).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("status IN ?", statuses).Find(&sessions).Error
 	return sessions, err
 }
 
 // ListSessionsByCommitStatuses returns sessions with the given commit statuses.
 func (s *Store) ListSessionsByCommitStatuses(ctx context.Context, commitStatuses []string) ([]*model.Session, error) {
 	var sessions []*model.Session
-	err := s.db.WithContext(ctx).Where("commit_status IN ?", commitStatuses).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("commit_status IN ?", commitStatuses).Find(&sessions).Error
 	return sessions, err
 }
 
 // GetSessionsByStatus returns all sessions with the given status.
 func (s *Store) GetSessionsByStatus(ctx context.Context, status string) ([]model.Session, error) {
 	var sessions []model.Session
-	err := s.db.WithContext(ctx).Where("status = ?", status).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("status = ?", status).Find(&sessions).Error
 	return sessions, err
 }
 
@@ -324,15 +331,15 @@ func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, erro
 	} else {
 		updates["error_message"] = nil
 	}
-	return s.db.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
+	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (s *Store) CreateSession(ctx context.Context, session *model.Session) error {
-	return s.db.WithContext(ctx).Create(session).Error
+	return s.writeDB.WithContext(ctx).Create(session).Error
 }
 
 func (s *Store) UpdateSession(ctx context.Context, session *model.Session) error {
-	return s.db.WithContext(ctx).Save(session).Error
+	return s.writeDB.WithContext(ctx).Save(session).Error
 }
 
 // UpdateSessionWorkspace updates the workspace path and commit for a session.
@@ -343,11 +350,11 @@ func (s *Store) UpdateSessionWorkspace(ctx context.Context, id, workspacePath, w
 	if workspaceCommit != "" {
 		updates["workspace_commit"] = workspaceCommit
 	}
-	return s.db.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
+	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete messages
 		if err := tx.Where("session_id = ?", id).Delete(&model.Message{}).Error; err != nil {
 			return err
@@ -367,7 +374,7 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 
 func (s *Store) GetAgentByID(ctx context.Context, id string) (*model.Agent, error) {
 	var agent model.Agent
-	if err := s.db.WithContext(ctx).First(&agent, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&agent, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -378,7 +385,7 @@ func (s *Store) GetAgentByID(ctx context.Context, id string) (*model.Agent, erro
 
 func (s *Store) GetDefaultAgent(ctx context.Context, projectID string) (*model.Agent, error) {
 	var agent model.Agent
-	if err := s.db.WithContext(ctx).First(&agent, "project_id = ? AND is_default = ?", projectID, true).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&agent, "project_id = ? AND is_default = ?", projectID, true).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -389,20 +396,20 @@ func (s *Store) GetDefaultAgent(ctx context.Context, projectID string) (*model.A
 
 func (s *Store) ListAgentsByProject(ctx context.Context, projectID string) ([]*model.Agent, error) {
 	var agents []*model.Agent
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&agents).Error
+	err := s.readDB.WithContext(ctx).Where("project_id = ?", projectID).Find(&agents).Error
 	return agents, err
 }
 
 func (s *Store) CreateAgent(ctx context.Context, agent *model.Agent) error {
-	return s.db.WithContext(ctx).Create(agent).Error
+	return s.writeDB.WithContext(ctx).Create(agent).Error
 }
 
 func (s *Store) UpdateAgent(ctx context.Context, agent *model.Agent) error {
-	return s.db.WithContext(ctx).Save(agent).Error
+	return s.writeDB.WithContext(ctx).Save(agent).Error
 }
 
 func (s *Store) DeleteAgent(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Nullify agent references in sessions (don't delete sessions)
 		if err := tx.Model(&model.Session{}).Where("agent_id = ?", id).Update("agent_id", nil).Error; err != nil {
 			return err
@@ -414,7 +421,7 @@ func (s *Store) DeleteAgent(ctx context.Context, id string) error {
 }
 
 func (s *Store) SetDefaultAgent(ctx context.Context, projectID, agentID string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Clear existing default
 		if err := tx.Model(&model.Agent{}).Where("project_id = ?", projectID).Update("is_default", false).Error; err != nil {
 			return err
@@ -428,19 +435,19 @@ func (s *Store) SetDefaultAgent(ctx context.Context, projectID, agentID string) 
 
 func (s *Store) ListMessagesBySession(ctx context.Context, sessionID string) ([]*model.Message, error) {
 	var messages []*model.Message
-	err := s.db.WithContext(ctx).Where("session_id = ?", sessionID).Order("turn ASC").Find(&messages).Error
+	err := s.readDB.WithContext(ctx).Where("session_id = ?", sessionID).Order("turn ASC").Find(&messages).Error
 	return messages, err
 }
 
 func (s *Store) CreateMessage(ctx context.Context, message *model.Message) error {
-	return s.db.WithContext(ctx).Create(message).Error
+	return s.writeDB.WithContext(ctx).Create(message).Error
 }
 
 // --- Credentials ---
 
 func (s *Store) GetCredentialByProvider(ctx context.Context, projectID, provider string) (*model.Credential, error) {
 	var credential model.Credential
-	if err := s.db.WithContext(ctx).First(&credential, "project_id = ? AND provider = ?", projectID, provider).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&credential, "project_id = ? AND provider = ?", projectID, provider).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -451,27 +458,27 @@ func (s *Store) GetCredentialByProvider(ctx context.Context, projectID, provider
 
 func (s *Store) ListCredentialsByProject(ctx context.Context, projectID string) ([]*model.Credential, error) {
 	var credentials []*model.Credential
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&credentials).Error
+	err := s.readDB.WithContext(ctx).Where("project_id = ?", projectID).Find(&credentials).Error
 	return credentials, err
 }
 
 func (s *Store) CreateCredential(ctx context.Context, credential *model.Credential) error {
-	return s.db.WithContext(ctx).Create(credential).Error
+	return s.writeDB.WithContext(ctx).Create(credential).Error
 }
 
 func (s *Store) UpdateCredential(ctx context.Context, credential *model.Credential) error {
-	return s.db.WithContext(ctx).Save(credential).Error
+	return s.writeDB.WithContext(ctx).Save(credential).Error
 }
 
 func (s *Store) DeleteCredential(ctx context.Context, projectID, provider string) error {
-	return s.db.WithContext(ctx).Delete(&model.Credential{}, "project_id = ? AND provider = ?", projectID, provider).Error
+	return s.writeDB.WithContext(ctx).Delete(&model.Credential{}, "project_id = ? AND provider = ?", projectID, provider).Error
 }
 
 // --- Terminal History ---
 
 func (s *Store) ListTerminalHistory(ctx context.Context, sessionID string, limit int) ([]*model.TerminalHistory, error) {
 	var history []*model.TerminalHistory
-	query := s.db.WithContext(ctx).Where("session_id = ?", sessionID).Order("created_at DESC")
+	query := s.readDB.WithContext(ctx).Where("session_id = ?", sessionID).Order("created_at DESC")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -480,20 +487,20 @@ func (s *Store) ListTerminalHistory(ctx context.Context, sessionID string, limit
 }
 
 func (s *Store) CreateTerminalHistory(ctx context.Context, entry *model.TerminalHistory) error {
-	return s.db.WithContext(ctx).Create(entry).Error
+	return s.writeDB.WithContext(ctx).Create(entry).Error
 }
 
 // --- Jobs ---
 
 // CreateJob creates a new job in the queue.
 func (s *Store) CreateJob(ctx context.Context, job *model.Job) error {
-	return s.db.WithContext(ctx).Create(job).Error
+	return s.writeDB.WithContext(ctx).Create(job).Error
 }
 
 // GetJobByID retrieves a job by its ID.
 func (s *Store) GetJobByID(ctx context.Context, id string) (*model.Job, error) {
 	var job model.Job
-	if err := s.db.WithContext(ctx).First(&job, "id = ?", id).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&job, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -506,7 +513,7 @@ func (s *Store) GetJobByID(ctx context.Context, id string) (*model.Job, error) {
 // Returns ErrNotFound if no job exists for the resource.
 func (s *Store) GetJobByResourceID(ctx context.Context, resourceType, resourceID string) (*model.Job, error) {
 	var job model.Job
-	err := s.db.WithContext(ctx).
+	err := s.readDB.WithContext(ctx).
 		Where("resource_type = ? AND resource_id = ?", resourceType, resourceID).
 		Order("created_at DESC").
 		First(&job).Error
@@ -523,7 +530,7 @@ func (s *Store) GetJobByResourceID(ctx context.Context, resourceType, resourceID
 // Returns true if a job exists that would block enqueueing a new one.
 func (s *Store) HasActiveJobForResource(ctx context.Context, resourceType, resourceID string) (bool, error) {
 	var count int64
-	err := s.db.WithContext(ctx).Model(&model.Job{}).
+	err := s.readDB.WithContext(ctx).Model(&model.Job{}).
 		Where("resource_type = ? AND resource_id = ? AND status IN ?",
 			resourceType, resourceID, []string{string(model.JobStatusPending), string(model.JobStatusRunning)}).
 		Count(&count).Error
@@ -549,7 +556,7 @@ func (s *Store) ClaimJobOfTypes(ctx context.Context, jobTypes []string, workerID
 	var job model.Job
 	var found bool
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Find pending jobs of any allowed type that are scheduled to run
 		// Order: priority (highest first), scheduled_at (oldest first), created_at (tiebreaker)
 		var candidates []model.Job
@@ -621,7 +628,7 @@ func (s *Store) ClaimJobOfTypes(ctx context.Context, jobTypes []string, workerID
 // CompleteJob marks a job as completed.
 func (s *Store) CompleteJob(ctx context.Context, jobID string) error {
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(&model.Job{}).
+	return s.writeDB.WithContext(ctx).Model(&model.Job{}).
 		Where("id = ?", jobID).
 		Updates(map[string]interface{}{
 			"status":       model.JobStatusCompleted,
@@ -633,7 +640,7 @@ func (s *Store) CompleteJob(ctx context.Context, jobID string) error {
 // If attempts < max_attempts, requeues as pending for retry with backoff.
 // The baseBackoff is multiplied by the attempt number for exponential backoff.
 func (s *Store) FailJob(ctx context.Context, jobID string, errMsg string, baseBackoff time.Duration) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var job model.Job
 		if err := tx.First(&job, "id = ?", jobID).Error; err != nil {
 			return err
@@ -666,7 +673,7 @@ func (s *Store) FailJob(ctx context.Context, jobID string, errMsg string, baseBa
 // CountRunningJobsByType returns the count of running jobs of a given type.
 func (s *Store) CountRunningJobsByType(ctx context.Context, jobType string) (int64, error) {
 	var count int64
-	err := s.db.WithContext(ctx).Model(&model.Job{}).
+	err := s.readDB.WithContext(ctx).Model(&model.Job{}).
 		Where("type = ? AND status = ?", jobType, model.JobStatusRunning).
 		Count(&count).Error
 	return count, err
@@ -676,7 +683,7 @@ func (s *Store) CountRunningJobsByType(ctx context.Context, jobType string) (int
 // Returns the number of jobs reset.
 func (s *Store) CleanupStaleJobs(ctx context.Context, staleAfter time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-staleAfter)
-	result := s.db.WithContext(ctx).Model(&model.Job{}).
+	result := s.writeDB.WithContext(ctx).Model(&model.Job{}).
 		Where("status = ? AND started_at < ?", model.JobStatusRunning, cutoff).
 		Updates(map[string]interface{}{
 			"status":     model.JobStatusPending,
@@ -689,7 +696,7 @@ func (s *Store) CleanupStaleJobs(ctx context.Context, staleAfter time.Duration) 
 // ListPendingJobTypes returns the distinct types of pending jobs.
 func (s *Store) ListPendingJobTypes(ctx context.Context) ([]string, error) {
 	var types []string
-	err := s.db.WithContext(ctx).Model(&model.Job{}).
+	err := s.readDB.WithContext(ctx).Model(&model.Job{}).
 		Where("status = ? AND scheduled_at <= ?", model.JobStatusPending, time.Now()).
 		Distinct("type").
 		Pluck("type", &types).Error
@@ -705,7 +712,7 @@ func (s *Store) TryAcquireLeadership(ctx context.Context, serverID string, heart
 	cutoff := now.Add(-heartbeatTimeout)
 
 	var acquired bool
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing model.DispatcherLeader
 		err := tx.First(&existing, "id = ?", model.DispatcherLeaderSingletonID).Error
 
@@ -762,7 +769,7 @@ func (s *Store) TryAcquireLeadership(ctx context.Context, serverID string, heart
 
 // ReleaseLeadership releases leadership on graceful shutdown.
 func (s *Store) ReleaseLeadership(ctx context.Context, serverID string) error {
-	return s.db.WithContext(ctx).
+	return s.writeDB.WithContext(ctx).
 		Where("id = ? AND server_id = ?", model.DispatcherLeaderSingletonID, serverID).
 		Delete(&model.DispatcherLeader{}).Error
 }
@@ -771,14 +778,14 @@ func (s *Store) ReleaseLeadership(ctx context.Context, serverID string) error {
 
 // CreateProjectEvent persists a new event for a project.
 func (s *Store) CreateProjectEvent(ctx context.Context, event *model.ProjectEvent) error {
-	return s.db.WithContext(ctx).Create(event).Error
+	return s.writeDB.WithContext(ctx).Create(event).Error
 }
 
 // ListProjectEventsSince returns all events for a project created after the given time.
 // Events are returned in ascending order by creation time.
 func (s *Store) ListProjectEventsSince(ctx context.Context, projectID string, since time.Time) ([]model.ProjectEvent, error) {
 	var events []model.ProjectEvent
-	err := s.db.WithContext(ctx).
+	err := s.readDB.WithContext(ctx).
 		Where("project_id = ? AND created_at > ?", projectID, since).
 		Order("created_at ASC").
 		Find(&events).Error
@@ -793,7 +800,7 @@ func (s *Store) ListProjectEventsSince(ctx context.Context, projectID string, si
 func (s *Store) ListProjectEventsAfterID(ctx context.Context, projectID, afterID string) ([]model.ProjectEvent, error) {
 	// First get the timestamp of the reference event
 	var refEvent model.ProjectEvent
-	if err := s.db.WithContext(ctx).First(&refEvent, "id = ?", afterID).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&refEvent, "id = ?", afterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// If reference event not found, return all events
 			return s.ListProjectEventsSince(ctx, projectID, time.Time{})
@@ -802,7 +809,7 @@ func (s *Store) ListProjectEventsAfterID(ctx context.Context, projectID, afterID
 	}
 
 	var events []model.ProjectEvent
-	err := s.db.WithContext(ctx).
+	err := s.readDB.WithContext(ctx).
 		Where("project_id = ? AND created_at > ?", projectID, refEvent.CreatedAt).
 		Order("created_at ASC").
 		Find(&events).Error
@@ -817,7 +824,7 @@ func (s *Store) ListProjectEventsAfterID(ctx context.Context, projectID, afterID
 // This is used by the event poller to fetch new events globally.
 func (s *Store) ListEventsAfterSeq(ctx context.Context, afterSeq int64, limit int) ([]model.ProjectEvent, error) {
 	var events []model.ProjectEvent
-	query := s.db.WithContext(ctx).
+	query := s.readDB.WithContext(ctx).
 		Where("seq > ?", afterSeq).
 		Order("seq ASC")
 	if limit > 0 {
@@ -833,7 +840,7 @@ func (s *Store) ListEventsAfterSeq(ctx context.Context, afterSeq int64, limit in
 // Returns 0 if there are no events.
 func (s *Store) GetMaxEventSeq(ctx context.Context) (int64, error) {
 	var maxSeq int64
-	err := s.db.WithContext(ctx).
+	err := s.readDB.WithContext(ctx).
 		Model(&model.ProjectEvent{}).
 		Select("COALESCE(MAX(seq), 0)").
 		Scan(&maxSeq).Error
@@ -844,7 +851,7 @@ func (s *Store) GetMaxEventSeq(ctx context.Context) (int64, error) {
 // This can be called periodically to clean up old events.
 func (s *Store) DeleteOldProjectEvents(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
-	result := s.db.WithContext(ctx).
+	result := s.writeDB.WithContext(ctx).
 		Where("created_at < ?", cutoff).
 		Delete(&model.ProjectEvent{})
 	return result.RowsAffected, result.Error
@@ -855,7 +862,7 @@ func (s *Store) DeleteOldProjectEvents(ctx context.Context, olderThan time.Durat
 // GetUserPreference returns a single preference by user ID and key.
 func (s *Store) GetUserPreference(ctx context.Context, userID, key string) (*model.UserPreference, error) {
 	var pref model.UserPreference
-	if err := s.db.WithContext(ctx).First(&pref, "user_id = ? AND key = ?", userID, key).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).First(&pref, "user_id = ? AND key = ?", userID, key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -867,13 +874,13 @@ func (s *Store) GetUserPreference(ctx context.Context, userID, key string) (*mod
 // ListUserPreferences returns all preferences for a user.
 func (s *Store) ListUserPreferences(ctx context.Context, userID string) ([]*model.UserPreference, error) {
 	var prefs []*model.UserPreference
-	err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("key ASC").Find(&prefs).Error
+	err := s.readDB.WithContext(ctx).Where("user_id = ?", userID).Order("key ASC").Find(&prefs).Error
 	return prefs, err
 }
 
 // SetUserPreference creates or updates a user preference (upsert).
 func (s *Store) SetUserPreference(ctx context.Context, pref *model.UserPreference) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing model.UserPreference
 		err := tx.First(&existing, "user_id = ? AND key = ?", pref.UserID, pref.Key).Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -895,7 +902,7 @@ func (s *Store) SetUserPreference(ctx context.Context, pref *model.UserPreferenc
 
 // DeleteUserPreference deletes a user preference by key.
 func (s *Store) DeleteUserPreference(ctx context.Context, userID, key string) error {
-	result := s.db.WithContext(ctx).Delete(&model.UserPreference{}, "user_id = ? AND key = ?", userID, key)
+	result := s.writeDB.WithContext(ctx).Delete(&model.UserPreference{}, "user_id = ? AND key = ?", userID, key)
 	if result.Error != nil {
 		return result.Error
 	}

@@ -119,7 +119,7 @@ func NewTestServer(t *testing.T) *TestServer {
 		cleanTables(db)
 	}
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, db.ReadDB)
 
 	// Create git provider with workspace source for lookup
 	workspaceSource := git.NewStoreWorkspaceSource(s)
@@ -381,7 +381,7 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 		t.Fatalf("Failed to seed database: %v", err)
 	}
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, db.ReadDB)
 
 	// Create git provider with workspace source for lookup
 	workspaceSource := git.NewStoreWorkspaceSource(s)

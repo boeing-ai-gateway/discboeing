@@ -796,5 +796,5 @@ func setupTestStore(t *testing.T) *store.Store {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 
-	return store.New(db)
+	return store.New(db, nil)
 }

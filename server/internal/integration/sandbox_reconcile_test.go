@@ -117,7 +117,7 @@ func newTestSandboxSetup(t *testing.T) *testSandboxSetup {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, db.ReadDB)
 
 	// Create session project resolver for cache volumes
 	sessionProjectResolver := func(ctx context.Context, sessionID string) (string, error) {

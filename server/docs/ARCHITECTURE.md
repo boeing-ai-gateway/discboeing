@@ -109,8 +109,8 @@ func main() {
     gitProvider := git.NewLocalProvider(cfg)
     sandboxProvider := sandbox.NewDockerProvider(cfg)
 
-    // 4. Create store
-    store := store.New(db)
+    // 4. Create store (separate read/write pools for SQLite)
+    store := store.New(db.DB, db.ReadDB)
 
     // 5. Create services
     services := service.NewServices(store, gitProvider, sandboxProvider)

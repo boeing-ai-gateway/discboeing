@@ -17,17 +17,19 @@ import (
 	"github.com/obot-platform/discobot/server/internal/model"
 )
 
-// DB wraps the GORM DB connection with additional context
+// DB wraps the GORM DB connection with additional context.
+// For SQLite, separate read and write pools are used to avoid contention:
+// the write pool has a single connection (SQLite only supports one writer),
+// while the read pool has multiple connections for concurrent reads via WAL mode.
 type DB struct {
-	*gorm.DB
-	Driver string
+	*gorm.DB // write pool (also used for Migrate/Seed)
+	ReadDB   *gorm.DB
+	Driver   string
 }
 
-// New creates a new database connection based on configuration
+// New creates a new database connection based on configuration.
+// For SQLite, it creates separate read and write connection pools.
 func New(cfg *config.Config) (*DB, error) {
-	var db *gorm.DB
-	var err error
-
 	// Configure logger to only log slow queries (>1 second)
 	slowLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
@@ -39,77 +41,122 @@ func New(cfg *config.Config) (*DB, error) {
 		},
 	)
 
-	gormConfig := &gorm.Config{
-		Logger: slowLogger,
-	}
-
 	driver := cfg.DatabaseDriver
 	dsn := cfg.CleanDSN()
 
 	switch driver {
 	case "postgres":
-		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
+		gormCfg := &gorm.Config{Logger: slowLogger}
+		db, err := gorm.Open(postgres.Open(dsn), gormCfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to database: %w", err)
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+		}
+		sqlDB.SetMaxOpenConns(25)
+		sqlDB.SetMaxIdleConns(5)
+		return &DB{DB: db, Driver: driver}, nil
+
 	case "sqlite":
-		// For SQLite, we need to handle the DSN differently
-		// Remove "file:" prefix if present
-		sqliteDSN := strings.TrimPrefix(dsn, "file:")
-		// glebarez/sqlite (modernc) handles pragmas differently
-		// For in-memory databases, use ":memory:"
-		// For file databases, just use the path
+		return newSQLite(dsn, slowLogger)
 
-		// Ensure parent directory exists for file-based databases
-		if sqliteDSN != ":memory:" && !strings.HasPrefix(sqliteDSN, ":memory:") {
-			dir := filepath.Dir(sqliteDSN)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
-			}
-		}
-
-		// Append pragmas to the DSN so they are applied to EVERY connection
-		// opened by the pool, not just the first one. Per-connection pragmas
-		// (busy_timeout, foreign_keys) set via db.Exec only affect a single
-		// connection, leaving the rest of the pool without them.
-		pragmas := []string{
-			"_pragma=journal_mode(WAL)",   // concurrent readers + single writer
-			"_pragma=busy_timeout(5000)",  // wait up to 5s instead of SQLITE_BUSY
-			"_pragma=foreign_keys(1)",     // enforce FK constraints
-			"_pragma=synchronous(NORMAL)", // safe with WAL, much faster than FULL
-		}
-		if strings.Contains(sqliteDSN, "?") {
-			sqliteDSN += "&" + strings.Join(pragmas, "&")
-		} else {
-			sqliteDSN += "?" + strings.Join(pragmas, "&")
-		}
-
-		db, err = gorm.Open(sqlite.Open(sqliteDSN), gormConfig)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", driver)
 	}
+}
 
+// newSQLite creates a DB with separate read and write connection pools.
+// The write pool has a single connection (SQLite only supports one writer)
+// with _txlock=immediate to acquire the write lock at BEGIN, preventing
+// the classic deadlock where two deferred transactions both try to upgrade.
+// The read pool has multiple connections for concurrent reads in WAL mode,
+// opened with mode=ro and query_only(1) as defense-in-depth against
+// accidental writes.
+//
+// File-based DSNs use the file: URI format so SQLite interprets URI
+// parameters like mode=rwc (write pool) and mode=ro (read pool).
+func newSQLite(dsn string, dbLogger logger.Interface) (*DB, error) {
+	// Normalize: strip file: prefix so we can work with the raw path,
+	// then re-add it for file-based databases before opening.
+	rawPath := strings.TrimPrefix(dsn, "file:")
+
+	isMemory := rawPath == ":memory:" || strings.HasPrefix(rawPath, ":memory:")
+
+	// Ensure parent directory exists for file-based databases
+	if !isMemory {
+		dir := filepath.Dir(rawPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
+		}
+	}
+
+	// Base DSN: file: URI for file-based, plain for :memory:
+	baseDSN := rawPath
+	if !isMemory {
+		baseDSN = "file:" + rawPath
+	}
+
+	// Pragmas applied to every connection in both pools via the DSN.
+	// Setting them per-DSN ensures every connection opened by the pool
+	// gets the same configuration, unlike db.Exec which only affects
+	// a single connection.
+	basePragmas := []string{
+		"_pragma=journal_mode(WAL)",   // concurrent readers + single writer
+		"_pragma=busy_timeout(5000)",  // wait up to 5s instead of SQLITE_BUSY
+		"_pragma=foreign_keys(1)",     // enforce FK constraints
+		"_pragma=synchronous(NORMAL)", // safe with WAL, much faster than FULL
+	}
+
+	appendParams := func(base string, params []string) string {
+		sep := "?"
+		if strings.Contains(base, "?") {
+			sep = "&"
+		}
+		return base + sep + strings.Join(params, "&")
+	}
+
+	// --- Write pool: single connection, read-write-create, immediate tx lock ---
+	writeParams := append(basePragmas, "_txlock=immediate")
+	if !isMemory {
+		writeParams = append(writeParams, "mode=rwc")
+	}
+	writeDSN := appendParams(baseDSN, writeParams)
+	writeDB, err := gorm.Open(sqlite.Open(writeDSN), &gorm.Config{Logger: dbLogger})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to open sqlite write pool: %w", err)
 	}
-
-	// Get underlying sql.DB for connection pool configuration
-	sqlDB, err := db.DB()
+	writeSQLDB, err := writeDB.DB()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+		return nil, fmt.Errorf("failed to get write pool sql.DB: %w", err)
+	}
+	writeSQLDB.SetMaxOpenConns(1)
+	writeSQLDB.SetMaxIdleConns(1)
+
+	// --- Read pool: multiple connections, read-only ---
+	// For in-memory databases, a second Open creates a separate database,
+	// so skip the read pool and reuse the write pool.
+	if isMemory {
+		return &DB{DB: writeDB, Driver: "sqlite"}, nil
 	}
 
-	// Configure connection pool based on driver
-	if driver == "sqlite" {
-		// With WAL mode, SQLite supports concurrent readers alongside a single
-		// writer. Allow multiple connections so read-heavy polling goroutines
-		// don't block behind writes (or each other).
-		sqlDB.SetMaxOpenConns(4)
-		sqlDB.SetMaxIdleConns(4)
-	} else {
-		// PostgreSQL handles connection pooling well
-		sqlDB.SetMaxOpenConns(25)
-		sqlDB.SetMaxIdleConns(5)
+	// mode=ro: SQLite opens the connection read-only at the VFS level.
+	// query_only(1): additional PRAGMA-level guard that errors on writes.
+	readParams := append(basePragmas, "mode=ro", "_pragma=query_only(1)")
+	readDSN := appendParams(baseDSN, readParams)
+	readDB, err := gorm.Open(sqlite.Open(readDSN), &gorm.Config{Logger: dbLogger})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open sqlite read pool: %w", err)
 	}
+	readSQLDB, err := readDB.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get read pool sql.DB: %w", err)
+	}
+	readSQLDB.SetMaxOpenConns(4)
+	readSQLDB.SetMaxIdleConns(4)
 
-	return &DB{DB: db, Driver: driver}, nil
+	return &DB{DB: writeDB, ReadDB: readDB, Driver: "sqlite"}, nil
 }
 
 // Migrate runs database migrations using GORM's AutoMigrate
@@ -236,11 +283,21 @@ func (db *DB) IsSQLite() bool {
 	return db.Driver == "sqlite"
 }
 
-// Close closes the database connection
+// Close closes both the write and read database connections.
 func (db *DB) Close() error {
-	sqlDB, err := db.DB.DB()
+	writeSQLDB, err := db.DB.DB()
 	if err != nil {
 		return err
 	}
-	return sqlDB.Close()
+	if err := writeSQLDB.Close(); err != nil {
+		return err
+	}
+	if db.ReadDB != nil {
+		readSQLDB, err := db.ReadDB.DB()
+		if err != nil {
+			return err
+		}
+		return readSQLDB.Close()
+	}
+	return nil
 }

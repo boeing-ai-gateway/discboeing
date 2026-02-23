@@ -38,7 +38,7 @@ func setupChatTestStore(t *testing.T) *store.Store {
 	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
-	return store.New(db)
+	return store.New(db, nil)
 }
 
 // seedSession creates a workspace and session in the store for testing.

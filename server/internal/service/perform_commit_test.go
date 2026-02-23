@@ -65,7 +65,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	s := store.New(db.DB)
+	s := store.New(db.DB, db.ReadDB)
 
 	// Create git provider
 	workspaceSource := git.NewStoreWorkspaceSource(s)

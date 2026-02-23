@@ -39,7 +39,7 @@ func testSetup(t *testing.T) *testEnv {
 	}
 
 	// Create a project for the events
-	s := store.New(db.DB)
+	s := store.New(db.DB, db.ReadDB)
 	project := &model.Project{Name: "Test Project", Slug: "test-project"}
 	if err := s.CreateProject(context.Background(), project); err != nil {
 		t.Fatalf("Failed to create project: %v", err)
