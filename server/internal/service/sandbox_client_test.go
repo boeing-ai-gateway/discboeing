@@ -100,6 +100,14 @@ func (m *mockSandboxProvider) Watch(_ context.Context) (<-chan sandbox.StateEven
 	return ch, nil
 }
 
+func (m *mockSandboxProvider) Reconcile(_ context.Context) error {
+	return nil
+}
+
+func (m *mockSandboxProvider) RemoveProject(_ context.Context, _ string) error {
+	return nil
+}
+
 func TestSandboxChatClient_SendMessages_Returns202ThenStreams(t *testing.T) {
 	// Track request sequence
 	var postCalled, getCalled bool
@@ -503,6 +511,14 @@ func (m *mockSandboxProviderWithTransport) Watch(_ context.Context) (<-chan sand
 	ch := make(chan sandbox.StateEvent)
 	close(ch)
 	return ch, nil
+}
+
+func (m *mockSandboxProviderWithTransport) Reconcile(_ context.Context) error {
+	return nil
+}
+
+func (m *mockSandboxProviderWithTransport) RemoveProject(_ context.Context, _ string) error {
+	return nil
 }
 
 func contains(s, substr string) bool {

@@ -634,6 +634,16 @@ func (p *Provider) EmitEvent(event sandbox.StateEvent) {
 	p.emitEvent(event)
 }
 
+// Reconcile is a no-op for the mock provider.
+func (p *Provider) Reconcile(_ context.Context) error {
+	return nil
+}
+
+// RemoveProject is a no-op for the mock provider.
+func (p *Provider) RemoveProject(_ context.Context, _ string) error {
+	return nil
+}
+
 // CloseWatchers closes all active Watch channels.
 // This is useful for testing cleanup.
 func (p *Provider) CloseWatchers() {

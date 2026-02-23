@@ -381,13 +381,21 @@ func (p *ProviderProxy) Watch(ctx context.Context) (<-chan StateEvent, error) {
 	return merged, nil
 }
 
-// CleanupImages delegates to all providers that implement ImageCleaner.
-func (p *ProviderProxy) CleanupImages(ctx context.Context) error {
+// Reconcile delegates to all providers.
+func (p *ProviderProxy) Reconcile(ctx context.Context) error {
 	for name, provider := range p.manager.providers {
-		if cleaner, ok := provider.(ImageCleaner); ok {
-			if err := cleaner.CleanupImages(ctx); err != nil {
-				log.Printf("Warning: Failed to clean up images for provider %s: %v", name, err)
-			}
+		if err := provider.Reconcile(ctx); err != nil {
+			log.Printf("Warning: Failed to reconcile provider %s: %v", name, err)
+		}
+	}
+	return nil
+}
+
+// RemoveProject delegates to all providers.
+func (p *ProviderProxy) RemoveProject(ctx context.Context, projectID string) error {
+	for name, provider := range p.manager.providers {
+		if err := provider.RemoveProject(ctx, projectID); err != nil {
+			log.Printf("Warning: Failed to remove project resources for provider %s: %v", name, err)
 		}
 	}
 	return nil

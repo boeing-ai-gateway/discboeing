@@ -81,6 +81,17 @@ type Provider interface {
 	// For Docker, this watches the Docker events API for container lifecycle events.
 	// For VZ, this uses the VM state change notifications.
 	Watch(ctx context.Context) (<-chan StateEvent, error)
+
+	// Reconcile performs provider-specific reconciliation on startup.
+	// This handles tasks like cleaning up old images, removing outdated
+	// infrastructure containers (e.g., BuildKit), and other housekeeping.
+	// Called after sandbox image reconciliation completes.
+	Reconcile(ctx context.Context) error
+
+	// RemoveProject cleans up all provider-managed resources for a project.
+	// This includes cache volumes, BuildKit containers, networks, etc.
+	// Called when a project is deleted.
+	RemoveProject(ctx context.Context, projectID string) error
 }
 
 // DockerProxyProvider is an optional interface that sandbox providers can implement
@@ -105,13 +116,6 @@ type ProviderStatus struct {
 // to report their status. Providers that don't implement this are assumed ready.
 type StatusProvider interface {
 	Status() ProviderStatus
-}
-
-// ImageCleaner is an optional interface that sandbox providers can implement
-// to clean up old/unused sandbox images. This is called after sandbox reconciliation
-// to remove images from previous versions once all sandboxes have been migrated.
-type ImageCleaner interface {
-	CleanupImages(ctx context.Context) error
 }
 
 // RemoveOption configures sandbox removal behavior.

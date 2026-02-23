@@ -158,17 +158,10 @@ func (s *ProjectService) DeleteProject(ctx context.Context, projectID string) er
 		return err
 	}
 
-	// Clean up cache volume if provider supports it
+	// Clean up provider-managed resources (cache volumes, BuildKit containers, networks, etc.)
 	if s.provider != nil {
-		// Use type assertion to check if provider supports cache volume cleanup
-		type cacheVolumeManager interface {
-			RemoveCacheVolume(ctx context.Context, projectID string) error
-		}
-		if cvm, ok := s.provider.(cacheVolumeManager); ok {
-			if err := cvm.RemoveCacheVolume(ctx, projectID); err != nil {
-				// Log but don't fail - cache cleanup is best-effort
-				log.Printf("Warning: failed to remove cache volume for project %s: %v", projectID, err)
-			}
+		if err := s.provider.RemoveProject(ctx, projectID); err != nil {
+			log.Printf("Warning: failed to remove provider resources for project %s: %v", projectID, err)
 		}
 	}
 

@@ -370,9 +370,8 @@ func (p *Provider) Close() error {
 	return nil
 }
 
-// CleanupImages delegates to all per-project Docker providers to clean up old images.
-// Implements sandbox.ImageCleaner.
-func (p *Provider) CleanupImages(ctx context.Context) error {
+// Reconcile delegates to all per-project Docker providers to reconcile.
+func (p *Provider) Reconcile(ctx context.Context) error {
 	p.dockerProvidersMu.RLock()
 	providers := make([]*docker.Provider, 0, len(p.dockerProviders))
 	for _, prov := range p.dockerProviders {
@@ -381,9 +380,21 @@ func (p *Provider) CleanupImages(ctx context.Context) error {
 	p.dockerProvidersMu.RUnlock()
 
 	for _, dockerProv := range providers {
-		if err := dockerProv.CleanupImages(ctx); err != nil {
-			log.Printf("Warning: Failed to clean up images in VM Docker provider: %v", err)
+		if err := dockerProv.Reconcile(ctx); err != nil {
+			log.Printf("Warning: Failed to reconcile VM Docker provider: %v", err)
 		}
+	}
+	return nil
+}
+
+// RemoveProject delegates to the project's Docker provider to clean up resources.
+func (p *Provider) RemoveProject(ctx context.Context, projectID string) error {
+	p.dockerProvidersMu.RLock()
+	dockerProv, ok := p.dockerProviders[projectID]
+	p.dockerProvidersMu.RUnlock()
+
+	if ok {
+		return dockerProv.RemoveProject(ctx, projectID)
 	}
 	return nil
 }

@@ -640,6 +640,16 @@ func (p *Provider) broadcastEvent(event sandbox.StateEvent) {
 	}
 }
 
+// Reconcile is a no-op for the local provider.
+func (p *Provider) Reconcile(_ context.Context) error {
+	return nil
+}
+
+// RemoveProject is a no-op for the local provider.
+func (p *Provider) RemoveProject(_ context.Context, _ string) error {
+	return nil
+}
+
 // hashSecret creates a salted SHA-256 hash of the secret.
 // This matches the Docker provider implementation.
 func hashSecret(secret string) string {

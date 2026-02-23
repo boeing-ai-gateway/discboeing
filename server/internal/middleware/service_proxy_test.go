@@ -238,6 +238,14 @@ func (m *mockSandboxProvider) Watch(_ context.Context) (<-chan sandbox.StateEven
 	return nil, nil
 }
 
+func (m *mockSandboxProvider) Reconcile(_ context.Context) error {
+	return nil
+}
+
+func (m *mockSandboxProvider) RemoveProject(_ context.Context, _ string) error {
+	return nil
+}
+
 // TestServiceProxyNonServiceSubdomain verifies that non-service requests pass through
 func TestServiceProxyNonServiceSubdomain(t *testing.T) {
 	provider := &mockSandboxProvider{
