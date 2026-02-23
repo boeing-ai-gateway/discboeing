@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { executeHook, getHookOutputPath } from "./executor.js";
 import type { Hook } from "./parser.js";
 
-describe("executeHook", () => {
+const isWindows = process.platform === "win32";
+
+describe("executeHook", { skip: isWindows && "requires bash" }, () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
@@ -141,13 +143,8 @@ describe("executeHook", () => {
 
 describe("getHookOutputPath", () => {
 	it("returns correct path", () => {
-		const path = getHookOutputPath(
-			"/home/user/.discobot/session1/hooks",
-			"my-hook",
-		);
-		assert.strictEqual(
-			path,
-			"/home/user/.discobot/session1/hooks/output/my-hook.log",
-		);
+		const baseDir = join("home", "user", ".discobot", "session1", "hooks");
+		const path = getHookOutputPath(baseDir, "my-hook");
+		assert.strictEqual(path, join(baseDir, "output", "my-hook.log"));
 	});
 });

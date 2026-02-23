@@ -130,7 +130,7 @@ export async function executeHook(
 	}, timeout);
 
 	return new Promise<HookResult>((resolve) => {
-		proc.on("exit", async (code) => {
+		proc.on("close", async (code) => {
 			clearTimeout(timer);
 
 			const exitCode = killed ? 124 : (code ?? 1); // 124 = timeout convention

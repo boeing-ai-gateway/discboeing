@@ -3,6 +3,10 @@
 *.ts text eol=lf
 *.tsx text eol=lf
 *.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
@@ -10,3 +14,4 @@
 *.toml text eol=lf
 *.mod text eol=lf
 *.sum text eol=lf
+*.sh text eol=lf

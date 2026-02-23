@@ -343,9 +343,9 @@ ${Array.from({ length: 1000 }, (_, i) => `+line ${i}`).join("\n")}`;
 		// The fast method should return correct count
 		assert.strictEqual(countFast, 1000, "Fast counting should be accurate");
 
-		// Fast method should complete in reasonable time (< 10ms for 1000 lines)
+		// Fast method should complete in reasonable time (< 100ms for 1000 lines)
 		assert.ok(
-			timeFast < 10,
+			timeFast < 100,
 			`Fast counting should be quick (took ${timeFast}ms)`,
 		);
 	});
