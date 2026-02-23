@@ -33,7 +33,7 @@
 		"test:agent-api:integration": "pnpm --filter agent-api test:integration",
 		"check": "pnpm check:frontend && pnpm check:backend && pnpm check:shell",
 		"check:fix": "pnpm check:frontend:fix && pnpm check:backend:fix && pnpm check:shell",
-		"check:shell": "find . -name '*.sh' -not -path './node_modules/*' -not -path './.git/*' -exec shellcheck {} +",
+		"check:shell": "case \"$(uname -s)\" in MINGW*|MSYS*) echo 'Skipping shellcheck on Windows'; exit 0;; esac && find . -name '*.sh' -not -path './node_modules/*' -not -path './.git/*' -exec shellcheck {} +",
 		"check:frontend": "biome check . && eslint . && tsc --noEmit",
 		"check:frontend:fix": "biome check . --write && biome check . && eslint . && tsc --noEmit",
 		"check:backend": "cd server && go tool golangci-lint run && cd ../proxy && go tool golangci-lint run",
