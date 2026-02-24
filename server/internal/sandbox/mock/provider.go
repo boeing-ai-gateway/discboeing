@@ -449,6 +449,13 @@ func (p *PTY) Resize(_ context.Context, rows, cols int) error {
 	return nil
 }
 
+// GetResizeCalls returns a copy of the resize calls for test assertions.
+func (p *PTY) GetResizeCalls() []struct{ Rows, Cols int } {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]struct{ Rows, Cols int }{}, p.ResizeCalls...)
+}
+
 func (p *PTY) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -468,6 +475,7 @@ type Stream struct {
 	StderrBuffer []byte
 	Closed       bool
 	WritesClosed bool
+	ResizeCalls  []struct{ Rows, Cols int }
 	mu           sync.Mutex
 }
 
@@ -524,6 +532,13 @@ func (s *Stream) Write(b []byte) (int, error) {
 
 	s.InputBuffer = append(s.InputBuffer, b...)
 	return len(b), nil
+}
+
+func (s *Stream) Resize(_ context.Context, rows, cols int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ResizeCalls = append(s.ResizeCalls, struct{ Rows, Cols int }{rows, cols})
+	return nil
 }
 
 func (s *Stream) CloseWrite() error {

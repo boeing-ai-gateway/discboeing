@@ -1468,6 +1468,16 @@ func (s *dockerStream) Write(b []byte) (int, error) {
 	return s.hijacked.Conn.Write(b)
 }
 
+func (s *dockerStream) Resize(ctx context.Context, rows, cols int) error {
+	if !s.tty {
+		return nil
+	}
+	return s.client.ContainerExecResize(ctx, s.execID, containerTypes.ResizeOptions{
+		Height: uint(rows),
+		Width:  uint(cols),
+	})
+}
+
 func (s *dockerStream) CloseWrite() error {
 	// Close the write side of the connection
 	if cw, ok := s.hijacked.Conn.(interface{ CloseWrite() error }); ok {

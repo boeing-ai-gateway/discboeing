@@ -285,6 +285,11 @@ func (h *sessionHandler) handleChannel(newChannel ssh.NewChannel) {
 	}
 }
 
+// resizeable is implemented by sandbox.PTY to allow terminal resize.
+type resizeable interface {
+	Resize(ctx context.Context, rows, cols int) error
+}
+
 func (h *sessionHandler) handleSessionChannel(newChannel ssh.NewChannel) {
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
@@ -297,66 +302,112 @@ func (h *sessionHandler) handleSessionChannel(newChannel ssh.NewChannel) {
 	var ptyReq *ptyRequest
 	var envVars = make(map[string]string)
 
-	for req := range requests {
-		switch req.Type {
-		case "pty-req":
-			ptyReq = parsePTYRequest(req.Payload)
-			if req.WantReply {
-				_ = req.Reply(true, nil)
-			}
+	// activePTY holds a reference to the running PTY so window-change
+	// requests can resize it. Set by runShell/runExec via the onPTY callback.
+	var activePTY resizeable
+	var ptyMu sync.Mutex
 
-		case "env":
-			// Parse environment variable request
-			name, value := parseEnvRequest(req.Payload)
-			envVars[name] = value
-			if req.WantReply {
-				_ = req.Reply(true, nil)
-			}
+	// done is closed when the shell/exec goroutine finishes.
+	done := make(chan struct{})
+	started := false
 
-		case "shell":
-			if req.WantReply {
-				_ = req.Reply(true, nil)
-			}
-			h.runShell(channel, ptyReq, envVars)
+	for {
+		select {
+		case <-done:
+			// Shell/exec goroutine finished — exit the handler.
 			return
 
-		case "exec":
-			command := parseExecRequest(req.Payload)
-			if req.WantReply {
-				_ = req.Reply(true, nil)
+		case req, ok := <-requests:
+			if !ok {
+				// Channel request stream closed.
+				if started {
+					<-done
+				}
+				return
 			}
-			h.runExec(channel, command, ptyReq, envVars)
-			return
 
-		case "subsystem":
-			subsystem := parseSubsystemRequest(req.Payload)
-			if subsystem == "sftp" {
+			switch req.Type {
+			case "pty-req":
+				ptyReq = parsePTYRequest(req.Payload)
 				if req.WantReply {
 					_ = req.Reply(true, nil)
 				}
-				h.runSFTP(channel)
-				return
-			}
-			if req.WantReply {
-				_ = req.Reply(false, nil)
-			}
 
-		case "window-change":
-			// Window resize - we'd need to track the PTY to resize it
-			if req.WantReply {
-				_ = req.Reply(true, nil)
-			}
+			case "env":
+				// Parse environment variable request
+				name, value := parseEnvRequest(req.Payload)
+				envVars[name] = value
+				if req.WantReply {
+					_ = req.Reply(true, nil)
+				}
 
-		default:
-			log.Printf("SSH session %s: unknown request type: %s", h.sessionID, req.Type)
-			if req.WantReply {
-				_ = req.Reply(false, nil)
+			case "shell":
+				if req.WantReply {
+					_ = req.Reply(true, nil)
+				}
+				started = true
+				go func() {
+					defer close(done)
+					h.runShell(channel, ptyReq, envVars, func(pty resizeable) {
+						ptyMu.Lock()
+						activePTY = pty
+						ptyMu.Unlock()
+					})
+				}()
+
+			case "exec":
+				command := parseExecRequest(req.Payload)
+				if req.WantReply {
+					_ = req.Reply(true, nil)
+				}
+				started = true
+				go func() {
+					defer close(done)
+					h.runExec(channel, command, ptyReq, envVars, func(pty resizeable) {
+						ptyMu.Lock()
+						activePTY = pty
+						ptyMu.Unlock()
+					})
+				}()
+
+			case "subsystem":
+				subsystem := parseSubsystemRequest(req.Payload)
+				if subsystem == "sftp" {
+					if req.WantReply {
+						_ = req.Reply(true, nil)
+					}
+					h.runSFTP(channel)
+					return
+				}
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
+
+			case "window-change":
+				cols, rows := parseWindowChange(req.Payload)
+				ptyMu.Lock()
+				p := activePTY
+				ptyMu.Unlock()
+				if p != nil {
+					if resizeErr := p.Resize(context.Background(), int(rows), int(cols)); resizeErr != nil {
+						log.Printf("SSH session %s: PTY resize error: %v", h.sessionID, resizeErr)
+					}
+				}
+				if req.WantReply {
+					_ = req.Reply(true, nil)
+				}
+
+			default:
+				log.Printf("SSH session %s: unknown request type: %s", h.sessionID, req.Type)
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
 			}
 		}
 	}
 }
 
-func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVars map[string]string) {
+func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVars map[string]string, onPTY func(resizeable)) {
 	ctx := context.Background()
 
 	// Get user for this session (uid:gid format)
@@ -378,6 +429,11 @@ func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVa
 		return
 	}
 	defer pty.Close()
+
+	// Expose PTY for window-change resize handling
+	if onPTY != nil {
+		onPTY(pty)
+	}
 
 	// Done channel to signal when PTY output is fully drained
 	outputDone := make(chan struct{})
@@ -402,7 +458,7 @@ func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVa
 	sendExitStatus(channel, uint32(exitCode))
 }
 
-func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *ptyRequest, envVars map[string]string) {
+func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *ptyRequest, envVars map[string]string, onResize func(resizeable)) {
 	ctx := context.Background()
 
 	// Get user for this session (uid:gid format)
@@ -422,6 +478,11 @@ func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *pt
 		return
 	}
 	defer stream.Close()
+
+	// Expose stream for window-change resize handling (effective when TTY=true)
+	if onResize != nil && ptyReq != nil {
+		onResize(stream)
+	}
 
 	// Done channels to signal when output is fully drained
 	stdoutDone := make(chan struct{})
@@ -600,6 +661,15 @@ func parsePTYRequest(payload []byte) *ptyRequest {
 		Width:  width,
 		Height: height,
 	}
+}
+
+func parseWindowChange(payload []byte) (cols, rows uint32) {
+	if len(payload) < 8 {
+		return 0, 0
+	}
+	cols = uint32(payload[0])<<24 | uint32(payload[1])<<16 | uint32(payload[2])<<8 | uint32(payload[3])
+	rows = uint32(payload[4])<<24 | uint32(payload[5])<<16 | uint32(payload[6])<<8 | uint32(payload[7])
+	return
 }
 
 func parseEnvRequest(payload []byte) (name, value string) {

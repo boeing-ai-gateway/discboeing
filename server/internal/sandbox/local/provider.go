@@ -746,6 +746,10 @@ func (s *unsupportedStream) Write(buf []byte) (int, error) {
 	return len(buf), nil
 }
 
+func (s *unsupportedStream) Resize(_ context.Context, _, _ int) error {
+	return nil
+}
+
 func (s *unsupportedStream) CloseWrite() error {
 	return nil
 }

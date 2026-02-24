@@ -549,6 +549,10 @@ func (s *execStream) Write(b []byte) (int, error) {
 	return len(b), nil // Discard input
 }
 
+func (s *execStream) Resize(_ context.Context, _, _ int) error {
+	return nil
+}
+
 func (s *execStream) CloseWrite() error {
 	return nil
 }
@@ -617,6 +621,10 @@ func (s *testStream) Write(b []byte) (int, error) {
 	}
 	s.inputBuf = append(s.inputBuf, b...)
 	return len(b), nil
+}
+
+func (s *testStream) Resize(_ context.Context, _, _ int) error {
+	return nil
 }
 
 func (s *testStream) CloseWrite() error {

@@ -289,21 +289,26 @@ type ExecStreamOptions struct {
 	TTY     bool              // Allocate a pseudo-terminal for the command
 }
 
-// Stream represents a bidirectional stream to a command (no TTY).
-// Unlike PTY, this doesn't allocate a pseudo-terminal, so binary data
-// is not corrupted. This is used for SFTP, port forwarding, and exec.
+// Stream represents a bidirectional stream to a command.
+// When created with TTY=true, stdout and stderr are merged and
+// Resize can be used to change terminal dimensions.
+// This is used for SFTP, port forwarding, and exec.
 type Stream interface {
 	// Read reads stdout from the command.
 	// Implements io.Reader.
 	Read(p []byte) (n int, err error)
 
 	// Stderr returns a reader for the command's stderr.
-	// Returns nil if stderr is not available (e.g., merged with stdout).
+	// Returns nil if stderr is not available (e.g., TTY mode merges streams).
 	Stderr() io.Reader
 
 	// Write sends input to the command's stdin.
 	// Implements io.Writer.
 	Write(p []byte) (n int, err error)
+
+	// Resize changes the terminal dimensions.
+	// Only effective when the stream was created with TTY=true.
+	Resize(ctx context.Context, rows, cols int) error
 
 	// CloseWrite signals EOF to the command's stdin.
 	// The stream can still be read after calling this.

@@ -257,6 +257,162 @@ func TestParsePTYRequest(t *testing.T) {
 	}
 }
 
+func TestParseWindowChange(t *testing.T) {
+	t.Parallel()
+	// Build a window-change payload
+	// Format: uint32 cols, uint32 rows, uint32 width_pixels, uint32 height_pixels
+	payload := make([]byte, 16)
+
+	// Cols (120)
+	payload[0] = 0
+	payload[1] = 0
+	payload[2] = 0
+	payload[3] = 120
+	// Rows (40)
+	payload[4] = 0
+	payload[5] = 0
+	payload[6] = 0
+	payload[7] = 40
+	// Width pixels (960) - not parsed
+	payload[8] = 0
+	payload[9] = 0
+	payload[10] = 3
+	payload[11] = 192
+	// Height pixels (640) - not parsed
+	payload[12] = 0
+	payload[13] = 0
+	payload[14] = 2
+	payload[15] = 128
+
+	cols, rows := parseWindowChange(payload)
+
+	if cols != 120 {
+		t.Errorf("cols = %d, want 120", cols)
+	}
+	if rows != 40 {
+		t.Errorf("rows = %d, want 40", rows)
+	}
+}
+
+func TestParseWindowChange_ShortPayload(t *testing.T) {
+	t.Parallel()
+	cols, rows := parseWindowChange([]byte{0, 0, 0})
+	if cols != 0 || rows != 0 {
+		t.Errorf("expected (0, 0) for short payload, got (%d, %d)", cols, rows)
+	}
+}
+
+func TestWindowChangeResizesPTY(t *testing.T) {
+	t.Parallel()
+	provider := mock.NewProvider()
+
+	ctx := context.Background()
+	sessionID := "resize-test-session"
+	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	if err := provider.Start(ctx, sessionID); err != nil {
+		t.Fatalf("failed to start sandbox: %v", err)
+	}
+
+	// Track the mock PTY so we can inspect resize calls
+	mockPTY := &mock.PTY{}
+	provider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
+		return mockPTY, nil
+	}
+
+	srv, err := New(&Config{
+		Address:         "127.0.0.1:0",
+		HostKeyPath:     getSharedTestKeyPath(),
+		SandboxProvider: provider,
+	})
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	go srv.Start()
+	time.Sleep(100 * time.Millisecond)
+	defer srv.Stop()
+
+	addr := srv.Addr()
+
+	// Connect as SSH client
+	config := &ssh.ClientConfig{
+		User:            sessionID,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         5 * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatalf("failed to open session: %v", err)
+	}
+	defer session.Close()
+
+	// Request PTY
+	if err := session.RequestPty("xterm", 24, 80, ssh.TerminalModes{}); err != nil {
+		t.Fatalf("failed to request PTY: %v", err)
+	}
+
+	// Start shell
+	if err := session.Shell(); err != nil {
+		t.Fatalf("failed to start shell: %v", err)
+	}
+
+	// Give the shell goroutine time to start and set the PTY
+	time.Sleep(100 * time.Millisecond)
+
+	// Send window-change request
+	ok, err := session.SendRequest("window-change", true, buildWindowChangePayload(120, 40))
+	if err != nil {
+		t.Fatalf("failed to send window-change: %v", err)
+	}
+	if !ok {
+		t.Error("window-change request was rejected")
+	}
+
+	// Give the resize time to be processed
+	time.Sleep(50 * time.Millisecond)
+
+	// Close the PTY to end the shell
+	mockPTY.Close()
+
+	// Check the mock PTY received the resize call
+	resizeCalls := mockPTY.GetResizeCalls()
+
+	if len(resizeCalls) == 0 {
+		t.Fatal("expected at least one resize call, got none")
+	}
+
+	lastResize := resizeCalls[len(resizeCalls)-1]
+	if lastResize.Rows != 40 || lastResize.Cols != 120 {
+		t.Errorf("resize = {Rows: %d, Cols: %d}, want {Rows: 40, Cols: 120}",
+			lastResize.Rows, lastResize.Cols)
+	}
+}
+
+// buildWindowChangePayload creates an SSH window-change request payload.
+func buildWindowChangePayload(cols, rows uint32) []byte {
+	payload := make([]byte, 16)
+	payload[0] = byte(cols >> 24)
+	payload[1] = byte(cols >> 16)
+	payload[2] = byte(cols >> 8)
+	payload[3] = byte(cols)
+	payload[4] = byte(rows >> 24)
+	payload[5] = byte(rows >> 16)
+	payload[6] = byte(rows >> 8)
+	payload[7] = byte(rows)
+	// pixel width and height (zeros)
+	return payload
+}
+
 func TestParseEnvRequest(t *testing.T) {
 	t.Parallel()
 	// Build an env request payload
