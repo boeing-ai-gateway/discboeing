@@ -61,6 +61,7 @@ function getFolderStatus(
 
 interface FilePanelProps {
 	sessionId: string | null;
+	sessionStatus?: string;
 	activeView: string;
 	onFileSelect: (path: string) => void;
 	className?: string;
@@ -69,6 +70,7 @@ interface FilePanelProps {
 
 export function FilePanel({
 	sessionId,
+	sessionStatus,
 	activeView,
 	onFileSelect,
 	className,
@@ -92,7 +94,7 @@ export function FilePanel({
 		collapseAll,
 		isPathLoading,
 		refresh,
-	} = useSessionFiles(sessionId, !showChangedOnly);
+	} = useSessionFiles(sessionId, !showChangedOnly, sessionStatus);
 
 	// Filter to show only changed files when in "Changed" mode
 	const filteredFiles = React.useMemo(() => {

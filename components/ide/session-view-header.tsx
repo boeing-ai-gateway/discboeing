@@ -60,8 +60,12 @@ export function SessionViewHeader() {
 	} = useSessionViewContext();
 	const activeService = services.find((s) => s.id === activeServiceId);
 
-	// Get diff stats for the "All Changes" button
-	const { diffStats } = useSessionFiles(selectedSessionId, false);
+	// Get diff stats for the "All Changes" button (only when sandbox is ready)
+	const { diffStats } = useSessionFiles(
+		selectedSessionId,
+		false,
+		selectedSession?.status,
+	);
 
 	// Check if session is in a commit state
 	const isSessionCommitPending =

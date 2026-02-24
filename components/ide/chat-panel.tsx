@@ -384,8 +384,11 @@ export function ChatPanel({
 		[throttledMessages],
 	);
 
-	// Poll hook status for existing sessions
-	const { hooksStatus } = useHooksStatus(resume ? sessionId : null);
+	// Poll hook status for existing sessions (only when sandbox is ready)
+	const { hooksStatus } = useHooksStatus(
+		resume ? sessionId : null,
+		session?.status,
+	);
 
 	// Detect hook evaluation changes and trigger resumeStream to reconnect
 	// to any hook-triggered completion (no-op if no completion is running)

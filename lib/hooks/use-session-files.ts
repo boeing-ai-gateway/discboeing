@@ -76,12 +76,26 @@ export function shouldAutoExpand(nodes: LazyFileNode[]): LazyFileNode | null {
 }
 
 /**
+ * Check if a session status indicates the sandbox is available for requests.
+ */
+function isSandboxReady(status: string | undefined): boolean {
+	return status === "ready" || status === "running";
+}
+
+/**
  * Hook for managing session files with lazy loading.
  * Files are loaded directory-by-directory as folders are expanded.
  * @param sessionId - The session ID to load files for
  * @param loadAllFiles - When false, only shows changed files without loading the full tree
+ * @param sessionStatus - Session status — fetching is paused unless "ready" or "running"
  */
-export function useSessionFiles(sessionId: string | null, loadAllFiles = true) {
+export function useSessionFiles(
+	sessionId: string | null,
+	loadAllFiles = true,
+	sessionStatus?: string,
+) {
+	const sandboxReady = isSandboxReady(sessionStatus);
+
 	// Track which directories are expanded (for lazy loading)
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
 		new Set(["."]),
@@ -95,25 +109,27 @@ export function useSessionFiles(sessionId: string | null, loadAllFiles = true) {
 	// Track paths that are currently loading
 	const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
 
-	// Load root directory listing - only when loadAllFiles is true
+	// Load root directory listing - only when loadAllFiles is true and sandbox is ready
 	const {
 		data: rootData,
 		isLoading: isLoadingRoot,
 		error: rootError,
 	} = useSWR(
-		sessionId && loadAllFiles ? `session-files-${sessionId}-root` : null,
+		sessionId && loadAllFiles && sandboxReady
+			? `session-files-${sessionId}-root`
+			: null,
 		() => (sessionId ? api.listSessionFiles(sessionId, ".") : null),
 		{ shouldRetryOnError },
 	);
 
-	// Load diff status (files that have changed) - always load
+	// Load diff status (files that have changed) - only when sandbox is ready
 	const {
 		data: diffData,
 		isLoading: isLoadingDiff,
 		mutate: mutateDiff,
 		error: diffError,
 	} = useSWR(
-		sessionId ? `session-diff-${sessionId}-files` : null,
+		sessionId && sandboxReady ? `session-diff-${sessionId}-files` : null,
 		async () => {
 			if (!sessionId) return null;
 			const result = await api.getSessionDiff(sessionId, { format: "files" });

@@ -564,8 +564,12 @@ function FileDiffSection({
  * Each file is collapsible and can be marked as reviewed (persisted in localStorage).
  */
 export function ConsolidatedDiffView() {
-	const { selectedSessionId, handleFileSelect, setActiveView } =
-		useSessionViewContext();
+	const {
+		selectedSessionId,
+		selectedSession,
+		handleFileSelect,
+		setActiveView,
+	} = useSessionViewContext();
 
 	// Track diff style preference (split/unified)
 	const [diffStyle, setDiffStyle] = usePersistedState<DiffStyle>(
@@ -574,10 +578,11 @@ export function ConsolidatedDiffView() {
 		"local",
 	);
 
-	// Get all changed files from session
+	// Get all changed files from session (only when sandbox is ready)
 	const { diffEntries, isLoading: isLoadingFiles } = useSessionFiles(
 		selectedSessionId,
 		false,
+		selectedSession?.status,
 	);
 
 	// Compute patch hashes for all files to use as React keys

@@ -2,9 +2,21 @@ import useSWR from "swr";
 import { api } from "../api-client";
 import type { HooksStatusResponse } from "../api-types";
 
-export function useHooksStatus(sessionId: string | null) {
+/**
+ * Check if a session status indicates the sandbox is available for requests.
+ */
+function isSandboxReady(status: string | undefined): boolean {
+	return status === "ready" || status === "running";
+}
+
+export function useHooksStatus(
+	sessionId: string | null,
+	sessionStatus?: string,
+) {
+	const shouldFetch = sessionId && isSandboxReady(sessionStatus);
+
 	const { data, error, isLoading } = useSWR<HooksStatusResponse | null>(
-		sessionId ? `hooks-status-${sessionId}` : null,
+		shouldFetch ? `hooks-status-${sessionId}` : null,
 		() => (sessionId ? api.getHooksStatus(sessionId) : null),
 		{
 			refreshInterval: (latestData) => {

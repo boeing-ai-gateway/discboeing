@@ -136,7 +136,7 @@ export function SessionViewProvider({
 	);
 
 	// Fetch session files for changed files count
-	const { diffStats, changedFiles } = useSessionFiles(selectedSessionId, false);
+	const { diffStats, changedFiles } = useSessionFiles(selectedSessionId, false, selectedSession?.status);
 	const changedFilesCount = diffStats?.filesChanged ?? changedFiles.length;
 
 	// Active view state (persisted per session in sessionStorage)
@@ -176,8 +176,12 @@ export function SessionViewProvider({
 		"session",
 	);
 
-	// Fetch file statuses for badges
-	const { diffEntries } = useSessionFiles(selectedSessionId, false);
+	// Fetch file statuses for badges (only when sandbox is ready)
+	const { diffEntries } = useSessionFiles(
+		selectedSessionId,
+		false,
+		selectedSession?.status,
+	);
 
 	// Build FileNode objects for tabs
 	const openFiles = React.useMemo(() => {
@@ -257,9 +261,11 @@ export function SessionViewProvider({
 		}
 	}, [activeView, desktopMounted]);
 
-	// Services state
-	const { services, startService, stopService } =
-		useServices(selectedSessionId);
+	// Services state (only fetch when sandbox is ready)
+	const { services, startService, stopService } = useServices(
+		selectedSessionId,
+		selectedSession?.status,
+	);
 
 	const activeServiceId = activeView.startsWith("service:")
 		? activeView.slice(8)

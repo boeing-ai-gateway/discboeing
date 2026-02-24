@@ -2,12 +2,22 @@ import useSWR from "swr";
 import { api } from "../api-client";
 
 /**
+ * Check if a session status indicates the sandbox is available for requests.
+ */
+function isSandboxReady(status: string | undefined): boolean {
+	return status === "ready" || status === "running";
+}
+
+/**
  * Hook for managing services in a session's sandbox.
  * @param sessionId Session ID, or null to disable fetching
+ * @param sessionStatus Session status — fetching is paused unless "ready" or "running"
  */
-export function useServices(sessionId: string | null) {
+export function useServices(sessionId: string | null, sessionStatus?: string) {
+	const shouldFetch = sessionId && isSandboxReady(sessionStatus);
+
 	const { data, error, isLoading, mutate } = useSWR(
-		sessionId ? `services-${sessionId}` : null,
+		shouldFetch ? `services-${sessionId}` : null,
 		() => (sessionId ? api.getServices(sessionId) : null),
 		{
 			// Poll every 30s normally, 5s when a service is starting

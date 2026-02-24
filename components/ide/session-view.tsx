@@ -60,6 +60,7 @@ export function SessionView({
 }: SessionViewProps) {
 	const {
 		selectedSessionId,
+		selectedSession,
 		activeView,
 		setActiveView,
 		activeFilePathFromView,
@@ -130,8 +131,12 @@ export function SessionView({
 		[chatWidth, setChatWidth],
 	);
 
-	// Fetch diff entries for rendering file content
-	const { diffEntries } = useSessionFiles(selectedSessionId, false);
+	// Fetch diff entries for rendering file content (only when sandbox is ready)
+	const { diffEntries } = useSessionFiles(
+		selectedSessionId,
+		false,
+		selectedSession?.status,
+	);
 
 	// For existing sessions, fetch messages once (no caching) to pass to ChatPanel
 	const {
@@ -298,6 +303,7 @@ export function SessionView({
 										/>
 										<FilePanel
 											sessionId={selectedSessionId}
+											sessionStatus={selectedSession?.status}
 											activeView={activeView}
 											onFileSelect={handleFileSelect}
 											className="overflow-hidden"
