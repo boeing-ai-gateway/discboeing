@@ -13,10 +13,10 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
-// serviceSubdomainPattern matches {session-id}-svc-{service-id}.* subdomains.
+// serviceSubdomainPattern matches a single {session-id}-svc-{service-id} subdomain component.
 // Session IDs are 10-26 alphanumeric chars (case-insensitive in URLs).
 // Service IDs are normalized lowercase (a-z0-9_- only).
-var serviceSubdomainPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)\.`)
+var serviceSubdomainPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)$`)
 
 // findSessionID finds the actual session ID with correct casing.
 // DNS/URLs are case-insensitive, so we need to do a case-insensitive lookup.
@@ -61,28 +61,45 @@ func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID 
 func ServiceProxy(provider sandbox.Provider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			host := r.Host
-
-			// Try to match service subdomain pattern
-			matches := serviceSubdomainPattern.FindStringSubmatch(host)
-			if matches == nil {
-				// Not a service subdomain, continue to next handler
-				next.ServeHTTP(w, r)
-				return
+			// Check both Host and X-Forwarded-Host for service subdomains.
+			// In nested discobot, the outer proxy sets X-Forwarded-Host to
+			// the original host before rewriting, so the inner instance's
+			// service subdomain may only appear there.
+			hosts := []string{r.Host}
+			if fwdHost := r.Header.Get("X-Forwarded-Host"); fwdHost != "" && fwdHost != r.Host {
+				hosts = append(hosts, fwdHost)
 			}
 
-			urlSessionID := matches[1]
-			serviceID := matches[2]
+			// Split each host into subdomain components and find the first one
+			// with a valid session ID. This handles nested discobot where
+			// multiple {id}-svc-{name} components may be chained, e.g.:
+			//   inner-svc-ui.outer-svc-api.localhost:3001
+			// We need to find the component whose session ID exists on THIS instance.
 			ctx := r.Context()
+			var sessionID, serviceID string
+			for _, host := range hosts {
+				parts := strings.Split(host, ".")
+				for _, part := range parts {
+					matches := serviceSubdomainPattern.FindStringSubmatch(part)
+					if matches == nil {
+						continue
+					}
+					sid, err := findSessionID(ctx, provider, matches[1])
+					if err != nil {
+						continue
+					}
+					sessionID = sid
+					serviceID = matches[2]
+					break
+				}
+				if sessionID != "" {
+					break
+				}
+			}
 
-			// Find the actual session ID with correct casing
-			sessionID, err := findSessionID(ctx, provider, urlSessionID)
-			if err != nil {
-				writeJSONError(w, http.StatusBadGateway, "Failed to find session", map[string]string{
-					"sessionId": urlSessionID,
-					"serviceId": serviceID,
-					"message":   err.Error(),
-				})
+			if sessionID == "" {
+				// No valid service subdomain found, continue to next handler
+				next.ServeHTTP(w, r)
 				return
 			}
 
@@ -112,10 +129,16 @@ func ServiceProxy(provider sandbox.Provider) func(http.Handler) http.Handler {
 					// Set the Host header to the target
 					req.Host = target.Host
 
-					// Set x-forwarded-* headers
+					// Set x-forwarded-* headers.
 					req.Header.Set("X-Forwarded-Path", r.URL.Path)
-					req.Header.Set("X-Forwarded-Host", r.Host)
 					req.Header.Set("X-Forwarded-Proto", getScheme(r))
+
+					// Preserve existing X-Forwarded-Host so the full subdomain
+					// chain survives through nested discobot levels. Only set it
+					// on the first proxy layer (when no forwarded host exists yet).
+					if r.Header.Get("X-Forwarded-Host") == "" {
+						req.Header.Set("X-Forwarded-Host", r.Host)
+					}
 
 					// Preserve or append X-Forwarded-For
 					clientIP := r.RemoteAddr

@@ -2,118 +2,114 @@ package middleware
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
-// TestServiceSubdomainPattern tests the regex pattern matching for service subdomains
+// TestServiceSubdomainPattern tests the regex pattern matching for service subdomain segments.
+// The pattern matches individual subdomain components (split by "."), not full hosts.
 func TestServiceSubdomainPattern(t *testing.T) {
 	tests := []struct {
 		name        string
-		host        string
+		segment     string
 		wantMatch   bool
 		wantSession string
 		wantService string
 	}{
 		{
-			name:        "valid subdomain with lowercase session ID",
-			host:        "abc123def456ghi7-svc-myservice.localhost:3000",
+			name:        "valid segment with lowercase session ID",
+			segment:     "abc123def456ghi7-svc-myservice",
 			wantMatch:   true,
 			wantSession: "abc123def456ghi7",
 			wantService: "myservice",
 		},
 		{
-			name:        "valid subdomain with mixed case session ID",
-			host:        "AbC123DeF456GhI7-svc-myservice.example.com",
+			name:        "valid segment with mixed case session ID",
+			segment:     "AbC123DeF456GhI7-svc-myservice",
 			wantMatch:   true,
 			wantSession: "AbC123DeF456GhI7",
 			wantService: "myservice",
 		},
 		{
-			name:        "valid subdomain with underscore in service ID",
-			host:        "session12345678901-svc-my_service.localhost:3000",
+			name:        "valid segment with underscore in service ID",
+			segment:     "session12345678901-svc-my_service",
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "my_service",
 		},
 		{
-			name:        "valid subdomain with hyphen in service ID",
-			host:        "session12345678901-svc-my-service.localhost:3000",
+			name:        "valid segment with hyphen in service ID",
+			segment:     "session12345678901-svc-my-service",
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "my-service",
 		},
 		{
-			name:        "valid subdomain with numbers in service ID",
-			host:        "session12345678901-svc-service123.localhost:3000",
+			name:        "valid segment with numbers in service ID",
+			segment:     "session12345678901-svc-service123",
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "service123",
 		},
 		{
 			name:        "minimum session ID length (10 chars)",
-			host:        "abcdefghij-svc-svc.localhost:3000",
+			segment:     "abcdefghij-svc-svc",
 			wantMatch:   true,
 			wantSession: "abcdefghij",
 			wantService: "svc",
 		},
 		{
 			name:        "maximum session ID length (26 chars)",
-			host:        "abcdefghijklmnopqrstuvwxyz-svc-svc.localhost:3000",
+			segment:     "abcdefghijklmnopqrstuvwxyz-svc-svc",
 			wantMatch:   true,
 			wantSession: "abcdefghijklmnopqrstuvwxyz",
 			wantService: "svc",
 		},
 		{
-			name:      "session ID too short (9 chars)",
-			host:      "abcdefghi-svc-myservice.localhost:3000",
+			name:    "session ID too short (9 chars)",
+			segment: "abcdefghi-svc-myservice",
 			wantMatch: false,
 		},
 		{
-			name:      "session ID too long (27 chars)",
-			host:      "abcdefghijklmnopqrstuvwxyza-svc-myservice.localhost:3000",
+			name:    "session ID too long (27 chars)",
+			segment: "abcdefghijklmnopqrstuvwxyza-svc-myservice",
 			wantMatch: false,
 		},
 		{
-			name:      "no service subdomain - regular domain",
-			host:      "localhost:3000",
+			name:      "plain domain segment",
+			segment:   "localhost:3000",
 			wantMatch: false,
 		},
 		{
-			name:      "no service subdomain - api subdomain",
-			host:      "api.localhost:3000",
+			name:      "api subdomain segment",
+			segment:   "api",
 			wantMatch: false,
 		},
 		{
 			name:      "missing -svc- separator",
-			host:      "session12345678901-myservice.localhost:3000",
+			segment:   "session12345678901-myservice",
 			wantMatch: false,
 		},
 		{
 			name:      "uppercase in service ID (invalid)",
-			host:      "session12345678901-svc-MyService.localhost:3000",
+			segment:   "session12345678901-svc-MyService",
 			wantMatch: false,
-		},
-		{
-			name:        "dot in host is treated as subdomain separator",
-			host:        "session12345678901-svc-my.service.localhost:3000",
-			wantMatch:   true,
-			wantSession: "session12345678901",
-			wantService: "my", // service ID is "my", ".service.localhost:3000" is the domain
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches := serviceSubdomainPattern.FindStringSubmatch(tt.host)
+			matches := serviceSubdomainPattern.FindStringSubmatch(tt.segment)
 
 			if tt.wantMatch {
 				if matches == nil {
-					t.Errorf("expected host %q to match pattern, but it didn't", tt.host)
+					t.Errorf("expected segment %q to match pattern, but it didn't", tt.segment)
 					return
 				}
 				if matches[1] != tt.wantSession {
@@ -124,7 +120,7 @@ func TestServiceSubdomainPattern(t *testing.T) {
 				}
 			} else {
 				if matches != nil {
-					t.Errorf("expected host %q NOT to match pattern, but got matches: %v", tt.host, matches)
+					t.Errorf("expected segment %q NOT to match pattern, but got matches: %v", tt.segment, matches)
 				}
 			}
 		})
@@ -251,14 +247,18 @@ func TestServiceProxyNonServiceSubdomain(t *testing.T) {
 	}
 }
 
-// TestServiceProxySessionNotFound verifies error handling when session doesn't exist
+// TestServiceProxySessionNotFound verifies that when no valid session is found,
+// the request passes through to the next handler (e.g. may be a nested discobot
+// subdomain where none of the session IDs belong to this instance).
 func TestServiceProxySessionNotFound(t *testing.T) {
 	provider := &mockSandboxProvider{
 		sandboxes: map[string]*sandbox.Sandbox{},
 	}
 
-	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Error("next handler should not be called")
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
 	})
 
 	middleware := ServiceProxy(provider)(next)
@@ -269,15 +269,137 @@ func TestServiceProxySessionNotFound(t *testing.T) {
 
 	middleware.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadGateway {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	if !nextCalled {
+		t.Error("expected next handler to be called when no valid session found")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestServiceProxyNestedSubdomains verifies that nested discobot subdomains
+// correctly resolve to the first valid session ID.
+func TestServiceProxyNestedSubdomains(t *testing.T) {
+	outerSessionID := "zivnuflwywnlfxkr"
+
+	// Track what path the proxy sent
+	var proxiedPath string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxiedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	// Create a transport that redirects "sandbox" to the test backend
+	backendURL, _ := url.Parse(backend.URL)
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{}).DialContext,
+	}
+	// Use a custom RoundTripper that rewrites the host
+	provider := &mockSandboxProvider{
+		sandboxes: map[string]*sandbox.Sandbox{
+			outerSessionID: {SessionID: outerSessionID},
+		},
+		client: &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				req.URL.Scheme = backendURL.Scheme
+				req.URL.Host = backendURL.Host
+				return transport.RoundTrip(req)
+			}),
+		},
 	}
 
-	// Check that response contains error information
-	body := rr.Body.String()
-	if body == "" {
-		t.Error("expected error response body")
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("next handler should not be called for valid nested subdomain")
+	})
+
+	middleware := ServiceProxy(provider)(next)
+
+	// Inner session doesn't exist on this instance, outer does
+	host := "UMHkK8J0U98kA85p-svc-ui." + outerSessionID + "-svc-api.localhost:3001"
+	req := httptest.NewRequest("GET", "http://"+host+"/some/path", nil)
+	req.Host = host
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	// Should proxy to the outer session's service
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
+	// The proxied path should target the outer session's service ID "api"
+	wantPath := "/services/api/http/some/path"
+	if proxiedPath != wantPath {
+		t.Errorf("proxied path = %q, want %q", proxiedPath, wantPath)
+	}
+}
+
+// TestServiceProxyXForwardedHost verifies that X-Forwarded-Host is checked
+// when the Host header doesn't contain a valid service subdomain.
+func TestServiceProxyXForwardedHost(t *testing.T) {
+	sessionID := "zivnuflwywnlfxkr"
+
+	var proxiedPath string
+	var proxiedXFwdHost string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxiedPath = r.URL.Path
+		proxiedXFwdHost = r.Header.Get("X-Forwarded-Host")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	backendURL, _ := url.Parse(backend.URL)
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{}).DialContext,
+	}
+	provider := &mockSandboxProvider{
+		sandboxes: map[string]*sandbox.Sandbox{
+			sessionID: {SessionID: sessionID},
+		},
+		client: &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				req.URL.Scheme = backendURL.Scheme
+				req.URL.Host = backendURL.Host
+				return transport.RoundTrip(req)
+			}),
+		},
+	}
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("next handler should not be called when X-Forwarded-Host has valid service subdomain")
+	})
+
+	middleware := ServiceProxy(provider)(next)
+
+	// Simulate a nested discobot: Host is internal, but X-Forwarded-Host
+	// carries the full multi-level subdomain chain from the outer proxy.
+	originalChain := "bCfyeG08yfDammp5-svc-ui." + sessionID + "-svc-api.localhost:3001"
+	req := httptest.NewRequest("GET", "http://localhost:3001/some/path", nil)
+	req.Host = "localhost:3001"
+	req.Header.Set("X-Forwarded-Host", originalChain)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	wantPath := "/services/api/http/some/path"
+	if proxiedPath != wantPath {
+		t.Errorf("proxied path = %q, want %q", proxiedPath, wantPath)
+	}
+	// The outgoing X-Forwarded-Host must preserve the full chain so the
+	// next nested discobot level can find its own service subdomain.
+	if proxiedXFwdHost != originalChain {
+		t.Errorf("X-Forwarded-Host = %q, want full chain %q", proxiedXFwdHost, originalChain)
+	}
+}
+
+// roundTripperFunc adapts a function to http.RoundTripper.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 // TestFindSessionIDCaseInsensitive verifies case-insensitive session ID lookup
