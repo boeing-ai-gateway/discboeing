@@ -10,15 +10,14 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
-// TestParseServiceSubdomain tests the hostname parsing for service subdomains
-func TestParseServiceSubdomain(t *testing.T) {
+// TestServiceSubdomainPattern tests the regex pattern matching for service subdomains
+func TestServiceSubdomainPattern(t *testing.T) {
 	tests := []struct {
 		name        string
 		host        string
 		wantMatch   bool
 		wantSession string
 		wantService string
-		wantInner   string
 	}{
 		{
 			name:        "valid subdomain with lowercase session ID",
@@ -26,7 +25,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "abc123def456ghi7",
 			wantService: "myservice",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:        "valid subdomain with mixed case session ID",
@@ -34,7 +32,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "AbC123DeF456GhI7",
 			wantService: "myservice",
-			wantInner:   "example.com",
 		},
 		{
 			name:        "valid subdomain with underscore in service ID",
@@ -42,7 +39,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "my_service",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:        "valid subdomain with hyphen in service ID",
@@ -50,7 +46,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "my-service",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:        "valid subdomain with numbers in service ID",
@@ -58,7 +53,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "session12345678901",
 			wantService: "service123",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:        "minimum session ID length (10 chars)",
@@ -66,7 +60,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "abcdefghij",
 			wantService: "svc",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:        "maximum session ID length (26 chars)",
@@ -74,7 +67,6 @@ func TestParseServiceSubdomain(t *testing.T) {
 			wantMatch:   true,
 			wantSession: "abcdefghijklmnopqrstuvwxyz",
 			wantService: "svc",
-			wantInner:   "localhost:3000",
 		},
 		{
 			name:      "session ID too short (9 chars)",
@@ -106,63 +98,33 @@ func TestParseServiceSubdomain(t *testing.T) {
 			host:      "session12345678901-svc-MyService.localhost:3000",
 			wantMatch: false,
 		},
-		// Nested Discobot tests
 		{
-			name:        "nested: two levels of service subdomains",
-			host:        "D9szBjRw19MEtS8K-svc-ui.3vuqc0jqv5qmt3me-svc-api.localhost:3001",
-			wantMatch:   true,
-			wantSession: "3vuqc0jqv5qmt3me",
-			wantService: "api",
-			wantInner:   "D9szBjRw19MEtS8K-svc-ui.localhost:3001",
-		},
-		{
-			name:        "nested: three levels of service subdomains",
-			host:        "innermost1234567-svc-web.middle1234567890-svc-ui.outer12345678901-svc-api.localhost:3001",
-			wantMatch:   true,
-			wantSession: "outer12345678901",
-			wantService: "api",
-			wantInner:   "innermost1234567-svc-web.middle1234567890-svc-ui.localhost:3001",
-		},
-		{
-			name:        "nested: service subdomain with multi-part base domain",
-			host:        "inner12345678901-svc-ui.outer12345678901-svc-api.app.example.com",
-			wantMatch:   true,
-			wantSession: "outer12345678901",
-			wantService: "api",
-			wantInner:   "inner12345678901-svc-ui.app.example.com",
-		},
-		{
-			name:        "no port",
-			host:        "session12345678901-svc-myservice.localhost",
+			name:        "dot in host is treated as subdomain separator",
+			host:        "session12345678901-svc-my.service.localhost:3000",
 			wantMatch:   true,
 			wantSession: "session12345678901",
-			wantService: "myservice",
-			wantInner:   "localhost",
+			wantService: "my", // service ID is "my", ".service.localhost:3000" is the domain
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sessionID, serviceID, innerHost, ok := parseServiceSubdomain(tt.host)
+			matches := serviceSubdomainPattern.FindStringSubmatch(tt.host)
 
 			if tt.wantMatch {
-				if !ok {
+				if matches == nil {
 					t.Errorf("expected host %q to match pattern, but it didn't", tt.host)
 					return
 				}
-				if sessionID != tt.wantSession {
-					t.Errorf("session ID = %q, want %q", sessionID, tt.wantSession)
+				if matches[1] != tt.wantSession {
+					t.Errorf("session ID = %q, want %q", matches[1], tt.wantSession)
 				}
-				if serviceID != tt.wantService {
-					t.Errorf("service ID = %q, want %q", serviceID, tt.wantService)
-				}
-				if innerHost != tt.wantInner {
-					t.Errorf("inner host = %q, want %q", innerHost, tt.wantInner)
+				if matches[2] != tt.wantService {
+					t.Errorf("service ID = %q, want %q", matches[2], tt.wantService)
 				}
 			} else {
-				if ok {
-					t.Errorf("expected host %q NOT to match pattern, but got session=%q service=%q inner=%q",
-						tt.host, sessionID, serviceID, innerHost)
+				if matches != nil {
+					t.Errorf("expected host %q NOT to match pattern, but got matches: %v", tt.host, matches)
 				}
 			}
 		})

@@ -135,15 +135,8 @@ export async function proxyHttpRequest(
 	const forwardedProto = c.req.header("x-forwarded-proto") || "http";
 	headers.set("x-forwarded-proto", forwardedProto);
 
-	// Set host header: use X-Service-Host if present (for nested Discobot routing),
-	// replacing the port with the target service port.
-	const serviceHost = c.req.header("x-service-host");
-	if (serviceHost) {
-		const hostWithoutPort = serviceHost.replace(/:\d+$/, "");
-		headers.set("host", `${hostWithoutPort}:${port}`);
-	} else {
-		headers.set("host", `localhost:${port}`);
-	}
+	// Set host header to target
+	headers.set("host", `localhost:${port}`);
 
 	// Make the proxied request
 	const proxyReq: RequestInit = {
