@@ -43,9 +43,10 @@ type SessionConfig struct {
 	// top-level thread. Top-level threads are depth 0.
 	MaxSubagentDepth int
 
-	// Skills are discovered skill configurations from .claude/skills/ and
-	// .claude/commands/. They are listed in the system-reminder so the
-	// model knows which slash commands are available.
+	// Skills are discovered skill configurations from project-level .claude/skills/
+	// and .discobot/skills/, user-level ~/.claude/skills, ~/.discobot/skills,
+	// ~/.agents/skills, and legacy commands directories. They are listed in the
+	// system-reminder so the model knows which slash commands are available.
 	Skills []SkillConfig
 }
 

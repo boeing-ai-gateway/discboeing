@@ -51,7 +51,7 @@ func runSkill(cwd, skillName, args string) (string, error) {
 		}
 	}
 	if !found {
-		return "", fmt.Errorf("skill %q not found in .claude/skills or .claude/commands", skillName)
+		return "", fmt.Errorf("skill %q not found in configured skill or command directories", skillName)
 	}
 
 	body := cfg.Expand(args)

@@ -234,6 +234,52 @@ func TestDiscoverSkills_SkipsNonDirsInSkillsDir(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkills_UserAgentsSkillsDir(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	skillsDir := filepath.Join(home, ".agents", "skills", "standard")
+	mkdirAll(t, skillsDir)
+	writeFile(t, filepath.Join(skillsDir, "SKILL.md"), "---\nname: standard\ndescription: Standard user skill.\n---\nStandard body.")
+
+	skills, err := discoverSkillsWithHome(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(skills))
+	}
+	if skills[0].Name != "standard" {
+		t.Errorf("name = %q, want standard", skills[0].Name)
+	}
+	if skills[0].Description != "Standard user skill." {
+		t.Errorf("description = %q", skills[0].Description)
+	}
+}
+
+func TestDiscoverSkills_UserClaudeTakesPriorityOverAgents(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+
+	claudeDir := filepath.Join(home, ".claude", "skills", "deploy")
+	mkdirAll(t, claudeDir)
+	writeFile(t, filepath.Join(claudeDir, "SKILL.md"), "---\nname: deploy\ndescription: Claude user version.\n---\nClaude deploy.")
+
+	agentsDir := filepath.Join(home, ".agents", "skills", "deploy")
+	mkdirAll(t, agentsDir)
+	writeFile(t, filepath.Join(agentsDir, "SKILL.md"), "---\nname: deploy\ndescription: Agents user version.\n---\nAgents deploy.")
+
+	skills, err := discoverSkillsWithHome(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill (deduped), got %d", len(skills))
+	}
+	if skills[0].Description != "Claude user version." {
+		t.Errorf("description = %q, want ~/.claude to take priority", skills[0].Description)
+	}
+}
+
 func TestLookupSkill_FoundInSkillsDir(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, ".claude", "skills", "myskill")
@@ -251,6 +297,29 @@ func TestLookupSkill_FoundInSkillsDir(t *testing.T) {
 		t.Errorf("name = %q", skill.Name)
 	}
 	if skill.Body != "Do the thing." {
+		t.Errorf("body = %q", skill.Body)
+	}
+}
+
+func TestLookupSkill_FoundInUserAgentsSkillsDir(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".agents", "skills", "myskill")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: myskill\ndescription: My user skill.\n---\nDo the user thing.")
+
+	skill, found, err := LookupSkill(root, "myskill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected skill to be found")
+	}
+	if skill.Name != "myskill" {
+		t.Errorf("name = %q", skill.Name)
+	}
+	if skill.Body != "Do the user thing." {
 		t.Errorf("body = %q", skill.Body)
 	}
 }

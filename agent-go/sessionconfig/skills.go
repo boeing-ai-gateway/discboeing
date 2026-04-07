@@ -27,7 +27,9 @@ type SkillConfig struct {
 }
 
 // discoverSkills loads skill configs from the project's .claude/skills and
-// .claude/commands directories, plus ~/.claude/skills and ~/.claude/commands.
+// .claude/commands directories, plus user-level skill directories including
+// ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills, along with
+// ~/.claude/commands and ~/.discobot/commands.
 // The equivalent .discobot/ directories are also checked as an alternative
 // naming style.
 // Priority: project skills (.claude then .discobot) → user skills →
@@ -67,8 +69,9 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 	}
 
 	// 2. User skills: ~/.claude/skills/*/SKILL.md then ~/.discobot/skills/*/SKILL.md
+	// then ~/.agents/skills/*/SKILL.md.
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot"} {
+		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			if err := addFrom(loadSkillsDir(filepath.Join(home, dir, "skills"))); err != nil {
 				return nil, err
 			}
@@ -96,7 +99,8 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 
 // LookupSkill searches for a skill by name in skills/ directories only.
 // It does NOT search commands/ — use LookupCommand for legacy commands.
-// Both .claude and .discobot directory styles are checked.
+// Project-level .claude and .discobot directory styles are checked, along with
+// user-level ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills.
 // Returns (zero, false, nil) if the skill is not found.
 func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 	var paths []string
@@ -104,7 +108,7 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 		paths = append(paths, skillLookupPaths(filepath.Join(projectRoot, dir, "skills"), skillName)...)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		for _, dir := range []string{".claude", ".discobot"} {
+		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			paths = append(paths, skillLookupPaths(filepath.Join(home, dir, "skills"), skillName)...)
 		}
 	}
