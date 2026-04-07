@@ -1,6 +1,17 @@
 // API Client for making requests to the backend
 import { appendAuthToken, getApiBase, getApiRootBase } from "./api-config";
 
+/** Error thrown for non-OK HTTP responses, carrying the status code. */
+export class ApiError extends Error {
+	constructor(
+		message: string,
+		public status: number,
+	) {
+		super(message);
+		this.name = "ApiError";
+	}
+}
+
 /** Error thrown when file write fails due to optimistic locking conflict */
 export class FileConflictError extends Error {
 	constructor(
@@ -124,7 +135,7 @@ class ApiClient {
 			const error = await response
 				.json()
 				.catch(() => ({ error: "Request failed" }));
-			throw new Error(error.error || "Request failed");
+			throw new ApiError(error.error || "Request failed", response.status);
 		}
 
 		return response.json();
@@ -146,7 +157,7 @@ class ApiClient {
 			const error = await response
 				.json()
 				.catch(() => ({ error: "Request failed" }));
-			throw new Error(error.error || "Request failed");
+			throw new ApiError(error.error || "Request failed", response.status);
 		}
 
 		return response.text();
@@ -167,7 +178,7 @@ class ApiClient {
 			const error = await response
 				.json()
 				.catch(() => ({ error: "Request failed" }));
-			throw new Error(error.error || "Request failed");
+			throw new ApiError(error.error || "Request failed", response.status);
 		}
 
 		return response.json();

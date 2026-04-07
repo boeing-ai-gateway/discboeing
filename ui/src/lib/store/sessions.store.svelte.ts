@@ -2,7 +2,7 @@ import { SvelteSet } from "svelte/reactivity";
 
 import { generateId } from "ai";
 
-import { api } from "$lib/api-client";
+import { api, ApiError } from "$lib/api-client";
 import type { Session, UpdateSessionRequest } from "$lib/api-types";
 import type { AsyncStatus } from "$lib/shell-types";
 
@@ -71,6 +71,10 @@ export class SessionStore {
 					this.#status = "ready";
 				}
 			} catch (error) {
+				if (error instanceof ApiError && error.status === 404) {
+					this.evict(id);
+					return;
+				}
 				console.error("[SessionStore] Failed to fetch session:", id, error);
 			}
 		});
