@@ -110,7 +110,7 @@
 
 			{#key session.threads.selectedId ?? session.sessionId}
 				<ThreadWorkspace
-					mainClass="flex min-h-0 flex-1 flex-col overflow-hidden"
+					mainClass="flex min-h-0 flex-1 flex-col overflow-hidden pt-1"
 					showSidebarToggle={!sidebarOpen()}
 					reserveSidebarSpace={false}
 					onToggleSidebar={toggleSidebar}
@@ -146,7 +146,7 @@
 					<Resizable.Pane minSize={45} class="min-h-0 min-w-0">
 						{#key session.threads.selectedId ?? session.sessionId}
 							<ThreadWorkspace
-								mainClass="flex h-full min-h-0 flex-col overflow-hidden"
+								mainClass="flex h-full min-h-0 flex-col overflow-hidden pt-1"
 								reserveSidebarSpace={!sessionView.desktopSidebarOpen}
 								mode={session.isPending ? "conversation-only" : undefined}
 							/>

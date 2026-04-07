@@ -41,7 +41,7 @@
 </script>
 
 <div
-	class="relative flex min-h-10 min-w-0 items-center gap-1 bg-background px-3 pb-2 pt-6"
+	class="relative flex h-10 min-w-0 items-center gap-1 bg-background px-3"
 	data-tauri-drag-region
 >
 	<div
