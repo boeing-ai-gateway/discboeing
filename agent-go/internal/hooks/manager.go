@@ -70,6 +70,7 @@ type Manager struct {
 	preCommitHooks []Hook
 	initialized    bool
 	chunkEmitter   func(message.MessageChunk)
+	envSnapshot    func() map[string]string
 }
 
 // NewManager creates a new HookManager.
@@ -79,6 +80,24 @@ func NewManager(workspaceRoot, sessionID string) *Manager {
 		sessionID:     sessionID,
 		hooksDataDir:  GetHooksDataDir(sessionID),
 	}
+}
+
+// SetEnvSnapshot sets an optional function that returns request-scoped
+// environment variables to inject into executed hooks.
+func (m *Manager) SetEnvSnapshot(fn func() map[string]string) {
+	m.mu.Lock()
+	m.envSnapshot = fn
+	m.mu.Unlock()
+}
+
+func (m *Manager) visibleEnvSnapshot() map[string]string {
+	m.mu.Lock()
+	fn := m.envSnapshot
+	m.mu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
 }
 
 // SetChunkEmitter configures how hook status updates are emitted as message chunks.
@@ -332,6 +351,7 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 
 	result := ExecuteHook(*hook, ExecuteOptions{
 		Cwd:          m.workspaceRoot,
+		Env:          m.visibleEnvSnapshot(),
 		ChangedFiles: matching,
 		SessionID:    m.sessionID,
 		OutputPath:   outputPath,
@@ -432,6 +452,7 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 
 		result := ExecuteHook(hook, ExecuteOptions{
 			Cwd:          m.workspaceRoot,
+			Env:          m.visibleEnvSnapshot(),
 			ChangedFiles: matching,
 			SessionID:    m.sessionID,
 			OutputPath:   outputPath,

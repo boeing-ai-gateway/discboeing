@@ -83,6 +83,9 @@ func Run(cfg *config.Config) {
 		if err := hookMgr.Init(); err != nil {
 			log.Printf("warn: hooks init: %v", err)
 		}
+		hookMgr.SetEnvSnapshot(func() map[string]string {
+			return credMgr.Snapshot()
+		})
 		// The HTTP handler owns post-completion hook evaluation so hook-failure
 		// re-prompts preserve structured metadata for optimized UI rendering.
 	}

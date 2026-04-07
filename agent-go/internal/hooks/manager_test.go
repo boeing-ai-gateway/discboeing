@@ -318,6 +318,113 @@ exit 0
 	}
 }
 
+func TestSetEnvSnapshot_PassesVarsToRerunHook(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "env-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Env Check
+# type: file
+# pattern: "*.go"
+#---
+if [ -z "$TEST_CREDENTIAL" ]; then
+  echo "TEST_CREDENTIAL not set"
+  exit 1
+fi
+echo "TEST_CREDENTIAL=$TEST_CREDENTIAL"
+exit 0
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetEnvSnapshot(func() map[string]string {
+		return map[string]string{"TEST_CREDENTIAL": "secret-value"}
+	})
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	runResult, err := mgr.RerunHook("env-check")
+	if err != nil {
+		t.Fatalf("RerunHook() failed: %v", err)
+	}
+	if runResult == nil {
+		t.Fatal("expected rerun result")
+	}
+	if !runResult.Result.Success {
+		t.Fatalf("expected hook to succeed with env var present, got output: %s", runResult.Result.Output)
+	}
+	if !strings.Contains(runResult.Result.Output, "TEST_CREDENTIAL=secret-value") {
+		t.Fatalf("expected hook output to contain credential value, got: %s", runResult.Result.Output)
+	}
+}
+
+func TestSetEnvSnapshot_PassesVarsToEvaluateFileHooks(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "env-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Env Check
+# type: file
+# pattern: "*.go"
+#---
+if [ -z "$TEST_CREDENTIAL" ]; then
+  echo "TEST_CREDENTIAL not set"
+  exit 1
+fi
+echo "TEST_CREDENTIAL=$TEST_CREDENTIAL"
+exit 0
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetEnvSnapshot(func() map[string]string {
+		return map[string]string{"TEST_CREDENTIAL": "secret-value"}
+	})
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	eval := mgr.EvaluateFileHooks()
+	if !eval.Evaluated {
+		t.Fatal("expected hooks to be evaluated")
+	}
+	if eval.FailedResult != nil {
+		t.Fatalf("expected hook to succeed with env var present, got output: %s", eval.FailedResult.Output)
+	}
+}
+
 func TestGetHookOutput_ReturnsInlineOutputWhenUnderLimit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	mgr := NewManager(t.TempDir(), "session-123")
