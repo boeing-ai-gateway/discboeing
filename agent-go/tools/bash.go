@@ -19,10 +19,11 @@ import (
 )
 
 type bashInput struct {
-	Command         string `json:"command"`
-	Description     string `json:"description"`
-	Timeout         int    `json:"timeout"` // milliseconds; 0 = default 120s
-	RunInBackground bool   `json:"run_in_background"`
+	Command         string                 `json:"command"`
+	Description     string                 `json:"description"`
+	Timeout         int                    `json:"timeout"` // milliseconds; 0 = default 120s
+	RunInBackground bool                   `json:"run_in_background"`
+	CredentialUses  []CredentialUseBinding `json:"credentialUses,omitempty"`
 }
 
 func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
@@ -32,6 +33,9 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 	}
 	if input.Command == "" {
 		return errResult(call, "command is required"), nil
+	}
+	if err := e.authorizeCredentialUses(call.ToolCallID, input.Command, input.Description, input.CredentialUses); err != nil {
+		return errResult(call, err.Error()), nil
 	}
 
 	timeout := 120 * time.Second

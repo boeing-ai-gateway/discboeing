@@ -1353,7 +1353,7 @@ func TestListModels(t *testing.T) {
 func TestFactoryRegistration(t *testing.T) {
 	registeredProviders := modelsdev.ProvidersByNPM("@ai-sdk/openai-compatible")
 	if len(registeredProviders) == 0 {
-		t.Fatal("expected modelsdev to return openai-compatible providers")
+		t.Fatal("expected models.dev to return openai-compatible providers")
 	}
 
 	for _, info := range registeredProviders {

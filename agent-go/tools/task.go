@@ -36,12 +36,13 @@ type taskRecord struct {
 	output  string
 	created time.Time
 
-	parentThreadID    string
-	parentTaskID      string
-	depth             int
-	subThreadID       string
-	pendingApprovalID string
-	pendingQuestions  json.RawMessage
+	parentThreadID     string
+	parentTaskID       string
+	depth              int
+	subThreadID        string
+	pendingApprovalID  string
+	pendingQuestions   json.RawMessage
+	pendingCredentials json.RawMessage
 
 	mu     sync.Mutex
 	done   chan struct{}
@@ -318,9 +319,16 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 			rec.output = fmt.Sprintf("sub-agent question marshal failed: %v", err)
 			return
 		}
+		credentials, err := json.Marshal(pending.Credentials)
+		if err != nil {
+			rec.status = "failed"
+			rec.output = fmt.Sprintf("sub-agent credential marshal failed: %v", err)
+			return
+		}
 		rec.status = "waiting_for_answer"
 		rec.pendingApprovalID = pending.ApprovalID
 		rec.pendingQuestions = questions
+		rec.pendingCredentials = credentials
 		rec.output = ""
 		return
 	}
@@ -368,6 +376,7 @@ func taskHandle(call message.ToolCallPart, rec *taskRecord, subThreadID string) 
 					Approval: &thread.ApprovalRequest{
 						Questions:    rec.pendingQuestions,
 						Continuation: continuation,
+						Credentials:  rec.pendingCredentials,
 					},
 				}, nil
 			}

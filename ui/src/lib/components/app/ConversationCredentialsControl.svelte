@@ -50,17 +50,42 @@
 		}
 	}
 
+	function notifySessionCredentialsChanged() {
+		if (typeof window === "undefined") {
+			return;
+		}
+		window.dispatchEvent(
+			new CustomEvent("discobot:session-credentials-changed", {
+				detail: { sessionId: session.sessionId },
+			}),
+		);
+	}
+
 	async function saveAssignments(
 		nextAssignments: SessionCredentialAssignment[],
 	) {
 		const response = await api.setSessionCredentials(
 			session.sessionId,
-			nextAssignments.map((assignment) => ({
-				credentialId: assignment.credentialId,
-				agentVisible: assignment.agentVisible,
-			})),
+			nextAssignments
+				.filter(
+					(assignment) =>
+						Boolean(assignment.sessionCredentialId) ||
+						Boolean(assignment.envVar) ||
+						Boolean(assignment.sourceEnvVar) ||
+						(assignment.uses?.length ?? 0) > 0 ||
+						assignment.agentVisible !== assignment.credential.agentVisible,
+				)
+				.map((assignment) => ({
+					credentialId: assignment.credentialId,
+					sessionCredentialId: assignment.sessionCredentialId,
+					envVar: assignment.envVar,
+					sourceEnvVar: assignment.sourceEnvVar,
+					agentVisible: assignment.agentVisible,
+					uses: assignment.uses,
+				})),
 		);
 		assignments = response.credentials;
+		notifySessionCredentialsChanged();
 	}
 
 	function credentialPreview(assignment: SessionCredentialAssignment) {
@@ -120,6 +145,29 @@
 		}
 		loadedSessionId = sessionId;
 		void loadAssignments();
+	});
+
+	$effect(() => {
+		if (typeof window === "undefined") {
+			return;
+		}
+		const handleSessionCredentialsChanged = (event: Event) => {
+			const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
+			if (!detail?.sessionId || detail.sessionId !== session.sessionId) {
+				return;
+			}
+			void loadAssignments();
+		};
+		window.addEventListener(
+			"discobot:session-credentials-changed",
+			handleSessionCredentialsChanged,
+		);
+		return () => {
+			window.removeEventListener(
+				"discobot:session-credentials-changed",
+				handleSessionCredentialsChanged,
+			);
+		};
 	});
 </script>
 

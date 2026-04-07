@@ -14,12 +14,21 @@ import (
 
 // EnvVar represents a credential mapped to an environment variable.
 type EnvVar struct {
-	EnvVar       string `json:"envVar"`
-	Value        string `json:"value"`
-	Provider     string `json:"provider"`
-	AuthType     string `json:"authType"` // "api_key" or "oauth"
-	AgentVisible bool   `json:"agentVisible"`
-	ExpiresAt    *int64 `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
+	CredentialID        string          `json:"credentialId,omitempty"`
+	SessionCredentialID string          `json:"sessionCredentialId,omitempty"`
+	Uses                []AuthorizedUse `json:"uses,omitempty"`
+	EnvVar              string          `json:"envVar"`
+	Value               string          `json:"value"`
+	Provider            string          `json:"provider"`
+	AuthType            string          `json:"authType"` // "api_key" or "oauth"
+	AgentVisible        bool            `json:"agentVisible"`
+	ExpiresAt           *int64          `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
+}
+
+type AuthorizedUse struct {
+	ID                 string `json:"id"`
+	Description        string `json:"description"`
+	LastUsedToolCallID string `json:"lastUsedToolCallId,omitempty"`
 }
 
 type gitConfigSetter func(key, value string) error
@@ -113,12 +122,15 @@ func parseHeader(headerValue string) []EnvVar {
 	}
 
 	var raw []struct {
-		EnvVar       string `json:"envVar"`
-		Value        string `json:"value"`
-		Provider     string `json:"provider"`
-		AuthType     string `json:"authType"`
-		AgentVisible *bool  `json:"agentVisible"`
-		ExpiresAt    *int64 `json:"expiresAt,omitempty"`
+		CredentialID        string          `json:"credentialId,omitempty"`
+		SessionCredentialID string          `json:"sessionCredentialId,omitempty"`
+		Uses                []AuthorizedUse `json:"uses,omitempty"`
+		EnvVar              string          `json:"envVar"`
+		Value               string          `json:"value"`
+		Provider            string          `json:"provider"`
+		AuthType            string          `json:"authType"`
+		AgentVisible        *bool           `json:"agentVisible"`
+		ExpiresAt           *int64          `json:"expiresAt,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(headerValue), &raw); err != nil {
 		log.Printf("credentials: failed to parse header: %v", err)
@@ -131,15 +143,29 @@ func parseHeader(headerValue string) []EnvVar {
 			agentVisible = *entry.AgentVisible
 		}
 		creds = append(creds, EnvVar{
-			EnvVar:       entry.EnvVar,
-			Value:        entry.Value,
-			Provider:     entry.Provider,
-			AuthType:     entry.AuthType,
-			AgentVisible: agentVisible,
-			ExpiresAt:    entry.ExpiresAt,
+			CredentialID:        entry.CredentialID,
+			SessionCredentialID: entry.SessionCredentialID,
+			Uses:                entry.Uses,
+			EnvVar:              entry.EnvVar,
+			Value:               entry.Value,
+			Provider:            entry.Provider,
+			AuthType:            entry.AuthType,
+			AgentVisible:        agentVisible,
+			ExpiresAt:           entry.ExpiresAt,
 		})
 	}
 	return creds
+}
+
+func (m *Manager) SessionCredential(id string) *EnvVar {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for i := range m.creds {
+		if m.creds[i].SessionCredentialID == id {
+			return &m.creds[i]
+		}
+	}
+	return nil
 }
 
 // update checks if credentials changed and stores the new set if so.

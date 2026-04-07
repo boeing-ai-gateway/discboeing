@@ -319,12 +319,16 @@ func (c *Credential) BeforeCreate(_ *gorm.DB) error {
 // SessionCredentialAssignment stores which credentials are assigned to a session
 // and whether each assignment is visible to the agent/LLM environment.
 type SessionCredentialAssignment struct {
-	ID           string    `gorm:"primaryKey;type:text" json:"id"`
-	SessionID    string    `gorm:"column:session_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"sessionId"`
-	CredentialID string    `gorm:"column:credential_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"credentialId"`
-	AgentVisible bool      `gorm:"column:agent_visible;not null;default:false" json:"agentVisible"`
-	CreatedAt    time.Time `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	ID                  string          `gorm:"primaryKey;type:text" json:"id"`
+	SessionID           string          `gorm:"column:session_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"sessionId"`
+	CredentialID        string          `gorm:"column:credential_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"credentialId"`
+	SessionCredentialID string          `gorm:"column:session_credential_id;type:text;index" json:"sessionCredentialId"`
+	EnvVar              string          `gorm:"column:env_var;type:text" json:"envVar,omitempty"`
+	SourceEnvVar        string          `gorm:"column:source_env_var;type:text" json:"sourceEnvVar,omitempty"`
+	AgentVisible        bool            `gorm:"column:agent_visible;not null;default:false" json:"agentVisible"`
+	UsesJSON            json.RawMessage `gorm:"column:uses_json;type:text" json:"uses,omitempty"`
+	CreatedAt           time.Time       `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt           time.Time       `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Session    *Session    `gorm:"foreignKey:SessionID" json:"-"`
 	Credential *Credential `gorm:"foreignKey:CredentialID" json:"-"`

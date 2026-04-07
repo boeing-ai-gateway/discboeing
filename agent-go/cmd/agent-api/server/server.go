@@ -63,6 +63,31 @@ func Run(cfg *config.Config) {
 	exec.SetEnvSnapshot(func() map[string]string {
 		return credMgr.Snapshot()
 	})
+	exec.SetCredentialUseAuthorizer(func(_ string, _, _ string, uses []tools.CredentialUseBinding) error {
+		for _, use := range uses {
+			cred := credMgr.SessionCredential(use.CredentialID)
+			if cred == nil {
+				return fmt.Errorf("credential id %s is not available in this session", use.CredentialID)
+			}
+			if !cred.AgentVisible {
+				return fmt.Errorf("credential id %s is not visible to the agent in this session", use.CredentialID)
+			}
+			if cred.EnvVar != use.EnvVar {
+				return fmt.Errorf("credential id %s is not authorized for environment variable %s", use.CredentialID, use.EnvVar)
+			}
+			authorized := false
+			for _, approvedUse := range cred.Uses {
+				if approvedUse.ID == use.UseID {
+					authorized = true
+					break
+				}
+			}
+			if !authorized {
+				return fmt.Errorf("credential use %s is not authorized for credential id %s", use.UseID, use.CredentialID)
+			}
+		}
+		return nil
+	})
 
 	// ── DefaultAgent ─────────────────────────────────────────────────────────
 	mcpCfg := agentimpl.NewMCPConfig(

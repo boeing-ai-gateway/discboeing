@@ -30,7 +30,7 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		// Background tasks
 		"TaskOutput", "TaskStop",
 		// User interaction
-		"AskUserQuestion",
+		"AskUserQuestion", "RequestUserCredential",
 		// Plan mode
 		"EnterPlanMode", "ExitPlanMode",
 		// Skills
@@ -100,7 +100,7 @@ func TestBuiltinTools_BashSchema(t *testing.T) {
 	schema := findToolSchema(t, "Bash")
 	props := schema["properties"].(map[string]any)
 
-	for _, field := range []string{"command", "description", "timeout", "run_in_background"} {
+	for _, field := range []string{"command", "description", "timeout", "run_in_background", "credentialUses"} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("Bash schema missing '%s' property", field)
 		}
@@ -248,6 +248,22 @@ func TestBuiltinTools_AskUserQuestionSchema(t *testing.T) {
 	}
 }
 
+func TestBuiltinTools_RequestUserCredentialSchema(t *testing.T) {
+	schema := findToolSchema(t, "RequestUserCredential")
+	props := schema["properties"].(map[string]any)
+
+	credentials, ok := props["credentials"]
+	if !ok {
+		t.Error("RequestUserCredential schema missing 'credentials' property")
+		return
+	}
+	items := credentials.(map[string]any)["items"].(map[string]any)
+	itemProps := items["properties"].(map[string]any)
+	approvedUses := itemProps["approvedUses"].(map[string]any)
+	if approvedUses["type"] != "array" {
+		t.Errorf("RequestUserCredential approvedUses type = %v, want array", approvedUses["type"])
+	}
+}
 func TestBuiltinTools_WebSearchSchema(t *testing.T) {
 	schema := findToolSchema(t, "WebSearch")
 	props := schema["properties"].(map[string]any)

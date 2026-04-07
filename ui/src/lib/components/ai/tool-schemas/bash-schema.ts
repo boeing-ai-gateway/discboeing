@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { createValidator, type ToolSchema } from "./index";
 
+export const BashCredentialUseBindingSchema = z.object({
+	credentialId: z.string(),
+	useId: z.string(),
+	envVar: z.string(),
+});
+
 /**
  * Bash tool input schema (Zod)
  */
@@ -15,6 +21,7 @@ export const BashToolInputSchema = z.object({
 	run_in_background: z.boolean().optional(),
 	/** Whether to disable sandbox mode (dangerous) */
 	dangerouslyDisableSandbox: z.boolean().optional(),
+	credentialUses: z.array(BashCredentialUseBindingSchema).optional(),
 });
 
 /**

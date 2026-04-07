@@ -76,6 +76,14 @@ type Executor struct {
 	// environment (e.g. credentials visible to subprocesses). Bash uses it
 	// to merge request-scoped variables into its process environment.
 	envSnapshot func() map[string]string
+
+	credentialUseAuthorizer func(toolCallID, command, description string, uses []CredentialUseBinding) error
+}
+
+type CredentialUseBinding struct {
+	CredentialID string `json:"credentialId"`
+	UseID        string `json:"useId"`
+	EnvVar       string `json:"envVar"`
 }
 
 // New creates an Executor rooted at cwd.
@@ -187,6 +195,17 @@ func (e *Executor) SetEnvLookup(fn func(key string) string) {
 // into command executions.
 func (e *Executor) SetEnvSnapshot(fn func() map[string]string) {
 	e.envSnapshot = fn
+}
+
+func (e *Executor) SetCredentialUseAuthorizer(fn func(toolCallID, command, description string, uses []CredentialUseBinding) error) {
+	e.credentialUseAuthorizer = fn
+}
+
+func (e *Executor) authorizeCredentialUses(toolCallID, command, description string, uses []CredentialUseBinding) error {
+	if len(uses) == 0 || e.credentialUseAuthorizer == nil {
+		return nil
+	}
+	return e.credentialUseAuthorizer(toolCallID, command, description, uses)
 }
 
 // getenv returns the value of the environment variable named by key.
@@ -451,6 +470,8 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return e.executeNotebookEdit(call)
 	case "AskUserQuestion":
 		return e.executeAskUserQuestion(call)
+	case "RequestUserCredential":
+		return e.executeRequestUserCredential(call)
 	case "EnterPlanMode":
 		return e.executeEnterPlanMode(toolCtx, call)
 	case "ExitPlanMode":
@@ -534,6 +555,12 @@ func (e *Executor) Continue(ctx context.Context, toolCtx *thread.ToolContext, ca
 	switch call.ToolName {
 	case "AskUserQuestion":
 		result, err := e.resolveAskUserQuestion(call, *req)
+		if err != nil {
+			return thread.ToolExecuteResult{}, err
+		}
+		return thread.ToolExecuteResult{Result: result}, nil
+	case "RequestUserCredential":
+		result, err := e.resolveRequestUserCredential(call, *req)
 		if err != nil {
 			return thread.ToolExecuteResult{}, err
 		}

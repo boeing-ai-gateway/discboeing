@@ -425,14 +425,30 @@ export interface CreateCredentialRequest {
 
 export interface SessionCredentialAssignment {
 	credentialId: string;
+	sessionCredentialId?: string;
+	envVar?: string;
+	sourceEnvVar?: string;
 	agentVisible: boolean;
+	uses?: SessionCredentialUse[];
 	credential: CredentialInfo;
+}
+
+export interface SessionCredentialUse {
+	id: string;
+	description: string;
+	createdAt?: string;
+	lastUsedAt?: string;
+	lastUsedToolCallId?: string;
 }
 
 export interface SetSessionCredentialsRequest {
 	credentials: Array<{
 		credentialId: string;
+		sessionCredentialId?: string;
+		envVar?: string;
+		sourceEnvVar?: string;
 		agentVisible: boolean;
+		uses?: SessionCredentialUse[];
 	}>;
 }
 
@@ -936,10 +952,34 @@ export interface AskUserQuestion {
 	notes?: string;
 }
 
-/** A pending AskUserQuestion waiting for user answers */
+export interface RequestedCredential {
+	envVar: string;
+	name: string;
+	justification: string;
+	approvedUses: RequestedCredentialApprovedUse[];
+}
+
+export interface RequestedCredentialApprovedUse {
+	description: string;
+}
+
+export interface GrantedCredentialApprovedUse {
+	id: string;
+	description: string;
+}
+
+export interface GrantedCredential {
+	credentialId: string;
+	envVar: string;
+	name: string;
+	approvedUses: GrantedCredentialApprovedUse[];
+}
+
+/** A pending approval waiting for user answers */
 export interface PendingQuestion {
 	toolUseID: string;
-	questions: AskUserQuestion[];
+	questions?: AskUserQuestion[];
+	credentials?: RequestedCredential[];
 }
 
 /** Response from GET /sessions/{sessionId}/threads/{threadId}/question/{questionId} */
@@ -951,7 +991,8 @@ export interface PendingQuestionResponse {
 /** Request body for POST /sessions/{sessionId}/threads/{threadId}/answer/{questionId} */
 export interface AnswerQuestionRequest {
 	toolUseID: string;
-	answers: Record<string, string>;
+	answers?: Record<string, string>;
+	credentials?: Record<string, string>;
 }
 
 /** Response from POST /sessions/{sessionId}/threads/{threadId}/answer/{questionId} */

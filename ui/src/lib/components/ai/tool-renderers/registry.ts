@@ -172,6 +172,22 @@ export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 			}
 			return "Agent Question";
 		}
+
+		case "RequestUserCredential": {
+			const credentials = safeInput.credentials;
+			if (Array.isArray(credentials) && credentials.length > 0) {
+				const first = credentials[0];
+				if (first && typeof first === "object") {
+					const envVar = (first as Record<string, unknown>).envVar;
+					if (typeof envVar === "string") {
+						return credentials.length > 1
+							? `Credential: ${envVar} (+${credentials.length - 1} more)`
+							: `Credential: ${envVar}`;
+					}
+				}
+			}
+			return "Credential Request";
+		}
 	}
 
 	return undefined;

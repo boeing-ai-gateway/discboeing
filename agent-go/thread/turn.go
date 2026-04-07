@@ -958,7 +958,7 @@ func (lc *loopContext) runWaitingForAnswerPhase() loopStepResult {
 	}
 
 	resumePhase := answerResumePhase(pendingQuestion)
-	answerReq := api.AnswerQuestionRequest{Answers: answer.Answers}
+	answerReq := api.AnswerQuestionRequest{Answers: answer.Answers, Credentials: answer.Credentials}
 	next, err := lc.executor.Continue(lc.ctx, lc.toolCtx, answerCall, pendingQuestion.Continuation, &answerReq)
 	if err != nil {
 		lc.yield(nil, fmt.Errorf("continue answered tool: %w", err))
@@ -1242,6 +1242,7 @@ func pauseForApproval(
 		ResumePhase:  pause.resumePhase,
 		Continuation: cloneRawMessage(continuation),
 		Questions:    pause.approval.Questions,
+		Credentials:  pause.approval.Credentials,
 	}); err != nil {
 		yield(nil, fmt.Errorf("save question: %w", err))
 		return false

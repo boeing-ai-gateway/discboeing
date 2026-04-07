@@ -63,6 +63,24 @@ test("conversation composer disables input when no models are available", () => 
 	assert.match(source, /onclick=\{ui\.openCredentialsDialog\}/);
 	assert.match(
 		source,
+		/<ConversationComposerTextarea[\s\S]*disabled=\{composerDisabled\}/,
+	);
+	assert.match(
+		source,
+		/<ConversationComposerAttachmentButton[\s\S]*disabled=\{composerDisabled\}/,
+	);
+});
+
+test("conversation composer keeps session credentials interactive during pending questions", () => {
+	const source = readConversationComposerSource();
+
+	assert.match(
+		source,
+		/Answer the agent's pending question before sending a new message\./,
+	);
+	assert.match(source, /<ConversationCredentialsControl \/>/);
+	assert.doesNotMatch(
+		source,
 		/class=\{composerDisabled \? "pointer-events-none opacity-60" : undefined\}/,
 	);
 });

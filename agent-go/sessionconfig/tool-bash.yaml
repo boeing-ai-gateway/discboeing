@@ -12,6 +12,8 @@ description: |-
   Prefer absolute paths and quote paths with spaces. Use `run_in_background` for long-running commands. Prefer one Bash call with `&&` for dependent commands and separate tool calls for independent commands.
 
   For git work, avoid destructive commands, force pushes, or skipped hooks unless the user explicitly requests them. Do not commit or push unless asked.
+
+  If a command needs a secret, first use RequestUserCredential to request it. Later Bash calls may reuse approved credential ids and approved-use ids through `credentialUses`. Never invent or guess credential ids or approved-use ids; only use ids returned by RequestUserCredential.
 inputSchema:
   type: object
   additionalProperties: false
@@ -31,5 +33,25 @@ inputSchema:
     dangerouslyDisableSandbox:
       type: boolean
       description: Disable sandboxing for this command.
+    credentialUses:
+      type: array
+      description: Optional approved credential bindings for this command. Use ids returned by RequestUserCredential.
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          credentialId:
+            type: string
+            description: Previously returned session-scoped credential id.
+          useId:
+            type: string
+            description: Previously returned session-scoped approved-use id.
+          envVar:
+            type: string
+            description: Environment variable name to bind the credential to for this command.
+        required:
+          - credentialId
+          - useId
+          - envVar
   required:
     - command

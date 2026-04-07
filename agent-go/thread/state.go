@@ -48,12 +48,14 @@ type PendingQuestionState struct {
 	ResumePhase  TurnPhase       `json:"resumePhase,omitempty"`  // phase to resume after this approval is answered
 	Continuation json.RawMessage `json:"continuation,omitempty"` // executor-owned continuation payload for resuming this approval
 	Questions    json.RawMessage `json:"questions,omitempty"`    // raw JSON array from tool input
+	Credentials  json.RawMessage `json:"credentials,omitempty"`  // raw JSON array from tool input
 }
 
 // QuestionAnswer persists the user's response to a pending approval.
 type QuestionAnswer struct {
-	ApprovalID string            `json:"approvalId"`
-	Answers    map[string]string `json:"answers"`
+	ApprovalID  string            `json:"approvalId"`
+	Answers     map[string]string `json:"answers,omitempty"`
+	Credentials map[string]string `json:"credentials,omitempty"`
 }
 
 // StepAsyncContinuations holds executor-owned continuation metadata for async

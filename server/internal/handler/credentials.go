@@ -259,8 +259,12 @@ func (h *Handler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 }
 
 type setSessionCredentialAssignmentRequest struct {
-	CredentialID string `json:"credentialId"`
-	AgentVisible bool   `json:"agentVisible"`
+	CredentialID        string                         `json:"credentialId"`
+	SessionCredentialID string                         `json:"sessionCredentialId,omitempty"`
+	EnvVar              string                         `json:"envVar,omitempty"`
+	SourceEnvVar        string                         `json:"sourceEnvVar,omitempty"`
+	AgentVisible        bool                           `json:"agentVisible"`
+	Uses                []service.SessionCredentialUse `json:"uses,omitempty"`
 }
 
 // ListSessionCredentialAssignments returns credentials assigned to a session.
@@ -293,8 +297,12 @@ func (h *Handler) SetSessionCredentialAssignments(w http.ResponseWriter, r *http
 	assignments := make([]service.SessionCredentialAssignmentInfo, 0, len(req.Credentials))
 	for _, credential := range req.Credentials {
 		assignments = append(assignments, service.SessionCredentialAssignmentInfo{
-			CredentialID: credential.CredentialID,
-			AgentVisible: credential.AgentVisible,
+			CredentialID:        credential.CredentialID,
+			SessionCredentialID: credential.SessionCredentialID,
+			EnvVar:              credential.EnvVar,
+			SourceEnvVar:        credential.SourceEnvVar,
+			AgentVisible:        credential.AgentVisible,
+			Uses:                credential.Uses,
 		})
 	}
 

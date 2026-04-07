@@ -1407,9 +1407,16 @@ func (a *DefaultAgent) PendingQuestion(threadID string) (*agent.PendingQuestion,
 			return nil, fmt.Errorf("unmarshal questions: %w", err)
 		}
 	}
+	var credentials []api.RequestedCredential
+	if len(q.Credentials) > 0 {
+		if err := json.Unmarshal(q.Credentials, &credentials); err != nil {
+			return nil, fmt.Errorf("unmarshal credentials: %w", err)
+		}
+	}
 	return &agent.PendingQuestion{
-		ApprovalID: q.ApprovalID,
-		Questions:  questions,
+		ApprovalID:  q.ApprovalID,
+		Questions:   questions,
+		Credentials: credentials,
 	}, nil
 }
 
@@ -1433,8 +1440,9 @@ func (a *DefaultAgent) SubmitAnswer(threadID, approvalID string, req api.AnswerQ
 	}
 
 	return a.store.SaveAnswer(threadID, state.ID, thread.QuestionAnswer{
-		ApprovalID: approvalID,
-		Answers:    req.Answers,
+		ApprovalID:  approvalID,
+		Answers:     req.Answers,
+		Credentials: req.Credentials,
 	})
 }
 

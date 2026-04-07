@@ -333,12 +333,25 @@ type AskUserQuestion struct {
 	Notes       string                  `json:"notes,omitempty"` // optional context shown before options
 }
 
+type RequestedCredentialApprovedUse struct {
+	Description string `json:"description"`
+}
+
+// RequestedCredential describes a credential the agent wants the user to provide.
+type RequestedCredential struct {
+	EnvVar        string                           `json:"envVar"`
+	Name          string                           `json:"name"`
+	Justification string                           `json:"justification"`
+	ApprovedUses  []RequestedCredentialApprovedUse `json:"approvedUses"`
+}
+
 // PendingQuestion is the pending AskUserQuestion payload returned by GET /chat/question.
 // Question is nil when no question is pending.
 type PendingQuestion struct {
-	ToolUseID string            `json:"toolUseID"`
-	Questions []AskUserQuestion `json:"questions"`
-	Context   string            `json:"context,omitempty"`
+	ToolUseID   string                `json:"toolUseID"`
+	Questions   []AskUserQuestion     `json:"questions,omitempty"`
+	Credentials []RequestedCredential `json:"credentials,omitempty"`
+	Context     string                `json:"context,omitempty"`
 }
 
 // PendingQuestionResponse is the GET /chat/question response body.
@@ -350,8 +363,9 @@ type PendingQuestionResponse struct {
 
 // AnswerQuestionRequest is the POST /chat/answer request body.
 type AnswerQuestionRequest struct {
-	ToolUseID string            `json:"toolUseID"`
-	Answers   map[string]string `json:"answers"`
+	ToolUseID   string            `json:"toolUseID"`
+	Answers     map[string]string `json:"answers,omitempty"`
+	Credentials map[string]string `json:"credentials,omitempty"`
 }
 
 // AnswerQuestionResponse is the POST /chat/answer response body.

@@ -525,8 +525,9 @@ func (h *Handler) GetQuestion(w http.ResponseWriter, r *http.Request) {
 		h.JSON(w, http.StatusOK, api.PendingQuestionResponse{
 			Status: "pending",
 			Question: &api.PendingQuestion{
-				ToolUseID: pending.ApprovalID,
-				Questions: pending.Questions,
+				ToolUseID:   pending.ApprovalID,
+				Questions:   pending.Questions,
+				Credentials: pending.Credentials,
 			},
 		})
 		return
@@ -559,8 +560,8 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Answers == nil {
-		h.Error(w, http.StatusBadRequest, "answers is required")
+	if len(req.Answers) == 0 && len(req.Credentials) == 0 {
+		h.Error(w, http.StatusBadRequest, "answers or credentials is required")
 		return
 	}
 

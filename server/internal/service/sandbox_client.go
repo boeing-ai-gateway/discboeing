@@ -971,7 +971,7 @@ func (c *SandboxChatClient) AnswerQuestion(ctx context.Context, sessionID, threa
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		if err := c.applyRequestAuth(ctx, httpReq, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+		if err := c.applyRequestAuth(ctx, httpReq, sessionID, nil); err != nil {
 			return nil, 0, err
 		}
 

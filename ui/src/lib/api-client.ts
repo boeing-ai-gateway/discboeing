@@ -721,7 +721,14 @@ class ApiClient {
 
 	async setSessionCredentials(
 		sessionId: string,
-		credentials: Array<{ credentialId: string; agentVisible: boolean }>,
+		credentials: Array<{
+			credentialId: string;
+			sessionCredentialId?: string;
+			envVar?: string;
+			sourceEnvVar?: string;
+			agentVisible: boolean;
+			uses?: SessionCredentialAssignment["uses"];
+		}>,
 	): Promise<{ credentials: SessionCredentialAssignment[] }> {
 		return this.fetch<{ credentials: SessionCredentialAssignment[] }>(
 			`/sessions/${sessionId}/credentials`,

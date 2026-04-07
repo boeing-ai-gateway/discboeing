@@ -46,8 +46,9 @@ type Command struct {
 
 // PendingQuestion represents an outstanding approval request that needs user input.
 type PendingQuestion struct {
-	ApprovalID string
-	Questions  []api.AskUserQuestion
+	ApprovalID  string
+	Questions   []api.AskUserQuestion
+	Credentials []api.RequestedCredential
 }
 
 // Agent abstracts the underlying agent implementation.

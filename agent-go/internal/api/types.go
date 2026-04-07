@@ -39,9 +39,34 @@ type RenameFileRequest struct {
 	NewPath string `json:"newPath"`
 }
 
+type RequestedCredentialApprovedUse struct {
+	Description string `json:"description"`
+}
+
+// RequestedCredential describes a credential the agent wants the user to provide.
+type RequestedCredential struct {
+	EnvVar        string                           `json:"envVar"`
+	Name          string                           `json:"name"`
+	Justification string                           `json:"justification"`
+	ApprovedUses  []RequestedCredentialApprovedUse `json:"approvedUses"`
+}
+
+type GrantedCredentialApprovedUse struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+}
+
+type GrantedCredential struct {
+	CredentialID string                         `json:"credentialId"`
+	EnvVar       string                         `json:"envVar"`
+	Name         string                         `json:"name"`
+	ApprovedUses []GrantedCredentialApprovedUse `json:"approvedUses"`
+}
+
 // AnswerQuestionRequest is the POST /threads/{id}/chat/answer/{questionId} request body.
 type AnswerQuestionRequest struct {
-	Answers map[string]string `json:"answers"`
+	Answers     map[string]string `json:"answers,omitempty"`
+	Credentials map[string]string `json:"credentials,omitempty"`
 }
 
 // ============================================================================
@@ -323,8 +348,9 @@ type AskUserQuestion struct {
 
 // PendingQuestion is the pending AskUserQuestion payload.
 type PendingQuestion struct {
-	ToolUseID string            `json:"toolUseID"`
-	Questions []AskUserQuestion `json:"questions"`
+	ToolUseID   string                `json:"toolUseID"`
+	Questions   []AskUserQuestion     `json:"questions,omitempty"`
+	Credentials []RequestedCredential `json:"credentials,omitempty"`
 }
 
 // PendingQuestionResponse is the GET /threads/{id}/chat/question/{questionId} response.

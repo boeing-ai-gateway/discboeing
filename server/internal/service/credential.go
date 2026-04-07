@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -107,9 +110,21 @@ type CredentialInfo struct {
 
 // SessionCredentialAssignmentInfo is the client-safe representation of a credential assigned to a session.
 type SessionCredentialAssignmentInfo struct {
-	CredentialID string         `json:"credentialId"`
-	AgentVisible bool           `json:"agentVisible"`
-	Credential   CredentialInfo `json:"credential"`
+	CredentialID        string                 `json:"credentialId"`
+	SessionCredentialID string                 `json:"sessionCredentialId,omitempty"`
+	EnvVar              string                 `json:"envVar,omitempty"`
+	SourceEnvVar        string                 `json:"sourceEnvVar,omitempty"`
+	AgentVisible        bool                   `json:"agentVisible"`
+	Uses                []SessionCredentialUse `json:"uses,omitempty"`
+	Credential          CredentialInfo         `json:"credential"`
+}
+
+type SessionCredentialUse struct {
+	ID                 string    `json:"id"`
+	Description        string    `json:"description"`
+	CreatedAt          time.Time `json:"createdAt,omitempty"`
+	LastUsedAt         time.Time `json:"lastUsedAt,omitempty"`
+	LastUsedToolCallID string    `json:"lastUsedToolCallId,omitempty"`
 }
 
 // CredentialService handles credential operations with encryption
@@ -149,6 +164,78 @@ func NewCredentialService(s *store.Store, cfg *config.Config) (*CredentialServic
 		encryptor:       enc,
 		lastRefreshFail: make(map[string]time.Time),
 	}, nil
+}
+
+func generateSessionScopedID(prefix string) string {
+	var bytes [6]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return prefix + uuid.NewString()[:8]
+	}
+	token := strings.TrimRight(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(bytes[:]), "=")
+	return prefix + strings.ToLower(token)
+}
+
+func normalizeSessionCredentialUses(existing []SessionCredentialUse, requested []SessionCredentialUse) []SessionCredentialUse {
+	now := time.Now().UTC()
+	byDescription := make(map[string]SessionCredentialUse, len(existing))
+	for _, use := range existing {
+		key := strings.TrimSpace(strings.ToLower(use.Description))
+		if key == "" {
+			continue
+		}
+		if use.ID == "" {
+			use.ID = generateSessionScopedID("use_s_")
+		}
+		if use.CreatedAt.IsZero() {
+			use.CreatedAt = now
+		}
+		byDescription[key] = use
+	}
+	for _, use := range requested {
+		desc := strings.TrimSpace(use.Description)
+		if desc == "" {
+			continue
+		}
+		key := strings.ToLower(desc)
+		existingUse, ok := byDescription[key]
+		if ok {
+			if use.LastUsedAt.After(existingUse.LastUsedAt) {
+				existingUse.LastUsedAt = use.LastUsedAt
+			}
+			if strings.TrimSpace(use.LastUsedToolCallID) != "" {
+				existingUse.LastUsedToolCallID = strings.TrimSpace(use.LastUsedToolCallID)
+			}
+			byDescription[key] = existingUse
+			continue
+		}
+		if use.ID == "" {
+			use.ID = generateSessionScopedID("use_s_")
+		}
+		use.Description = desc
+		if use.CreatedAt.IsZero() {
+			use.CreatedAt = now
+		}
+		byDescription[key] = use
+	}
+	result := make([]SessionCredentialUse, 0, len(byDescription))
+	for _, use := range byDescription {
+		result = append(result, use)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Description < result[j].Description
+	})
+	return result
+}
+
+func parseSessionCredentialUses(data json.RawMessage) []SessionCredentialUse {
+	if len(data) == 0 {
+		return nil
+	}
+	var uses []SessionCredentialUse
+	if err := json.Unmarshal(data, &uses); err != nil {
+		return nil
+	}
+	return uses
 }
 
 // List returns all credentials for a project (safe info only, no secrets)
@@ -311,8 +398,16 @@ func (s *CredentialService) ListSessionAssignments(ctx context.Context, projectI
 	result := make([]SessionCredentialAssignmentInfo, 0, len(creds))
 	for _, cred := range creds {
 		agentVisible := cred.AgentVisible
+		sessionCredentialID := ""
+		envVar := ""
+		sourceEnvVar := ""
+		var uses []SessionCredentialUse
 		if assignment, ok := assignmentByCredentialID[cred.ID]; ok {
 			agentVisible = assignment.AgentVisible
+			sessionCredentialID = assignment.SessionCredentialID
+			envVar = assignment.EnvVar
+			sourceEnvVar = assignment.SourceEnvVar
+			uses = parseSessionCredentialUses(assignment.UsesJSON)
 		}
 		info := s.toCredentialInfo(cred)
 		if info.Inactive {
@@ -320,9 +415,13 @@ func (s *CredentialService) ListSessionAssignments(ctx context.Context, projectI
 		}
 		info.AgentVisible = agentVisible
 		result = append(result, SessionCredentialAssignmentInfo{
-			CredentialID: cred.ID,
-			AgentVisible: agentVisible,
-			Credential:   info,
+			CredentialID:        cred.ID,
+			SessionCredentialID: sessionCredentialID,
+			EnvVar:              envVar,
+			SourceEnvVar:        sourceEnvVar,
+			AgentVisible:        agentVisible,
+			Uses:                uses,
+			Credential:          info,
 		})
 	}
 	return result, nil
@@ -337,6 +436,14 @@ func (s *CredentialService) SetSessionAssignments(ctx context.Context, projectID
 	if sess.ProjectID != projectID {
 		return nil, ErrCredentialNotFound
 	}
+	existingAssignments, err := s.store.ListSessionCredentialAssignments(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	existingByCredentialID := make(map[string]*model.SessionCredentialAssignment, len(existingAssignments))
+	for _, assignment := range existingAssignments {
+		existingByCredentialID[assignment.CredentialID] = assignment
+	}
 	if err := s.store.DeleteSessionCredentialAssignments(ctx, sessionID); err != nil {
 		return nil, err
 	}
@@ -348,13 +455,39 @@ func (s *CredentialService) SetSessionAssignments(ctx context.Context, projectID
 			}
 			return nil, err
 		}
-		if assignment.AgentVisible == cred.AgentVisible {
-			continue
+		sessionCredentialID := strings.TrimSpace(assignment.SessionCredentialID)
+		existing := existingByCredentialID[cred.ID]
+		if sessionCredentialID == "" && existing != nil {
+			sessionCredentialID = existing.SessionCredentialID
+		}
+		if sessionCredentialID == "" {
+			sessionCredentialID = generateSessionScopedID("cred_s_")
+		}
+		envVar := strings.TrimSpace(assignment.EnvVar)
+		if envVar == "" && existing != nil {
+			envVar = existing.EnvVar
+		}
+		sourceEnvVar := strings.TrimSpace(assignment.SourceEnvVar)
+		if sourceEnvVar == "" && existing != nil {
+			sourceEnvVar = existing.SourceEnvVar
+		}
+		var existingUses []SessionCredentialUse
+		if existing != nil {
+			existingUses = parseSessionCredentialUses(existing.UsesJSON)
+		}
+		uses := normalizeSessionCredentialUses(existingUses, assignment.Uses)
+		usesJSON, err := json.Marshal(uses)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.store.UpsertSessionCredentialAssignment(ctx, &model.SessionCredentialAssignment{
-			SessionID:    sessionID,
-			CredentialID: cred.ID,
-			AgentVisible: assignment.AgentVisible,
+			SessionID:           sessionID,
+			CredentialID:        cred.ID,
+			SessionCredentialID: sessionCredentialID,
+			EnvVar:              envVar,
+			SourceEnvVar:        sourceEnvVar,
+			AgentVisible:        assignment.AgentVisible,
+			UsesJSON:            usesJSON,
 		}); err != nil {
 			return nil, err
 		}
@@ -694,13 +827,15 @@ func (s *CredentialService) Delete(ctx context.Context, projectID, credentialID 
 // CredentialEnvVar represents a credential value with its target environment variable.
 // Used for passing credentials to agent containers.
 type CredentialEnvVar struct {
-	CredentialID string `json:"credentialId,omitempty"`
-	EnvVar       string `json:"envVar"`
-	Value        string `json:"value"`
-	Provider     string `json:"provider"`
-	AuthType     string `json:"authType"` // "api_key", "id", or "oauth"
-	AgentVisible bool   `json:"agentVisible"`
-	ExpiresAt    int64  `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
+	CredentialID        string                 `json:"credentialId,omitempty"`
+	SessionCredentialID string                 `json:"sessionCredentialId,omitempty"`
+	Uses                []SessionCredentialUse `json:"uses,omitempty"`
+	EnvVar              string                 `json:"envVar"`
+	Value               string                 `json:"value"`
+	Provider            string                 `json:"provider"`
+	AuthType            string                 `json:"authType"` // "api_key", "id", or "oauth"
+	AgentVisible        bool                   `json:"agentVisible"`
+	ExpiresAt           int64                  `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
 }
 
 // GetAllDecrypted returns all configured credentials for a project as environment variable mappings.
@@ -726,15 +861,7 @@ func (s *CredentialService) GetAllForSession(ctx context.Context, projectID, ses
 	for _, assignment := range assignments {
 		assignmentByCredentialID[assignment.CredentialID] = assignment
 	}
-	effective := make([]*model.Credential, 0, len(creds))
-	for _, cred := range creds {
-		clone := *cred
-		if assignment, ok := assignmentByCredentialID[cred.ID]; ok {
-			clone.AgentVisible = assignment.AgentVisible
-		}
-		effective = append(effective, &clone)
-	}
-	return s.mapCredentialsToEnvVars(ctx, projectID, effective)
+	return s.mapCredentialsToEnvVarsWithAssignments(ctx, projectID, creds, assignmentByCredentialID)
 }
 
 // GetVisibleEnvVarsForSession returns only the credentials that should be exposed
@@ -759,6 +886,10 @@ func (s *CredentialService) GetVisibleEnvVarsForSession(ctx context.Context, ses
 }
 
 func (s *CredentialService) mapCredentialsToEnvVars(ctx context.Context, projectID string, creds []*model.Credential) ([]CredentialEnvVar, error) {
+	return s.mapCredentialsToEnvVarsWithAssignments(ctx, projectID, creds, nil)
+}
+
+func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.Context, projectID string, creds []*model.Credential, assignmentByCredentialID map[string]*model.SessionCredentialAssignment) ([]CredentialEnvVar, error) {
 	result := make([]CredentialEnvVar, 0, len(creds))
 	var mcpTokens []MCPTokenData
 
@@ -780,20 +911,60 @@ func (s *CredentialService) mapCredentialsToEnvVars(ctx context.Context, project
 			continue
 		}
 
+		agentVisible := c.AgentVisible
+		sessionCredentialID := ""
+		envVar := ""
+		sourceEnvVar := ""
+		var uses []SessionCredentialUse
+		if assignmentByCredentialID != nil {
+			if assignment, ok := assignmentByCredentialID[c.ID]; ok {
+				agentVisible = assignment.AgentVisible
+				sessionCredentialID = assignment.SessionCredentialID
+				envVar = assignment.EnvVar
+				sourceEnvVar = assignment.SourceEnvVar
+				uses = parseSessionCredentialUses(assignment.UsesJSON)
+			}
+		}
+
 		switch c.AuthType {
 		case AuthTypeAPIKey, AuthTypeID:
 			data, err := s.getSecretData(c)
 			if err != nil {
 				continue
 			}
-			for _, envVar := range data.EnvVars {
+			if envVar != "" {
+				selected := sourceEnvVar
+				if selected == "" {
+					selected = envVar
+				}
+				for _, secretEnvVar := range data.EnvVars {
+					if secretEnvVar.Key != selected {
+						continue
+					}
+					result = append(result, CredentialEnvVar{
+						CredentialID:        c.ID,
+						SessionCredentialID: sessionCredentialID,
+						Uses:                uses,
+						EnvVar:              envVar,
+						Value:               secretEnvVar.Value,
+						Provider:            c.Provider,
+						AuthType:            c.AuthType,
+						AgentVisible:        agentVisible,
+					})
+					break
+				}
+				continue
+			}
+			for _, secretEnvVar := range data.EnvVars {
 				result = append(result, CredentialEnvVar{
-					CredentialID: c.ID,
-					EnvVar:       envVar.Key,
-					Value:        envVar.Value,
-					Provider:     c.Provider,
-					AuthType:     c.AuthType,
-					AgentVisible: c.AgentVisible,
+					CredentialID:        c.ID,
+					SessionCredentialID: sessionCredentialID,
+					Uses:                uses,
+					EnvVar:              secretEnvVar.Key,
+					Value:               secretEnvVar.Value,
+					Provider:            c.Provider,
+					AuthType:            c.AuthType,
+					AgentVisible:        agentVisible,
 				})
 			}
 		case AuthTypeOAuth:
@@ -803,21 +974,26 @@ func (s *CredentialService) mapCredentialsToEnvVars(ctx context.Context, project
 				continue
 			}
 			if tokens.AccessToken != "" {
-				envVar := firstProviderEnvVar(c.Provider)
-				if oauthEnvVar, exists := oauthEnvVars[c.Provider]; exists {
-					envVar = oauthEnvVar
+				boundEnvVar := envVar
+				if boundEnvVar == "" {
+					boundEnvVar = firstProviderEnvVar(c.Provider)
+					if oauthEnvVar, exists := oauthEnvVars[c.Provider]; exists {
+						boundEnvVar = oauthEnvVar
+					}
 				}
-				if envVar == "" {
+				if boundEnvVar == "" {
 					continue
 				}
 				result = append(result, CredentialEnvVar{
-					CredentialID: c.ID,
-					EnvVar:       envVar,
-					Value:        tokens.AccessToken,
-					Provider:     c.Provider,
-					AuthType:     AuthTypeOAuth,
-					AgentVisible: c.AgentVisible,
-					ExpiresAt:    tokens.ExpiresAt.Unix(),
+					CredentialID:        c.ID,
+					SessionCredentialID: sessionCredentialID,
+					Uses:                uses,
+					EnvVar:              boundEnvVar,
+					Value:               tokens.AccessToken,
+					Provider:            c.Provider,
+					AuthType:            AuthTypeOAuth,
+					AgentVisible:        agentVisible,
+					ExpiresAt:           tokens.ExpiresAt.Unix(),
 				})
 			}
 		}

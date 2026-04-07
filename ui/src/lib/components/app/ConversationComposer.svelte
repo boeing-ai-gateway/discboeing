@@ -518,7 +518,6 @@
 
 		<div class="relative">
 			<form
-				class={composerDisabled ? "pointer-events-none opacity-60" : undefined}
 				onsubmit={(event) => {
 					event.preventDefault();
 					void submitComposer();

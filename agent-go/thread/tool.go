@@ -77,6 +77,8 @@ type AsyncContinuationHandle struct {
 type ApprovalRequest struct {
 	// Questions is the raw JSON data presented to the user.
 	Questions json.RawMessage
+	// Credentials is the raw JSON data for requested credentials.
+	Credentials json.RawMessage
 	// Continuation is an executor-owned opaque payload that TURN persists and
 	// passes back into Continue when this approval is answered later.
 	Continuation json.RawMessage
