@@ -14,6 +14,10 @@
 	const app = useAppContext();
 	const isMobile = new IsMobile(1024);
 	const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discobot-ui-sidebar-layout";
+	const SIDEBAR_MIN_WIDTH_PX = 40;
+	const SIDEBAR_MIN_SIZE_FALLBACK = 4;
+	let desktopPaneGroupElement = $state<HTMLDivElement | null>(null);
+	let desktopSidebarMinSize = $state(SIDEBAR_MIN_SIZE_FALLBACK);
 	let desktopSidebarPane = $state<PaneAPI | null>(null);
 	let desktopSidebarInitialized = $state(false);
 
@@ -64,6 +68,36 @@
 			sessionView.mobileSidebarOpen = false;
 		}
 	}
+
+	function updateDesktopSidebarMinSize(width: number) {
+		if (!Number.isFinite(width) || width <= 0) {
+			return;
+		}
+		desktopSidebarMinSize = Math.min(
+			48,
+			Math.max(SIDEBAR_MIN_SIZE_FALLBACK, (SIDEBAR_MIN_WIDTH_PX / width) * 100),
+		);
+	}
+
+	$effect(() => {
+		if (isMobile.current || !desktopPaneGroupElement) {
+			return;
+		}
+
+		updateDesktopSidebarMinSize(desktopPaneGroupElement.clientWidth);
+		const resizeObserver = new ResizeObserver((entries) => {
+			const entry = entries[0];
+			if (!entry) {
+				return;
+			}
+			updateDesktopSidebarMinSize(entry.contentRect.width);
+		});
+		resizeObserver.observe(desktopPaneGroupElement);
+
+		return () => {
+			resizeObserver.disconnect();
+		};
+	});
 
 	function hasSavedSidebarLayout() {
 		return (
@@ -118,7 +152,10 @@
 				/>
 			{/key}
 		{:else}
-			<div class="relative min-h-0 min-w-0 flex-1">
+			<div
+				bind:this={desktopPaneGroupElement}
+				class="relative min-h-0 min-w-0 flex-1"
+			>
 				<Resizable.PaneGroup
 					direction="horizontal"
 					autoSaveId="discobot-ui-sidebar-layout"
@@ -127,7 +164,7 @@
 					<Resizable.Pane
 						bind:this={desktopSidebarPane}
 						defaultSize={24}
-						minSize={24}
+						minSize={desktopSidebarMinSize}
 						maxSize={48}
 						collapsible
 						collapsedSize={0}
