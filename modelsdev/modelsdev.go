@@ -118,6 +118,10 @@ type overlayEntry struct {
 	// Fields applied to both new and existing models.
 	ReasoningLevels    []string `json:"reasoningLevels"`
 	DefaultReasonLevel string   `json:"defaultReasonLevel"`
+	ContextWindow      int      `json:"contextWindow"`
+	MaxOutputTokens    int      `json:"maxOutputTokens"`
+	InputModalities    []string `json:"inputModalities"`
+	OutputModalities   []string `json:"outputModalities"`
 	// Fields only meaningful when creating a new model (not present in base data).
 	Name        string `json:"name"`
 	Family      string `json:"family"`
@@ -147,8 +151,9 @@ func load() {
 
 // applyOverlay merges model-overlay.json into the loaded base data.
 //
-// For existing providers and models the overlay can update ReasoningLevels and
-// DefaultReasonLevel (and optionally Name/Family/Reasoning/ToolCall/CustomTools).
+// For existing providers and models the overlay can update ReasoningLevels,
+// DefaultReasonLevel, context/modality limits, and optionally
+// Name/Family/Reasoning/ToolCall/CustomTools.
 //
 // The overlay also supports adding entirely new providers and models that are
 // not present in the base models.dev snapshot:
@@ -232,6 +237,18 @@ func applyOverlay() {
 			}
 			if ov.DefaultReasonLevel != "" {
 				m.DefaultReasonLevel = ov.DefaultReasonLevel
+			}
+			if ov.ContextWindow > 0 {
+				m.Limit.Context = ov.ContextWindow
+			}
+			if ov.MaxOutputTokens > 0 {
+				m.Limit.Output = ov.MaxOutputTokens
+			}
+			if len(ov.InputModalities) > 0 {
+				m.Modalities.Input = append([]string(nil), ov.InputModalities...)
+			}
+			if len(ov.OutputModalities) > 0 {
+				m.Modalities.Output = append([]string(nil), ov.OutputModalities...)
 			}
 			provider.Models[modelID] = m
 		}

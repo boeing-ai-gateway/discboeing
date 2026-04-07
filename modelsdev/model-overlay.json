@@ -85,11 +85,103 @@
 			],
 			"name": "ChatGPT Codex"
 		},
-		"gpt-5.1-codex": {
+		"gpt-5": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"family": "gpt",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"name": "GPT-5",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"minimal",
+				"low",
+				"medium",
+				"high"
+			],
+			"tool_call": true
+		},
+		"gpt-5-codex": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"name": "GPT-5 Codex",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			],
+			"tool_call": true
+		},
+		"gpt-5-codex-mini": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"name": "GPT-5 Codex Mini",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium",
+				"high"
+			],
+			"tool_call": true
+		},
+		"gpt-5.1": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"family": "gpt",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"name": "GPT-5.1",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			],
+			"tool_call": true
+		},
+		"gpt-5.1-codex": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.1 Codex",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -99,36 +191,60 @@
 			"tool_call": true
 		},
 		"gpt-5.1-codex-max": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.1 Codex Max",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
 				"medium",
-				"high"
+				"high",
+				"xhigh"
 			],
 			"tool_call": true
 		},
 		"gpt-5.1-codex-mini": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.1 Codex Mini",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
-				"low",
 				"medium",
 				"high"
 			],
 			"tool_call": true
 		},
 		"gpt-5.2": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.2",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -139,10 +255,18 @@
 			"tool_call": true
 		},
 		"gpt-5.2-codex": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.2 Codex",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -153,10 +277,18 @@
 			"tool_call": true
 		},
 		"gpt-5.3-codex": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt-codex",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.3 Codex",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -167,10 +299,18 @@
 			"tool_call": true
 		},
 		"gpt-5.4": {
+			"contextWindow": 272000,
 			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt",
+			"inputModalities": [
+				"text",
+				"image"
+			],
 			"name": "GPT-5.4",
+			"outputModalities": [
+				"text"
+			],
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -191,9 +331,154 @@
 		}
 	},
 	"openai": {
+		"computer-use-preview": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium"
+			]
+		},
+		"computer-use-preview-2025-03-11": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium"
+			]
+		},
+		"ft:gpt-3.5-turbo-0125:acorn-labs::A76oE7JW:ckpt-step-80": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-3.5-turbo-0125:acorn-labs::A76oF96a": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-3.5-turbo-0125:acorn-labs::A76oFTkQ:ckpt-step-90": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-3.5-turbo-0613:personal::88wa34IG": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs::AGEjadfU:ckpt-step-77": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs::AGEjbvrS:ckpt-step-88": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs::AGEjbxi2": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs:tildy:9vXipETL:ckpt-step-75": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs:tildy:9vXipNs9:ckpt-step-60": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"ft:gpt-4o-mini-2024-07-18:acorn-labs:tildy:9vXipV43": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-3.5-turbo": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-3.5-turbo-0125": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-3.5-turbo-1106": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-3.5-turbo-instruct": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-3.5-turbo-instruct-0914": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4-0613": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4-turbo": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4-turbo-2024-04-09": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1-2025-04-14": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1-mini": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1-mini-2025-04-14": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1-nano": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4.1-nano-2025-04-14": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o-2024-05-13": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o-2024-08-06": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o-2024-11-20": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o-mini": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-4o-mini-2024-07-18": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
 		"gpt-5": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"minimal",
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"gpt-5-2025-08-07": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"minimal",
@@ -229,9 +514,27 @@
 				"high"
 			]
 		},
+		"gpt-5-mini-2025-08-07": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"minimal",
+				"low",
+				"medium",
+				"high"
+			]
+		},
 		"gpt-5-nano": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"minimal",
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"gpt-5-nano-2025-08-07": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"minimal",
@@ -248,9 +551,32 @@
 				"high"
 			]
 		},
+		"gpt-5-pro-2025-10-06": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"high"
+			]
+		},
+		"gpt-5-search-api": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-5-search-api-2025-10-14": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
 		"gpt-5.1": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"gpt-5.1-2025-11-13": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"none",
@@ -310,6 +636,16 @@
 				"xhigh"
 			]
 		},
+		"gpt-5.2-2025-12-11": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
 		"gpt-5.2-chat-latest": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
@@ -339,6 +675,20 @@
 				"xhigh"
 			]
 		},
+		"gpt-5.2-pro-2025-12-11": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.3-chat-latest": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium"
+			]
+		},
 		"gpt-5.3-codex": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
@@ -363,6 +713,56 @@
 				"xhigh"
 			]
 		},
+		"gpt-5.4-2026-03-05": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.4-mini": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.4-mini-2026-03-17": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.4-nano": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.4-nano-2026-03-17": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
 		"gpt-5.4-pro": {
 			"customTools": true,
 			"defaultReasonLevel": "medium",
@@ -373,8 +773,60 @@
 				"xhigh"
 			]
 		},
+		"gpt-5.4-pro-2026-03-05": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-audio": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-audio-1.5": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-audio-2025-08-28": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-audio-mini": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-audio-mini-2025-10-06": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-audio-mini-2025-12-15": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-realtime-mini": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-realtime-mini-2025-10-06": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
+		"gpt-realtime-mini-2025-12-15": {
+			"reasoning": false,
+			"reasoningLevels": []
+		},
 		"o1": {
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"o1-2024-12-17": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -391,8 +843,24 @@
 				"high"
 			]
 		},
+		"o1-pro-2025-03-19": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
 		"o3": {
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"o3-2025-04-16": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -417,8 +885,24 @@
 				"high"
 			]
 		},
+		"o3-mini-2025-01-31": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
 		"o3-pro": {
 			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
+		"o3-pro-2025-06-10": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
@@ -435,6 +919,14 @@
 				"high"
 			]
 		},
+		"o4-mini-2025-04-16": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high"
+			]
+		},
 		"o4-mini-deep-research": {
 			"defaultReasonLevel": "medium",
 			"reasoningLevels": [
@@ -442,6 +934,10 @@
 				"medium",
 				"high"
 			]
+		},
+		"omni-moderation-latest": {
+			"reasoning": false,
+			"reasoningLevels": []
 		}
 	}
 }

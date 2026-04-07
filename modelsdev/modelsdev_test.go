@@ -39,6 +39,25 @@ func TestLookup(t *testing.T) {
 		}
 	})
 
+	t.Run("codex overlay model includes context and modalities", func(t *testing.T) {
+		m := Lookup("codex", "gpt-5.1-codex-mini")
+		if m == nil {
+			t.Fatal("expected gpt-5.1-codex-mini to be found")
+		}
+		if m.Name != "GPT-5.1 Codex Mini" {
+			t.Fatalf("expected display name from overlay, got %q", m.Name)
+		}
+		if m.ContextWindow != 272000 {
+			t.Fatalf("expected context window 272000, got %d", m.ContextWindow)
+		}
+		if len(m.ReasoningLevels) != 2 || m.ReasoningLevels[0] != "medium" || m.ReasoningLevels[1] != "high" {
+			t.Fatalf("expected reasoning levels [medium high], got %v", m.ReasoningLevels)
+		}
+		if !m.SupportsInputModality("image") {
+			t.Error("expected codex model to support image input modality")
+		}
+	})
+
 	t.Run("custom tools default false", func(t *testing.T) {
 		m := Lookup("openai", "gpt-4o")
 		if m == nil {

@@ -58,19 +58,6 @@ type Provider struct {
 	isCodex   bool    // true when targeting the ChatGPT Codex backend
 }
 
-// codexModels is the hardcoded list of models available via the ChatGPT Codex
-// backend. We skip the live /models API call when in Codex mode because that
-// endpoint is not available on chatgpt.com.
-var codexModels = []providers.ModelInfo{
-	{ID: "gpt-5.1-codex-max", DisplayName: "GPT-5.1 Codex Max", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.1-codex-mini", DisplayName: "GPT-5.1 Codex Mini", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.1-codex", DisplayName: "GPT-5.1 Codex", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.2", DisplayName: "GPT-5.2", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh, providers.ReasoningXHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.2-codex", DisplayName: "GPT-5.2 Codex", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh, providers.ReasoningXHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.3-codex", DisplayName: "GPT-5.3 Codex", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh, providers.ReasoningXHigh}, DefaultReasoning: providers.ReasoningMedium},
-	{ID: "gpt-5.4", DisplayName: "GPT-5.4", Reasoning: true, ReasoningLevels: []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh, providers.ReasoningXHigh}, DefaultReasoning: providers.ReasoningMedium},
-}
-
 // New creates a new OpenAI Responses API provider.
 func New(cfg providers.Config, isCodex bool, defaultURL string) (providers.Provider, error) {
 	apiKey := cfg.APIKey()
@@ -255,13 +242,7 @@ func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 }
 
 func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	// When targeting the ChatGPT Codex backend the /models endpoint is not
-	// available, so return the known Codex model list directly.
-	if p.isCodex {
-		return codexModels, nil
-	}
-
-	// Fetch live model IDs from the OpenAI API.
+	// Fetch live model IDs from the provider's /models endpoint.
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("openai: create models request: %w", err)
@@ -290,10 +271,14 @@ func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error
 
 	// Enrich each model with metadata from models.dev (context window,
 	// max output tokens, reasoning, display name).
+	metadataProviderID := providerID
+	if p.isCodex {
+		metadataProviderID = codexProviderID
+	}
 	var models []providers.ModelInfo
 	for _, m := range result.Data {
 		info := providers.ModelInfo{ID: m.ID, DisplayName: m.ID}
-		if md := modelsdev.Lookup(providerID, m.ID); md != nil {
+		if md := modelsdev.Lookup(metadataProviderID, m.ID); md != nil {
 			info.DisplayName = md.Name
 			info.Reasoning = md.Reasoning
 			info.ReasoningLevels = toReasoningSlice(md.ReasoningLevels)

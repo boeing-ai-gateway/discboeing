@@ -1459,6 +1459,65 @@ func TestListModels(t *testing.T) {
 		}
 	})
 
+	t.Run("fetches codex models from API and enriches with codex overlay", func(t *testing.T) {
+		var gotAccountID string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/backend-api/codex/models" {
+				t.Errorf("expected /backend-api/codex/models, got %s", r.URL.Path)
+			}
+			if r.Header.Get("Authorization") != "Bearer codex-key" {
+				t.Errorf("expected Bearer codex-key, got %s", r.Header.Get("Authorization"))
+			}
+			gotAccountID = r.Header.Get("ChatGPT-Account-Id")
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"id":"gpt-5.1-codex-mini","object":"model"},{"id":"gpt-5.4","object":"model"}]}`)
+		}))
+		defer server.Close()
+
+		p := &Provider{apiKey: "codex-key", baseURL: server.URL + "/backend-api/codex", client: server.Client(), accountID: "acct_123", isCodex: true}
+		models, err := p.ListModels(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(models) != 2 {
+			t.Fatalf("expected 2 models, got %d", len(models))
+		}
+		if gotAccountID != "acct_123" {
+			t.Fatalf("expected ChatGPT-Account-Id acct_123, got %q", gotAccountID)
+		}
+
+		var codexMini *providers.ModelInfo
+		var gpt54 *providers.ModelInfo
+		for i := range models {
+			switch models[i].ID {
+			case "gpt-5.1-codex-mini":
+				codexMini = &models[i]
+			case "gpt-5.4":
+				gpt54 = &models[i]
+			}
+		}
+
+		if codexMini == nil {
+			t.Fatal("expected gpt-5.1-codex-mini in results")
+		}
+		if codexMini.DisplayName != "GPT-5.1 Codex Mini" {
+			t.Fatalf("expected codex overlay display name, got %q", codexMini.DisplayName)
+		}
+		if codexMini.ContextWindow != 272000 {
+			t.Fatalf("expected context window 272000, got %d", codexMini.ContextWindow)
+		}
+		if got := codexMini.ReasoningLevels; len(got) != 2 || got[0] != providers.ReasoningMedium || got[1] != providers.ReasoningHigh {
+			t.Fatalf("expected reasoning levels [medium high], got %v", got)
+		}
+
+		if gpt54 == nil {
+			t.Fatal("expected gpt-5.4 in results")
+		}
+		if gpt54.DisplayName != "GPT-5.4" {
+			t.Fatalf("expected codex overlay display name for gpt-5.4, got %q", gpt54.DisplayName)
+		}
+	})
+
 	t.Run("handles API error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(401)
