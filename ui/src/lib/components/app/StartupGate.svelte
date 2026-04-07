@@ -309,10 +309,46 @@
 			hasActiveStartupTasks(startupTasks),
 	);
 
+	function getStartupErrorMessage(error: unknown) {
+		return error instanceof Error
+			? error.message
+			: "Discobot could not connect to the backend.";
+	}
+
+	function isAbortError(error: unknown, signal: AbortSignal) {
+		return signal.aborted && error === signal.reason;
+	}
+
 	onMount(() => {
 		const abortController = new AbortController();
 		const startupScreenShownAt = Date.now();
 		let stopProjectEvents = () => {};
+
+		async function waitForSuccessfulStartupRequest<T>(
+			request: () => Promise<T>,
+			phase: StartupPhase,
+		): Promise<T> {
+			for (;;) {
+				if (abortController.signal.aborted) {
+					throw abortController.signal.reason ?? new Error("aborted");
+				}
+
+				try {
+					return await request();
+				} catch (error) {
+					if (
+						abortController.signal.aborted ||
+						isAbortError(error, abortController.signal)
+					) {
+						throw error;
+					}
+					startupPhase = phase;
+					retryCount += 1;
+					errorMessage = getStartupErrorMessage(error);
+					await sleep(STARTUP_STATUS_POLL_MS);
+				}
+			}
+		}
 
 		void (async () => {
 			try {
@@ -320,29 +356,16 @@
 				await initTauriConfig();
 				startupPhase = "waiting";
 
-				for (;;) {
-					if (abortController.signal.aborted) {
-						throw abortController.signal.reason ?? new Error("aborted");
-					}
-
-					try {
-						await refreshStartupStatus();
-						break;
-					} catch (error) {
-						if (abortController.signal.aborted) {
-							throw error;
-						}
-						retryCount += 1;
-						errorMessage =
-							error instanceof Error
-								? error.message
-								: "Discobot could not connect to the backend.";
-						await sleep(STARTUP_STATUS_POLL_MS);
-					}
-				}
+				await waitForSuccessfulStartupRequest(
+					() => refreshStartupStatus(),
+					"waiting",
+				);
 
 				errorMessage = null;
-				authenticatedUser = await api.getCurrentUser();
+				authenticatedUser = await waitForSuccessfulStartupRequest(
+					() => api.getCurrentUser(),
+					"waiting",
+				);
 				if (!authenticatedUser) {
 					startupPhase = "auth";
 					return;
@@ -354,13 +377,28 @@
 				stopProjectEvents = app.connectProjectEvents();
 
 				while (!abortController.signal.aborted) {
-					await refreshStartupStatus();
-					if (startupOverlayDismissed || !hasActiveStartupTasks(startupTasks)) {
-						break;
+					try {
+						await refreshStartupStatus();
+						if (
+							startupOverlayDismissed ||
+							!hasActiveStartupTasks(startupTasks)
+						) {
+							break;
+						}
+					} catch (error) {
+						if (
+							abortController.signal.aborted ||
+							isAbortError(error, abortController.signal)
+						) {
+							throw error;
+						}
+						retryCount += 1;
+						errorMessage = getStartupErrorMessage(error);
 					}
 					await sleep(STARTUP_STATUS_POLL_MS);
 				}
 
+				errorMessage = null;
 				startupPhase = "ready";
 
 				const elapsed = Date.now() - startupScreenShownAt;
@@ -374,10 +412,7 @@
 			} catch (error) {
 				if (!abortController.signal.aborted) {
 					startupPhase = "error";
-					errorMessage =
-						error instanceof Error
-							? error.message
-							: "Discobot could not connect to the backend.";
+					errorMessage = getStartupErrorMessage(error);
 				}
 			}
 		})();
