@@ -1,0 +1,17 @@
+name: Glob
+description: |-
+  Find files by glob pattern.
+
+  Returns matching paths in sorted order. Use this for filename or path-pattern searches. For broader code exploration, prefer Task.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    pattern:
+      type: string
+      description: Glob pattern to match.
+    path:
+      type: string
+      description: Directory to search. Omit to use the current working directory.
+  required:
+    - pattern

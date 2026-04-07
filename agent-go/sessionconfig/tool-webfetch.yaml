@@ -1,0 +1,19 @@
+name: WebFetch
+description: |-
+  Fetch a public web page and answer a prompt about it.
+
+  This tool is read-only. It does not work for authenticated or private URLs. Prefer GitHub CLI for GitHub URLs.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    prompt:
+      type: string
+      description: What to extract or answer from the page.
+    url:
+      type: string
+      format: uri
+      description: URL to fetch.
+  required:
+    - url
+    - prompt

@@ -1,0 +1,17 @@
+name: Skill
+description: |-
+  Invoke a skill in the main conversation.
+
+  If the user refers to a slash command such as `/commit`, use this tool before responding normally. Do not mention a skill without calling it.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    skill:
+      type: string
+      description: Skill name, such as "commit" or "review-pr".
+    args:
+      type: string
+      description: Optional skill arguments.
+  required:
+    - skill

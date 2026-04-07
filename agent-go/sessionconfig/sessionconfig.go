@@ -55,8 +55,17 @@ type SessionConfig struct {
 func Load(cwd string) (*SessionConfig, error) {
 	cfg := &SessionConfig{}
 
-	// 1. Set the default base system prompt.
-	cfg.SystemPrompt = defaultSystemPrompt()
+	// 1. Set the system prompt and default tool set.
+	projectRoot := findProjectRoot(cwd)
+	systemCfg, err := loadSystemConfig(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	cfg.SystemPrompt = systemCfg.PromptBody
+	cfg.Tools, err = toolsForNames(systemCfg.AllowedTools)
+	if err != nil {
+		return nil, err
+	}
 	cfg.MaxSubagentDepth = DefaultMaxSubagentDepth
 
 	// 2. Discover user instruction files (CLAUDE.md, AGENTS.md, rules).
@@ -66,11 +75,7 @@ func Load(cwd string) (*SessionConfig, error) {
 	}
 	cfg.UserInstructions = entries
 
-	// 3. Load built-in tool definitions.
-	cfg.Tools = DefaultBuiltinTools("")
-
-	// 4. Discover MCP server configs.
-	projectRoot := findProjectRoot(cwd)
+	// 3. Discover MCP server configs.
 	mcpServers, err := discoverMCPServers(projectRoot)
 	if err != nil {
 		log.Printf("sessionconfig: warning: MCP discovery: %v", err)
@@ -79,7 +84,7 @@ func Load(cwd string) (*SessionConfig, error) {
 		cfg.MCPServers = mcpServers
 	}
 
-	// 5. Discover sub-agent configs.
+	// 4. Discover sub-agent configs.
 	subAgents, err := discoverSubAgents(projectRoot)
 	if err != nil {
 		log.Printf("sessionconfig: warning: sub-agent discovery: %v", err)
@@ -88,7 +93,7 @@ func Load(cwd string) (*SessionConfig, error) {
 		cfg.SubAgents = subAgents
 	}
 
-	// 6. Discover skills.
+	// 5. Discover skills.
 	skills, err := discoverSkills(projectRoot)
 	if err != nil {
 		log.Printf("sessionconfig: warning: skill discovery: %v", err)

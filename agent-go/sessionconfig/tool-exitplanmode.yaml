@@ -1,0 +1,27 @@
+name: ExitPlanMode
+description: |-
+  Exit plan mode and present the written plan for user approval.
+
+  Use this only after the plan file is complete. Do not use AskUserQuestion to request plan approval.
+inputSchema:
+  type: object
+  additionalProperties: true
+  properties:
+    allowedPrompts:
+      type: array
+      description: Permission prompts needed to implement the approved plan.
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          tool:
+            type: string
+            enum:
+              - Bash
+            description: Tool the prompt applies to.
+          prompt:
+            type: string
+            description: Semantic action description such as "run tests".
+        required:
+          - tool
+          - prompt

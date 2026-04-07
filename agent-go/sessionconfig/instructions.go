@@ -26,23 +26,26 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 		}
 		seen[dir] = true
 
-		for _, name := range []string{"CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md"} {
+		for _, name := range []string{"AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"} {
 			p := filepath.Join(dir, name)
 			content, err := readFileIfExists(p)
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", p, err)
 			}
-			if content != "" {
-				rel, _ := filepath.Rel(projectRoot, p)
-				if rel == "" {
-					rel = p
-				}
-				entries = append(entries, InstructionEntry{
-					Path:        rel,
-					Description: descriptionForFile(name),
-					Content:     strings.TrimSpace(content),
-				})
+			if content == "" {
+				continue
 			}
+
+			rel, _ := filepath.Rel(projectRoot, p)
+			if rel == "" {
+				rel = p
+			}
+			entries = append(entries, InstructionEntry{
+				Path:        rel,
+				Description: descriptionForFile(name),
+				Content:     strings.TrimSpace(content),
+			})
+			break
 		}
 
 		parent := filepath.Dir(dir)
@@ -68,8 +71,8 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 		}
 	}
 
-	// 3. Modular rules from project root (.claude/rules/*.md).
-	rulesDir := filepath.Join(projectRoot, ".claude", "rules")
+	// 3. Modular rules from project root (.discobot/rules/*.md).
+	rulesDir := filepath.Join(projectRoot, ".discobot", "rules")
 	ruleEntries, err := discoverRules(rulesDir)
 	if err != nil {
 		return nil, err
@@ -89,7 +92,7 @@ func descriptionForFile(name string) string {
 	}
 }
 
-// discoverRules loads .claude/rules/*.md files sorted by name.
+// discoverRules loads .discobot/rules/*.md files sorted by name.
 func discoverRules(rulesDir string) ([]InstructionEntry, error) {
 	dirEntries, err := os.ReadDir(rulesDir)
 	if err != nil {
@@ -116,7 +119,7 @@ func discoverRules(rulesDir string) ([]InstructionEntry, error) {
 		}
 		if len(content) > 0 {
 			entries = append(entries, InstructionEntry{
-				Path:        ".claude/rules/" + e.Name(),
+				Path:        ".discobot/rules/" + e.Name(),
 				Description: "project rule",
 				Content:     strings.TrimSpace(string(content)),
 			})

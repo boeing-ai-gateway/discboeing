@@ -1,0 +1,82 @@
+name: AskUserQuestion
+description: |-
+  Ask the user one or more focused questions during execution.
+
+  Use this to clarify requirements or ask the user to choose among options. In plan mode, use this only for clarification; use ExitPlanMode for plan approval.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    questions:
+      type: array
+      minItems: 1
+      maxItems: 4
+      description: Questions to ask.
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          question:
+            type: string
+            description: Full question text.
+          header:
+            type: string
+            description: Short label shown with the question.
+          multiSelect:
+            type: boolean
+            default: false
+            description: Allow multiple selections.
+          options:
+            type: array
+            minItems: 2
+            maxItems: 4
+            description: Available choices.
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: string
+                  description: Option label.
+                description:
+                  type: string
+                  description: Short explanation of the option.
+                markdown:
+                  type: string
+                  description: Optional preview content for single-select questions.
+              required:
+                - label
+                - description
+        required:
+          - question
+          - header
+          - options
+          - multiSelect
+    answers:
+      type: object
+      additionalProperties:
+        type: string
+      description: User answers returned by the UI.
+    annotations:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties: false
+        properties:
+          markdown:
+            type: string
+            description: Selected preview markdown, if any.
+          notes:
+            type: string
+            description: User notes.
+      description: Optional per-question user annotations.
+    metadata:
+      type: object
+      additionalProperties: false
+      description: Optional analytics metadata.
+      properties:
+        source:
+          type: string
+          description: Source identifier.
+  required:
+    - questions

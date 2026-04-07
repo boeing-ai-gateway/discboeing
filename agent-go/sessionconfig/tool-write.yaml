@@ -1,0 +1,18 @@
+name: Write
+description: |-
+  Write a file to the local filesystem.
+
+  Use this for new files or full rewrites. If the file already exists, read it first. Prefer Edit for targeted changes.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    content:
+      type: string
+      description: Full file contents to write.
+    file_path:
+      type: string
+      description: Absolute path to the file.
+  required:
+    - file_path
+    - content

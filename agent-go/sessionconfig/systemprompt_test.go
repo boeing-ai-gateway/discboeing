@@ -58,7 +58,7 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 			Content:     "User preferences.",
 		},
 		{
-			Path:        ".claude/rules/style.md",
+			Path:        ".discobot/rules/style.md",
 			Description: "project rule",
 			Content:     "Use tabs.",
 		},
@@ -66,14 +66,13 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 
 	result := FormatUserInstructions(entries)
 
-	// All entries should be present.
 	if !strings.Contains(result, "Contents of CLAUDE.md (project instructions, checked into the codebase):") {
 		t.Error("missing CLAUDE.md header")
 	}
 	if !strings.Contains(result, "Contents of ~/.claude/CLAUDE.md (user-level instructions):") {
 		t.Error("missing user-level header")
 	}
-	if !strings.Contains(result, "Contents of .claude/rules/style.md (project rule):") {
+	if !strings.Contains(result, "Contents of .discobot/rules/style.md (project rule):") {
 		t.Error("missing rule header")
 	}
 	if !strings.Contains(result, "Project rules.") {
@@ -86,7 +85,6 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 		t.Error("missing rule content")
 	}
 
-	// Order: CLAUDE.md should come before user-level which comes before rule.
 	idx1 := strings.Index(result, "Project rules.")
 	idx2 := strings.Index(result, "User preferences.")
 	idx3 := strings.Index(result, "Use tabs.")
@@ -98,16 +96,33 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 func TestDefaultSystemPrompt_Content(t *testing.T) {
 	prompt := defaultSystemPrompt()
 
-	if !strings.Contains(prompt, "You are an AI coding agent powered by Discobot") {
-		t.Error("missing identity")
+	for _, want := range []string{
+		"You are Discobot’s coding agent.",
+		"## Runtime rules",
+		"## Working rules",
+		"## Tool use",
+		"## Style",
+		"/discobot/docs.txt",
+		"/usr/bin/agent-browser",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("missing %q", want)
+		}
 	}
-	if !strings.Contains(prompt, "# Doing tasks") {
-		t.Error("missing tasks section")
+}
+
+func TestDefaultSystemConfig_AllowedTools(t *testing.T) {
+	cfg, err := defaultSystemConfig()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(prompt, "# Using your tools") {
-		t.Error("missing tools section")
+	if len(cfg.AllowedTools) == 0 {
+		t.Fatal("expected allowedTools in embedded SYSTEM.md")
 	}
-	if !strings.Contains(prompt, "# Tone and style") {
-		t.Error("missing tone section")
+	if cfg.AllowedTools[0] != "Bash" {
+		t.Errorf("first allowed tool = %q, want Bash", cfg.AllowedTools[0])
+	}
+	if !strings.Contains(cfg.PromptBody, "You are Discobot’s coding agent.") {
+		t.Error("missing prompt body")
 	}
 }

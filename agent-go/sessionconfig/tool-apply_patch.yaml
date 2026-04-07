@@ -1,0 +1,61 @@
+type: custom
+name: apply_patch
+description: |-
+  Apply a structured patch to one or more files.
+
+  Use one patch envelope:
+
+  *** Begin Patch
+  ...file operations...
+  *** End Patch
+
+  File operations are:
+  - `*** Add File: <path>`
+  - `*** Delete File: <path>`
+  - `*** Update File: <path>`
+  - optional `*** Move to: <new path>` after `Update File`
+
+  In hunks, prefix kept lines with a space, removed lines with `-`, and added lines with `+`. New file contents must also use `+` prefixes.
+
+  Use about 3 lines of context by default. If a match is ambiguous, add more context or use `@@` headers to anchor the change. Paths may be relative or absolute. In plan mode, only patch the active plan file.
+
+  Example:
+
+  *** Begin Patch
+  *** Update File: src/app.py
+  @@
+  -print("Hi")
+  +print("Hello")
+  *** End Patch
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    input:
+      type: string
+      description: Entire patch text.
+  required:
+    - input
+format:
+  type: grammar
+  syntax: lark
+  definition: |-
+    start: begin_patch hunk+ end_patch
+    begin_patch: "*** Begin Patch" LF
+    end_patch: "*** End Patch" LF?
+
+    hunk: add_hunk | delete_hunk | update_hunk
+    add_hunk: "*** Add File: " filename LF add_line+
+    delete_hunk: "*** Delete File: " filename LF
+    update_hunk: "*** Update File: " filename LF change_move? change?
+
+    filename: /(.+)/
+    add_line: "+" /(.*)/ LF -> line
+
+    change_move: "*** Move to: " filename LF
+    change: (change_context | change_line)+ eof_line?
+    change_context: ("@@" | "@@ " /(.+)/) LF
+    change_line: ("+" | "-" | " ") /(.*)/ LF
+    eof_line: "*** End of File" LF
+
+    %import common.LF

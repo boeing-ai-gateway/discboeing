@@ -24,8 +24,21 @@ type SubAgentConfig struct {
 	Prompt           string                     `yaml:"-" json:"prompt"` // Markdown body
 }
 
-// discoverSubAgents loads sub-agent configs from .claude/agents/*.md (Claude Code convention).
+// discoverSubAgents loads sub-agent configs from .claude/agents/*.md plus built-in embedded agents.
+// Project agents override built-in agents with the same name.
 func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
+	projectAgents, err := discoverProjectSubAgents(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	builtinAgents, err := discoverBuiltinSubAgents()
+	if err != nil {
+		return nil, err
+	}
+	return mergeSubAgents(projectAgents, builtinAgents), nil
+}
+
+func discoverProjectSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 	agentsDir := filepath.Join(projectRoot, ".claude", "agents")
 	entries, err := os.ReadDir(agentsDir)
 	if err != nil {
@@ -35,7 +48,6 @@ func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 		return nil, fmt.Errorf("read agents dir: %w", err)
 	}
 
-	// Sort by name for deterministic ordering.
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].Name() < entries[j].Name()
 	})
@@ -61,6 +73,59 @@ func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 	return agents, nil
 }
 
+func discoverBuiltinSubAgents() ([]SubAgentConfig, error) {
+	entries, err := embeddedConfigFiles.ReadDir(".")
+	if err != nil {
+		return nil, fmt.Errorf("read embedded config dir: %w", err)
+	}
+
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		matched, err := filepath.Match("agent-*.md", name)
+		if err != nil {
+			return nil, fmt.Errorf("match embedded agent file %s: %w", name, err)
+		}
+		if matched {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	var agents []SubAgentConfig
+	for _, name := range names {
+		data, err := embeddedConfigFiles.ReadFile(name)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", name, err)
+		}
+		agent, err := parseSubAgent(name, string(data))
+		if err != nil {
+			return nil, fmt.Errorf("parse built-in agent %s: %w", name, err)
+		}
+		agents = append(agents, agent)
+	}
+	return agents, nil
+}
+
+func mergeSubAgents(projectAgents, builtinAgents []SubAgentConfig) []SubAgentConfig {
+	seen := make(map[string]struct{}, len(projectAgents))
+	merged := make([]SubAgentConfig, 0, len(projectAgents)+len(builtinAgents))
+	for _, agent := range projectAgents {
+		merged = append(merged, agent)
+		seen[agent.Name] = struct{}{}
+	}
+	for _, agent := range builtinAgents {
+		if _, ok := seen[agent.Name]; ok {
+			continue
+		}
+		merged = append(merged, agent)
+	}
+	return merged
+}
+
 // parseSubAgent parses a single sub-agent markdown file.
 // The file may have YAML frontmatter followed by the agent's prompt.
 func parseSubAgent(filename, content string) (SubAgentConfig, error) {
@@ -76,7 +141,6 @@ func parseSubAgent(filename, content string) (SubAgentConfig, error) {
 			return SubAgentConfig{}, err
 		}
 
-		// Re-marshal the frontmatter map to YAML and unmarshal into the struct.
 		yamlBytes, err := yaml.Marshal(fm)
 		if err != nil {
 			return SubAgentConfig{}, fmt.Errorf("re-marshal frontmatter: %w", err)
@@ -86,7 +150,6 @@ func parseSubAgent(filename, content string) (SubAgentConfig, error) {
 		}
 	}
 
-	// Default name from filename (without extension).
 	if agent.Name == "" {
 		agent.Name = strings.TrimSuffix(filename, ".md")
 	}

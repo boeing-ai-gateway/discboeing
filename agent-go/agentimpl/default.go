@@ -488,12 +488,6 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 	}
 
 	displayName := resolveModelDisplayName(ref.ProviderID, ref.ModelID)
-	if req.Tools == nil && req.SubagentType == "" {
-		tools = sessionconfig.DefaultBuiltinTools(displayName)
-		if mcpMgr != nil {
-			tools = append(tools, mcpMgr.Tools()...)
-		}
-	}
 
 	maxSteps := req.MaxTurns
 	if subAgentCfg != nil && subAgentCfg.MaxTurns > 0 {
@@ -1142,6 +1136,9 @@ func hasStartupBootstrapContent(
 	if formatRuntimeEnvironmentReminder("", displayName) != "" {
 		return true
 	}
+	if !hasNamedTool(sessionCfg.Tools, "Skill") {
+		return false
+	}
 	return sessionconfig.FormatSkillsReminder(sessionCfg.Skills) != ""
 }
 
@@ -1199,12 +1196,23 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 		return "", fmt.Errorf("save runtime reminder: %w", err)
 	}
 
-	skillsReminder := sessionconfig.FormatSkillsReminder(sessionCfg.Skills)
-	if err := appendMessage("skills-"+agent.GenerateID(), "user", skillsReminder); err != nil {
-		return "", fmt.Errorf("save skills reminder: %w", err)
+	if hasNamedTool(sessionCfg.Tools, "Skill") {
+		skillsReminder := sessionconfig.FormatSkillsReminder(sessionCfg.Skills)
+		if err := appendMessage("skills-"+agent.GenerateID(), "user", skillsReminder); err != nil {
+			return "", fmt.Errorf("save skills reminder: %w", err)
+		}
 	}
 
 	return effectiveLeafID, nil
+}
+
+func hasNamedTool(tools []providers.ToolDefinition, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *DefaultAgent) resolveResumeMessageID(threadID string, state *thread.TurnState) string {

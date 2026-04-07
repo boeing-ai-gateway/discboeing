@@ -1,0 +1,23 @@
+name: Read
+description: |-
+  Read a file from the local filesystem.
+
+  `file_path` must be absolute. By default this reads from the start of the file. Use `offset` and `limit` for large files. PDFs may use `pages`. This tool can also read images and notebooks.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    file_path:
+      type: string
+      description: Absolute path to the file.
+    offset:
+      type: number
+      description: Starting line number for partial reads.
+    limit:
+      type: number
+      description: Number of lines to read for partial reads.
+    pages:
+      type: string
+      description: PDF page range such as "1-5" or "3".
+  required:
+    - file_path

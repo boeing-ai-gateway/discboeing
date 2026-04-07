@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
 func TestBuiltinTools_AllDefined(t *testing.T) {
-	tools := BuiltinTools("")
+	toolMap, err := builtinToolDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	expectedNames := []string{
 		// Execution
@@ -35,25 +37,31 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		"Skill",
 	}
 
-	if len(tools) != len(expectedNames) {
-		t.Fatalf("expected %d tools, got %d", len(expectedNames), len(tools))
-	}
-
-	nameSet := make(map[string]bool)
-	for _, tool := range tools {
-		nameSet[tool.Name] = true
+	if len(toolMap) != len(expectedNames) {
+		t.Fatalf("expected %d tools, got %d", len(expectedNames), len(toolMap))
 	}
 
 	for _, name := range expectedNames {
-		if !nameSet[name] {
+		if _, ok := toolMap[name]; !ok {
 			t.Errorf("missing tool: %s", name)
 		}
 	}
 }
 
-func TestDefaultBuiltinTools_ExcludesEnterPlanMode(t *testing.T) {
-	tools := DefaultBuiltinTools("")
-
+func TestBuiltinTools_DefaultSelectionMatchesSystemConfig(t *testing.T) {
+	cfg, err := defaultSystemConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := BuiltinTools("")
+	if len(tools) != len(cfg.AllowedTools) {
+		t.Fatalf("expected %d tools, got %d", len(cfg.AllowedTools), len(tools))
+	}
+	for i, tool := range tools {
+		if tool.Name != cfg.AllowedTools[i] {
+			t.Errorf("tool[%d] = %q, want %q", i, tool.Name, cfg.AllowedTools[i])
+		}
+	}
 	if hasTool(tools, "EnterPlanMode") {
 		t.Fatal("EnterPlanMode should not be included in the default tool set")
 	}
@@ -73,14 +81,12 @@ func TestBuiltinTools_ValidSchemas(t *testing.T) {
 			t.Errorf("tool %s has empty description", tool.Name)
 		}
 
-		// Verify input schema is valid JSON.
 		var schema map[string]any
 		if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
 			t.Errorf("tool %s has invalid JSON schema: %v", tool.Name, err)
 			continue
 		}
 
-		// Should be an object type with properties.
 		if schema["type"] != "object" {
 			t.Errorf("tool %s schema type = %v, want object", tool.Name, schema["type"])
 		}
@@ -269,7 +275,7 @@ func TestBuiltinTools_SkillSchema(t *testing.T) {
 	}
 }
 
-func TestBuiltinTools_WebSearchDescriptionUsesCurrentMonthYear(t *testing.T) {
+func TestBuiltinTools_WebSearchDescriptionMentionsSources(t *testing.T) {
 	tools := BuiltinTools("")
 
 	var description string
@@ -282,14 +288,11 @@ func TestBuiltinTools_WebSearchDescriptionUsesCurrentMonthYear(t *testing.T) {
 	if description == "" {
 		t.Fatal("WebSearch tool not found")
 	}
-
-	monthYear := time.Now().Format("January 2006")
-	if !strings.Contains(description, "The current month is "+monthYear+".") {
-		t.Errorf("WebSearch description should include current month/year %q", monthYear)
+	if !strings.Contains(description, "Sources:") {
+		t.Error("WebSearch description should mention the required Sources section")
 	}
 }
 
-// findToolSchema returns the parsed input schema for a tool by name.
 func findToolSchema(t *testing.T, name string) map[string]any {
 	t.Helper()
 	tools := BuiltinTools("")

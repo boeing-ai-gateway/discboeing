@@ -1,0 +1,34 @@
+name: TodoWrite
+description: |-
+  Create or update the session todo list.
+
+  Use this for multi-step or non-trivial work. Keep exactly one item `in_progress` at a time. Only mark an item `completed` when it is fully done.
+inputSchema:
+  type: object
+  additionalProperties: false
+  required:
+    - todos
+  properties:
+    todos:
+      type: array
+      description: Full updated todo list.
+      items:
+        type: object
+        additionalProperties: false
+        required:
+          - content
+          - status
+          - activeForm
+        properties:
+          content:
+            type: string
+            minLength: 1
+          status:
+            type: string
+            enum:
+              - pending
+              - in_progress
+              - completed
+          activeForm:
+            type: string
+            minLength: 1

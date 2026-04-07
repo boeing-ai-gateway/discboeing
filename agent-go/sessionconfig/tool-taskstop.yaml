@@ -1,0 +1,13 @@
+name: TaskStop
+description: |-
+  Stop a running background task.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    task_id:
+      type: string
+      description: Background task ID.
+    shell_id:
+      type: string
+      description: Deprecated alias for `task_id`.

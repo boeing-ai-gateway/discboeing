@@ -1,0 +1,9 @@
+name: EnterPlanMode
+description: |-
+  Enter plan mode for a non-trivial implementation task.
+
+  Use this before coding when the task has multiple valid approaches, unclear scope, architectural choices, or likely multi-file changes. After calling it, immediately explore with tools; do not send user-facing text first.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties: {}

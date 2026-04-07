@@ -29,11 +29,10 @@ func TestDiscoverInstructions_SingleCLAUDEMD(t *testing.T) {
 	}
 }
 
-func TestDiscoverInstructions_MultipleFiles(t *testing.T) {
+func TestDiscoverInstructions_PrefersFirstMatchingFilePerDirectory(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
 
-	// Create multiple instruction files.
 	writeFile(t, filepath.Join(root, "CLAUDE.md"), "Root CLAUDE.md")
 	writeFile(t, filepath.Join(root, "AGENTS.md"), "Root AGENTS.md")
 
@@ -45,28 +44,14 @@ func TestDiscoverInstructions_MultipleFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(entries) != 3 {
-		t.Fatalf("expected 3 entries, got %d", len(entries))
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-
-	// Verify all three files are present by content.
-	contents := make(map[string]bool)
-	for _, e := range entries {
-		contents[e.Content] = true
+	if entries[0].Content != "Root AGENTS.md" {
+		t.Fatalf("content = %q, want %q", entries[0].Content, "Root AGENTS.md")
 	}
-	for _, want := range []string{"Root CLAUDE.md", "Dot-claude CLAUDE.md", "Root AGENTS.md"} {
-		if !contents[want] {
-			t.Errorf("missing entry with content %q", want)
-		}
-	}
-
-	// Check AGENTS.md has correct description.
-	for _, e := range entries {
-		if e.Content == "Root AGENTS.md" {
-			if e.Description != "agent instructions, checked into the codebase" {
-				t.Errorf("AGENTS.md description = %q", e.Description)
-			}
-		}
+	if entries[0].Description != "agent instructions, checked into the codebase" {
+		t.Errorf("AGENTS.md description = %q", entries[0].Description)
 	}
 }
 
@@ -78,6 +63,7 @@ func TestDiscoverInstructions_WalkUpDirectory(t *testing.T) {
 	subdir := filepath.Join(root, "src", "deep")
 	mkdirAll(t, subdir)
 	writeFile(t, filepath.Join(subdir, "CLAUDE.md"), "Deep instructions")
+	writeFile(t, filepath.Join(subdir, "AGENTS.md"), "Deep agents")
 
 	entries, err := discoverInstructions(subdir)
 	if err != nil {
@@ -88,9 +74,9 @@ func TestDiscoverInstructions_WalkUpDirectory(t *testing.T) {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
 
-	// Deep instructions should come first (closer to cwd).
-	if entries[0].Content != "Deep instructions" {
-		t.Errorf("first entry = %q, want %q", entries[0].Content, "Deep instructions")
+	// Closest directory comes first, and AGENTS.md wins within that directory.
+	if entries[0].Content != "Deep agents" {
+		t.Errorf("first entry = %q, want %q", entries[0].Content, "Deep agents")
 	}
 	if entries[1].Content != "Root instructions" {
 		t.Errorf("second entry = %q, want %q", entries[1].Content, "Root instructions")
@@ -101,7 +87,7 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
 
-	rulesDir := filepath.Join(root, ".claude", "rules")
+	rulesDir := filepath.Join(root, ".discobot", "rules")
 	mkdirAll(t, rulesDir)
 	writeFile(t, filepath.Join(rulesDir, "formatting.md"), "Use tabs.")
 	writeFile(t, filepath.Join(rulesDir, "testing.md"), "Write tests.")
@@ -119,7 +105,7 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 	if entries[0].Content != "Use tabs." {
 		t.Errorf("first rule content = %q", entries[0].Content)
 	}
-	if entries[0].Path != ".claude/rules/formatting.md" {
+	if entries[0].Path != ".discobot/rules/formatting.md" {
 		t.Errorf("first rule path = %q", entries[0].Path)
 	}
 	if entries[0].Description != "project rule" {

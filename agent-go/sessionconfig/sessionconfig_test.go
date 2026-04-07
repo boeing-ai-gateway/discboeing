@@ -14,7 +14,7 @@ func TestLoad_EndToEnd(t *testing.T) {
 	writeFile(t, filepath.Join(root, "CLAUDE.md"), "Project instructions.")
 
 	// Create rules.
-	rulesDir := filepath.Join(root, ".claude", "rules")
+	rulesDir := filepath.Join(root, ".discobot", "rules")
 	mkdirAll(t, rulesDir)
 	writeFile(t, filepath.Join(rulesDir, "style.md"), "Use gofmt.")
 
@@ -41,7 +41,7 @@ func TestLoad_EndToEnd(t *testing.T) {
 	}
 
 	// Check system prompt is the default base prompt.
-	if !strings.Contains(cfg.SystemPrompt, "You are an AI coding agent powered by Discobot") {
+	if !strings.Contains(cfg.SystemPrompt, "You are Discobot’s coding agent.") {
 		t.Error("expected default system prompt")
 	}
 
@@ -78,10 +78,15 @@ func TestLoad_EndToEnd(t *testing.T) {
 	}
 
 	// Check sub-agents.
-	if len(cfg.SubAgents) != 1 {
-		t.Errorf("expected 1 sub-agent, got %d", len(cfg.SubAgents))
-	} else if cfg.SubAgents[0].Name != "helper" {
-		t.Errorf("sub-agent name = %s, want helper", cfg.SubAgents[0].Name)
+	if len(cfg.SubAgents) != 2 {
+		t.Errorf("expected 2 sub-agents, got %d", len(cfg.SubAgents))
+	} else {
+		if cfg.SubAgents[0].Name != "helper" {
+			t.Errorf("first sub-agent name = %s, want helper", cfg.SubAgents[0].Name)
+		}
+		if cfg.SubAgents[1].Name != "general-purpose" {
+			t.Errorf("second sub-agent name = %s, want general-purpose", cfg.SubAgents[1].Name)
+		}
 	}
 	if cfg.MaxSubagentDepth != DefaultMaxSubagentDepth {
 		t.Errorf("max sub-agent depth = %d, want %d", cfg.MaxSubagentDepth, DefaultMaxSubagentDepth)
@@ -112,7 +117,7 @@ func TestLoad_EmptyDirectory(t *testing.T) {
 	}
 
 	// System prompt should contain the default base prompt.
-	if !strings.Contains(cfg.SystemPrompt, "You are an AI coding agent powered by Discobot") {
+	if !strings.Contains(cfg.SystemPrompt, "You are Discobot’s coding agent.") {
 		t.Error("expected default system prompt")
 	}
 
@@ -129,15 +134,43 @@ func TestLoad_EmptyDirectory(t *testing.T) {
 		t.Error("expected default tool set to exclude EnterPlanMode")
 	}
 
-	// MCP and sub-agents should be empty.
+	// MCP and sub-agents should be empty except for built-in agents.
 	if len(cfg.MCPServers) != 0 {
 		t.Errorf("expected 0 MCP servers, got %d", len(cfg.MCPServers))
 	}
-	if len(cfg.SubAgents) != 0 {
-		t.Errorf("expected 0 sub-agents, got %d", len(cfg.SubAgents))
+	if len(cfg.SubAgents) == 0 {
+		t.Error("expected built-in sub-agents")
 	}
 	if cfg.MaxSubagentDepth != DefaultMaxSubagentDepth {
 		t.Errorf("max sub-agent depth = %d, want %d", cfg.MaxSubagentDepth, DefaultMaxSubagentDepth)
+	}
+}
+
+func TestLoad_ProjectSystemOverride(t *testing.T) {
+	root := t.TempDir()
+	mkdirAll(t, filepath.Join(root, ".git"))
+	mkdirAll(t, filepath.Join(root, ".discobot"))
+	writeFile(t, filepath.Join(root, ".discobot", "SYSTEM.md"), `---
+allowedTools:
+  - Read
+  - Glob
+---
+# Custom System
+
+Use the project override prompt.`)
+
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SystemPrompt != "# Custom System\n\nUse the project override prompt." {
+		t.Fatalf("system prompt = %q", cfg.SystemPrompt)
+	}
+	if len(cfg.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(cfg.Tools))
+	}
+	if cfg.Tools[0].Name != "Read" || cfg.Tools[1].Name != "Glob" {
+		t.Fatalf("tool order = [%s %s], want [Read Glob]", cfg.Tools[0].Name, cfg.Tools[1].Name)
 	}
 }
 

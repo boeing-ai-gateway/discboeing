@@ -7,6 +7,33 @@ import (
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
+func TestDiscoverBuiltinSubAgents_IncludesGeneralPurpose(t *testing.T) {
+	agents, err := discoverBuiltinSubAgents()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var general *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "general-purpose" {
+			general = &agents[i]
+			break
+		}
+	}
+	if general == nil {
+		t.Fatal("expected built-in general-purpose agent")
+	}
+	if general.Description == "" {
+		t.Error("expected built-in general-purpose description")
+	}
+	if general.Prompt == "" {
+		t.Error("expected built-in general-purpose prompt")
+	}
+	if len(general.AllowedTools) == 0 {
+		t.Error("expected built-in general-purpose allowedTools")
+	}
+}
+
 func TestDiscoverSubAgents_WithFrontmatter(t *testing.T) {
 	root := t.TempDir()
 	agentsDir := filepath.Join(root, ".claude", "agents")
@@ -30,11 +57,18 @@ You are a code reviewer. Review the code for quality and correctness.`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+
+	var a *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "code-reviewer" {
+			a = &agents[i]
+			break
+		}
+	}
+	if a == nil {
+		t.Fatal("expected code-reviewer agent")
 	}
 
-	a := agents[0]
 	if a.Name != "code-reviewer" {
 		t.Errorf("name = %s, want code-reviewer", a.Name)
 	}
@@ -73,10 +107,17 @@ You are a code reviewer.`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+	var reviewer *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "code-reviewer" {
+			reviewer = &agents[i]
+			break
+		}
 	}
-	if got := agents[0].SupportingModels[providers.SupportingModelThreadSummarization]; got != "openai/gpt-5.4-nano" {
+	if reviewer == nil {
+		t.Fatal("expected code-reviewer agent")
+	}
+	if got := reviewer.SupportingModels[providers.SupportingModelThreadSummarization]; got != "openai/gpt-5.4-nano" {
 		t.Fatalf("supportingModels.thread_summarization = %q", got)
 	}
 }
@@ -96,13 +137,20 @@ You are a code reviewer.`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+	var reviewer *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "code-reviewer" {
+			reviewer = &agents[i]
+			break
+		}
 	}
-	if got := agents[0].SupportingModels[providers.SupportingModelThreadSummarization]; got != "openai/gpt-5.4-nano" {
+	if reviewer == nil {
+		t.Fatal("expected code-reviewer agent")
+	}
+	if got := reviewer.SupportingModels[providers.SupportingModelThreadSummarization]; got != "openai/gpt-5.4-nano" {
 		t.Fatalf("thread_summarization = %q", got)
 	}
-	if got := agents[0].SupportingModels[providers.SupportingModelType("custom_helper")]; got != "anthropic/claude-haiku-4-5-20251001" {
+	if got := reviewer.SupportingModels[providers.SupportingModelType("custom_helper")]; got != "anthropic/claude-haiku-4-5-20251001" {
 		t.Fatalf("custom_helper = %q", got)
 	}
 }
@@ -135,16 +183,23 @@ func TestDiscoverSubAgents_NoFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+
+	var simple *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "simple" {
+			simple = &agents[i]
+			break
+		}
+	}
+	if simple == nil {
+		t.Fatal("expected simple agent")
 	}
 
-	a := agents[0]
-	if a.Name != "simple" {
-		t.Errorf("name = %s, want simple (from filename)", a.Name)
+	if simple.Name != "simple" {
+		t.Errorf("name = %s, want simple (from filename)", simple.Name)
 	}
-	if a.Prompt != "Just a simple agent prompt." {
-		t.Errorf("prompt = %q", a.Prompt)
+	if simple.Prompt != "Just a simple agent prompt." {
+		t.Errorf("prompt = %q", simple.Prompt)
 	}
 }
 
@@ -160,16 +215,19 @@ func TestDiscoverSubAgents_MultipleAgents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 2 {
-		t.Fatalf("expected 2 agents, got %d", len(agents))
+	if len(agents) != 3 {
+		t.Fatalf("expected 3 agents, got %d", len(agents))
 	}
 
-	// Should be sorted by filename.
+	// Project agents should be sorted by filename and appear before built-ins.
 	if agents[0].Name != "alpha" {
 		t.Errorf("first agent = %s, want alpha", agents[0].Name)
 	}
 	if agents[1].Name != "beta" {
 		t.Errorf("second agent = %s, want beta", agents[1].Name)
+	}
+	if agents[2].Name != "general-purpose" {
+		t.Errorf("third agent = %s, want general-purpose", agents[2].Name)
 	}
 }
 
@@ -179,8 +237,18 @@ func TestDiscoverSubAgents_MissingDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if agents != nil {
-		t.Errorf("expected nil for missing dir, got %v", agents)
+	if len(agents) == 0 {
+		t.Fatal("expected built-in agents even when project dir is missing")
+	}
+	var found bool
+	for _, agent := range agents {
+		if agent.Name == "general-purpose" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected built-in general-purpose agent")
 	}
 }
 
@@ -197,11 +265,51 @@ func TestDiscoverSubAgents_SkipsNonMarkdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent (skipping non-md files), got %d", len(agents))
+	var realAgent *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "real" {
+			realAgent = &agents[i]
+			break
+		}
 	}
-	if agents[0].Name != "real" {
-		t.Errorf("name = %s, want real", agents[0].Name)
+	if realAgent == nil {
+		t.Fatal("expected real agent")
+	}
+	if realAgent.Name != "real" {
+		t.Errorf("name = %s, want real", realAgent.Name)
+	}
+}
+
+func TestDiscoverSubAgents_ProjectOverridesBuiltin(t *testing.T) {
+	root := t.TempDir()
+	agentsDir := filepath.Join(root, ".claude", "agents")
+	mkdirAll(t, agentsDir)
+
+	writeFile(t, filepath.Join(agentsDir, "general-purpose.md"), `---
+name: general-purpose
+description: Project override
+---
+Project prompt.`)
+
+	agents, err := discoverSubAgents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	for _, agent := range agents {
+		if agent.Name == "general-purpose" {
+			count++
+			if agent.Description != "Project override" {
+				t.Fatalf("description = %q, want project override", agent.Description)
+			}
+			if agent.Prompt != "Project prompt." {
+				t.Fatalf("prompt = %q, want project prompt", agent.Prompt)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly 1 general-purpose agent, got %d", count)
 	}
 }
 
@@ -222,10 +330,17 @@ I cannot run commands or write files.`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+	var safe *SubAgentConfig
+	for i := range agents {
+		if agents[i].Name == "safe-agent" {
+			safe = &agents[i]
+			break
+		}
 	}
-	if len(agents[0].DisallowedTools) != 2 {
-		t.Errorf("disallowedTools = %v, want 2 items", agents[0].DisallowedTools)
+	if safe == nil {
+		t.Fatal("expected safe-agent")
+	}
+	if len(safe.DisallowedTools) != 2 {
+		t.Errorf("disallowedTools = %v, want 2 items", safe.DisallowedTools)
 	}
 }

@@ -1,0 +1,48 @@
+name: Task
+description: |-
+  Launch a specialized sub-agent for multi-step work.
+
+  Use this for broad research, open-ended code exploration, planning, or delegated execution. Prefer direct tools for simple file reads or targeted searches.
+
+  Set `subagent_type`, give a short `description`, and write a clear `prompt`. Use `resume` to continue an existing agent. Use `run_in_background` for work you do not need immediately.
+
+  Agent results are not shown to the user automatically; summarize useful results back to the user yourself.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    allowed_tools:
+      type: array
+      items:
+        type: string
+      description: Tools to grant the agent.
+    description:
+      type: string
+      description: Short 3-5 word summary.
+    max_turns:
+      type: integer
+      exclusiveMinimum: 0
+      description: Maximum agent turns.
+    model:
+      type: string
+      enum:
+        - sonnet
+        - opus
+        - haiku
+      description: Optional model override.
+    prompt:
+      type: string
+      description: Task instructions for the agent.
+    resume:
+      type: string
+      description: Existing agent ID to resume.
+    run_in_background:
+      type: boolean
+      description: Run the agent in the background.
+    subagent_type:
+      type: string
+      description: Specialized agent type.
+  required:
+    - description
+    - prompt
+    - subagent_type

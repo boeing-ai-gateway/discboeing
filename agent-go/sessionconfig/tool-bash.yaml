@@ -1,0 +1,35 @@
+name: Bash
+description: |-
+  Run a bash command and return its output.
+
+  Use dedicated tools instead of shell equivalents when possible:
+  - Glob for file search
+  - Grep for content search
+  - Read for file contents
+  - Edit for edits
+  - Write for new files
+
+  Prefer absolute paths and quote paths with spaces. Use `run_in_background` for long-running commands. Prefer one Bash call with `&&` for dependent commands and separate tool calls for independent commands.
+
+  For git work, avoid destructive commands, force pushes, or skipped hooks unless the user explicitly requests them. Do not commit or push unless asked.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    command:
+      type: string
+      description: Command to execute.
+    description:
+      type: string
+      description: Short active-voice summary of what the command does.
+    timeout:
+      type: number
+      description: Optional timeout in milliseconds, up to 600000.
+    run_in_background:
+      type: boolean
+      description: Run the command in the background.
+    dangerouslyDisableSandbox:
+      type: boolean
+      description: Disable sandboxing for this command.
+  required:
+    - command
