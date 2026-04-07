@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XIcon from "@lucide/svelte/icons/x";
 	import { Badge } from "$lib/components/ui/badge";
 	import { Progress } from "$lib/components/ui/progress";
 	import { Spinner } from "$lib/components/ui/spinner";
@@ -10,6 +11,8 @@
 	};
 
 	let { startup }: Props = $props();
+
+	let dismissed = $state(false);
 
 	function getTaskStatusLabel(task: StartupTask) {
 		switch (task.state) {
@@ -90,7 +93,7 @@
 	}
 </script>
 
-{#if startup.visibleTasks.length > 0}
+{#if !dismissed && startup.visibleTasks.length > 0}
 	<div class="border-b border-border bg-muted/30 px-3 py-2">
 		<div class="flex items-center gap-2">
 			{#if startup.hasActiveTasks}
@@ -101,6 +104,15 @@
 				{startup.visibleTasks.length}
 				{startup.visibleTasks.length === 1 ? " task" : " tasks"}
 			</p>
+			{#if !startup.hasActiveTasks}
+				<button
+					class="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground"
+					onclick={() => (dismissed = true)}
+					aria-label="Dismiss"
+				>
+					<XIcon class="size-3.5" />
+				</button>
+			{/if}
 		</div>
 
 		<div class="mt-2 grid gap-2 md:grid-cols-2">

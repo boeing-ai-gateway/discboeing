@@ -127,6 +127,12 @@ function startProjectEventsSubscription(app: AppContext) {
 					error,
 				);
 			});
+			void app.startup.refresh().catch((error) => {
+				console.error(
+					"[SSE] Failed to refresh startup tasks after connecting to project events stream:",
+					error,
+				);
+			});
 		});
 
 		nextEventSource.addEventListener("workspace_updated", (event) => {
