@@ -1,8 +1,11 @@
 package proxy
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -193,6 +197,7 @@ func TestIntegration_HTTPProxy_StreamsCacheMissResponses(t *testing.T) {
 
 func TestIntegration_HTTPProxy_WSSWebSocketUpgrade(t *testing.T) {
 	serverErrCh := make(chan error, 1)
+	recordingDir := t.TempDir()
 	backend := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
@@ -237,7 +242,7 @@ func TestIntegration_HTTPProxy_WSSWebSocketUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cache.New failed: %v", err)
 	}
-	rec, err := recorder.New(recorder.Config{Enabled: true, Dir: t.TempDir(), MaxBodySize: 1024})
+	rec, err := recorder.New(recorder.Config{Enabled: true, Dir: recordingDir, MaxBodySize: 1024})
 	if err != nil {
 		t.Fatalf("recorder.New failed: %v", err)
 	}
@@ -293,6 +298,9 @@ func TestIntegration_HTTPProxy_WSSWebSocketUpgrade(t *testing.T) {
 	if string(msg) != "pong" {
 		t.Fatalf("unexpected websocket response %q", msg)
 	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("conn.Close failed: %v", err)
+	}
 
 	select {
 	case err := <-serverErrCh:
@@ -301,6 +309,44 @@ func TestIntegration_HTTPProxy_WSSWebSocketUpgrade(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for backend websocket handler")
+	}
+
+	recordings := readRecordedEntries(t, recordingDir)
+	if len(recordings) != 1 {
+		t.Fatalf("len(recordings) = %d, want 1", len(recordings))
+	}
+	recording := recordings[0]
+	if !recording.Upgrade {
+		t.Fatal("expected recorded entry to be marked as upgrade")
+	}
+	if recording.UpgradeType != "websocket" {
+		t.Fatalf("recording.UpgradeType = %q, want websocket", recording.UpgradeType)
+	}
+	if recording.StreamRecord == nil {
+		t.Fatal("expected stream record metadata")
+	}
+
+	streamFrames := readUpgradeStreamFrames(t, filepath.Join(recordingDir, filepath.FromSlash(recording.StreamRecord.File)))
+	if len(streamFrames) < 2 {
+		t.Fatalf("len(streamFrames) = %d, want at least 2", len(streamFrames))
+	}
+
+	var sawClientPayload bool
+	var sawServerPong bool
+	for _, frame := range streamFrames {
+		switch {
+		case frame.Direction == 1 && len(frame.Payload) > 0:
+			sawClientPayload = true
+		case frame.Direction == 2 && bytes.Contains(frame.Payload, []byte("pong")):
+			sawServerPong = true
+		}
+	}
+
+	if !sawClientPayload {
+		t.Fatal("expected at least one client-to-server upgraded frame")
+	}
+	if !sawServerPong {
+		t.Fatal("expected at least one server-to-client frame containing pong payload")
 	}
 }
 
@@ -359,6 +405,118 @@ func TestIntegration_HTTPProxy_HeaderInjection(t *testing.T) {
 	if got := receivedHeaders.Get("X-Custom"); got != "injected" {
 		t.Errorf("X-Custom header = %q, want %q", got, "injected")
 	}
+}
+
+type recordedUpgradeFrame struct {
+	Direction byte
+	Payload   []byte
+}
+
+func readRecordedEntries(t *testing.T, dir string) []recorder.Entry {
+	t.Helper()
+
+	path := filepath.Join(dir, "requests-"+time.Now().UTC().Format("2006-01-02")+".jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) failed: %v", path, err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	entries := make([]recorder.Entry, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		var entry recorder.Entry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("json.Unmarshal failed: %v", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+func readUpgradeStreamFrames(t *testing.T, path string) []recordedUpgradeFrame {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) failed: %v", path, err)
+	}
+
+	reader := bytes.NewReader(data)
+
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(reader, magic); err != nil {
+		t.Fatalf("ReadFull(magic) failed: %v", err)
+	}
+	if string(magic) != "DBS1" {
+		t.Fatalf("unexpected magic %q", magic)
+	}
+
+	if _, err := reader.Seek(1+8, io.SeekCurrent); err != nil {
+		t.Fatalf("Seek(header prelude) failed: %v", err)
+	}
+
+	var sessionIDLen uint16
+	if err := binary.Read(reader, binary.BigEndian, &sessionIDLen); err != nil {
+		t.Fatalf("binary.Read(sessionIDLen) failed: %v", err)
+	}
+	if _, err := reader.Seek(int64(sessionIDLen), io.SeekCurrent); err != nil {
+		t.Fatalf("Seek(sessionID) failed: %v", err)
+	}
+
+	var upgradeTypeLen uint16
+	if err := binary.Read(reader, binary.BigEndian, &upgradeTypeLen); err != nil {
+		t.Fatalf("binary.Read(upgradeTypeLen) failed: %v", err)
+	}
+	if _, err := reader.Seek(int64(upgradeTypeLen), io.SeekCurrent); err != nil {
+		t.Fatalf("Seek(upgradeType) failed: %v", err)
+	}
+
+	frames := make([]recordedUpgradeFrame, 0, 2)
+	for reader.Len() > 0 {
+		frameType, err := reader.ReadByte()
+		if err != nil {
+			t.Fatalf("ReadByte(frameType) failed: %v", err)
+		}
+
+		switch frameType {
+		case 1:
+			var timestamp int64
+			if err := binary.Read(reader, binary.BigEndian, &timestamp); err != nil {
+				t.Fatalf("binary.Read(timestamp) failed: %v", err)
+			}
+
+			direction, err := reader.ReadByte()
+			if err != nil {
+				t.Fatalf("ReadByte(direction) failed: %v", err)
+			}
+
+			var payloadLen uint32
+			if err := binary.Read(reader, binary.BigEndian, &payloadLen); err != nil {
+				t.Fatalf("binary.Read(payloadLen) failed: %v", err)
+			}
+
+			payload := make([]byte, payloadLen)
+			if _, err := io.ReadFull(reader, payload); err != nil {
+				t.Fatalf("ReadFull(payload) failed: %v", err)
+			}
+
+			frames = append(frames, recordedUpgradeFrame{
+				Direction: direction,
+				Payload:   payload,
+			})
+		case 2:
+			return frames
+		default:
+			t.Fatalf("unexpected frame type %d", frameType)
+		}
+	}
+
+	return frames
 }
 
 func TestIntegration_HTTPProxy_HeaderAppend(t *testing.T) {

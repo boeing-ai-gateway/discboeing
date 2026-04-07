@@ -172,6 +172,12 @@ func (s *Server) Close() error {
 
 ## HTTP Proxy
 
+The HTTP proxy records two layers of traffic when request recording is enabled:
+- the HTTP request/response handshake as JSONL metadata
+- a separate framed binary stream for post-upgrade traffic such as WebSockets after a `101 Switching Protocols` response
+
+Upgraded stream chunks are captured on both directions of the proxied `io.ReadWriteCloser` and queued to a background writer. This preserves observed direction and ordering without blocking the active network path when disk writes are slow.
+
 ```go
 func (s *Server) setupHTTPProxy() *goproxy.ProxyHttpServer {
     proxy := goproxy.NewProxyHttpServer()

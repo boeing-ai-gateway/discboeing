@@ -6,6 +6,8 @@ This document describes the architecture of the Discobot Proxy, a multi-protocol
 
 The proxy follows a layered architecture with protocol detection at the entry point:
 
+- HTTP recording captures both the initial HTTP handshake and, for upgraded connections, a separate framed binary log of post-upgrade duplex traffic.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         Listener (:8080)                             │
@@ -58,6 +60,9 @@ proxy/
 │   │   └── handlers.go         # POST handlers for config
 │   ├── logger/
 │   │   └── logger.go           # zap-based structured logging
+│   ├── recorder/
+│   │   ├── recorder.go         # HTTP handshake + upgraded stream recording
+│   │   └── recorder_test.go    # Recorder coverage
 │   └── filter/
 │       └── filter.go           # DNS/IP allowlist with CIDR
 ```

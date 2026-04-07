@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,12 @@ type responseStream struct {
 
 	finalizeOnce sync.Once
 	sawEOF       bool
+}
+
+type upgradedResponseStream struct {
+	source    io.ReadWriteCloser
+	recorder  *recorder.UpgradeStreamSession
+	closeOnce sync.Once
 }
 
 func (s *responseStream) Read(p []byte) (int, error) {
@@ -100,6 +107,34 @@ func (s *responseStream) Close() error {
 	return err
 }
 
+func (s *upgradedResponseStream) Read(p []byte) (int, error) {
+	n, err := s.source.Read(p)
+	if n > 0 && s.recorder != nil {
+		s.recorder.RecordChunk(recorder.UpgradeStreamServerToClient, p[:n])
+	}
+	if err != nil {
+		s.closeRecorder()
+	}
+	return n, err
+}
+
+func (s *upgradedResponseStream) Write(p []byte) (int, error) {
+	n, err := s.source.Write(p)
+	if n > 0 && s.recorder != nil {
+		s.recorder.RecordChunk(recorder.UpgradeStreamClientToServer, p[:n])
+	}
+	if err != nil {
+		s.closeRecorder()
+	}
+	return n, err
+}
+
+func (s *upgradedResponseStream) Close() error {
+	err := s.source.Close()
+	s.closeRecorder()
+	return err
+}
+
 func (s *responseStream) finish(aborted bool, readErr error) {
 	s.finalizeOnce.Do(func() {
 		if readErr != nil && readErr != io.EOF {
@@ -128,6 +163,14 @@ func (s *responseStream) finish(aborted bool, readErr error) {
 		}
 		if s.entry != nil && s.recorder != nil {
 			s.recorder.Record(s.entry)
+		}
+	})
+}
+
+func (s *upgradedResponseStream) closeRecorder() {
+	s.closeOnce.Do(func() {
+		if s.recorder != nil {
+			_ = s.recorder.Close()
 		}
 	})
 }
@@ -281,6 +324,25 @@ func (h *HTTPProxy) setupHandlers() {
 		var responseCapture *recorder.ResponseCapture
 		if meta != nil && meta.entry != nil {
 			recorder.SetResponse(meta.entry, resp, duration)
+			if upgradedProtocol, isUpgrade := getUpgradeProtocol(ctx.Req, resp); isUpgrade {
+				body, ok := resp.Body.(io.ReadWriteCloser)
+				if !ok {
+					h.logger.Warn("upgrade response body is not bidirectional", "path", ctx.Req.URL.Path)
+				} else {
+					streamRecorder, err := h.recorder.BeginUpgradeStream(meta.entry, upgradedProtocol)
+					if err != nil {
+						h.logger.Warn("failed to start upgrade stream recording", "path", ctx.Req.URL.Path, "error", err.Error())
+					} else if streamRecorder != nil {
+						resp.Body = &upgradedResponseStream{
+							source:   body,
+							recorder: streamRecorder,
+						}
+					}
+				}
+
+				h.recorder.Record(meta.entry)
+				return resp
+			}
 			responseCapture = h.recorder.BeginResponseCapture(meta.entry, resp)
 		}
 
@@ -328,6 +390,37 @@ func (h *HTTPProxy) setupHandlers() {
 
 		return resp
 	})
+}
+
+func getUpgradeProtocol(req *http.Request, resp *http.Response) (string, bool) {
+	if req == nil || resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		return "", false
+	}
+	if !headerContainsToken(req.Header, "Connection", "Upgrade") {
+		return "", false
+	}
+
+	requestUpgrade := strings.TrimSpace(req.Header.Get("Upgrade"))
+	responseUpgrade := strings.TrimSpace(resp.Header.Get("Upgrade"))
+	upgrade := responseUpgrade
+	if upgrade == "" {
+		upgrade = requestUpgrade
+	}
+	if upgrade == "" {
+		return "", false
+	}
+	return strings.ToLower(upgrade), true
+}
+
+func headerContainsToken(header http.Header, key, token string) bool {
+	for _, value := range header.Values(key) {
+		for _, part := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), token) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ServeConn serves an HTTP connection.

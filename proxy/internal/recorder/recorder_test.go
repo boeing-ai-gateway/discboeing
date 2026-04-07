@@ -2,8 +2,11 @@ package recorder
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -288,4 +291,175 @@ func TestBeginResponseCapture_DropsBinaryPayloadsDetectedByNullByte(t *testing.T
 	if entry.Response.BodyTruncated {
 		t.Fatal("expected truncated flag to remain false when payload is discarded")
 	}
+}
+
+func TestBeginUpgradeStream_WritesBidirectionalFrames(t *testing.T) {
+	r, err := New(Config{Enabled: true, Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer r.Close()
+
+	entry := &Entry{}
+	session, err := r.BeginUpgradeStream(entry, "websocket")
+	if err != nil {
+		t.Fatalf("BeginUpgradeStream failed: %v", err)
+	}
+
+	session.RecordChunk(UpgradeStreamClientToServer, []byte("ping"))
+	session.RecordChunk(UpgradeStreamServerToClient, []byte("pong"))
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if !entry.Upgrade {
+		t.Fatal("expected upgrade flag on entry")
+	}
+	if entry.UpgradeType != "websocket" {
+		t.Fatalf("entry.UpgradeType = %q, want websocket", entry.UpgradeType)
+	}
+	if entry.StreamRecord == nil {
+		t.Fatal("expected stream record metadata on entry")
+	}
+
+	frames := readUpgradeStreamFramesForTest(t, filepath.Join(r.cfg.Dir, filepath.FromSlash(entry.StreamRecord.File)))
+	if len(frames) != 2 {
+		t.Fatalf("len(frames) = %d, want 2", len(frames))
+	}
+	if frames[0].Direction != byte(UpgradeStreamClientToServer) || string(frames[0].Payload) != "ping" {
+		t.Fatalf("unexpected first frame: direction=%d payload=%q", frames[0].Direction, frames[0].Payload)
+	}
+	if frames[1].Direction != byte(UpgradeStreamServerToClient) || string(frames[1].Payload) != "pong" {
+		t.Fatalf("unexpected second frame: direction=%d payload=%q", frames[1].Direction, frames[1].Payload)
+	}
+}
+
+func TestUpgradeStreamSession_DropsChunksWhenWriterBlocks(t *testing.T) {
+	writer := &blockingWriteCloser{allowWrites: make(chan struct{})}
+	session := newUpgradeStreamSession(writer, 1)
+
+	session.RecordChunk(UpgradeStreamClientToServer, []byte("one"))
+	session.RecordChunk(UpgradeStreamClientToServer, []byte("two"))
+	session.RecordChunk(UpgradeStreamServerToClient, []byte("three"))
+
+	close(writer.allowWrites)
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if got := session.droppedChunks.Load(); got == 0 {
+		t.Fatal("expected at least one dropped chunk")
+	}
+	if got := session.droppedBytes.Load(); got == 0 {
+		t.Fatal("expected dropped bytes to be recorded")
+	}
+}
+
+type blockingWriteCloser struct {
+	allowWrites chan struct{}
+	buf         bytes.Buffer
+}
+
+func (w *blockingWriteCloser) Write(p []byte) (int, error) {
+	<-w.allowWrites
+	return w.buf.Write(p)
+}
+
+func (w *blockingWriteCloser) Close() error {
+	return nil
+}
+
+type testUpgradeStreamFrame struct {
+	Direction byte
+	Payload   []byte
+}
+
+func readUpgradeStreamFramesForTest(t *testing.T, path string) []testUpgradeStreamFrame {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+
+	reader := bytes.NewReader(data)
+
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(reader, magic); err != nil {
+		t.Fatalf("ReadFull(magic) failed: %v", err)
+	}
+	if !bytes.Equal(magic, upgradeStreamFileMagic[:]) {
+		t.Fatalf("magic = %q, want %q", magic, upgradeStreamFileMagic)
+	}
+
+	var version [1]byte
+	if _, err := io.ReadFull(reader, version[:]); err != nil {
+		t.Fatalf("ReadFull(version) failed: %v", err)
+	}
+	if version[0] != 1 {
+		t.Fatalf("version = %d, want 1", version[0])
+	}
+
+	var startedAt int64
+	if err := binary.Read(reader, binary.BigEndian, &startedAt); err != nil {
+		t.Fatalf("binary.Read(startedAt) failed: %v", err)
+	}
+
+	var sessionIDLen uint16
+	if err := binary.Read(reader, binary.BigEndian, &sessionIDLen); err != nil {
+		t.Fatalf("binary.Read(sessionIDLen) failed: %v", err)
+	}
+	if _, err := reader.Seek(int64(sessionIDLen), io.SeekCurrent); err != nil {
+		t.Fatalf("Seek(sessionID) failed: %v", err)
+	}
+
+	var upgradeTypeLen uint16
+	if err := binary.Read(reader, binary.BigEndian, &upgradeTypeLen); err != nil {
+		t.Fatalf("binary.Read(upgradeTypeLen) failed: %v", err)
+	}
+	if _, err := reader.Seek(int64(upgradeTypeLen), io.SeekCurrent); err != nil {
+		t.Fatalf("Seek(upgradeType) failed: %v", err)
+	}
+
+	frames := make([]testUpgradeStreamFrame, 0, 2)
+	for reader.Len() > 0 {
+		frameType, err := reader.ReadByte()
+		if err != nil {
+			t.Fatalf("ReadByte(frameType) failed: %v", err)
+		}
+
+		switch frameType {
+		case streamFrameTypeData:
+			var timestamp int64
+			if err := binary.Read(reader, binary.BigEndian, &timestamp); err != nil {
+				t.Fatalf("binary.Read(timestamp) failed: %v", err)
+			}
+
+			direction, err := reader.ReadByte()
+			if err != nil {
+				t.Fatalf("ReadByte(direction) failed: %v", err)
+			}
+
+			var payloadLen uint32
+			if err := binary.Read(reader, binary.BigEndian, &payloadLen); err != nil {
+				t.Fatalf("binary.Read(payloadLen) failed: %v", err)
+			}
+
+			payload := make([]byte, payloadLen)
+			if _, err := io.ReadFull(reader, payload); err != nil {
+				t.Fatalf("ReadFull(payload) failed: %v", err)
+			}
+
+			frames = append(frames, testUpgradeStreamFrame{
+				Direction: direction,
+				Payload:   payload,
+			})
+		case streamFrameTypeSummary:
+			return frames
+		default:
+			t.Fatalf("unexpected frame type %d", frameType)
+		}
+	}
+
+	return frames
 }

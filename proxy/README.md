@@ -6,6 +6,7 @@ A multi-protocol proxy server with HTTP interception, header injection, and dyna
 
 The proxy provides:
 - HTTP/HTTPS proxy with MITM for traffic inspection, header injection, and WebSocket upgrades
+- HTTP recording for request/response handshakes plus binary upgraded-stream capture for WebSockets and other `101 Switching Protocols` flows
 - SOCKS5 proxy for non-HTTP TCP tunneling
 - Protocol auto-detection on a single port
 - Domain-based header injection rules
@@ -89,6 +90,14 @@ go test ./...
 # Run linter
 golangci-lint run
 ```
+
+### Recording
+
+When `recording.enabled` is on, the proxy writes:
+- HTTP request/response handshakes to `requests-YYYY-MM-DD.jsonl`
+- upgraded bidirectional traffic (for example WebSockets after a `101 Switching Protocols` response) to `streams/stream-<session-id>.bin`
+
+The binary stream files use a compact framed format so each chunk keeps its direction (`client -> server` or `server -> client`) and observed ordering. Stream writes are queued to a background writer so recording does not block proxied traffic; if the recorder falls behind, chunks are dropped from the log rather than stalling the connection.
 
 ### Environment Variables
 

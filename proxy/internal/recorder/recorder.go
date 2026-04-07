@@ -5,6 +5,7 @@ package recorder
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,6 +35,11 @@ type Entry struct {
 	Response  *ResponseInfo `json:"response,omitempty"`
 	CacheHit  bool          `json:"cache_hit,omitempty"`
 	Blocked   bool          `json:"blocked,omitempty"`
+	Upgrade   bool          `json:"upgrade,omitempty"`
+	// UpgradeType identifies the negotiated upgraded protocol, such as
+	// "websocket".
+	UpgradeType  string            `json:"upgrade_type,omitempty"`
+	StreamRecord *StreamRecordInfo `json:"stream_record,omitempty"`
 }
 
 // RequestInfo holds request metadata.
@@ -57,6 +63,13 @@ type ResponseInfo struct {
 	Body          []byte      `json:"body,omitempty"`
 	BodyTruncated bool        `json:"body_truncated,omitempty"`
 	DurationMs    int64       `json:"duration_ms"`
+}
+
+// StreamRecordInfo points to an upgraded-stream binary recording.
+type StreamRecordInfo struct {
+	SessionID string `json:"session_id"`
+	File      string `json:"file"`
+	Format    string `json:"format"`
 }
 
 var idCounter atomic.Uint64
@@ -84,6 +97,48 @@ type ResponseCapture struct {
 	finalized bool
 }
 
+const (
+	defaultUpgradeStreamQueueSize = 256
+
+	streamRecordFormatRawFrames = "discobot-upgrade-stream-v1"
+
+	streamFrameTypeData    = 1
+	streamFrameTypeSummary = 2
+
+	streamDirectionClientToServer = 1
+	streamDirectionServerToClient = 2
+)
+
+var upgradeStreamFileMagic = [4]byte{'D', 'B', 'S', '1'}
+
+type streamEvent struct {
+	direction byte
+	payload   []byte
+}
+
+// UpgradeStreamDirection identifies the direction of a recorded upgraded
+// stream chunk.
+type UpgradeStreamDirection byte
+
+const (
+	UpgradeStreamClientToServer UpgradeStreamDirection = streamDirectionClientToServer
+	UpgradeStreamServerToClient UpgradeStreamDirection = streamDirectionServerToClient
+)
+
+// UpgradeStreamSession asynchronously records raw upgraded-stream bytes to a
+// framed binary log.
+type UpgradeStreamSession struct {
+	writer    io.WriteCloser
+	events    chan streamEvent
+	done      chan struct{}
+	closeOnce sync.Once
+
+	droppedChunks atomic.Uint64
+	droppedBytes  atomic.Uint64
+	clientBytes   atomic.Uint64
+	serverBytes   atomic.Uint64
+}
+
 // New creates a new Recorder. If cfg.Enabled is false the recorder is a no-op.
 func New(cfg Config) (*Recorder, error) {
 	if !cfg.Enabled {
@@ -93,6 +148,48 @@ func New(cfg Config) (*Recorder, error) {
 		return nil, fmt.Errorf("create recording dir: %w", err)
 	}
 	return &Recorder{cfg: cfg}, nil
+}
+
+// BeginUpgradeStream starts recording an upgraded bidirectional stream to a
+// binary file under the recording directory.
+func (r *Recorder) BeginUpgradeStream(entry *Entry, upgradeType string) (*UpgradeStreamSession, error) {
+	if !r.cfg.Enabled {
+		return nil, nil
+	}
+
+	streamsDir := filepath.Join(r.cfg.Dir, "streams")
+	if err := os.MkdirAll(streamsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create stream recordings dir: %w", err)
+	}
+
+	sessionID := generateID()
+	filename := fmt.Sprintf("stream-%s.bin", sessionID)
+	relativePath := filepath.Join("streams", filename)
+	filePath := filepath.Join(r.cfg.Dir, relativePath)
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("create stream recording: %w", err)
+	}
+
+	startedAt := time.Now().UTC()
+	if err := writeUpgradeStreamHeader(file, sessionID, upgradeType, startedAt); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("write stream recording header: %w", err)
+	}
+
+	session := newUpgradeStreamSession(file, defaultUpgradeStreamQueueSize)
+	if entry != nil {
+		entry.Upgrade = true
+		entry.UpgradeType = upgradeType
+		entry.StreamRecord = &StreamRecordInfo{
+			SessionID: sessionID,
+			File:      filepath.ToSlash(relativePath),
+			Format:    streamRecordFormatRawFrames,
+		}
+	}
+
+	return session, nil
 }
 
 // NewEntry builds a new Entry from an incoming request.
@@ -142,6 +239,50 @@ func (r *Recorder) CaptureRequestBody(entry *Entry, req *http.Request) {
 	}
 	entry.Request.Body = captured
 	entry.Request.BodyTruncated = truncated
+}
+
+func newUpgradeStreamSession(writer io.WriteCloser, queueSize int) *UpgradeStreamSession {
+	session := &UpgradeStreamSession{
+		writer: writer,
+		events: make(chan streamEvent, queueSize),
+		done:   make(chan struct{}),
+	}
+
+	go session.run()
+
+	return session
+}
+
+// RecordChunk enqueues a raw upgraded-stream chunk for asynchronous recording.
+// Chunks may be dropped if the recorder is backpressured; network traffic is
+// never blocked on disk I/O.
+func (s *UpgradeStreamSession) RecordChunk(direction UpgradeStreamDirection, payload []byte) {
+	if s == nil || len(payload) == 0 {
+		return
+	}
+
+	chunk := bytes.Clone(payload)
+	event := streamEvent{direction: byte(direction), payload: chunk}
+
+	select {
+	case s.events <- event:
+	default:
+		s.droppedChunks.Add(1)
+		s.droppedBytes.Add(uint64(len(chunk)))
+	}
+}
+
+// Close flushes the writer goroutine and finalizes the binary recording.
+func (s *UpgradeStreamSession) Close() error {
+	if s == nil {
+		return nil
+	}
+
+	s.closeOnce.Do(func() {
+		close(s.events)
+	})
+	<-s.done
+	return nil
 }
 
 // CaptureResponseBody reads up to MaxBodySize bytes from resp.Body, stores
@@ -277,6 +418,113 @@ func (r *Recorder) Close() error {
 		return err
 	}
 	return nil
+}
+
+func (s *UpgradeStreamSession) run() {
+	defer close(s.done)
+
+	for event := range s.events {
+		if err := writeUpgradeStreamDataFrame(s.writer, event.direction, time.Now().UTC(), event.payload); err != nil {
+			s.droppedChunks.Add(1)
+			s.droppedBytes.Add(uint64(len(event.payload)))
+			continue
+		}
+
+		switch event.direction {
+		case streamDirectionClientToServer:
+			s.clientBytes.Add(uint64(len(event.payload)))
+		case streamDirectionServerToClient:
+			s.serverBytes.Add(uint64(len(event.payload)))
+		}
+	}
+
+	_ = writeUpgradeStreamSummaryFrame(s.writer, time.Now().UTC(), s)
+	_ = s.writer.Close()
+}
+
+func writeUpgradeStreamHeader(w io.Writer, sessionID, upgradeType string, startedAt time.Time) error {
+	if _, err := w.Write(upgradeStreamFileMagic[:]); err != nil {
+		return err
+	}
+	if err := writeByte(w, 1); err != nil {
+		return err
+	}
+	if err := writeInt64(w, startedAt.UnixNano()); err != nil {
+		return err
+	}
+	if err := writeUint16(w, uint16(len(sessionID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, sessionID); err != nil {
+		return err
+	}
+	if err := writeUint16(w, uint16(len(upgradeType))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, upgradeType); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeUpgradeStreamDataFrame(w io.Writer, direction byte, timestamp time.Time, payload []byte) error {
+	if err := writeByte(w, streamFrameTypeData); err != nil {
+		return err
+	}
+	if err := writeInt64(w, timestamp.UnixNano()); err != nil {
+		return err
+	}
+	if err := writeByte(w, direction); err != nil {
+		return err
+	}
+	if err := writeUint32(w, uint32(len(payload))); err != nil {
+		return err
+	}
+	_, err := w.Write(payload)
+	return err
+}
+
+func writeUpgradeStreamSummaryFrame(w io.Writer, timestamp time.Time, session *UpgradeStreamSession) error {
+	if err := writeByte(w, streamFrameTypeSummary); err != nil {
+		return err
+	}
+	if err := writeInt64(w, timestamp.UnixNano()); err != nil {
+		return err
+	}
+	if err := writeUint64(w, session.clientBytes.Load()); err != nil {
+		return err
+	}
+	if err := writeUint64(w, session.serverBytes.Load()); err != nil {
+		return err
+	}
+	if err := writeUint64(w, session.droppedChunks.Load()); err != nil {
+		return err
+	}
+	if err := writeUint64(w, session.droppedBytes.Load()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeByte(w io.Writer, value byte) error {
+	_, err := w.Write([]byte{value})
+	return err
+}
+
+func writeUint16(w io.Writer, value uint16) error {
+	return binary.Write(w, binary.BigEndian, value)
+}
+
+func writeUint32(w io.Writer, value uint32) error {
+	return binary.Write(w, binary.BigEndian, value)
+}
+
+func writeUint64(w io.Writer, value uint64) error {
+	return binary.Write(w, binary.BigEndian, value)
+}
+
+func writeInt64(w io.Writer, value int64) error {
+	return binary.Write(w, binary.BigEndian, value)
 }
 
 // currentFile returns the open file for today, rotating if the day has changed.
