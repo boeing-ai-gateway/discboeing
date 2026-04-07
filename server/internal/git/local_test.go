@@ -1281,6 +1281,9 @@ func TestApplyReplayBundle(t *testing.T) {
 			t.Fatalf("Failed to chmod script: %v", err)
 		}
 		runGit(t, patchRepo, "add", "script.sh")
+		if strings.TrimSpace(runGit(t, patchRepo, "status", "--short", "--", "script.sh")) == "" {
+			t.Skip("git does not track executable-bit-only changes on this platform")
+		}
 		runGit(t, patchRepo, "commit", "-m", "Make script executable")
 
 		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)

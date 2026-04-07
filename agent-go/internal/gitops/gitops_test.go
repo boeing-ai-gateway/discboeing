@@ -27,6 +27,9 @@ func TestBuildCommitReplayBundlePreservesFileModes(t *testing.T) {
 		t.Fatalf("chmod script: %v", err)
 	}
 	runGitCommand(t, repoDir, "add", "script.sh")
+	if strings.TrimSpace(runGitCommand(t, repoDir, "status", "--short", "--", "script.sh")) == "" {
+		t.Skip("git does not track executable-bit-only changes on this platform")
+	}
 	runGitCommand(t, repoDir, "commit", "-m", "Make script executable")
 
 	bundleJSON, err := buildCommitReplayBundle(repoDir, base)
