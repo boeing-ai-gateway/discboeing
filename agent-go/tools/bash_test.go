@@ -243,6 +243,29 @@ func TestBash_Timeout(t *testing.T) {
 }
 
 // TestBash_BackgroundReturnsPIDAndLogPath verifies the immediate response for a background command.
+func TestBash_SyncCommandWithShellBackgroundingReturnsPromptly(t *testing.T) {
+	skipOnWindows(t)
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+
+	start := time.Now()
+	out, ok := runBash(t, e, map[string]any{
+		"command": "sleep 5 & echo started",
+		"timeout": 1000,
+	})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("expected sync bash call to return before background child exits; took %s", elapsed)
+	}
+	if !strings.Contains(out, "started") {
+		t.Fatalf("expected command output in result, got: %s", out)
+	}
+	if strings.Contains(out, "timed out") {
+		t.Fatalf("expected command not to time out, got: %s", out)
+	}
+}
+
 func TestBash_BackgroundReturnsPIDAndLogPath(t *testing.T) {
 	skipOnWindows(t)
 	cwd := t.TempDir()

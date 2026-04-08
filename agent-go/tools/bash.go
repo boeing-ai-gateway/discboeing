@@ -1,11 +1,9 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,6 +65,7 @@ func (e *Executor) bashLogPath(toolCtx *thread.ToolContext, toolCallID string) s
 func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart, command string, timeout time.Duration) (thread.ToolExecuteResult, error) {
 	cwd := e.getCwd()
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
+	cwdPath := logPath + ".cwd"
 	bashPath, err := resolveBashCommand()
 	if err != nil {
 		return errResult(call, err.Error()), nil
@@ -80,18 +79,15 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	if err != nil {
 		return errResult(call, fmt.Sprintf("failed to create log file: %v", err)), nil
 	}
-	defer logFile.Close()
 
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Wrap command to capture the new working directory after execution.
-	const sentinel = "__DISCOBOT_PWD_SENTINEL__"
-	wrapped := fmt.Sprintf("%s\n__exit=$?\nprintf '%%s\\n' '%s'\n%s\nexit $__exit", command, sentinel, bashPwdCaptureCommand())
+	wrapped := fmt.Sprintf("%s\n__exit=$?\n%s > \"$DISCOBOT_BASH_CWD_PATH\"\nexit $__exit", command, bashPwdCaptureCommand())
 
 	cmd := exec.CommandContext(cmdCtx, bashPath, "-c", wrapped)
 	cmd.Dir = cwd
-	cmd.Env = e.bashEnv()
+	cmd.Env = append(e.bashEnv(), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
 	// Put bash in its own process group so that killing it also kills any
 	// child processes it spawned (e.g. sleep, subshells).
 	setSysProcAttr(cmd)
@@ -103,28 +99,38 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 		return killProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	}
 
-	// Capture stdout and stderr separately so that the sentinel (written to
-	// stdout) is never mixed with stderr content. Both streams are tee'd to
-	// the shared log file so the on-disk record stays interleaved.
-	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = io.MultiWriter(&stdoutBuf, logFile)
-	cmd.Stderr = io.MultiWriter(&stderrBuf, logFile)
+	// Write stdout/stderr directly to a real file instead of a pipe-backed
+	// writer. That way, a shell-backgrounded descendant inheriting stdout or
+	// stderr cannot keep cmd.Run waiting for pipe EOF after the shell exits.
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
 
 	runErr := cmd.Run()
 
-	// Parse the sentinel and cwd from stdout only, then append stderr.
-	stdoutUser, newCwd := extractCwdFromOutput(stdoutBuf.String(), sentinel)
-	newCwd = normalizeBashWorkingDir(newCwd)
-	output := stdoutUser + stderrBuf.String()
+	if cmdCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		fmt.Fprintf(logFile, "[Command timed out after %s and was killed]\n", timeout)
+	}
+	if closeErr := logFile.Close(); closeErr != nil {
+		return errResult(call, fmt.Sprintf("failed to close log file: %v", closeErr)), nil
+	}
+
+	newCwdBytes, err := os.ReadFile(cwdPath)
+	newCwd := ""
+	if err == nil {
+		newCwd = normalizeBashWorkingDir(strings.TrimSpace(string(newCwdBytes)))
+	}
+
+	outputBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		return errResult(call, fmt.Sprintf("failed to read log file: %v", err)), nil
+	}
+	output := string(outputBytes)
 
 	if newCwd != "" && newCwd != cwd {
 		e.setCwd(newCwd)
 	}
 
-	if cmdCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		output = strings.TrimRight(output, "\n") + fmt.Sprintf("\n[Command timed out after %s and was killed]", timeout)
-		fmt.Fprintf(logFile, "[Command timed out after %s and was killed]\n", timeout)
-	} else if runErr != nil {
+	if runErr != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(runErr, &exitErr) {
 			msg := fmt.Sprintf("failed to run command: %v", runErr)
