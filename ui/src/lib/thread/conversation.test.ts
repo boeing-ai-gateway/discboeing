@@ -166,18 +166,37 @@ test("conversation loader derives running state from backend lifecycle", () => {
 	assert.doesNotMatch(source, /hasStreamingAssistantMessage/);
 });
 
-test("conversation loader preserves streamed error text when the SSE connection closes", () => {
+test("conversation loader preserves streamed error text when the SSE connection closes unexpectedly", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(
 		source,
-		/const resolvedErrorMessage =\s*streamError \?\? error\.message/,
+		/const shouldIgnoreClosedStreamError =\s*args\.shouldIgnoreClosedStreamError\?\.\(\) \?\? false/,
+	);
+	assert.match(
+		source,
+		/if \(!shouldIgnoreClosedStreamError\) \{[\s\S]*const error = new Error\("Lost chat stream connection"\);/,
 	);
 	assert.match(source, /streamError = resolvedErrorMessage/);
 	assert.match(
 		source,
 		/rejectLoad\(new Error\(resolvedErrorMessage\), resolvedErrorMessage\)/,
 	);
+});
+
+test("conversation loader silently reconnects when closed stream errors are expected", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(source, /shouldIgnoreClosedStreamError\?: \(\) => boolean;/);
+	assert.match(
+		source,
+		/if \(!shouldIgnoreClosedStreamError\) \{[\s\S]*\} else \{[\s\S]*disconnectStream\(\);/,
+	);
+	assert.doesNotMatch(
+		source,
+		/else \{[\s\S]*streamError = resolvedErrorMessage/,
+	);
+	assert.match(source, /if \(args\.hasSession\(\) && !fatalStreamError\) \{/);
 });
 
 test("conversation loader only clears stream errors when a completion starts", () => {

@@ -1,6 +1,7 @@
 import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
+import { SessionStatus } from "$lib/api-constants";
 import type { Thread } from "$lib/api-types";
 import {
 	clearComposerDraft,
@@ -167,6 +168,19 @@ function createThreadContext(
 ): ThreadContextValue {
 	const app = useAppContext();
 	const hasSession = $derived.by(() => session.current !== null);
+	const shouldIgnoreClosedStreamError = () => {
+		switch (session.current?.status) {
+			case SessionStatus.INITIALIZING:
+			case SessionStatus.REINITIALIZING:
+			case SessionStatus.CLONING:
+			case SessionStatus.PULLING_IMAGE:
+			case SessionStatus.CREATING_SANDBOX:
+			case SessionStatus.REMOVING:
+				return true;
+			default:
+				return false;
+		}
+	};
 	const refreshSessionState = async () => {
 		await Promise.all([
 			session.files.refresh(),
@@ -215,6 +229,7 @@ function createThreadContext(
 			return session.hooks.applyStatusUpdate(status);
 		},
 		refreshSessionState,
+		shouldIgnoreClosedStreamError,
 		afterTurn: async () => {
 			await session.threads.refreshThread(threadId);
 			await refreshSessionState();

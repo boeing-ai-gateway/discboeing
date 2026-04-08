@@ -25,6 +25,7 @@ type CreateConversationDomainArgs = {
 		status: HooksStatusResponse,
 	) => void | Promise<void>;
 	refreshSessionState?: () => Promise<void>;
+	shouldIgnoreClosedStreamError?: () => boolean;
 	afterTurn?: () => Promise<void>;
 };
 
@@ -285,13 +286,19 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 			if (source.readyState === EventSource.CLOSED) {
 				completionRunning = false;
-				const error = new Error("Lost chat stream connection");
-				const resolvedErrorMessage = streamError ?? error.message;
-				streamError = resolvedErrorMessage;
-				disconnectStream();
-				if (loadStatus === "loading") {
-					rejectLoad(new Error(resolvedErrorMessage), resolvedErrorMessage);
-					return;
+				const shouldIgnoreClosedStreamError =
+					args.shouldIgnoreClosedStreamError?.() ?? false;
+				if (!shouldIgnoreClosedStreamError) {
+					const error = new Error("Lost chat stream connection");
+					const resolvedErrorMessage = streamError ?? error.message;
+					streamError = resolvedErrorMessage;
+					disconnectStream();
+					if (loadStatus === "loading") {
+						rejectLoad(new Error(resolvedErrorMessage), resolvedErrorMessage);
+						return;
+					}
+				} else {
+					disconnectStream();
 				}
 				if (args.hasSession() && !fatalStreamError) {
 					ensureStream();
