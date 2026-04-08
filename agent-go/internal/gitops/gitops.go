@@ -167,7 +167,7 @@ func parseDiffOutput(output string) DiffResult {
 	var current *FileDiffEntry
 	var patchLines []string
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		// Check for diff header
 		if strings.HasPrefix(line, "diff --git a/") {
 			// Save previous entry
@@ -249,11 +249,8 @@ func getUntrackedFiles(dir string) []string {
 
 // isBinaryContent checks if content contains null bytes (likely binary).
 func isBinaryContent(data []byte) bool {
-	checkLen := len(data)
-	if checkLen > 8000 {
-		checkLen = 8000
-	}
-	for i := 0; i < checkLen; i++ {
+	checkLen := min(len(data), 8000)
+	for i := range checkLen {
 		if data[i] == 0 {
 			return true
 		}
@@ -433,7 +430,7 @@ func buildCommitReplayBundle(workspaceRoot, parent string) (string, error) {
 
 	bundle := commitReplayBundle{Version: 1}
 	previous := parent
-	for _, sha := range strings.Split(strings.TrimSpace(commitsOutput), "\n") {
+	for sha := range strings.SplitSeq(strings.TrimSpace(commitsOutput), "\n") {
 		sha = strings.TrimSpace(sha)
 		if sha == "" {
 			continue

@@ -60,7 +60,7 @@ func TestListWorkspaces_Empty(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Workspaces []interface{} `json:"workspaces"`
+		Workspaces []any `json:"workspaces"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -87,7 +87,7 @@ func TestCreateWorkspace(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["path"] != testPath {
@@ -132,7 +132,7 @@ func TestCreateWorkspace_DefaultSourceType(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["sourceType"] != "local" {
@@ -232,7 +232,7 @@ func TestGetWorkspace(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["id"] != workspace.ID {
@@ -255,7 +255,7 @@ func TestUpdateWorkspace(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["path"] != "/home/user/new-path" {
@@ -298,7 +298,7 @@ func TestListWorkspaces_WithData(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Workspaces []interface{} `json:"workspaces"`
+		Workspaces []any `json:"workspaces"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -345,7 +345,7 @@ func TestCreateWorkspace_TildeExpansion(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	path := workspace["path"].(string)
@@ -379,7 +379,7 @@ func TestUpdateWorkspace_TildeExpansion(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	path := result["path"].(string)
@@ -459,7 +459,7 @@ func TestCreateWorkspace_WithDisplayName(t *testing.T) {
 	// Create a valid git repository for testing
 	testPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":        testPath,
 		"sourceType":  "local",
 		"displayName": "My Project",
@@ -468,7 +468,7 @@ func TestCreateWorkspace_WithDisplayName(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["path"] != testPath {
@@ -488,14 +488,14 @@ func TestUpdateWorkspace_SetDisplayName(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set display name
-	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]interface{}{
+	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]any{
 		"displayName": "My Renamed Project",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["displayName"] != "My Renamed Project" {
@@ -516,21 +516,21 @@ func TestUpdateWorkspace_ClearDisplayName(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// First set a display name
-	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]interface{}{
+	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]any{
 		"displayName": "My Project",
 	})
 	resp.Body.Close()
 	AssertStatus(t, resp, http.StatusOK)
 
 	// Now clear it by setting to null
-	resp = client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]interface{}{
+	resp = client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]any{
 		"displayName": nil,
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	// displayName should be nil/absent
@@ -548,7 +548,7 @@ func TestUpdateWorkspace_UpdateBothPathAndDisplayName(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Update both path and display name
-	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]interface{}{
+	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]any{
 		"path":        "/home/user/new-code",
 		"displayName": "New Project Name",
 	})
@@ -556,7 +556,7 @@ func TestUpdateWorkspace_UpdateBothPathAndDisplayName(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["path"] != "/home/user/new-code" {
@@ -576,7 +576,7 @@ func TestGetWorkspace_WithDisplayName(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set display name first
-	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]interface{}{
+	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+workspace.ID, map[string]any{
 		"displayName": "Project Display Name",
 	})
 	resp.Body.Close()
@@ -588,7 +588,7 @@ func TestGetWorkspace_WithDisplayName(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["displayName"] != "Project Display Name" {
@@ -606,7 +606,7 @@ func TestListWorkspaces_WithDisplayNames(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set display name on first workspace
-	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+ws1.ID, map[string]interface{}{
+	resp := client.Put("/api/projects/"+project.ID+"/workspaces/"+ws1.ID, map[string]any{
 		"displayName": "First Project",
 	})
 	resp.Body.Close()
@@ -619,7 +619,7 @@ func TestListWorkspaces_WithDisplayNames(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Workspaces []map[string]interface{} `json:"workspaces"`
+		Workspaces []map[string]any `json:"workspaces"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -659,7 +659,7 @@ func TestCreateWorkspace_WithProvider(t *testing.T) {
 	// Create a test git repo
 	localPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
 		"provider":   "docker",
@@ -668,7 +668,7 @@ func TestCreateWorkspace_WithProvider(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["path"] != localPath {
@@ -689,7 +689,7 @@ func TestCreateWorkspace_WithoutProvider(t *testing.T) {
 	// Create a test git repo
 	localPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
 	})
@@ -697,7 +697,7 @@ func TestCreateWorkspace_WithoutProvider(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["path"] != localPath {
@@ -719,7 +719,7 @@ func TestCreateWorkspace_WithVZProvider(t *testing.T) {
 	// Create a test git repo
 	localPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
 		"provider":   "vz",
@@ -728,7 +728,7 @@ func TestCreateWorkspace_WithVZProvider(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["provider"] != "vz" {
@@ -746,7 +746,7 @@ func TestCreateWorkspace_WithLocalProvider(t *testing.T) {
 	// Create a test git repo
 	localPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
 		"provider":   "local",
@@ -755,7 +755,7 @@ func TestCreateWorkspace_WithLocalProvider(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 
 	if workspace["provider"] != "local" {
@@ -774,26 +774,26 @@ func TestUpdateWorkspace_ProviderImmutable(t *testing.T) {
 	localPath := createWorkspaceTestGitRepo(t)
 
 	// Create workspace with docker provider
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]interface{}{
+	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
 		"provider":   "docker",
 	})
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var workspace map[string]interface{}
+	var workspace map[string]any
 	ParseJSON(t, resp, &workspace)
 	workspaceID := workspace["id"].(string)
 
 	// Attempt to update provider
-	resp = client.Put("/api/projects/"+project.ID+"/workspaces/"+workspaceID, map[string]interface{}{
+	resp = client.Put("/api/projects/"+project.ID+"/workspaces/"+workspaceID, map[string]any{
 		"provider": "vz",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var updated map[string]interface{}
+	var updated map[string]any
 	ParseJSON(t, resp, &updated)
 
 	// Provider should remain unchanged (docker, not vz)

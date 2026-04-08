@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"iter"
 	"log"
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -150,7 +151,6 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 	if err != nil {
 		return errorIter(err)
 	}
-
 	toolCtx := &thread.ToolContext{
 		ThreadID:         threadID,
 		PlanMode:         env.planMode,
@@ -426,10 +426,7 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 	}
 	useThreadConfig := threadCfgErr == nil
 	planMode, _ := resolvePlanMode(req.Mode, threadCfg, useThreadConfig)
-	currentDepth := req.SubagentDepth
-	if currentDepth < 0 {
-		currentDepth = 0
-	}
+	currentDepth := max(req.SubagentDepth, 0)
 
 	sessionCfg, err := sessionconfig.Load(a.cwd)
 	if err != nil {
@@ -647,12 +644,8 @@ func mergeSupportingModels(base, override providers.SupportingModels) providers.
 		return nil
 	}
 	merged := make(providers.SupportingModels, len(base)+len(override))
-	for k, v := range base {
-		merged[k] = v
-	}
-	for k, v := range override {
-		merged[k] = v
-	}
+	maps.Copy(merged, base)
+	maps.Copy(merged, override)
 	return merged
 }
 

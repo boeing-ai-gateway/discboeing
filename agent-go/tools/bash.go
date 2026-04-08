@@ -38,10 +38,7 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 
 	timeout := 120 * time.Second
 	if input.Timeout > 0 {
-		ms := input.Timeout
-		if ms > 600_000 {
-			ms = 600_000
-		}
+		ms := min(input.Timeout, 600_000)
 		timeout = time.Duration(ms) * time.Millisecond
 	}
 
@@ -222,7 +219,7 @@ func windowsBashExtensions(pathExt string) []string {
 		".exe": {},
 	}
 
-	for _, raw := range strings.Split(pathExt, ";") {
+	for raw := range strings.SplitSeq(pathExt, ";") {
 		ext := strings.TrimSpace(strings.ToLower(raw))
 		if ext == "" {
 			continue

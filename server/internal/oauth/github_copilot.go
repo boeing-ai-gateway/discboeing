@@ -49,7 +49,7 @@ type DevicePollResponse struct {
 	Scope        string    `json:"scope,omitempty"`
 	Error        string    `json:"error,omitempty"`
 	ErrorDesc    string    `json:"error_description,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at,omitzero"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 }
 

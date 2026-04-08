@@ -84,7 +84,7 @@ func TestCache_Eviction(t *testing.T) {
 	}
 
 	// Add entries that exceed max size
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		entry := &Entry{
 			StatusCode: 200,
 			Headers:    http.Header{},
@@ -119,7 +119,7 @@ func TestCache_Clear(t *testing.T) {
 	}
 
 	// Add some entries
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		entry := &Entry{
 			StatusCode: 200,
 			Body:       []byte("test"),

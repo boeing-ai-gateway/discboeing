@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -127,9 +128,7 @@ func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.Crea
 		"session_id": sessionID,
 		"managed":    "true",
 	}
-	for k, v := range opts.Labels {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, opts.Labels)
 
 	// Build environment variables
 	env := map[string]string{

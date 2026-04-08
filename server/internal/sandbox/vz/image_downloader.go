@@ -68,7 +68,7 @@ type DownloadProgress struct {
 	CurrentLayer    string        `json:"current_layer"`
 	Error           string        `json:"error,omitempty"`
 	StartedAt       time.Time     `json:"started_at"`
-	CompletedAt     time.Time     `json:"completed_at,omitempty"`
+	CompletedAt     time.Time     `json:"completed_at,omitzero"`
 }
 
 // ImageDownloader manages async download of VZ images from container registry.
@@ -350,7 +350,7 @@ func (d *ImageDownloader) download(ctx context.Context) error {
 	}
 
 	// Write metadata
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"image_ref":   d.cfg.ImageRef,
 		"digest":      digest,
 		"pulled_at":   time.Now().Format(time.RFC3339),

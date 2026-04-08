@@ -4,6 +4,7 @@ package services
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -96,6 +97,7 @@ wait
 	}
 	if svc == nil {
 		t.Fatal("GetService() returned nil service")
+		return
 	}
 	if svc.Status != "stopped" {
 		t.Fatalf("service status = %q, want stopped", svc.Status)
@@ -131,9 +133,7 @@ printf 'VISIBLE_FROM_OS=%%s\n' "${VISIBLE_FROM_OS:-}" >> %q
 	visibleEnv := map[string]string{"VISIBLE_AT_LAUNCH": "first-value"}
 	mgr.SetEnvSnapshot(func() map[string]string {
 		snapshot := make(map[string]string, len(visibleEnv))
-		for key, value := range visibleEnv {
-			snapshot[key] = value
-		}
+		maps.Copy(snapshot, visibleEnv)
 		return snapshot
 	})
 

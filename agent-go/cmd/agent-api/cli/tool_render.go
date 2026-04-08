@@ -225,7 +225,7 @@ func renderToolTail(label string, isError bool, text, detail string) {
 	}
 
 	fmt.Fprintln(os.Stderr, styleToolDivider())
-	for _, line := range strings.Split(detail, "\n") {
+	for line := range strings.SplitSeq(detail, "\n") {
 		fmt.Fprintf(os.Stderr, "    %s\n", line)
 	}
 	fmt.Fprintln(os.Stderr, styleToolDivider())
@@ -350,8 +350,8 @@ func webSearchOutputDetail(text string) string {
 				results = append(results, current)
 			}
 			rest := strings.TrimPrefix(line, "## Result ")
-			if idx := strings.Index(rest, ": "); idx >= 0 {
-				current = result{title: rest[idx+2:]}
+			if _, title, ok := strings.Cut(rest, ": "); ok {
+				current = result{title: title}
 			} else {
 				current = result{title: rest}
 			}
@@ -409,7 +409,7 @@ func applyPatchOutputDetail(input json.RawMessage) string {
 	const maxLines = 80
 	needSep := false
 
-	for i := 0; i < len(lines); i++ {
+	for i := range len(lines) {
 		if lineCount >= maxLines {
 			b.WriteString("\n... truncated")
 			break
@@ -421,8 +421,8 @@ func applyPatchOutputDetail(input json.RawMessage) string {
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, "*** Add File: ") {
-			path := strings.TrimSpace(strings.TrimPrefix(trimmed, "*** Add File: "))
+		if path, ok := strings.CutPrefix(trimmed, "*** Add File: "); ok {
+			path = strings.TrimSpace(path)
 			if needSep {
 				b.WriteByte('\n')
 			}
@@ -433,8 +433,8 @@ func applyPatchOutputDetail(input json.RawMessage) string {
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, "*** Delete File: ") {
-			path := strings.TrimSpace(strings.TrimPrefix(trimmed, "*** Delete File: "))
+		if path, ok := strings.CutPrefix(trimmed, "*** Delete File: "); ok {
+			path = strings.TrimSpace(path)
 			if needSep {
 				b.WriteByte('\n')
 			}
@@ -445,17 +445,16 @@ func applyPatchOutputDetail(input json.RawMessage) string {
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, "*** Update File: ") {
-			path := strings.TrimSpace(strings.TrimPrefix(trimmed, "*** Update File: "))
+		if path, ok := strings.CutPrefix(trimmed, "*** Update File: "); ok {
+			path = strings.TrimSpace(path)
 			header := "M " + path
 			if i+1 < len(lines) {
 				next := strings.TrimSpace(lines[i+1])
-				if strings.HasPrefix(next, "*** Move to: ") {
-					movePath := strings.TrimSpace(strings.TrimPrefix(next, "*** Move to: "))
+				if movePath, ok := strings.CutPrefix(next, "*** Move to: "); ok {
+					movePath = strings.TrimSpace(movePath)
 					if movePath != "" && movePath != path {
 						header = "M " + path + " -> " + movePath
 					}
-					i++
 				}
 			}
 			if needSep {
@@ -634,11 +633,13 @@ func summarizeApplyPatchChanges(input json.RawMessage) []string {
 	changes := make([]string, 0)
 	seen := make(map[string]struct{})
 
-	for i := 0; i < len(lines); i++ {
+	for i := range len(lines) {
 		line := strings.TrimSpace(lines[i])
 		change := ""
 
 		switch {
+		case strings.HasPrefix(line, "*** Move to: "):
+			continue
 		case strings.HasPrefix(line, "*** Add File: "):
 			path := strings.TrimSpace(strings.TrimPrefix(line, "*** Add File: "))
 			if path != "" {
@@ -657,8 +658,8 @@ func summarizeApplyPatchChanges(input json.RawMessage) []string {
 			change = "M " + path
 			if i+1 < len(lines) {
 				moveLine := strings.TrimSpace(lines[i+1])
-				if strings.HasPrefix(moveLine, "*** Move to: ") {
-					movePath := strings.TrimSpace(strings.TrimPrefix(moveLine, "*** Move to: "))
+				if movePath, ok := strings.CutPrefix(moveLine, "*** Move to: "); ok {
+					movePath = strings.TrimSpace(movePath)
 					if movePath != "" && movePath != path {
 						change = "M " + path + " -> " + movePath
 					}

@@ -707,6 +707,7 @@ func TestParseSSEStream(t *testing.T) {
 		}
 		if finish == nil {
 			t.Fatal("expected FinishChunk")
+			return
 		}
 		if finish.FinishReason.Unified != "length" {
 			t.Errorf("expected finish reason 'length', got %q", finish.FinishReason.Unified)
@@ -752,6 +753,7 @@ func TestParseSSEStream(t *testing.T) {
 		}
 		if finish == nil {
 			t.Fatal("expected FinishChunk")
+			return
 		}
 		if finish.Usage.InputTokens.Total != 8 {
 			t.Errorf("expected 8 input tokens, got %d", finish.Usage.InputTokens.Total)
@@ -1121,6 +1123,7 @@ func TestComplete(t *testing.T) {
 		}
 		if finish == nil {
 			t.Fatal("expected FinishChunk")
+			return
 		}
 		if finish.FinishReason.Unified != "stop" {
 			t.Errorf("expected stop, got %q", finish.FinishReason.Unified)

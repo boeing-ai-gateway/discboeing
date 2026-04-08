@@ -171,13 +171,13 @@ func newSQLite(dsn string, dbLogger logger.Interface) (*DB, error) {
 // databases may still have foreign keys referencing agents, and asking GORM's
 // SQLite migrator to reconcile the Agent schema can trigger a table rebuild
 // that attempts to drop `agents`, causing restart-time migration failures.
-func (db *DB) migrateModels() []interface{} {
+func (db *DB) migrateModels() []any {
 	models := model.AllModels()
 	if !db.IsSQLite() {
 		return models
 	}
 
-	filtered := make([]interface{}, 0, len(models))
+	filtered := make([]any, 0, len(models))
 	for _, m := range models {
 		if _, ok := m.(*model.Agent); ok {
 			continue

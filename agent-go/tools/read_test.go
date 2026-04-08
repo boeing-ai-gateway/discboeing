@@ -49,11 +49,11 @@ func buildPDFWithPageCount(pageCount int) []byte {
 	b.WriteString("2 0 obj\n<< /Type /Pages /Count ")
 	b.WriteString(fmt.Sprintf("%d", pageCount))
 	b.WriteString(" /Kids [")
-	for i := 0; i < pageCount; i++ {
+	for i := range pageCount {
 		b.WriteString(fmt.Sprintf("%d 0 R ", i+3))
 	}
 	b.WriteString("] >>\nendobj\n")
-	for i := 0; i < pageCount; i++ {
+	for i := range pageCount {
 		objNum := i + 3
 		b.WriteString(fmt.Sprintf("%d 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n", objNum))
 	}

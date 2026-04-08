@@ -662,7 +662,7 @@ type Config struct {
 	// CWD is the working directory associated with this thread.
 	CWD string `json:"cwd,omitempty"`
 	// Mode is the canonical durable mode state ("build" | "plan" with metadata).
-	Mode ModeState `json:"mode,omitempty"`
+	Mode ModeState `json:"mode,omitzero"`
 	// LastTurnState stores the last user-visible terminal turn outcome that
 	// should surface in thread chrome. Empty means no special state.
 	LastTurnState State `json:"lastTurnState,omitempty"`
@@ -676,7 +676,7 @@ type Config struct {
 // QueuedPrompt stores one queued user submission for a thread.
 type QueuedPrompt struct {
 	ID        string            `json:"id"`
-	CreatedAt time.Time         `json:"createdAt,omitempty"`
+	CreatedAt time.Time         `json:"createdAt,omitzero"`
 	Message   message.UIMessage `json:"message"`
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
@@ -702,7 +702,7 @@ type ModeState struct {
 	// SetBy indicates who last set the mode: "user", "llm", or "system".
 	SetBy string `json:"setBy,omitempty"`
 	// ChangedAt is when the mode last changed.
-	ChangedAt time.Time `json:"changedAt,omitempty"`
+	ChangedAt time.Time `json:"changedAt,omitzero"`
 }
 
 // threadConfigPath returns the path to the thread config file.

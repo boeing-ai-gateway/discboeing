@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"maps"
 	"net/http"
 	"sort"
 	"strings"
@@ -41,7 +42,6 @@ import (
 
 func init() {
 	for _, info := range modelsdev.ProvidersByNPM("@ai-sdk/openai-compatible") {
-		info := info // capture loop variable
 		providers.Register(info.ID, func(cfg providers.Config) (providers.Provider, error) {
 			return newProvider(info.ID, info.API, cfg)
 		})
@@ -119,9 +119,7 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 		if req.ProviderOptions != nil {
 			var opts map[string]any
 			if json.Unmarshal(req.ProviderOptions, &opts) == nil {
-				for k, v := range opts {
-					body[k] = v
-				}
+				maps.Copy(body, opts)
 			}
 		}
 
@@ -711,14 +709,8 @@ func (p *Provider) emitFinish(state *streamState, yield func(message.ProviderMes
 	if state.usage != nil {
 		cached := state.usage.PromptTokensDetails.CachedTokens
 		reasoning := state.usage.CompletionTokensDetails.ReasoningTokens
-		noCache := state.usage.PromptTokens - cached
-		if noCache < 0 {
-			noCache = 0
-		}
-		textOut := state.usage.CompletionTokens - reasoning
-		if textOut < 0 {
-			textOut = 0
-		}
+		noCache := max(state.usage.PromptTokens-cached, 0)
+		textOut := max(state.usage.CompletionTokens-reasoning, 0)
 		usage = message.Usage{
 			InputTokens: message.InputTokens{
 				Total:     state.usage.PromptTokens,

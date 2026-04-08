@@ -89,9 +89,7 @@ func TestDrainAndStopWaitsForRunningJobsWithoutStartingNewOnes(t *testing.T) {
 	}
 	disp.RegisterExecutor(executor)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	disp.Start(ctx)
+	disp.Start(t.Context())
 
 	firstJob := &model.Job{
 		Type:        string(executor.jobType),

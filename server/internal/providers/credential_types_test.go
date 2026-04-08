@@ -3,14 +3,16 @@ package providers
 import "testing"
 
 func TestGetCredentialTypesIncludesOpenAIOAuthBackedByCodex(t *testing.T) {
-	var openAIOAuth *CredentialType
+	var openAIOAuth CredentialType
+	found := false
 	for _, credentialType := range GetCredentialTypes() {
 		if credentialType.ID == "openai:oauth" {
-			openAIOAuth = &credentialType
+			openAIOAuth = credentialType
+			found = true
 			break
 		}
 	}
-	if openAIOAuth == nil {
+	if !found {
 		t.Fatal("expected openai:oauth credential type")
 	}
 

@@ -155,7 +155,7 @@ func (s *Server) validateConfig(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
-func (s *Server) jsonOK(w http.ResponseWriter, data interface{}) {
+func (s *Server) jsonOK(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(data)
 }
@@ -171,7 +171,7 @@ func (s *Server) handleCacheStats(w http.ResponseWriter, _ *http.Request) {
 	cache := s.proxy.GetCache()
 	stats := cache.GetStats()
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"hits":         stats.Hits,
 		"misses":       stats.Misses,
 		"stores":       stats.Stores,

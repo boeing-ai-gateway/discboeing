@@ -19,8 +19,8 @@ type ModelInfo struct {
 }
 
 func rawModelID(modelID string) string {
-	if idx := strings.Index(modelID, "/"); idx >= 0 {
-		return modelID[idx+1:]
+	if _, raw, ok := strings.Cut(modelID, "/"); ok {
+		return raw
 	}
 	return modelID
 }

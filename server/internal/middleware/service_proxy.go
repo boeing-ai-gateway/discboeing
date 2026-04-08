@@ -90,8 +90,7 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 			ctx := r.Context()
 			var sessionID, serviceID string
 			for _, host := range hosts {
-				parts := strings.Split(host, ".")
-				for _, part := range parts {
+				for part := range strings.SplitSeq(host, ".") {
 					matches := serviceSubdomainPattern.FindStringSubmatch(part)
 					if matches == nil {
 						continue

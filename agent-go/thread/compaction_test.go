@@ -827,15 +827,15 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 		t.Errorf("expected compacted input (<11 messages), got %d — old raw history was not replaced", len(summaryReq.Messages))
 	}
 
-	var transcript string
+	var transcript strings.Builder
 	for _, msg := range summaryReq.Messages {
 		for _, part := range msg.Parts {
 			if tp, ok := part.(message.TextPart); ok {
-				transcript += tp.Text
+				transcript.WriteString(tp.Text)
 			}
 		}
 	}
-	if !strings.Contains(transcript, "Old partial summary.") {
+	if !strings.Contains(transcript.String(), "Old partial summary.") {
 		t.Error("expected old summary text to appear in summarization input")
 	}
 }
@@ -970,15 +970,15 @@ func TestMaybeCompact_SystemRemindersFilteredFromSummaryInput(t *testing.T) {
 	if len(prov.requests) == 0 {
 		t.Fatal("expected LLM to be called for summarization")
 	}
-	var transcript string
+	var transcript strings.Builder
 	for _, msg := range prov.requests[0].Messages {
 		for _, part := range msg.Parts {
 			if tp, ok := part.(message.TextPart); ok {
-				transcript += tp.Text
+				transcript.WriteString(tp.Text)
 			}
 		}
 	}
-	if strings.Contains(transcript, "<system-reminder>") {
+	if strings.Contains(transcript.String(), "<system-reminder>") {
 		t.Error("system-reminder content leaked into summarization input")
 	}
 }
@@ -1066,7 +1066,7 @@ func TestGenerateSummary_IterativeCompaction(t *testing.T) {
 	failFirstProv := &failFirstCallProvider{inner: prov}
 
 	var msgs []message.Message
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		role := "user"
 		if i%2 == 1 {
 			role = "assistant"
@@ -1235,7 +1235,7 @@ func TestRunTurn_WithCompaction(t *testing.T) {
 
 	// Pre-populate a long conversation history.
 	prevID := ""
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		role := "user"
 		if i%2 == 1 {
 			role = "assistant"
@@ -1335,7 +1335,7 @@ func TestCrashRecovery_WithCompaction(t *testing.T) {
 
 	// Pre-populate long history.
 	prevID := ""
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		role := "user"
 		if i%2 == 1 {
 			role = "assistant"
@@ -1430,7 +1430,7 @@ func TestRunTurn_EmergencyCompaction(t *testing.T) {
 
 	// Pre-populate history with enough messages to compact.
 	prevID := ""
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		role := "user"
 		if i%2 == 1 {
 			role = "assistant"

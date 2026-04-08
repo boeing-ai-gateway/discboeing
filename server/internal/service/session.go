@@ -907,7 +907,7 @@ func generateSecret(length int) string {
 
 // ptrString returns a pointer to a string.
 func ptrString(s string) *string {
-	return &s
+	return new(s)
 }
 
 // PerformCommit performs the session commit work synchronously.
@@ -1484,22 +1484,22 @@ func (s *SessionService) setCommitFailed(ctx context.Context, projectID string, 
 // Returns json.RawMessage that can be passed to SendMessages.
 func buildCommitMessage(msgID, text string) (json.RawMessage, error) {
 	// Build the text part
-	part := map[string]interface{}{
+	part := map[string]any{
 		"type": "text",
 		"text": text,
 	}
-	parts, err := json.Marshal([]interface{}{part})
+	parts, err := json.Marshal([]any{part})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal parts: %w", err)
 	}
 
 	// Build the message
-	message := map[string]interface{}{
+	message := map[string]any{
 		"id":    msgID,
 		"role":  "user",
 		"parts": json.RawMessage(parts),
 	}
-	messages, err := json.Marshal([]interface{}{message})
+	messages, err := json.Marshal([]any{message})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal messages: %w", err)
 	}

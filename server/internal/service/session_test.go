@@ -310,12 +310,11 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 	}
 
 	// Use reflection to verify all documented fields are mapped
-	modelType := reflect.TypeOf(*modelSession)
-	serviceType := reflect.TypeOf(*result)
+	modelType := reflect.TypeFor[model.Session]()
+	serviceType := reflect.TypeFor[Session]()
 
 	// Check all model fields
-	for i := 0; i < modelType.NumField(); i++ {
-		modelField := modelType.Field(i)
+	for modelField := range modelType.Fields() {
 		modelFieldName := modelField.Name
 
 		// Skip GORM metadata fields and relationship fields

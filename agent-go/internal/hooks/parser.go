@@ -95,11 +95,11 @@ func stripPrefix(line, prefix string) string {
 	if prefix == "" {
 		return line
 	}
-	idx := strings.Index(line, prefix)
-	if idx == -1 {
+	_, content, found := strings.Cut(line, prefix)
+	if !found {
 		return line
 	}
-	return strings.TrimLeft(line[idx+len(prefix):], " \t")
+	return strings.TrimLeft(content, " \t")
 }
 
 // parseHookFrontMatter parses the front matter from a hook file's content.
@@ -146,12 +146,12 @@ func parseHookFrontMatter(content string) *hookConfig {
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		colonIdx := strings.Index(trimmed, ":")
-		if colonIdx == -1 {
+		key, value, ok := strings.Cut(trimmed, ":")
+		if !ok {
 			continue
 		}
-		key := strings.TrimSpace(trimmed[:colonIdx])
-		value := strings.TrimSpace(trimmed[colonIdx+1:])
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
 
 		// Remove quotes
 		if len(value) >= 2 {

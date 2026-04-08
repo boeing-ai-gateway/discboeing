@@ -214,7 +214,7 @@ func (h *Handler) ListProjectCacheVolumes(w http.ResponseWriter, r *http.Request
 
 	// Check if provider supports cache volume listing
 	type cacheVolumeManager interface {
-		ListCacheVolumes(ctx context.Context, projectID string) (interface{}, error)
+		ListCacheVolumes(ctx context.Context, projectID string) (any, error)
 	}
 
 	cvm, ok := h.sandboxProvider.(cacheVolumeManager)
@@ -229,7 +229,7 @@ func (h *Handler) ListProjectCacheVolumes(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]interface{}{
+	h.JSON(w, http.StatusOK, map[string]any{
 		"volumes": volumes,
 	})
 }

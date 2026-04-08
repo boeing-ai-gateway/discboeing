@@ -347,7 +347,7 @@ type ThreadUpdateInfo struct {
 // ThreadQueuedPromptInfo summarizes one queued prompt for thread chrome.
 type ThreadQueuedPromptInfo struct {
 	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt,omitzero"`
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`

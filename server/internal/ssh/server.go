@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -301,15 +302,11 @@ func (h *sessionHandler) getEnvVars(ctx context.Context, sshEnvVars map[string]s
 		if err != nil {
 			log.Printf("SSH session %s: failed to get runtime env vars: %v", h.sessionID, err)
 		} else {
-			for k, v := range sessionVars {
-				merged[k] = v
-			}
+			maps.Copy(merged, sessionVars)
 		}
 	}
 	// SSH client-provided env vars take precedence over runtime-managed vars
-	for k, v := range sshEnvVars {
-		merged[k] = v
-	}
+	maps.Copy(merged, sshEnvVars)
 	return merged
 }
 

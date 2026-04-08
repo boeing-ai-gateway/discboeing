@@ -74,7 +74,7 @@ func (e *Encryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 }
 
 // EncryptJSON encrypts a value as JSON using AES-256-GCM.
-func (e *Encryptor) EncryptJSON(v interface{}) ([]byte, error) {
+func (e *Encryptor) EncryptJSON(v any) ([]byte, error) {
 	plaintext, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (e *Encryptor) EncryptJSON(v interface{}) ([]byte, error) {
 }
 
 // DecryptJSON decrypts ciphertext and unmarshals the JSON result into v.
-func (e *Encryptor) DecryptJSON(ciphertext []byte, v interface{}) error {
+func (e *Encryptor) DecryptJSON(ciphertext []byte, v any) error {
 	plaintext, err := e.Decrypt(ciphertext)
 	if err != nil {
 		return err

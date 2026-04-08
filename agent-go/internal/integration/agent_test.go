@@ -92,8 +92,6 @@ func extractText(chunks []message.MessageChunk) string {
 	return b.String()
 }
 
-func intPtr(n int) *int { return &n }
-
 func agentTestContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -116,7 +114,7 @@ func TestAgent_SimpleTextResponse(t *testing.T) {
 	chunks := runTurnCollect(t, thread.RunTurn(ctx, p, &testToolExecutor{}, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "What is 2 + 2?"}},
-		MaxTokens: intPtr(64),
+		MaxTokens: new(64),
 	}))
 
 	// Verify chunks: should have text, no tool calls.
@@ -193,7 +191,7 @@ func TestAgent_SingleToolCall(t *testing.T) {
 	chunks := runTurnCollect(t, thread.RunTurn(ctx, p, executor, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "What is the weather in Tokyo?"}},
-		MaxTokens: intPtr(256),
+		MaxTokens: new(256),
 		Tools: []providers.ToolDefinition{{
 			Name:        "get_weather",
 			Description: "Get the current weather for a city",
@@ -286,7 +284,7 @@ func TestAgent_MultiStepToolCalls(t *testing.T) {
 	chunks := runTurnCollect(t, thread.RunTurn(ctx, p, executor, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "What is the population density of France?"}},
-		MaxTokens: intPtr(512),
+		MaxTokens: new(512),
 		Tools: []providers.ToolDefinition{
 			{
 				Name:        "get_population",
@@ -389,7 +387,7 @@ func TestAgent_MultiTurnConversation(t *testing.T) {
 	runTurnCollect(t, thread.RunTurn(ctx, p, &testToolExecutor{}, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "My favorite color is blue. Remember that."}},
-		MaxTokens: intPtr(128),
+		MaxTokens: new(128),
 	}))
 
 	// Get leaf after turn 1.
@@ -402,7 +400,7 @@ func TestAgent_MultiTurnConversation(t *testing.T) {
 	chunks2 := runTurnCollect(t, thread.RunTurn(ctx, p, &testToolExecutor{}, store, threadID, turn1Leaf, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "What is my favorite color?"}},
-		MaxTokens: intPtr(128),
+		MaxTokens: new(128),
 	}))
 
 	// Verify the model remembers "blue".
@@ -463,7 +461,7 @@ func TestAgent_ToolExecutionError(t *testing.T) {
 	chunks := runTurnCollect(t, thread.RunTurn(ctx, p, executor, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "Get the data for item XYZ."}},
-		MaxTokens: intPtr(256),
+		MaxTokens: new(256),
 		Tools: []providers.ToolDefinition{{
 			Name:        "get_data",
 			Description: "Retrieve data for an item by ID",
@@ -558,7 +556,7 @@ func TestAgent_MessagePersistence(t *testing.T) {
 	runTurnCollect(t, thread.RunTurn(ctx, p, executor, store, threadID, leafID, thread.TurnConfig{
 		Model:     testModel,
 		UserParts: []message.Part{message.TextPart{Text: "Look up item 42."}},
-		MaxTokens: intPtr(256),
+		MaxTokens: new(256),
 		Tools: []providers.ToolDefinition{{
 			Name:        "lookup",
 			Description: "Look up an item by number",

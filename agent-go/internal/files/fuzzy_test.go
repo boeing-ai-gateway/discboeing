@@ -106,6 +106,7 @@ func TestSearchFilesIntegration(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result")
+		return
 	}
 	if result.Query != "fuzzy" {
 		t.Errorf("query = %q, want %q", result.Query, "fuzzy")

@@ -27,10 +27,7 @@ func Truncate(path string) error {
 		return fmt.Errorf("open log file for truncation: %w", err)
 	}
 
-	seekPos := info.Size() - keepSize
-	if seekPos < 0 {
-		seekPos = 0
-	}
+	seekPos := max(info.Size()-keepSize, 0)
 	if _, err := f.Seek(seekPos, io.SeekStart); err != nil {
 		f.Close()
 		return fmt.Errorf("seek in log file: %w", err)

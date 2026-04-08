@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -229,9 +230,7 @@ func (e *Executor) bashEnv() []string {
 			env[key] = value
 		}
 		if e.envSnapshot != nil {
-			for key, value := range e.envSnapshot() {
-				env[key] = value
-			}
+			maps.Copy(env, e.envSnapshot())
 		}
 		out := make([]string, 0, len(env))
 		for key, value := range env {

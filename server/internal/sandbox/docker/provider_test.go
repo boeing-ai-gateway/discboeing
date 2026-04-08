@@ -324,6 +324,7 @@ func TestTranslateDockerEvent_DieWithNonZeroExitCodeIsStopped(t *testing.T) {
 
 	if event == nil {
 		t.Fatal("expected state event")
+		return
 	}
 	if event.Status != sandbox.StatusStopped {
 		t.Fatalf("translateDockerEvent status = %s, want %s", event.Status, sandbox.StatusStopped)

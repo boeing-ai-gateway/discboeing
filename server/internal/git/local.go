@@ -1329,7 +1329,7 @@ func buildUnifiedPatch(path, oldPath, status string, oldContent, newContent []by
 func countPatchLines(patch string) (int, int) {
 	additions := 0
 	deletions := 0
-	for _, line := range strings.Split(patch, "\n") {
+	for line := range strings.SplitSeq(patch, "\n") {
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
 			additions++
 		}
@@ -1341,11 +1341,8 @@ func countPatchLines(patch string) (int, int) {
 }
 
 func isBinaryContent(data []byte) bool {
-	checkLen := len(data)
-	if checkLen > 8000 {
-		checkLen = 8000
-	}
-	for i := 0; i < checkLen; i++ {
+	checkLen := min(len(data), 8000)
+	for i := range checkLen {
 		if data[i] == 0 {
 			return true
 		}

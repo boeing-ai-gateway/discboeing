@@ -26,25 +26,24 @@ func parseFrontmatter(content string) (map[string]any, string, error) {
 		return nil, content, nil
 	}
 
-	closeIdx := strings.Index(rest, "\n---")
-	if closeIdx < 0 {
-		// No closing delimiter — treat as no frontmatter.
-		return nil, content, nil
-	}
+	if before, after, ok := strings.Cut(rest, "\n---"); ok {
+		closeIdx := len(before)
+		yamlContent := rest[:closeIdx]
+		body := after
+		// Skip trailing newline after closing delimiter.
+		if len(body) > 0 && body[0] == '\n' {
+			body = body[1:]
+		} else if len(body) > 1 && body[0] == '\r' && body[1] == '\n' {
+			body = body[2:]
+		}
 
-	yamlContent := rest[:closeIdx]
-	body := rest[closeIdx+4:] // skip "\n---"
-	// Skip trailing newline after closing delimiter.
-	if len(body) > 0 && body[0] == '\n' {
-		body = body[1:]
-	} else if len(body) > 1 && body[0] == '\r' && body[1] == '\n' {
-		body = body[2:]
-	}
+		var fm map[string]any
+		if err := yaml.Unmarshal([]byte(yamlContent), &fm); err != nil {
+			return nil, content, err
+		}
 
-	var fm map[string]any
-	if err := yaml.Unmarshal([]byte(yamlContent), &fm); err != nil {
-		return nil, content, err
+		return fm, body, nil
 	}
-
-	return fm, body, nil
+	// No closing delimiter — treat as no frontmatter.
+	return nil, content, nil
 }

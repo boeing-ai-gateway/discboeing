@@ -27,8 +27,8 @@ func TestWaitForJobCompletion_AlreadyCompleted(t *testing.T) {
 	job := &model.Job{
 		Type:         "session_init",
 		Status:       "completed",
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("test-session"),
+		ResourceType: new("session"),
+		ResourceID:   new("test-session"),
 		Payload:      []byte(`{"projectId":"test-project","sessionId":"test-session"}`),
 	}
 	if err := s.CreateJob(ctx, job); err != nil {
@@ -70,8 +70,8 @@ func TestWaitForJobCompletion_AlreadyFailed(t *testing.T) {
 		Type:         "session_init",
 		Status:       "failed",
 		Error:        &errorMsg,
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("test-session"),
+		ResourceType: new("session"),
+		ResourceID:   new("test-session"),
 		Payload:      []byte(`{"projectId":"test-project","sessionId":"test-session"}`),
 	}
 	if err := s.CreateJob(ctx, job); err != nil {
@@ -111,8 +111,8 @@ func TestWaitForJobCompletion_WaitForEvent(t *testing.T) {
 	job := &model.Job{
 		Type:         "session_init",
 		Status:       "pending",
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("test-session"),
+		ResourceType: new("session"),
+		ResourceID:   new("test-session"),
 		Payload:      []byte(`{"projectId":"test-project","sessionId":"test-session"}`),
 	}
 	if err := s.CreateJob(ctx, job); err != nil {
@@ -177,8 +177,8 @@ func TestWaitForJobCompletion_Timeout(t *testing.T) {
 	job := &model.Job{
 		Type:         "session_init",
 		Status:       "pending",
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("test-session"),
+		ResourceType: new("session"),
+		ResourceID:   new("test-session"),
 		Payload:      []byte(`{"projectId":"test-project","sessionId":"test-session"}`),
 	}
 	if err := s.CreateJob(context.Background(), job); err != nil {
@@ -264,15 +264,15 @@ func TestWaitForJobCompletion_EventFiltering(t *testing.T) {
 	job1 := &model.Job{
 		Type:         "session_init",
 		Status:       "pending",
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("session-1"),
+		ResourceType: new("session"),
+		ResourceID:   new("session-1"),
 		Payload:      []byte(`{}`),
 	}
 	job2 := &model.Job{
 		Type:         "session_init",
 		Status:       "pending",
-		ResourceType: ptrString("session"),
-		ResourceID:   ptrString("session-2"),
+		ResourceType: new("session"),
+		ResourceID:   new("session-2"),
 		Payload:      []byte(`{}`),
 	}
 	if err := s.CreateJob(ctx, job1); err != nil {
@@ -425,8 +425,4 @@ func TestPublishJobCompleted_WithError(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timeout waiting for job completed event")
 	}
-}
-
-func ptrString(s string) *string {
-	return &s
 }

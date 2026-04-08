@@ -547,11 +547,11 @@ func (m *Manager) Close() {
 // splitToolName splits "serverName__toolName" into its two components.
 // Returns ok=false if the format is invalid.
 func splitToolName(fullName string) (serverName, toolName string, ok bool) {
-	idx := strings.Index(fullName, "__")
-	if idx < 0 {
+	serverName, toolName, ok = strings.Cut(fullName, "__")
+	if !ok {
 		return "", "", false
 	}
-	return fullName[:idx], fullName[idx+2:], true
+	return serverName, toolName, true
 }
 
 // IsMCPTool returns true if the tool name follows the "server__tool" format.

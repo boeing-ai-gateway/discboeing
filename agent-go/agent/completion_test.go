@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"iter"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -63,10 +64,8 @@ func (m *mockAgent) ListThreads() ([]string, error) {
 }
 
 func (m *mockAgent) HasInterruptedTurn(threadID string) (bool, error) {
-	for _, interrupted := range m.interruptedThreads {
-		if interrupted == threadID {
-			return true, nil
-		}
+	if slices.Contains(m.interruptedThreads, threadID) {
+		return true, nil
 	}
 	return false, nil
 }
@@ -172,6 +171,7 @@ func TestCompletionManager_Chat_SimpleCompletion(t *testing.T) {
 	result := cm.PollChunks("thread1", 0)
 	if result == nil {
 		t.Fatal("expected poll result")
+		return
 	}
 	if !result.Done {
 		t.Error("expected completion to be done")
@@ -213,6 +213,7 @@ func TestCompletionManager_Chat_PrependsStartBeforeEarlyError(t *testing.T) {
 	result := cm.PollChunks("thread1", 0)
 	if result == nil {
 		t.Fatal("expected poll result")
+		return
 	}
 	if len(result.Chunks) != 2 {
 		t.Fatalf("expected 2 chunks, got %d", len(result.Chunks))
@@ -426,6 +427,7 @@ func TestCompletionManager_PollChunks_CoalescesConsecutiveDeltaChunks(t *testing
 	result := cm.PollChunks("thread1", 0)
 	if result == nil {
 		t.Fatal("expected poll result")
+		return
 	}
 	if result.NextOffset != len(chunks) {
 		t.Fatalf("expected next offset %d, got %d", len(chunks), result.NextOffset)
@@ -490,6 +492,7 @@ func TestCompletionManager_PollChunks_CoalescesOnlyUnreadBatch(t *testing.T) {
 	result := cm.PollChunks("thread1", 1)
 	if result == nil {
 		t.Fatal("expected poll result")
+		return
 	}
 	if len(result.Chunks) != 1 {
 		t.Fatalf("expected 1 chunk from unread suffix, got %d", len(result.Chunks))
@@ -633,6 +636,7 @@ func TestCompletionManager_WaitNextCompletion_ReturnsFinishedNewCompletion(t *te
 	result := cm.WaitNextCompletion(ctx, "thread1", firstCompletionID)
 	if result == nil {
 		t.Fatal("expected next completion result")
+		return
 	}
 	if !result.Done {
 		t.Fatal("expected finished completion to be returned")
@@ -675,6 +679,7 @@ func TestCompletionManager_WaitChunks_SwitchesToNewCompletionWithoutReusingOffse
 	result := cm.WaitChunks(ctx, "thread1", "completion-old", 5)
 	if result == nil {
 		t.Fatal("expected result")
+		return
 	}
 	if result.CompletionID != "completion-new" {
 		t.Fatalf("expected completion-new, got %q", result.CompletionID)

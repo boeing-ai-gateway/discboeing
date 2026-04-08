@@ -157,7 +157,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionId")
 
 	// Parse as map first to detect which fields are present
-	var rawReq map[string]interface{}
+	var rawReq map[string]any
 	if err := h.DecodeJSON(r, &rawReq); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

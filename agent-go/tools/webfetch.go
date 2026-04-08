@@ -50,8 +50,8 @@ func (e *Executor) executeWebFetch(ctx context.Context, call message.ToolCallPar
 
 	// Upgrade http to https.
 	rawURL := input.URL
-	if strings.HasPrefix(rawURL, "http://") {
-		rawURL = "https://" + strings.TrimPrefix(rawURL, "http://")
+	if rest, ok := strings.CutPrefix(rawURL, "http://"); ok {
+		rawURL = "https://" + rest
 	}
 
 	// Use Discobot proxy if configured (managed/hosted environment).

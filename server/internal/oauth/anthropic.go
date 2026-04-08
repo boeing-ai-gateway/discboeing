@@ -46,7 +46,7 @@ type TokenResponse struct {
 	ExpiresIn    int       `json:"expires_in,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	Scope        string    `json:"scope,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at,omitzero"`
 }
 
 // NewAnthropicProvider creates a new Anthropic OAuth provider.

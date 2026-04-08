@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"maps"
 	"net/http"
 	"os"
 	"strconv"
@@ -172,9 +173,7 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 		if req.ProviderOptions != nil {
 			var opts map[string]any
 			if json.Unmarshal(req.ProviderOptions, &opts) == nil {
-				for k, v := range opts {
-					body[k] = v
-				}
+				maps.Copy(body, opts)
 			}
 		}
 
@@ -621,9 +620,7 @@ func stripDataURL(data, mediaType string) (string, string) {
 	}
 	// data:image/png;base64,<data>
 	rest := strings.TrimPrefix(data, "data:")
-	if idx := strings.Index(rest, ","); idx >= 0 {
-		header := rest[:idx]
-		raw := rest[idx+1:]
+	if header, raw, ok := strings.Cut(rest, ","); ok {
 		if parts := strings.SplitN(header, ";", 2); len(parts) > 0 && parts[0] != "" {
 			mediaType = parts[0]
 		}
@@ -688,12 +685,11 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 	var eventType string
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "event: ") {
-			eventType = strings.TrimPrefix(line, "event: ")
+		if event, ok := strings.CutPrefix(line, "event: "); ok {
+			eventType = event
 			continue
 		}
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
+		if data, ok := strings.CutPrefix(line, "data: "); ok {
 			if eventType != "" {
 				if !handleSSEEvent(eventType, []byte(data), state, yield) {
 					return
@@ -881,10 +877,7 @@ func handleMessageDelta(data []byte, state *streamState, yield func(message.Prov
 	}
 	state.outputTokens = event.Usage.OutputTokens
 
-	noCache := state.inputTokens - state.cacheCreate - state.cacheRead
-	if noCache < 0 {
-		noCache = 0
-	}
+	noCache := max(state.inputTokens-state.cacheCreate-state.cacheRead, 0)
 	return yield(message.FinishChunk{
 		FinishReason: message.FinishReason{
 			Unified: unifyStopReason(event.Delta.StopReason, state.hasToolUse),

@@ -65,6 +65,7 @@ func TestManagerGet(t *testing.T) {
 	c := mgr.Get("ANTHROPIC_API_KEY")
 	if c == nil {
 		t.Fatal("expected credential for ANTHROPIC_API_KEY")
+		return
 	}
 	if c.Value != "sk-123" {
 		t.Errorf("expected 'sk-123', got %q", c.Value)
@@ -158,7 +159,7 @@ func TestApplyGitUserSerializesConcurrentWrites(t *testing.T) {
 	const goroutines = 8
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			mgr.applyGitUser("", "test@example.com")

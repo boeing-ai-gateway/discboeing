@@ -131,7 +131,7 @@ type Thread struct {
 
 type QueuedPrompt struct {
 	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt,omitzero"`
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`

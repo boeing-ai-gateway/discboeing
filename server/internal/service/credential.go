@@ -87,7 +87,7 @@ type OAuthCredential struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	TokenType    string    `json:"token_type,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at,omitzero"`
 	Scope        string    `json:"scope,omitempty"`
 }
 
@@ -122,8 +122,8 @@ type SessionCredentialAssignmentInfo struct {
 type SessionCredentialUse struct {
 	ID                 string    `json:"id"`
 	Description        string    `json:"description"`
-	CreatedAt          time.Time `json:"createdAt,omitempty"`
-	LastUsedAt         time.Time `json:"lastUsedAt,omitempty"`
+	CreatedAt          time.Time `json:"createdAt,omitzero"`
+	LastUsedAt         time.Time `json:"lastUsedAt,omitzero"`
 	LastUsedToolCallID string    `json:"lastUsedToolCallId,omitempty"`
 }
 

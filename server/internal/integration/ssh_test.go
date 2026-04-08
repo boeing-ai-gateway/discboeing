@@ -179,7 +179,6 @@ func TestSSHServer_Integration_MultipleConnections(t *testing.T) {
 
 	// Connect to each session sequentially (parallel subtests run after parent returns)
 	for _, sessionID := range sessions {
-		sessionID := sessionID
 		t.Run(sessionID, func(t *testing.T) {
 			config := &gossh.ClientConfig{
 				User:            sessionID,

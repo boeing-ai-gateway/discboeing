@@ -286,8 +286,7 @@ func getStaticRepoSuggestions(query string) []Suggestion {
 		}
 	}
 
-	if strings.HasPrefix(trimmed, "https://github.com/") {
-		short := strings.TrimPrefix(trimmed, "https://github.com/")
+	if short, ok := strings.CutPrefix(trimmed, "https://github.com/"); ok {
 		short = strings.TrimSuffix(short, ".git")
 		short = strings.Trim(short, "/")
 		if githubShorthandPattern.MatchString(short) {
@@ -637,18 +636,15 @@ func normalizeGitHubRepoQuery(input string) string {
 		return ""
 	}
 
-	if strings.HasPrefix(trimmed, "git@github.com:") {
-		path := strings.TrimPrefix(trimmed, "git@github.com:")
+	if path, ok := strings.CutPrefix(trimmed, "git@github.com:"); ok {
 		return strings.Trim(strings.TrimSuffix(path, ".git"), "/")
 	}
 
-	if strings.HasPrefix(trimmed, "github.com/") {
-		path := strings.TrimPrefix(trimmed, "github.com/")
+	if path, ok := strings.CutPrefix(trimmed, "github.com/"); ok {
 		return strings.Trim(strings.TrimSuffix(path, ".git"), "/")
 	}
 
-	if strings.HasPrefix(trimmed, "www.github.com/") {
-		path := strings.TrimPrefix(trimmed, "www.github.com/")
+	if path, ok := strings.CutPrefix(trimmed, "www.github.com/"); ok {
 		return strings.Trim(strings.TrimSuffix(path, ".git"), "/")
 	}
 
@@ -818,7 +814,7 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "workspaceId")
 
 	// Parse raw JSON to detect which fields were sent
-	var rawReq map[string]interface{}
+	var rawReq map[string]any
 	if err := h.DecodeJSON(r, &rawReq); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

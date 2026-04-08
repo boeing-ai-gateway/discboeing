@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -425,9 +426,7 @@ func mergedEnv(requestEnv map[string]string) []string {
 		}
 		env[key] = value
 	}
-	for key, value := range requestEnv {
-		env[key] = value
-	}
+	maps.Copy(env, requestEnv)
 	out := make([]string, 0, len(env))
 	for key, value := range env {
 		out = append(out, key+"="+value)

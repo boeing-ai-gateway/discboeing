@@ -29,7 +29,7 @@ func TestGeneratePKCE(t *testing.T) {
 func TestGeneratePKCE_Unique(t *testing.T) {
 	// Generate multiple PKCE challenges and ensure they're unique
 	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		pkce, err := GeneratePKCE()
 		if err != nil {
 			t.Fatalf("GeneratePKCE() error = %v", err)
@@ -56,7 +56,7 @@ func TestGenerateState(t *testing.T) {
 func TestGenerateState_Unique(t *testing.T) {
 	// Generate multiple states and ensure they're unique
 	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		state, err := GenerateState()
 		if err != nil {
 			t.Fatalf("GenerateState() error = %v", err)

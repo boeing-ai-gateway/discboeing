@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -24,7 +25,7 @@ func TestListSessionsByProject_Empty(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Sessions []interface{} `json:"sessions"`
+		Sessions []any `json:"sessions"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -44,12 +45,12 @@ func TestCreateSession_ViaChat(t *testing.T) {
 	// Sessions are created implicitly via the chat endpoint
 	// Format matches AI SDK's DefaultChatTransport with UIMessage format
 	sessionID := "test-session-id-1"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Create a new session"},
 				},
 			},
@@ -61,7 +62,7 @@ func TestCreateSession_ViaChat(t *testing.T) {
 	// Chat endpoint returns a normal JSON response.
 	AssertStatus(t, resp, http.StatusOK)
 
-	var chatResult map[string]interface{}
+	var chatResult map[string]any
 	ParseJSON(t, resp, &chatResult)
 	if chatResult["sessionId"] != sessionID {
 		t.Fatalf("Expected sessionId %q, got %v", sessionID, chatResult["sessionId"])
@@ -78,7 +79,7 @@ func TestCreateSession_ViaChat(t *testing.T) {
 	defer listResp.Body.Close()
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, listResp, &result)
 
@@ -102,12 +103,12 @@ func TestCreateSession_ViaChatWithSessionIDPath(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-session-field"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Create a session using sessionId"},
 				},
 			},
@@ -118,7 +119,7 @@ func TestCreateSession_ViaChatWithSessionIDPath(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var chatResult map[string]interface{}
+	var chatResult map[string]any
 	ParseJSON(t, resp, &chatResult)
 	if chatResult["sessionId"] != sessionID {
 		t.Fatalf("Expected sessionId %q, got %v", sessionID, chatResult["sessionId"])
@@ -138,8 +139,8 @@ func TestCreateSession_ViaLegacyChatEndpoint_NotFound(t *testing.T) {
 	project := ts.CreateTestProject(user, "Test Project")
 	client := ts.AuthenticatedClient(user)
 
-	resp := client.Post("/api/projects/"+project.ID+"/chat", map[string]interface{}{
-		"messages": []map[string]interface{}{},
+	resp := client.Post("/api/projects/"+project.ID+"/chat", map[string]any{
+		"messages": []map[string]any{},
 	})
 	defer resp.Body.Close()
 
@@ -155,15 +156,15 @@ func TestCreateSession_ViaEmptyChat(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-empty-chat"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages":    []map[string]interface{}{},
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages":    []map[string]any{},
 		"workspaceId": workspace.ID,
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var chatResult map[string]interface{}
+	var chatResult map[string]any
 	ParseJSON(t, resp, &chatResult)
 	if chatResult["sessionId"] != sessionID {
 		t.Fatalf("Expected sessionId %q, got %v", sessionID, chatResult["sessionId"])
@@ -182,7 +183,7 @@ func TestCreateSession_ViaEmptyChat(t *testing.T) {
 	defer sessionResp.Body.Close()
 	AssertStatus(t, sessionResp, http.StatusOK)
 
-	var sessionResult map[string]interface{}
+	var sessionResult map[string]any
 	ParseJSON(t, sessionResp, &sessionResult)
 	if sessionResult["name"] != "" {
 		t.Fatalf("expected empty session name for empty chat submission, got %v", sessionResult["name"])
@@ -197,8 +198,8 @@ func TestCreateSession_ViaCreateSessionEndpointWithoutWorkspace(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-no-workspace-1"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{},
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{},
 	})
 	defer resp.Body.Close()
 
@@ -214,7 +215,7 @@ func TestCreateSession_ViaCreateSessionEndpointWithoutWorkspace(t *testing.T) {
 	defer sessionResp.Body.Close()
 	AssertStatus(t, sessionResp, http.StatusOK)
 
-	var sessionResult map[string]interface{}
+	var sessionResult map[string]any
 	ParseJSON(t, sessionResp, &sessionResult)
 
 	workspaceID, ok := sessionResult["workspaceId"].(string)
@@ -226,7 +227,7 @@ func TestCreateSession_ViaCreateSessionEndpointWithoutWorkspace(t *testing.T) {
 	defer workspaceResp.Body.Close()
 	AssertStatus(t, workspaceResp, http.StatusOK)
 
-	var workspaceResult map[string]interface{}
+	var workspaceResult map[string]any
 	ParseJSON(t, workspaceResp, &workspaceResult)
 
 	path, ok := workspaceResult["path"].(string)
@@ -252,12 +253,12 @@ func TestCreateSession_ViaChatWithoutWorkspace(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-no-workspace-2"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Create a session without selecting a workspace"},
 				},
 			},
@@ -271,7 +272,7 @@ func TestCreateSession_ViaChatWithoutWorkspace(t *testing.T) {
 	defer sessionResp.Body.Close()
 	AssertStatus(t, sessionResp, http.StatusOK)
 
-	var sessionResult map[string]interface{}
+	var sessionResult map[string]any
 	ParseJSON(t, sessionResp, &sessionResult)
 
 	workspaceID, ok := sessionResult["workspaceId"].(string)
@@ -283,7 +284,7 @@ func TestCreateSession_ViaChatWithoutWorkspace(t *testing.T) {
 	defer workspaceResp.Body.Close()
 	AssertStatus(t, workspaceResp, http.StatusOK)
 
-	var workspaceResult map[string]interface{}
+	var workspaceResult map[string]any
 	ParseJSON(t, workspaceResp, &workspaceResult)
 
 	path, ok := workspaceResult["path"].(string)
@@ -312,12 +313,12 @@ func TestCreateSession_ViaChatWithWorkspace(t *testing.T) {
 	// Sessions are created implicitly via the chat endpoint with workspace
 	// Format matches AI SDK's DefaultChatTransport with UIMessage format
 	sessionID := "test-session-id-2"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Hello agent"},
 				},
 			},
@@ -333,7 +334,7 @@ func TestCreateSession_ViaChatWithWorkspace(t *testing.T) {
 	defer listResp.Body.Close()
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, listResp, &result)
 
@@ -354,12 +355,12 @@ func TestCreateSession_NameRemainsEmptyAfterPrompt(t *testing.T) {
 	// Session name stays empty until it is populated elsewhere.
 	longPrompt := "This is a very long prompt that should be truncated to fit within the 50 character limit for session names"
 	sessionID := "test-session-id-3"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": longPrompt},
 				},
 			},
@@ -375,7 +376,7 @@ func TestCreateSession_NameRemainsEmptyAfterPrompt(t *testing.T) {
 	defer listResp.Body.Close()
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, listResp, &result)
 
@@ -404,7 +405,7 @@ func TestGetSession(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["id"] != session.ID {
@@ -432,7 +433,7 @@ func TestUpdateSession(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["name"] != "Updated Session" {
@@ -462,7 +463,7 @@ func TestDeleteSession(t *testing.T) {
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 	if result["status"] != "removing" {
 		t.Errorf("Expected status 'removing', got '%v'", result["status"])
@@ -543,6 +544,46 @@ func TestListSessionFiles(t *testing.T) {
 	}
 	if result.Path != "." {
 		t.Errorf("Expected path '.', got %s", result.Path)
+	}
+}
+
+func TestListMessages(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+
+	// Set up mock sandbox HTTP server that responds to /chat
+	mockSandboxServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" && r.Header.Get("Accept") != "text/event-stream" {
+			// Return empty messages array
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"messages":[]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer mockSandboxServer.Close()
+
+	// Create session with sandbox using mock server
+	session := ts.CreateTestSessionWithMockSandbox(workspace, "Test Session", mockSandboxServer.URL)
+	client := ts.AuthenticatedClient(user)
+
+	// Get messages from sandbox - returns empty since no messages have been sent
+	resp := client.Get("/api/projects/" + project.ID + "/sessions/" + session.ID + "/messages")
+	defer resp.Body.Close()
+
+	AssertStatus(t, resp, http.StatusOK)
+
+	var result struct {
+		Messages []any `json:"messages"`
+	}
+	ParseJSON(t, resp, &result)
+
+	if len(result.Messages) != 0 {
+		t.Errorf("Expected 0 messages, got %d", len(result.Messages))
 	}
 }
 
@@ -671,7 +712,7 @@ func TestGetSession_IncludesCommitStatus(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["commitStatus"] != "committing" {
@@ -707,7 +748,7 @@ func TestGetSession_MapsFailedCommitIntoStatusAndError(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["status"] != "error" {
@@ -747,7 +788,7 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -792,7 +833,7 @@ func TestCommitSession_SendsCommitMessageToAgent(t *testing.T) {
 	baseCommit := gitStatus.Commit
 
 	// Track messages sent to the agent
-	var capturedMessages []map[string]interface{}
+	var capturedMessages []map[string]any
 	var messagesMu sync.Mutex
 
 	// Set up a custom HTTP handler to capture messages sent to /chat
@@ -802,7 +843,7 @@ func TestCommitSession_SendsCommitMessageToAgent(t *testing.T) {
 			body, _ := io.ReadAll(r.Body)
 			r.Body.Close()
 
-			var req map[string]interface{}
+			var req map[string]any
 			if err := json.Unmarshal(body, &req); err == nil {
 				messagesMu.Lock()
 				capturedMessages = append(capturedMessages, req)
@@ -865,12 +906,12 @@ waitLoop:
 		case <-ticker.C:
 			messagesMu.Lock()
 			for _, msg := range capturedMessages {
-				if messages, ok := msg["messages"].([]interface{}); ok {
+				if messages, ok := msg["messages"].([]any); ok {
 					for _, m := range messages {
-						if msgMap, ok := m.(map[string]interface{}); ok {
-							if parts, ok := msgMap["parts"].([]interface{}); ok {
+						if msgMap, ok := m.(map[string]any); ok {
+							if parts, ok := msgMap["parts"].([]any); ok {
 								for _, p := range parts {
-									if partMap, ok := p.(map[string]interface{}); ok {
+									if partMap, ok := p.(map[string]any); ok {
 										if text, ok := partMap["text"].(string); ok {
 											expectedMsg := "/discobot-commit " + baseCommit
 											if text == expectedMsg {

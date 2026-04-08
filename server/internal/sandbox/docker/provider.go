@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -352,9 +353,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	if opts.SharedSecret != "" {
 		labels[labelSecret] = opts.SharedSecret
 	}
-	for k, v := range opts.Labels {
-		labels[k] = v
-	}
+	maps.Copy(labels, opts.Labels)
 
 	// Build environment variables
 	var env []string
@@ -727,7 +726,7 @@ func (p *Provider) processPullProgress(reader io.Reader, taskID string) error {
 	layerDownloadProgress := make(map[string]int64) // layerID -> max bytes downloaded
 
 	for {
-		var rawEvent map[string]interface{}
+		var rawEvent map[string]any
 		if err := decoder.Decode(&rawEvent); err != nil {
 			if err == io.EOF {
 				break
@@ -740,7 +739,7 @@ func (p *Provider) processPullProgress(reader io.Reader, taskID string) error {
 		id, _ := rawEvent["id"].(string)
 
 		var current int64
-		if pd, ok := rawEvent["progressDetail"].(map[string]interface{}); ok {
+		if pd, ok := rawEvent["progressDetail"].(map[string]any); ok {
 			if c, ok := pd["current"].(float64); ok {
 				current = int64(c)
 			}

@@ -100,11 +100,11 @@ func stripSvcPrefix(line, prefix string) string {
 	if prefix == "" {
 		return line
 	}
-	idx := strings.Index(line, prefix)
-	if idx == -1 {
+	_, content, found := strings.Cut(line, prefix)
+	if !found {
 		return line
 	}
-	return strings.TrimLeft(line[idx+len(prefix):], " \t")
+	return strings.TrimLeft(content, " \t")
 }
 
 // parseServiceFrontMatter parses service YAML front matter from file content.
@@ -175,12 +175,12 @@ func parseServiceFrontMatter(content string) (cfg serviceConfig, bodyStart int, 
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		colonIdx := strings.Index(trimmed, ":")
-		if colonIdx == -1 {
+		key, value, ok := strings.Cut(trimmed, ":")
+		if !ok {
 			continue
 		}
-		key := strings.TrimSpace(trimmed[:colonIdx])
-		value := strings.TrimSpace(trimmed[colonIdx+1:])
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
 
 		// Remove quotes
 		if len(value) >= 2 {

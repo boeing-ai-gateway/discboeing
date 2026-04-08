@@ -611,8 +611,7 @@ func serializeHeaders(headers http.Header) []byte {
 // deserializeHeaders converts bytes to http.Header.
 func deserializeHeaders(data []byte) http.Header {
 	headers := make(http.Header)
-	lines := bytes.Split(data, []byte{'\n'})
-	for _, line := range lines {
+	for line := range bytes.SplitSeq(data, []byte{'\n'}) {
 		if len(line) == 0 {
 			continue
 		}

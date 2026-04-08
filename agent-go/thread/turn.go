@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"log"
+	"maps"
 	"strings"
 	"time"
 
@@ -586,9 +587,7 @@ func (lc *loopContext) loadToolsPhaseState() (*toolsPhaseState, bool) {
 	}
 	lc.asyncHandles = nil
 	allResults := make(map[string]message.ToolResultPart)
-	for id, r := range completedTools {
-		allResults[id] = r
-	}
+	maps.Copy(allResults, completedTools)
 	return &toolsPhaseState{
 		stepIndex:               stepIndex,
 		toolCalls:               toolCalls,
@@ -1532,10 +1531,7 @@ func makeRetryStatusChunk(event transport.RetryEvent) (message.DataChunk, error)
 }
 
 func formatRetryMessage(event transport.RetryEvent) string {
-	delay := event.Delay
-	if delay < 0 {
-		delay = 0
-	}
+	delay := max(event.Delay, 0)
 	delayText := delay.Round(100 * time.Millisecond).String()
 
 	switch {

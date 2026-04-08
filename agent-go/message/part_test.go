@@ -210,7 +210,7 @@ func TestPartTypeField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	json.Unmarshal(data, &raw)
 	if raw["type"] != "text" {
 		t.Errorf("expected type=text, got %v", raw["type"])

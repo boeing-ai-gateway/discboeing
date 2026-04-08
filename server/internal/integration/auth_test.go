@@ -31,7 +31,7 @@ func TestAuthMe_Authenticated(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["email"] != "test@example.com" {
@@ -85,7 +85,7 @@ func TestNoAuthMode_AuthMe(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["id"] != model.AnonymousUserID {
@@ -109,7 +109,7 @@ func TestNoAuthMode_AuthProvidersIncludeDiscobotMetadata(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		AuthProviders []map[string]interface{} `json:"authProviders"`
+		AuthProviders []map[string]any `json:"authProviders"`
 	}
 	ParseJSON(t, resp, &result)
 

@@ -22,7 +22,7 @@ func TestListCredentials_Empty(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Credentials []map[string]interface{} `json:"credentials"`
+		Credentials []map[string]any `json:"credentials"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -45,7 +45,7 @@ func TestCreateCredential_APIKey(t *testing.T) {
 	})
 	AssertStatus(t, resp, http.StatusOK)
 
-	var cred map[string]interface{}
+	var cred map[string]any
 	ParseJSON(t, resp, &cred)
 
 	if cred["provider"] != "anthropic" {
@@ -81,7 +81,7 @@ func TestCreateCredential_ID(t *testing.T) {
 	})
 	AssertStatus(t, resp, http.StatusOK)
 
-	var cred map[string]interface{}
+	var cred map[string]any
 	ParseJSON(t, resp, &cred)
 
 	if cred["provider"] != "discobot" {
@@ -196,7 +196,7 @@ func TestGetCredential(t *testing.T) {
 	resp = client.Get("/api/projects/" + project.ID + "/credentials/openai")
 	AssertStatus(t, resp, http.StatusOK)
 
-	var cred map[string]interface{}
+	var cred map[string]any
 	ParseJSON(t, resp, &cred)
 
 	if cred["provider"] != "openai" {
@@ -302,7 +302,7 @@ func TestUpdateCredential(t *testing.T) {
 	})
 	AssertStatus(t, resp, http.StatusOK)
 
-	var cred map[string]interface{}
+	var cred map[string]any
 	ParseJSON(t, resp, &cred)
 
 	if cred["name"] != "Updated Name" {
@@ -314,7 +314,7 @@ func TestUpdateCredential(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var credList struct {
-		Credentials []map[string]interface{} `json:"credentials"`
+		Credentials []map[string]any `json:"credentials"`
 	}
 	ParseJSON(t, resp, &credList)
 
@@ -346,7 +346,7 @@ func TestListCredentials_WithData(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Credentials []map[string]interface{} `json:"credentials"`
+		Credentials []map[string]any `json:"credentials"`
 	}
 	ParseJSON(t, resp, &result)
 

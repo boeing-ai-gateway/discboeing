@@ -68,13 +68,13 @@ type socksLogger struct {
 	logger *logger.Logger
 }
 
-func (l *socksLogger) Errorf(format string, args ...interface{}) {
+func (l *socksLogger) Errorf(format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
 // Implement the full Logger interface from go-socks5
 type stdLogger interface {
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 }
 
 var _ stdLogger = (*socksLogger)(nil)

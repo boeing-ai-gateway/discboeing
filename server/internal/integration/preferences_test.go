@@ -17,7 +17,7 @@ func TestListPreferences_Empty(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Preferences []interface{} `json:"preferences"`
+		Preferences []any `json:"preferences"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -32,14 +32,14 @@ func TestSetPreference(t *testing.T) {
 	user := ts.CreateTestUser("test@example.com")
 	client := ts.AuthenticatedClient(user)
 
-	resp := client.Put("/api/preferences/preferredIDE", map[string]interface{}{
+	resp := client.Put("/api/preferences/preferredIDE", map[string]any{
 		"value": "vscode",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["key"] != "preferredIDE" {
@@ -57,7 +57,7 @@ func TestGetPreference(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// First set a preference
-	resp := client.Put("/api/preferences/theme", map[string]interface{}{
+	resp := client.Put("/api/preferences/theme", map[string]any{
 		"value": "dark",
 	})
 	resp.Body.Close()
@@ -69,7 +69,7 @@ func TestGetPreference(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["key"] != "theme" {
@@ -99,21 +99,21 @@ func TestUpdatePreference(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set initial value
-	resp := client.Put("/api/preferences/editor", map[string]interface{}{
+	resp := client.Put("/api/preferences/editor", map[string]any{
 		"value": "vim",
 	})
 	resp.Body.Close()
 	AssertStatus(t, resp, http.StatusOK)
 
 	// Update it
-	resp = client.Put("/api/preferences/editor", map[string]interface{}{
+	resp = client.Put("/api/preferences/editor", map[string]any{
 		"value": "neovim",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["value"] != "neovim" {
@@ -128,7 +128,7 @@ func TestDeletePreference(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set a preference
-	resp := client.Put("/api/preferences/toDelete", map[string]interface{}{
+	resp := client.Put("/api/preferences/toDelete", map[string]any{
 		"value": "some-value",
 	})
 	resp.Body.Close()
@@ -165,7 +165,7 @@ func TestSetMultiplePreferences(t *testing.T) {
 	user := ts.CreateTestUser("test@example.com")
 	client := ts.AuthenticatedClient(user)
 
-	resp := client.Put("/api/preferences", map[string]interface{}{
+	resp := client.Put("/api/preferences", map[string]any{
 		"preferences": map[string]string{
 			"theme":  "dark",
 			"editor": "cursor",
@@ -177,7 +177,7 @@ func TestSetMultiplePreferences(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Preferences []map[string]interface{} `json:"preferences"`
+		Preferences []map[string]any `json:"preferences"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -193,8 +193,8 @@ func TestListPreferences_WithData(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set multiple preferences
-	client.Put("/api/preferences/pref1", map[string]interface{}{"value": "val1"}).Body.Close()
-	client.Put("/api/preferences/pref2", map[string]interface{}{"value": "val2"}).Body.Close()
+	client.Put("/api/preferences/pref1", map[string]any{"value": "val1"}).Body.Close()
+	client.Put("/api/preferences/pref2", map[string]any{"value": "val2"}).Body.Close()
 
 	// List them
 	resp := client.Get("/api/preferences")
@@ -203,7 +203,7 @@ func TestListPreferences_WithData(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	var result struct {
-		Preferences []map[string]interface{} `json:"preferences"`
+		Preferences []map[string]any `json:"preferences"`
 	}
 	ParseJSON(t, resp, &result)
 
@@ -221,7 +221,7 @@ func TestPreferences_UserIsolation(t *testing.T) {
 	client2 := ts.AuthenticatedClient(user2)
 
 	// User 1 sets a preference
-	resp := client1.Put("/api/preferences/myPref", map[string]interface{}{
+	resp := client1.Put("/api/preferences/myPref", map[string]any{
 		"value": "user1-value",
 	})
 	resp.Body.Close()
@@ -233,7 +233,7 @@ func TestPreferences_UserIsolation(t *testing.T) {
 	AssertStatus(t, resp, http.StatusNotFound)
 
 	// User 2 sets their own version
-	resp = client2.Put("/api/preferences/myPref", map[string]interface{}{
+	resp = client2.Put("/api/preferences/myPref", map[string]any{
 		"value": "user2-value",
 	})
 	resp.Body.Close()
@@ -243,7 +243,7 @@ func TestPreferences_UserIsolation(t *testing.T) {
 	resp = client1.Get("/api/preferences/myPref")
 	defer resp.Body.Close()
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["value"] != "user1-value" {
@@ -273,14 +273,14 @@ func TestPreferences_SpecialCharactersInKey(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Test with a key that has special characters (URL encoded)
-	resp := client.Put("/api/preferences/user.settings.theme", map[string]interface{}{
+	resp := client.Put("/api/preferences/user.settings.theme", map[string]any{
 		"value": "dark",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["key"] != "user.settings.theme" {
@@ -295,14 +295,14 @@ func TestPreferences_EmptyValue(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Set a preference with empty value (should be allowed)
-	resp := client.Put("/api/preferences/emptyPref", map[string]interface{}{
+	resp := client.Put("/api/preferences/emptyPref", map[string]any{
 		"value": "",
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["value"] != "" {
@@ -318,14 +318,14 @@ func TestPreferences_LargeValue(t *testing.T) {
 
 	// Set a preference with a large JSON value
 	largeValue := `{"settings": {"theme": "dark", "fontSize": 14, "fontFamily": "JetBrains Mono", "tabSize": 4, "wordWrap": true}}`
-	resp := client.Put("/api/preferences/complexConfig", map[string]interface{}{
+	resp := client.Put("/api/preferences/complexConfig", map[string]any{
 		"value": largeValue,
 	})
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var pref map[string]interface{}
+	var pref map[string]any
 	ParseJSON(t, resp, &pref)
 
 	if pref["value"] != largeValue {

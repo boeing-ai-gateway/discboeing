@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // DynamicToolPart represents a tool invocation with its full lifecycle state,
@@ -139,16 +140,16 @@ func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 }
 
 func buildUISystemMessage(msg Message) UIMessage {
-	text := ""
+	var text strings.Builder
 	for _, p := range msg.Parts {
 		if tp, ok := p.(TextPart); ok {
-			text += tp.Text
+			text.WriteString(tp.Text)
 		}
 	}
 	return UIMessage{
 		ID:       msg.ID,
 		Role:     "system",
-		Parts:    []UIPart{UITextPart{Type: "text", Text: text, State: "done"}},
+		Parts:    []UIPart{UITextPart{Type: "text", Text: text.String(), State: "done"}},
 		Metadata: msg.Metadata,
 	}
 }

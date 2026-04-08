@@ -38,7 +38,7 @@ func (h historyView) At(idx int) string {
 func loadCmdHistory(path string) *cmdHistory {
 	h := &cmdHistory{path: path}
 	if data, err := os.ReadFile(path); err == nil {
-		for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
 			if line != "" {
 				h.entries = append(h.entries, line)
 			}

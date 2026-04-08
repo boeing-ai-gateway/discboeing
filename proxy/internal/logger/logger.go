@@ -67,22 +67,22 @@ func New(cfg config.LoggingConfig) (*Logger, error) {
 }
 
 // Debug logs a debug message.
-func (l *Logger) Debug(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Debug(msg string, keysAndValues ...any) {
 	l.sugar.Debugw(msg, keysAndValues...)
 }
 
 // Info logs an info message.
-func (l *Logger) Info(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Info(msg string, keysAndValues ...any) {
 	l.sugar.Infow(msg, keysAndValues...)
 }
 
 // Warn logs a warning message.
-func (l *Logger) Warn(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Warn(msg string, keysAndValues ...any) {
 	l.sugar.Warnw(msg, keysAndValues...)
 }
 
 // Error logs an error message.
-func (l *Logger) Error(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Error(msg string, keysAndValues ...any) {
 	l.sugar.Errorw(msg, keysAndValues...)
 }
 

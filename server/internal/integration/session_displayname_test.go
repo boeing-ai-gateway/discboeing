@@ -15,12 +15,12 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 
 	// Create a session via chat
 	sessionID := "test-displayname-session-1"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Help me fix authentication bug"},
 				},
 			},
@@ -35,7 +35,7 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	defer getResp.Body.Close()
 	AssertStatus(t, getResp, http.StatusOK)
 
-	var session map[string]interface{}
+	var session map[string]any
 	ParseJSON(t, getResp, &session)
 
 	if session["name"] != "Help me fix authentication bug" {
@@ -46,13 +46,13 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	}
 
 	// Update the session with a displayName
-	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]interface{}{
+	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]any{
 		"displayName": "Auth Bug Fix",
 	})
 	defer updateResp.Body.Close()
 	AssertStatus(t, updateResp, http.StatusOK)
 
-	var updatedSession map[string]interface{}
+	var updatedSession map[string]any
 	ParseJSON(t, updateResp, &updatedSession)
 
 	// Verify displayName is set
@@ -69,7 +69,7 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	defer getResp2.Body.Close()
 	AssertStatus(t, getResp2, http.StatusOK)
 
-	var persistedSession map[string]interface{}
+	var persistedSession map[string]any
 	ParseJSON(t, getResp2, &persistedSession)
 
 	if persistedSession["displayName"] != "Auth Bug Fix" {
@@ -90,12 +90,12 @@ func TestSessionDisplayName_ClearDisplayName(t *testing.T) {
 
 	// Create a session
 	sessionID := "test-displayname-session-2"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Original prompt text"},
 				},
 			},
@@ -106,20 +106,20 @@ func TestSessionDisplayName_ClearDisplayName(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	// Set a displayName
-	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]interface{}{
+	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]any{
 		"displayName": "Custom Name",
 	})
 	updateResp.Body.Close()
 	AssertStatus(t, updateResp, http.StatusOK)
 
 	// Clear the displayName by setting it to null
-	clearResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]interface{}{
+	clearResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]any{
 		"displayName": nil,
 	})
 	defer clearResp.Body.Close()
 	AssertStatus(t, clearResp, http.StatusOK)
 
-	var clearedSession map[string]interface{}
+	var clearedSession map[string]any
 	ParseJSON(t, clearResp, &clearedSession)
 
 	// displayName should be cleared (null or empty)
@@ -142,12 +142,12 @@ func TestSessionDisplayName_InList(t *testing.T) {
 
 	// Create multiple sessions with different displayName configurations
 	session1ID := "test-displayname-list-1"
-	resp1 := client.Post(threadChatPath(project.ID, session1ID, session1ID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp1 := client.Post(threadChatPath(project.ID, session1ID, session1ID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "First session prompt"},
 				},
 			},
@@ -158,12 +158,12 @@ func TestSessionDisplayName_InList(t *testing.T) {
 	AssertStatus(t, resp1, http.StatusOK)
 
 	session2ID := "test-displayname-list-2"
-	resp2 := client.Post(threadChatPath(project.ID, session2ID, session2ID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp2 := client.Post(threadChatPath(project.ID, session2ID, session2ID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Second session prompt"},
 				},
 			},
@@ -174,7 +174,7 @@ func TestSessionDisplayName_InList(t *testing.T) {
 	AssertStatus(t, resp2, http.StatusOK)
 
 	// Set displayName on second session only
-	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+session2ID, map[string]interface{}{
+	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+session2ID, map[string]any{
 		"displayName": "My Custom Session",
 	})
 	updateResp.Body.Close()
@@ -186,7 +186,7 @@ func TestSessionDisplayName_InList(t *testing.T) {
 	AssertStatus(t, listResp, http.StatusOK)
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, listResp, &result)
 
@@ -196,7 +196,7 @@ func TestSessionDisplayName_InList(t *testing.T) {
 	}
 
 	// Find our sessions in the list
-	var session1, session2 map[string]interface{}
+	var session1, session2 map[string]any
 	for _, s := range result.Sessions {
 		switch s["id"] {
 		case session1ID:
@@ -239,12 +239,12 @@ func TestSessionDisplayName_EmptyString(t *testing.T) {
 
 	// Create a session
 	sessionID := "test-displayname-empty"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Test prompt"},
 				},
 			},
@@ -255,13 +255,13 @@ func TestSessionDisplayName_EmptyString(t *testing.T) {
 	AssertStatus(t, resp, http.StatusOK)
 
 	// Try to set displayName to empty string (should be treated as clearing it)
-	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]interface{}{
+	updateResp := client.Patch("/api/projects/"+project.ID+"/sessions/"+sessionID, map[string]any{
 		"displayName": "",
 	})
 	defer updateResp.Body.Close()
 	AssertStatus(t, updateResp, http.StatusOK)
 
-	var updatedSession map[string]interface{}
+	var updatedSession map[string]any
 	ParseJSON(t, updateResp, &updatedSession)
 
 	// Empty string should result in no displayName (or empty)

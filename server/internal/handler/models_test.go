@@ -13,20 +13,17 @@ import (
 // 2. The field types match
 // 3. The JSON tags match (to ensure API stability)
 func TestModelMapping(t *testing.T) {
-	serviceType := reflect.TypeOf(service.Model{})
-	handlerType := reflect.TypeOf(ModelInfo{})
+	serviceType := reflect.TypeFor[service.Model]()
+	handlerType := reflect.TypeFor[ModelInfo]()
 
 	// Build a map of handler fields for quick lookup
 	handlerFields := make(map[string]reflect.StructField)
-	for i := 0; i < handlerType.NumField(); i++ {
-		field := handlerType.Field(i)
+	for field := range handlerType.Fields() {
 		handlerFields[field.Name] = field
 	}
 
 	// Check that every field in service.Model exists in handler.ModelInfo
-	for i := 0; i < serviceType.NumField(); i++ {
-		serviceField := serviceType.Field(i)
-
+	for serviceField := range serviceType.Fields() {
 		// Skip unexported fields
 		if !serviceField.IsExported() {
 			continue

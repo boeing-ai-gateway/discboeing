@@ -29,7 +29,7 @@ func TestListProjects_Empty(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var projects []interface{}
+	var projects []any
 	ParseJSON(t, resp, &projects)
 
 	if len(projects) != 0 {
@@ -50,7 +50,7 @@ func TestCreateProject(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var project map[string]interface{}
+	var project map[string]any
 	ParseJSON(t, resp, &project)
 
 	if project["name"] != "Test Project" {
@@ -85,7 +85,7 @@ func TestGetProject(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["id"] != project.ID {
@@ -121,7 +121,7 @@ func TestUpdateProject(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
 	if result["name"] != "Updated Project" {
@@ -160,7 +160,7 @@ func TestListProjectMembers(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var members []map[string]interface{}
+	var members []map[string]any
 	ParseJSON(t, resp, &members)
 
 	if len(members) != 1 {
@@ -183,7 +183,7 @@ func TestCreateInvitation(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusCreated)
 
-	var invitation map[string]interface{}
+	var invitation map[string]any
 	ParseJSON(t, resp, &invitation)
 
 	if invitation["email"] != "newuser@example.com" {

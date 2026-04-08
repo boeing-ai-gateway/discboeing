@@ -480,7 +480,7 @@ func (d *Service) publishJobCompletionEvent(job *model.Job, status, errorMsg str
 // extractProjectIDFromJob extracts the projectId from the job payload.
 // Returns empty string if projectId cannot be found.
 func (d *Service) extractProjectIDFromJob(job *model.Job) string {
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return ""
 	}

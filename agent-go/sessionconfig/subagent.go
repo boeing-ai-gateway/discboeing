@@ -177,7 +177,7 @@ func normalizeSupportingModelsFrontmatter(fm map[string]any) error {
 	}
 
 	models := make(providers.SupportingModels)
-	for _, item := range strings.Split(value, ",") {
+	for item := range strings.SplitSeq(value, ",") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue

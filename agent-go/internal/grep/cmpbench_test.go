@@ -15,8 +15,6 @@ import (
 const defaultCorpus = "/usr/local/go/src"
 const rgBinary = "/usr/bin/rg"
 
-func boolPtr(b bool) *bool { return &b }
-
 func benchCorpus() string {
 	if c := os.Getenv("GOGREP_BENCH_CORPUS"); c != "" {
 		return c
@@ -38,7 +36,7 @@ func benchScenarios() []scenario {
 			Name: "LiteralSimple",
 			Opts: GrepOptions{
 				Pattern: "error", Path: c, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "--type", "go", "error", c},
 			MinCount: 1000,
@@ -47,7 +45,7 @@ func benchScenarios() []scenario {
 			Name: "LiteralRare",
 			Opts: GrepOptions{
 				Pattern: "GODEBUG", Path: c,
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "GODEBUG", c},
 			MinCount: 10,
@@ -56,7 +54,7 @@ func benchScenarios() []scenario {
 			Name: "RegexFuncDef",
 			Opts: GrepOptions{
 				Pattern: `func \w+\(`, Path: c, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "--type", "go", `func \w+\(`, c},
 			MinCount: 10000,
@@ -66,7 +64,7 @@ func benchScenarios() []scenario {
 			Opts: GrepOptions{
 				Pattern: "error", Path: c, Type: "go",
 				CaseInsensitive: true, OutputMode: "count",
-				RespectGitignore: boolPtr(false),
+				RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-ic", "--no-ignore", "--type", "go", "error", c},
 			MinCount: 1000,
@@ -75,7 +73,7 @@ func benchScenarios() []scenario {
 			Name: "Alternation",
 			Opts: GrepOptions{
 				Pattern: "error|warning|fatal|panic", Path: c, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "--type", "go", "error|warning|fatal|panic", c},
 			MinCount: 1000,
@@ -85,7 +83,7 @@ func benchScenarios() []scenario {
 			Opts: GrepOptions{
 				Pattern: "interface", Path: c, Type: "go",
 				OutputMode:       "files_with_matches",
-				RespectGitignore: boolPtr(false),
+				RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-l", "--no-ignore", "--type", "go", "interface", c},
 			MinCount: 100,
@@ -94,7 +92,7 @@ func benchScenarios() []scenario {
 			Name: "CountHighFreq",
 			Opts: GrepOptions{
 				Pattern: "return", Path: c, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "--type", "go", "return", c},
 			MinCount: 10000,
@@ -103,7 +101,7 @@ func benchScenarios() []scenario {
 			Name: "NoTypeFilter",
 			Opts: GrepOptions{
 				Pattern: "TODO", Path: c,
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			RgArgs:   []string{"-c", "--no-ignore", "TODO", c},
 			MinCount: 100,
@@ -255,7 +253,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "error",
 			opts: GrepOptions{
 				Pattern: "error", Path: corpus, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-c", "--no-ignore", "--type", "go", "error", corpus},
 		},
@@ -265,7 +263,7 @@ func TestParityWithRg(t *testing.T) {
 			opts: GrepOptions{
 				Pattern: "error", Path: corpus, Type: "go",
 				CaseInsensitive: true, OutputMode: "count",
-				RespectGitignore: boolPtr(false),
+				RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-ic", "--no-ignore", "--type", "go", "error", corpus},
 		},
@@ -274,7 +272,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: `func \w+\(`,
 			opts: GrepOptions{
 				Pattern: `func \w+\(`, Path: corpus, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			// --no-unicode: Go's \w is ASCII-only [0-9A-Za-z_], rg's is Unicode by default
 			rgArgs: []string{"-c", "--no-ignore", "--no-unicode", "--type", "go", `func \w+\(`, corpus},
@@ -284,7 +282,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "error|warning|fatal|panic",
 			opts: GrepOptions{
 				Pattern: "error|warning|fatal|panic", Path: corpus, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-c", "--no-ignore", "--type", "go", "error|warning|fatal|panic", corpus},
 		},
@@ -293,7 +291,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "interface",
 			opts: GrepOptions{
 				Pattern: "interface", Path: corpus, Type: "go",
-				OutputMode: "files_with_matches", RespectGitignore: boolPtr(false),
+				OutputMode: "files_with_matches", RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-l", "--no-ignore", "--type", "go", "interface", corpus},
 		},
@@ -302,7 +300,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "TODO",
 			opts: GrepOptions{
 				Pattern: "TODO", Path: corpus,
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-c", "--no-ignore", "TODO", corpus},
 		},
@@ -311,7 +309,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "GODEBUG",
 			opts: GrepOptions{
 				Pattern: "GODEBUG", Path: corpus, Type: "go",
-				OutputMode: "count", RespectGitignore: boolPtr(false),
+				OutputMode: "count", RespectGitignore: new(false),
 			},
 			rgArgs: []string{"-c", "--no-ignore", "--type", "go", "GODEBUG", corpus},
 		},
@@ -320,7 +318,7 @@ func TestParityWithRg(t *testing.T) {
 			pattern: "GODEBUG",
 			opts: GrepOptions{
 				Pattern: "GODEBUG", Path: corpus, Type: "go",
-				RespectGitignore: boolPtr(false),
+				RespectGitignore: new(false),
 			},
 			rgArgs: []string{"--no-ignore", "--type", "go", "--no-heading", "--no-line-number", "GODEBUG", corpus},
 		},
@@ -434,7 +432,7 @@ func TestParityWithRg(t *testing.T) {
 
 func parseRgCountTotal(output string) int {
 	total := 0
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}
@@ -452,7 +450,7 @@ func parseRgCountTotal(output string) int {
 
 func parseRgFileCounts(output string) map[string]int {
 	counts := make(map[string]int)
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}
@@ -471,7 +469,7 @@ func parseRgFileCounts(output string) map[string]int {
 
 func parseRgFileList(output string) map[string]bool {
 	files := make(map[string]bool)
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line != "" {
 			files[line] = true
 		}
@@ -481,7 +479,7 @@ func parseRgFileList(output string) map[string]bool {
 
 func parseRgContentLines(output string) []string {
 	var lines []string
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line != "" {
 			lines = append(lines, line)
 		}

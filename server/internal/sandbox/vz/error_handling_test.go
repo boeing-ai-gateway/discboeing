@@ -84,7 +84,7 @@ func TestImageDownloader_RecordErrorMultipleCalls(t *testing.T) {
 	})
 
 	// Call multiple times - should not panic
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		downloader.RecordError(fmt.Errorf("error %d", i))
 	}
 

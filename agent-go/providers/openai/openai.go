@@ -906,12 +906,11 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 	var eventType string
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "event: ") {
-			eventType = strings.TrimPrefix(line, "event: ")
+		if event, ok := strings.CutPrefix(line, "event: "); ok {
+			eventType = event
 			continue
 		}
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
+		if data, ok := strings.CutPrefix(line, "data: "); ok {
 			if eventType != "" {
 				if !state.handleSSEEvent(eventType, []byte(data), yield) {
 					return

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -166,9 +167,7 @@ func closePooledConnNow(pc *pooledConn) {
 
 func cloneWebSocketBody(body map[string]any) map[string]any {
 	cloned := make(map[string]any, len(body)+2)
-	for k, v := range body {
-		cloned[k] = v
-	}
+	maps.Copy(cloned, body)
 	return cloned
 }
 

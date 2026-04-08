@@ -119,11 +119,11 @@ func TestLimitOutput_SpillFileContainsFullOutput(t *testing.T) {
 
 	// Extract the spill file path from the message.
 	const marker = "Full output written to: "
-	idx := strings.Index(out, marker)
-	if idx < 0 {
+	_, after, ok := strings.Cut(out, marker)
+	if !ok {
 		t.Fatalf("could not find spill file path in output: %s", out)
 	}
-	spillPath := strings.TrimSpace(strings.SplitN(out[idx+len(marker):], "]", 2)[0])
+	spillPath := strings.TrimSpace(strings.SplitN(after, "]", 2)[0])
 
 	spillData, err := os.ReadFile(spillPath)
 	if err != nil {

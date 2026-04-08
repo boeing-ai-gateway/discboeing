@@ -414,7 +414,7 @@ func getUpgradeProtocol(req *http.Request, resp *http.Response) (string, bool) {
 
 func headerContainsToken(header http.Header, key, token string) bool {
 	for _, value := range header.Values(key) {
-		for _, part := range strings.Split(value, ",") {
+		for part := range strings.SplitSeq(value, ",") {
 			if strings.EqualFold(strings.TrimSpace(part), token) {
 				return true
 			}

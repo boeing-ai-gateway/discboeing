@@ -415,9 +415,7 @@ func looksLikePasteFragment(fragment string) bool {
 
 func longestSuffixPrefix(data, pattern []byte) int {
 	maxLen := len(pattern) - 1
-	if len(data) < maxLen {
-		maxLen = len(data)
-	}
+	maxLen = min(maxLen, len(data))
 	for n := maxLen; n > 0; n-- {
 		if bytes.Equal(data[len(data)-n:], pattern[:n]) {
 			return n

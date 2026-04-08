@@ -381,7 +381,7 @@ func (s *Store) GetSessionsByStatus(ctx context.Context, status string) ([]model
 
 // UpdateSessionStatus updates only the status and error message fields for a session.
 func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, errorMessage *string) error {
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status": status,
 	}
 	if errorMessage != nil {
@@ -394,7 +394,7 @@ func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, erro
 
 // UpdateSessionErrorMessage updates only the error message field for a session.
 func (s *Store) UpdateSessionErrorMessage(ctx context.Context, id string, errorMessage *string) error {
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if errorMessage != nil {
 		updates["error_message"] = *errorMessage
 	} else {
@@ -420,7 +420,7 @@ func (s *Store) UpdateSessionSSHKey(ctx context.Context, id string, encryptedDat
 
 // UpdateSessionWorkspace updates the workspace path and commit for a session.
 func (s *Store) UpdateSessionWorkspace(ctx context.Context, id, workspacePath, workspaceCommit string) error {
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"workspace_path": workspacePath,
 	}
 	if workspaceCommit != "" {
@@ -725,7 +725,7 @@ func (s *Store) CompleteJob(ctx context.Context, jobID string) error {
 	now := time.Now()
 	return s.writeDB.WithContext(ctx).Model(&model.Job{}).
 		Where("id = ?", jobID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":       model.JobStatusCompleted,
 			"completed_at": now,
 		}).Error
@@ -746,7 +746,7 @@ func (s *Store) FailJob(ctx context.Context, jobID string, errMsg string, baseBa
 			backoff := time.Duration(job.Attempts) * baseBackoff
 			scheduledAt := time.Now().Add(backoff)
 
-			return tx.Model(&job).Updates(map[string]interface{}{
+			return tx.Model(&job).Updates(map[string]any{
 				"status":       model.JobStatusPending,
 				"worker_id":    nil,
 				"started_at":   nil,
@@ -757,7 +757,7 @@ func (s *Store) FailJob(ctx context.Context, jobID string, errMsg string, baseBa
 
 		// Max attempts reached, mark as failed
 		now := time.Now()
-		return tx.Model(&job).Updates(map[string]interface{}{
+		return tx.Model(&job).Updates(map[string]any{
 			"status":       model.JobStatusFailed,
 			"completed_at": now,
 			"error":        errMsg,
@@ -780,7 +780,7 @@ func (s *Store) CleanupStaleJobs(ctx context.Context, staleAfter time.Duration) 
 	cutoff := time.Now().Add(-staleAfter)
 	result := s.writeDB.WithContext(ctx).Model(&model.Job{}).
 		Where("status = ? AND started_at < ?", model.JobStatusRunning, cutoff).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":     model.JobStatusPending,
 			"worker_id":  nil,
 			"started_at": nil,

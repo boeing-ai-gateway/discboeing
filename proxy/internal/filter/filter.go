@@ -3,6 +3,7 @@ package filter
 
 import (
 	"net"
+	"slices"
 	"sync"
 
 	"github.com/obot-platform/discobot/proxy/internal/injector"
@@ -67,15 +68,7 @@ func (f *Filter) AddDomains(domains []string) {
 	defer f.mu.Unlock()
 
 	for _, d := range domains {
-		// Check if already exists
-		exists := false
-		for _, existing := range f.domains {
-			if existing == d {
-				exists = true
-				break
-			}
-		}
-		if !exists {
+		if !slices.Contains(f.domains, d) {
 			f.domains = append(f.domains, d)
 		}
 	}

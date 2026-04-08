@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -186,10 +187,8 @@ func namePathVariants(name string) []string {
 
 func nameToPath(name string) string {
 	parts := strings.Split(name, ":")
-	for _, part := range parts {
-		if part == "" {
-			return name
-		}
+	if slices.Contains(parts, "") {
+		return name
 	}
 	return filepath.Join(parts...)
 }

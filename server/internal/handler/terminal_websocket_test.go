@@ -718,7 +718,7 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 	pty := newMockPTY()
 
 	go func() {
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			pty.feedOutput(fmt.Sprintf("output %d\n", i))
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -753,10 +753,8 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 10; i++ {
+	wg.Go(func() {
+		for i := range 10 {
 			inputMsg := TerminalMessage{
 				Type: "input",
 				Data: json.RawMessage(fmt.Sprintf(`"input %d\n"`, i)),
@@ -764,12 +762,10 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 			ws.WriteJSON(inputMsg)
 			time.Sleep(15 * time.Millisecond)
 		}
-	}()
+	})
 
 	outputCount := 0
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ws.SetReadDeadline(time.Now().Add(5 * time.Second))
 		for {
 			var msg TerminalMessage
@@ -780,7 +776,7 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 				outputCount++
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 

@@ -1,6 +1,7 @@
 package injector
 
 import (
+	"maps"
 	"net"
 	"net/http"
 	"sync"
@@ -169,9 +170,7 @@ func copyMap(m map[string]string) map[string]string {
 		return nil
 	}
 	c := make(map[string]string, len(m))
-	for k, v := range m {
-		c[k] = v
-	}
+	maps.Copy(c, m)
 	return c
 }
 

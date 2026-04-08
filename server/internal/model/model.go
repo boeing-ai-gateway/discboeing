@@ -475,8 +475,8 @@ func (i *Installation) BeforeCreate(_ *gorm.DB) error {
 }
 
 // AllModels returns all model types for migration.
-func AllModels() []interface{} {
-	return []interface{}{
+func AllModels() []any {
+	return []any{
 		&User{},
 		&UserSession{},
 		&Project{},

@@ -518,7 +518,7 @@ func (ts *TestServer) CreateTestUser(email string) *TestUser {
 
 	user := &model.User{
 		Email:      email,
-		Name:       strPtr(fmt.Sprintf("Test User %s", email)),
+		Name:       new(fmt.Sprintf("Test User %s", email)),
 		Provider:   "github",
 		ProviderID: fmt.Sprintf("gh_%s", email),
 	}
@@ -798,19 +798,19 @@ func (tc *TestClient) Get(path string) *http.Response {
 }
 
 // Post makes an authenticated POST request
-func (tc *TestClient) Post(path string, body interface{}) *http.Response {
+func (tc *TestClient) Post(path string, body any) *http.Response {
 	tc.ts.T.Helper()
 	return tc.do("POST", path, body)
 }
 
 // Put makes an authenticated PUT request
-func (tc *TestClient) Put(path string, body interface{}) *http.Response {
+func (tc *TestClient) Put(path string, body any) *http.Response {
 	tc.ts.T.Helper()
 	return tc.do("PUT", path, body)
 }
 
 // Patch makes an authenticated PATCH request
-func (tc *TestClient) Patch(path string, body interface{}) *http.Response {
+func (tc *TestClient) Patch(path string, body any) *http.Response {
 	tc.ts.T.Helper()
 	return tc.do("PATCH", path, body)
 }
@@ -821,7 +821,7 @@ func (tc *TestClient) Delete(path string) *http.Response {
 	return tc.do("DELETE", path, nil)
 }
 
-func (tc *TestClient) do(method, path string, body interface{}) *http.Response {
+func (tc *TestClient) do(method, path string, body any) *http.Response {
 	tc.ts.T.Helper()
 
 	var bodyReader io.Reader
@@ -853,7 +853,7 @@ func (tc *TestClient) do(method, path string, body interface{}) *http.Response {
 }
 
 // ParseJSON parses the response body as JSON
-func ParseJSON(t *testing.T, resp *http.Response, v interface{}) {
+func ParseJSON(t *testing.T, resp *http.Response, v any) {
 	t.Helper()
 	defer func() { _ = resp.Body.Close() }()
 
@@ -875,10 +875,6 @@ func AssertStatus(t *testing.T, resp *http.Response, expected int) {
 		_ = resp.Body.Close()
 		t.Errorf("Expected status %d, got %d\nBody: %s", expected, resp.StatusCode, string(body))
 	}
-}
-
-func strPtr(s string) *string {
-	return &s
 }
 
 // copyFile copies a file from src to dst

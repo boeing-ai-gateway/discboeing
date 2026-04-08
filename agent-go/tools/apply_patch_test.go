@@ -531,10 +531,6 @@ func TestApplyPatch_InsertionOnlyUpdateStillRequiresRead(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string {
-	return &s
-}
-
 func TestSeekPatchSequence_ConformanceCases(t *testing.T) {
 	t.Run("exact match", func(t *testing.T) {
 		lines := []string{"foo", "bar", "baz"}
@@ -656,7 +652,7 @@ func TestParseApplyPatch_ConformanceCases(t *testing.T) {
 			{kind: patchAddFile, path: "path/add.py", addLines: []string{"abc", "def"}},
 			{kind: patchDeleteFile, path: "path/delete.py"},
 			{kind: patchUpdateFile, path: "path/update.py", movePath: "path/update2.py", chunks: []patchChunk{{
-				changeContext: strPtr("def f():"),
+				changeContext: new("def f():"),
 				oldLines:      []string{"    pass"},
 				newLines:      []string{"    return 123"},
 			}}},
@@ -727,7 +723,7 @@ func TestParsePatchChunk_ConformanceCases(t *testing.T) {
 		t.Fatalf("parsePatchChunk returned error: %v", err)
 	}
 	expectedChunk := patchChunk{
-		changeContext: strPtr("change_context"),
+		changeContext: new("change_context"),
 		oldLines:      []string{"", "context", "remove", "context2"},
 		newLines:      []string{"", "context", "add", "context2"},
 	}

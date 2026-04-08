@@ -14,12 +14,10 @@ type ModelRef struct {
 // ParseModelRef splits a "providerId/modelId" string on the first "/".
 // Returns an error if the format is invalid.
 func ParseModelRef(ref string) (ModelRef, error) {
-	i := strings.IndexByte(ref, '/')
-	if i < 0 {
+	providerID, modelID, ok := strings.Cut(ref, "/")
+	if !ok {
 		return ModelRef{}, fmt.Errorf("invalid model ref %q: expected providerId/modelId", ref)
 	}
-	providerID := ref[:i]
-	modelID := ref[i+1:]
 	if providerID == "" {
 		return ModelRef{}, fmt.Errorf("invalid model ref %q: empty provider ID", ref)
 	}

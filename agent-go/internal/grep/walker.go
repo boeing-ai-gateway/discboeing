@@ -56,7 +56,7 @@ func walk(ctx context.Context, opts GrepOptions, s *searcher) (*Results, error) 
 
 	// Start workers
 	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		wg.Go(func() {
 			for fe := range fileCh {
 				if ctx.Err() != nil || truncated.Load() {

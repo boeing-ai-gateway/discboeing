@@ -22,7 +22,7 @@ func TestGetTerminalStatus_NotCreated(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var status map[string]interface{}
+	var status map[string]any
 	ParseJSON(t, resp, &status)
 
 	if status["status"] != "not_created" {
@@ -48,7 +48,7 @@ func TestGetTerminalStatus_Running(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var status map[string]interface{}
+	var status map[string]any
 	ParseJSON(t, resp, &status)
 
 	if status["status"] != "running" {
@@ -70,10 +70,10 @@ func TestGetTerminalHistory_Empty(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	var result map[string]interface{}
+	var result map[string]any
 	ParseJSON(t, resp, &result)
 
-	history, ok := result["history"].([]interface{})
+	history, ok := result["history"].([]any)
 	if !ok {
 		t.Fatalf("Expected history to be an array")
 	}
@@ -95,7 +95,7 @@ func TestGetTerminalStatus_SessionNotFound(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusNotFound)
 
-	var status map[string]interface{}
+	var status map[string]any
 	ParseJSON(t, resp, &status)
 
 	if status["error"] != "Session not found" {
@@ -138,12 +138,12 @@ func TestCreateSession_CreatesSandbox(t *testing.T) {
 	// Sessions are created implicitly via the chat endpoint
 	// Format matches AI SDK's DefaultChatTransport with UIMessage format
 	sessionID := "test-sandbox-session-1"
-	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]interface{}{
-		"messages": []map[string]interface{}{
+	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
+		"messages": []map[string]any{
 			{
 				"id":   "msg-1",
 				"role": "user",
-				"parts": []map[string]interface{}{
+				"parts": []map[string]any{
 					{"type": "text", "text": "Hello sandbox"},
 				},
 			},
@@ -159,7 +159,7 @@ func TestCreateSession_CreatesSandbox(t *testing.T) {
 	defer listResp.Body.Close()
 
 	var result struct {
-		Sessions []map[string]interface{} `json:"sessions"`
+		Sessions []map[string]any `json:"sessions"`
 	}
 	ParseJSON(t, listResp, &result)
 

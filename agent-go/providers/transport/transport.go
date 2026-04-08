@@ -260,10 +260,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 func backoff(base time.Duration, attempt int, retryAfter string) time.Duration {
 	if retryAfter != "" {
 		if secs, err := strconv.Atoi(retryAfter); err == nil && secs > 0 {
-			d := time.Duration(secs) * time.Second
-			if d > maxRetryAfter {
-				d = maxRetryAfter
-			}
+			d := min(time.Duration(secs)*time.Second, maxRetryAfter)
 			return d
 		}
 	}

@@ -71,7 +71,7 @@ func TestPoller_StartsWithMaxSeq(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert some events before starting poller
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		event := &model.ProjectEvent{
 			ProjectID: env.ProjectID,
 			Type:      "test",

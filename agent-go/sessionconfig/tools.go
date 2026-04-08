@@ -3,6 +3,7 @@ package sessionconfig
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -65,9 +66,7 @@ func builtinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 	}
 
 	clone := make(map[string]providers.ToolDefinition, len(builtinToolMap))
-	for name, tool := range builtinToolMap {
-		clone[name] = tool
-	}
+	maps.Copy(clone, builtinToolMap)
 	return clone, nil
 }
 

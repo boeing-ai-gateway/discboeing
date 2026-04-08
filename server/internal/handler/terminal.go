@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -109,9 +110,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("failed to get visible credential env vars for session %s: %v", sessionID, err)
 		} else {
-			for k, v := range credentialVars {
-				envVars[k] = v
-			}
+			maps.Copy(envVars, credentialVars)
 		}
 	}
 

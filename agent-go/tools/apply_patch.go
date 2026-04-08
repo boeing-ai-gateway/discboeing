@@ -313,8 +313,8 @@ func validatePatchBoundaries(lines []string) error {
 func parsePatchOperation(lines []string) (patchOperation, int, error) {
 	header := strings.TrimSpace(lines[0])
 
-	if strings.HasPrefix(header, addFileMarker) {
-		path := strings.TrimSpace(strings.TrimPrefix(header, addFileMarker))
+	if path, ok := strings.CutPrefix(header, addFileMarker); ok {
+		path = strings.TrimSpace(path)
 		if err := validatePatchPath(path); err != nil {
 			return patchOperation{}, 0, err
 		}
@@ -331,16 +331,16 @@ func parsePatchOperation(lines []string) (patchOperation, int, error) {
 		return patchOperation{kind: patchAddFile, path: path, addLines: addLines}, consumed, nil
 	}
 
-	if strings.HasPrefix(header, deleteFileMarker) {
-		path := strings.TrimSpace(strings.TrimPrefix(header, deleteFileMarker))
+	if path, ok := strings.CutPrefix(header, deleteFileMarker); ok {
+		path = strings.TrimSpace(path)
 		if err := validatePatchPath(path); err != nil {
 			return patchOperation{}, 0, err
 		}
 		return patchOperation{kind: patchDeleteFile, path: path}, 1, nil
 	}
 
-	if strings.HasPrefix(header, updateFileMarker) {
-		path := strings.TrimSpace(strings.TrimPrefix(header, updateFileMarker))
+	if path, ok := strings.CutPrefix(header, updateFileMarker); ok {
+		path = strings.TrimSpace(path)
 		if err := validatePatchPath(path); err != nil {
 			return patchOperation{}, 0, err
 		}
@@ -348,8 +348,8 @@ func parsePatchOperation(lines []string) (patchOperation, int, error) {
 		movePath := ""
 		if consumed < len(lines) {
 			next := strings.TrimSpace(lines[consumed])
-			if strings.HasPrefix(next, moveToMarker) {
-				movePath = strings.TrimSpace(strings.TrimPrefix(next, moveToMarker))
+			if moveTo, ok := strings.CutPrefix(next, moveToMarker); ok {
+				movePath = strings.TrimSpace(moveTo)
 				if err := validatePatchPath(movePath); err != nil {
 					return patchOperation{}, 0, err
 				}
@@ -403,8 +403,9 @@ func parsePatchChunk(lines []string, allowMissingContext bool) (patchChunk, int,
 	first := strings.TrimSpace(lines[0])
 	if first == emptyCtxMarker {
 		startIndex = 1
-	} else if strings.HasPrefix(first, changeCtxMarker) {
-		changeContext = new(strings.TrimPrefix(first, changeCtxMarker))
+	} else if changeCtx, ok := strings.CutPrefix(first, changeCtxMarker); ok {
+		ctx := changeCtx
+		changeContext = &ctx
 		startIndex = 1
 	} else if !allowMissingContext {
 		return patchChunk{}, 0, fmt.Errorf(
@@ -572,10 +573,7 @@ func applyPatchReplacements(lines []string, replacements []patchReplacement) []s
 		if r.start > len(out) {
 			r.start = len(out)
 		}
-		end := r.start + r.oldLen
-		if end > len(out) {
-			end = len(out)
-		}
+		end := min(r.start+r.oldLen, len(out))
 
 		segment := append([]string(nil), r.newLines...)
 		updated := make([]string, 0, len(out)-maxInt(0, end-r.start)+len(segment))
@@ -611,10 +609,7 @@ func seekPatchSequenceMatches(lines []string, pattern []string, start int, eof b
 		return nil
 	}
 
-	searchStart := start
-	if searchStart < 0 {
-		searchStart = 0
-	}
+	searchStart := max(start, 0)
 	if eof && len(lines) >= len(pattern) {
 		searchStart = len(lines) - len(pattern)
 	}

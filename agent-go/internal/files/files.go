@@ -166,11 +166,8 @@ func IsTextFile(path string, content []byte) bool {
 
 	// Unknown extension — check content for null bytes
 	if len(content) > 0 {
-		checkLen := len(content)
-		if checkLen > 8192 {
-			checkLen = 8192
-		}
-		for i := 0; i < checkLen; i++ {
+		checkLen := min(len(content), 8192)
+		for i := range checkLen {
 			if content[i] == 0 {
 				return false
 			}

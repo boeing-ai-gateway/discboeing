@@ -76,7 +76,7 @@ func buildCommitReplayBundle(t *testing.T, dir, parent string) []byte {
 
 	bundle := commitReplayBundle{Version: 1}
 	previous := parent
-	for _, sha := range strings.Split(commitsOutput, "\n") {
+	for sha := range strings.SplitSeq(commitsOutput, "\n") {
 		sha = strings.TrimSpace(sha)
 		if sha == "" {
 			continue
@@ -880,7 +880,7 @@ func TestLog(t *testing.T) {
 		sourceRepo := createTestRepo(t)
 
 		// Add more commits
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			runGit(t, sourceRepo, "commit", "--allow-empty", "-m", "Commit")
 		}
 
@@ -1348,7 +1348,7 @@ func TestConcurrentEnsureWorkspace(t *testing.T) {
 	// Ensure concurrent calls for the same workspace return the same result
 	done := make(chan string, 10)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			workDir, _, _ := provider.EnsureWorkspace(ctx, "project1", "ws1", sourceRepo, "")
 			done <- workDir
@@ -1356,7 +1356,7 @@ func TestConcurrentEnsureWorkspace(t *testing.T) {
 	}
 
 	var results []string
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		results = append(results, <-done)
 	}
 

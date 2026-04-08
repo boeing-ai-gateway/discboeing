@@ -158,7 +158,7 @@ func TestUniqueNonces(t *testing.T) {
 	}
 
 	// All ciphertexts should be different (due to random nonces)
-	for i := 0; i < len(ciphertexts); i++ {
+	for i := range len(ciphertexts) {
 		for j := i + 1; j < len(ciphertexts); j++ {
 			if bytes.Equal(ciphertexts[i], ciphertexts[j]) {
 				t.Error("Ciphertexts should be unique due to random nonces")
