@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -640,79 +640,29 @@ func (p *LocalProvider) RemoveWorkspace(_ context.Context, workspaceID string) e
 	return os.RemoveAll(info.workDir)
 }
 
-// ApplyReplayBundle applies the serialized commit replay bundle to the workspace.
-func (p *LocalProvider) ApplyReplayBundle(ctx context.Context, workspaceID string, replayBundle []byte) (string, error) {
+// ApplyPatches applies mbox-format patches (from git format-patch) to the workspace.
+// Returns the final commit SHA after all patches are applied.
+// If application fails, the operation is aborted without losing local changes.
+func (p *LocalProvider) ApplyPatches(ctx context.Context, workspaceID string, patches []byte) (string, error) {
 	workDir := p.GetWorkDir(ctx, workspaceID)
 	if workDir == "" {
 		return "", fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	bundle, err := decodeCommitReplayBundle(replayBundle)
-	if err != nil {
-		return "", fmt.Errorf("failed to apply commit replay bundle: %w", err)
+	if err := p.runGitWithStdin(ctx, workDir, patches, "apply", "--check"); err != nil {
+		return "", fmt.Errorf("patches will not apply cleanly: %w", err)
 	}
 
-	repo, wt, err := p.openWorktree(workDir)
-	if err != nil {
-		return "", err
+	if err := p.runGitWithStdin(ctx, workDir, patches, "am", "--keep-cr", "--no-gpg-sign"); err != nil {
+		_ = p.runGit(ctx, workDir, "am", "--abort")
+		return "", fmt.Errorf("failed to apply patches: %w", err)
 	}
 
-	state := newReplayState(workDir)
-	for _, commit := range bundle.Commits {
-		if err := state.ValidateAndApply(commit.Changes); err != nil {
-			return "", fmt.Errorf("commit %q will not apply cleanly: %w", commit.Message, err)
-		}
-	}
-
-	rollback, err := snapshotReplayRollback(repo, wt, workDir, bundle)
-	if err != nil {
-		return "", err
-	}
-
-	defer func() {
-		if err != nil {
-			_ = rollback.Restore()
-		}
-	}()
-
-	for _, replayCommit := range bundle.Commits {
-		stagedPaths := make([]string, 0, len(replayCommit.Changes)*2)
-		for _, change := range replayCommit.Changes {
-			if err := applyReplayChange(workDir, change); err != nil {
-				return "", fmt.Errorf("failed to apply commit %q: %w", replayCommit.Message, err)
-			}
-			switch change.Status {
-			case "renamed":
-				stagedPaths = append(stagedPaths, change.OldPath, change.Path)
-			default:
-				stagedPaths = append(stagedPaths, change.Path)
-			}
-		}
-
-		if err := stagePaths(wt, stagedPaths); err != nil {
-			return "", fmt.Errorf("failed to stage replayed commit %q: %w", replayCommit.Message, err)
-		}
-
-		author := &object.Signature{Name: replayCommit.AuthorName, Email: replayCommit.AuthorEmail, When: replayCommit.AuthorDate}
-		committer := author
-		if replayCommit.CommitterName != "" && replayCommit.CommitterEmail != "" {
-			when := replayCommit.AuthorDate
-			if replayCommit.CommitterDate != nil {
-				when = *replayCommit.CommitterDate
-			}
-			committer = &object.Signature{Name: replayCommit.CommitterName, Email: replayCommit.CommitterEmail, When: when}
-		}
-
-		if _, err := wt.Commit(replayCommit.Message, &gitrepo.CommitOptions{Author: author, Committer: committer}); err != nil {
-			return "", fmt.Errorf("failed to create replayed commit %q: %w", replayCommit.Message, err)
-		}
-	}
-
-	finalCommit, err := p.currentCommit(ctx, workDir)
+	finalCommit, err := p.runGitOutput(ctx, workDir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to get final commit: %w", err)
 	}
-	return finalCommit, nil
+	return strings.TrimSpace(finalCommit), nil
 }
 
 func cleanGitEnv() []string {
@@ -723,6 +673,54 @@ func cleanGitEnv() []string {
 		}
 	}
 	return env
+}
+
+func (p *LocalProvider) runGit(ctx context.Context, workDir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+	cmd.Env = cleanGitEnv()
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+	}
+	return nil
+}
+
+func (p *LocalProvider) runGitWithStdin(ctx context.Context, workDir string, stdin []byte, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+	cmd.Env = cleanGitEnv()
+	cmd.Stdin = bytes.NewReader(stdin)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+	}
+	return nil
+}
+
+func (p *LocalProvider) runGitOutput(ctx context.Context, workDir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+	cmd.Env = cleanGitEnv()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+	}
+	return stdout.String(), nil
 }
 
 // GetUserConfig retrieves the global git user name and email configuration.
@@ -1410,333 +1408,6 @@ func (p *LocalProvider) loadCommitterSignature(repo *gitrepo.Repository) *object
 		return nil
 	}
 	return &object.Signature{Name: name, Email: email, When: time.Now()}
-}
-
-type replayState struct {
-	workDir string
-	files   map[string]*replayFileState
-}
-
-type replayFileState struct {
-	exists  bool
-	content []byte
-	mode    string
-	loaded  bool
-}
-
-func newReplayState(workDir string) *replayState {
-	return &replayState{workDir: workDir, files: map[string]*replayFileState{}}
-}
-
-func (s *replayState) read(path string) (*replayFileState, error) {
-	if file, ok := s.files[path]; ok {
-		return file, nil
-	}
-	fullPath := filepath.Join(s.workDir, path)
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			state := &replayFileState{exists: false, loaded: true}
-			s.files[path] = state
-			return state, nil
-		}
-		return nil, err
-	}
-	mode, err := fileModeFromPath(fullPath)
-	if err != nil {
-		return nil, err
-	}
-	state := &replayFileState{exists: true, content: append([]byte(nil), data...), mode: mode, loaded: true}
-	s.files[path] = state
-	return state, nil
-}
-
-func (s *replayState) ValidateAndApply(changes []commitFileChange) error {
-	for _, change := range changes {
-		if err := s.validate(change); err != nil {
-			return err
-		}
-	}
-	for _, change := range changes {
-		s.apply(change)
-	}
-	return nil
-}
-
-func (s *replayState) validate(change commitFileChange) error {
-	switch change.Status {
-	case "added":
-		state, err := s.read(change.Path)
-		if err != nil {
-			return err
-		}
-		if state.exists {
-			return fmt.Errorf("%s already exists", change.Path)
-		}
-	case "modified", "deleted":
-		state, err := s.read(change.Path)
-		if err != nil {
-			return err
-		}
-		if !state.exists {
-			return fmt.Errorf("%s does not exist", change.Path)
-		}
-		if !bytes.Equal(state.content, change.PreviousContent) {
-			return fmt.Errorf("%s does not match expected preimage", change.Path)
-		}
-		if change.PreviousMode != "" && state.mode != change.PreviousMode {
-			return fmt.Errorf("%s does not match expected mode", change.Path)
-		}
-	case "renamed":
-		oldState, err := s.read(change.OldPath)
-		if err != nil {
-			return err
-		}
-		if !oldState.exists {
-			return fmt.Errorf("%s does not exist", change.OldPath)
-		}
-		if !bytes.Equal(oldState.content, change.PreviousContent) {
-			return fmt.Errorf("%s does not match expected preimage", change.OldPath)
-		}
-		if change.PreviousMode != "" && oldState.mode != change.PreviousMode {
-			return fmt.Errorf("%s does not match expected mode", change.OldPath)
-		}
-		newState, err := s.read(change.Path)
-		if err != nil {
-			return err
-		}
-		if newState.exists {
-			return fmt.Errorf("%s already exists", change.Path)
-		}
-	default:
-		return fmt.Errorf("unsupported replay change status %q", change.Status)
-	}
-	return nil
-}
-
-func (s *replayState) apply(change commitFileChange) {
-	switch change.Status {
-	case "added", "modified":
-		s.files[change.Path] = &replayFileState{exists: true, content: append([]byte(nil), change.Content...), mode: replayChangeMode(change), loaded: true}
-	case "deleted":
-		s.files[change.Path] = &replayFileState{exists: false, loaded: true}
-	case "renamed":
-		s.files[change.OldPath] = &replayFileState{exists: false, loaded: true}
-		s.files[change.Path] = &replayFileState{exists: true, content: append([]byte(nil), change.Content...), mode: replayChangeMode(change), loaded: true}
-	}
-}
-
-type replayRollback struct {
-	repo          *gitrepo.Repository
-	worktree      *gitrepo.Worktree
-	workDir       string
-	index         *indexformat.Index
-	headRef       *plumbing.Reference
-	branchRef     *plumbing.Reference
-	fileSnapshots map[string]*replayFileSnapshot
-}
-
-type replayFileSnapshot struct {
-	exists  bool
-	content []byte
-	mode    string
-}
-
-func snapshotReplayRollback(repo *gitrepo.Repository, wt *gitrepo.Worktree, workDir string, bundle *commitReplayBundle) (*replayRollback, error) {
-	originalIndex, err := repo.Storer.Index()
-	if err != nil {
-		return nil, err
-	}
-	rollback := &replayRollback{repo: repo, worktree: wt, workDir: workDir, index: cloneIndex(originalIndex), fileSnapshots: map[string]*replayFileSnapshot{}}
-	if head, err := repo.Storer.Reference(plumbing.HEAD); err == nil {
-		rollback.headRef = cloneReference(head)
-		if head.Type() == plumbing.SymbolicReference {
-			if branch, err := repo.Storer.Reference(head.Target()); err == nil {
-				rollback.branchRef = cloneReference(branch)
-			}
-		}
-	}
-	for _, commit := range bundle.Commits {
-		for _, change := range commit.Changes {
-			for _, path := range []string{change.Path, change.OldPath} {
-				if path == "" {
-					continue
-				}
-				if _, ok := rollback.fileSnapshots[path]; ok {
-					continue
-				}
-				data, err := os.ReadFile(filepath.Join(workDir, path))
-				if err != nil {
-					if os.IsNotExist(err) {
-						rollback.fileSnapshots[path] = &replayFileSnapshot{exists: false}
-						continue
-					}
-					return nil, err
-				}
-				mode, err := fileModeFromPath(filepath.Join(workDir, path))
-				if err != nil {
-					return nil, err
-				}
-				rollback.fileSnapshots[path] = &replayFileSnapshot{exists: true, content: data, mode: mode}
-			}
-		}
-	}
-	return rollback, nil
-}
-
-func (r *replayRollback) Restore() error {
-	for path, snapshot := range r.fileSnapshots {
-		fullPath := filepath.Join(r.workDir, path)
-		if snapshot.exists {
-			if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-				return err
-			}
-			mode, err := gitModeToFileMode(snapshot.mode, 0644)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(fullPath, snapshot.content, mode); err != nil {
-				return err
-			}
-			if err := os.Chmod(fullPath, mode); err != nil {
-				return err
-			}
-		} else if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	if r.index != nil {
-		if err := r.repo.Storer.SetIndex(cloneIndex(r.index)); err != nil {
-			return err
-		}
-	}
-	if r.branchRef != nil {
-		if err := r.repo.Storer.SetReference(cloneReference(r.branchRef)); err != nil {
-			return err
-		}
-	}
-	if r.headRef != nil {
-		if err := r.repo.Storer.SetReference(cloneReference(r.headRef)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func cloneIndex(idx *indexformat.Index) *indexformat.Index {
-	if idx == nil {
-		return nil
-	}
-	cloned := &indexformat.Index{Version: idx.Version}
-	cloned.Entries = make([]*indexformat.Entry, len(idx.Entries))
-	for i, entry := range idx.Entries {
-		copyEntry := *entry
-		cloned.Entries[i] = &copyEntry
-	}
-	return cloned
-}
-
-func cloneReference(ref *plumbing.Reference) *plumbing.Reference {
-	if ref == nil {
-		return nil
-	}
-	if ref.Type() == plumbing.SymbolicReference {
-		return plumbing.NewSymbolicReference(ref.Name(), ref.Target())
-	}
-	return plumbing.NewHashReference(ref.Name(), ref.Hash())
-}
-
-func applyReplayChange(workDir string, change commitFileChange) error {
-	switch change.Status {
-	case "added", "modified":
-		fullPath := filepath.Join(workDir, change.Path)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			return err
-		}
-		mode, err := gitModeToFileMode(replayChangeMode(change), 0644)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(fullPath, change.Content, mode); err != nil {
-			return err
-		}
-		return os.Chmod(fullPath, mode)
-	case "deleted":
-		if err := os.Remove(filepath.Join(workDir, change.Path)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	case "renamed":
-		if err := os.Remove(filepath.Join(workDir, change.OldPath)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		fullPath := filepath.Join(workDir, change.Path)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			return err
-		}
-		mode, err := gitModeToFileMode(replayChangeMode(change), 0644)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(fullPath, change.Content, mode); err != nil {
-			return err
-		}
-		return os.Chmod(fullPath, mode)
-	default:
-		return fmt.Errorf("unsupported replay change status %q", change.Status)
-	}
-}
-
-func replayChangeMode(change commitFileChange) string {
-	if change.Mode != "" {
-		return change.Mode
-	}
-	if change.PreviousMode != "" {
-		return change.PreviousMode
-	}
-	return ""
-}
-
-func fileModeFromPath(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", err
-	}
-	if info.Mode()&0111 != 0 {
-		return "100755", nil
-	}
-	return "100644", nil
-}
-
-func gitModeToFileMode(mode string, fallback os.FileMode) (os.FileMode, error) {
-	if mode == "" {
-		return fallback, nil
-	}
-	if len(mode) < 3 {
-		return 0, fmt.Errorf("invalid git mode %q", mode)
-	}
-	perms, err := strconv.ParseUint(mode[len(mode)-3:], 8, 32)
-	if err != nil {
-		return 0, fmt.Errorf("parse git mode %q: %w", mode, err)
-	}
-	return os.FileMode(perms), nil
-}
-
-func stagePaths(wt *gitrepo.Worktree, paths []string) error {
-	seen := map[string]struct{}{}
-	for _, path := range paths {
-		if path == "" {
-			continue
-		}
-		if _, ok := seen[path]; ok {
-			continue
-		}
-		seen[path] = struct{}{}
-		if _, err := wt.Add(path); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Ensure LocalProvider implements Provider.

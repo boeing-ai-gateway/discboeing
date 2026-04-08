@@ -42,52 +42,45 @@ type testEnv struct {
 	cleanup      func()
 }
 
-type testCommitBundle struct {
-	Version int                `json:"version"`
-	Commits []testReplayCommit `json:"commits"`
-}
-
-type testReplayCommit struct {
-	Message        string                 `json:"message"`
-	AuthorName     string                 `json:"authorName"`
-	AuthorEmail    string                 `json:"authorEmail"`
-	AuthorDate     time.Time              `json:"authorDate"`
-	CommitterName  string                 `json:"committerName"`
-	CommitterEmail string                 `json:"committerEmail"`
-	CommitterDate  time.Time              `json:"committerDate"`
-	Changes        []testReplayFileChange `json:"changes"`
-}
-
-type testReplayFileChange struct {
-	Path            string `json:"path"`
-	Status          string `json:"status"`
-	PreviousContent []byte `json:"previousContent,omitempty"`
-	Content         []byte `json:"content,omitempty"`
-}
-
-func addedFileCommitBundle(message, authorName, authorEmail, path, content string) string {
-	timestamp := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
-	payload, err := json.Marshal(testCommitBundle{
-		Version: 1,
-		Commits: []testReplayCommit{{
-			Message:        message,
-			AuthorName:     authorName,
-			AuthorEmail:    authorEmail,
-			AuthorDate:     timestamp,
-			CommitterName:  authorName,
-			CommitterEmail: authorEmail,
-			CommitterDate:  timestamp,
-			Changes: []testReplayFileChange{{
-				Path:    path,
-				Status:  "added",
-				Content: []byte(content),
-			}},
-		}},
-	})
+func addedFilePatch(message, authorName, authorEmail, path, content string) string {
+	repoDir := os.TempDir()
+	patchRepo, err := os.MkdirTemp(repoDir, "discobot-perform-commit-patch-*")
 	if err != nil {
 		panic(err)
 	}
-	return string(payload)
+	defer os.RemoveAll(patchRepo)
+
+	mustRunGitCommand(patchRepo, "init")
+	mustRunGitCommand(patchRepo, "config", "user.email", authorEmail)
+	mustRunGitCommand(patchRepo, "config", "user.name", authorName)
+
+	if err := os.WriteFile(filepath.Join(patchRepo, ".gitignore"), []byte(""), 0644); err != nil {
+		panic(err)
+	}
+	mustRunGitCommand(patchRepo, "add", ".gitignore")
+	mustRunGitCommand(patchRepo, "commit", "-m", "base")
+	base := strings.TrimSpace(mustRunGitCommand(patchRepo, "rev-parse", "HEAD"))
+
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(patchRepo, path)), 0755); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(filepath.Join(patchRepo, path), []byte(content), 0644); err != nil {
+		panic(err)
+	}
+	mustRunGitCommand(patchRepo, "add", path)
+	mustRunGitCommand(patchRepo, "commit", "-m", message)
+
+	return mustRunGitCommand(patchRepo, "format-patch", "--stdout", base+"..HEAD")
+}
+
+func mustRunGitCommand(dir string, args ...string) string {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		panic(fmt.Sprintf("git %v failed: %v\nOutput: %s", args, err, output))
+	}
+	return string(output)
 }
 
 // newTestEnv creates a test environment with an in-memory database and git workspace.
@@ -350,8 +343,8 @@ func TestPerformCommit_WorkspaceUnchangedNoExistingPatches(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{CommitCount: 0})
 			} else {
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
-					ReplayBundle: addedFileCommitBundle("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
-					CommitCount:  1,
+					Patches:     addedFilePatch("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
+					CommitCount: 1,
 				})
 			}
 		},
@@ -453,8 +446,8 @@ func TestPerformCommit_CompletesOnFinishChunkWithoutDoneEvent(t *testing.T) {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
-				ReplayBundle: addedFileCommitBundle("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
-				CommitCount:  1,
+				Patches:     addedFilePatch("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
+				CommitCount: 1,
 			})
 			return
 		default:
@@ -576,8 +569,8 @@ func TestPerformCommit_StreamEndsBeforeFinishContinuesReconciliation(t *testing.
 			}
 
 			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
-				ReplayBundle: addedFileCommitBundle("Recovered commit", "Test", "test@example.com", "recovered.txt", "recovered\n"),
-				CommitCount:  1,
+				Patches:     addedFilePatch("Recovered commit", "Test", "test@example.com", "recovered.txt", "recovered\n"),
+				CommitCount: 1,
 			})
 		},
 	}
@@ -643,8 +636,8 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 	// Set up mock handler with patches available (simulating agent already has work done)
 	handler := newMockHandler()
 	handler.commitsResponse = &sandboxapi.CommitsResponse{
-		ReplayBundle: addedFileCommitBundle("Agent work", "Agent", "agent@example.com", "agent.txt", "agent work\n"),
-		CommitCount:  1,
+		Patches:     addedFilePatch("Agent work", "Agent", "agent@example.com", "agent.txt", "agent work\n"),
+		CommitCount: 1,
 	}
 	env.mockSandbox.HTTPHandler = handler
 
@@ -740,8 +733,8 @@ func TestPerformCommit_WorkspaceChangedNoPatches(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{CommitCount: 0})
 			} else {
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
-					ReplayBundle: addedFileCommitBundle("Work done", "Agent", "agent@example.com", "work.txt", "work\n"),
-					CommitCount:  1,
+					Patches:     addedFilePatch("Work done", "Agent", "agent@example.com", "work.txt", "work\n"),
+					CommitCount: 1,
 				})
 			}
 		},
@@ -842,8 +835,8 @@ func TestPerformCommit_WorkspaceChangedGetCommitsError(t *testing.T) {
 				})
 			} else {
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
-					ReplayBundle: addedFileCommitBundle("Work", "Agent", "agent@example.com", "work.txt", "work\n"),
-					CommitCount:  1,
+					Patches:     addedFilePatch("Work", "Agent", "agent@example.com", "work.txt", "work\n"),
+					CommitCount: 1,
 				})
 			}
 		},
@@ -907,8 +900,8 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 	// This simulates the agent having already created commits
 	handler := newMockHandler()
 	handler.commitsResponse = &sandboxapi.CommitsResponse{
-		ReplayBundle: addedFileCommitBundle("Pre-existing agent work", "Agent", "agent@example.com", "preexisting.txt", "pre-existing work from agent\n"),
-		CommitCount:  1,
+		Patches:     addedFilePatch("Pre-existing agent work", "Agent", "agent@example.com", "preexisting.txt", "pre-existing work from agent\n"),
+		CommitCount: 1,
 	}
 	env.mockSandbox.HTTPHandler = handler
 
@@ -1172,13 +1165,13 @@ func TestPerformCommit_NoCommitsAfterPromptMarksCompleted(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			if callNumber == 0 {
-				// Pre-check (tryApplyExistingReplayBundle): no bundle yet, continue to prompt.
+				// Pre-check (tryApplyExistingPatches): no bundle yet, continue to prompt.
 				w.WriteHeader(http.StatusOK)
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{CommitCount: 0})
 				return
 			}
 
-			// Post-prompt (fetchAndApplyReplayBundle): clean sandbox at the exact base commit.
+			// Post-prompt (fetchAndApplyPatches): clean sandbox at the exact base commit.
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
 				Error:      "no_commits",
@@ -1432,8 +1425,8 @@ func TestPerformCommit_SandboxNotRunning(t *testing.T) {
 	// Set up mock handler to return patches
 	handler := newMockHandler()
 	handler.commitsResponse = &sandboxapi.CommitsResponse{
-		ReplayBundle: addedFileCommitBundle("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
-		CommitCount:  1,
+		Patches:     addedFilePatch("Test commit", "Test", "test@example.com", "test.txt", "test content\n"),
+		CommitCount: 1,
 	}
 	env.mockSandbox.HTTPHandler = handler
 

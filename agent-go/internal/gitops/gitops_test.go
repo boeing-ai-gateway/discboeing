@@ -1,7 +1,6 @@
 package gitops
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestBuildCommitReplayBundlePreservesFileModes(t *testing.T) {
+func TestGetCommitPatchesPreservesFileModes(t *testing.T) {
 	repoDir := t.TempDir()
 	runGitCommand(t, repoDir, "init")
 	runGitCommand(t, repoDir, "config", "user.email", "test@example.com")
@@ -32,34 +31,18 @@ func TestBuildCommitReplayBundlePreservesFileModes(t *testing.T) {
 	}
 	runGitCommand(t, repoDir, "commit", "-m", "Make script executable")
 
-	bundleJSON, err := buildCommitReplayBundle(repoDir, base)
-	if err != nil {
-		t.Fatalf("buildCommitReplayBundle: %v", err)
+	result, commitsErr := GetCommitPatches(repoDir, base)
+	if commitsErr != nil {
+		t.Fatalf("GetCommitPatches: %v", commitsErr)
 	}
-
-	var bundle commitReplayBundle
-	if err := json.Unmarshal([]byte(bundleJSON), &bundle); err != nil {
-		t.Fatalf("unmarshal bundle: %v", err)
+	if result.CommitCount != 1 {
+		t.Fatalf("expected 1 commit, got %d", result.CommitCount)
 	}
-	if len(bundle.Commits) != 1 {
-		t.Fatalf("expected 1 commit, got %d", len(bundle.Commits))
+	if !strings.Contains(result.Patches, "old mode 100644") {
+		t.Fatalf("expected old mode in patch, got %q", result.Patches)
 	}
-	if len(bundle.Commits[0].Changes) != 1 {
-		t.Fatalf("expected 1 change, got %d", len(bundle.Commits[0].Changes))
-	}
-
-	change := bundle.Commits[0].Changes[0]
-	if change.Status != "modified" {
-		t.Fatalf("expected modified change, got %s", change.Status)
-	}
-	if change.PreviousMode != "100644" {
-		t.Fatalf("expected previous mode 100644, got %q", change.PreviousMode)
-	}
-	if change.Mode != "100755" {
-		t.Fatalf("expected mode 100755, got %q", change.Mode)
-	}
-	if string(change.PreviousContent) != string(change.Content) {
-		t.Fatal("expected chmod-only commit to preserve identical content")
+	if !strings.Contains(result.Patches, "new mode 100755") {
+		t.Fatalf("expected new mode in patch, got %q", result.Patches)
 	}
 }
 

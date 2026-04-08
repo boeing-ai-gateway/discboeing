@@ -247,7 +247,7 @@ func (c *SessionClient) GetDiff(ctx context.Context, path, format string) (any, 
 	})
 }
 
-// GetCommits retrieves a serialized commit replay bundle from the sandbox.
+// GetCommits retrieves git format-patch output from the sandbox.
 func (c *SessionClient) GetCommits(ctx context.Context, parentCommit string) (*sandboxapi.CommitsResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.CommitsResponse, error) {
 		return c.inner.GetCommits(ctx, c.sessionID, parentCommit)

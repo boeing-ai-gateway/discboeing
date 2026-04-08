@@ -300,10 +300,10 @@ type SingleFileDiffResponse struct {
 // ============================================================================
 
 // CommitsResponse is the GET /commits response (success case).
-// Returns a serialized commit replay bundle for commits since a parent.
+// Returns git format-patch output for commits since a parent.
 type CommitsResponse struct {
-	ReplayBundle string `json:"replayBundle"` // Serialized commit replay bundle JSON
-	CommitCount  int    `json:"commitCount"`  // Number of commits in the bundle
+	Patches     string `json:"patches"`     // git format-patch --stdout output
+	CommitCount int    `json:"commitCount"` // Number of commits in the patch set
 }
 
 // CommitsErrorResponse is the GET /commits error response.

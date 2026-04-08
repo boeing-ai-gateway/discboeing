@@ -1,15 +1,12 @@
 package git
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // createTestRepo creates a test git repository with initial content
@@ -49,134 +46,6 @@ func runGit(t *testing.T, dir string, args ...string) string {
 	return string(output)
 }
 
-func runGitBytes(t *testing.T, dir string, args ...string) []byte {
-	t.Helper()
-
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = cleanGitEnv()
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git %v failed: %v", args, err)
-	}
-	return output
-}
-
-func buildCommitReplayBundle(t *testing.T, dir, parent string) []byte {
-	t.Helper()
-
-	commitsOutput := strings.TrimSpace(runGit(t, dir, "rev-list", "--reverse", parent+"..HEAD"))
-	if commitsOutput == "" {
-		payload, err := json.Marshal(commitReplayBundle{Version: 1, Commits: []commitReplayEntry{}})
-		if err != nil {
-			t.Fatalf("failed to marshal empty bundle: %v", err)
-		}
-		return payload
-	}
-
-	bundle := commitReplayBundle{Version: 1}
-	previous := parent
-	for sha := range strings.SplitSeq(commitsOutput, "\n") {
-		sha = strings.TrimSpace(sha)
-		if sha == "" {
-			continue
-		}
-		bundle.Commits = append(bundle.Commits, buildCommitReplayEntry(t, dir, previous, sha))
-		previous = sha
-	}
-
-	payload, err := json.Marshal(bundle)
-	if err != nil {
-		t.Fatalf("failed to marshal commit replay bundle: %v", err)
-	}
-	return payload
-}
-
-func buildCommitReplayEntry(t *testing.T, dir, parent, sha string) commitReplayEntry {
-	t.Helper()
-
-	meta := strings.SplitN(string(runGitBytes(t, dir, "show", "-s", "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B", sha)), "\x00", 7)
-	if len(meta) != 7 {
-		t.Fatalf("unexpected commit metadata for %s", sha)
-	}
-	authorDate, err := time.Parse(time.RFC3339, strings.TrimSpace(meta[2]))
-	if err != nil {
-		t.Fatalf("failed to parse author date: %v", err)
-	}
-	committerDate, err := time.Parse(time.RFC3339, strings.TrimSpace(meta[5]))
-	if err != nil {
-		t.Fatalf("failed to parse committer date: %v", err)
-	}
-
-	entry := commitReplayEntry{
-		SHA:            sha,
-		Message:        strings.TrimRight(meta[6], "\n"),
-		AuthorName:     meta[0],
-		AuthorEmail:    meta[1],
-		AuthorDate:     authorDate,
-		CommitterName:  meta[3],
-		CommitterEmail: meta[4],
-		CommitterDate:  &committerDate,
-	}
-
-	changed := runGitBytes(t, dir, "diff-tree", "--no-commit-id", "--find-renames", "-r", "--name-status", "-z", parent, sha)
-	tokens := bytesToTokens(changed)
-	for i := 0; i < len(tokens); {
-		statusToken := tokens[i]
-		i++
-		switch {
-		case strings.HasPrefix(statusToken, "R"):
-			oldPath := tokens[i]
-			newPath := tokens[i+1]
-			i += 2
-			oldContent := runGitBytes(t, dir, "show", parent+":"+oldPath)
-			newContent := runGitBytes(t, dir, "show", sha+":"+newPath)
-			entry.Changes = append(entry.Changes, commitFileChange{
-				Path:            newPath,
-				OldPath:         oldPath,
-				Status:          "renamed",
-				PreviousMode:    gitPathModeForTest(t, dir, parent, oldPath),
-				Mode:            gitPathModeForTest(t, dir, sha, newPath),
-				PreviousContent: oldContent,
-				Content:         newContent,
-			})
-		case statusToken == "A":
-			path := tokens[i]
-			i++
-			entry.Changes = append(entry.Changes, commitFileChange{
-				Path:    path,
-				Status:  "added",
-				Mode:    gitPathModeForTest(t, dir, sha, path),
-				Content: runGitBytes(t, dir, "show", sha+":"+path),
-			})
-		case statusToken == "M":
-			path := tokens[i]
-			i++
-			entry.Changes = append(entry.Changes, commitFileChange{
-				Path:            path,
-				Status:          "modified",
-				PreviousMode:    gitPathModeForTest(t, dir, parent, path),
-				Mode:            gitPathModeForTest(t, dir, sha, path),
-				PreviousContent: runGitBytes(t, dir, "show", parent+":"+path),
-				Content:         runGitBytes(t, dir, "show", sha+":"+path),
-			})
-		case statusToken == "D":
-			path := tokens[i]
-			i++
-			entry.Changes = append(entry.Changes, commitFileChange{
-				Path:            path,
-				Status:          "deleted",
-				PreviousMode:    gitPathModeForTest(t, dir, parent, path),
-				PreviousContent: runGitBytes(t, dir, "show", parent+":"+path),
-			})
-		default:
-			t.Fatalf("unsupported name-status token %q", statusToken)
-		}
-	}
-
-	return entry
-}
-
 func gitPathModeForTest(t *testing.T, dir, ref, path string) string {
 	t.Helper()
 
@@ -186,17 +55,6 @@ func gitPathModeForTest(t *testing.T, dir, ref, path string) string {
 		t.Fatalf("path %s not found at %s", path, ref)
 	}
 	return fields[0]
-}
-
-func bytesToTokens(data []byte) []string {
-	parts := strings.Split(string(bytes.TrimRight(data, "\x00")), "\x00")
-	filtered := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part != "" {
-			filtered = append(filtered, part)
-		}
-	}
-	return filtered
 }
 
 func TestNewLocalProvider(t *testing.T) {
@@ -986,7 +844,7 @@ func TestIsGitURL(t *testing.T) {
 	}
 }
 
-func TestApplyReplayBundle(t *testing.T) {
+func TestApplyPatches(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("applies single commit patch", func(t *testing.T) {
@@ -1020,12 +878,12 @@ func TestApplyReplayBundle(t *testing.T) {
 		runGit(t, patchRepo, "add", "patched.txt")
 		runGit(t, patchRepo, "commit", "-m", "Add patched file")
 
-		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)
+		patches := runGit(t, patchRepo, "format-patch", "--stdout", initialCommit+"..HEAD")
 
 		// Apply the patches
-		finalCommit, err := provider.ApplyReplayBundle(ctx, "ws1", bundle)
+		finalCommit, err := provider.ApplyPatches(ctx, "ws1", []byte(patches))
 		if err != nil {
-			t.Fatalf("ApplyReplayBundle failed: %v", err)
+			t.Fatalf("ApplyPatches failed: %v", err)
 		}
 
 		// Verify final commit is different from initial
@@ -1096,11 +954,11 @@ func TestApplyReplayBundle(t *testing.T) {
 		runGit(t, patchRepo, "add", "file3.txt")
 		runGit(t, patchRepo, "commit", "-m", "Add file 3")
 
-		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)
+		patches := runGit(t, patchRepo, "format-patch", "--stdout", initialCommit+"..HEAD")
 
-		finalCommit, err := provider.ApplyReplayBundle(ctx, "ws1", bundle)
+		finalCommit, err := provider.ApplyPatches(ctx, "ws1", []byte(patches))
 		if err != nil {
-			t.Fatalf("ApplyReplayBundle failed: %v", err)
+			t.Fatalf("ApplyPatches failed: %v", err)
 		}
 
 		// Verify all files exist
@@ -1123,7 +981,7 @@ func TestApplyReplayBundle(t *testing.T) {
 		baseDir := t.TempDir()
 		provider, _ := NewLocalProvider(baseDir)
 
-		_, err := provider.ApplyReplayBundle(ctx, "nonexistent", []byte("patch content"))
+		_, err := provider.ApplyPatches(ctx, "nonexistent", []byte("patch content"))
 		if err == nil {
 			t.Error("Expected error for unknown workspace")
 		}
@@ -1138,7 +996,7 @@ func TestApplyReplayBundle(t *testing.T) {
 		initialCommit := strings.TrimSpace(runGit(t, workDir, "rev-parse", "HEAD"))
 
 		// Try to apply invalid patch
-		_, err := provider.ApplyReplayBundle(ctx, "ws1", []byte("invalid patch content"))
+		_, err := provider.ApplyPatches(ctx, "ws1", []byte("invalid patch content"))
 		if err == nil {
 			t.Error("Expected error for invalid patch")
 		}
@@ -1179,10 +1037,10 @@ func TestApplyReplayBundle(t *testing.T) {
 		runGit(t, patchRepo, "add", "README.md")
 		runGit(t, patchRepo, "commit", "-m", "Modify README")
 
-		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)
+		patches := runGit(t, patchRepo, "format-patch", "--stdout", initialCommit+"..HEAD")
 
 		// Try to apply the conflicting patch
-		_, err := provider.ApplyReplayBundle(ctx, "ws1", bundle)
+		_, err := provider.ApplyPatches(ctx, "ws1", []byte(patches))
 		if err == nil {
 			t.Error("Expected error for conflicting patch")
 		}
@@ -1235,11 +1093,11 @@ func TestApplyReplayBundle(t *testing.T) {
 		runGit(t, patchRepo, "add", "signed.txt")
 		runGit(t, patchRepo, "commit", "-m", "Signed commit")
 
-		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)
+		patches := runGit(t, patchRepo, "format-patch", "--stdout", initialCommit+"..HEAD")
 
-		_, err := provider.ApplyReplayBundle(ctx, "ws1", bundle)
+		_, err := provider.ApplyPatches(ctx, "ws1", []byte(patches))
 		if err != nil {
-			t.Fatalf("ApplyReplayBundle failed: %v", err)
+			t.Fatalf("ApplyPatches failed: %v", err)
 		}
 
 		// Verify author info was preserved
@@ -1286,10 +1144,10 @@ func TestApplyReplayBundle(t *testing.T) {
 		}
 		runGit(t, patchRepo, "commit", "-m", "Make script executable")
 
-		bundle := buildCommitReplayBundle(t, patchRepo, initialCommit)
+		patches := runGit(t, patchRepo, "format-patch", "--stdout", initialCommit+"..HEAD")
 
-		if _, err := provider.ApplyReplayBundle(ctx, "ws1", bundle); err != nil {
-			t.Fatalf("ApplyReplayBundle failed: %v", err)
+		if _, err := provider.ApplyPatches(ctx, "ws1", []byte(patches)); err != nil {
+			t.Fatalf("ApplyPatches failed: %v", err)
 		}
 
 		info, err := os.Stat(filepath.Join(workDir, "script.sh"))

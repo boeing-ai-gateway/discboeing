@@ -1462,8 +1462,8 @@ func (c *SandboxChatClient) GetDiff(ctx context.Context, sessionID string, path 
 	return &result, nil
 }
 
-// GetCommits retrieves a serialized commit replay bundle from the sandbox for commits since a parent.
-// Returns the bundle string and commit count on success, or an error on failure.
+// GetCommits retrieves git format-patch output from the sandbox for commits since a parent.
+// Returns the patch string and commit count on success, or an error on failure.
 // Retries with exponential backoff on connection errors and 5xx responses.
 func (c *SandboxChatClient) GetCommits(ctx context.Context, sessionID string, parentCommit string) (*sandboxapi.CommitsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
