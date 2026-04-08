@@ -679,13 +679,6 @@ func TestDirectToken_NoRefreshAttemptWhenExpired(t *testing.T) {
 	}
 }
 
-func clearStartupCredentialImportEnv(t *testing.T) {
-	t.Helper()
-	for _, spec := range startupCredentialImportSpecs {
-		t.Setenv(spec.envVar, "")
-	}
-}
-
 func TestImportEnvCredentials_CreatesKnownCredentials(t *testing.T) {
 	clearStartupCredentialEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-openai")
