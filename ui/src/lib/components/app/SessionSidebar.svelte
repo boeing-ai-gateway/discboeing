@@ -416,7 +416,9 @@
 				showLabel={false}
 				class="shrink-0"
 			/>
-			<span class="truncate">{sessionObj.name || "New Session"}</span>
+			<span class={floatingMode ? "whitespace-nowrap" : "truncate"}
+				>{sessionObj.name || "New Session"}</span
+			>
 		</button>
 
 		<DropdownMenu>
@@ -465,7 +467,8 @@
 		/>
 		<span class="min-w-0 flex-1 overflow-hidden">
 			<span class="flex min-w-0 items-center gap-2 overflow-hidden">
-				<span class="block truncate text-sm font-medium"
+				<span
+					class={`block text-sm font-medium ${floatingMode ? "whitespace-nowrap" : "truncate"}`}
 					>{threadObj.threadName || "New Thread"}</span
 				>
 				{#if recentThreadStateLabel(threadObj)}
@@ -479,9 +482,17 @@
 				{/if}
 			</span>
 			{#if hasRecentThreadSubtitle(threadObj)}
-				<span class="block truncate text-xs text-current/60"
-					>{threadObj.lastMessage ?? ""}</span
-				>
+				{#if floatingMode}
+					<span class="relative block h-4">
+						<span class="absolute inset-x-0 truncate text-xs text-current/60"
+							>{threadObj.lastMessage ?? ""}</span
+						>
+					</span>
+				{:else}
+					<span class="block truncate text-xs text-current/60"
+						>{threadObj.lastMessage ?? ""}</span
+					>
+				{/if}
 			{/if}
 		</span>
 	</button>
@@ -489,7 +500,7 @@
 
 <aside
 	bind:this={shellRef}
-	class={`flex min-h-0 flex-col overflow-hidden text-sidebar-foreground ${dropdownMode ? "max-h-[min(70vh,32rem)] min-w-64 bg-sidebar" : floatingMode ? `${showSidebarBody ? "max-h-[calc(100vh-7rem)] w-[min(16rem,calc(100vw-1.5rem))] rounded-md border border-sidebar-border bg-sidebar shadow-sm" : "w-fit bg-transparent shadow-none border-transparent"} pointer-events-auto` : "h-full min-w-64 w-full rounded-md border border-sidebar-border bg-sidebar shadow-sm"}`}
+	class={`flex min-h-0 flex-col overflow-hidden text-sidebar-foreground ${dropdownMode ? "max-h-[min(70vh,32rem)] min-w-64 bg-sidebar" : floatingMode ? `${showSidebarBody ? "max-h-[calc(100vh-7rem)] w-fit max-w-[calc(100vw-1.5rem)] rounded-md border border-sidebar-border bg-sidebar shadow-sm" : "w-fit bg-transparent shadow-none border-transparent"} pointer-events-auto` : "h-full min-w-64 w-full rounded-md border border-sidebar-border bg-sidebar shadow-sm"}`}
 >
 	<div
 		class={`flex h-10 items-center justify-between px-3 ${showSidebarBody ? "border-b border-sidebar-border" : ""}`}
