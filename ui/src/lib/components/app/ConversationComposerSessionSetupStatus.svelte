@@ -15,6 +15,9 @@
 	const showSessionStatus = $derived.by(
 		() => sessionStatus !== null && sessionStatus !== "ready",
 	);
+	const initialStatusLabel = $derived.by(() =>
+		session.isPending ? "Creating session" : "Restoring session",
+	);
 
 	$effect(() => {
 		if (awaitingInitialStatus && sessionStatus) {
@@ -30,7 +33,7 @@
 				class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground"
 			>
 				<Loader2Icon class="size-3.5 animate-spin" />
-				<span>Creating session</span>
+				<span>{initialStatusLabel}</span>
 			</div>
 		{:else if showSessionStatus && sessionStatus}
 			<SessionStatus

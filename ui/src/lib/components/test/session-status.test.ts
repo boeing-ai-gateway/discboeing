@@ -9,9 +9,17 @@ const SESSION_STATUS_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/parts/SessionStatus.svelte",
 );
+const SESSION_SETUP_STATUS_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ConversationComposerSessionSetupStatus.svelte",
+);
 
 function readSessionStatusSource() {
 	return readFileSync(SESSION_STATUS_COMPONENT, "utf-8");
+}
+
+function readSessionSetupStatusSource() {
+	return readFileSync(SESSION_SETUP_STATUS_COMPONENT, "utf-8");
 }
 
 test("session status constants include committed and rebased", () => {
@@ -34,4 +42,13 @@ test("session status component renders dedicated git icons for committed and reb
 	assert.match(source, /normalizedStatus\(status\) === "rebased"/);
 	assert.match(source, /<GitCommitIcon class="size-3\.5" \/>/);
 	assert.match(source, /<GitBranchIcon class="size-3\.5" \/>/);
+});
+
+test("session setup status distinguishes creating from restoring", () => {
+	const source = readSessionSetupStatusSource();
+
+	assert.match(
+		source,
+		/session\.isPending \? "Creating session" : "Restoring session"/,
+	);
 });
