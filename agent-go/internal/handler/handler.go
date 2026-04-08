@@ -179,9 +179,8 @@ func (h *Handler) startNextQueuedPrompt(threadID string) {
 	h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 }
 
-// startHookFailureReprompt sends a hook-failure follow-up message to the LLM.
-func (h *Handler) startHookFailureReprompt(threadID string, result hooks.FileHookEvalResult) error {
-	req := agent.PromptRequest{
+func hookFailurePromptRequest(result hooks.FileHookEvalResult) agent.PromptRequest {
+	return agent.PromptRequest{
 		Metadata: func() json.RawMessage {
 			if result.HookFailure == nil {
 				return nil
@@ -198,9 +197,36 @@ func (h *Handler) startHookFailureReprompt(threadID string, result hooks.FileHoo
 			message.UITextPart{Text: result.LLMMessage},
 		},
 	}
+}
 
+// startHookFailureReprompt sends a hook-failure follow-up message to the LLM.
+func (h *Handler) startHookFailureReprompt(threadID string, result hooks.FileHookEvalResult) error {
+	req := hookFailurePromptRequest(result)
 	_, err := h.completions.Chat(threadID, req)
 	return err
+}
+
+func (h *Handler) enqueueHookFailureReprompt(threadID string, result hooks.FileHookEvalResult) error {
+	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
+		return nil
+	}
+
+	h.queueMu.Lock()
+	defer h.queueMu.Unlock()
+
+	store := h.defaultAgent.Store()
+	cfg, err := store.PrependQueuedPrompt(threadID, thread.QueuedPrompt{
+		Message: message.UIMessage{
+			Role:     "user",
+			Parts:    []message.UIPart{message.UITextPart{Text: result.LLMMessage}},
+			Metadata: hookFailurePromptRequest(result).Metadata,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
+	return nil
 }
 
 // scheduleHookEvaluation runs hook evaluation after a grace period, and
@@ -225,6 +251,11 @@ func (h *Handler) scheduleHookEvaluation(threadID string) {
 	}
 
 	if err := h.startHookFailureReprompt(threadID, result); err != nil {
+		if strings.Contains(err.Error(), "completion_in_progress") {
+			if queueErr := h.enqueueHookFailureReprompt(threadID, result); queueErr != nil {
+				log.Printf("hooks: failed to queue re-prompt after conflict: %v", queueErr)
+			}
+		}
 		log.Printf("hooks: failed to start re-prompt: %v", err)
 	}
 }
