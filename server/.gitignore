@@ -4,6 +4,7 @@ tmp/
 build/
 __debug_bin*
 /server
+static/ui/dist/
 
 # Database
 *.db

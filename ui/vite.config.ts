@@ -20,8 +20,60 @@ function fixNoVncCjs(): Plugin {
 	};
 }
 
-export default defineConfig({
-	plugins: [fixNoVncCjs(), sveltekit(), tailwindcss(), devtoolsJson()],
+function trackSSRBuild(): Plugin {
+	let isSSRBuild = false;
+
+	return {
+		name: "track-ssr-build",
+		configResolved(config) {
+			isSSRBuild = Boolean(config.build.ssr);
+		},
+		config() {
+			return {
+				build: {
+					rollupOptions: {
+						output: {
+							manualChunks(id: string) {
+								if (isSSRBuild || !id.includes("node_modules")) {
+									return;
+								}
+
+								// Isolate Monaco into its own chunk so Rollup can GC the rest
+								// of the module graph before processing it. Monaco's source is
+								// ~75 MB and includes 5 large worker bundles (including the full
+								// TypeScript compiler), making it the primary driver of OOM
+								// failures during CI builds.
+								if (id.includes("/monaco-editor/")) {
+									return "monaco-editor";
+								}
+
+								if (
+									id.includes("/svelte/") ||
+									id.includes("/@sveltejs/") ||
+									id.includes("/bits-ui/") ||
+									id.includes("/runed/") ||
+									id.includes("/svelte-toolbelt/") ||
+									id.includes("/paneforge/")
+								) {
+									return "svelte-core";
+								}
+							},
+						},
+					},
+				},
+			};
+		},
+	};
+}
+
+export default defineConfig(() => ({
+	plugins: [
+		trackSSRBuild(),
+		fixNoVncCjs(),
+		sveltekit(),
+		tailwindcss(),
+		devtoolsJson(),
+	],
 	server: { port: 3100, strictPort: true },
 	preview: { port: 3100, strictPort: true },
 	worker: {
@@ -36,33 +88,6 @@ export default defineConfig({
 			maxParallelFileOps: 20,
 			onwarn(warning, defaultHandler) {
 				defaultHandler(warning);
-			},
-			output: {
-				manualChunks(id) {
-					if (!id.includes("node_modules")) {
-						return;
-					}
-
-					// Isolate Monaco into its own chunk so Rollup can GC the rest
-					// of the module graph before processing it. Monaco's source is
-					// ~75 MB and includes 5 large worker bundles (including the full
-					// TypeScript compiler), making it the primary driver of OOM
-					// failures during CI builds.
-					if (id.includes("/monaco-editor/")) {
-						return "monaco-editor";
-					}
-
-					if (
-						id.includes("/svelte/") ||
-						id.includes("/@sveltejs/") ||
-						id.includes("/bits-ui/") ||
-						id.includes("/runed/") ||
-						id.includes("/svelte-toolbelt/") ||
-						id.includes("/paneforge/")
-					) {
-						return "svelte-core";
-					}
-				},
 			},
 		},
 	},
@@ -92,4 +117,4 @@ export default defineConfig({
 			],
 		},
 	},
-});
+}));

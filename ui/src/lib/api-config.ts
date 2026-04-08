@@ -1,10 +1,19 @@
 // Default project ID for anonymous user mode (matches Go backend)
 export const PROJECT_ID = "local";
 
+declare global {
+	interface Window {
+		__DISCOBOT_CONFIG__?: {
+			apiRoot?: string;
+		};
+	}
+}
+
 const DEFAULT_SSH_PORT = 3333;
 const DEFAULT_HTTP_PORT = 3001;
 const API_READY_POLL_INTERVAL_MS = 1000;
 const tauriLocalhost = "localhost";
+const sameOriginAPIPath = "/api";
 
 // Cached Tauri server config (populated on first use)
 let tauriServerConfig: { port: number; secret: string } | null = null;
@@ -131,17 +140,35 @@ export function appendAuthToken(url: string): string {
 	return `${url}${separator}token=${encodeURIComponent(token)}`;
 }
 
+function getInjectedApiRootBase(): string | null {
+	if (typeof window === "undefined") {
+		return null;
+	}
+	const apiRoot = window.__DISCOBOT_CONFIG__?.apiRoot;
+	if (!apiRoot) {
+		return null;
+	}
+	return new URL(apiRoot, window.location.origin).toString().replace(/\/$/, "");
+}
+
 /**
  * Get the backend API root URL (without project path).
  *
+ * - In standalone embedded mode: uses the Go server's injected runtime config
  * - In Tauri: connects directly to Go server on dynamic port
  * - In browser with *-svc-ui.* or *-svc-ui-svelte.* hostname: routes to corresponding *-svc-api.* host
- * - Otherwise: calls Go backend directly on port 3001
+ * - In Vite dev: calls the Go backend directly on port 3001
+ * - Otherwise: uses the current origin's /api endpoint
  */
 export function getApiRootBase() {
 	if (typeof window === "undefined") {
 		// Server-side rendering - call backend directly
 		return "http://localhost:3001/api";
+	}
+
+	const injectedApiRoot = getInjectedApiRootBase();
+	if (injectedApiRoot) {
+		return injectedApiRoot;
 	}
 
 	// Check if hostname matches *-svc-ui.* or *-svc-ui-svelte.* pattern
@@ -168,12 +195,15 @@ export function getApiRootBase() {
 		return `http://${tauriLocalhost}:${tauriServerConfig.port}/api`;
 	}
 
-	const preferred = getPreferredBrowserAPIOrigin();
-	if (preferred) {
-		return `${preferred.protocol}//${window.location.hostname}:${preferred.port}/api`;
+	if (import.meta.env.DEV) {
+		const preferred = getPreferredBrowserAPIOrigin();
+		if (preferred) {
+			return `${preferred.protocol}//${window.location.hostname}:${preferred.port}/api`;
+		}
+		return `http://localhost:${DEFAULT_HTTP_PORT}/api`;
 	}
 
-	return `http://localhost:${DEFAULT_HTTP_PORT}/api`;
+	return `${window.location.origin}${sameOriginAPIPath}`;
 }
 
 /**
@@ -189,7 +219,8 @@ export function getApiBase() {
  *
  * - In Tauri: connects directly to Go server on dynamic port with token
  * - In browser with *-svc-ui.* or *-svc-ui-svelte.* hostname: routes to corresponding *-svc-api.* host
- * - Otherwise: connects to Go backend directly on port 3001
+ * - In Vite dev: connects to the Go backend directly on port 3001
+ * - Otherwise: connects to the current origin's /api endpoint
  */
 export function getWsBase() {
 	const url = getApiRootBase();

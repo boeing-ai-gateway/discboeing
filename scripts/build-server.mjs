@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(__dirname);
 const serverDir = join(projectRoot, "server");
+const uiBuildDir = join(projectRoot, "ui", "build");
+const embeddedUIDir = join(serverDir, "static", "ui", "dist");
 const binariesDir = join(projectRoot, "src-tauri", "binaries");
 
 // Get version from environment (CI) or default to "main" for dev builds
@@ -19,6 +21,20 @@ const githubOAuthClientID = process.env.DISCOBOT_GITHUB_OAUTH_CLIENT_ID || "";
 
 // Create binaries directory
 mkdirSync(binariesDir, { recursive: true });
+
+function syncEmbeddedUI() {
+	console.log("Building Svelte UI for standalone server...");
+	execSync("pnpm ui:build", {
+		cwd: projectRoot,
+		stdio: "inherit",
+		env: process.env,
+	});
+
+	console.log("Syncing built UI into server/static/ui/dist...");
+	rmSync(embeddedUIDir, { recursive: true, force: true });
+	mkdirSync(embeddedUIDir, { recursive: true });
+	cpSync(uiBuildDir, embeddedUIDir, { recursive: true });
+}
 
 // Get target triple from environment or detect from current platform
 function getTargetTriple() {
@@ -74,6 +90,8 @@ const goEnv = getGoEnv(targetTriple);
 console.log(
 	`Building discobot-server ${version} for ${targetTriple} (GOOS=${goEnv.GOOS}, GOARCH=${goEnv.GOARCH})...`,
 );
+
+syncEmbeddedUI();
 
 // Build with version and compiled-in client IDs injected via ldflags
 const ldflags = [

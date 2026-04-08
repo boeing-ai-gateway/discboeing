@@ -389,6 +389,10 @@ func main() {
 
 	// Initialize handlers
 	h := handler.New(s, cfg, gitProvider, sandboxProvider, sandboxManager, eventBroker, jobQueue, systemManager)
+	spaHandler, err := static.NewSPAHandler()
+	if err != nil {
+		log.Fatalf("Failed to initialize embedded UI handler: %v", err)
+	}
 
 	// Wire up job queue notification to dispatcher for immediate execution
 	if disp != nil {
@@ -442,6 +446,7 @@ func main() {
 
 	// API Routes endpoint (returns route metadata for API UI)
 	r.Get("/api/routes", h.GetRoutes)
+	r.NotFound(spaHandler.ServeHTTP)
 
 	// ===== Auth routes (no auth required) =====
 	r.Route("/auth", func(r chi.Router) {

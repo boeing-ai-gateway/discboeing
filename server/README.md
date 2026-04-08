@@ -113,9 +113,15 @@ After startup seeding, the server also imports known credential environment vari
 
 ### Building
 
+For a standalone server binary with the embedded Svelte SPA, build from the repository root:
+
 ```bash
-go build -o discobot-server ./cmd/server
+pnpm build:server
 ```
+
+This builds `ui/build`, copies it into `server/static/ui/dist`, and then compiles the Go server.
+
+If you only run `go build` directly inside `server/`, the binary will not include the freshly built SPA assets.
 
 ### Authservice container image
 
