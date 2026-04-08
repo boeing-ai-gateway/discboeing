@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MoonIcon from "@lucide/svelte/icons/moon";
+	import PlusIcon from "@lucide/svelte/icons/plus";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import SunIcon from "@lucide/svelte/icons/sun";
@@ -20,6 +21,7 @@
 	const app = useAppContext();
 	const environment = app.environment;
 	const preferences = app.preferences;
+	const sessions = app.sessions;
 	const ui = app.ui;
 	const updates = app.updates;
 
@@ -53,27 +55,27 @@
 		<DiscobotBrand heightClass="h-6" />
 	</div>
 
-	{#if showSessionToolbar}
-		<div class="relative z-20 min-w-0 px-2">
+	<div class="relative z-20 flex min-w-0 items-center justify-end gap-2">
+		<button
+			type="button"
+			onclick={() => sessions.startNew()}
+			aria-label="New session"
+			title="New session"
+			class="tauri-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"
+		>
+			<PlusIcon class="size-3 shrink-0" />
+			<span>New Session</span>
+		</button>
+
+		{#if showSessionToolbar}
 			<SessionToolbar />
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	<div
 		class="relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"
 	>
 		<div class="flex min-w-0 items-center gap-1 pr-2">
-			{#if environment.isTauri}
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					onclick={refreshWindow}
-					aria-label="Refresh"
-					title="Refresh"
-				>
-					<RefreshCwIcon class="size-4" />
-				</Button>
-			{/if}
 			<Button
 				variant="ghost"
 				size="icon-sm"
@@ -91,6 +93,17 @@
 					<MoonIcon class="size-4" />
 				{/if}
 			</Button>
+			{#if environment.isTauri}
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					onclick={refreshWindow}
+					aria-label="Refresh"
+					title="Refresh"
+				>
+					<RefreshCwIcon class="size-4" />
+				</Button>
+			{/if}
 			<Button
 				variant="ghost"
 				size="icon-sm"
