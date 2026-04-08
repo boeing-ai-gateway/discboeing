@@ -52,4 +52,8 @@ apt-get install -y --no-install-recommends \
     patchelf \
     libglib2.0-dev \
     libsoup-3.0-dev \
-    libjavascriptcoregtk-4.1-dev
+    libjavascriptcoregtk-4.1-dev \
+    dbus-x11 \
+    libegl1 \
+    libgl1-mesa-dri \
+    mesa-utils
