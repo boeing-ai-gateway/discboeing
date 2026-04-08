@@ -45,8 +45,9 @@ type SessionConfig struct {
 
 	// Skills are discovered skill configurations from project-level .claude/skills/
 	// and .discobot/skills/, user-level ~/.claude/skills, ~/.discobot/skills,
-	// ~/.agents/skills, and legacy commands directories. They are listed in the
-	// system-reminder so the model knows which slash commands are available.
+	// ~/.agents/skills, and legacy commands directories including ~/.agents/
+	// commands. They are listed in the system-reminder so the model knows which
+	// slash commands are available.
 	Skills []SkillConfig
 }
 

@@ -361,6 +361,75 @@ func TestLookupSkill_DoesNotSearchCommands(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkills_UserAgentsCommandsDir(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	cmdDir := filepath.Join(home, ".agents", "commands", "release")
+	mkdirAll(t, cmdDir)
+	writeFile(t, filepath.Join(cmdDir, "SKILL.md"), "---\nname: release\ndescription: Standard user command.\n---\nRun the standard command.")
+
+	skills, err := discoverSkillsWithHome(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(skills))
+	}
+	if skills[0].Name != "release" {
+		t.Errorf("name = %q, want release", skills[0].Name)
+	}
+	if skills[0].Description != "Standard user command." {
+		t.Errorf("description = %q", skills[0].Description)
+	}
+}
+
+func TestDiscoverSkills_UserClaudeCommandsTakePriorityOverAgents(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+
+	claudeDir := filepath.Join(home, ".claude", "commands", "release")
+	mkdirAll(t, claudeDir)
+	writeFile(t, filepath.Join(claudeDir, "SKILL.md"), "---\nname: release\ndescription: Claude user command.\n---\nClaude command.")
+
+	agentsDir := filepath.Join(home, ".agents", "commands", "release")
+	mkdirAll(t, agentsDir)
+	writeFile(t, filepath.Join(agentsDir, "SKILL.md"), "---\nname: release\ndescription: Agents user command.\n---\nAgents command.")
+
+	skills, err := discoverSkillsWithHome(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 command (deduped), got %d", len(skills))
+	}
+	if skills[0].Description != "Claude user command." {
+		t.Errorf("description = %q, want ~/.claude to take priority", skills[0].Description)
+	}
+}
+
+func TestLookupCommand_FoundInUserAgentsCommandsDir(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".agents", "commands", "release")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: release\n---\nRun the user command.")
+
+	cmd, found, err := LookupCommand(root, "release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected command to be found")
+	}
+	if cmd.Name != "release" {
+		t.Errorf("name = %q", cmd.Name)
+	}
+	if cmd.Body != "Run the user command." {
+		t.Errorf("body = %q", cmd.Body)
+	}
+}
+
 func TestLookupCommand_FoundInSubdir(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, ".claude", "commands", "release")

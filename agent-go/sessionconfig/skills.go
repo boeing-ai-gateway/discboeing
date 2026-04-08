@@ -29,7 +29,7 @@ type SkillConfig struct {
 // discoverSkills loads skill configs from the project's .claude/skills and
 // .claude/commands directories, plus user-level skill directories including
 // ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills, along with
-// ~/.claude/commands and ~/.discobot/commands.
+// ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands.
 // The equivalent .discobot/ directories are also checked as an alternative
 // naming style.
 // Priority: project skills (.claude then .discobot) → user skills →
@@ -85,9 +85,10 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 		}
 	}
 
-	// 4. User commands: ~/.claude/commands/ then ~/.discobot/commands/ (both formats).
+	// 4. User commands: ~/.claude/commands/ then ~/.discobot/commands/ then
+	// ~/.agents/commands/ (both formats).
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot"} {
+		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			if err := addFrom(loadCommandsDir(filepath.Join(home, dir, "commands"))); err != nil {
 				return nil, err
 			}
@@ -122,7 +123,8 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 // LookupCommand searches for a legacy command by name in commands/ directories.
 // Commands are expanded programmatically when a user message starts with /name,
 // unlike skills which are invoked via the Skill tool by the LLM.
-// Both .claude and .discobot directory styles are checked.
+// Project-level .claude and .discobot directory styles are checked, along with
+// user-level ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands.
 // Returns (zero, false, nil) if the command is not found.
 func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 	var paths []string
@@ -130,7 +132,7 @@ func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 		paths = append(paths, commandLookupPaths(filepath.Join(projectRoot, dir, "commands"), cmdName)...)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		for _, dir := range []string{".claude", ".discobot"} {
+		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			paths = append(paths, commandLookupPaths(filepath.Join(home, dir, "commands"), cmdName)...)
 		}
 	}
