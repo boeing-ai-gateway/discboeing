@@ -181,7 +181,7 @@ const SessionNode = () => {
 
 ### Unit Tests
 
-**Frontend** (`components/ide/session-name.test.tsx`):
+**Frontend** (`ui/src/lib/components/test/`):
 - `getSessionDisplayName()` returns correct name
 - `SessionName` component renders correctly
 - Props (className, showIcon, etc.) work as expected
@@ -198,7 +198,7 @@ const SessionNode = () => {
 
 ```bash
 # Frontend tests
-node --import ./test/setup.js --import tsx --test components/ide/session-name.test.tsx
+node --import tsx --test ui/src/lib/components/test/<test-file>.test.ts
 
 # Backend tests
 go test ./internal/integration -run TestSessionDisplayName
@@ -252,7 +252,6 @@ The schema change is handled automatically by GORM's `AutoMigrate()`:
 
 ## References
 
-- Implementation: `server/internal/model/model.go`, `lib/api-types.ts`
+- Implementation: `server/internal/model/model.go`, `ui/src/lib/api-types.ts`
 - API Docs: `server/api.md` (Sessions section)
-- UI Component: `components/ide/session-name.tsx`
-- Similar Pattern: `components/ide/workspace-path.tsx`
+- UI Component: `ui/src/lib/components/app/`

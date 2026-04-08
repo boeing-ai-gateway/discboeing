@@ -372,9 +372,9 @@ Client re-fetches session to get updated public `status`, `errorMessage`, and `a
 
 | Component | File | Changes |
 |-----------|------|---------|
-| Types | `lib/api-types.ts` | Add `commitError`, `baseCommit`, `appliedCommit` |
-| Chat Panel | `components/ide/chat-panel.tsx` | Display `commitError` |
-| Sidebar | `components/ide/sidebar-tree.tsx` | Show failed state |
+| Types | `ui/src/lib/api-types.ts` | Add `commitError`, `baseCommit`, `appliedCommit` |
+| Chat Panel | `ui/src/lib/components/app/` | Display `commitError` |
+| Sidebar | `ui/src/lib/components/app/` | Show failed state |
 
 ---
 

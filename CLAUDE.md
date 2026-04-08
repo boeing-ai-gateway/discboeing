@@ -23,7 +23,6 @@ pnpm dev:server         # Go backend with hot-reload via air (port 3001)
 ```bash
 pnpm build              # Build server + active frontend + Tauri app
 pnpm build:server       # Build Go server binary
-pnpm typecheck          # TypeScript type checking
 ```
 
 ### Lint & Format
@@ -40,8 +39,8 @@ pnpm format             # Run the Svelte UI Prettier formatter
 
 ```bash
 pnpm test               # All unit + integration tests
-pnpm test:unit          # All unit tests (server, proxy, agent-go, watcher, frontend)
-pnpm test:frontend      # Frontend tests only
+pnpm test:unit          # All unit tests (server, proxy, agent-go, watcher, ui)
+pnpm test:ui            # Svelte UI tests only
 
 # Go tests
 pnpm test:server        # All server tests
@@ -53,8 +52,8 @@ pnpm test:agent-go      # Agent Go tests
 # Single Go test
 cd server && go test -v -run TestName ./internal/path/...
 
-# Single frontend test
-node --import ./test/setup.js --import tsx --test lib/hooks/use-messages.test.ts
+# Single Svelte UI test
+node --import tsx --test ui/src/lib/components/test/<test-file>.test.ts
 ```
 
 ### CI
@@ -102,15 +101,9 @@ Project → Workspace (git repo or local folder) → Session (chat thread + cont
 
 ### Frontend Patterns
 
-- `./ui` is the current UI and should be used for active frontend work.
-- `./components` and `./lib` are the old React UI, are slated for deletion, and do not need to be maintained unless a task explicitly targets them.
-- **Data fetching**: SWR hooks in `lib/hooks/` with optimistic mutations
-- **API client**: `lib/api-client.ts` — all calls go through `getApiBase()` (`/api/projects/local/...`)
-- **Types**: All shared interfaces in `lib/api-types.ts`
+- `./ui` is the active frontend. All frontend work goes here.
 - **Styling**: Tailwind CSS v4 with CSS custom properties. Use design tokens (`bg-background`, `text-foreground`, `border-border`) and IDE tokens (`bg-tree-hover`, `bg-diff-add`)
 - **Icons**: Theme-aware via `IconRenderer` component. SVGs with `currentColor` must be inlined, not `<img>`
-- **AI chat**: Vercel AI SDK v6 with `useChat` hook and custom elements in `components/ai-elements/`
-- **React Compiler**: Enabled via babel plugin — run `/vercel-react-best-practices` skill when working on React code
 
 ### Svelte UI (`./ui`)
 
@@ -160,23 +153,12 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 
 ### Adding Features
 
-For active UI work, prefer `./ui`. The steps below apply to the legacy React UI only and generally should be ignored unless the task explicitly targets that code.
-
-1. Define types in `lib/api-types.ts`
-2. Add Go handler/service/store in `server/internal/`
-3. Add API client method in `lib/api-client.ts`
-4. Create SWR hook in `lib/hooks/`
-5. Build UI in `components/app/`
+1. Add Go handler/service/store in `server/internal/`
+2. Build UI in `ui/src/`
 
 ## Testing
 
-**Frontend tests use Node's built-in `node:test`** — NOT vitest or jest.
-
-The `test/setup.js` file initializes jsdom globals and must be loaded BEFORE React via `--import`. This order is critical:
-
-```bash
-node --import ./test/setup.js --import tsx --test <test-file>
-```
+**Svelte UI tests use Node's built-in `node:test`** — NOT vitest or jest.
 
 **Go tests** use standard `go test`. Integration tests are under `*/internal/integration/`.
 
@@ -203,7 +185,5 @@ When making changes, update the relevant docs:
 
 ## Known Quirks
 
-1. **ResizeObserver errors**: Suppressed globally via `ResizeObserverFix` component
-2. **Monaco Editor errors**: Internal cursor tracking errors suppressed via `MonacoEditorFix` component
-3. **Terminal resize**: Uses debounced `requestAnimationFrame` to avoid loops
-4. **Icon rendering**: SVGs with `currentColor` must be inlined, not used as `<img>`
+1. **Terminal resize**: Uses debounced `requestAnimationFrame` to avoid loops
+2. **Icon rendering**: SVGs with `currentColor` must be inlined, not used as `<img>`

@@ -4,7 +4,7 @@ This document describes the overall architecture of Discobot, an IDE-like chat i
 
 ## Component Documentation
 
-- [UI Architecture](./ui/ARCHITECTURE.md) - Frontend React + Vite architecture
+- [UI Architecture](./ui/ARCHITECTURE.md) - Frontend Svelte + Vite architecture
 - [Server Documentation](../server/README.md) - Go backend server
 - [Agent Documentation](../agent/README.md) - Container init process (PID 1)
 - [Agent API Documentation](../agent-api/README.md) - Container agent API service

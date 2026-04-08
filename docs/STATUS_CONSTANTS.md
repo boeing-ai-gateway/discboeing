@@ -7,7 +7,7 @@ This document describes how status constants are synchronized between the Go bac
 Status constants (Session, Commit, and Workspace statuses) are defined in two places:
 
 1. **Go Backend**: `server/internal/model/model.go`
-2. **TypeScript Frontend**: `lib/api-constants.ts`
+2. **TypeScript Frontend**: `ui/src/lib/api-constants.ts`
 
 These constants MUST be kept in sync manually when changes are made.
 
@@ -33,7 +33,7 @@ const (
 )
 ```
 
-**TypeScript constants** (lib/api-constants.ts):
+**TypeScript constants** (ui/src/lib/api-constants.ts):
 ```typescript
 export const SessionStatus = {
 	INITIALIZING: "initializing",
@@ -64,7 +64,7 @@ const (
 )
 ```
 
-**TypeScript constants** (lib/api-constants.ts):
+**TypeScript constants** (ui/src/lib/api-constants.ts):
 ```typescript
 export const CommitStatus = {
 	NONE: "",
@@ -89,7 +89,7 @@ const (
 )
 ```
 
-**TypeScript constants** (lib/api-constants.ts):
+**TypeScript constants** (ui/src/lib/api-constants.ts):
 ```typescript
 export const WorkspaceStatus = {
 	INITIALIZING: "initializing",
@@ -106,7 +106,7 @@ export const WorkspaceStatus = {
 Import and use the constants instead of hardcoded strings:
 
 ```typescript
-import { SessionStatus, WorkspaceStatus } from "@/lib/api-constants";
+import { SessionStatus, WorkspaceStatus } from "$lib/api-constants";
 
 // Good ✓
 if (session.status === SessionStatus.COMPLETED) {
@@ -135,7 +135,7 @@ session.CommitStatus = "completed"
 
 ## Type Safety
 
-The TypeScript types in `lib/api-types.ts` are derived from the constants:
+The TypeScript types in `ui/src/lib/api-types.ts` are derived from the constants:
 
 ```typescript
 export type SessionStatus =
@@ -155,17 +155,14 @@ This ensures that:
 When adding, removing, or renaming a status value:
 
 1. Update the Go constants in `server/internal/model/model.go`
-2. Update the TypeScript constants in `lib/api-constants.ts`
+2. Update the TypeScript constants in `ui/src/lib/api-constants.ts`
 3. Update any usages in the codebase
 4. Run type checking and tests to verify synchronization
 
 ## Files Using Status Constants
 
 ### Frontend
-- `components/ide/sidebar-tree.tsx` - Session status indicators in workspace tree
-- `components/ide/layout/header.tsx` - Session status in header
-- `components/ide/layout/bottom-panel.tsx` - Commit status checks
-- `components/ide/chat-panel.tsx` - Session status banner and input locking
+- `ui/src/lib/` - Status constant definitions and type derivations
 
 ### Backend
 - `server/internal/service/session.go` - Session lifecycle management
@@ -177,5 +174,5 @@ When adding, removing, or renaming a status value:
 
 If you encounter hardcoded status strings in the codebase:
 1. Replace them with the appropriate constant
-2. Import the constants from `@/lib/api-constants` (TypeScript) or `model` package (Go)
+2. Import the constants from `$lib/api-constants` (TypeScript) or `model` package (Go)
 3. This improves type safety and makes refactoring easier
