@@ -731,9 +731,36 @@ type CodexDeviceCodeResponse struct {
 	Interval        int    `json:"interval"`
 }
 
+type CodexAuthorizeRequest struct {
+	RedirectURI string `json:"redirectUri"`
+}
+
+type CodexAuthorizeResponse struct {
+	URL               string `json:"url"`
+	Verifier          string `json:"verifier"`
+	State             string `json:"state"`
+	RedirectURI       string `json:"redirectUri"`
+	CallbackListening bool   `json:"callbackListening"`
+}
+
+type CodexExchangeRequest struct {
+	Code         string `json:"code"`
+	RedirectURI  string `json:"redirectUri"`
+	CodeVerifier string `json:"verifier"`
+}
+
+type CodexExchangeResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
 type CodexPollRequest struct {
 	DeviceAuthID string `json:"deviceAuthId"`
 	UserCode     string `json:"userCode"`
+}
+
+type CodexCallbackStatusRequest struct {
+	State string `json:"state"`
 }
 
 // PostMCPToken stores an MCP OAuth token posted by the agent after completing
@@ -791,6 +818,46 @@ func (h *Handler) CodexDeviceCode(w http.ResponseWriter, r *http.Request) {
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: oauth.CodexDevicePageURL,
 		Interval:        interval,
+	})
+}
+
+// CodexAuthorize starts the standard authorization-code flow for Codex/OpenAI OAuth.
+func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+	if h.cfg.CodexClientID == "" {
+		h.Error(w, http.StatusServiceUnavailable, "Codex OAuth not configured")
+		return
+	}
+
+	var req CodexAuthorizeRequest
+	_ = h.DecodeJSON(r, &req)
+
+	redirectURI := strings.TrimSpace(req.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = "http://localhost:1455/auth/callback"
+	}
+
+	provider := oauth.NewCodexProvider(h.cfg.CodexClientID)
+	authResp, err := provider.Authorize(redirectURI)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to generate authorization URL")
+		return
+	}
+
+	callbackListening := false
+	if h.codexCallbackServer != nil {
+		callbackListening = h.codexCallbackServer.Start()
+		if callbackListening {
+			h.codexCallbackServer.RegisterPending(authResp.State, authResp.Verifier, projectID, redirectURI)
+		}
+	}
+
+	h.JSON(w, http.StatusOK, CodexAuthorizeResponse{
+		URL:               authResp.URL,
+		Verifier:          authResp.Verifier,
+		State:             authResp.State,
+		RedirectURI:       redirectURI,
+		CallbackListening: callbackListening,
 	})
 }
 
@@ -864,4 +931,92 @@ func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, response)
+}
+
+// CodexExchange exchanges a standard OAuth authorization code for tokens.
+func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+	if h.cfg.CodexClientID == "" {
+		h.Error(w, http.StatusServiceUnavailable, "Codex OAuth not configured")
+		return
+	}
+
+	var req CodexExchangeRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	req.Code = strings.TrimSpace(req.Code)
+	req.RedirectURI = strings.TrimSpace(req.RedirectURI)
+	req.CodeVerifier = strings.TrimSpace(req.CodeVerifier)
+
+	if req.Code == "" {
+		h.Error(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	if req.RedirectURI == "" {
+		req.RedirectURI = "http://localhost:1455/auth/callback"
+	}
+	if req.CodeVerifier == "" {
+		h.Error(w, http.StatusBadRequest, "verifier is required")
+		return
+	}
+
+	provider := oauth.NewCodexProvider(h.cfg.CodexClientID)
+	tokenResp, err := provider.Exchange(r.Context(), req.Code, req.RedirectURI, req.CodeVerifier)
+	if err != nil {
+		h.Error(w, http.StatusBadRequest, "Token exchange failed: "+err.Error())
+		return
+	}
+
+	oauthCred := &service.OAuthCredential{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		TokenType:    tokenResp.TokenType,
+		ExpiresAt:    tokenResp.ExpiresAt,
+		Scope:        tokenResp.Scope,
+	}
+
+	info, err := h.credentialService.SetOAuthTokens(r.Context(), projectID, service.ProviderCodex, "OpenAI Codex", oauthCred)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to store credential")
+		return
+	}
+
+	response := map[string]any{
+		"success":    true,
+		"credential": info,
+		"expiresAt":  tokenResp.ExpiresAt,
+	}
+	if !tokenResp.ExpiresAt.IsZero() {
+		response["expiresIn"] = int(time.Until(tokenResp.ExpiresAt).Seconds())
+	}
+
+	h.JSON(w, http.StatusOK, response)
+}
+
+// CodexCallbackStatus reports whether the localhost:1455 callback completed.
+func (h *Handler) CodexCallbackStatus(w http.ResponseWriter, r *http.Request) {
+	var req CodexCallbackStatusRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	req.State = strings.TrimSpace(req.State)
+	if req.State == "" {
+		h.Error(w, http.StatusBadRequest, "state is required")
+		return
+	}
+
+	status := "pending"
+	errMsg := ""
+	if h.codexCallbackServer != nil {
+		status, errMsg = h.codexCallbackServer.Status(req.State)
+	}
+
+	h.JSON(w, http.StatusOK, map[string]string{
+		"status": status,
+		"error":  errMsg,
+	})
 }

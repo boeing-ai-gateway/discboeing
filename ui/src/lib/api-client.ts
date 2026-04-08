@@ -41,8 +41,13 @@ import type {
 	AuthProvider,
 	AuthUser,
 	CancelChatResponse,
+	CodexAuthorizeResponse,
+	CodexCallbackStatusRequest,
+	CodexCallbackStatusResponse,
 	CreateThreadRequest,
 	CodexDeviceCodeResponse,
+	CodexExchangeRequest,
+	CodexExchangeResponse,
 	CodexPollRequest,
 	CodexPollResponse,
 	CreateCredentialRequest,
@@ -815,6 +820,21 @@ class ApiClient {
 		});
 	}
 
+	async codexAuthorize(): Promise<CodexAuthorizeResponse> {
+		return this.fetch<CodexAuthorizeResponse>("/credentials/codex/authorize", {
+			method: "POST",
+		});
+	}
+
+	async codexExchange(
+		data: CodexExchangeRequest,
+	): Promise<CodexExchangeResponse> {
+		return this.fetch<CodexExchangeResponse>("/credentials/codex/exchange", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	}
+
 	// Codex (ChatGPT) OAuth device flow
 	async codexDeviceCode(): Promise<CodexDeviceCodeResponse> {
 		return this.fetch<CodexDeviceCodeResponse>(
@@ -830,6 +850,18 @@ class ApiClient {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
+	}
+
+	async codexCallbackStatus(
+		data: CodexCallbackStatusRequest,
+	): Promise<CodexCallbackStatusResponse> {
+		return this.fetch<CodexCallbackStatusResponse>(
+			"/credentials/codex/callback-status",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
 	// Services

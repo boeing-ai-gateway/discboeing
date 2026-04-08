@@ -5,7 +5,12 @@ import type { CredentialStore } from "$lib/store/credentials.store.svelte";
 import type { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
 import type {
 	ModelInfo,
+	CodexAuthorizeResponse,
+	CodexCallbackStatusRequest,
+	CodexCallbackStatusResponse,
 	CodexDeviceCodeResponse,
+	CodexExchangeRequest,
+	CodexExchangeResponse,
 	CodexPollRequest,
 	CodexPollResponse,
 	CreateWorkspaceRequest,
@@ -236,8 +241,13 @@ export type AppCredentials = {
 		data?: GitHubDeviceCodeRequest,
 	) => Promise<GitHubDeviceCodeResponse>;
 	githubPoll: (data: GitHubPollRequest) => Promise<GitHubPollResponse>;
+	codexAuthorize: () => Promise<CodexAuthorizeResponse>;
+	codexExchange: (data: CodexExchangeRequest) => Promise<CodexExchangeResponse>;
 	codexDeviceCode: () => Promise<CodexDeviceCodeResponse>;
 	codexPoll: (data: CodexPollRequest) => Promise<CodexPollResponse>;
+	codexCallbackStatus: (
+		data: CodexCallbackStatusRequest,
+	) => Promise<CodexCallbackStatusResponse>;
 };
 
 export type AppSupportInfo = {

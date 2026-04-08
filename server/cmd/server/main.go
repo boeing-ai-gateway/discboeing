@@ -1537,6 +1537,28 @@ func main() {
 
 				// Codex OAuth
 				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/codex/authorize",
+					Handler: h.CodexAuthorize,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "Codex authorization-code auth",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"redirectUri": "http://localhost:1455/auth/callback"},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/codex/exchange",
+					Handler: h.CodexExchange,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "Codex authorization-code exchange",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"code": "", "redirectUri": "http://localhost:1455/auth/callback", "verifier": ""},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
 					Method: "POST", Pattern: "/codex/device-code",
 					Handler: h.CodexDeviceCode,
 					Meta: routes.Meta{
@@ -1554,6 +1576,17 @@ func main() {
 						Description: "Codex device-code poll",
 						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
 						Body:        map[string]any{"deviceAuthId": "", "userCode": ""},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/codex/callback-status",
+					Handler: h.CodexCallbackStatus,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "Codex localhost callback status",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"state": ""},
 					},
 				})
 

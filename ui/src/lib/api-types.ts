@@ -216,6 +216,7 @@ export type CredentialOAuthKind = "authorization_code" | "device_code";
 export interface CredentialTypeOAuthConfig {
 	provider: string;
 	kind: CredentialOAuthKind;
+	supportedKinds?: CredentialOAuthKind[];
 	description?: string;
 	inputLabel?: string;
 	inputPlaceholder?: string;
@@ -524,6 +525,25 @@ export interface GitHubPollResponse {
 }
 
 // Codex (ChatGPT) OAuth types
+export interface CodexAuthorizeResponse {
+	url: string;
+	verifier: string;
+	state: string;
+	redirectUri: string;
+	callbackListening: boolean;
+}
+
+export interface CodexExchangeRequest {
+	code: string;
+	redirectUri?: string;
+	verifier: string;
+}
+
+export interface CodexExchangeResponse {
+	success: boolean;
+	error?: string;
+}
+
 export interface CodexDeviceCodeResponse {
 	deviceAuthId: string;
 	userCode: string;
@@ -540,6 +560,15 @@ export interface CodexPollResponse {
 	status: "pending" | "success" | "error";
 	error?: string;
 	accountId?: string;
+}
+
+export interface CodexCallbackStatusRequest {
+	state: string;
+}
+
+export interface CodexCallbackStatusResponse {
+	status: "pending" | "success" | "error";
+	error?: string;
 }
 
 // System Status types

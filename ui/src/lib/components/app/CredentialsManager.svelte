@@ -8,7 +8,11 @@
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import XIcon from "@lucide/svelte/icons/x";
-	import type { CredentialAuthType, CredentialEnvVar } from "$lib/api-types";
+	import type {
+		CredentialAuthType,
+		CredentialEnvVar,
+		CredentialOAuthKind,
+	} from "$lib/api-types";
 	import {
 		parseBulkEnvVarPaste,
 		type BulkEnvVarPaste,
@@ -66,13 +70,19 @@
 	let oauthUserCodeDraft = $state("");
 	let oauthVerificationUrl = $state("");
 	let oauthAuthUrl = $state("");
+	let oauthAuthStateDraft = $state("");
+	let oauthRedirectUriDraft = $state("");
 	let oauthInputDraft = $state("");
 	let oauthPollIntervalSeconds = $state(5);
 	let oauthPollDomainDraft = $state("");
 	let oauthVerifierDraft = $state("");
+	let oauthCallbackListening = $state(false);
+	let oauthCallbackPolling = $state(false);
+	let oauthKindDraft = $state<CredentialOAuthKind | null>(null);
 	let startingOAuth = $state(false);
 	let pollingOAuth = $state(false);
 	let copiedOAuthCode = $state(false);
+	let copiedOAuthAuthUrl = $state(false);
 	let inactiveDraft = $state(false);
 	let replaceSecretDraft = $state(false);
 	let agentVisibleDraft = $state(false);
@@ -81,6 +91,7 @@
 	let submitting = $state(false);
 	let deletingId = $state<string | null>(null);
 	let oauthPollTimer: ReturnType<typeof setTimeout> | null = null;
+	let oauthCallbackPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let oauthCopiedTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const providerOptions = $derived.by(() => {
@@ -152,7 +163,20 @@
 			? (selectedCredentialType?.oauth ?? null)
 			: null,
 	);
-	const selectedOAuthKind = $derived(selectedOAuthConfig?.kind ?? null);
+	const availableOAuthKinds = $derived.by(
+		() =>
+			selectedOAuthConfig?.supportedKinds ??
+			(selectedOAuthConfig ? [selectedOAuthConfig.kind] : []),
+	);
+	const selectedOAuthKind = $derived.by(() => {
+		if (!selectedOAuthConfig) {
+			return null;
+		}
+		if (oauthKindDraft && availableOAuthKinds.includes(oauthKindDraft)) {
+			return oauthKindDraft;
+		}
+		return selectedOAuthConfig.kind;
+	});
 
 	function makeEnvVarRow(
 		key = "",
@@ -247,6 +271,10 @@
 			clearTimeout(oauthPollTimer);
 			oauthPollTimer = null;
 		}
+		if (oauthCallbackPollTimer) {
+			clearTimeout(oauthCallbackPollTimer);
+			oauthCallbackPollTimer = null;
+		}
 		if (oauthCopiedTimer) {
 			clearTimeout(oauthCopiedTimer);
 			oauthCopiedTimer = null;
@@ -264,13 +292,19 @@
 		oauthUserCodeDraft = "";
 		oauthVerificationUrl = "";
 		oauthAuthUrl = "";
+		oauthAuthStateDraft = "";
+		oauthRedirectUriDraft = "";
 		oauthInputDraft = "";
 		oauthPollIntervalSeconds = 5;
 		oauthPollDomainDraft = "";
 		oauthVerifierDraft = "";
+		oauthCallbackListening = false;
+		oauthCallbackPolling = false;
+		oauthKindDraft = null;
 		startingOAuth = false;
 		pollingOAuth = false;
 		copiedOAuthCode = false;
+		copiedOAuthAuthUrl = false;
 		inactiveDraft = false;
 		replaceSecretDraft = false;
 		agentVisibleDraft = false;
@@ -399,6 +433,16 @@
 		try {
 			switch (selectedOAuthConfig.provider) {
 				case "codex": {
+					if (selectedOAuthKind === "authorization_code") {
+						const response = await credentialsApi.codexAuthorize();
+						oauthAuthUrl = response.url;
+						oauthVerifierDraft = response.verifier;
+						oauthAuthStateDraft = response.state;
+						oauthRedirectUriDraft = response.redirectUri;
+						oauthCallbackListening = response.callbackListening;
+						startCodexCallbackPolling();
+						break;
+					}
 					const response = await credentialsApi.codexDeviceCode();
 					oauthDeviceIdDraft = response.deviceAuthId;
 					oauthUserCodeDraft = response.userCode;
@@ -447,6 +491,57 @@
 			copiedOAuthCode = false;
 			oauthCopiedTimer = null;
 		}, 2000);
+	}
+
+	async function openOAuthAuthUrl() {
+		if (!oauthAuthUrl) {
+			return;
+		}
+		await writeClipboardText(oauthAuthUrl);
+		copiedOAuthAuthUrl = true;
+		if (oauthCopiedTimer) {
+			clearTimeout(oauthCopiedTimer);
+		}
+		oauthCopiedTimer = setTimeout(() => {
+			copiedOAuthAuthUrl = false;
+			copiedOAuthCode = false;
+			oauthCopiedTimer = null;
+		}, 2000);
+		await openUrl(oauthAuthUrl);
+	}
+
+	function startCodexCallbackPolling() {
+		if (!oauthAuthStateDraft) {
+			return;
+		}
+		if (oauthCallbackPollTimer) {
+			clearTimeout(oauthCallbackPollTimer);
+			oauthCallbackPollTimer = null;
+		}
+		oauthCallbackPolling = true;
+
+		const poll = async () => {
+			try {
+				const response = await credentialsApi.codexCallbackStatus({
+					state: oauthAuthStateDraft,
+				});
+				if (response.status === "success") {
+					resetEditor();
+					await load();
+					return;
+				}
+				if (response.status === "error") {
+					oauthCallbackPolling = false;
+					errorMessage = response.error || "Authorization failed";
+					return;
+				}
+				oauthCallbackPollTimer = setTimeout(() => void poll(), 2000);
+			} catch {
+				oauthCallbackPollTimer = setTimeout(() => void poll(), 2000);
+			}
+		};
+
+		void poll();
 	}
 
 	async function startOAuthPolling() {
@@ -524,6 +619,28 @@
 		errorMessage = null;
 		try {
 			switch (selectedOAuthConfig.provider) {
+				case "codex": {
+					const trimmedInput = oauthInputDraft.trim();
+					if (!trimmedInput) {
+						throw new Error(
+							"Enter the authorization code or full redirect URL.",
+						);
+					}
+					if (!oauthVerifierDraft.trim()) {
+						throw new Error("Start the OAuth flow before connecting.");
+					}
+					const response = await credentialsApi.codexExchange({
+						code: parseOAuthCode(trimmedInput),
+						redirectUri: oauthRedirectUriDraft.trim() || undefined,
+						verifier: oauthVerifierDraft.trim(),
+					});
+					if (!response.success) {
+						throw new Error(response.error || "Authorization failed");
+					}
+					resetEditor();
+					await load();
+					return;
+				}
 				case "anthropic": {
 					const trimmedInput = oauthInputDraft.trim();
 					if (!trimmedInput) {
@@ -689,6 +806,9 @@
 			if (oauthPollTimer) {
 				clearTimeout(oauthPollTimer);
 			}
+			if (oauthCallbackPollTimer) {
+				clearTimeout(oauthCallbackPollTimer);
+			}
 			if (oauthCopiedTimer) {
 				clearTimeout(oauthCopiedTimer);
 			}
@@ -803,14 +923,32 @@
 								option.authType === "oauth" ? false : mode === "create";
 							agentVisibleDraft = false;
 							apiKeyDraft = "";
+							if (oauthPollTimer) {
+								clearTimeout(oauthPollTimer);
+								oauthPollTimer = null;
+							}
+							if (oauthCallbackPollTimer) {
+								clearTimeout(oauthCallbackPollTimer);
+								oauthCallbackPollTimer = null;
+							}
 							oauthDeviceIdDraft = "";
 							oauthUserCodeDraft = "";
 							oauthVerificationUrl = "";
 							oauthAuthUrl = "";
+							oauthAuthStateDraft = "";
+							oauthRedirectUriDraft = "";
 							oauthInputDraft = "";
 							oauthPollIntervalSeconds = 5;
 							oauthPollDomainDraft = "";
 							oauthVerifierDraft = "";
+							oauthCallbackListening = false;
+							oauthCallbackPolling = false;
+							oauthKindDraft =
+								option.authType === "oauth"
+									? ((credentialsApi.credentialTypes.find(
+											(type) => type.id === option.value,
+										)?.oauth?.kind ?? null) as CredentialOAuthKind | null)
+									: null;
 							pollingOAuth = false;
 						}}
 					>
@@ -925,6 +1063,44 @@
 										"Use ChatGPT device auth to connect this credential."}
 								</p>
 							</div>
+							{#if availableOAuthKinds.length > 1}
+								<div class="flex flex-wrap gap-2">
+									{#each availableOAuthKinds as oauthKind}
+										<Button
+											variant={selectedOAuthKind === oauthKind
+												? "default"
+												: "outline"}
+											size="sm"
+											onclick={() => {
+												oauthKindDraft = oauthKind;
+												oauthDeviceIdDraft = "";
+												oauthUserCodeDraft = "";
+												oauthVerificationUrl = "";
+												oauthAuthUrl = "";
+												oauthAuthStateDraft = "";
+												oauthRedirectUriDraft = "";
+												oauthInputDraft = "";
+												oauthVerifierDraft = "";
+												oauthCallbackListening = false;
+												oauthCallbackPolling = false;
+												pollingOAuth = false;
+												if (oauthPollTimer) {
+													clearTimeout(oauthPollTimer);
+													oauthPollTimer = null;
+												}
+												if (oauthCallbackPollTimer) {
+													clearTimeout(oauthCallbackPollTimer);
+													oauthCallbackPollTimer = null;
+												}
+											}}
+										>
+											{oauthKind === "authorization_code"
+												? "Redirect Sign-In"
+												: "Device code"}
+										</Button>
+									{/each}
+								</div>
+							{/if}
 							<div class="flex flex-wrap gap-2">
 								<Button
 									variant="outline"
@@ -961,10 +1137,12 @@
 										size="sm"
 										class="gap-2"
 										disabled={pollingOAuth}
-										onclick={() => void openUrl(oauthAuthUrl)}
+										onclick={() => void openOAuthAuthUrl()}
 									>
 										<ExternalLinkIcon class="size-4" />
-										Open auth page
+										{copiedOAuthAuthUrl
+											? "Opened and copied"
+											: "Open auth page"}
 									</Button>
 								{/if}
 							</div>
@@ -1017,6 +1195,37 @@
 								</div>
 							{:else if selectedOAuthKind === "authorization_code"}
 								<div class="space-y-2">
+									{#if oauthAuthUrl}
+										<div
+											class="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+										>
+											<p>
+												Sign in with ChatGPT. OpenAI redirects to
+												<code class="mx-1 font-mono">localhost:1455</code>, and
+												Discobot will try to catch that redirect automatically.
+											</p>
+											<p class="mt-2">
+												{#if oauthCallbackListening}
+													Waiting for the local callback. If it does not land,
+													paste the full redirect URL or just the <code
+														class="font-mono">code</code
+													> below.
+												{:else}
+													Could not bind
+													<code class="mx-1 font-mono">localhost:1455</code>.
+													Paste the full redirect URL or just the
+													<code class="font-mono">code</code> below after signing
+													in.
+												{/if}
+											</p>
+											{#if oauthCallbackPolling}
+												<p class="mt-2 flex items-center gap-2 text-foreground">
+													<Loader2Icon class="size-4 animate-spin" />
+													Waiting for the redirect…
+												</p>
+											{/if}
+										</div>
+									{/if}
 									<Input
 										id="credential-secret"
 										value={oauthInputDraft}

@@ -27,6 +27,12 @@ type pendingCodexAuth struct {
 	createdAt   time.Time
 }
 
+type completedCodexAuth struct {
+	status    string
+	error     string
+	createdAt time.Time
+}
+
 // CodexCallbackServer handles the OAuth callback on localhost:1455
 type CodexCallbackServer struct {
 	handler       *Handler
@@ -34,6 +40,7 @@ type CodexCallbackServer struct {
 	listener      net.Listener
 	mu            sync.Mutex
 	pending       map[string]*pendingCodexAuth // state -> auth info
+	completed     map[string]*completedCodexAuth
 	running       bool
 	cleanupTicker *time.Ticker
 	cleanupDone   chan struct{}
@@ -42,8 +49,9 @@ type CodexCallbackServer struct {
 // NewCodexCallbackServer creates a new callback server
 func NewCodexCallbackServer(h *Handler) *CodexCallbackServer {
 	return &CodexCallbackServer{
-		handler: h,
-		pending: make(map[string]*pendingCodexAuth),
+		handler:   h,
+		pending:   make(map[string]*pendingCodexAuth),
+		completed: make(map[string]*completedCodexAuth),
 	}
 }
 
@@ -120,6 +128,7 @@ func (s *CodexCallbackServer) RegisterPending(state, verifier, projectID, redire
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	delete(s.completed, state)
 	s.pending[state] = &pendingCodexAuth{
 		state:       state,
 		verifier:    verifier,
@@ -141,6 +150,11 @@ func (s *CodexCallbackServer) cleanupExpired() {
 					delete(s.pending, state)
 				}
 			}
+			for state, auth := range s.completed {
+				if auth.createdAt.Before(cutoff) {
+					delete(s.completed, state)
+				}
+			}
 			s.mu.Unlock()
 		case <-s.cleanupDone:
 			return
@@ -156,6 +170,7 @@ func (s *CodexCallbackServer) handleCallback(w http.ResponseWriter, r *http.Requ
 	errorDesc := r.URL.Query().Get("error_description")
 
 	if errorParam != "" {
+		s.complete(state, "error", fmt.Sprintf("Authorization failed: %s - %s", errorParam, errorDesc))
 		s.renderError(w, fmt.Sprintf("Authorization failed: %s - %s", errorParam, errorDesc))
 		return
 	}
@@ -188,6 +203,7 @@ func (s *CodexCallbackServer) handleCallback(w http.ResponseWriter, r *http.Requ
 	provider := oauth.NewCodexProvider(s.handler.cfg.CodexClientID)
 	tokenResp, err := provider.Exchange(r.Context(), code, auth.redirectURI, auth.verifier)
 	if err != nil {
+		s.complete(state, "error", fmt.Sprintf("Token exchange failed: %v", err))
 		s.renderError(w, fmt.Sprintf("Token exchange failed: %v", err))
 		return
 	}
@@ -203,11 +219,42 @@ func (s *CodexCallbackServer) handleCallback(w http.ResponseWriter, r *http.Requ
 
 	_, err = s.handler.credentialService.SetOAuthTokens(r.Context(), auth.projectID, service.ProviderCodex, "OpenAI Codex", oauthCred)
 	if err != nil {
+		s.complete(state, "error", fmt.Sprintf("Failed to store credential: %v", err))
 		s.renderError(w, fmt.Sprintf("Failed to store credential: %v", err))
 		return
 	}
 
+	s.complete(state, "success", "")
 	s.renderSuccess(w)
+}
+
+func (s *CodexCallbackServer) complete(state, status, errMsg string) {
+	if state == "" {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.pending, state)
+	s.completed[state] = &completedCodexAuth{
+		status:    status,
+		error:     errMsg,
+		createdAt: time.Now(),
+	}
+}
+
+func (s *CodexCallbackServer) Status(state string) (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if completed, ok := s.completed[state]; ok {
+		return completed.status, completed.error
+	}
+	if _, ok := s.pending[state]; ok {
+		return "pending", ""
+	}
+	return "pending", ""
 }
 
 func (s *CodexCallbackServer) renderSuccess(w http.ResponseWriter) {

@@ -1,7 +1,12 @@
 import { api } from "$lib/api-client";
 import type { AppCredentials } from "$lib/app/app-context.types";
 import type {
+	CodexAuthorizeResponse,
+	CodexCallbackStatusRequest,
+	CodexCallbackStatusResponse,
 	CodexDeviceCodeResponse,
+	CodexExchangeRequest,
+	CodexExchangeResponse,
 	CodexPollRequest,
 	CodexPollResponse,
 	CredentialAuthType,
@@ -84,6 +89,17 @@ export function createAppCredentialsDomain(
 			}
 			return response;
 		},
+		codexAuthorize: (): Promise<CodexAuthorizeResponse> => api.codexAuthorize(),
+		codexExchange: async (
+			data: CodexExchangeRequest,
+		): Promise<CodexExchangeResponse> => {
+			const response = await api.codexExchange(data);
+			if (response.success) {
+				await store.fetch();
+				void args.refreshModels();
+			}
+			return response;
+		},
 		codexDeviceCode: (): Promise<CodexDeviceCodeResponse> =>
 			api.codexDeviceCode(),
 		codexPoll: async (data: CodexPollRequest): Promise<CodexPollResponse> => {
@@ -94,5 +110,8 @@ export function createAppCredentialsDomain(
 			}
 			return response;
 		},
+		codexCallbackStatus: (
+			data: CodexCallbackStatusRequest,
+		): Promise<CodexCallbackStatusResponse> => api.codexCallbackStatus(data),
 	};
 }

@@ -167,8 +167,11 @@ The database schema does NOT use cascading deletes (`ON DELETE CASCADE`). All re
 - `POST /api/projects/{projectId}/credentials/anthropic/exchange` - Returns 501
 - `POST /api/projects/{projectId}/credentials/github-copilot/device-code` - Returns 501
 - `POST /api/projects/{projectId}/credentials/github-copilot/poll` - Returns 501
-- `POST /api/projects/{projectId}/credentials/codex/authorize` - Returns 501
-- `POST /api/projects/{projectId}/credentials/codex/exchange` - Returns 501
+- `POST /api/projects/{projectId}/credentials/codex/authorize` - Starts Codex OAuth sign-in
+- `POST /api/projects/{projectId}/credentials/codex/exchange` - Exchanges a pasted Codex OAuth code
+- `POST /api/projects/{projectId}/credentials/codex/device-code` - Starts Codex device-code auth
+- `POST /api/projects/{projectId}/credentials/codex/poll` - Polls Codex device-code auth
+- `POST /api/projects/{projectId}/credentials/codex/callback-status` - Checks localhost callback capture status
 - `GET /api/projects/{projectId}/terminal/ws` - Returns 501
 - `GET /api/projects/{projectId}/terminal/history` - Returns `[]`
 - `GET /api/projects/{projectId}/terminal/status` - Returns `{"status":"stopped"}`
@@ -328,8 +331,11 @@ All API routes require authentication via session cookie (`discobot_session`) un
 | POST | `/api/projects/{projectId}/credentials/anthropic/exchange` | Anthropic token exchange | 🚧 |
 | POST | `/api/projects/{projectId}/credentials/github-copilot/device-code` | Copilot device flow | 🚧 |
 | POST | `/api/projects/{projectId}/credentials/github-copilot/poll` | Copilot poll | 🚧 |
-| POST | `/api/projects/{projectId}/credentials/codex/authorize` | Codex PKCE auth | 🚧 |
-| POST | `/api/projects/{projectId}/credentials/codex/exchange` | Codex token exchange | 🚧 |
+| POST | `/api/projects/{projectId}/credentials/codex/authorize` | Codex authorization-code auth | ✅ |
+| POST | `/api/projects/{projectId}/credentials/codex/exchange` | Codex authorization-code exchange | ✅ |
+| POST | `/api/projects/{projectId}/credentials/codex/device-code` | Codex device-code auth | ✅ |
+| POST | `/api/projects/{projectId}/credentials/codex/poll` | Codex device-code poll | ✅ |
+| POST | `/api/projects/{projectId}/credentials/codex/callback-status` | Codex localhost callback status | ✅ |
 
 ### Terminal
 

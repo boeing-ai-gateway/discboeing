@@ -19,12 +19,13 @@ const (
 
 // OAuthConfig describes how the UI should drive an OAuth credential flow.
 type OAuthConfig struct {
-	Provider          string    `json:"provider"`
-	Kind              OAuthKind `json:"kind"`
-	Description       string    `json:"description,omitempty"`
-	InputLabel        string    `json:"inputLabel,omitempty"`
-	InputPlaceholder  string    `json:"inputPlaceholder,omitempty"`
-	AllowsDirectToken bool      `json:"allowsDirectToken,omitempty"`
+	Provider          string      `json:"provider"`
+	Kind              OAuthKind   `json:"kind"`
+	SupportedKinds    []OAuthKind `json:"supportedKinds,omitempty"`
+	Description       string      `json:"description,omitempty"`
+	InputLabel        string      `json:"inputLabel,omitempty"`
+	InputPlaceholder  string      `json:"inputPlaceholder,omitempty"`
+	AllowsDirectToken bool        `json:"allowsDirectToken,omitempty"`
 }
 
 // CredentialType describes a selectable credential option in the current UI.
@@ -103,9 +104,12 @@ var credentialTypeSpecs = []credentialTypeSpec{
 		GroupName:         "Model Providers",
 		AuthType:          "oauth",
 		OAuth: &OAuthConfig{
-			Provider:    "codex",
-			Kind:        OAuthKindDeviceCode,
-			Description: "Use ChatGPT device code login to connect OpenAI.",
+			Provider:         "codex",
+			Kind:             OAuthKindAuthorizationCode,
+			SupportedKinds:   []OAuthKind{OAuthKindAuthorizationCode, OAuthKindDeviceCode},
+			Description:      "Use ChatGPT sign-in or device code login to connect OpenAI.",
+			InputLabel:       "Authorization code or full redirect URL",
+			InputPlaceholder: "Paste the code or http://localhost:1455/auth/callback?...",
 		},
 	},
 	// {
