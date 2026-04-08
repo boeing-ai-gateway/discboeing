@@ -49,6 +49,12 @@ type SessionUpdatedEventData = {
 	status: string;
 };
 
+type ThreadUpdatedEventData = {
+	sessionId: string;
+	threadId: string;
+	name?: string;
+};
+
 type WorkspaceUpdatedEventData = {
 	workspaceId: string;
 	status: string;
@@ -133,6 +139,21 @@ function startProjectEventsSubscription(app: AppContext) {
 					error,
 				);
 			});
+		});
+
+		nextEventSource.addEventListener("thread_updated", (event) => {
+			try {
+				const payload = JSON.parse(
+					event.data,
+				) as ProjectEvent<ThreadUpdatedEventData>;
+				if (!payload.data?.sessionId || !payload.data?.threadId) {
+					return;
+				}
+
+				void app.sessions.reloadSession(payload.data.sessionId);
+			} catch (error) {
+				console.error("[SSE] Failed to parse thread_updated event:", error);
+			}
 		});
 
 		nextEventSource.addEventListener("workspace_updated", (event) => {

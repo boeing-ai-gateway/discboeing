@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -228,9 +229,50 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			if line.Done {
 				continue
 			}
+			h.publishThreadUpdatedEvent(ctx, projectID, sessionID, line)
 			writeStreamEvent(w, line)
 			flusher.Flush()
 		}
+	}
+}
+
+type streamThreadUpdateChunk struct {
+	Type string `json:"type"`
+	Data struct {
+		Thread struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"thread"`
+	} `json:"data"`
+}
+
+func (h *Handler) publishThreadUpdatedEvent(ctx context.Context, projectID, sessionID string, line service.SSELine) {
+	if h.eventBroker == nil || line.Event != "chunk" || line.Data == "" {
+		return
+	}
+
+	var chunk streamThreadUpdateChunk
+	if err := json.Unmarshal([]byte(line.Data), &chunk); err != nil {
+		return
+	}
+	if chunk.Type != "data-thread-update" {
+		return
+	}
+
+	threadID := strings.TrimSpace(chunk.Data.Thread.ID)
+	threadName := strings.TrimSpace(chunk.Data.Thread.Name)
+	if threadID == "" || threadName == "" {
+		return
+	}
+
+	if err := h.eventBroker.PublishThreadUpdated(
+		ctx,
+		projectID,
+		sessionID,
+		threadID,
+		threadName,
+	); err != nil {
+		log.Printf("[ChatStream] Failed to publish thread update event: %v", err)
 	}
 }
 

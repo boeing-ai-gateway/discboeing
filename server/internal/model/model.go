@@ -367,6 +367,7 @@ func (t *TerminalHistory) BeforeCreate(_ *gorm.DB) error {
 // Event type constants
 const (
 	EventTypeSessionUpdated = "session_updated"
+	EventTypeThreadUpdated  = "thread_updated"
 )
 
 // ProjectEvent represents a persisted event for a project.

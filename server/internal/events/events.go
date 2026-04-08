@@ -19,6 +19,8 @@ type EventType string
 const (
 	// EventTypeSessionUpdated indicates a session's state has changed
 	EventTypeSessionUpdated EventType = "session_updated"
+	// EventTypeThreadUpdated indicates a thread's metadata has changed
+	EventTypeThreadUpdated EventType = "thread_updated"
 	// EventTypeWorkspaceUpdated indicates a workspace's state has changed
 	EventTypeWorkspaceUpdated EventType = "workspace_updated"
 	// EventTypeJobCompleted indicates a job has completed (success or failure)
@@ -50,6 +52,13 @@ type SessionUpdatedData struct {
 	SessionID    string `json:"sessionId"`
 	Status       string `json:"status"`
 	CommitStatus string `json:"commitStatus,omitempty"`
+}
+
+// ThreadUpdatedData is the payload for thread_updated events
+type ThreadUpdatedData struct {
+	SessionID string `json:"sessionId"`
+	ThreadID  string `json:"threadId"`
+	Name      string `json:"name,omitempty"`
 }
 
 // WorkspaceUpdatedData is the payload for workspace_updated events
@@ -162,6 +171,29 @@ func (b *Broker) PublishSessionUpdated(ctx context.Context, projectID, sessionID
 	event := &Event{
 		ID:        generateEventID(),
 		Type:      EventTypeSessionUpdated,
+		Timestamp: time.Now(),
+		Data:      dataBytes,
+	}
+
+	return b.Publish(ctx, projectID, event)
+}
+
+// PublishThreadUpdated is a convenience method to publish thread update events.
+func (b *Broker) PublishThreadUpdated(ctx context.Context, projectID, sessionID, threadID, name string) error {
+	data := ThreadUpdatedData{
+		SessionID: sessionID,
+		ThreadID:  threadID,
+		Name:      name,
+	}
+
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event data: %w", err)
+	}
+
+	event := &Event{
+		ID:        generateEventID(),
+		Type:      EventTypeThreadUpdated,
 		Timestamp: time.Now(),
 		Data:      dataBytes,
 	}

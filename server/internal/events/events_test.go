@@ -411,6 +411,53 @@ func TestBroker_PublishSessionUpdated_CommitStatusOnly(t *testing.T) {
 	}
 }
 
+func TestBroker_PublishThreadUpdated(t *testing.T) {
+	env := testSetup(t)
+	defer env.Cleanup()
+
+	ctx := context.Background()
+
+	pollerCfg := DefaultPollerConfig()
+	pollerCfg.PollInterval = 10 * time.Millisecond
+	poller := NewPoller(env.Store, pollerCfg)
+	if err := poller.Start(ctx); err != nil {
+		t.Fatalf("Failed to start poller: %v", err)
+	}
+	defer poller.Stop()
+
+	broker := NewBroker(env.Store, poller)
+
+	sub := broker.Subscribe(env.ProjectID)
+	defer broker.Unsubscribe(sub)
+
+	if err := broker.PublishThreadUpdated(ctx, env.ProjectID, "session-123", "thread-123", "Thread name"); err != nil {
+		t.Fatalf("Failed to publish thread updated: %v", err)
+	}
+
+	select {
+	case received := <-sub.Events:
+		if received.Type != EventTypeThreadUpdated {
+			t.Errorf("Expected type %s, got %s", EventTypeThreadUpdated, received.Type)
+		}
+
+		var data ThreadUpdatedData
+		if err := json.Unmarshal(received.Data, &data); err != nil {
+			t.Fatalf("Failed to unmarshal data: %v", err)
+		}
+		if data.SessionID != "session-123" {
+			t.Errorf("Expected sessionId 'session-123', got '%s'", data.SessionID)
+		}
+		if data.ThreadID != "thread-123" {
+			t.Errorf("Expected threadId 'thread-123', got '%s'", data.ThreadID)
+		}
+		if data.Name != "Thread name" {
+			t.Errorf("Expected name 'Thread name', got '%s'", data.Name)
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("Timeout waiting for event")
+	}
+}
+
 func TestBroker_GetEventsSince(t *testing.T) {
 	env := testSetup(t)
 	defer env.Cleanup()
