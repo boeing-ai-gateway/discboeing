@@ -3,6 +3,7 @@ export type ThemeMode = ResolvedTheme | "system";
 
 export type ThemeColorScheme =
 	| "default"
+	| "flexoki"
 	| "nord"
 	| "tokyo-night"
 	| "solarized"
@@ -49,6 +50,16 @@ export const THEME_METADATA: ThemeMetadata[] = [
 		},
 	},
 	{
+		id: "flexoki",
+		name: "Flexoki",
+		mode: "light",
+		preview: {
+			background: "#fffcf0",
+			primary: "#4385be",
+			foreground: "#100f0f",
+		},
+	},
+	{
 		id: "alucard",
 		name: "Alucard",
 		mode: "light",
@@ -76,6 +87,16 @@ export const THEME_METADATA: ThemeMetadata[] = [
 			background: "#1e1e1e",
 			primary: "#3b82f6",
 			foreground: "#ededed",
+		},
+	},
+	{
+		id: "flexoki",
+		name: "Flexoki",
+		mode: "dark",
+		preview: {
+			background: "#1c1b1a",
+			primary: "#205ea6",
+			foreground: "#cecdc3",
 		},
 	},
 	{
@@ -160,6 +181,7 @@ function resolveStoredColorScheme(): ThemeColorScheme | null {
 
 	const storedScheme = window.localStorage.getItem(COLOR_SCHEME_KEY);
 	return storedScheme === "default" ||
+		storedScheme === "flexoki" ||
 		storedScheme === "nord" ||
 		storedScheme === "tokyo-night" ||
 		storedScheme === "solarized" ||

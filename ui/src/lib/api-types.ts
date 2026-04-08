@@ -96,6 +96,7 @@ export type FileStatus = "added" | "modified" | "deleted" | "renamed";
 /** Theme color scheme for customization */
 export type ThemeColorScheme =
 	| "default"
+	| "flexoki"
 	| "nord"
 	| "tokyo-night"
 	| "solarized"
