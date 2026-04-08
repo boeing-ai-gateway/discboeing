@@ -30,9 +30,6 @@ inputSchema:
     run_in_background:
       type: boolean
       description: Run the command in the background.
-    dangerouslyDisableSandbox:
-      type: boolean
-      description: Disable sandboxing for this command.
     credentialUses:
       type: array
       description: Optional approved credential bindings for this command. Use ids returned by RequestUserCredential.

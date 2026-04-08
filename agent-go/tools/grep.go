@@ -39,11 +39,12 @@ type grepInput struct {
 	Type            string `json:"type"`        // rg --type
 	Glob            string `json:"glob"`        // rg --glob
 	OutputMode      string `json:"output_mode"` // "content", "files_with_matches", "count"
-	CaseInsensitive bool   `json:"i"`
+	CaseInsensitive bool   `json:"-i"`
 	Context         int    `json:"context"` // -C lines
-	After           int    `json:"A"`       // lines after
-	Before          int    `json:"B"`       // lines before
-	LineNumbers     bool   `json:"n"`       // show line numbers (default true)
+	ContextAlias    int    `json:"-C"`
+	After           int    `json:"-A"` // lines after
+	Before          int    `json:"-B"` // lines before
+	LineNumbers     bool   `json:"-n"` // show line numbers (default true)
 	HeadLimit       int    `json:"head_limit"`
 	Offset          int    `json:"offset"`
 	Multiline       bool   `json:"multiline"`
@@ -56,6 +57,9 @@ func (e *Executor) executeGrep(ctx context.Context, call message.ToolCallPart) (
 	}
 	if input.Pattern == "" {
 		return errResult(call, "pattern is required"), nil
+	}
+	if input.Context == 0 && input.ContextAlias != 0 {
+		input.Context = input.ContextAlias
 	}
 
 	// Determine search path.

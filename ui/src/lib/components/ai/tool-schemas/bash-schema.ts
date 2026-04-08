@@ -19,8 +19,6 @@ export const BashToolInputSchema = z.object({
 	timeout: z.number().optional(),
 	/** Whether to run the command in the background */
 	run_in_background: z.boolean().optional(),
-	/** Whether to disable sandbox mode (dangerous) */
-	dangerouslyDisableSandbox: z.boolean().optional(),
 	credentialUses: z.array(BashCredentialUseBindingSchema).optional(),
 });
 

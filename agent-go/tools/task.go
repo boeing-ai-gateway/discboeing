@@ -18,8 +18,12 @@ import (
 // Each task runs as an async operation with its own mini turn loop.
 
 type taskInput struct {
-	Description string `json:"description"`
-	Prompt      string `json:"prompt"`
+	AllowedTools    []string `json:"allowed_tools"`
+	Description     string   `json:"description"`
+	Model           string   `json:"model"`
+	Prompt          string   `json:"prompt"`
+	Resume          string   `json:"resume"`
+	RunInBackground bool     `json:"run_in_background"`
 
 	// Agent-specific fields (from the Agent/Task tool schema).
 	SubagentType string `json:"subagent_type"`
@@ -476,7 +480,9 @@ func (e *Executor) executeTodoWrite(_ context.Context, _ *thread.ToolContext, ca
 // --- TaskOutput ---
 
 type taskOutputInput struct {
-	ID string `json:"id"`
+	TaskID  string `json:"task_id"`
+	Block   bool   `json:"block"`
+	Timeout int    `json:"timeout"`
 }
 
 func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
@@ -484,13 +490,27 @@ func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExec
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
 	}
+	if input.TaskID == "" {
+		return errResult(call, "task_id is required"), nil
+	}
 
 	globalTasks.mu.Lock()
-	rec, ok := globalTasks.tasks[input.ID]
+	rec, ok := globalTasks.tasks[input.TaskID]
 	globalTasks.mu.Unlock()
 
 	if !ok {
-		return errResult(call, fmt.Sprintf("task %s not found", input.ID)), nil
+		return errResult(call, fmt.Sprintf("task %s not found", input.TaskID)), nil
+	}
+
+	if input.Block {
+		timeout := 30 * time.Second
+		if input.Timeout > 0 {
+			timeout = time.Duration(min(input.Timeout, 600_000)) * time.Millisecond
+		}
+		select {
+		case <-rec.done:
+		case <-time.After(timeout):
+		}
 	}
 
 	rec.mu.Lock()
@@ -506,7 +526,8 @@ func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExec
 // --- TaskStop ---
 
 type taskStopInput struct {
-	ID string `json:"id"`
+	TaskID  string `json:"task_id"`
+	ShellID string `json:"shell_id"`
 }
 
 func (e *Executor) executeTaskStop(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
@@ -514,13 +535,19 @@ func (e *Executor) executeTaskStop(call message.ToolCallPart) (thread.ToolExecut
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
 	}
+	if input.TaskID == "" {
+		input.TaskID = input.ShellID
+	}
+	if input.TaskID == "" {
+		return errResult(call, "task_id is required"), nil
+	}
 
 	globalTasks.mu.Lock()
-	rec, ok := globalTasks.tasks[input.ID]
+	rec, ok := globalTasks.tasks[input.TaskID]
 	globalTasks.mu.Unlock()
 
 	if !ok {
-		return errResult(call, fmt.Sprintf("task %s not found", input.ID)), nil
+		return errResult(call, fmt.Sprintf("task %s not found", input.TaskID)), nil
 	}
 
 	rec.mu.Lock()
@@ -539,5 +566,5 @@ func (e *Executor) executeTaskStop(call message.ToolCallPart) (thread.ToolExecut
 		}
 	}
 
-	return textResult(call, fmt.Sprintf("Task %s stopped", input.ID)), nil
+	return textResult(call, fmt.Sprintf("Task %s stopped", input.TaskID)), nil
 }

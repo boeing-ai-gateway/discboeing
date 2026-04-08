@@ -53,7 +53,10 @@ func persistToolContextPlanMode(toolCtx *thread.ToolContext) {
 // mechanism so the handler can surface it to the client.
 
 type askUserQuestionInput struct {
-	Questions json.RawMessage `json:"questions"`
+	Questions   json.RawMessage `json:"questions"`
+	Answers     json.RawMessage `json:"answers"`
+	Annotations json.RawMessage `json:"annotations"`
+	Metadata    json.RawMessage `json:"metadata"`
 }
 
 func (e *Executor) executeAskUserQuestion(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
