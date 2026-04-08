@@ -118,7 +118,7 @@ func newTestStore(t *testing.T) *store.Store {
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("db.Migrate() error = %v", err)
 	}
-	return store.New(db.DB)
+	return store.New(db.DB, nil)
 }
 
 func testEncryptor(t *testing.T) *encryption.Encryptor {

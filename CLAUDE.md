@@ -31,7 +31,7 @@ pnpm build:server       # Build Go server binary
 pnpm check              # Run active frontend checks, backend checks, and shellcheck
 pnpm check:fix          # Run UI Prettier + ESLint fixes, backend autofixes, and shellcheck
 pnpm check:frontend     # Delegate to the Svelte UI's Prettier + ESLint + typecheck flow
-pnpm check:backend      # golangci-lint (server + proxy)
+pnpm check:backend      # golangci-lint (server + proxy + agent-go + authservice)
 pnpm format             # Run the Svelte UI Prettier formatter
 ```
 
