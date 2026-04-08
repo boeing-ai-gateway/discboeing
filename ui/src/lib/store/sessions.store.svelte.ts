@@ -44,6 +44,18 @@ export class SessionStore {
 		this.#items = this.#items.filter((s) => s.id !== id);
 	}
 
+	upsert(session: Session): void {
+		const idx = this.#items.findIndex((s) => s.id === session.id);
+		if (idx === -1) {
+			this.#items.push(session);
+		} else {
+			this.#items[idx] = session;
+		}
+		if (this.#status !== "ready") {
+			this.#status = "ready";
+		}
+	}
+
 	async fetch(): Promise<void> {
 		return this.#fetchRequests.run("list", async () => {
 			this.#status = "loading";
@@ -61,15 +73,7 @@ export class SessionStore {
 		return this.#fetchOneRequests.run(id, async () => {
 			try {
 				const session = await api.getSession(id);
-				const idx = this.#items.findIndex((s) => s.id === id);
-				if (idx === -1) {
-					this.#items.push(session);
-				} else {
-					this.#items[idx] = session;
-				}
-				if (this.#status !== "ready") {
-					this.#status = "ready";
-				}
+				this.upsert(session);
 			} catch (error) {
 				if (error instanceof ApiError && error.status === 404) {
 					this.evict(id);

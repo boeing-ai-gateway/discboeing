@@ -117,6 +117,7 @@ export function applyStreamedThreadUpdate({
 	previousThreadName,
 	thread,
 	upsertThread,
+	syncSessionName,
 	refreshRecentThread,
 	reloadSession,
 }: {
@@ -126,6 +127,7 @@ export function applyStreamedThreadUpdate({
 	previousThreadName?: string | null;
 	thread: Thread;
 	upsertThread: (thread: Thread) => void;
+	syncSessionName: (name: string) => void;
 	refreshRecentThread: (payload: {
 		sessionId: string;
 		sessionName: string;
@@ -155,6 +157,7 @@ export function applyStreamedThreadUpdate({
 		return;
 	}
 
+	syncSessionName(thread.name);
 	void reloadSession();
 }
 
@@ -193,6 +196,16 @@ function createThreadContext(
 				thread,
 				upsertThread: (nextThread) => {
 					session.stores.threads.upsert(nextThread);
+				},
+				syncSessionName: (name) => {
+					const currentSession = session.current;
+					if (!currentSession || currentSession.displayName) {
+						return;
+					}
+					app.stores.sessions.upsert({
+						...currentSession,
+						name,
+					});
 				},
 				refreshRecentThread: app.sessions.refreshRecentThread,
 				reloadSession: () => app.sessions.reloadSession(session.sessionId),
