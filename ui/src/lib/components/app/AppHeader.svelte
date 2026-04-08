@@ -56,6 +56,12 @@
 	</div>
 
 	<div class="relative z-20 flex min-w-0 items-center justify-end gap-2">
+		{#if showSessionToolbar}
+			<div class="tauri-no-drag shrink-0">
+				<SessionToolbar />
+			</div>
+		{/if}
+
 		<button
 			type="button"
 			onclick={() => sessions.startNew()}
@@ -66,10 +72,6 @@
 			<PlusIcon class="size-3 shrink-0" />
 			<span>New Session</span>
 		</button>
-
-		{#if showSessionToolbar}
-			<SessionToolbar />
-		{/if}
 	</div>
 
 	<div
