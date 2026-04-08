@@ -245,9 +245,10 @@
 
 <div
 	class="flex h-full w-full min-w-0 items-center justify-end gap-2 bg-background px-2"
+	data-tauri-drag-region
 >
 	<div
-		class="inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+		class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 	>
 		<Button
 			variant={sessionView.activeView.kind === "terminal"
@@ -304,7 +305,7 @@
 		{#if operationState.showSplitButton}
 			<DropdownMenu>
 				<div
-					class="inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+					class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 				>
 					<Button
 						variant="outline"
@@ -357,7 +358,7 @@
 				size="xs"
 				onclick={handleRebase}
 				disabled={operationDisabled}
-				class="gap-1.5"
+				class="tauri-no-drag gap-1.5"
 				title="Rebase branch"
 			>
 				{#if operationState.showPending}

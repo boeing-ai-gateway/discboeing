@@ -55,9 +55,7 @@
 
 	{#if showSessionToolbar}
 		<div class="relative z-20 min-w-0 px-2">
-			<div class="tauri-no-drag min-w-0">
-				<SessionToolbar />
-			</div>
+			<SessionToolbar />
 		</div>
 	{/if}
 
