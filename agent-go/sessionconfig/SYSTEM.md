@@ -5,7 +5,6 @@ allowedTools:
   - Write
   - Edit
   - apply_patch
-  - NotebookEdit
   - Glob
   - Grep
   - WebFetch

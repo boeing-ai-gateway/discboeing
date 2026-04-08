@@ -18,7 +18,7 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		// Execution
 		"Bash",
 		// File operations
-		"Read", "Write", "Edit", "apply_patch", "NotebookEdit",
+		"Read", "Write", "Edit", "apply_patch",
 		// Search
 		"Glob", "Grep",
 		// Web
@@ -188,17 +188,6 @@ func TestBuiltinTools_GrepSchema(t *testing.T) {
 	} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("Grep schema missing '%s' property", field)
-		}
-	}
-}
-
-func TestBuiltinTools_NotebookEditSchema(t *testing.T) {
-	schema := findToolSchema(t, "NotebookEdit")
-	props := schema["properties"].(map[string]any)
-
-	for _, field := range []string{"notebook_path", "new_source", "cell_id", "cell_type", "edit_mode"} {
-		if _, ok := props[field]; !ok {
-			t.Errorf("NotebookEdit schema missing '%s' property", field)
 		}
 	}
 }

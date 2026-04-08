@@ -40,7 +40,6 @@ var planModeBlockedTools = map[string]bool{
 	"Write":         true,
 	"Edit":          true,
 	"apply_patch":   true,
-	"NotebookEdit":  true,
 	"EnterPlanMode": true, // already in plan mode
 }
 
@@ -466,8 +465,6 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return e.executeWebFetch(ctx, call)
 	case "WebSearch":
 		return e.executeWebSearch(ctx, call)
-	case "NotebookEdit":
-		return e.executeNotebookEdit(call)
 	case "AskUserQuestion":
 		return e.executeAskUserQuestion(call)
 	case "RequestUserCredential":

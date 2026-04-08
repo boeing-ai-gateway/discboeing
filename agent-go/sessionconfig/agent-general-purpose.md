@@ -6,7 +6,6 @@ allowedTools:
   - Read
   - Write
   - Edit
-  - NotebookEdit
   - Glob
   - Grep
   - WebFetch
