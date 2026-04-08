@@ -461,7 +461,7 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 	case "Grep":
 		return e.executeGrep(ctx, call)
 	case "WebFetch":
-		return e.executeWebFetch(ctx, call)
+		return e.executeWebFetch(ctx, toolCtx, call)
 	case "WebSearch":
 		return e.executeWebSearch(ctx, call)
 	case "AskUserQuestion":

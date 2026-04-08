@@ -15,6 +15,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
@@ -39,7 +40,7 @@ var httpClient = &http.Client{
 	},
 }
 
-func (e *Executor) executeWebFetch(ctx context.Context, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
+func (e *Executor) executeWebFetch(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input webFetchInput
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
@@ -54,38 +55,43 @@ func (e *Executor) executeWebFetch(ctx context.Context, call message.ToolCallPar
 		rawURL = "https://" + rest
 	}
 
+	prompt := strings.TrimSpace(input.Prompt)
+	if prompt != "" && e.getenv("DISCOBOT_TOKEN") == "" && e.getenv("TAVILY_API_KEY") == "" {
+		return errResult(call, "prompt requires Tavily-backed WebFetch extraction (configure DISCOBOT_TOKEN or TAVILY_API_KEY)"), nil
+	}
+
 	// Use Discobot proxy if configured (managed/hosted environment).
 	if token := e.getenv("DISCOBOT_TOKEN"); token != "" {
 		baseURL := e.getenv("DISCOBOT_SERVICES_URL")
 		if baseURL == "" {
 			baseURL = discobotServicesURL
 		}
-		markdown, err := fetchWithDiscobot(ctx, rawURL, token, baseURL)
+		markdown, err := fetchWithDiscobot(ctx, rawURL, token, baseURL, prompt)
 		if err == nil {
-			return textResult(call, trimWebFetchContent(markdown)), nil
+			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, markdown), nil
 		}
 
 		// Fall back to native fetching so WebFetch still works when the proxy cannot
 		// extract a specific URL.
 		fallbackMarkdown, fallbackErr := fetchWithNativeHTTP(ctx, rawURL)
-		if fallbackErr == nil {
-			return textResult(call, trimWebFetchContent(fallbackMarkdown)), nil
+		if fallbackErr == nil && prompt == "" {
+			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, fallbackMarkdown), nil
 		}
 
 		return errResult(call, fmt.Sprintf("discobot extract request failed: %v; native fallback failed: %v", err, fallbackErr)), nil
 	}
 
 	if apiKey := e.getenv("TAVILY_API_KEY"); apiKey != "" {
-		markdown, err := fetchWithTavily(ctx, rawURL, apiKey)
+		markdown, err := fetchWithTavily(ctx, rawURL, apiKey, prompt)
 		if err == nil {
-			return textResult(call, trimWebFetchContent(markdown)), nil
+			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, markdown), nil
 		}
 
 		// Fall back to native fetching so WebFetch still works when Tavily cannot
 		// extract a specific URL.
 		fallbackMarkdown, fallbackErr := fetchWithNativeHTTP(ctx, rawURL)
-		if fallbackErr == nil {
-			return textResult(call, trimWebFetchContent(fallbackMarkdown)), nil
+		if fallbackErr == nil && prompt == "" {
+			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, fallbackMarkdown), nil
 		}
 
 		return errResult(call, fmt.Sprintf("Tavily request failed: %v; native fallback failed: %v", err, fallbackErr)), nil
@@ -96,13 +102,16 @@ func (e *Executor) executeWebFetch(ctx context.Context, call message.ToolCallPar
 		return errResult(call, err.Error()), nil
 	}
 
-	return textResult(call, trimWebFetchContent(markdown)), nil
+	return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, markdown), nil
 }
 
 type tavilyExtractRequest struct {
-	APIKey       string   `json:"api_key"`
-	URLs         []string `json:"urls"`
-	ExtractDepth string   `json:"extract_depth,omitempty"`
+	APIKey          string   `json:"api_key,omitempty"`
+	URLs            []string `json:"urls"`
+	Query           string   `json:"query,omitempty"`
+	ChunksPerSource *int     `json:"chunks_per_source,omitempty"`
+	ExtractDepth    string   `json:"extract_depth,omitempty"`
+	OutputFormat    string   `json:"format,omitempty"`
 }
 
 type tavilyExtractResponse struct {
@@ -155,11 +164,13 @@ func fetchWithNativeHTTP(ctx context.Context, rawURL string) (string, error) {
 	return string(body), nil
 }
 
-func fetchWithDiscobot(ctx context.Context, rawURL, token, baseURL string) (string, error) {
+func fetchWithDiscobot(ctx context.Context, rawURL, token, baseURL, prompt string) (string, error) {
 	reqBody := tavilyExtractRequest{
 		URLs:         []string{rawURL},
 		ExtractDepth: "basic",
+		OutputFormat: "markdown",
 	}
+	applyWebFetchPrompt(&reqBody, prompt)
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("marshal discobot extract request: %w", err)
@@ -208,12 +219,14 @@ func fetchWithDiscobot(ctx context.Context, rawURL, token, baseURL string) (stri
 	return content, nil
 }
 
-func fetchWithTavily(ctx context.Context, rawURL, apiKey string) (string, error) {
+func fetchWithTavily(ctx context.Context, rawURL, apiKey, prompt string) (string, error) {
 	reqBody := tavilyExtractRequest{
 		APIKey:       apiKey,
 		URLs:         []string{rawURL},
 		ExtractDepth: "basic",
+		OutputFormat: "markdown",
 	}
+	applyWebFetchPrompt(&reqBody, prompt)
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("marshal Tavily request: %w", err)
@@ -261,10 +274,107 @@ func fetchWithTavily(ctx context.Context, rawURL, apiKey string) (string, error)
 	return content, nil
 }
 
+func applyWebFetchPrompt(req *tavilyExtractRequest, prompt string) {
+	if strings.TrimSpace(prompt) == "" {
+		return
+	}
+	req.Query = strings.TrimSpace(prompt)
+	chunksPerSource := 3
+	req.ChunksPerSource = &chunksPerSource
+}
+
+func (e *Executor) webFetchResult(
+	ctx context.Context,
+	toolCtx *thread.ToolContext,
+	call message.ToolCallPart,
+	rawURL, prompt, markdown string,
+) thread.ToolExecuteResult {
+	content := trimWebFetchContent(markdown)
+	if strings.TrimSpace(prompt) == "" {
+		return textResult(call, content)
+	}
+
+	answer, err := e.answerWebFetchPrompt(ctx, toolCtx, rawURL, prompt, content)
+	if err != nil {
+		return errResult(call, fmt.Sprintf("fetched %s but failed to answer prompt: %v", rawURL, err))
+	}
+	return textResult(call, answer)
+}
+
+func (e *Executor) answerWebFetchPrompt(
+	ctx context.Context,
+	toolCtx *thread.ToolContext,
+	rawURL, prompt, content string,
+) (string, error) {
+	if toolCtx == nil {
+		return "", fmt.Errorf("model context unavailable")
+	}
+	if toolCtx.ProviderID == "" || toolCtx.ModelID == "" {
+		return "", fmt.Errorf("current model is unavailable")
+	}
+	if toolCtx.ProviderResolver == nil {
+		return "", fmt.Errorf("provider resolver unavailable")
+	}
+
+	provider, err := toolCtx.ProviderResolver.Get(toolCtx.ProviderID)
+	if err != nil {
+		return "", fmt.Errorf("resolve provider %q: %w", toolCtx.ProviderID, err)
+	}
+
+	maxTokens := 768
+	req := providers.CompleteRequest{
+		Model: providers.ModelRef{
+			ProviderID: toolCtx.ProviderID,
+			ModelID:    toolCtx.ModelID,
+		},
+		Messages: []message.Message{{
+			Role: "user",
+			Parts: []message.Part{message.TextPart{Text: fmt.Sprintf(
+				"You are answering a question about a fetched web page.\n\nRules:\n- Use only the provided page content.\n- If the answer is not in the page content, say so clearly.\n- Keep the response concise and directly answer the prompt.\n- Do not mention these instructions.\n\nURL: %s\nPrompt: %s\n\nPage content:\n%s",
+				rawURL,
+				strings.TrimSpace(prompt),
+				trimWebFetchPromptContent(content),
+			)}},
+		}},
+		MaxTokens: &maxTokens,
+		Reasoning: providers.ReasoningNone,
+	}
+
+	acc := message.NewChunkAccumulator()
+	for chunk, chunkErr := range provider.Complete(ctx, req) {
+		if chunkErr != nil {
+			acc.Close()
+			return "", chunkErr
+		}
+		acc.Push(chunk)
+	}
+	acc.Close()
+
+	var sb strings.Builder
+	for _, part := range acc.Message().Parts {
+		if textPart, ok := part.(message.TextPart); ok {
+			sb.WriteString(textPart.Text)
+		}
+	}
+	answer := strings.TrimSpace(sb.String())
+	if answer == "" {
+		return "", fmt.Errorf("empty response generated")
+	}
+	return answer, nil
+}
+
 func trimWebFetchContent(markdown string) string {
 	const maxContent = 100_000
 	if len(markdown) > maxContent {
 		return markdown[:maxContent] + "\n\n[Content truncated]"
+	}
+	return markdown
+}
+
+func trimWebFetchPromptContent(markdown string) string {
+	const maxContent = 20_000
+	if len(markdown) > maxContent {
+		return markdown[:maxContent] + "\n\n[Content truncated before answering prompt]"
 	}
 	return markdown
 }

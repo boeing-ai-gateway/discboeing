@@ -609,7 +609,7 @@ func toolInputSummary(toolName string, input json.RawMessage) string {
 	case "websearch":
 		return summarizeToolFields(obj, []string{"query"})
 	case "webfetch":
-		return summarizeToolFields(obj, []string{"url"})
+		return summarizeToolFields(obj, []string{"url", "prompt"})
 	}
 
 	return summarizeToolFields(obj, []string{"description", "command", "path", "old_path", "file_path", "url", "query", "pattern"})

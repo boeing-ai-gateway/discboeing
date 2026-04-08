@@ -277,7 +277,7 @@ func TestToolInputSummary_SpecialTools(t *testing.T) {
 			name:     "webfetch shows url",
 			toolName: "WebFetch",
 			input:    json.RawMessage(`{"url":"https://example.com/docs","prompt":"summarize"}`),
-			want:     "url: https://example.com/docs",
+			want:     "url: https://example.com/docs prompt: summarize",
 		},
 	}
 

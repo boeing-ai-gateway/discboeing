@@ -1,6 +1,6 @@
 name: WebFetch
 description: |-
-  Fetch a public web page and answer a prompt about it.
+  Fetch a public web page. When a prompt is provided, answer it using the fetched page content.
 
   This tool is read-only. It does not work for authenticated or private URLs. Prefer GitHub CLI for GitHub URLs.
 inputSchema:
@@ -16,4 +16,3 @@ inputSchema:
       description: URL to fetch.
   required:
     - url
-    - prompt

@@ -18,7 +18,7 @@ func newExecutor(t *testing.T) *tools.Executor {
 
 func fetchURL(t *testing.T, e *tools.Executor, url string) string {
 	t.Helper()
-	input, _ := json.Marshal(map[string]string{"url": url, "prompt": "summarise"})
+	input, _ := json.Marshal(map[string]string{"url": url})
 	result, err := e.Execute(context.Background(), nil, message.ToolCallPart{
 		ToolCallID: "test-fetch",
 		ToolName:   "WebFetch",
