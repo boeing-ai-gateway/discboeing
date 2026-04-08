@@ -762,6 +762,7 @@ func (w *pipeResponseWriter) ensureHeaderReady() {
 }
 
 // defaultMockHandler returns a handler that responds like agent-go.
+// GET /health returns 200 OK.
 // POST /threads/{id}/chat returns 202 Accepted.
 // GET /threads/{id}/chat/status returns {"isRunning":false}.
 // GET /threads/{id}/chat/stream returns 200 with an explicit SSE done event.
@@ -776,6 +777,11 @@ func defaultMockHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
+		case r.URL.Path == "/health" && r.Method == "GET":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+
 		case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST":
 			w.WriteHeader(http.StatusAccepted)
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "started", "completionId": "mock-completion"})

@@ -54,6 +54,8 @@ type SandboxService struct {
 
 const healthCacheTTL = 10 * time.Second
 
+const sandboxHealthWaitTimeout = 30 * time.Second
+
 // NewSandboxService creates a new sandbox service.
 // connTracker may be nil; when set it tracks active streaming connections so the
 // idle monitor can avoid stopping sandboxes that still have live clients.
@@ -231,9 +233,10 @@ func (s *SandboxService) ReconcileSandbox(ctx context.Context, sessionID string)
 		}
 	}
 
-	// If job enqueuer is not available (e.g., in tests), fall back to direct initialization
-	if s.jobEnqueuer == nil {
-		log.Printf("Job enqueuer not available, falling back to direct initialization for session %s", sessionID)
+	// If job orchestration dependencies are not available (e.g., in tests), fall
+	// back to direct initialization.
+	if s.jobEnqueuer == nil || s.eventBroker == nil {
+		log.Printf("Job orchestration not fully available, falling back to direct initialization for session %s", sessionID)
 		if s.sessionInitializer == nil {
 			return fmt.Errorf("no session initializer available for session %s", sessionID)
 		}
@@ -400,30 +403,81 @@ func (s *SandboxService) probeSandboxHealth(ctx context.Context, sessionID strin
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	httpClient, err := s.provider.HTTPClient(probeCtx, sessionID)
+	statusCode, err := s.checkSandboxHealth(probeCtx, sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get HTTP client: %w", err)
+		return fmt.Errorf("health check failed: %w", err)
+	}
+	if statusCode >= 500 {
+		return fmt.Errorf("health check returned %d", statusCode)
 	}
 
-	req, err := http.NewRequestWithContext(probeCtx, "GET", "http://sandbox/health", nil)
+	s.recordSandboxHealthy(sessionID)
+	return nil
+}
+
+// waitForSandboxHealth waits for a newly started sandbox to begin responding to
+// health checks. Unlike probeSandboxHealth, it keeps retrying transient
+// connection and 5xx failures until the startup timeout expires.
+func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID string) error {
+	s.healthCacheMu.RLock()
+	lastHealthy, ok := s.healthCacheMap[sessionID]
+	s.healthCacheMu.RUnlock()
+	if ok && time.Since(lastHealthy) < healthCacheTTL {
+		return nil
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, sandboxHealthWaitTimeout)
+	defer cancel()
+
+	delay := retryInitialDelay
+	for {
+		statusCode, err := s.checkSandboxHealth(waitCtx, sessionID)
+		if err == nil && !isRetryableStatus(statusCode) {
+			s.recordSandboxHealthy(sessionID)
+			return nil
+		}
+
+		if err != nil && !isRetryableError(err) {
+			return fmt.Errorf("health check failed: %w", err)
+		}
+
+		select {
+		case <-waitCtx.Done():
+			if err != nil {
+				return fmt.Errorf("health check failed: %w", err)
+			}
+			return fmt.Errorf("health check failed: sandbox returned retryable status %d before startup timeout", statusCode)
+		case <-time.After(delay):
+		}
+
+		delay = min(time.Duration(float64(delay)*retryMultiplier), retryMaxDelay)
+	}
+}
+
+func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID string) (int, error) {
+	httpClient, err := s.provider.HTTPClient(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return 0, fmt.Errorf("failed to get HTTP client: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/health", nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("health check failed: %w", err)
+		return 0, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 500 {
-		return fmt.Errorf("health check returned %d", resp.StatusCode)
-	}
+	return resp.StatusCode, nil
+}
 
+func (s *SandboxService) recordSandboxHealthy(sessionID string) {
 	s.healthCacheMu.Lock()
 	s.healthCacheMap[sessionID] = time.Now()
 	s.healthCacheMu.Unlock()
-	return nil
 }
 
 // DestroyForSession removes the sandbox when a session is deleted.

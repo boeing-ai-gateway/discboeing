@@ -176,6 +176,9 @@ func retryWithBackoff[T any](ctx context.Context, fn func() (T, int, error)) (T,
 			if err != nil {
 				return zero, err
 			}
+			if isRetryableStatus(statusCode) {
+				return zero, fmt.Errorf("sandbox returned retryable status %d after %d attempts", statusCode, attempt)
+			}
 			return result, nil
 		}
 

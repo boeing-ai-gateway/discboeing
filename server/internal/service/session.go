@@ -873,7 +873,7 @@ func (s *SessionService) initializeSync(
 	}
 
 	if needsHealthCheck && s.sandboxService != nil {
-		if err := s.sandboxService.probeSandboxHealth(ctx, sessionID); err != nil {
+		if err := s.sandboxService.waitForSandboxHealth(ctx, sessionID); err != nil {
 			log.Printf("Sandbox health check failed for session %s after start: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox health check failed: "+err.Error()))
 			return fmt.Errorf("sandbox health check failed: %w", err)

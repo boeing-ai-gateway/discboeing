@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -247,7 +248,9 @@ func (p *imageIDAwareReconcileProvider) RemoveProject(_ context.Context, _ strin
 
 type healthAwareProvider struct {
 	*mock.Provider
+	mu               sync.Mutex
 	healthStatusCode int
+	healthStatuses   []int
 }
 
 func newHealthAwareProvider(image string, healthStatusCode int) *healthAwareProvider {
@@ -257,13 +260,37 @@ func newHealthAwareProvider(image string, healthStatusCode int) *healthAwareProv
 	}
 }
 
+func newSequencedHealthAwareProvider(image string, healthStatuses ...int) *healthAwareProvider {
+	statusCode := http.StatusOK
+	if len(healthStatuses) > 0 {
+		statusCode = healthStatuses[len(healthStatuses)-1]
+	}
+	return &healthAwareProvider{
+		Provider:         mock.NewProviderWithImage(image),
+		healthStatusCode: statusCode,
+		healthStatuses:   append([]int(nil), healthStatuses...),
+	}
+}
+
+func (p *healthAwareProvider) nextHealthStatus() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.healthStatuses) == 0 {
+		return p.healthStatusCode
+	}
+	statusCode := p.healthStatuses[0]
+	p.healthStatuses = p.healthStatuses[1:]
+	p.healthStatusCode = statusCode
+	return statusCode
+}
+
 func (p *healthAwareProvider) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
 	return &http.Client{
 		Transport: healthRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			rec := newResponseRecorder()
 			switch req.URL.Path {
 			case "/health":
-				rec.WriteHeader(p.healthStatusCode)
+				rec.WriteHeader(p.nextHealthStatus())
 			default:
 				rec.WriteHeader(http.StatusOK)
 			}
@@ -381,6 +408,94 @@ func TestSandboxService_EnsureSandboxReady_ReconcilesAfterWaitWhenHealthProbeFai
 	}
 	if initializer.calls != 1 {
 		t.Fatalf("expected exactly one reconciliation, got %d", initializer.calls)
+	}
+}
+
+func TestSessionService_Initialize_WaitsForSandboxHealthAfterStart(t *testing.T) {
+	provider := newSequencedHealthAwareProvider(testImage, http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusOK)
+	testStore := setupTestStore(t)
+	cfg := &config.Config{
+		SandboxIdleTimeout: 30 * time.Minute,
+		EncryptionKey:      testEncryptionKey,
+	}
+	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+
+	ctx := context.Background()
+	workspace := &model.Workspace{
+		ID:         "workspace-health-wait",
+		ProjectID:  "test-project",
+		Path:       "/workspace-health-wait",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	session := &model.Session{
+		ID:          "session-health-wait",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
+		t.Fatalf("expected initialize to wait for transient sandbox health failures, got %v", err)
+	}
+
+	updatedSession, err := testStore.GetSessionByID(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if updatedSession.Status != model.SessionStatusReady {
+		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, updatedSession.Status)
+	}
+}
+
+func TestSessionService_Initialize_WaitsBeyondGenericRetryBudgetForSandboxHealth(t *testing.T) {
+	healthStatuses := make([]int, 0, 19)
+	for range 18 {
+		healthStatuses = append(healthStatuses, http.StatusServiceUnavailable)
+	}
+	healthStatuses = append(healthStatuses, http.StatusOK)
+
+	provider := newSequencedHealthAwareProvider(testImage, healthStatuses...)
+	testStore := setupTestStore(t)
+	cfg := &config.Config{
+		SandboxIdleTimeout: 30 * time.Minute,
+		EncryptionKey:      testEncryptionKey,
+	}
+	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+
+	ctx := context.Background()
+	workspace := &model.Workspace{
+		ID:         "workspace-health-wait-long",
+		ProjectID:  "test-project",
+		Path:       "/workspace-health-wait-long",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	session := &model.Session{
+		ID:          "session-health-wait-long",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
+		t.Fatalf("expected initialize to keep waiting for longer transient sandbox health failures, got %v", err)
 	}
 }
 
