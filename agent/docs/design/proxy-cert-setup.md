@@ -2,7 +2,12 @@
 
 ## Overview
 
-The agent automatically generates a CA certificate for the proxy and installs it in the system trust store during container startup. This enables transparent HTTPS interception without certificate warnings.
+The agent automatically generates a CA certificate for the proxy and installs it during container startup in:
+
+- the system trust store
+- the runtime user's NSS database (`~/.pki/nssdb`) for Chromium-based browsers
+
+This enables transparent HTTPS interception without certificate warnings in both CLI clients and Chromium automation.
 
 ## Why This Is Needed
 
@@ -14,7 +19,7 @@ For the proxy to cache HTTPS traffic (like Docker registry pulls), it must perfo
 4. Proxy forwards the request to the real server
 5. Client verifies the fake certificate using the **trusted CA**
 
-Without the CA in the system trust store, clients would see certificate errors and refuse to connect.
+Without the CA in the appropriate trust stores, clients would see certificate errors and refuse to connect. In particular, Chromium-based browsers may require the certificate to be present in the user's NSS database even when the system trust store is configured.
 
 ## Implementation
 
@@ -27,7 +32,7 @@ Without the CA in the system trust store, clients would see certificate errors a
 // Check if certificate already exists
 if _, err := os.Stat("/.data/proxy/certs/ca.crt"); err == nil {
     fmt.Printf("Certificate exists, reusing...\n")
-    return installCertificateInSystemTrust(certPath)
+    return installCertificateTrust(certPath, userInfo)
 }
 
 // Generate using Go crypto libraries
@@ -68,7 +73,22 @@ certDER, _ := x509.CreateCertificate(rand.Reader, &template, &template, &private
 - **Storage**: `/.data/proxy/certs/` (persistent if `/.data` is a volume)
 - **Reuse**: Existing certificates are detected and reused
 
-### Step 2: System Trust Installation
+### Step 2: Browser and System Trust Installation
+
+**Chromium / NSS**:
+
+The agent imports the proxy CA into the runtime user's NSS database with `certutil`:
+
+```bash
+mkdir -p /home/discobot/.pki/nssdb
+certutil -d sql:/home/discobot/.pki/nssdb -N --empty-password
+certutil -d sql:/home/discobot/.pki/nssdb -A \
+  -t "C,," \
+  -n discobot-proxy-ca \
+  -i /.data/proxy/certs/ca.crt
+```
+
+This is the trust path Chromium-based browsers actually consult in this environment.
 
 **Location**: `agent/cmd/agent/main.go` - `installCertificateInSystemTrust()`
 

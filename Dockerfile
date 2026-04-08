@@ -103,6 +103,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     iptables \
     jq \
     less \
+    libnss3-tools \
     openssh-client \
     openssh-sftp-server \
     psmisc \

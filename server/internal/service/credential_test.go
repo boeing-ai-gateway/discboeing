@@ -9,6 +9,13 @@ import (
 	"github.com/obot-platform/discobot/server/internal/providers"
 )
 
+func clearStartupCredentialEnv(t *testing.T) {
+	t.Helper()
+	for _, spec := range startupCredentialImportSpecs {
+		t.Setenv(spec.envVar, "")
+	}
+}
+
 func TestGetAllDecrypted_DiscobotID_UsesCorrectEnvVar(t *testing.T) {
 	st := setupTestStore(t)
 	cfg := &config.Config{
@@ -673,6 +680,7 @@ func TestDirectToken_NoRefreshAttemptWhenExpired(t *testing.T) {
 }
 
 func TestImportEnvCredentials_CreatesKnownCredentials(t *testing.T) {
+	clearStartupCredentialEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-openai")
 	t.Setenv("TAVILY_API_KEY", "tvly")
 
@@ -719,6 +727,7 @@ func TestImportEnvCredentials_CreatesKnownCredentials(t *testing.T) {
 }
 
 func TestImportEnvCredentials_IsIdempotent(t *testing.T) {
+	clearStartupCredentialEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-openai")
 
 	st := setupTestStore(t)
@@ -750,6 +759,7 @@ func TestImportEnvCredentials_IsIdempotent(t *testing.T) {
 }
 
 func TestImportEnvCredentials_DoesNotOverrideExistingEnvVar(t *testing.T) {
+	clearStartupCredentialEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-from-env")
 
 	st := setupTestStore(t)
@@ -788,6 +798,7 @@ func TestImportEnvCredentials_DoesNotOverrideExistingEnvVar(t *testing.T) {
 }
 
 func TestImportEnvCredentials_BlankEnvVarsDoNothing(t *testing.T) {
+	clearStartupCredentialEnv(t)
 	t.Setenv("OPENAI_API_KEY", "   ")
 
 	st := setupTestStore(t)
@@ -814,6 +825,7 @@ func TestImportEnvCredentials_BlankEnvVarsDoNothing(t *testing.T) {
 }
 
 func TestImportEnvCredentials_PrefersExistingProvider(t *testing.T) {
+	clearStartupCredentialEnv(t)
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-key")
 	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-token")
 

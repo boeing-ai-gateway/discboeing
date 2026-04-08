@@ -181,7 +181,7 @@ func runSetup() error {
 
 	// Step 7: Generate CA certificate
 	stepStart = time.Now()
-	if err := setupProxyCertificate(); err != nil {
+	if err := setupProxyCertificate(userInfo); err != nil {
 		fmt.Printf("discobot-agent: Proxy certificate setup failed: %v\n", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
@@ -1018,7 +1018,7 @@ export NODE_EXTRA_CA_CERTS=%s
 
 // setupProxyCertificate generates a CA certificate for the proxy and installs it in the system trust store.
 // The certificate is stored in /.data/proxy/certs/ (session-scoped) and will be used by the proxy for HTTPS MITM.
-func setupProxyCertificate() error {
+func setupProxyCertificate(u *userInfo) error {
 	certDir := filepath.Join(dataDir, "proxy", "certs")
 	certPath := filepath.Join(certDir, "ca.crt")
 	keyPath := filepath.Join(certDir, "ca.key")
@@ -1031,8 +1031,8 @@ func setupProxyCertificate() error {
 	// Check if certificate already exists
 	if _, err := os.Stat(certPath); err == nil {
 		fmt.Printf("discobot-agent: proxy CA certificate already exists at %s\n", certPath)
-		// Certificate exists, ensure it's installed in system trust store
-		return installCertificateInSystemTrust(certPath)
+		// Certificate exists, ensure it's installed in browser and system trust stores
+		return installCertificateTrust(certPath, u)
 	}
 
 	fmt.Printf("discobot-agent: generating proxy CA certificate...\n")
@@ -1046,8 +1046,8 @@ func setupProxyCertificate() error {
 
 	fmt.Printf("discobot-agent: proxy CA certificate generated at %s\n", certPath)
 
-	// Install certificate in system trust store
-	return installCertificateInSystemTrust(certPath)
+	// Install certificate in browser and system trust stores
+	return installCertificateTrust(certPath, u)
 }
 
 // generateCACertificate creates a CA certificate and private key using Go crypto libraries.
@@ -1116,6 +1116,13 @@ func generateCACertificate(certPath, keyPath string) error {
 	}
 
 	return nil
+}
+
+func installCertificateTrust(certPath string, u *userInfo) error {
+	if err := installCertificateInUserNSSDB(certPath, u); err != nil {
+		return err
+	}
+	return installCertificateInSystemTrust(certPath)
 }
 
 // installCertificateInSystemTrust installs the CA certificate in the system trust store.
@@ -1208,6 +1215,56 @@ func installCertFedoraStyle(certPath string) error {
 	}
 
 	fmt.Printf("discobot-agent: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
+	return nil
+}
+
+// installCertificateInUserNSSDB installs the CA certificate into the runtime user's
+// NSS database so Chromium-based browsers trust the proxy certificate.
+func installCertificateInUserNSSDB(certPath string, u *userInfo) error {
+	if u == nil {
+		return nil
+	}
+
+	if _, err := exec.LookPath("certutil"); err != nil {
+		fmt.Printf("discobot-agent: warning: certutil not found; skipping Chromium/NSS trust setup\n")
+		return nil
+	}
+
+	nssDBDir := filepath.Join(u.homeDir, ".pki", "nssdb")
+	if err := os.MkdirAll(nssDBDir, 0755); err != nil {
+		return fmt.Errorf("failed to create NSS DB directory %s: %w", nssDBDir, err)
+	}
+	if err := os.Chown(filepath.Join(u.homeDir, ".pki"), u.uid, u.gid); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to chown NSS parent directory: %w", err)
+	}
+	if err := os.Chown(nssDBDir, u.uid, u.gid); err != nil {
+		return fmt.Errorf("failed to chown NSS DB directory: %w", err)
+	}
+
+	nssDB := "sql:" + nssDBDir
+	if _, err := os.Stat(filepath.Join(nssDBDir, "cert9.db")); os.IsNotExist(err) {
+		cmd := exec.Command("certutil", "-d", nssDB, "-N", "--empty-password")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to initialize NSS DB %s: %w", nssDBDir, err)
+		}
+	}
+
+	_ = exec.Command("certutil", "-d", nssDB, "-D", "-n", "discobot-proxy-ca").Run()
+
+	addCmd := exec.Command("certutil", "-d", nssDB, "-A", "-t", "C,,", "-n", "discobot-proxy-ca", "-i", certPath)
+	addCmd.Stdout = os.Stdout
+	addCmd.Stderr = os.Stderr
+	if err := addCmd.Run(); err != nil {
+		return fmt.Errorf("failed to import proxy CA into NSS DB %s: %w", nssDBDir, err)
+	}
+
+	if err := chownRecursive(nssDBDir, u.uid, u.gid); err != nil {
+		return fmt.Errorf("failed to set ownership on NSS DB %s: %w", nssDBDir, err)
+	}
+
+	fmt.Printf("discobot-agent: proxy CA certificate installed in NSS DB for %s at %s\n", u.username, nssDBDir)
 	return nil
 }
 
