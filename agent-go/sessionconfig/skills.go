@@ -105,11 +105,16 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 // user-level ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills.
 // Returns (zero, false, nil) if the skill is not found.
 func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
+	home, _ := os.UserHomeDir()
+	return lookupSkillWithHome(projectRoot, skillName, home)
+}
+
+func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool, error) {
 	var paths []string
 	for _, dir := range []string{".claude", ".discobot"} {
 		paths = append(paths, skillLookupPaths(filepath.Join(projectRoot, dir, "skills"), skillName)...)
 	}
-	if home, err := os.UserHomeDir(); err == nil {
+	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			paths = append(paths, skillLookupPaths(filepath.Join(home, dir, "skills"), skillName)...)
 		}
@@ -128,11 +133,16 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 // user-level ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands.
 // Returns (zero, false, nil) if the command is not found.
 func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
+	home, _ := os.UserHomeDir()
+	return lookupCommandWithHome(projectRoot, cmdName, home)
+}
+
+func lookupCommandWithHome(projectRoot, cmdName, home string) (SkillConfig, bool, error) {
 	var paths []string
 	for _, dir := range []string{".claude", ".discobot"} {
 		paths = append(paths, commandLookupPaths(filepath.Join(projectRoot, dir, "commands"), cmdName)...)
 	}
-	if home, err := os.UserHomeDir(); err == nil {
+	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			paths = append(paths, commandLookupPaths(filepath.Join(home, dir, "commands"), cmdName)...)
 		}

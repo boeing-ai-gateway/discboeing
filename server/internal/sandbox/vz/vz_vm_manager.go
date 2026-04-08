@@ -325,10 +325,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 			log.Printf("VZ image download failed (attempt %d/%d): %v", attempt, maxRetries, err)
 
 			if attempt < maxRetries {
-				delay := baseDelay * time.Duration(1<<uint(attempt-1))
-				if delay > 5*time.Minute {
-					delay = 5 * time.Minute
-				}
+				delay := min(baseDelay*time.Duration(1<<uint(attempt-1)), 5*time.Minute)
 				log.Printf("Retrying in %v...", delay)
 				time.Sleep(delay)
 
@@ -356,10 +353,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 			log.Printf("%v", err)
 
 			if attempt < maxRetries {
-				delay := baseDelay * time.Duration(1<<uint(attempt-1))
-				if delay > 5*time.Minute {
-					delay = 5 * time.Minute
-				}
+				delay := min(baseDelay*time.Duration(1<<uint(attempt-1)), 5*time.Minute)
 				log.Printf("Retrying in %v...", delay)
 				time.Sleep(delay)
 

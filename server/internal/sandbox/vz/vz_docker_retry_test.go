@@ -5,6 +5,7 @@ package vz
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -153,14 +154,7 @@ func TestVZProvider_StatusWithDownloader(t *testing.T) {
 
 	// State should be downloading or failed (if image doesn't exist)
 	validStates := []string{"downloading", "failed", "ready"}
-	found := false
-	for _, validState := range validStates {
-		if status.State == validState {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(validStates, status.State) {
 		t.Errorf("Expected state to be one of %v, got %q", validStates, status.State)
 	}
 

@@ -304,12 +304,11 @@ func TestLookupSkill_FoundInSkillsDir(t *testing.T) {
 func TestLookupSkill_FoundInUserAgentsSkillsDir(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
 	dir := filepath.Join(home, ".agents", "skills", "myskill")
 	mkdirAll(t, dir)
 	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: myskill\ndescription: My user skill.\n---\nDo the user thing.")
 
-	skill, found, err := LookupSkill(root, "myskill")
+	skill, found, err := lookupSkillWithHome(root, "myskill", home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,12 +409,11 @@ func TestDiscoverSkills_UserClaudeCommandsTakePriorityOverAgents(t *testing.T) {
 func TestLookupCommand_FoundInUserAgentsCommandsDir(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
 	dir := filepath.Join(home, ".agents", "commands", "release")
 	mkdirAll(t, dir)
 	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: release\n---\nRun the user command.")
 
-	cmd, found, err := LookupCommand(root, "release")
+	cmd, found, err := lookupCommandWithHome(root, "release", home)
 	if err != nil {
 		t.Fatal(err)
 	}
