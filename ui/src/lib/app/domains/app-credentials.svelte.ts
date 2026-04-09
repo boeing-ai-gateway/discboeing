@@ -29,7 +29,13 @@ type CreateAppCredentialsDomainArgs = {
 export function createAppCredentialsDomain(
 	args: CreateAppCredentialsDomainArgs,
 ): AppCredentials {
-	const { store } = args;
+	const { store, refreshModels } = args;
+
+	const refreshModelsAfter = async <T>(task: () => Promise<T>): Promise<T> => {
+		const result = await task();
+		await refreshModels();
+		return result;
+	};
 
 	const saveCredential = async (data: {
 		provider?: string;
@@ -42,9 +48,7 @@ export function createAppCredentialsDomain(
 		agentVisible?: boolean;
 		inactive?: boolean;
 	}): Promise<CredentialInfo> => {
-		const credential = await store.save(data);
-		void args.refreshModels();
-		return credential;
+		return refreshModelsAfter(() => store.save(data));
 	};
 
 	return {
@@ -58,14 +62,11 @@ export function createAppCredentialsDomain(
 		refresh: () => store.fetch(),
 		create: saveCredential,
 		update: saveCredential,
-		remove: async (provider) => {
-			await store.remove(provider);
-			void args.refreshModels();
-		},
+		remove: (provider) => refreshModelsAfter(() => store.remove(provider)),
 		refreshCredential: async (provider) => {
 			const response = await api.refreshCredential(provider);
 			await store.fetch();
-			void args.refreshModels();
+			await refreshModels();
 			return response as OAuthRefreshResponse;
 		},
 		anthropicAuthorize: (): Promise<OAuthAuthorizeResponse> =>
@@ -75,7 +76,7 @@ export function createAppCredentialsDomain(
 		): Promise<OAuthExchangeResponse> => {
 			const response = await api.anthropicExchange(data);
 			await store.fetch();
-			void args.refreshModels();
+			await refreshModels();
 			return response;
 		},
 		githubDeviceCode: (
@@ -85,7 +86,7 @@ export function createAppCredentialsDomain(
 			const response = await api.githubPoll(data);
 			if (response.status === "success") {
 				await store.fetch();
-				void args.refreshModels();
+				await refreshModels();
 			}
 			return response;
 		},
@@ -96,7 +97,7 @@ export function createAppCredentialsDomain(
 			const response = await api.codexExchange(data);
 			if (response.success) {
 				await store.fetch();
-				void args.refreshModels();
+				await refreshModels();
 			}
 			return response;
 		},
@@ -106,7 +107,7 @@ export function createAppCredentialsDomain(
 			const response = await api.codexPoll(data);
 			if (response.status === "success") {
 				await store.fetch();
-				void args.refreshModels();
+				await refreshModels();
 			}
 			return response;
 		},
