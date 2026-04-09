@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ChatMessage } from "$lib/api-types";
+import type { AssistantConversationPaneRenderablePart } from "../app/conversation-pane-message-parts";
 import {
 	getAssistantMessagePartGroups,
 	getHookFailureMessageMetadata,
 	getHookPathDisplayLabel,
+	isAssistantToolPartQueued,
 	getUserMessageOriginalCommandDisplay,
 	getUserMessageOriginalText,
 	getUserMessageRenderableParts,
@@ -150,6 +152,61 @@ test("getAssistantMessagePartGroups keeps all trailing text parts visible", () =
 		),
 		["First summary paragraph.", "Second summary paragraph."],
 	);
+});
+
+test("isAssistantToolPartQueued marks later running tools as queued", () => {
+	const parts = createAssistantMessage([
+		{
+			type: "dynamic-tool",
+			toolCallId: "tool-1",
+			toolName: "Read",
+			state: "input-available",
+			input: { file_path: "/tmp/first.ts" },
+		},
+		{
+			type: "dynamic-tool",
+			toolCallId: "tool-2",
+			toolName: "Edit",
+			state: "input-available",
+			input: { file_path: "/tmp/second.ts" },
+		},
+		{ type: "text", text: "Still working..." },
+	]).parts.filter(
+		(part): part is AssistantConversationPaneRenderablePart =>
+			part.type === "dynamic-tool" ||
+			part.type === "text" ||
+			part.type === "reasoning",
+	);
+
+	assert.equal(isAssistantToolPartQueued(parts, 0), false);
+	assert.equal(isAssistantToolPartQueued(parts, 1), true);
+});
+
+test("isAssistantToolPartQueued ignores non-running tools", () => {
+	const parts = createAssistantMessage([
+		{
+			type: "dynamic-tool",
+			toolCallId: "tool-1",
+			toolName: "Read",
+			state: "output-available",
+			input: { file_path: "/tmp/first.ts" },
+			output: { content: "done" },
+		},
+		{
+			type: "dynamic-tool",
+			toolCallId: "tool-2",
+			toolName: "Edit",
+			state: "input-streaming",
+			input: { file_path: "/tmp/second.ts" },
+		},
+	]).parts.filter(
+		(part): part is AssistantConversationPaneRenderablePart =>
+			part.type === "dynamic-tool" ||
+			part.type === "text" ||
+			part.type === "reasoning",
+	);
+
+	assert.equal(isAssistantToolPartQueued(parts, 1), false);
 });
 
 test("getUserMessageRenderableParts keeps text and file parts for user messages", () => {

@@ -8,10 +8,12 @@
 	import type { ToolState } from "$lib/components/ai/types";
 	import { Badge } from "$lib/components/ui/badge";
 	import { cn } from "$lib/utils";
+	import { getToolContextIfPresent } from "./context";
 	import {
 		getToolStatusLabel,
 		isToolPreparingState,
 		isToolRunningState,
+		type ToolDisplayState,
 	} from "./tool-status";
 
 	type Props = {
@@ -20,29 +22,34 @@
 	};
 
 	let { state, class: className }: Props = $props();
+	const tool = getToolContextIfPresent();
+	const effectiveState = $derived.by(() =>
+		tool?.queued && isToolRunningState(state) ? "queued" : state,
+	);
 
 	const statusMeta = $derived.by(() => {
 		const icons: Record<
-			Exclude<ToolState, "output-available">,
+			Exclude<ToolDisplayState, "output-available">,
 			Component<{ class?: string }>
 		> = {
 			"input-streaming": LoaderCircleIcon,
 			"input-available": LoaderCircleIcon,
+			queued: ClockIcon,
 			"approval-requested": ClockIcon,
 			"approval-responded": CheckCircleIcon,
 			"output-error": XCircleIcon,
 			"output-denied": XCircleIcon,
 		};
 
-		if (state === "output-available") {
+		if (effectiveState === "output-available") {
 			return null;
 		}
 
 		return {
-			label: getToolStatusLabel(state),
-			Icon: icons[state],
-			preparing: isToolPreparingState(state),
-			spinning: isToolRunningState(state),
+			label: getToolStatusLabel(effectiveState),
+			Icon: icons[effectiveState],
+			preparing: isToolPreparingState(effectiveState),
+			spinning: isToolRunningState(effectiveState),
 		};
 	});
 </script>

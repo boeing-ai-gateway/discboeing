@@ -1,11 +1,15 @@
 import type { ToolState } from "../types";
 
-export function getToolStatusLabel(state: ToolState): string {
+export type ToolDisplayState = ToolState | "queued";
+
+export function getToolStatusLabel(state: ToolDisplayState): string {
 	switch (state) {
 		case "input-streaming":
 			return "Preparing";
 		case "input-available":
 			return "Running";
+		case "queued":
+			return "Queued";
 		case "approval-requested":
 			return "Awaiting Approval";
 		case "approval-responded":
@@ -19,10 +23,10 @@ export function getToolStatusLabel(state: ToolState): string {
 	}
 }
 
-export function isToolRunningState(state: ToolState): boolean {
+export function isToolRunningState(state: ToolDisplayState): boolean {
 	return state === "input-streaming" || state === "input-available";
 }
 
-export function isToolPreparingState(state: ToolState): boolean {
+export function isToolPreparingState(state: ToolDisplayState): boolean {
 	return state === "input-streaming";
 }

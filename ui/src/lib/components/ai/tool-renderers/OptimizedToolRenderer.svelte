@@ -11,6 +11,7 @@
 
 	type Props = {
 		toolPart: DynamicToolPart;
+		queued?: boolean;
 		forceRaw?: boolean;
 		defaultOpen?: boolean;
 		sessionId?: string | null;
@@ -24,6 +25,7 @@
 
 	let {
 		toolPart,
+		queued = false,
 		forceRaw = false,
 		defaultOpen = false,
 		sessionId,
@@ -70,7 +72,7 @@
 </script>
 
 {#if showRaw}
-	<Tool bind:open {defaultOpen} showBorder={false}>
+	<Tool bind:open {defaultOpen} {queued} showBorder={false}>
 		<ToolHeader
 			type="dynamic-tool"
 			toolName={toolPart.toolName}
@@ -86,9 +88,10 @@
 		</ToolContent>
 	</Tool>
 {:else if Renderer}
-	<Tool bind:open {defaultOpen} showBorder={false}>
+	<Tool bind:open {defaultOpen} {queued} showBorder={false}>
 		<Renderer
 			{toolPart}
+			{queued}
 			{sessionId}
 			{threadId}
 			{onToolApprovalResponse}

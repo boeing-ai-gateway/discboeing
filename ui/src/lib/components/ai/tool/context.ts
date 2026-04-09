@@ -4,6 +4,7 @@ const TOOL_CONTEXT_KEY = Symbol.for("discobot-ui-ai-tool-context");
 
 export type ToolContextValue = {
 	isOpen: boolean;
+	queued: boolean;
 	setIsOpen: (open: boolean) => void;
 };
 
@@ -17,4 +18,8 @@ export function useToolContext(): ToolContextValue {
 		throw new Error("Tool components must be used within Tool");
 	}
 	return context;
+}
+
+export function getToolContextIfPresent(): ToolContextValue | null {
+	return getContext<ToolContextValue | undefined>(TOOL_CONTEXT_KEY) ?? null;
 }

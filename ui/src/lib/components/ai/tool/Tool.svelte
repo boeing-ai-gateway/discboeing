@@ -6,6 +6,7 @@
 	type Props = {
 		open?: boolean;
 		defaultOpen?: boolean;
+		queued?: boolean;
 		showBorder?: boolean;
 		class?: string;
 		children?: () => any;
@@ -14,6 +15,7 @@
 	let {
 		defaultOpen = false,
 		open = $bindable(defaultOpen),
+		queued = false,
 		showBorder = true,
 		class: className,
 		children,
@@ -22,6 +24,7 @@
 
 	const tool = $state({
 		isOpen: open,
+		queued: false,
 		setIsOpen: (next: boolean) => {
 			open = next;
 		},
@@ -29,6 +32,7 @@
 
 	$effect(() => {
 		tool.isOpen = open;
+		tool.queued = queued;
 	});
 
 	setToolContext(tool);

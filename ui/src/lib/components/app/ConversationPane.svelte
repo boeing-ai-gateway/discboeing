@@ -15,6 +15,7 @@
 		getHookFailureMessageMetadata,
 		getHookPathDisplayLabel,
 		getUserMessageRenderableParts,
+		isAssistantToolPartQueued,
 		isConversationPaneMessageStreaming,
 	} from "$lib/components/app/conversation-pane-message-parts";
 	import {
@@ -596,6 +597,7 @@
 		{:else if part.type === "dynamic-tool"}
 			<OptimizedToolRenderer
 				toolPart={part as DynamicToolPart}
+				queued={isAssistantToolPartQueued(parts, index)}
 				sessionId={activeSessionId}
 				threadId={activeThreadId}
 				onToolApprovalResponse={thread?.addToolApprovalResponse}

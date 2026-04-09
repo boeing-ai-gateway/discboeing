@@ -10,6 +10,7 @@ import {
 test("tool status labels distinguish preparing from running", () => {
 	assert.equal(getToolStatusLabel("input-streaming"), "Preparing");
 	assert.equal(getToolStatusLabel("input-available"), "Running");
+	assert.equal(getToolStatusLabel("queued"), "Queued");
 	assert.equal(getToolStatusLabel("output-available"), "Completed");
 });
 

@@ -1,4 +1,5 @@
 import type { ChatMessage } from "$lib/api-types";
+import { isToolRunningState } from "../ai/tool/tool-status";
 
 export type ConversationPaneMessagePart = ChatMessage["parts"][number];
 export type AssistantConversationPaneRenderablePart = Extract<
@@ -267,4 +268,20 @@ export function getAssistantMessagePartGroups(
 		collapsedStepCount: collapsedParts.length,
 		hasCollapsedSteps: true,
 	};
+}
+
+export function isAssistantToolPartQueued(
+	parts: AssistantConversationPaneRenderablePart[],
+	partIndex: number,
+): boolean {
+	const part = parts[partIndex];
+	if (part?.type !== "dynamic-tool" || !isToolRunningState(part.state)) {
+		return false;
+	}
+
+	return parts.slice(0, partIndex).some((candidate) => {
+		return (
+			candidate.type === "dynamic-tool" && isToolRunningState(candidate.state)
+		);
+	});
 }
