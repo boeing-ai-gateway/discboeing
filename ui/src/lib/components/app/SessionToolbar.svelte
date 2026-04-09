@@ -47,6 +47,7 @@
 
 	let startingOperation = $state<CommitOperation | null>(null);
 	let waitingForOperationEvent = $state(false);
+	let waitingForStatusChangeFrom = $state<string | undefined>(undefined);
 
 	function isJetBrainsIdeOption(
 		option: IdeOption,
@@ -206,14 +207,17 @@
 		if (currentSessionStatus === undefined || !waitingForOperationEvent) {
 			return;
 		}
+		if (currentSessionStatus === waitingForStatusChangeFrom) {
+			return;
+		}
 
 		waitingForOperationEvent = false;
+		waitingForStatusChangeFrom = undefined;
 		startingOperation = null;
 	});
 
-	async function ensureActiveThreadStream() {
-		const activeThreadId = session.threads.selectedId ?? session.sessionId;
-		await session.threadContexts.get(activeThreadId)?.load();
+	async function refreshSessionState() {
+		await app.sessions.reloadSession(session.sessionId);
 	}
 
 	async function startOperation(operation: CommitOperation) {
@@ -221,6 +225,7 @@
 			return;
 		}
 
+		const previousStatus = session.current.status;
 		startingOperation = operation;
 		try {
 			if (operation === "commit") {
@@ -229,13 +234,18 @@
 				await api.rebaseSession(session.sessionId);
 			}
 
+			waitingForStatusChangeFrom = previousStatus;
 			waitingForOperationEvent = true;
-			void ensureActiveThreadStream().catch((error) => {
-				console.error("Failed to sync active thread stream:", error);
+			void refreshSessionState().catch((error) => {
+				console.error(
+					"Failed to refresh session state after starting operation:",
+					error,
+				);
 			});
 		} catch (error) {
 			console.error(`Failed to start ${operation}:`, error);
 			waitingForOperationEvent = false;
+			waitingForStatusChangeFrom = undefined;
 			startingOperation = null;
 		}
 	}

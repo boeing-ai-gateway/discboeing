@@ -3,7 +3,7 @@ import { StartChatError } from "$lib/api-client";
 import { useAppContext } from "$lib/context/app-context.svelte";
 import type { ChatMessage, HooksStatusResponse, Thread } from "$lib/api-types";
 import {
-	bindChatStreamEventSource,
+	createChatStreamEventListeners,
 	createChatStreamState,
 } from "$lib/thread/conversation-stream";
 import type { ChatStreamSubscription } from "$lib/thread/chat-stream-manager";
@@ -115,7 +115,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let pendingQuestionId = $state<string | null>(null);
 	let loadStatus = $state<"idle" | "loading" | "ready" | "error">("idle");
 	let activeSubscription: ChatStreamSubscription | null = null;
-	let unbindStream: (() => void) | null = null;
 	let activeStreamKey: string | null = null;
 	let pendingLoadPromise: Promise<void> | null = null;
 	let resolvePendingLoad: (() => void) | null = null;
@@ -198,8 +197,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	});
 
 	function disconnectStream() {
-		unbindStream?.();
-		unbindStream = null;
 		activeSubscription?.unsubscribe();
 		activeSubscription = null;
 		activeStreamKey = null;
@@ -250,10 +247,24 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		disconnectStream();
 		streamError = null;
 		activeStreamKey = streamKey(args.sessionId);
+		const listeners = createChatStreamEventListeners(streamState, {
+			onError: (error) => {
+				streamError =
+					error instanceof Error
+						? error.message
+						: "Failed to process chat stream";
+				fatalStreamError = true;
+				disconnectStream();
+				if (loadStatus === "loading") {
+					rejectLoad(error, "Failed to load messages");
+				}
+			},
+		});
 		const subscription = app.chatStreams.subscribe({
 			sessionId: args.sessionId,
 			threadId: args.threadId,
 			replay: true,
+			listeners,
 			onOpen: () => {
 				streamError = null;
 				void Promise.all([
@@ -279,23 +290,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			},
 		});
 		activeSubscription = subscription;
-		unbindStream = bindChatStreamEventSource(
-			subscription.eventSource,
-			streamState,
-			{
-				onError: (error) => {
-					streamError =
-						error instanceof Error
-							? error.message
-							: "Failed to process chat stream";
-					fatalStreamError = true;
-					disconnectStream();
-					if (loadStatus === "loading") {
-						rejectLoad(error, "Failed to load messages");
-					}
-				},
-			},
-		);
 	}
 
 	async function loadFromStream(forceReconnect = false) {

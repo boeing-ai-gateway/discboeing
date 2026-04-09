@@ -178,13 +178,17 @@ export async function parseChatStreamChunk(
 	return validation.value as ChatStreamChunk;
 }
 
-export function bindChatStreamEventSource(
-	eventSource: ChatStreamEventSource,
+export type ChatStreamEventListenerBinding = {
+	type: ChatStreamEventName;
+	listener: (event: MessageEvent<string>) => void;
+};
+
+export function createChatStreamEventListeners(
 	streamState: {
 		handleStreamEvent: (event: ChatStreamEvent) => Promise<unknown>;
 	},
 	options: ChatStreamEventSourceOptions = {},
-) {
+): ChatStreamEventListenerBinding[] {
 	const handleError = (error: unknown) => {
 		if (options.onError) {
 			options.onError(error);
@@ -198,42 +202,56 @@ export function bindChatStreamEventSource(
 		void streamState.handleStreamEvent(event).catch(handleError);
 	};
 
-	const listeners = {
-		"history-start": (event: MessageEvent<string>) => {
-			dispatchEvent({ event: "history-start", data: event.data });
+	return [
+		{
+			type: "history-start",
+			listener: (event: MessageEvent<string>) => {
+				dispatchEvent({ event: "history-start", data: event.data });
+			},
 		},
-		"history-message": (event: MessageEvent<string>) => {
-			dispatchEvent({ event: "history-message", data: event.data });
+		{
+			type: "history-message",
+			listener: (event: MessageEvent<string>) => {
+				dispatchEvent({ event: "history-message", data: event.data });
+			},
 		},
-		"history-end": (event: MessageEvent<string>) => {
-			dispatchEvent({ event: "history-end", data: event.data });
+		{
+			type: "history-end",
+			listener: (event: MessageEvent<string>) => {
+				dispatchEvent({ event: "history-end", data: event.data });
+			},
 		},
-		chunk: (event: MessageEvent<string>) => {
-			dispatchEvent({ event: "chunk", data: event.data });
+		{
+			type: "chunk",
+			listener: (event: MessageEvent<string>) => {
+				dispatchEvent({ event: "chunk", data: event.data });
+			},
 		},
-		ping: (event: MessageEvent<string>) => {
-			dispatchEvent({ event: "ping", data: event.data });
+		{
+			type: "ping",
+			listener: (event: MessageEvent<string>) => {
+				dispatchEvent({ event: "ping", data: event.data });
+			},
 		},
-	} satisfies Record<
-		ChatStreamEventName,
-		(event: MessageEvent<string>) => void
-	>;
-
-	const eventNames: ChatStreamEventName[] = [
-		"history-start",
-		"history-message",
-		"history-end",
-		"chunk",
-		"ping",
 	];
+}
 
-	for (const eventName of eventNames) {
-		eventSource.addEventListener(eventName, listeners[eventName]);
+export function bindChatStreamEventSource(
+	eventSource: ChatStreamEventSource,
+	streamState: {
+		handleStreamEvent: (event: ChatStreamEvent) => Promise<unknown>;
+	},
+	options: ChatStreamEventSourceOptions = {},
+) {
+	const bindings = createChatStreamEventListeners(streamState, options);
+
+	for (const { type, listener } of bindings) {
+		eventSource.addEventListener(type, listener);
 	}
 
 	return () => {
-		for (const eventName of eventNames) {
-			eventSource.removeEventListener(eventName, listeners[eventName]);
+		for (const { type, listener } of bindings) {
+			eventSource.removeEventListener(type, listener);
 		}
 	};
 }

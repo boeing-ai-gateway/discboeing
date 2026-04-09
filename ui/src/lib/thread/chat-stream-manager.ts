@@ -5,6 +5,7 @@ import type {
 	ProjectStreamSubscriptionState,
 } from "$lib/api-types";
 import type {
+	ChatStreamEventListenerBinding,
 	ChatStreamEventName,
 	ChatStreamEventSource,
 } from "$lib/thread/conversation-stream";
@@ -49,6 +50,7 @@ export type ChatStreamManager = {
 		threadId: string;
 		replay?: boolean;
 		lastEventId?: string;
+		listeners?: ChatStreamEventListenerBinding[];
 		onOpen?: () => void;
 		onError?: (error: unknown) => void;
 	}) => ChatStreamSubscription;
@@ -305,8 +307,15 @@ export function createChatStreamManager(): ChatStreamManager {
 		getOrCreateEntry: () => StreamEntry,
 		onOpen?: () => void,
 		onError?: (error: unknown) => void,
+		listenerBindings?: Array<{
+			type: string;
+			listener: (event: MessageEvent<string>) => void;
+		}>,
 	): BaseSubscription<ProjectStreamEventSource> => {
 		const entry = getOrCreateEntry();
+		for (const binding of listenerBindings ?? []) {
+			entry.source.addEventListener(binding.type, binding.listener);
+		}
 		const consumerId = Symbol(key);
 		entry.consumers.set(consumerId, { onOpen, onError });
 		ensureSocket();
@@ -320,6 +329,12 @@ export function createChatStreamManager(): ChatStreamManager {
 				const currentEntry = entries.get(key);
 				if (!currentEntry) {
 					return;
+				}
+				for (const binding of listenerBindings ?? []) {
+					currentEntry.source.removeEventListener(
+						binding.type,
+						binding.listener,
+					);
 				}
 				currentEntry.consumers.delete(consumerId);
 				if (currentEntry.consumers.size === 0) {
@@ -346,6 +361,7 @@ export function createChatStreamManager(): ChatStreamManager {
 			threadId,
 			replay = true,
 			lastEventId = "",
+			listeners,
 			onOpen,
 			onError,
 		}) => {
@@ -406,6 +422,7 @@ export function createChatStreamManager(): ChatStreamManager {
 				},
 				onOpen,
 				onError,
+				listeners,
 			) as unknown as ChatStreamSubscription;
 		},
 		subscribeServiceOutput: ({ sessionId, serviceId, onOpen, onError }) => {

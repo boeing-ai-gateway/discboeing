@@ -10,6 +10,8 @@ import {
 
 export {
 	bindChatStreamEventSource,
+	createChatStreamEventListeners,
+	type ChatStreamEventListenerBinding,
 	type ChatStreamEventName,
 	type ChatStreamEventSource,
 	type ChatStreamEventSourceOptions,

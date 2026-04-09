@@ -138,6 +138,41 @@ test("chat stream manager routes websocket events and resubscribes after complet
 	manager.dispose();
 });
 
+test("chat stream manager binds provided listeners before subscribe starts streaming", () => {
+	const manager = createChatStreamManager();
+	const chunkEvents: string[] = [];
+	const subscription = manager.subscribe({
+		sessionId: "session-early",
+		threadId: "thread-early",
+		replay: true,
+		listeners: [
+			{
+				type: "chunk",
+				listener: (event) => {
+					chunkEvents.push(event.data);
+				},
+			},
+		],
+	});
+
+	assert.equal(MockWebSocket.instances.length, 1);
+	const socket = MockWebSocket.instances[0];
+	socket.emitOpen();
+	socket.emitMessage({
+		type: "event",
+		stream: "chat",
+		sessionId: "session-early",
+		threadId: "thread-early",
+		event: "chunk",
+		data: '{"type":"text","text":"early"}',
+	});
+
+	assert.deepEqual(chunkEvents, ['{"type":"text","text":"early"}']);
+
+	subscription.unsubscribe();
+	manager.dispose();
+});
+
 test("chat stream manager reconnects and resubscribes active streams", async () => {
 	const manager = createChatStreamManager();
 	const subscription = manager.subscribe({
