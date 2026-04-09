@@ -32,8 +32,9 @@ type Handler struct {
 	defaultAgent   *agentimpl.DefaultAgent // for MCP manager access; may be nil
 	chatPingEvery  time.Duration
 
-	hookMu         sync.Mutex
-	hookRetryCount int
+	hookMu             sync.Mutex
+	hookRetryCount     map[string]int
+	hookNotificationTo map[string]string
 
 	answeredMu        sync.Mutex
 	answeredQuestions map[string]bool // toolCallID → true (tracks answered questions for status polling)
@@ -43,13 +44,15 @@ type Handler struct {
 // New creates a new Handler.
 func New(agentCwd string, completions *agent.CompletionManager, hookManager *hooks.Manager, serviceManager *services.Manager, defaultAgent *agentimpl.DefaultAgent) *Handler {
 	h := &Handler{
-		agentCwd:          agentCwd,
-		completions:       completions,
-		hookManager:       hookManager,
-		serviceManager:    serviceManager,
-		defaultAgent:      defaultAgent,
-		chatPingEvery:     defaultChatStreamPingInterval,
-		answeredQuestions: make(map[string]bool),
+		agentCwd:           agentCwd,
+		completions:        completions,
+		hookManager:        hookManager,
+		serviceManager:     serviceManager,
+		defaultAgent:       defaultAgent,
+		chatPingEvery:      defaultChatStreamPingInterval,
+		hookRetryCount:     make(map[string]int),
+		hookNotificationTo: make(map[string]string),
+		answeredQuestions:  make(map[string]bool),
 	}
 
 	if hookManager != nil {
@@ -62,9 +65,8 @@ func New(agentCwd string, completions *agent.CompletionManager, hookManager *hoo
 	return h
 }
 
-// OnTurnStart resets hook retry state when a turn begins.
+// OnTurnStart clears thread-local error state when a turn begins.
 func (h *Handler) OnTurnStart(threadID string) {
-	h.resetHookState()
 	if cfg, cleared := h.clearThreadError(threadID); cleared {
 		go h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 	}
@@ -236,17 +238,25 @@ func (h *Handler) scheduleHookEvaluation(threadID string) {
 	time.Sleep(200 * time.Millisecond)
 
 	result := h.hookManager.EvaluateFileHooks()
+	h.reconcileHookNotificationState()
 	if !result.ShouldReprompt {
 		return
 	}
 
-	h.hookMu.Lock()
-	h.hookRetryCount++
-	count := h.hookRetryCount
-	h.hookMu.Unlock()
+	hookID := ""
+	if result.FailedResult != nil {
+		hookID = strings.TrimSpace(result.FailedResult.Hook.ID)
+	}
+	if hookID == "" {
+		hookID = threadID
+	}
 
+	count, shouldNotify := h.claimHookNotificationThread(hookID, threadID)
+	if !shouldNotify {
+		return
+	}
 	if count >= maxHookRetries {
-		log.Printf("hooks: max retries (%d) reached, not re-prompting", maxHookRetries)
+		log.Printf("hooks: max retries (%d) reached for hook %q, not re-prompting", maxHookRetries, hookID)
 		return
 	}
 
@@ -260,11 +270,47 @@ func (h *Handler) scheduleHookEvaluation(threadID string) {
 	}
 }
 
-// resetHookState aborts any pending hook evaluation and resets the retry counter.
-func (h *Handler) resetHookState() {
+func (h *Handler) reconcileHookNotificationState() {
+	if h.hookManager == nil {
+		return
+	}
+
+	status := h.hookManager.GetStatus()
+	pending := make(map[string]struct{}, len(status.PendingHooks))
+	for _, hookID := range status.PendingHooks {
+		pending[hookID] = struct{}{}
+	}
+
 	h.hookMu.Lock()
-	h.hookRetryCount = 0
-	h.hookMu.Unlock()
+	defer h.hookMu.Unlock()
+	for hookID := range h.hookNotificationTo {
+		if _, ok := pending[hookID]; !ok {
+			delete(h.hookNotificationTo, hookID)
+			delete(h.hookRetryCount, hookID)
+		}
+	}
+	for hookID := range h.hookRetryCount {
+		if _, ok := pending[hookID]; !ok {
+			delete(h.hookRetryCount, hookID)
+		}
+	}
+}
+
+func (h *Handler) claimHookNotificationThread(hookID, threadID string) (int, bool) {
+	h.hookMu.Lock()
+	defer h.hookMu.Unlock()
+
+	owner := h.hookNotificationTo[hookID]
+	if owner == "" {
+		h.hookNotificationTo[hookID] = threadID
+		owner = threadID
+	}
+	if owner != threadID {
+		return 0, false
+	}
+
+	h.hookRetryCount[hookID]++
+	return h.hookRetryCount[hookID], true
 }
 
 // RegisterRoutes registers all API routes on the given router and records

@@ -146,6 +146,77 @@ func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.
 	}
 }
 
+func TestScheduleHookEvaluation_SticksNotificationToFirstThread(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, hooks.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+echo "lint failed"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mainPath := filepath.Join(workspaceRoot, "main.go")
+	if err := os.WriteFile(mainPath, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hookManager := hooks.NewManager(workspaceRoot, "session-123")
+	if err := hookManager.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	reqThreadCh := make(chan string, 4)
+	ma := &streamTestAgent{
+		promptFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqThreadCh <- threadID
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	h := New("", agent.NewCompletionManager(ma), hookManager, nil, nil)
+
+	h.scheduleHookEvaluation("thread-1")
+	select {
+	case got := <-reqThreadCh:
+		if got != "thread-1" {
+			t.Fatalf("first hook notification thread = %q, want %q", got, "thread-1")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first hook notification")
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	if err := os.WriteFile(mainPath, []byte("package main\n\nvar _ = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h.scheduleHookEvaluation("thread-2")
+	select {
+	case got := <-reqThreadCh:
+		t.Fatalf("unexpected hook notification for %q; wanted original thread only", got)
+	case <-time.After(400 * time.Millisecond):
+	}
+}
+
 func TestScheduleHookEvaluation_QueuesHookRepromptWhenThreadBusy(t *testing.T) {
 	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
