@@ -169,7 +169,7 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 - **Go**: gofmt + goimports with local prefix `github.com/obot-platform/discobot`
 - **Go version**: 1.26 — use `new(value)` to create a pointer to a value (e.g. `new(true)` for `*bool`); avoid `boolPtr`/`intPtr` helper functions
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
-- **Git commit messages**: use a short subject line of 50 characters or fewer, followed by a blank line and a wrapped body with lines of 72 characters or fewer when a body is needed
+- **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible, followed by a blank line and a wrapped body with lines of 72 characters or fewer when a body is needed
 
 ## Documentation
 
