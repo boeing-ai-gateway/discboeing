@@ -91,7 +91,7 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 	}
 
 	// Create chat service
-	chatSvc := service.NewChatService(s, sessionSvc, jobQueue, eventBroker, sandboxSvc, gitSvc)
+	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, sandboxSvc, gitSvc)
 
 	// Create remaining services
 	workspaceSvc := service.NewWorkspaceService(s, gitProvider, eventBroker)

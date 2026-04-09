@@ -38,9 +38,10 @@ func (q *Queue) notify() {
 
 // Resource type constants for job deduplication.
 const (
-	ResourceTypeSession         = "session"
-	ResourceTypeRetainedSandbox = "retained_sandbox"
-	ResourceTypeWorkspace       = "workspace"
+	ResourceTypeSession          = "session"
+	ResourceTypeRetainedSandbox  = "retained_sandbox"
+	ResourceTypeWorkspace        = "workspace"
+	ResourceTypePromptSubmission = "prompt_submission"
 )
 
 // Schedulable is an optional interface payloads can implement to request

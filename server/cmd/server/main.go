@@ -268,6 +268,7 @@ func main() {
 	var disp *dispatcher.Service
 	var sessionSvc *service.SessionService
 	var dispSandboxSvc *service.SandboxService
+	var dispChatSvc *service.ChatService
 	var sandboxIdleMonitor *service.SandboxIdleMonitor
 	if cfg.DispatcherEnabled {
 		disp = dispatcher.NewService(s, cfg, eventBroker)
@@ -286,12 +287,14 @@ func main() {
 			credFetcher := service.MakeCredentialFetcher(s, credSvc)
 			dispSandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
 			sessionSvc = service.NewSessionService(s, gitSvc, sandboxProvider, dispSandboxSvc, eventBroker, jobQueue)
+			dispChatSvc = service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, dispSandboxSvc, gitSvc)
 			dispSandboxSvc.SetSessionInitializer(sessionSvc)
 			disp.RegisterExecutor(dispatcher.NewSessionInitExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionDeleteExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionSandboxDeleteExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionCommitExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionRebaseExecutor(sessionSvc))
+			disp.RegisterExecutor(dispatcher.NewPromptDispatchExecutor(dispChatSvc))
 		}
 
 		disp.Start(context.Background())
@@ -345,6 +348,17 @@ func main() {
 					log.Println("Commit state reconciliation completed successfully")
 				}
 				cancel()
+
+				// 4. Re-enqueue prompt submissions that were accepted by the server but not yet delivered
+				if dispChatSvc != nil {
+					ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+					if err := dispChatSvc.ReconcilePromptSubmissions(ctx); err != nil {
+						log.Printf("Warning: Failed to reconcile prompt submissions: %v", err)
+					} else {
+						log.Println("Prompt submission reconciliation completed successfully")
+					}
+					cancel()
+				}
 
 				log.Println("All reconciliation completed")
 			}()

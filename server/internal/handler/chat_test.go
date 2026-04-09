@@ -109,6 +109,7 @@ func newChatTestHandler(t *testing.T, s *store.Store, provider *mocksandbox.Prov
 	cfg := &config.Config{
 		SandboxIdleTimeout: 30 * time.Minute,
 		WorkspaceDir:       t.TempDir(),
+		EncryptionKey:      []byte("01234567890123456789012345678901"),
 	}
 
 	jobQueue := jobs.NewQueue(s, cfg)
@@ -116,7 +117,7 @@ func newChatTestHandler(t *testing.T, s *store.Store, provider *mocksandbox.Prov
 	sandboxSvc := service.NewSandboxService(s, provider, cfg, nil, nil, jobQueue, nil)
 	sessionSvc := service.NewSessionService(s, nil, provider, sandboxSvc, nil, jobQueue)
 	sandboxSvc.SetSessionInitializer(sessionSvc)
-	chatSvc := service.NewChatService(s, sessionSvc, jobQueue, nil, sandboxSvc, nil)
+	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, nil, sandboxSvc, nil)
 
 	return &Handler{
 		store:            s,
@@ -262,6 +263,12 @@ func TestChat_ClientDisconnect_DoesNotCancelSandbox(t *testing.T) {
 	)
 
 	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"healthy":true,"connected":true}`))
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST" {
 			select {
 			case postCalled <- struct{}{}:
@@ -408,6 +415,12 @@ func TestChat_PersistsChatStartErrorsOnTheSession(t *testing.T) {
 	}
 
 	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"healthy":true,"connected":true}`))
+			return
+		}
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -438,6 +451,17 @@ func TestChat_PersistsChatStartErrorsOnTheSession(t *testing.T) {
 	}
 	if got := *session.ErrorMessage; got != "sandbox returned status 400: invalid_api_key" {
 		t.Fatalf("expected persisted session error %q, got %q", "sandbox returned status 400: invalid_api_key", got)
+	}
+
+	submission, err := s.GetPromptSubmissionByMessageID(context.Background(), sessionID, sessionID, "msg-error")
+	if err != nil {
+		t.Fatalf("expected prompt submission to be persisted: %v", err)
+	}
+	if len(submission.MessagesEncryptedData) == 0 {
+		t.Fatal("expected failed prompt submission payload to remain encrypted for retry")
+	}
+	if bytes.Contains(submission.MessagesEncryptedData, []byte("hello")) {
+		t.Fatal("expected prompt submission payload to be encrypted at rest")
 	}
 
 	serviceSession, err := h.sessionService.GetSession(context.Background(), sessionID)
@@ -483,6 +507,12 @@ func TestChat_ClearsPersistedChatStartErrorsAfterSuccessfulRetry(t *testing.T) {
 	}
 
 	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"healthy":true,"connected":true}`))
+			return
+		}
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
@@ -513,6 +543,85 @@ func TestChat_ClearsPersistedChatStartErrorsAfterSuccessfulRetry(t *testing.T) {
 	}
 }
 
+func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
+	s := setupChatTestStore(t)
+	provider := mocksandbox.NewProvider()
+	sessionID := "session-retry-prompt"
+
+	seedSession(t, s, sessionID)
+
+	ctx := context.Background()
+	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+		SharedSecret:  "test-secret",
+		WorkspacePath: "/workspace",
+	})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	if err := provider.Start(ctx, sessionID); err != nil {
+		t.Fatalf("failed to start sandbox: %v", err)
+	}
+
+	postCount := 0
+	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"healthy":true,"connected":true}`))
+			return
+		}
+		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
+			postCount++
+			if postCount > 1 {
+				t.Fatalf("expected one POST /chat, got %d", postCount)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"started","completionId":"completion-1"}`))
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	h := newChatTestHandler(t, s, provider)
+	chatReq := ChatRequest{
+		Messages: parseMessages(t, `[{"id":"msg-retry-persisted","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
+	}
+
+	w := httptest.NewRecorder()
+	h.Chat(w, makeChatRequest(context.Background(), t, sessionID, "", chatReq))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected first status %d, got %d; body: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	h.Chat(w, makeChatRequest(context.Background(), t, sessionID, "", chatReq))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected retry status %d, got %d; body: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var response ChatResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
+	}
+	if response.SubmissionID == "" {
+		t.Fatal("expected submission ID in response")
+	}
+	if response.CompletionID != "completion-1" {
+		t.Fatalf("expected completion ID %q, got %q", "completion-1", response.CompletionID)
+	}
+	submission, err := s.GetPromptSubmissionByID(context.Background(), response.SubmissionID)
+	if err != nil {
+		t.Fatalf("expected prompt submission to exist: %v", err)
+	}
+	if len(submission.MessagesEncryptedData) != 0 {
+		t.Fatal("expected accepted prompt submission payload to be deleted promptly")
+	}
+	if postCount != 1 {
+		t.Fatalf("expected one POST /chat, got %d", postCount)
+	}
+}
+
 func TestChat_UsesExplicitThreadID(t *testing.T) {
 	s := setupChatTestStore(t)
 	provider := mocksandbox.NewProvider()
@@ -535,6 +644,12 @@ func TestChat_UsesExplicitThreadID(t *testing.T) {
 
 	pathCh := make(chan string, 1)
 	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"healthy":true,"connected":true}`))
+			return
+		}
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
 			select {
 			case pathCh <- r.URL.Path:

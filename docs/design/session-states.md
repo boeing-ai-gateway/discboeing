@@ -65,6 +65,12 @@ This separation allows a session to be `ready` and `committing` at the same time
 | `removing` | Session is being deleted asynchronously |
 | `removed` | Session has been deleted. |
 
+### Prompt Submission Durability
+
+Prompt delivery has its own durable handoff separate from session lifecycle and commit status. Before the server tries to create or reconcile a sandbox and forward a prompt, it stores a `PromptSubmission` record in the database. If the server restarts or sandbox creation fails mid-request, startup reconciliation re-enqueues any `pending` or stale `dispatching` submissions and retries delivery.
+
+The persisted prompt payload is encrypted at rest while the submission is pending. Once the sandbox accepts the prompt, the submission moves to `accepted`, stores the returned `completionId` or `queuedPromptId`, and clears the encrypted payload so prompt contents are not retained longer than necessary.
+
 ---
 
 ## Commit Status (Orthogonal)

@@ -64,6 +64,8 @@ A chat thread within a workspace, bound to a specific AI agent configuration.
 
 Sessions also persist encrypted sandbox-only secret material when needed. For SSH-enabled sandboxes, Discobot stores a per-session SSH keypair encrypted at rest in the database and reuses it when the sandbox is recreated.
 
+Prompt submissions are also persisted server-side before delivery to the sandbox. This durable handoff lets the server replay pending prompts after a restart or sandbox-creation failure so a submitted user turn is not lost while waiting for the sandbox to become ready. The stored prompt payload is encrypted at rest and is cleared immediately after the sandbox accepts the submission, so the database retains only the minimal metadata needed for idempotent retries and status reporting.
+
 **Session Lifecycle:**
 ```
 initializing → cloning → pulling_image → creating_sandbox → ready ⇄ running

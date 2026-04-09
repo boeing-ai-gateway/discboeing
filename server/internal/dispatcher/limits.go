@@ -9,6 +9,7 @@ var ConcurrencyLimits = map[jobs.JobType]int{
 	jobs.JobTypeSessionDelete:        2,  // Max 2 session deletes at once
 	jobs.JobTypeSessionSandboxDelete: 2,  // Max 2 delayed sandbox deletes at once
 	jobs.JobTypeSessionRebase:        10, // Max 10 session rebases at once
+	jobs.JobTypePromptDispatch:       5,  // Max 5 background prompt dispatches at once
 }
 
 // DefaultConcurrencyLimit is used for job types not in ConcurrencyLimits.

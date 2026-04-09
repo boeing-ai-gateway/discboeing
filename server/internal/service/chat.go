@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/encryption"
 	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -28,10 +30,19 @@ type ChatService struct {
 	eventBroker    *events.Broker
 	sandboxService *SandboxService
 	gitService     *GitService
+	encryptor      *encryption.Encryptor
 }
 
 // NewChatService creates a new chat service.
-func NewChatService(s *store.Store, sessionService *SessionService, jobEnqueuer JobEnqueuer, eventBroker *events.Broker, sandboxService *SandboxService, gitService *GitService) *ChatService {
+func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionService, jobEnqueuer JobEnqueuer, eventBroker *events.Broker, sandboxService *SandboxService, gitService *GitService) *ChatService {
+	var encryptor *encryption.Encryptor
+	if cfg != nil {
+		enc, err := encryption.NewEncryptor(cfg.EncryptionKey)
+		if err != nil {
+			panic("failed to create chat service encryptor: " + err.Error())
+		}
+		encryptor = enc
+	}
 	return &ChatService{
 		store:          s,
 		sessionService: sessionService,
@@ -39,6 +50,7 @@ func NewChatService(s *store.Store, sessionService *SessionService, jobEnqueuer 
 		eventBroker:    eventBroker,
 		sandboxService: sandboxService,
 		gitService:     gitService,
+		encryptor:      encryptor,
 	}
 }
 

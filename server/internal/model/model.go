@@ -487,6 +487,7 @@ func AllModels() []any {
 		&Workspace{},
 		&Session{},
 		&Message{},
+		&PromptSubmission{},
 		&Credential{},
 		&SessionCredentialAssignment{},
 		&TerminalHistory{},

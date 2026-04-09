@@ -184,6 +184,9 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 			if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", ws.ID).Delete(&model.TerminalHistory{}).Error; err != nil {
 				return err
 			}
+			if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", ws.ID).Delete(&model.PromptSubmission{}).Error; err != nil {
+				return err
+			}
 			// Delete sessions
 			if err := tx.Unscoped().Where("workspace_id = ?", ws.ID).Delete(&model.Session{}).Error; err != nil {
 				return err
@@ -305,6 +308,9 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.TerminalHistory{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.PromptSubmission{}).Error; err != nil {
+			return err
+		}
 
 		// Delete sessions
 		if err := tx.Unscoped().Where("workspace_id = ?", id).Delete(&model.Session{}).Error; err != nil {
@@ -327,6 +333,95 @@ func (s *Store) GetSessionByID(ctx context.Context, id string) (*model.Session, 
 		return nil, err
 	}
 	return &session, nil
+}
+
+func (s *Store) GetPromptSubmissionByID(ctx context.Context, id string) (*model.PromptSubmission, error) {
+	var submission model.PromptSubmission
+	if err := s.readDB.WithContext(ctx).First(&submission, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &submission, nil
+}
+
+func (s *Store) GetPromptSubmissionByMessageID(ctx context.Context, sessionID, threadID, clientMessageID string) (*model.PromptSubmission, error) {
+	var submission model.PromptSubmission
+	if err := s.readDB.WithContext(ctx).
+		First(&submission, "session_id = ? AND thread_id = ? AND client_message_id = ?", sessionID, threadID, clientMessageID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &submission, nil
+}
+
+func (s *Store) CreatePromptSubmission(ctx context.Context, submission *model.PromptSubmission) error {
+	return s.writeDB.WithContext(ctx).Create(submission).Error
+}
+
+func (s *Store) UpdatePromptSubmission(ctx context.Context, submission *model.PromptSubmission) error {
+	return s.writeDB.WithContext(ctx).Save(submission).Error
+}
+
+func (s *Store) ClaimPromptSubmissionForDispatch(ctx context.Context, id string) (bool, error) {
+	result := s.writeDB.WithContext(ctx).Model(&model.PromptSubmission{}).
+		Where("id = ? AND status = ?", id, model.PromptSubmissionStatusPending).
+		Updates(map[string]any{
+			"status":        model.PromptSubmissionStatusDispatching,
+			"error_message": nil,
+			"updated_at":    time.Now().UTC(),
+		})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (s *Store) ReleasePromptSubmissionToPending(ctx context.Context, id string, errorMessage *string) error {
+	return s.writeDB.WithContext(ctx).Model(&model.PromptSubmission{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":        model.PromptSubmissionStatusPending,
+			"error_message": errorMessage,
+			"updated_at":    time.Now().UTC(),
+		}).Error
+}
+
+func (s *Store) MarkPromptSubmissionAccepted(ctx context.Context, id string, completionID, queuedPromptID *string) error {
+	now := time.Now().UTC()
+	return s.writeDB.WithContext(ctx).Model(&model.PromptSubmission{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":                  model.PromptSubmissionStatusAccepted,
+			"completion_id":           completionID,
+			"queued_prompt_id":        queuedPromptID,
+			"accepted_at":             &now,
+			"messages_encrypted_data": nil,
+			"error_message":           nil,
+			"updated_at":              now,
+		}).Error
+}
+
+func (s *Store) MarkPromptSubmissionFailed(ctx context.Context, id string, errorMessage string) error {
+	return s.writeDB.WithContext(ctx).Model(&model.PromptSubmission{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":        model.PromptSubmissionStatusFailed,
+			"error_message": errorMessage,
+			"updated_at":    time.Now().UTC(),
+		}).Error
+}
+
+func (s *Store) ListPromptSubmissionsByStatuses(ctx context.Context, statuses ...string) ([]*model.PromptSubmission, error) {
+	var submissions []*model.PromptSubmission
+	err := s.readDB.WithContext(ctx).
+		Where("status IN ?", statuses).
+		Order("created_at ASC").
+		Find(&submissions).Error
+	return submissions, err
 }
 
 // GetSessionByIDIncludingDeleted returns a session by ID, including soft-deleted sessions.
@@ -438,6 +533,9 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 
 		// Delete terminal history
 		if err := tx.Where("session_id = ?", id).Delete(&model.TerminalHistory{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("session_id = ?", id).Delete(&model.PromptSubmission{}).Error; err != nil {
 			return err
 		}
 

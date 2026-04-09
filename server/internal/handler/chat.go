@@ -42,6 +42,7 @@ type ChatResponse struct {
 	WorkspaceID    string `json:"workspaceId"`
 	SessionID      string `json:"sessionId"`
 	ThreadID       string `json:"threadId"`
+	SubmissionID   string `json:"submissionId,omitempty"`
 	MessageID      string `json:"messageId,omitempty"`
 	CompletionID   string `json:"completionId,omitempty"`
 	Status         string `json:"status,omitempty"`
@@ -136,11 +137,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use a context that won't be cancelled when the client disconnects.
-	// This ensures sandbox creation and message sending complete even if the
+	// This ensures prompt persistence and dispatch continue even if the
 	// client aborts the request. The explicit cancel endpoint
 	// (/sessions/{sessionId}/threads/{threadId}/cancel) remains the way to stop a running chat completion.
 	sendCtx := context.WithoutCancel(ctx)
-	_, started, err := h.chatService.StartChat(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.Mode)
+	submission, started, err := h.chatService.SubmitPrompt(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.Mode)
 	if err != nil {
 		log.Printf("[Chat] Failed to start chat for session %s: %v", sessionID, err)
 		var startErr *service.SandboxChatStartError
@@ -171,6 +172,9 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := h.sessionService.UpdateErrorMessage(ctx, projectID, sessionID, nil); err != nil {
 		log.Printf("[Chat] Failed to clear chat start error for session %s: %v", sessionID, err)
+	}
+	if submission != nil {
+		response.SubmissionID = submission.ID
 	}
 	response.CompletionID = started.CompletionID
 	response.Status = started.Status
