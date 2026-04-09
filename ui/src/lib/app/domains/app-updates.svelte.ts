@@ -10,6 +10,8 @@ import type {
 import type { AppUpdates, UpdateStatus } from "$lib/app/app-context.types";
 import { isTauriShell } from "$lib/environment";
 
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 export function createAppUpdatesDomain(): AppUpdates {
 	let updateStatus = $state<UpdateStatus>("idle");
 	let availableVersion = $state<string | null>(null);
@@ -59,6 +61,84 @@ export function createAppUpdatesDomain(): AppUpdates {
 		});
 	}
 
+	$effect(() => {
+		if (!isTauriShell()) {
+			return;
+		}
+
+		void checkForUpdates();
+
+		const intervalId = window.setInterval(() => {
+			void checkForUpdates();
+		}, UPDATE_CHECK_INTERVAL_MS);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	});
+
+	async function checkForUpdates(): Promise<void> {
+		if (updateCheckInFlight) return;
+		if (updateStatus === "downloading" || updateStatus === "installing") {
+			return;
+		}
+
+		updateCheckInFlight = true;
+		updateStatus = "checking";
+		updateError = null;
+		resetProgress();
+
+		try {
+			const { check } = await import("@tauri-apps/plugin-updater");
+
+			await closePendingUpdate();
+
+			const nextUpdate = await check();
+			if (!nextUpdate) {
+				availableVersion = null;
+				updateStatus = "idle";
+				return;
+			}
+
+			availableVersion = nextUpdate.version;
+
+			if (ignoredUpdateVersion === nextUpdate.version) {
+				await nextUpdate.close();
+				updateStatus = "ready";
+				return;
+			}
+
+			pendingUpdate = nextUpdate;
+			updateStatus = "downloading";
+			await nextUpdate.download((event: DownloadEvent) => {
+				switch (event.event) {
+					case "Started":
+						totalBytes = event.data?.contentLength ?? null;
+						downloadedBytes = 0;
+						break;
+					case "Progress":
+						downloadedBytes += event.data?.chunkLength ?? 0;
+						break;
+					case "Finished":
+						if (totalBytes !== null) {
+							downloadedBytes = totalBytes;
+						}
+						break;
+				}
+			});
+			updateStatus = "ready";
+		} catch (error) {
+			logUpdateError("check", error);
+			await closePendingUpdate();
+			resetProgress();
+			updateStatus = "error";
+			updateError =
+				error instanceof Error ? error.message : "Failed to check for updates";
+		} finally {
+			updateCheckInFlight = false;
+		}
+	}
+
 	return {
 		get status() {
 			return updateStatus;
@@ -82,73 +162,13 @@ export function createAppUpdatesDomain(): AppUpdates {
 			return showUpdateBadge;
 		},
 		check: async () => {
-			if (updateCheckInFlight) return;
-			if (updateStatus === "downloading" || updateStatus === "installing") {
-				return;
-			}
-
 			if (!isTauriShell()) {
 				updateStatus = "error";
 				updateError = "App updates are only available in the desktop app.";
 				return;
 			}
 
-			updateCheckInFlight = true;
-			updateStatus = "checking";
-			updateError = null;
-			resetProgress();
-
-			try {
-				const { check } = await import("@tauri-apps/plugin-updater");
-
-				await closePendingUpdate();
-
-				const nextUpdate = await check();
-				if (!nextUpdate) {
-					availableVersion = null;
-					updateStatus = "idle";
-					return;
-				}
-
-				availableVersion = nextUpdate.version;
-
-				if (ignoredUpdateVersion === nextUpdate.version) {
-					await nextUpdate.close();
-					updateStatus = "ready";
-					return;
-				}
-
-				pendingUpdate = nextUpdate;
-				updateStatus = "downloading";
-				await nextUpdate.download((event: DownloadEvent) => {
-					switch (event.event) {
-						case "Started":
-							totalBytes = event.data?.contentLength ?? null;
-							downloadedBytes = 0;
-							break;
-						case "Progress":
-							downloadedBytes += event.data?.chunkLength ?? 0;
-							break;
-						case "Finished":
-							if (totalBytes !== null) {
-								downloadedBytes = totalBytes;
-							}
-							break;
-					}
-				});
-				updateStatus = "ready";
-			} catch (error) {
-				logUpdateError("check", error);
-				await closePendingUpdate();
-				resetProgress();
-				updateStatus = "error";
-				updateError =
-					error instanceof Error
-						? error.message
-						: "Failed to check for updates";
-			} finally {
-				updateCheckInFlight = false;
-			}
+			await checkForUpdates();
 		},
 		installAndRelaunch: async () => {
 			if (updateStatus !== "ready" || !pendingUpdate) return;
