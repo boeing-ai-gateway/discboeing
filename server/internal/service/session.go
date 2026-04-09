@@ -46,8 +46,8 @@ func (e *CommitsNoOpError) Error() string {
 }
 
 const (
-	legacySessionStatusRunning    = "running"
-	sessionDeletionRetentionDelay = 24 * time.Hour
+	legacySessionStatusRunning          = "running"
+	defaultSandboxCleanupRetentionDelay = 1 * time.Minute
 )
 
 // sessionIDRegex matches valid session IDs (alphanumeric and hyphens only).
@@ -117,6 +117,7 @@ type SessionService struct {
 	sandboxService  *SandboxService
 	eventBroker     *events.Broker
 	jobEnqueuer     JobEnqueuer
+	cleanupDelay    time.Duration
 }
 
 // NewSessionService creates a new session service
@@ -128,7 +129,17 @@ func NewSessionService(s *store.Store, gitSvc *GitService, sandboxProv sandbox.P
 		sandboxService:  sandboxService,
 		eventBroker:     eventBroker,
 		jobEnqueuer:     jobEnqueuer,
+		cleanupDelay:    defaultSandboxCleanupRetentionDelay,
 	}
+}
+
+// SetSandboxCleanupDelay updates the retention window used before permanently
+// removing a sandbox after the session has been deleted.
+func (s *SessionService) SetSandboxCleanupDelay(delay time.Duration) {
+	if delay < 0 {
+		delay = 0
+	}
+	s.cleanupDelay = delay
 }
 
 // ListSessionsByProject returns all sessions for a project.
@@ -553,7 +564,7 @@ func (s *SessionService) PerformDeletion(ctx context.Context, projectID, session
 	if s.jobEnqueuer != nil && s.sandboxProvider != nil {
 		if err := s.jobEnqueuer.Enqueue(ctx, jobs.SessionSandboxDeletePayload{
 			SessionID: sessionID,
-			DeleteAt:  time.Now().Add(sessionDeletionRetentionDelay),
+			DeleteAt:  time.Now().Add(s.cleanupDelay),
 		}); err != nil {
 			log.Printf("Failed to enqueue deferred session sandbox delete job for %s: %v", sessionID, err)
 		}

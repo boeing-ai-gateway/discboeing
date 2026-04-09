@@ -3,6 +3,7 @@ package config
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestLoadDefaultsToEphemeralHTTPSMode(t *testing.T) {
@@ -124,5 +125,27 @@ func TestLoadCORSOriginsDropsHTTPSPlaceholdersWhenDisabled(t *testing.T) {
 	want := []string{"http://localhost:3007"}
 	if !slices.Equal(cfg.CORSOrigins, want) {
 		t.Fatalf("expected CORS origins %v, got %v", want, cfg.CORSOrigins)
+	}
+}
+
+func TestLoadDefaultsSessionSandboxCleanupDelay(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.SessionSandboxCleanupDelay != time.Minute {
+		t.Fatalf("expected SessionSandboxCleanupDelay 1m, got %s", cfg.SessionSandboxCleanupDelay)
+	}
+}
+
+func TestLoadSessionSandboxCleanupDelayFromEnv(t *testing.T) {
+	t.Setenv("SESSION_SANDBOX_CLEANUP_DELAY", "720h")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.SessionSandboxCleanupDelay != 720*time.Hour {
+		t.Fatalf("expected SessionSandboxCleanupDelay 720h, got %s", cfg.SessionSandboxCleanupDelay)
 	}
 }

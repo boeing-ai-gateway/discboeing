@@ -66,9 +66,10 @@ type Config struct {
 	WorkspaceDir string // Base directory for workspaces and git cache
 
 	// Sandbox runtime settings
-	SandboxImage       string        // Default sandbox image
-	SandboxIdleTimeout time.Duration // Auto-stop sandboxes after idle period
-	IdleCheckInterval  time.Duration // How often to check for idle sessions
+	SandboxImage               string        // Default sandbox image
+	SandboxIdleTimeout         time.Duration // Auto-stop sandboxes after idle period
+	IdleCheckInterval          time.Duration // How often to check for idle sessions
+	SessionSandboxCleanupDelay time.Duration // Delay before removing a stopped sandbox after session deletion
 
 	// Docker-specific settings
 	DockerHost    string // Docker socket/host (default: unix:///var/run/docker.sock)
@@ -96,16 +97,15 @@ type Config struct {
 	SSHHostKeyPath string // Path to SSH host key file (default: ./ssh_host_key)
 
 	// Job Dispatcher settings
-	DispatcherEnabled               bool          // Enable job dispatcher (default: true)
-	DispatcherPollInterval          time.Duration // How often to poll for jobs (default: 1s)
-	DispatcherHeartbeatInterval     time.Duration // Heartbeat interval for leader (default: 10s)
-	DispatcherHeartbeatTimeout      time.Duration // Timeout before leader is considered dead (default: 30s)
-	DispatcherJobTimeout            time.Duration // Max time for a single job (default: 5m)
-	DispatcherStaleJobTimeout       time.Duration // Time after which running jobs are considered stale (default: 10m)
-	DispatcherImmediateExecution    bool          // Try to execute jobs immediately when enqueued (default: true)
-	DisableSessionSandboxDeleteJobs bool          // Disable execution of session_sandbox_delete jobs (default: false)
-	JobRetryBackoff                 time.Duration // Base backoff between job retries, multiplied by attempt number (default: 5s)
-	JobMaxAttempts                  int           // Default max attempts for jobs (default: 3)
+	DispatcherEnabled            bool          // Enable job dispatcher (default: true)
+	DispatcherPollInterval       time.Duration // How often to poll for jobs (default: 1s)
+	DispatcherHeartbeatInterval  time.Duration // Heartbeat interval for leader (default: 10s)
+	DispatcherHeartbeatTimeout   time.Duration // Timeout before leader is considered dead (default: 30s)
+	DispatcherJobTimeout         time.Duration // Max time for a single job (default: 5m)
+	DispatcherStaleJobTimeout    time.Duration // Time after which running jobs are considered stale (default: 10m)
+	DispatcherImmediateExecution bool          // Try to execute jobs immediately when enqueued (default: true)
+	JobRetryBackoff              time.Duration // Base backoff between job retries, multiplied by attempt number (default: 5s)
+	JobMaxAttempts               int           // Default max attempts for jobs (default: 3)
 
 	// OIDC provider (for Discobot login)
 	OIDCIssuerURL          string
@@ -211,6 +211,7 @@ func Load() (*Config, error) {
 	cfg.SandboxImage = getEnv("SANDBOX_IMAGE", DefaultSandboxImage())
 	cfg.SandboxIdleTimeout = getEnvDuration("SANDBOX_IDLE_TIMEOUT", 1*time.Hour)
 	cfg.IdleCheckInterval = getEnvDuration("IDLE_CHECK_INTERVAL", 5*time.Minute)
+	cfg.SessionSandboxCleanupDelay = getEnvDuration("SESSION_SANDBOX_CLEANUP_DELAY", 1*time.Minute)
 
 	// Docker-specific settings
 	// Empty default lets the Docker SDK auto-detect (works on Linux, macOS, and Windows)
@@ -249,7 +250,6 @@ func Load() (*Config, error) {
 	cfg.DispatcherJobTimeout = getEnvDuration("DISPATCHER_JOB_TIMEOUT", 20*time.Minute)
 	cfg.DispatcherStaleJobTimeout = getEnvDuration("DISPATCHER_STALE_JOB_TIMEOUT", 10*time.Minute)
 	cfg.DispatcherImmediateExecution = getEnvBool("DISPATCHER_IMMEDIATE_EXECUTION", true)
-	cfg.DisableSessionSandboxDeleteJobs = getEnvBool("DISABLE_SESSION_SANDBOX_DELETE_JOBS", false)
 	cfg.JobRetryBackoff = getEnvDuration("JOB_RETRY_BACKOFF", 5*time.Second)
 	cfg.JobMaxAttempts = getEnvInt("JOB_MAX_ATTEMPTS", 3)
 

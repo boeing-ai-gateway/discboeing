@@ -695,7 +695,7 @@ if err := provider.Remove(ctx, sessionID, sandbox.RemoveVolumes()); err != nil {
 
 ### Session Deletion Retention Window
 
-When a session is deleted, Discobot now stops the sandbox immediately but keeps the sandbox and its data for **24 hours** before final cleanup.
+When a session is deleted, Discobot stops the sandbox immediately but keeps the sandbox and its data for a configurable recovery window before final cleanup. The default is **1 minute**, controlled by `SESSION_SANDBOX_CLEANUP_DELAY`.
 
 - The session record is removed right away, but the stopped sandbox is retained during the recovery window.
 - A delayed background job later removes the sandbox with `sandbox.RemoveVolumes()`, which performs the provider's normal full cleanup.

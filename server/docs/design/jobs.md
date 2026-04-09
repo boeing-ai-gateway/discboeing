@@ -107,7 +107,7 @@ func (q *Queue) Enqueue(ctx context.Context, payload JobPayload) error {
 }
 ```
 
-`session_sandbox_delete` uses this to defer final sandbox cleanup for 24 hours after a session is deleted.
+`session_sandbox_delete` uses this to defer final sandbox cleanup for the configured `SESSION_SANDBOX_CLEANUP_DELAY` after a session is deleted. The default delay is 1 minute.
 
 ## Dispatcher
 

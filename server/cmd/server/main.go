@@ -287,6 +287,7 @@ func main() {
 			credFetcher := service.MakeCredentialFetcher(s, credSvc)
 			dispSandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
 			sessionSvc = service.NewSessionService(s, gitSvc, sandboxProvider, dispSandboxSvc, eventBroker, jobQueue)
+			sessionSvc.SetSandboxCleanupDelay(cfg.SessionSandboxCleanupDelay)
 			dispChatSvc = service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, dispSandboxSvc, gitSvc)
 			dispSandboxSvc.SetSessionInitializer(sessionSvc)
 			disp.RegisterExecutor(dispatcher.NewSessionInitExecutor(sessionSvc))

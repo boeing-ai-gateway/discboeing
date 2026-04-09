@@ -425,6 +425,7 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 	}}
 
 	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	sessionSvc.SetSandboxCleanupDelay(30 * 24 * time.Hour)
 
 	before := time.Now()
 	if err := sessionSvc.PerformDeletion(ctx, workspace.ProjectID, session.ID); err != nil {
@@ -441,7 +442,7 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 	if queuedPayload.SessionID != session.ID {
 		t.Fatalf("queued session ID = %q, want %q", queuedPayload.SessionID, session.ID)
 	}
-	if queuedPayload.DeleteAt.Before(before.Add(sessionDeletionRetentionDelay)) || queuedPayload.DeleteAt.After(after.Add(sessionDeletionRetentionDelay)) {
+	if queuedPayload.DeleteAt.Before(before.Add(30*24*time.Hour)) || queuedPayload.DeleteAt.After(after.Add(30*24*time.Hour)) {
 		t.Fatalf("queued delete time %s outside expected retention window", queuedPayload.DeleteAt)
 	}
 	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
