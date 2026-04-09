@@ -44,7 +44,12 @@ export function createSessionThreadsDomain(
 			return;
 		}
 
-		args.setSelectedId(nextList[0]?.id ?? null);
+		if (nextList.length === 1) {
+			args.setSelectedId(nextList[0]?.id ?? null);
+			return;
+		}
+
+		args.setSelectedId(null);
 	}
 
 	function notifySelectedThread(nextList = currentList()) {
@@ -130,56 +135,51 @@ export function createSessionThreadsDomain(
 				args.onThreadActivated?.(created);
 			})();
 		},
-		rename: (threadId: string, nextName: string) => {
+		rename: async (threadId: string, nextName: string): Promise<boolean> => {
 			const trimmedName = nextName.trim();
 			if (!trimmedName || !list.some((thread) => thread.id === threadId)) {
-				return;
+				return false;
 			}
-			void (async () => {
-				if (!args.hasSession()) {
-					return;
-				}
-
-				if (store.list.length === 0 && threadId === args.sessionId) {
-					const created = await store.create(args.sessionId, {
-						id: threadId,
-						name: trimmedName,
-					});
-					notifyThreadListChanged();
-					args.onThreadRenamed?.(created);
-				} else {
-					const updated = await store.update(args.sessionId, threadId, {
-						name: trimmedName,
-					});
-					notifyThreadListChanged();
-					args.onThreadRenamed?.(updated);
-				}
-			})();
-		},
-		remove: (threadId: string) => {
 			if (!args.hasSession()) {
-				return;
+				return false;
 			}
+
 			if (store.list.length === 0 && threadId === args.sessionId) {
-				return;
+				const created = await store.create(args.sessionId, {
+					id: threadId,
+					name: trimmedName,
+				});
+				notifyThreadListChanged();
+				args.onThreadRenamed?.(created);
+				return true;
+			}
+
+			const updated = await store.update(args.sessionId, threadId, {
+				name: trimmedName,
+			});
+			notifyThreadListChanged();
+			args.onThreadRenamed?.(updated);
+			return true;
+		},
+		remove: async (threadId: string): Promise<boolean> => {
+			if (!args.hasSession()) {
+				return false;
+			}
+			if (threadId === args.sessionId) {
+				return false;
 			}
 			if (!store.list.some((thread) => thread.id === threadId)) {
-				return;
+				return false;
 			}
-			void (async () => {
-				await store.remove(args.sessionId, threadId);
-				args.onThreadRemoved?.(threadId);
-				args.setSelectedId(
-					getNextSelectedThreadId(
-						currentList(),
-						threadId,
-						args.getSelectedId(),
-					),
-				);
-				syncSelectedThread();
-				notifyThreadListChanged();
-				notifySelectedThread();
-			})();
+			await store.remove(args.sessionId, threadId);
+			args.onThreadRemoved?.(threadId);
+			args.setSelectedId(
+				getNextSelectedThreadId(currentList(), threadId, args.getSelectedId()),
+			);
+			syncSelectedThread();
+			notifyThreadListChanged();
+			notifySelectedThread();
+			return true;
 		},
 		refreshThread: async (threadId: string) => {
 			if (!args.hasSession()) {

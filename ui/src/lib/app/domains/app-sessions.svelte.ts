@@ -1,6 +1,7 @@
 import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
+import { api } from "$lib/api-client";
 import {
 	readRecentThreadEntries,
 	reconcileRecentThreadsForSession,
@@ -196,6 +197,37 @@ export function createAppSessionsDomain(
 				requestedThreadIdBySession.set(sessionId, threadId);
 			}
 			selectSession(sessionId);
+		},
+		createThread: async (sessionId) => {
+			if (!list.some((session) => session.id === sessionId)) {
+				return null;
+			}
+
+			const created = await api.createThread(sessionId, {
+				id: generateId(),
+			});
+			const thread = await api.getThread(sessionId, created.id);
+			const sessionContext = sessionContexts.get(sessionId);
+			if (sessionContext) {
+				sessionContext.stores.threads.upsert(thread);
+				sessionContext.ui.selectThread(thread.id);
+				sessionContext.threads.select(thread.id);
+			} else {
+				requestedThreadIdBySession.set(sessionId, thread.id);
+			}
+
+			recordRecentThread({
+				sessionId,
+				sessionName:
+					list.find((session) => session.id === sessionId)?.name ||
+					"New Session",
+				threadId: thread.id,
+				threadName: thread.name,
+				state: thread.state,
+				lastMessage: thread.lastMessage || "",
+			});
+			selectSession(sessionId);
+			return thread.id;
 		},
 		startNew: () => {
 			pendingSessionId = generateId();

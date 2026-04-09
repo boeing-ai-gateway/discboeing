@@ -139,6 +139,7 @@ export type AppSessions = {
 	sessionContexts: Map<string, SessionContextValue>;
 	select: (sessionId: string) => void;
 	openThread: (sessionId: string, threadId: string) => void;
+	createThread: (sessionId: string) => Promise<string | null>;
 	startNew: () => void;
 	setAwaitingInitialStatus: (sessionId: string | null) => void;
 	refresh: () => Promise<void>;

@@ -12,19 +12,17 @@ function readThreadWorkspaceSource() {
 	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("thread workspace no longer renders session sidebar controls directly", () => {
+test("thread workspace delegates threaded content and supports no-selection state", () => {
 	const source = readThreadWorkspaceSource();
 
 	assert.doesNotMatch(source, /let sessionsMenuOpen = \$state\(false\)/);
 	assert.doesNotMatch(source, /<SessionSidebar/);
 	assert.doesNotMatch(source, /<Popover\.Root/);
-	assert.match(
-		source,
-		/let \{[\s\S]*threadId,[\s\S]*mainClass,[\s\S]*showSidebarToggle,[\s\S]*reserveSidebarSpace,[\s\S]*onToggleSidebar,[\s\S]*mode,[\s\S]*\}: Props = \$props\(\);/,
-	);
-	assert.match(
-		source,
-		/const thread = setThreadContext\(untrack\(\(\) => threadId\)\)/,
-	);
-	assert.match(source, /showSidebarToggle=\{showSidebarToggle \?\? false\}/);
+	assert.match(source, /const props: Props = \$props\(\);/);
+	assert.match(source, /threadId: string;/);
+	assert.match(source, /sidebarOpen\?: boolean;/);
+	assert.match(source, /<ThreadWorkspaceActive/);
+	assert.match(source, /const hasSelectedThread = \$derived\.by/);
+	assert.match(source, /title="No thread selected"/);
+	assert.match(source, /Select a thread to continue\./);
 });

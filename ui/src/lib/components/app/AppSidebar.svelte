@@ -8,7 +8,7 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
-	import type { Workspace } from "$lib/api-types";
+	import type { Thread, Workspace } from "$lib/api-types";
 	import * as Collapsible from "$lib/components/ui/collapsible";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
 	import {
@@ -31,6 +31,7 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { useSessionContext } from "$lib/context/session-context.svelte";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -53,6 +54,7 @@
 	const app = useAppContext();
 	const sessions = app.sessions;
 	const preferences = app.preferences;
+	const session = useSessionContext();
 	type SessionGroup = {
 		key: string;
 		workspaceId: string | null;
@@ -65,9 +67,16 @@
 	let renameSessionId = $state<string | null>(null);
 	let renameDraft = $state("");
 	let renamingSession = $state(false);
+	let renameThreadDialogOpen = $state(false);
+	let renameThreadId = $state<string | null>(null);
+	let renameThreadDraft = $state("");
+	let renamingThread = $state(false);
 	let deleteDialogOpen = $state(false);
 	let deleteSessionId = $state<string | null>(null);
 	let deletingSession = $state(false);
+	let deleteThreadDialogOpen = $state(false);
+	let deleteThreadId = $state<string | null>(null);
+	let deletingThread = $state(false);
 	let renameWorkspaceDialogOpen = $state(false);
 	let renameWorkspaceId = $state<string | null>(null);
 	let renameWorkspaceDraft = $state("");
@@ -153,6 +162,28 @@
 		return sessions.list.find((s) => s.id === sessionId) ?? null;
 	}
 
+	function visibleThreadsForSession(sessionId: string): Thread[] {
+		if (sessions.selectedId !== sessionId) {
+			return [];
+		}
+		return session.threads.list;
+	}
+
+	function sessionHasNestedThreads(sessionId: string) {
+		return visibleThreadsForSession(sessionId).length > 1;
+	}
+
+	function isSessionSelected(sessionId: string) {
+		return sessions.selectedId === sessionId;
+	}
+
+	function isSessionThreadSelected(sessionId: string, threadId: string) {
+		return (
+			sessions.selectedId === sessionId &&
+			session.threads.selectedId === threadId
+		);
+	}
+
 	function workspaceById(workspaceId: string | null) {
 		if (!workspaceId) {
 			return null;
@@ -161,7 +192,11 @@
 	}
 
 	function handleSelectSession(sessionId: string) {
+		const isCurrentSession = session.sessionId === sessionId;
 		sessions.select(sessionId);
+		if (isCurrentSession && session.threads.list.length > 1) {
+			session.ui.selectThread(null);
+		}
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
@@ -174,6 +209,15 @@
 
 	function handleStartNewSession() {
 		sessions.startNew();
+		closeFloatingSidebar();
+		onThreadSelect?.();
+	}
+
+	async function handleCreateThread(sessionId: string) {
+		const createdThreadId = await sessions.createThread(sessionId);
+		if (!createdThreadId) {
+			return;
+		}
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
@@ -218,11 +262,30 @@
 		renameDialogOpen = true;
 	}
 
+	function openRenameThreadDialog(threadId: string) {
+		const threadItem = session.threads.list.find(
+			(thread) => thread.id === threadId,
+		);
+		if (!threadItem) {
+			return;
+		}
+		renameThreadId = threadId;
+		renameThreadDraft = threadItem.name;
+		renameThreadDialogOpen = true;
+	}
+
 	function closeRenameDialog() {
 		renameDialogOpen = false;
 		renameSessionId = null;
 		renameDraft = "";
 		renamingSession = false;
+	}
+
+	function closeRenameThreadDialog() {
+		renameThreadDialogOpen = false;
+		renameThreadId = null;
+		renameThreadDraft = "";
+		renamingThread = false;
 	}
 
 	async function handleRenameSession() {
@@ -237,10 +300,32 @@
 		}
 	}
 
+	async function handleRenameThread() {
+		if (!renameThreadId || renamingThread) {
+			return;
+		}
+		renamingThread = true;
+		const renamed = await session.threads.rename(
+			renameThreadId,
+			renameThreadDraft,
+		);
+		renamingThread = false;
+		if (renamed) {
+			closeRenameThreadDialog();
+		}
+	}
+
 	function handleRenameInputKeydown(event: KeyboardEvent) {
 		if (event.key === "Enter") {
 			event.preventDefault();
 			void handleRenameSession();
+		}
+	}
+
+	function handleRenameThreadInputKeydown(event: KeyboardEvent) {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			void handleRenameThread();
 		}
 	}
 
@@ -252,10 +337,27 @@
 		deleteDialogOpen = true;
 	}
 
+	function openDeleteThreadDialog(threadId: string) {
+		if (
+			isPrimaryThread(threadId) ||
+			!session.threads.list.some((thread) => thread.id === threadId)
+		) {
+			return;
+		}
+		deleteThreadId = threadId;
+		deleteThreadDialogOpen = true;
+	}
+
 	function closeDeleteDialog() {
 		deleteDialogOpen = false;
 		deleteSessionId = null;
 		deletingSession = false;
+	}
+
+	function closeDeleteThreadDialog() {
+		deleteThreadDialogOpen = false;
+		deleteThreadId = null;
+		deletingThread = false;
 	}
 
 	async function handleDeleteSession() {
@@ -270,11 +372,37 @@
 		}
 	}
 
+	async function handleDeleteThread() {
+		if (!deleteThreadId || deletingThread) {
+			return;
+		}
+		deletingThread = true;
+		const deleted = await session.threads.remove(deleteThreadId);
+		deletingThread = false;
+		if (deleted) {
+			closeDeleteThreadDialog();
+		}
+	}
+
 	function deleteDialogSessionName() {
 		if (!deleteSessionId) {
 			return "this session";
 		}
 		return sessionById(deleteSessionId)?.name ?? "this session";
+	}
+
+	function deleteDialogThreadName() {
+		if (!deleteThreadId) {
+			return "this thread";
+		}
+		return (
+			session.threads.list.find((thread) => thread.id === deleteThreadId)
+				?.name ?? "this thread"
+		);
+	}
+
+	function isPrimaryThread(threadId: string) {
+		return threadId === session.sessionId;
 	}
 
 	function isRecentThreadSelected(sessionId: string, threadId: string) {
@@ -413,48 +541,105 @@
 	sessionObj: (typeof sessions.list)[number],
 	isSelected: boolean,
 )}
-	<div class="group flex min-w-0 items-center gap-0.5">
-		<button
-			type="button"
-			onclick={() => handleSelectSession(sessionObj.id)}
-			class={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
-		>
-			<SessionStatus
-				status={sessionObj.status}
-				showLabel={false}
-				class="shrink-0"
-			/>
-			<span class={floatingMode ? "whitespace-nowrap" : "truncate"}
-				>{sessionObj.name || "New Session"}</span
+	<div class="space-y-0.5">
+		<div class="group flex min-w-0 items-center gap-0.5">
+			<button
+				type="button"
+				onclick={() => handleSelectSession(sessionObj.id)}
+				class={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
-		</button>
+				<SessionStatus
+					status={sessionObj.status}
+					showLabel={false}
+					class="shrink-0"
+				/>
+				<span class={floatingMode ? "whitespace-nowrap" : "truncate"}
+					>{sessionObj.name || "New Session"}</span
+				>
+			</button>
 
-		<DropdownMenu>
-			<DropdownMenuTrigger>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					class={`h-8 w-7 rounded-md transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
-					aria-label={`Session actions for ${sessionObj.name || "New Session"}`}
-					onclick={(event) => event.stopPropagation()}
-				>
-					<EllipsisIcon
-						class="size-3.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-					/>
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" class="w-32">
-				<DropdownMenuItem onclick={() => openRenameDialog(sessionObj.id)}>
-					Rename
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					variant="destructive"
-					onclick={() => openDeleteDialog(sessionObj.id)}
-				>
-					Delete
-				</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
+			<DropdownMenu>
+				<DropdownMenuTrigger>
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						class={`h-8 w-7 rounded-md transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+						aria-label={`Session actions for ${sessionObj.name || "New Session"}`}
+						onclick={(event) => event.stopPropagation()}
+					>
+						<EllipsisIcon
+							class="size-3.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+						/>
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" class="w-32">
+					<DropdownMenuItem
+						onclick={() => void handleCreateThread(sessionObj.id)}
+					>
+						New thread
+					</DropdownMenuItem>
+					<DropdownMenuItem onclick={() => openRenameDialog(sessionObj.id)}>
+						Rename
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						variant="destructive"
+						onclick={() => openDeleteDialog(sessionObj.id)}
+					>
+						Delete
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+
+		{#if sessionHasNestedThreads(sessionObj.id)}
+			<div class="ml-5 space-y-0.5 border-l border-sidebar-border pl-2">
+				{#each visibleThreadsForSession(sessionObj.id) as threadObj (threadObj.id)}
+					<div class="group flex min-w-0 items-center gap-0.5">
+						<button
+							type="button"
+							onclick={() =>
+								handleSelectRecentThread(sessionObj.id, threadObj.id)}
+							class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionObj.id, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+						>
+							<span class="min-w-0 flex-1 truncate"
+								>{threadObj.name || "New Thread"}</span
+							>
+						</button>
+
+						<DropdownMenu>
+							<DropdownMenuTrigger>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									class={`h-8 w-7 rounded-md transition-colors ${isSessionThreadSelected(sessionObj.id, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+									aria-label={`Thread actions for ${threadObj.name || "New Thread"}`}
+									onclick={(event) => event.stopPropagation()}
+								>
+									<EllipsisIcon
+										class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+									/>
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" class="w-32">
+								<DropdownMenuItem
+									onclick={() => openRenameThreadDialog(threadObj.id)}
+								>
+									Rename
+								</DropdownMenuItem>
+								{#if !isPrimaryThread(threadObj.id)}
+									<DropdownMenuItem
+										variant="destructive"
+										onclick={() => openDeleteThreadDialog(threadObj.id)}
+									>
+										Delete
+									</DropdownMenuItem>
+								{/if}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/snippet}
 
@@ -827,6 +1012,46 @@
 		</Dialog.Content>
 	</Dialog.Root>
 
+	<Dialog.Root bind:open={renameThreadDialogOpen}>
+		<Dialog.Content class="sm:max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>Rename thread</Dialog.Title>
+				<Dialog.Description
+					>Choose a new name for this thread.</Dialog.Description
+				>
+			</Dialog.Header>
+			<Input
+				value={renameThreadDraft}
+				oninput={(event) => {
+					renameThreadDraft = (event.currentTarget as HTMLInputElement).value;
+				}}
+				onkeydown={handleRenameThreadInputKeydown}
+				maxlength={120}
+				placeholder="Thread name"
+			/>
+			<Dialog.Footer>
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={closeRenameThreadDialog}
+					disabled={renamingThread}
+				>
+					Cancel
+				</Button>
+				<Button
+					variant="default"
+					size="sm"
+					onclick={() => {
+						void handleRenameThread();
+					}}
+					disabled={renamingThread || renameThreadDraft.trim().length === 0}
+				>
+					Save
+				</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
+
 	<Dialog.Root bind:open={renameWorkspaceDialogOpen}>
 		<Dialog.Content class="sm:max-w-md">
 			<Dialog.Header>
@@ -888,6 +1113,33 @@
 						void handleDeleteSession();
 					}}
 					disabled={deletingSession}
+				>
+					Delete
+				</AlertDialogAction>
+			</AlertDialogFooter>
+		</AlertDialogContent>
+	</AlertDialog>
+
+	<AlertDialog bind:open={deleteThreadDialogOpen}>
+		<AlertDialogContent>
+			<AlertDialogHeader>
+				<AlertDialogTitle>Delete thread?</AlertDialogTitle>
+				<AlertDialogDescription>
+					Delete "{deleteDialogThreadName()}"? This action cannot be undone.
+				</AlertDialogDescription>
+			</AlertDialogHeader>
+			<AlertDialogFooter>
+				<AlertDialogCancel
+					onclick={closeDeleteThreadDialog}
+					disabled={deletingThread}
+				>
+					Cancel
+				</AlertDialogCancel>
+				<AlertDialogAction
+					onclick={() => {
+						void handleDeleteThread();
+					}}
+					disabled={deletingThread}
 				>
 					Delete
 				</AlertDialogAction>

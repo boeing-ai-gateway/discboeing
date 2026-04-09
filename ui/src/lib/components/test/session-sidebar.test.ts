@@ -81,6 +81,58 @@ test("session sidebar hides the all sessions header and keeps sessions visible w
 	);
 });
 
+test("session sidebar session actions include new thread", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(
+		source,
+		/async function handleCreateThread\(sessionId: string\)/,
+	);
+	assert.match(source, /sessions\.createThread\(sessionId\)/);
+	assert.match(source, /New thread/);
+});
+
+test("session sidebar nests thread children only for the active session", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(
+		source,
+		/function visibleThreadsForSession\(sessionId: string\): Thread\[] \{/,
+	);
+	assert.match(source, /if \(sessions\.selectedId !== sessionId\) \{/);
+	assert.match(source, /return session\.threads\.list;/);
+	assert.match(
+		source,
+		/if \(isCurrentSession && session\.threads\.list\.length > 1\) \{/,
+	);
+	assert.match(source, /\{#if sessionHasNestedThreads\(sessionObj\.id\)\}/);
+	assert.match(
+		source,
+		/\{#each visibleThreadsForSession\(sessionObj\.id\) as threadObj \(threadObj\.id\)\}/,
+	);
+});
+
+test("session sidebar thread rows include rename and delete actions", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /function openRenameThreadDialog\(threadId: string\)/);
+	assert.match(source, /function openDeleteThreadDialog\(threadId: string\)/);
+	assert.match(source, /await session\.threads\.rename\(/);
+	assert.match(source, /await session\.threads\.remove\(deleteThreadId\)/);
+	assert.match(source, /Thread actions for/);
+	assert.match(source, /Rename thread/);
+	assert.match(source, /Delete thread\?/);
+});
+
+test("session sidebar hides delete for the primary session thread", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /function isPrimaryThread\(threadId: string\)/);
+	assert.match(source, /threadId === session\.sessionId/);
+	assert.match(source, /isPrimaryThread\(threadId\) \|\|/);
+	assert.match(source, /\{#if !isPrimaryThread\(threadObj\.id\)\}/);
+});
+
 test("session sidebar supports dropdown reuse and closes after creating a session", () => {
 	const source = readSessionSidebarSource();
 
