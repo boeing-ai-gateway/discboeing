@@ -1,4 +1,5 @@
 .svelte-kit
+.svelte-kit-hook
 build
 dist
 coverage

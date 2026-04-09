@@ -4,4 +4,4 @@
 # type: file
 # pattern: "ui/**/*.{ts,tsx,js,jsx,svelte,json}"
 #---
-pnpm ui:build
+SVELTEKIT_OUTDIR=.svelte-kit-hook pnpm ui:build

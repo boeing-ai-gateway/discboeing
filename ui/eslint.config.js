@@ -6,7 +6,13 @@ import svelteConfig from "./svelte.config.js";
 
 export default tseslint.config(
 	{
-		ignores: [".svelte-kit/**", "build/**", "dist/**", "coverage/**"],
+		ignores: [
+			".svelte-kit/**",
+			".svelte-kit-hook/**",
+			"build/**",
+			"dist/**",
+			"coverage/**",
+		],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
