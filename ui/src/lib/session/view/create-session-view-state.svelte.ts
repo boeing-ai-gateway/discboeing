@@ -8,7 +8,6 @@ import {
 type CreateSessionViewStateArgs = {
 	getFiles: () => string[];
 	getServices: () => string[];
-	initialSelectedThreadId?: string | null;
 };
 
 export function resolveOpenFileState(
@@ -38,7 +37,6 @@ export function resolveOpenFileState(
 
 export type SessionViewState = {
 	activeView: SessionActiveView;
-	selectedThreadId: string | null;
 	selectedFile: string;
 	activeServiceId: string | null;
 	terminalRootEnabled: boolean;
@@ -60,7 +58,6 @@ export type SessionViewState = {
 	pendingWorkspaceSourceType: "local" | "git";
 	pendingWorkspaceSourceIsValid: boolean;
 	pendingWorkspaceValidationMessage: string | null;
-	selectThread: (threadId: string | null) => void;
 	openChat: () => void;
 	openTerminal: () => void;
 	openDesktop: () => void;
@@ -86,19 +83,13 @@ export type SessionViewState = {
 	setQueueExpanded: (value: boolean) => void;
 	openHookDialog: (hookId: string) => void;
 	closeHookDialog: () => void;
-	resetForSession: (
-		selectedThreadId: string | null,
-		selectedFile: string,
-	) => void;
+	resetForSession: (selectedFile: string) => void;
 };
 
 export function createSessionViewState(
 	args: CreateSessionViewStateArgs,
 ): SessionViewState {
 	let activeView = $state<SessionActiveView>({ kind: "chat" });
-	let selectedThreadId = $state<string | null>(
-		args.initialSelectedThreadId ?? null,
-	);
 	let selectedFile = $state("");
 	let selectedServiceId = $state<string | null>(null);
 	let terminalRootEnabled = $state(false);
@@ -173,9 +164,6 @@ export function createSessionViewState(
 	return {
 		get activeView() {
 			return activeView;
-		},
-		get selectedThreadId() {
-			return selectedThreadId;
 		},
 		get selectedFile() {
 			return activeView.kind === "file" ? activeView.path : selectedFile;
@@ -318,9 +306,6 @@ export function createSessionViewState(
 					return null;
 			}
 		},
-		selectThread: (threadId) => {
-			selectedThreadId = threadId;
-		},
 		openChat,
 		openTerminal,
 		openDesktop,
@@ -373,8 +358,7 @@ export function createSessionViewState(
 			hookDialogOpen = true;
 		},
 		closeHookDialog,
-		resetForSession: (nextSelectedThreadId, nextSelectedFile) => {
-			selectedThreadId = nextSelectedThreadId;
+		resetForSession: (nextSelectedFile) => {
 			selectedFile = nextSelectedFile;
 			selectedServiceId = null;
 			activeView = { kind: "chat" };

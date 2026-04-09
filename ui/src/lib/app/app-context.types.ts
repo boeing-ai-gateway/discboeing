@@ -148,14 +148,6 @@ export type AppSessions = {
 	rename: (sessionId: string, nextName: string) => Promise<boolean>;
 	remove: (sessionId: string) => Promise<boolean>;
 	removeFromMemory: (sessionId: string) => boolean;
-	recordRecentThread: (payload: {
-		sessionId: string;
-		sessionName: string;
-		threadId: string;
-		threadName: string;
-		state?: import("$lib/api-types").ThreadState;
-		lastMessage: string;
-	}) => void;
 	refreshRecentThread: (payload: {
 		sessionId: string;
 		sessionName: string;
@@ -165,10 +157,6 @@ export type AppSessions = {
 		lastMessage: string;
 	}) => void;
 	removeRecentThread: (sessionId: string, threadId: string) => void;
-	reconcileRecentThreadsForSession: (
-		sessionId: string,
-		threadIds: string[],
-	) => void;
 	takeRequestedThreadId: (sessionId: string) => string | null;
 };
 

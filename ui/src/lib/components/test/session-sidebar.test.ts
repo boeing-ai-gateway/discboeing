@@ -48,7 +48,11 @@ test("session sidebar caps the visible recent thread list", () => {
 
 	assert.match(
 		source,
-		/const visibleRecentThreads = \$derived\.by\(\(\) =>\s*sessions\.recentThreads\.slice\(0, preferences\.recentThreadsVisibleLimit\),\s*\)/,
+		/import \{ getVisibleRecentThreads \} from "\$lib\/app\/app-helpers";/,
+	);
+	assert.match(
+		source,
+		/const visibleRecentThreads = \$derived\.by\(\(\) =>\s*getVisibleRecentThreads\(\s*sessions\.recentThreads,\s*preferences\.recentThreadsVisibleLimit,\s*\),\s*\)/,
 	);
 	assert.match(
 		source,

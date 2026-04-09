@@ -41,6 +41,10 @@ export type RecentThreadEntry = {
 	lastAccessedAt: string;
 };
 
+export type RecentThreadPayload = Omit<RecentThreadEntry, "lastAccessedAt"> & {
+	lastMessage: string;
+};
+
 export function detectWindowControlsSide(): WindowControlsSide {
 	if (typeof navigator === "undefined") {
 		return "right";
@@ -284,7 +288,7 @@ export function readRecentThreadEntries(): RecentThreadEntry[] {
 
 export function touchRecentThread(
 	entries: RecentThreadEntry[],
-	thread: Omit<RecentThreadEntry, "lastAccessedAt">,
+	thread: RecentThreadPayload,
 	lastAccessedAt = new Date().toISOString(),
 ): RecentThreadEntry[] {
 	const existingIndex = entries.findIndex((entry) =>
@@ -297,14 +301,50 @@ export function touchRecentThread(
 	}
 
 	return normalizeRecentThreadEntries([
-		...entries,
 		{ ...thread, lastAccessedAt },
+		...entries,
 	]);
+}
+
+export function getRecentThreadEntryForSessionSelection(args: {
+	session: Pick<SessionSummary, "id" | "name">;
+	sessionContext: {
+		threads: {
+			selectedId: string | null;
+			list: Array<{
+				id: string;
+				name: string;
+				state?: ThreadState;
+				lastMessage?: string;
+			}>;
+		};
+	} | null;
+}): RecentThreadPayload | null {
+	const { session, sessionContext } = args;
+	if (!sessionContext) {
+		return null;
+	}
+
+	const selectedThread = sessionContext.threads.list.find(
+		(thread) => thread.id === sessionContext.threads.selectedId,
+	);
+	if (!selectedThread) {
+		return null;
+	}
+
+	return {
+		sessionId: session.id,
+		sessionName: session.name,
+		threadId: selectedThread.id,
+		threadName: selectedThread.name,
+		state: selectedThread.state,
+		lastMessage: selectedThread.lastMessage ?? "",
+	};
 }
 
 export function refreshRecentThread(
 	entries: RecentThreadEntry[],
-	thread: Omit<RecentThreadEntry, "lastAccessedAt">,
+	thread: RecentThreadPayload,
 ): RecentThreadEntry[] {
 	const existingIndex = entries.findIndex((entry) =>
 		areSameRecentThread(entry, thread),
@@ -343,20 +383,6 @@ export function removeRecentThreadsForSession(
 	sessionId: string,
 ): RecentThreadEntry[] {
 	return entries.filter((entry) => entry.sessionId !== sessionId);
-}
-
-export function reconcileRecentThreadsForSession(
-	entries: RecentThreadEntry[],
-	sessionId: string,
-	threadIds: Iterable<string>,
-): RecentThreadEntry[] {
-	const validThreadIds = new Set(threadIds);
-	const nextEntries = entries.filter((entry) => {
-		return entry.sessionId !== sessionId || validThreadIds.has(entry.threadId);
-	});
-	return areRecentThreadEntriesEqual(entries, nextEntries)
-		? entries
-		: nextEntries;
 }
 
 export function reconcileRecentThreadsWithSessions(
@@ -428,6 +454,33 @@ export function toRecentThreadSummaries(
 				]
 			: [];
 	});
+}
+
+export function getVisibleRecentThreads(
+	recentThreads: RecentThreadSummary[],
+	limit: number,
+): RecentThreadSummary[] {
+	if (limit <= 0 || recentThreads.length === 0) {
+		return [];
+	}
+	if (recentThreads.length <= limit) {
+		return recentThreads;
+	}
+
+	const selectedIndexes = new Set(
+		recentThreads
+			.map((thread, index) => ({ thread, index }))
+			.sort((left, right) =>
+				compareIsoDatesDesc(
+					left.thread.lastAccessedAt,
+					right.thread.lastAccessedAt,
+				),
+			)
+			.slice(0, limit)
+			.map(({ index }) => index),
+	);
+
+	return recentThreads.filter((_, index) => selectedIndexes.has(index));
 }
 
 export function getMountedSessionIds(

@@ -21,6 +21,7 @@ function createSessionContext(sessionId: string): SessionContextValue {
 	const app = useAppContext();
 	let loaded = $state(false);
 	const initialSelectedThreadId = app.sessions.takeRequestedThreadId(sessionId);
+	let selectedThreadId = $state<string | null>(initialSelectedThreadId);
 
 	const current = $derived.by(() => {
 		return app.sessions.sessions.find((s) => s.id === sessionId) ?? null;
@@ -37,7 +38,6 @@ function createSessionContext(sessionId: string): SessionContextValue {
 			services.list
 				.filter((service) => service.id !== DESKTOP_SERVICE_ID)
 				.map((service) => service.id),
-		initialSelectedThreadId,
 	});
 
 	const stores: SessionStores = {
@@ -56,19 +56,9 @@ function createSessionContext(sessionId: string): SessionContextValue {
 		sessionId,
 		hasSession: () => hasSession,
 		getSession: () => current,
-		getSelectedId: () => ui.selectedThreadId,
+		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
-			ui.selectThread(threadId);
-		},
-		onThreadActivated: (thread) => {
-			app.sessions.recordRecentThread({
-				sessionId,
-				sessionName: getSessionName(),
-				threadId: thread.id,
-				threadName: thread.name,
-				state: thread.state,
-				lastMessage: thread.lastMessage || "",
-			});
+			selectedThreadId = threadId;
 		},
 		onThreadRenamed: (thread) => {
 			app.sessions.refreshRecentThread({
@@ -92,9 +82,6 @@ function createSessionContext(sessionId: string): SessionContextValue {
 		},
 		onThreadRemoved: (threadId) => {
 			app.sessions.removeRecentThread(sessionId, threadId);
-		},
-		onThreadListChanged: (threadIds) => {
-			app.sessions.reconcileRecentThreadsForSession(sessionId, threadIds);
 		},
 	});
 

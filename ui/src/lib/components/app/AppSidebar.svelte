@@ -30,6 +30,7 @@
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
+	import { getVisibleRecentThreads } from "$lib/app/app-helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { ensureSessionContext } from "$lib/context/session-context.svelte";
 
@@ -92,7 +93,10 @@
 	let shellRef = $state<HTMLElement | null>(null);
 	const showSidebarBody = $derived(!floatingCollapsed || floatingOpen);
 	const visibleRecentThreads = $derived.by(() =>
-		sessions.recentThreads.slice(0, preferences.recentThreadsVisibleLimit),
+		getVisibleRecentThreads(
+			sessions.recentThreads,
+			preferences.recentThreadsVisibleLimit,
+		),
 	);
 	const showRecentThreads = $derived(
 		preferences.recentThreadsVisibleLimit > 1 &&
@@ -201,7 +205,7 @@
 		const sessionContext = ensureSessionContext(sessionId);
 		sessions.select(sessionId);
 		if (isCurrentSession && sessionContext.threads.list.length > 1) {
-			sessionContext.ui.selectThread(null);
+			sessionContext.threads.select(null);
 		}
 		void sessionContext.threads.refresh();
 		closeFloatingSidebar();

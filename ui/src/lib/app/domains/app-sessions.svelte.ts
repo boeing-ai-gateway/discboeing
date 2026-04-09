@@ -3,8 +3,8 @@ import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
 import {
+	getRecentThreadEntryForSessionSelection,
 	readRecentThreadEntries,
-	reconcileRecentThreadsForSession,
 	reconcileRecentThreadsWithSessions,
 	refreshRecentSessionName,
 	refreshRecentThread,
@@ -34,6 +34,7 @@ export function createAppSessionsDomain(
 	let pendingSessionId = $state<string>(generateId());
 	let awaitingInitialStatusId = $state<string | null>(null);
 	let recentThreadEntries = $state(readRecentThreadEntries());
+	let lastTrackedRecentThreadKey: string | null = null;
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
 
 	const persistRecentThreadEntries = (entries: typeof recentThreadEntries) => {
@@ -120,6 +121,35 @@ export function createAppSessionsDomain(
 
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
+	$effect(() => {
+		const selectedSessionId = currentSelectedSessionId;
+		if (!selectedSessionId) {
+			lastTrackedRecentThreadKey = null;
+			return;
+		}
+
+		const session = list.find((entry) => entry.id === selectedSessionId);
+		if (!session) {
+			lastTrackedRecentThreadKey = null;
+			return;
+		}
+
+		const recentThread = getRecentThreadEntryForSessionSelection({
+			session,
+			sessionContext: sessionContexts.get(selectedSessionId) ?? null,
+		});
+		if (!recentThread) {
+			lastTrackedRecentThreadKey = null;
+			return;
+		}
+		const recentThreadKey = `${recentThread.sessionId}:${recentThread.threadId}`;
+		if (lastTrackedRecentThreadKey === recentThreadKey) {
+			return;
+		}
+		lastTrackedRecentThreadKey = recentThreadKey;
+		recordRecentThread(recentThread);
+	});
+
 	const removeFromMemory = (sessionId: string): boolean => {
 		sessionContexts.get(sessionId)?.dispose();
 		sessionContexts.delete(sessionId);
@@ -191,7 +221,6 @@ export function createAppSessionsDomain(
 		openThread: (sessionId, threadId) => {
 			const sessionContext = sessionContexts.get(sessionId);
 			if (sessionContext) {
-				sessionContext.ui.selectThread(threadId);
 				sessionContext.threads.select(threadId);
 			} else {
 				requestedThreadIdBySession.set(sessionId, threadId);
@@ -210,22 +239,10 @@ export function createAppSessionsDomain(
 			const sessionContext = sessionContexts.get(sessionId);
 			if (sessionContext) {
 				sessionContext.stores.threads.upsert(thread);
-				sessionContext.ui.selectThread(thread.id);
 				sessionContext.threads.select(thread.id);
 			} else {
 				requestedThreadIdBySession.set(sessionId, thread.id);
 			}
-
-			recordRecentThread({
-				sessionId,
-				sessionName:
-					list.find((session) => session.id === sessionId)?.name ||
-					"New Session",
-				threadId: thread.id,
-				threadName: thread.name,
-				state: thread.state,
-				lastMessage: thread.lastMessage || "",
-			});
 			selectSession(sessionId);
 			return thread.id;
 		},
@@ -280,19 +297,8 @@ export function createAppSessionsDomain(
 			return true;
 		},
 		removeFromMemory,
-		recordRecentThread,
 		refreshRecentThread: updateRecentThread,
 		removeRecentThread: dropRecentThread,
-		reconcileRecentThreadsForSession: (sessionId, threadIds) => {
-			const nextEntries = reconcileRecentThreadsForSession(
-				recentThreadEntries,
-				sessionId,
-				threadIds,
-			);
-			if (nextEntries !== recentThreadEntries) {
-				persistRecentThreadEntries(nextEntries);
-			}
-		},
 		takeRequestedThreadId: (sessionId) => {
 			const threadId = requestedThreadIdBySession.get(sessionId) ?? null;
 			requestedThreadIdBySession.delete(sessionId);
