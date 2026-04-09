@@ -111,6 +111,49 @@ func TestSessionThreadCRUD(t *testing.T) {
 	AssertStatus(t, getMissingResp, http.StatusNotFound)
 }
 
+func TestCreateUnnamedThreadDoesNotUseIDAsName(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
+	client := ts.AuthenticatedClient(user)
+
+	basePath := "/api/projects/" + project.ID + "/sessions/" + session.ID + "/threads"
+
+	createResp := client.Post(basePath, map[string]string{
+		"id": "thread-unnamed",
+	})
+	defer createResp.Body.Close()
+	AssertStatus(t, createResp, http.StatusCreated)
+
+	var created struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	ParseJSON(t, createResp, &created)
+	if created.ID != "thread-unnamed" {
+		t.Fatalf("expected thread id thread-unnamed, got %s", created.ID)
+	}
+	if created.Name != "" {
+		t.Fatalf("expected empty thread name, got %q", created.Name)
+	}
+
+	getResp := client.Get(basePath + "/thread-unnamed")
+	defer getResp.Body.Close()
+	AssertStatus(t, getResp, http.StatusOK)
+
+	var got struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	ParseJSON(t, getResp, &got)
+	if got.Name != "" {
+		t.Fatalf("expected empty thread name on get, got %q", got.Name)
+	}
+}
+
 func TestGetPrimaryThreadPendingPlaceholderIncludesSessionName(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)

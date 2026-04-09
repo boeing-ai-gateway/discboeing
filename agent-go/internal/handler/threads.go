@@ -20,11 +20,8 @@ func (h *Handler) requireThreadStore(w http.ResponseWriter) bool {
 	return true
 }
 
-func (h *Handler) threadResponse(threadID string, cfg thread.Config, fallbackName string) api.Thread {
+func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread {
 	name := strings.TrimSpace(cfg.Name)
-	if name == "" {
-		name = strings.TrimSpace(fallbackName)
-	}
 
 	mode := "build"
 	if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan") {
@@ -89,7 +86,7 @@ func (h *Handler) ListThreads(w http.ResponseWriter, _ *http.Request) {
 	store := h.defaultAgent.Store()
 	for _, threadID := range threadIDs {
 		cfg, _ := store.LoadConfig(threadID)
-		threads = append(threads, h.threadResponse(threadID, cfg, ""))
+		threads = append(threads, h.threadResponse(threadID, cfg))
 	}
 
 	h.JSON(w, http.StatusOK, api.ListThreadsResponse{Threads: threads})
@@ -141,7 +138,7 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusCreated, h.threadResponse(req.ID, cfg, req.ID))
+	h.JSON(w, http.StatusCreated, h.threadResponse(req.ID, cfg))
 }
 
 // GetThread handles GET /threads/{id} — returns thread metadata.
@@ -173,7 +170,7 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg, ""))
+	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg))
 }
 
 // UpdateThread handles PUT/PATCH /threads/{id} — updates thread metadata.
@@ -223,7 +220,7 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg, threadID))
+	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg))
 }
 
 // DeleteThread handles DELETE /threads/{id} — removes a thread.

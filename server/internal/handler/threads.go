@@ -96,9 +96,6 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		req.Name = req.ID
-	}
 
 	result, err := h.chatService.CreateThread(ctx, projectID, sessionID, &req)
 	if err != nil {

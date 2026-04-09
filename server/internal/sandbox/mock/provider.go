@@ -829,9 +829,6 @@ func defaultMockHandler() http.Handler {
 				_, _ = w.Write([]byte(`{"error":"id is required"}`))
 				return
 			}
-			if strings.TrimSpace(req.Name) == "" {
-				req.Name = req.ID
-			}
 
 			mu.Lock()
 			if _, exists := threads[req.ID]; exists {
