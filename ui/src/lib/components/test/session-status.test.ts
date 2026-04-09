@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { SessionStatus } from "../../api-constants";
+import {
+	SessionStatus,
+	isSessionTransitioningStatus,
+} from "../../api-constants";
 
 const SESSION_STATUS_COMPONENT = path.resolve(
 	import.meta.dirname,
@@ -25,6 +28,17 @@ function readSessionSetupStatusSource() {
 test("session status constants include committed and rebased", () => {
 	assert.equal(SessionStatus.COMMITTED, "committed");
 	assert.equal(SessionStatus.REBASED, "rebased");
+});
+
+test("session transitioning status helper only flags non-resting states", () => {
+	assert.equal(isSessionTransitioningStatus(SessionStatus.INITIALIZING), true);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.PENDING), true);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTING), true);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.REMOVING), true);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.ERROR), false);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.STOPPED), false);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTED), false);
+	assert.equal(isSessionTransitioningStatus(null), false);
 });
 
 test("session status component renders dedicated git icons for committed and rebased", () => {

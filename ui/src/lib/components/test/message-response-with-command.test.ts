@@ -51,6 +51,31 @@ test("conversation pane reads the session error directly from the active session
 	assert.doesNotMatch(source, /session\?\.current\?\.status === "error"/);
 });
 
+test("conversation pane suppresses session errors while the session is transitioning", () => {
+	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
+
+	assert.match(
+		source,
+		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
+	);
+	assert.match(
+		source,
+		/const shouldShowSessionError = \$derived\.by\(\s*\(\) => !isSessionTransitioningStatus\(session\?\.current\?\.status\),/,
+	);
+	assert.match(
+		source,
+		/const visibleSessionError = \$derived\.by\(\(\) =>\s*shouldShowSessionError \? sessionError : null,\s*\);/,
+	);
+	assert.match(
+		source,
+		/\{@render renderErrorBanner\("session", visibleSessionError\)\}/,
+	);
+	assert.doesNotMatch(
+		source,
+		/\{@render renderErrorBanner\("session", sessionError\)\}/,
+	);
+});
+
 test("conversation pane renders expandable top-level error banners with thread retry actions", () => {
 	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
 
@@ -71,7 +96,7 @@ test("conversation pane renders expandable top-level error banners with thread r
 	assert.match(source, /Show less/);
 	assert.match(
 		source,
-		/\{@render renderErrorBanner\("session", sessionError\)\}/,
+		/\{@render renderErrorBanner\("session", visibleSessionError\)\}/,
 	);
 	assert.match(
 		source,

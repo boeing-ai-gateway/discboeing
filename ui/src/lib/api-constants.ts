@@ -21,6 +21,27 @@ export const SessionStatus = {
 	REMOVED: "removed",
 } as const;
 
+type SessionStatusValue = (typeof SessionStatus)[keyof typeof SessionStatus];
+
+const SESSION_TRANSITIONING_STATUSES = new Set<SessionStatusValue>([
+	SessionStatus.INITIALIZING,
+	SessionStatus.REINITIALIZING,
+	SessionStatus.CLONING,
+	SessionStatus.PULLING_IMAGE,
+	SessionStatus.CREATING_SANDBOX,
+	SessionStatus.PENDING,
+	SessionStatus.COMMITTING,
+	SessionStatus.REMOVING,
+]);
+
+export function isSessionTransitioningStatus(
+	status: SessionStatusValue | null | undefined,
+): boolean {
+	return status !== null && status !== undefined
+		? SESSION_TRANSITIONING_STATUSES.has(status)
+		: false;
+}
+
 // Workspace status constants representing the lifecycle of a workspace
 export const WorkspaceStatus = {
 	INITIALIZING: "initializing",

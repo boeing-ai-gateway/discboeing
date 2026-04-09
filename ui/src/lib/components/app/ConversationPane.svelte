@@ -2,6 +2,7 @@
 	import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 	import { tick } from "svelte";
 	import { api } from "$lib/api-client";
+	import { isSessionTransitioningStatus } from "$lib/api-constants";
 	import type { ChatMessage } from "$lib/api-types";
 	import type { ChatWidthMode } from "$lib/app/app-context.types";
 	import type {
@@ -106,6 +107,12 @@
 	const isStreaming = $derived.by(() => conversationStatus === "streaming");
 	const sessionError = $derived.by(
 		() => sessionErrorOverride ?? session?.current?.errorMessage ?? null,
+	);
+	const shouldShowSessionError = $derived.by(
+		() => !isSessionTransitioningStatus(session?.current?.status),
+	);
+	const visibleSessionError = $derived.by(() =>
+		shouldShowSessionError ? sessionError : null,
 	);
 	const threadError = $derived.by(
 		() => threadErrorOverride ?? thread?.error ?? null,
@@ -642,10 +649,10 @@
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-	{#if sessionError || threadError}
+	{#if visibleSessionError || threadError}
 		<div class="flex flex-col gap-2 p-3">
-			{#if sessionError}
-				{@render renderErrorBanner("session", sessionError)}
+			{#if visibleSessionError}
+				{@render renderErrorBanner("session", visibleSessionError)}
 			{/if}
 			{#if threadError}
 				{@render renderErrorBanner("thread", threadError)}
