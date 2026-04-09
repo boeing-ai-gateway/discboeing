@@ -124,6 +124,9 @@
 	const canStop = $derived.by(
 		() => !!service && isRunnable && service.status === "running",
 	);
+	const canRestart = $derived.by(
+		() => !!service && isRunnable && service.status === "running",
+	);
 	const actionLabel = $derived.by(() => {
 		if (!service) {
 			return "Start";
@@ -306,6 +309,19 @@
 			if (canStart) {
 				await onStart(service.id);
 			}
+		} finally {
+			isMutatingService = false;
+		}
+	}
+
+	async function handleServiceRestart() {
+		if (isMutatingService || !canRestart || !service) {
+			return;
+		}
+		isMutatingService = true;
+		try {
+			await onStop(service.id);
+			await onStart(service.id);
 		} finally {
 			isMutatingService = false;
 		}
@@ -559,26 +575,46 @@
 				{/if}
 			</div>
 			{#if isRunnable}
-				<Button
-					size="xs"
-					variant={canStop ? "outline" : "default"}
-					class="gap-1.5"
-					title={`${actionLabel} ${service.label}`}
-					aria-label={`${actionLabel} ${service.label}`}
-					disabled={isMutatingService ||
-						service.status === "starting" ||
-						service.status === "stopping"}
-					onclick={handleServiceAction}
-				>
-					{#if service.status === "starting" || service.status === "stopping" || isMutatingService}
-						<Loader2Icon class="size-3.5 animate-spin" />
-					{:else if canStop}
-						<SquareIcon class="size-3.5 fill-current" />
-					{:else}
-						<PlayIcon class="size-3.5 fill-current" />
+				<div class="flex items-center gap-1">
+					{#if canRestart}
+						<Button
+							size="xs"
+							variant="outline"
+							class="gap-1.5"
+							title={`Restart ${service.label}`}
+							aria-label={`Restart ${service.label}`}
+							disabled={isMutatingService ||
+								service.status === "starting" ||
+								service.status === "stopping"}
+							onclick={handleServiceRestart}
+						>
+							<RefreshCwIcon
+								class={cn("size-3.5", isMutatingService && "animate-spin")}
+							/>
+							Restart
+						</Button>
 					{/if}
-					{actionLabel}
-				</Button>
+					<Button
+						size="xs"
+						variant={canStop ? "outline" : "default"}
+						class="gap-1.5"
+						title={`${actionLabel} ${service.label}`}
+						aria-label={`${actionLabel} ${service.label}`}
+						disabled={isMutatingService ||
+							service.status === "starting" ||
+							service.status === "stopping"}
+						onclick={handleServiceAction}
+					>
+						{#if service.status === "starting" || service.status === "stopping" || isMutatingService}
+							<Loader2Icon class="size-3.5 animate-spin" />
+						{:else if canStop}
+							<SquareIcon class="size-3.5 fill-current" />
+						{:else}
+							<PlayIcon class="size-3.5 fill-current" />
+						{/if}
+						{actionLabel}
+					</Button>
+				</div>
 			{/if}
 		</div>
 	{/if}
