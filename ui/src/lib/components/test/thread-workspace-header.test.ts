@@ -36,3 +36,14 @@ test("thread workspace header can render the sidebar toggle button", () => {
 	assert.match(source, /\{#if showSidebarToggle\}/);
 	assert.match(source, /aria-label="Expand sessions panel"/);
 });
+
+test("thread workspace header keeps the intended non-drag layout and is not a tauri drag region", () => {
+	const source = readThreadWorkspaceHeaderSource();
+
+	assert.match(
+		source,
+		/class="flex h-10 min-w-0 items-center gap-1 bg-background px-3"/,
+	);
+	assert.doesNotMatch(source, /data-tauri-drag-region/);
+	assert.doesNotMatch(source, /tauri-no-drag/);
+});

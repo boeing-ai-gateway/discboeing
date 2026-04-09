@@ -41,7 +41,7 @@
 	});
 </script>
 
-<div class="h-full overflow-auto bg-background px-3 pb-3 pt-1">
+<div class="h-full overflow-auto bg-background px-3 pb-3 pt-0">
 	{#if mountedDockPanelKinds.includes("terminal")}
 		<div
 			class={sessionView.activeView.kind === "terminal" ? "contents" : "hidden"}

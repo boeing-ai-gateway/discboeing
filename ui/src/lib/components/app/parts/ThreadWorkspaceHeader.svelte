@@ -40,16 +40,9 @@
 	}
 </script>
 
-<div
-	class="relative flex h-10 min-w-0 items-center gap-1 bg-background px-3"
-	data-tauri-drag-region
->
-	<div
-		class="absolute inset-0 pointer-events-auto"
-		data-tauri-drag-region
-	></div>
+<div class="flex h-10 min-w-0 items-center gap-1 bg-background px-3">
 	{#if showSidebarToggle}
-		<div class="relative z-10 tauri-no-drag">
+		<div>
 			{#if onToggleSidebar}
 				<Button
 					variant="ghost"
@@ -63,18 +56,14 @@
 			{/if}
 		</div>
 	{:else if reserveSidebarSpace}
-		<div class="relative z-10 w-[10.75rem] shrink-0" aria-hidden="true"></div>
+		<div class="w-[10.75rem] shrink-0" aria-hidden="true"></div>
 	{/if}
-	<div
-		class="relative z-10 flex min-w-0 items-center gap-2"
-		data-tauri-drag-region
-	>
-		<p class="truncate text-sm font-medium" data-tauri-drag-region>
+	<div class="flex min-w-0 items-center gap-2">
+		<p class="truncate text-sm font-medium">
 			{title}
 		</p>
 		{#if threadStateLabel(state)}
 			<span
-				data-tauri-drag-region
 				class={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${threadStateClass(
 					state,
 				)}`}
