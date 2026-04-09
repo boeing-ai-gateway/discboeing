@@ -272,13 +272,42 @@ export function createAppSessionsDomain(
 			const updatedSession = await store.update(sessionId, {
 				displayName: trimmedName,
 			});
+			const sessionName = updatedSession.displayName || updatedSession.name;
 			persistRecentThreadEntries(
-				refreshRecentSessionName(
-					recentThreadEntries,
-					sessionId,
-					updatedSession.displayName || updatedSession.name,
-				),
+				refreshRecentSessionName(recentThreadEntries, sessionId, sessionName),
 			);
+
+			try {
+				const { threads } = await api.getThreads(sessionId);
+				const primaryThread =
+					threads.length === 1 && threads[0]?.id === sessionId
+						? threads[0]
+						: null;
+				if (primaryThread) {
+					const updatedThread = await api.updateThread(
+						sessionId,
+						primaryThread.id,
+						{
+							name: trimmedName,
+						},
+					);
+					sessionContexts.get(sessionId)?.stores.threads.upsert(updatedThread);
+					updateRecentThread({
+						sessionId,
+						sessionName,
+						threadId: updatedThread.id,
+						threadName: updatedThread.name,
+						state: updatedThread.state,
+						lastMessage: updatedThread.lastMessage || "",
+					});
+				}
+			} catch (error) {
+				console.error(
+					"[AppSessions] Failed to sync primary thread name:",
+					sessionId,
+					error,
+				);
+			}
 			return true;
 		},
 		remove: async (sessionId) => {
