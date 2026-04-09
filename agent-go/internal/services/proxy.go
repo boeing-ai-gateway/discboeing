@@ -92,13 +92,19 @@ func isConnectionRefused(err error) bool {
 	}
 	if opErr, ok := err.(*net.OpError); ok {
 		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			return sysErr.Err.Error() == "connection refused"
+			sysErrStr := sysErr.Err.Error()
+			return sysErrStr == "connection refused" ||
+				// Windows WSAECONNREFUSED
+				strings.Contains(sysErrStr, "actively refused")
 		}
 	}
 	errStr := err.Error()
 	return strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "Connection refused") ||
-		strings.Contains(errStr, "ECONNREFUSED")
+		strings.Contains(errStr, "ECONNREFUSED") ||
+		// Windows WSAECONNREFUSED: "No connection could be made because the
+		// target machine actively refused it."
+		strings.Contains(errStr, "actively refused")
 }
 
 // acceptsHTML checks if the request accepts HTML responses.
