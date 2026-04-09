@@ -161,20 +161,29 @@ function createSessionContext(sessionId: string): SessionContextValue {
 	};
 }
 
-export function setSessionContext(): SessionContextValue {
+export function ensureSessionContext(sessionId: string): SessionContextValue {
 	const app = useAppContext();
-	const sessionId = app.sessions.selectedId ?? app.sessions.pendingId;
-
 	let context = app.sessions.sessionContexts.get(sessionId);
 	if (!context) {
 		context = createSessionContext(sessionId);
 		app.sessions.sessionContexts.set(sessionId, context);
 	}
+	return context;
+}
+
+export function setSessionContext(sessionId?: string): SessionContextValue {
+	const app = useAppContext();
+	const resolvedSessionId =
+		sessionId ?? app.sessions.selectedId ?? app.sessions.pendingId;
+	const context = ensureSessionContext(resolvedSessionId);
 	setContext(SESSION_CONTEXT_KEY, context);
 	return context;
 }
 
-export function useSessionContext(): SessionContextValue {
+export function useSessionContext(sessionId?: string): SessionContextValue {
+	if (sessionId !== undefined) {
+		return setSessionContext(sessionId);
+	}
 	const context = getContext<SessionContextValue | undefined>(
 		SESSION_CONTEXT_KEY,
 	);

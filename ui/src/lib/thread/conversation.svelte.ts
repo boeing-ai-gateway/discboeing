@@ -6,6 +6,7 @@ import {
 	bindChatStreamEventSource,
 	createChatStreamState,
 } from "$lib/thread/conversation-stream";
+import type { ChatStreamSubscription } from "$lib/thread/chat-stream-manager";
 import {
 	addToolApprovalResponse,
 	createUserMessageFromParts,
@@ -113,7 +114,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let completionRunning = $state(false);
 	let pendingQuestionId = $state<string | null>(null);
 	let loadStatus = $state<"idle" | "loading" | "ready" | "error">("idle");
-	let activeSource: EventSource | null = null;
+	let activeSubscription: ChatStreamSubscription | null = null;
 	let unbindStream: (() => void) | null = null;
 	let activeStreamKey: string | null = null;
 	let pendingLoadPromise: Promise<void> | null = null;
@@ -199,8 +200,8 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	function disconnectStream() {
 		unbindStream?.();
 		unbindStream = null;
-		activeSource?.close();
-		activeSource = null;
+		activeSubscription?.unsubscribe();
+		activeSubscription = null;
 		activeStreamKey = null;
 	}
 
@@ -232,7 +233,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		return `${sessionId}:${args.threadId}`;
 	}
 
-	function ensureStream() {
+	function ensureStream(forceResubscribe = false) {
 		if (typeof window === "undefined") {
 			return;
 		}
@@ -240,33 +241,31 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			return;
 		}
 		if (activeStreamKey === streamKey(args.sessionId)) {
+			if (forceResubscribe || activeSubscription?.getState() === "idle") {
+				activeSubscription?.resubscribe();
+			}
 			return;
 		}
 
 		disconnectStream();
 		streamError = null;
 		activeStreamKey = streamKey(args.sessionId);
-		const source = new EventSource(
-			api.getThreadChatStreamUrl(args.sessionId, args.threadId, true),
-			{ withCredentials: true },
-		);
-		activeSource = source;
-		source.onopen = () => {
-			if (activeSource !== source) {
-				return;
-			}
-			streamError = null;
-			void Promise.all([
-				args.refreshThread(),
-				args.refreshSessionState?.(),
-			]).catch((error) => {
-				console.error(
-					"Failed to refresh thread state after chat stream connected",
-					error,
-				);
-			});
-		};
-		unbindStream = bindChatStreamEventSource(source, streamState, {
+		const subscription = app.chatStreams.subscribe({
+			sessionId: args.sessionId,
+			threadId: args.threadId,
+			replay: true,
+			onOpen: () => {
+				streamError = null;
+				void Promise.all([
+					args.refreshThread(),
+					args.refreshSessionState?.(),
+				]).catch((error) => {
+					console.error(
+						"Failed to refresh thread state after chat stream connected",
+						error,
+					);
+				});
+			},
 			onError: (error) => {
 				fatalStreamError = true;
 				streamError =
@@ -279,32 +278,24 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				}
 			},
 		});
-		source.onerror = () => {
-			if (activeSource !== source) {
-				return;
-			}
-
-			if (source.readyState === EventSource.CLOSED) {
-				completionRunning = false;
-				const shouldIgnoreClosedStreamError =
-					args.shouldIgnoreClosedStreamError?.() ?? false;
-				if (!shouldIgnoreClosedStreamError) {
-					const error = new Error("Lost chat stream connection");
-					const resolvedErrorMessage = streamError ?? error.message;
-					streamError = resolvedErrorMessage;
+		activeSubscription = subscription;
+		unbindStream = bindChatStreamEventSource(
+			subscription.eventSource,
+			streamState,
+			{
+				onError: (error) => {
+					streamError =
+						error instanceof Error
+							? error.message
+							: "Failed to process chat stream";
+					fatalStreamError = true;
 					disconnectStream();
 					if (loadStatus === "loading") {
-						rejectLoad(new Error(resolvedErrorMessage), resolvedErrorMessage);
-						return;
+						rejectLoad(error, "Failed to load messages");
 					}
-				} else {
-					disconnectStream();
-				}
-				if (args.hasSession() && !fatalStreamError) {
-					ensureStream();
-				}
-			}
-		};
+				},
+			},
+		);
 	}
 
 	async function loadFromStream(forceReconnect = false) {
@@ -446,7 +437,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					};
 				}
 
-				ensureStream();
+				ensureStream(true);
 				const response = await app.chat({
 					sessionId: args.sessionId,
 					threadId: args.threadId,

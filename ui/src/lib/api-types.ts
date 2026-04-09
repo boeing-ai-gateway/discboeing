@@ -765,6 +765,54 @@ export type StartChatErrorResponse =
 	| StartChatConflictResponse
 	| StartChatTurnStateConflictResponse;
 
+export type ChatStreamSocketEventName =
+	| "history-start"
+	| "history-message"
+	| "history-end"
+	| "chunk"
+	| "ping";
+
+export type ProjectStreamType = "chat" | "service" | "project-events";
+
+export type ProjectStreamSocketRequest =
+	| {
+			type: "subscribe" | "unsubscribe";
+			stream: "chat";
+			sessionId: string;
+			threadId: string;
+			replay?: boolean;
+			lastEventId?: string;
+	  }
+	| {
+			type: "subscribe" | "unsubscribe";
+			stream: "service";
+			sessionId: string;
+			serviceId: string;
+	  }
+	| {
+			type: "subscribe" | "unsubscribe";
+			stream: "project-events";
+			afterId?: string;
+	  };
+
+export type ProjectStreamSocketMessage = {
+	type: "subscribed" | "event" | "complete" | "error" | "unsubscribed";
+	stream?: ProjectStreamType;
+	sessionId?: string;
+	threadId?: string;
+	serviceId?: string;
+	event?: string;
+	data?: string;
+	id?: string;
+	error?: string;
+	replay?: boolean;
+};
+
+export type ProjectStreamSubscriptionState =
+	| "idle"
+	| "subscribing"
+	| "streaming";
+
 // ============================================================================
 // Session File System Types
 // ============================================================================
@@ -954,7 +1002,7 @@ export interface StopServiceResponse {
 	serviceId: string;
 }
 
-/** Service output event from SSE stream */
+/** Service output event from the realtime stream */
 export interface ServiceOutputEvent {
 	type: "stdout" | "stderr" | "exit" | "error";
 	data?: string;

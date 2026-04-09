@@ -1,6 +1,5 @@
 import { getContext, hasContext, setContext } from "svelte";
 
-import { appendAuthToken, getApiBase } from "$lib/api-config";
 import { api } from "$lib/api-client";
 import type {
 	AppChatRequest,
@@ -19,6 +18,7 @@ import { createAppUpdatesDomain } from "$lib/app/domains/app-updates.svelte";
 import { createAppWorkspacesDomain } from "$lib/app/domains/app-workspaces.svelte";
 import { createAppViewState } from "$lib/app/view/create-app-view-state.svelte";
 import type { StartupTask } from "$lib/api-types";
+import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
 import { SessionStore } from "$lib/store/sessions.store.svelte";
 import { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
 import { ModelStore } from "$lib/store/models.store.svelte";
@@ -35,7 +35,6 @@ export type {
 } from "$lib/app/app-context.types";
 
 const APP_CONTEXT_KEY = Symbol.for("discobot-ui-app-context");
-const PROJECT_EVENTS_RECONNECT_DELAY = 3000;
 
 type ProjectEvent<TData> = {
 	id: string;
@@ -61,140 +60,106 @@ type WorkspaceUpdatedEventData = {
 };
 
 function startProjectEventsSubscription(app: AppContext) {
-	if (typeof window === "undefined" || typeof EventSource === "undefined") {
-		return () => {};
-	}
+	const subscription = app.chatStreams.subscribeProjectEvents({
+		onError: (error) => {
+			console.error("[WS] Project events connection error:", error);
+		},
+	});
 
-	let eventSource: EventSource | null = null;
-	let reconnectTimeoutId: number | null = null;
-	let stopped = false;
-
-	const clearReconnectTimeout = () => {
-		if (reconnectTimeoutId !== null) {
-			window.clearTimeout(reconnectTimeoutId);
-			reconnectTimeoutId = null;
-		}
-	};
-
-	const connect = () => {
-		if (stopped) {
-			return;
-		}
-
-		eventSource?.close();
-		const nextEventSource = new EventSource(
-			appendAuthToken(`${getApiBase()}/events`),
-			{ withCredentials: true },
-		);
-		eventSource = nextEventSource;
-
-		nextEventSource.onerror = (error) => {
-			if (eventSource !== nextEventSource || stopped) {
+	const handleSessionUpdated = (event: MessageEvent<string>) => {
+		try {
+			const payload = JSON.parse(
+				event.data,
+			) as ProjectEvent<SessionUpdatedEventData>;
+			const sessionData = payload.data;
+			if (!sessionData?.sessionId) {
 				return;
 			}
 
-			console.error("[SSE] Project events connection error:", error);
-			nextEventSource.close();
-			eventSource = null;
-			if (reconnectTimeoutId === null) {
-				reconnectTimeoutId = window.setTimeout(() => {
-					reconnectTimeoutId = null;
-					connect();
-				}, PROJECT_EVENTS_RECONNECT_DELAY);
+			if (sessionData.status === "removed") {
+				app.sessions.removeFromMemory(sessionData.sessionId);
+				return;
 			}
-		};
 
-		nextEventSource.addEventListener("session_updated", (event) => {
-			try {
-				const payload = JSON.parse(
-					event.data,
-				) as ProjectEvent<SessionUpdatedEventData>;
-				const sessionData = payload.data;
-				if (!sessionData?.sessionId) {
-					return;
-				}
+			void app.sessions.reloadSession(sessionData.sessionId);
+		} catch (error) {
+			console.error("[WS] Failed to parse session_updated event:", error);
+		}
+	};
 
-				if (sessionData.status === "removed") {
-					app.sessions.removeFromMemory(sessionData.sessionId);
-					return;
-				}
-
-				void app.sessions.reloadSession(sessionData.sessionId);
-			} catch (error) {
-				console.error("[SSE] Failed to parse session_updated event:", error);
-			}
+	const handleConnected = () => {
+		console.debug("[WS] Connected to project events stream");
+		void app.sessions.refresh().catch((error) => {
+			console.error(
+				"[WS] Failed to refresh sessions after connecting to project events stream:",
+				error,
+			);
 		});
-
-		nextEventSource.addEventListener("connected", () => {
-			console.debug("[SSE] Connected to project events stream");
-			void app.sessions.refresh().catch((error) => {
-				console.error(
-					"[SSE] Failed to refresh sessions after connecting to project events stream:",
-					error,
-				);
-			});
-			void app.startup.refresh().catch((error) => {
-				console.error(
-					"[SSE] Failed to refresh startup tasks after connecting to project events stream:",
-					error,
-				);
-			});
-		});
-
-		nextEventSource.addEventListener("thread_updated", (event) => {
-			try {
-				const payload = JSON.parse(
-					event.data,
-				) as ProjectEvent<ThreadUpdatedEventData>;
-				if (!payload.data?.sessionId || !payload.data?.threadId) {
-					return;
-				}
-
-				void app.sessions.reloadSession(payload.data.sessionId);
-			} catch (error) {
-				console.error("[SSE] Failed to parse thread_updated event:", error);
-			}
-		});
-
-		nextEventSource.addEventListener("workspace_updated", (event) => {
-			try {
-				const payload = JSON.parse(
-					event.data,
-				) as ProjectEvent<WorkspaceUpdatedEventData>;
-				if (!payload.data?.workspaceId) {
-					return;
-				}
-
-				void app.workspaces.reloadWorkspace(payload.data.workspaceId);
-			} catch (error) {
-				console.error("[SSE] Failed to parse workspace_updated event:", error);
-			}
-		});
-
-		nextEventSource.addEventListener("startup_task_updated", (event) => {
-			try {
-				const payload = JSON.parse(event.data) as ProjectEvent<StartupTask>;
-				if (!payload.data?.id) {
-					return;
-				}
-
-				void app.stores.startup.fetch();
-			} catch (error) {
-				console.error(
-					"[SSE] Failed to parse startup_task_updated event:",
-					error,
-				);
-			}
+		void app.startup.refresh().catch((error) => {
+			console.error(
+				"[WS] Failed to refresh startup tasks after connecting to project events stream:",
+				error,
+			);
 		});
 	};
 
-	connect();
+	const handleWorkspaceUpdated = (event: MessageEvent<string>) => {
+		try {
+			const payload = JSON.parse(
+				event.data,
+			) as ProjectEvent<WorkspaceUpdatedEventData>;
+			if (!payload.data?.workspaceId) {
+				return;
+			}
+
+			void app.workspaces.reloadWorkspace(payload.data.workspaceId);
+		} catch (error) {
+			console.error("[WS] Failed to parse workspace_updated event:", error);
+		}
+	};
+
+	const handleStartupTaskUpdated = (event: MessageEvent<string>) => {
+		try {
+			const payload = JSON.parse(event.data) as ProjectEvent<StartupTask>;
+			if (!payload.data?.id) {
+				return;
+			}
+
+			void app.stores.startup.fetch();
+		} catch (error) {
+			console.error("[WS] Failed to parse startup_task_updated event:", error);
+		}
+	};
+
+	subscription.eventSource.addEventListener(
+		"session_updated",
+		handleSessionUpdated,
+	);
+	subscription.eventSource.addEventListener("connected", handleConnected);
+	subscription.eventSource.addEventListener(
+		"workspace_updated",
+		handleWorkspaceUpdated,
+	);
+	subscription.eventSource.addEventListener(
+		"startup_task_updated",
+		handleStartupTaskUpdated,
+	);
 
 	return () => {
-		stopped = true;
-		clearReconnectTimeout();
-		eventSource?.close();
-		eventSource = null;
+		subscription.eventSource.removeEventListener(
+			"session_updated",
+			handleSessionUpdated,
+		);
+		subscription.eventSource.removeEventListener("connected", handleConnected);
+		subscription.eventSource.removeEventListener(
+			"workspace_updated",
+			handleWorkspaceUpdated,
+		);
+		subscription.eventSource.removeEventListener(
+			"startup_task_updated",
+			handleStartupTaskUpdated,
+		);
+		subscription.unsubscribe();
 	};
 }
 
@@ -216,6 +181,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 	const startup = createAppStartupStatusDomain({ store: stores.startup });
 	const models = createAppModelsDomain({ store: stores.models });
 	const supportInfo = createAppSupportInfoDomain();
+	const chatStreams = createChatStreamManager();
 	const credentials = createAppCredentialsDomain({
 		store: stores.credentials,
 		refreshModels: models.refresh,
@@ -316,6 +282,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		models,
 		credentials,
 		supportInfo,
+		chatStreams,
 		chat,
 		refresh,
 		connectProjectEvents: () => {

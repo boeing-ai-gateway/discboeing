@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type chatSSEFrame struct {
@@ -398,5 +401,208 @@ func TestChatStream_ActiveStream_OnlyDone(t *testing.T) {
 	}
 	if len(frames) != 0 {
 		t.Fatalf("expected no forwarded events, got %d", len(frames))
+	}
+}
+
+func chatWebSocketPath(projectID string) string {
+	return "/api/projects/" + projectID + "/ws"
+}
+
+type chatWebSocketFrame struct {
+	Type      string `json:"type"`
+	SessionID string `json:"sessionId,omitempty"`
+	ThreadID  string `json:"threadId,omitempty"`
+	Event     string `json:"event,omitempty"`
+	Data      string `json:"data,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Replay    bool   `json:"replay,omitempty"`
+}
+
+func chatWebSocketURL(ts *TestServer, user *TestUser, projectID string) string {
+	wsURL, err := url.Parse(ts.Server.URL)
+	if err != nil {
+		panic(err)
+	}
+	wsURL.Scheme = strings.Replace(wsURL.Scheme, "http", "ws", 1)
+	wsURL.Path = chatWebSocketPath(projectID)
+	if user != nil {
+		query := wsURL.Query()
+		query.Set("token", user.Token)
+		wsURL.RawQuery = query.Encode()
+	}
+	return wsURL.String()
+}
+
+func dialChatWebSocket(t *testing.T, ts *TestServer, user *TestUser, projectID string) *websocket.Conn {
+	t.Helper()
+
+	headers := http.Header{}
+	if user != nil {
+		headers.Add("Cookie", fmt.Sprintf("discobot_session=%s", user.Token))
+	}
+	conn, resp, err := websocket.DefaultDialer.Dial(
+		chatWebSocketURL(ts, nil, projectID),
+		headers,
+	)
+	if err != nil {
+		statusCode := 0
+		body := ""
+		if resp != nil {
+			statusCode = resp.StatusCode
+			responseBody, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			body = string(responseBody)
+		}
+		t.Fatalf(
+			"Failed to dial chat websocket: %v (status=%d body=%q)",
+			err,
+			statusCode,
+			body,
+		)
+	}
+	return conn
+}
+
+func readChatWebSocketFrame(t *testing.T, conn *websocket.Conn) chatWebSocketFrame {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var frame chatWebSocketFrame
+	if err := conn.ReadJSON(&frame); err != nil {
+		t.Fatalf("Failed to read websocket frame: %v", err)
+	}
+	return frame
+}
+
+func TestChatWebSocket_RequiresAuthentication(t *testing.T) {
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+
+	_, resp, err := websocket.DefaultDialer.Dial(chatWebSocketURL(ts, nil, project.ID), nil)
+	if err == nil {
+		t.Fatal("expected websocket dial to fail without authentication")
+	}
+	if resp == nil {
+		t.Fatalf("expected websocket handshake response, got error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func TestChatWebSocket_SubscribeForwardsEvents(t *testing.T) {
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
+	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
+
+	messages := []string{
+		`{"type":"text","text":"First message"}`,
+		`{"type":"text","text":"Second message"}`,
+	}
+
+	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/chat/stream") {
+			http.NotFound(w, r)
+			return
+		}
+
+		if r.Header.Get("Accept") == "text/event-stream" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("x-vercel-ai-ui-message-stream", "v1")
+			w.WriteHeader(http.StatusOK)
+			for index, msg := range messages {
+				_, _ = fmt.Fprintf(w, "id: completion-1:%d\n", index)
+				_, _ = fmt.Fprintf(w, "event: chunk\n")
+				_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+			_, _ = fmt.Fprintf(w, "event: done\n")
+			_, _ = fmt.Fprintf(w, "data: {}\n\n")
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"messages":[]}`))
+	})
+
+	conn := dialChatWebSocket(t, ts, user, project.ID)
+	defer func() { _ = conn.Close() }()
+
+	if err := conn.WriteJSON(map[string]any{
+		"type":      "subscribe",
+		"stream":    "chat",
+		"sessionId": session.ID,
+		"threadId":  session.ID,
+		"replay":    true,
+	}); err != nil {
+		t.Fatalf("Failed to subscribe: %v", err)
+	}
+
+	first := readChatWebSocketFrame(t, conn)
+	if first.Type != "subscribed" {
+		t.Fatalf("expected subscribed frame, got %#v", first)
+	}
+
+	receivedMessages := []string{}
+	gotComplete := false
+	for range 3 {
+		frame := readChatWebSocketFrame(t, conn)
+		switch frame.Type {
+		case "event":
+			if frame.Event == "chunk" {
+				receivedMessages = append(receivedMessages, frame.Data)
+			}
+		case "complete":
+			gotComplete = true
+		}
+	}
+
+	if len(receivedMessages) != len(messages) {
+		t.Fatalf("expected %d event frames, got %d", len(messages), len(receivedMessages))
+	}
+	for index, msg := range messages {
+		if receivedMessages[index] != msg {
+			t.Fatalf("message %d mismatch: expected %s got %s", index, msg, receivedMessages[index])
+		}
+	}
+	if !gotComplete {
+		t.Fatal("expected complete frame")
+	}
+}
+
+func TestChatWebSocket_InvalidSessionReturnsError(t *testing.T) {
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+
+	conn := dialChatWebSocket(t, ts, user, project.ID)
+	defer func() { _ = conn.Close() }()
+
+	if err := conn.WriteJSON(map[string]any{
+		"type":      "subscribe",
+		"stream":    "chat",
+		"sessionId": "missing-session",
+		"threadId":  "missing-thread",
+		"replay":    true,
+	}); err != nil {
+		t.Fatalf("Failed to subscribe: %v", err)
+	}
+
+	frame := readChatWebSocketFrame(t, conn)
+	if frame.Type != "error" {
+		t.Fatalf("expected error frame, got %#v", frame)
+	}
+	if !strings.Contains(frame.Error, "session not found") {
+		t.Fatalf("expected session not found error, got %q", frame.Error)
 	}
 }

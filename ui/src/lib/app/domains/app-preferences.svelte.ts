@@ -2,14 +2,17 @@ import {
 	CHAT_WIDTH_MODE_STORAGE_KEY,
 	DEFAULT_MODEL_STORAGE_KEY,
 	DEFAULT_PREFERRED_IDE,
+	DEFAULT_RECENT_THREADS_VISIBLE_LIMIT,
 	PINNED_PROMPTS_STORAGE_KEY,
 	PROMPT_HISTORY_STORAGE_KEY,
 	PREFERRED_IDE_STORAGE_KEY,
 	readPinnedPrompts,
 	readPromptHistory,
+	readRecentThreadsVisibleLimit,
 	SIDEBAR_ALL_OPEN_STORAGE_KEY,
 	SIDEBAR_ALL_GROUPED_STORAGE_KEY,
 	SIDEBAR_RECENT_OPEN_STORAGE_KEY,
+	RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY,
 	readChatWidthMode,
 	readDefaultModel,
 	readPreferredIde,
@@ -55,6 +58,7 @@ export function createAppPreferencesDomain(
 	let preferredIde = $state<PreferredIde>(DEFAULT_PREFERRED_IDE);
 	let chatWidthMode = $state<ChatWidthMode>("constrained");
 	let defaultModel = $state("");
+	let recentThreadsVisibleLimit = $state(DEFAULT_RECENT_THREADS_VISIBLE_LIMIT);
 	let sidebarRecentOpen = $state(true);
 	let sidebarAllOpen = $state(true);
 	let sidebarAllGroupedByWorkspace = $state(true);
@@ -88,6 +92,7 @@ export function createAppPreferencesDomain(
 		preferredIde = readPreferredIde();
 		chatWidthMode = readChatWidthMode();
 		defaultModel = readDefaultModel();
+		recentThreadsVisibleLimit = readRecentThreadsVisibleLimit();
 		sidebarRecentOpen = readSidebarRecentOpen();
 		sidebarAllOpen = readSidebarAllOpen();
 		sidebarAllGroupedByWorkspace = readSidebarAllGrouped();
@@ -135,6 +140,9 @@ export function createAppPreferencesDomain(
 		get defaultModel() {
 			return defaultModel;
 		},
+		get recentThreadsVisibleLimit() {
+			return recentThreadsVisibleLimit;
+		},
 		get sidebarRecentOpen() {
 			return sidebarRecentOpen;
 		},
@@ -179,6 +187,10 @@ export function createAppPreferencesDomain(
 		setDefaultModel: (modelId) => {
 			defaultModel = modelId;
 			writeStorage(DEFAULT_MODEL_STORAGE_KEY, modelId || null);
+		},
+		setRecentThreadsVisibleLimit: (value) => {
+			recentThreadsVisibleLimit = value;
+			writeStorage(RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY, String(value));
 		},
 		setSidebarRecentOpen: (value) => {
 			sidebarRecentOpen = value;

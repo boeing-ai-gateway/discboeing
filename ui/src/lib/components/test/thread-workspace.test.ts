@@ -20,6 +20,11 @@ test("thread workspace no longer renders session sidebar controls directly", () 
 	assert.doesNotMatch(source, /<Popover\.Root/);
 	assert.match(
 		source,
-		/showSidebarToggle=\{props\.showSidebarToggle \?\? false\}/,
+		/let \{[\s\S]*threadId,[\s\S]*mainClass,[\s\S]*showSidebarToggle,[\s\S]*reserveSidebarSpace,[\s\S]*onToggleSidebar,[\s\S]*mode,[\s\S]*\}: Props = \$props\(\);/,
 	);
+	assert.match(
+		source,
+		/const thread = setThreadContext\(untrack\(\(\) => threadId\)\)/,
+	);
+	assert.match(source, /showSidebarToggle=\{showSidebarToggle \?\? false\}/);
 });

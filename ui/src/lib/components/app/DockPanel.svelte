@@ -6,7 +6,10 @@
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import type { SessionActiveView } from "$lib/session/session-view.types";
 	import { DESKTOP_SERVICE_ID } from "$lib/shell-types";
+
+	type DockPanelKind = Exclude<SessionActiveView["kind"], "chat">;
 
 	const app = useAppContext();
 	const session = useSessionContext();
@@ -22,59 +25,102 @@
 	const sessionFileContents = $derived.by(() => session.files.contents);
 	const sessionFileDiff = $derived.by(() => session.files.diff);
 	const sessionFileDiffStats = $derived.by(() => session.files.diffStats);
+	const activeDockPanelKind = $derived.by<DockPanelKind | null>(() => {
+		const { kind } = sessionView.activeView;
+		return kind === "chat" ? null : kind;
+	});
+	let mountedDockPanelKinds = $state<DockPanelKind[]>([]);
+
+	$effect(() => {
+		const activeKind = activeDockPanelKind;
+		if (!activeKind || mountedDockPanelKinds.includes(activeKind)) {
+			return;
+		}
+
+		mountedDockPanelKinds = [...mountedDockPanelKinds, activeKind];
+	});
 </script>
 
 <div class="h-full overflow-auto bg-background px-3 pb-3 pt-1">
-	{#if sessionView.activeView.kind === "terminal"}
-		<TerminalPanel
-			onClose={sessionView.openChat}
-			sessionId={session.sessionId}
-			rootEnabled={sessionView.terminalRootEnabled}
-			onRootEnabledChange={sessionView.setTerminalRootEnabled}
-			dockMaximized={sessionView.dockMaximized}
-			onToggleDockMaximized={sessionView.toggleDockMaximized}
-		/>
-	{:else if sessionView.activeView.kind === "desktop"}
-		<DesktopPanel
-			sessionId={session.sessionId}
-			{desktopAvailable}
-			onClose={sessionView.openChat}
-			dockMaximized={sessionView.dockMaximized}
-			onToggleDockMaximized={sessionView.toggleDockMaximized}
-		/>
-	{:else if sessionView.activeView.kind === "file"}
-		<FilesPanel
-			files={session.files}
-			onClose={sessionView.openChat}
-			onToggleDockMaximized={sessionView.toggleDockMaximized}
-			dockMaximized={sessionView.dockMaximized}
-			colorScheme={app.preferences.colorScheme}
-			resolvedTheme={app.preferences.resolvedTheme}
-		/>
-	{:else if sessionView.activeView.kind === "diff-review"}
-		<DiffReviewPanel
-			dockMaximized={sessionView.dockMaximized}
-			onClose={sessionView.openChat}
-			onOpenFile={(path) => session.files.open(path)}
-			onRefresh={() => session.files.refresh()}
-			onToggleDockMaximized={sessionView.toggleDockMaximized}
-			sessionId={session.sessionId}
-			diff={sessionFileDiff}
-			fileContents={sessionFileContents}
-			diffStats={sessionFileDiffStats}
-			resolvedTheme={app.preferences.resolvedTheme}
-		/>
-	{:else if sessionView.activeView.kind === "services"}
-		<ServicePanel
-			dockMaximized={sessionView.dockMaximized}
-			sessionId={session.sessionId}
-			services={visibleServices}
-			activeServiceId={sessionView.activeServiceId}
-			onSelectService={session.services.open}
-			onClose={sessionView.openChat}
-			onStart={session.services.start}
-			onStop={session.services.stop}
-			onToggleDockMaximized={sessionView.toggleDockMaximized}
-		/>
+	{#if mountedDockPanelKinds.includes("terminal")}
+		<div
+			class={sessionView.activeView.kind === "terminal" ? "contents" : "hidden"}
+		>
+			<TerminalPanel
+				onClose={sessionView.openChat}
+				sessionId={session.sessionId}
+				rootEnabled={sessionView.terminalRootEnabled}
+				onRootEnabledChange={sessionView.setTerminalRootEnabled}
+				dockMaximized={sessionView.dockMaximized}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+			/>
+		</div>
+	{/if}
+
+	{#if mountedDockPanelKinds.includes("desktop")}
+		<div
+			class={sessionView.activeView.kind === "desktop" ? "contents" : "hidden"}
+		>
+			<DesktopPanel
+				sessionId={session.sessionId}
+				{desktopAvailable}
+				onClose={sessionView.openChat}
+				dockMaximized={sessionView.dockMaximized}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+			/>
+		</div>
+	{/if}
+
+	{#if mountedDockPanelKinds.includes("file")}
+		<div class={sessionView.activeView.kind === "file" ? "contents" : "hidden"}>
+			<FilesPanel
+				files={session.files}
+				onClose={sessionView.openChat}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				dockMaximized={sessionView.dockMaximized}
+				colorScheme={app.preferences.colorScheme}
+				resolvedTheme={app.preferences.resolvedTheme}
+			/>
+		</div>
+	{/if}
+
+	{#if mountedDockPanelKinds.includes("diff-review")}
+		<div
+			class={sessionView.activeView.kind === "diff-review"
+				? "contents"
+				: "hidden"}
+		>
+			<DiffReviewPanel
+				dockMaximized={sessionView.dockMaximized}
+				onClose={sessionView.openChat}
+				onOpenFile={(path) => session.files.open(path)}
+				onRefresh={() => session.files.refresh()}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				sessionId={session.sessionId}
+				diff={sessionFileDiff}
+				fileContents={sessionFileContents}
+				diffStats={sessionFileDiffStats}
+				resolvedTheme={app.preferences.resolvedTheme}
+			/>
+		</div>
+	{/if}
+
+	{#if visibleServices.length > 0 && mountedDockPanelKinds.includes("services")}
+		<div
+			class={sessionView.activeView.kind === "services" ? "contents" : "hidden"}
+		>
+			<ServicePanel
+				dockMaximized={sessionView.dockMaximized}
+				sessionId={session.sessionId}
+				streamManager={app.chatStreams}
+				services={visibleServices}
+				activeServiceId={sessionView.activeServiceId}
+				onSelectService={session.services.open}
+				onClose={sessionView.openChat}
+				onStart={session.services.start}
+				onStop={session.services.stop}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+			/>
+		</div>
 	{/if}
 </div>

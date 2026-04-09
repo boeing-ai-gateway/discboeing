@@ -20,10 +20,15 @@ export const IGNORED_UPDATE_VERSION_STORAGE_KEY = "update.ignored.version";
 export const SIDEBAR_RECENT_OPEN_STORAGE_KEY = "sidebar.recent.open";
 export const SIDEBAR_ALL_OPEN_STORAGE_KEY = "sidebar.all.open";
 export const SIDEBAR_ALL_GROUPED_STORAGE_KEY = "sidebar.all.grouped";
+export const RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY =
+	"recent.threads.visible.limit";
 export const RECENT_THREADS_STORAGE_KEY = "recent.threads";
 export const PROMPT_HISTORY_STORAGE_KEY = "discobot:composer-history";
 export const PINNED_PROMPTS_STORAGE_KEY = "discobot:composer-history:pinned";
 export const RECENT_SESSIONS_LIMIT = 4;
+export const RECENT_THREAD_ENTRIES_LIMIT = 12;
+export const RECENT_THREADS_VISIBLE_LIMIT_PRESETS = [1, 4, 8, 12] as const;
+export const DEFAULT_RECENT_THREADS_VISIBLE_LIMIT = 4;
 export const DEFAULT_PREFERRED_IDE: PreferredIde = "zed";
 
 export type RecentThreadEntry = {
@@ -106,6 +111,21 @@ export function readSidebarAllGrouped(): boolean {
 	}
 	const stored = window.localStorage.getItem(SIDEBAR_ALL_GROUPED_STORAGE_KEY);
 	return stored === null ? true : stored === "true";
+}
+
+export function readRecentThreadsVisibleLimit(): number {
+	if (typeof window === "undefined") {
+		return DEFAULT_RECENT_THREADS_VISIBLE_LIMIT;
+	}
+	const stored = window.localStorage.getItem(
+		RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY,
+	);
+	const value = Number(stored);
+	return RECENT_THREADS_VISIBLE_LIMIT_PRESETS.includes(
+		value as (typeof RECENT_THREADS_VISIBLE_LIMIT_PRESETS)[number],
+	)
+		? value
+		: DEFAULT_RECENT_THREADS_VISIBLE_LIMIT;
 }
 
 export function readPinnedPrompts(): string[] {
@@ -222,7 +242,17 @@ function normalizeRecentThreadEntries(
 		dedupedEntries.push(entry);
 	}
 
-	return dedupedEntries.slice(-RECENT_SESSIONS_LIMIT);
+	if (dedupedEntries.length <= RECENT_THREAD_ENTRIES_LIMIT) {
+		return dedupedEntries;
+	}
+
+	const oldestEntry = dedupedEntries.reduce((oldest, entry) =>
+		compareIsoDatesDesc(oldest.lastAccessedAt, entry.lastAccessedAt) < 0
+			? oldest
+			: entry,
+	);
+
+	return dedupedEntries.filter((entry) => entry !== oldestEntry);
 }
 
 export function readRecentThreadEntries(): RecentThreadEntry[] {
@@ -398,6 +428,31 @@ export function toRecentThreadSummaries(
 				]
 			: [];
 	});
+}
+
+export function getMountedSessionIds(
+	selectedSessionId: string | null,
+	recentThreads: Array<Pick<RecentThreadSummary, "sessionId">>,
+	limit = RECENT_SESSIONS_LIMIT,
+): string[] {
+	const sessionIds: string[] = [];
+	const seen = new Set<string>();
+
+	for (const sessionId of [
+		selectedSessionId,
+		...recentThreads.map((thread) => thread.sessionId),
+	]) {
+		if (!sessionId || seen.has(sessionId)) {
+			continue;
+		}
+		seen.add(sessionId);
+		sessionIds.push(sessionId);
+		if (sessionIds.length >= limit) {
+			break;
+		}
+	}
+
+	return sessionIds;
 }
 
 export function getAppEnvironment() {

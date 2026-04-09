@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+	import { untrack } from "svelte";
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
@@ -29,9 +30,14 @@
 		type JetBrainsIdeOption,
 	} from "$lib/shell-types";
 
+	type Props = {
+		sessionId: string;
+	};
+
+	let { sessionId }: Props = $props();
 	const app = useAppContext();
 	const preferences = app.preferences;
-	const session = useSessionContext();
+	const session = useSessionContext(untrack(() => sessionId));
 	const sessionView = session.ui;
 	const sessionServices = $derived.by(() =>
 		session.services.list.filter(

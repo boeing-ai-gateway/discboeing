@@ -761,7 +761,8 @@ body {
 }
 
 /* Tauri window drag regions */
-[data-tauri-drag-region] {
+[data-tauri-drag-region],
+.tauri-drag-region {
 	-webkit-app-region: drag;
 	app-region: drag;
 }

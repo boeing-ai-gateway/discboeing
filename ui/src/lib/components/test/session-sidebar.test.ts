@@ -5,7 +5,7 @@ import test from "node:test";
 
 const SESSION_SIDEBAR_COMPONENT = path.resolve(
 	import.meta.dirname,
-	"../app/SessionSidebar.svelte",
+	"../app/AppSidebar.svelte",
 );
 
 function readSessionSidebarSource() {
@@ -39,7 +39,45 @@ test("session sidebar keys session and recent thread rows", () => {
 	);
 	assert.match(
 		source,
-		/\{#each sessions\.recentThreads as threadObj \(`\$\{threadObj\.sessionId\}:\$\{threadObj\.threadId\}`\)\}/,
+		/\{#each visibleRecentThreads as threadObj \(`\$\{threadObj\.sessionId\}:\$\{threadObj\.threadId\}`\)\}/,
+	);
+});
+
+test("session sidebar caps the visible recent thread list", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(
+		source,
+		/const visibleRecentThreads = \$derived\.by\(\(\) =>\s*sessions\.recentThreads\.slice\(0, preferences\.recentThreadsVisibleLimit\),\s*\)/,
+	);
+	assert.match(
+		source,
+		/const showRecentThreads = \$derived\([\s\S]*preferences\.recentThreadsVisibleLimit > 1[\s\S]*visibleRecentThreads\.length > 0,[\s\S]*\)/,
+	);
+});
+
+test("session sidebar hides the recent section when the visible limit is disabled", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /\{#if showRecentThreads\}/);
+	assert.doesNotMatch(source, /\{#if visibleRecentThreads\.length > 0\}/);
+});
+
+test("session sidebar hides the all sessions header and keeps sessions visible when recents are disabled", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(
+		source,
+		/const showAllSessionsHeader = \$derived\(showRecentThreads\)/,
+	);
+	assert.match(source, /\{#if showAllSessionsHeader\}/);
+	assert.match(
+		source,
+		/\{:else\}\s*<div\s*\n\s*class=\{preferences\.sidebarAllGroupedByWorkspace/,
+	);
+	assert.doesNotMatch(
+		source,
+		/All sessions\s*<\/Collapsible\.Trigger>\s*<Collapsible\.Content[\s\S]*\{:else if sessions\.list\.length > 0\}/,
 	);
 });
 

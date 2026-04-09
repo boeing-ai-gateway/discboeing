@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, untrack } from "svelte";
 	import ConversationPane from "$lib/components/app/ConversationPane.svelte";
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
@@ -9,21 +9,27 @@
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
 
 	type Props = {
+		threadId: string;
 		mainClass: string;
 		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
 		onToggleSidebar?: () => void;
 		mode?: "full" | "conversation-only";
+		sidebarOpen?: boolean;
 	};
 
-	const props: Props = $props();
+	let {
+		threadId,
+		mainClass,
+		showSidebarToggle,
+		reserveSidebarSpace,
+		onToggleSidebar,
+		mode,
+	}: Props = $props();
 	const noop = () => {};
 
 	const session = useSessionContext();
-	// threadId is stable at mount time because SessionWorkspace wraps us in {#key session.threads.selectedId}
-	const thread = setThreadContext(
-		session.threads.selectedId ?? session.sessionId,
-	);
+	const thread = setThreadContext(untrack(() => threadId));
 
 	onMount(() => {
 		void thread.load();
@@ -33,12 +39,12 @@
 	});
 
 	const showDock = $derived(
-		(props.mode ?? "full") === "full" && !isChatView(session.ui.activeView),
+		(mode ?? "full") === "full" && !isChatView(session.ui.activeView),
 	);
 	const dockMaximized = $derived(showDock && session.ui.dockMaximized);
 </script>
 
-<main class={props.mainClass}>
+<main class={mainClass}>
 	{#if showDock && dockMaximized}
 		<div class="min-h-0 flex-1 overflow-hidden">
 			<DockPanel />
@@ -52,9 +58,9 @@
 			<Resizable.Pane defaultSize={35} minSize={25} class="min-h-0 min-w-0">
 				<div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
 					<ThreadWorkspaceHeader
-						showSidebarToggle={props.showSidebarToggle ?? false}
-						reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-						onToggleSidebar={props.onToggleSidebar ?? noop}
+						showSidebarToggle={showSidebarToggle ?? false}
+						reserveSidebarSpace={reserveSidebarSpace ?? false}
+						onToggleSidebar={onToggleSidebar ?? noop}
 						title={session.threads.selected?.name ??
 							(session.isPending ? "" : "No thread selected")}
 						state={session.threads.selected?.state}
@@ -73,9 +79,9 @@
 		</Resizable.PaneGroup>
 	{:else}
 		<ThreadWorkspaceHeader
-			showSidebarToggle={props.showSidebarToggle ?? false}
-			reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-			onToggleSidebar={props.onToggleSidebar ?? noop}
+			showSidebarToggle={showSidebarToggle ?? false}
+			reserveSidebarSpace={reserveSidebarSpace ?? false}
+			onToggleSidebar={onToggleSidebar ?? noop}
 			title={session.threads.selected?.name ??
 				(session.isPending ? "" : "No thread selected")}
 			state={session.threads.selected?.state}

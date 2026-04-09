@@ -578,6 +578,16 @@ func main() {
 				},
 			})
 
+			projReg.Register(r, routes.Route{
+				Method: "GET", Pattern: "/ws",
+				Handler: h.ChatWebSocket,
+				Meta: routes.Meta{
+					Group:       "Chat",
+					Description: "Multiplexed realtime WebSocket",
+					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+				},
+			})
+
 			// Project CRUD
 			projReg.Register(r, routes.Route{
 				Method: "GET", Pattern: "/",

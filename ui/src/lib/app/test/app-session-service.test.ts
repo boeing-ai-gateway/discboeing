@@ -6,11 +6,14 @@ import type { SessionSummary } from "$lib/shell-types";
 import {
 	PREFERRED_IDE_STORAGE_KEY,
 	RECENT_THREADS_STORAGE_KEY,
+	RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY,
 	readPreferredIde,
+	readRecentThreadsVisibleLimit,
 	reconcileRecentThreadsForSession,
 	reconcileRecentThreadsWithSessions,
 	readRecentThreadEntries,
 	refreshRecentThread,
+	getMountedSessionIds,
 	removeRecentThread,
 	removeRecentThreadsForSession,
 	toRecentThreadSummaries,
@@ -90,6 +93,20 @@ test("readPreferredIde returns the stored IDE when present", () => {
 	withLocalStorage((storage) => {
 		storage.setItem(PREFERRED_IDE_STORAGE_KEY, "cursor");
 		assert.equal(readPreferredIde(), "cursor");
+	});
+});
+
+test("readRecentThreadsVisibleLimit accepts the disabled preset", () => {
+	withLocalStorage((storage) => {
+		storage.setItem(RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY, "1");
+		assert.equal(readRecentThreadsVisibleLimit(), 1);
+	});
+});
+
+test("readRecentThreadsVisibleLimit falls back for unsupported values", () => {
+	withLocalStorage((storage) => {
+		storage.setItem(RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY, "2");
+		assert.equal(readRecentThreadsVisibleLimit(), 4);
 	});
 });
 
@@ -250,7 +267,7 @@ test("touchRecentThread updates timestamps without reordering existing entries",
 	]);
 });
 
-test("touchRecentThread appends unseen entries and evicts the oldest when full", () => {
+test("touchRecentThread appends unseen entries without reordering existing ones", () => {
 	let nextEntries = [
 		{
 			sessionId: "session-1",
@@ -294,6 +311,13 @@ test("touchRecentThread appends unseen entries and evicts the oldest when full",
 	);
 
 	assert.deepEqual(nextEntries, [
+		{
+			sessionId: "session-1",
+			sessionName: "One",
+			threadId: "thread-1",
+			threadName: "Thread One",
+			lastAccessedAt: "2026-01-01T00:00:00Z",
+		},
 		{
 			sessionId: "session-2",
 			sessionName: "Two",
@@ -492,6 +516,40 @@ test("toRecentThreadSummaries preserves stored insertion order", () => {
 				lastAccessedAt: "2026-01-03T00:00:00Z",
 			},
 		],
+	);
+});
+
+test("getMountedSessionIds keeps the selected session and fills unique recent sessions", () => {
+	assert.deepEqual(
+		getMountedSessionIds(
+			"session-5",
+			[
+				{ sessionId: "session-4" },
+				{ sessionId: "session-3" },
+				{ sessionId: "session-3" },
+				{ sessionId: "session-2" },
+				{ sessionId: "session-1" },
+			],
+			4,
+		),
+		["session-5", "session-4", "session-3", "session-2"],
+	);
+});
+
+test("getMountedSessionIds does not spend a slot on a pending selection", () => {
+	assert.deepEqual(
+		getMountedSessionIds(
+			null,
+			[
+				{ sessionId: "session-4" },
+				{ sessionId: "session-3" },
+				{ sessionId: "session-2" },
+				{ sessionId: "session-1" },
+				{ sessionId: "session-0" },
+			],
+			4,
+		),
+		["session-4", "session-3", "session-2", "session-1"],
 	);
 });
 

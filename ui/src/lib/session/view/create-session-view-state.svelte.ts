@@ -24,11 +24,14 @@ export function resolveOpenFileState(
 	}
 
 	const nextFile = selectedFile || (availableFiles[0] ?? "");
+	if (nextFile.length === 0) {
+		return {
+			activeView: { kind: "file", path: "" },
+			selectedFile: "",
+		};
+	}
 	return {
-		activeView:
-			nextFile.length > 0
-				? { kind: "file", path: nextFile }
-				: getDefaultActiveView(availableFiles),
+		activeView: { kind: "file", path: nextFile },
 		selectedFile: nextFile,
 	};
 }

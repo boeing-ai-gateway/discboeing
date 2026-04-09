@@ -36,6 +36,7 @@ import type {
 	WorkspaceValidationResult,
 } from "$lib/api-types";
 import type { SessionContextValue } from "$lib/session/session-context.types";
+import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 import type {
 	AsyncStatus,
 	IdeOption,
@@ -99,6 +100,7 @@ export type AppPreferences = {
 	ideOptions: IdeOption[];
 	chatWidthMode: ChatWidthMode;
 	defaultModel: string;
+	recentThreadsVisibleLimit: number;
 	sidebarRecentOpen: boolean;
 	sidebarAllOpen: boolean;
 	sidebarAllGroupedByWorkspace: boolean;
@@ -113,6 +115,7 @@ export type AppPreferences = {
 	setPreferredIde: (ide: PreferredIde) => void;
 	setChatWidthMode: (mode: ChatWidthMode) => void;
 	setDefaultModel: (modelId: string) => void;
+	setRecentThreadsVisibleLimit: (value: number) => void;
 	setSidebarRecentOpen: (value: boolean) => void;
 	setSidebarAllOpen: (value: boolean) => void;
 	setSidebarAllGroupedByWorkspace: (value: boolean) => void;
@@ -289,6 +292,7 @@ export type AppContext = {
 	models: AppModels;
 	credentials: AppCredentials;
 	supportInfo: AppSupportInfo;
+	chatStreams: ChatStreamManager;
 	chat: (data: AppChatRequest) => Promise<StartChatResponse>;
 	refresh: () => Promise<void>;
 	connectProjectEvents: () => () => void;

@@ -31,7 +31,6 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -54,7 +53,6 @@
 	const app = useAppContext();
 	const sessions = app.sessions;
 	const preferences = app.preferences;
-	const session = useSessionContext();
 	type SessionGroup = {
 		key: string;
 		workspaceId: string | null;
@@ -80,6 +78,14 @@
 	let floatingOpen = $state(false);
 	let shellRef = $state<HTMLElement | null>(null);
 	const showSidebarBody = $derived(!floatingCollapsed || floatingOpen);
+	const visibleRecentThreads = $derived.by(() =>
+		sessions.recentThreads.slice(0, preferences.recentThreadsVisibleLimit),
+	);
+	const showRecentThreads = $derived(
+		preferences.recentThreadsVisibleLimit > 1 &&
+			visibleRecentThreads.length > 0,
+	);
+	const showAllSessionsHeader = $derived(showRecentThreads);
 	const floatingSidebarPortalSelector = [
 		'[data-slot="dropdown-menu-content"]',
 		'[data-slot="dialog-content"]',
@@ -272,10 +278,12 @@
 	}
 
 	function isRecentThreadSelected(sessionId: string, threadId: string) {
-		return (
-			sessions.selectedId === sessionId &&
-			(session.threads.selectedId ?? session.sessionId) === threadId
-		);
+		const selectedSessionId = sessions.selectedId ?? sessions.pendingId;
+		const selectedSessionContext =
+			sessions.sessionContexts.get(selectedSessionId);
+		const selectedThreadId =
+			selectedSessionContext?.threads.selectedId ?? selectedSessionId;
+		return selectedSessionId === sessionId && selectedThreadId === threadId;
 	}
 
 	function shortenHomePath(path: string) {
@@ -575,7 +583,7 @@
 				{#if sessions.list.length === 0}
 					<p class="px-2 text-xs text-sidebar-foreground/50">No sessions</p>
 				{:else}
-					{#if sessions.recentThreads.length > 0}
+					{#if showRecentThreads}
 						<Collapsible.Root
 							open={preferences.sidebarRecentOpen}
 							onOpenChange={(v) => preferences.setSidebarRecentOpen(v)}
@@ -591,7 +599,7 @@
 								Recent
 							</Collapsible.Trigger>
 							<Collapsible.Content class="space-y-0.5">
-								{#each sessions.recentThreads as threadObj (`${threadObj.sessionId}:${threadObj.threadId}`)}
+								{#each visibleRecentThreads as threadObj (`${threadObj.sessionId}:${threadObj.threadId}`)}
 									{@render recentThreadItem(
 										threadObj,
 										isRecentThreadSelected(
@@ -605,24 +613,104 @@
 					{/if}
 
 					{#if sessions.list.length > 0}
-						<Collapsible.Root
-							open={preferences.sidebarAllOpen}
-							onOpenChange={(v) => preferences.setSidebarAllOpen(v)}
-						>
-							<Collapsible.Trigger
-								class="flex w-full items-center gap-1 px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground"
+						{#if showAllSessionsHeader}
+							<Collapsible.Root
+								open={preferences.sidebarAllOpen}
+								onOpenChange={(v) => preferences.setSidebarAllOpen(v)}
 							>
-								{#if preferences.sidebarAllOpen}
-									<ChevronDownIcon class="size-3 shrink-0" />
-								{:else}
-									<ChevronRightIcon class="size-3 shrink-0" />
-								{/if}
-								All sessions
-							</Collapsible.Trigger>
-							<Collapsible.Content
+								<Collapsible.Trigger
+									class="flex w-full items-center gap-1 px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground"
+								>
+									{#if preferences.sidebarAllOpen}
+										<ChevronDownIcon class="size-3 shrink-0" />
+									{:else}
+										<ChevronRightIcon class="size-3 shrink-0" />
+									{/if}
+									All sessions
+								</Collapsible.Trigger>
+								<Collapsible.Content
+									class={preferences.sidebarAllGroupedByWorkspace
+										? "space-y-3"
+										: "space-y-0.5"}
+								>
+									{#if preferences.sidebarAllGroupedByWorkspace}
+										{#each workspaceSessionGroups as group (group.key)}
+											<div class="space-y-1.5">
+												<div
+													class="group flex items-center gap-1.5 px-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60"
+												>
+													{#if group.sourceType === "git"}
+														<GitBranchIcon class="size-3 shrink-0" />
+													{:else if group.sourceType === "local"}
+														<FolderIcon class="size-3 shrink-0" />
+													{:else}
+														<PackageIcon class="size-3 shrink-0" />
+													{/if}
+													<span class="min-w-0 flex-1 truncate"
+														>{group.label}</span
+													>
+													{#if group.workspaceId}
+														<DropdownMenu>
+															<DropdownMenuTrigger>
+																<Button
+																	variant="ghost"
+																	size="icon-xs"
+																	class="h-6 w-6 rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+																	aria-label={`Workspace actions for ${group.label}`}
+																	onclick={(event) => event.stopPropagation()}
+																>
+																	<EllipsisIcon
+																		class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+																	/>
+																</Button>
+															</DropdownMenuTrigger>
+															<DropdownMenuContent align="end" class="w-32">
+																<DropdownMenuItem
+																	onclick={() =>
+																		openRenameWorkspaceDialog(
+																			group.workspaceId!,
+																		)}
+																>
+																	Rename
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	variant="destructive"
+																	onclick={() =>
+																		openDeleteWorkspaceDialog(
+																			group.workspaceId!,
+																		)}
+																>
+																	Delete
+																</DropdownMenuItem>
+															</DropdownMenuContent>
+														</DropdownMenu>
+													{/if}
+												</div>
+												<div class="space-y-0.5">
+													{#each group.sessions as sessionObj (sessionObj.id)}
+														{@render sessionItem(
+															sessionObj,
+															sessions.selectedId === sessionObj.id,
+														)}
+													{/each}
+												</div>
+											</div>
+										{/each}
+									{:else}
+										{#each sessions.list as sessionObj (sessionObj.id)}
+											{@render sessionItem(
+												sessionObj,
+												sessions.selectedId === sessionObj.id,
+											)}
+										{/each}
+									{/if}
+								</Collapsible.Content>
+							</Collapsible.Root>
+						{:else}
+							<div
 								class={preferences.sidebarAllGroupedByWorkspace
-									? "space-y-3"
-									: "space-y-0.5"}
+									? "space-y-3 pt-1"
+									: "space-y-0.5 pt-1"}
 							>
 								{#if preferences.sidebarAllGroupedByWorkspace}
 									{#each workspaceSessionGroups as group (group.key)}
@@ -691,8 +779,8 @@
 										)}
 									{/each}
 								{/if}
-							</Collapsible.Content>
-						</Collapsible.Root>
+							</div>
+						{/if}
 					{/if}
 				{/if}
 			</div>
@@ -784,7 +872,7 @@
 			<AlertDialogHeader>
 				<AlertDialogTitle>Delete session?</AlertDialogTitle>
 				<AlertDialogDescription>
-					Delete "{deleteDialogSessionName()}"? This action cannot be undone.
+					This will permanently delete {deleteDialogSessionName()}.
 				</AlertDialogDescription>
 			</AlertDialogHeader>
 			<AlertDialogFooter>
@@ -795,7 +883,8 @@
 					Cancel
 				</AlertDialogCancel>
 				<AlertDialogAction
-					onclick={() => {
+					onclick={(event) => {
+						event.preventDefault();
 						void handleDeleteSession();
 					}}
 					disabled={deletingSession}

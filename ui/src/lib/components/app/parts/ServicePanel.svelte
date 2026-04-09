@@ -26,6 +26,7 @@
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
 	import type { ServiceItem } from "$lib/shell-types";
+	import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 	import { openUrl } from "$lib/tauri";
 	import { cn } from "$lib/utils";
 
@@ -39,6 +40,7 @@
 		onToggleDockMaximized: () => void;
 		services: ServiceItem[];
 		sessionId: string;
+		streamManager: ChatStreamManager;
 	};
 
 	type ViewMode = "preview" | "logs";
@@ -70,6 +72,7 @@
 		onToggleDockMaximized,
 		services,
 		sessionId,
+		streamManager,
 	}: Props = $props();
 
 	let isLoading = $state(true);
@@ -395,22 +398,19 @@
 		void service.status;
 		logEvents = [];
 		logsConnected = false;
-		const source = new EventSource(
-			api.getServiceOutputUrl(sessionId, service.id),
-			{ withCredentials: true },
-		);
+		const subscription = streamManager.subscribeServiceOutput({
+			sessionId,
+			serviceId: service.id,
+			onOpen: () => {
+				logsConnected = true;
+			},
+			onError: () => {
+				logsConnected = false;
+			},
+		});
 
-		source.onopen = () => {
-			logsConnected = true;
-		};
-
-		source.onerror = () => {
-			logsConnected = false;
-		};
-
-		source.onmessage = (event) => {
+		const handleMessage = (event: MessageEvent<string>) => {
 			if (event.data === "[DONE]") {
-				source.close();
 				logsConnected = false;
 				return;
 			}
@@ -426,8 +426,11 @@
 			}
 		};
 
+		subscription.eventSource.addEventListener("message", handleMessage);
+
 		return () => {
-			source.close();
+			subscription.eventSource.removeEventListener("message", handleMessage);
+			subscription.unsubscribe();
 			logsConnected = false;
 		};
 	});

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import InfoIcon from "@lucide/svelte/icons/info";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/app/app-helpers";
 	import { Button } from "$lib/components/ui/button";
 	import {
 		Card,
@@ -204,6 +205,44 @@
 												>
 											{/each}
 										</NativeSelect>
+									</ItemActions>
+								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Recent list size</ItemTitle>
+										<ItemDescription>
+											Choose how many recent threads appear in the sidebar.
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions class="ml-auto justify-end">
+										<ToggleGroup
+											type="single"
+											value={String(preferences.recentThreadsVisibleLimit)}
+											onValueChange={(value) => {
+												const nextValue = Number(value);
+												if (
+													RECENT_THREADS_VISIBLE_LIMIT_PRESETS.includes(
+														nextValue as (typeof RECENT_THREADS_VISIBLE_LIMIT_PRESETS)[number],
+													)
+												) {
+													preferences.setRecentThreadsVisibleLimit(nextValue);
+												}
+											}}
+											variant="outline"
+											size="sm"
+											spacing={1}
+											class="rounded-full border border-border bg-muted p-1"
+										>
+											{#each RECENT_THREADS_VISIBLE_LIMIT_PRESETS as limit (limit)}
+												<ToggleGroupItem
+													value={String(limit)}
+													class="rounded-full border border-transparent px-3 data-[state=off]:bg-transparent data-[state=off]:text-muted-foreground data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm"
+												>
+													{limit === 1 ? "Off" : limit}
+												</ToggleGroupItem>
+											{/each}
+										</ToggleGroup>
 									</ItemActions>
 								</Item>
 							</ItemGroup>

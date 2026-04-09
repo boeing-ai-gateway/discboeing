@@ -337,6 +337,7 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 
 			r.Get("/suggestions", h.GetSuggestions)
 			r.Get("/events", h.Events)
+			r.Get("/ws", h.ChatWebSocket)
 
 			r.Route("/credentials", func(r chi.Router) {
 				r.Get("/", h.ListCredentials)

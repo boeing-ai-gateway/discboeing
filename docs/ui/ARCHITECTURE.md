@@ -27,7 +27,7 @@ The UI is a single-page SvelteKit application. It renders an IDE-style interface
 ui/src/
 ├── app.html                   # HTML shell (favicon, meta)
 ├── routes/
-│   └── +layout.svelte         # AppContext provider, SSE subscription
+│   └── +layout.svelte         # AppContext provider, shared project stream subscription
 ├── lib/
 │   ├── context/               # useAppContext, useSessionContext, useThreadContext
 │   ├── api-client.ts          # REST API client
@@ -40,7 +40,7 @@ ui/src/
 │   │       └── parts/         # Props-only sub-components
 │   ├── markdown/              # Native markdown renderer (remend + unified)
 │   └── session/
-│       └── runtime/           # Chat stream reducer, SSE state
+│       └── runtime/           # Chat stream reducer state
 └── static/                    # Favicon and static assets
 ```
 
@@ -74,9 +74,9 @@ Access via `useAppContext()`, `useSessionContext()`, `useThreadContext()` from `
 
 The application uses SvelteKit's adapter-static for a fully client-side SPA. Panel content is driven by Svelte stores and context rather than URL routes.
 
-### 2. Data Fetching and SSE
+### 2. Data Fetching and Realtime Streams
 
-All server data is fetched via `ui/src/lib/api-client.ts`. The app-level SSE subscription (`/api/projects/local/events`) triggers targeted reloads for affected sessions and workspaces, with full refreshes on reconnect. The store layer coalesces concurrent reloads into at most one active request plus one queued follow-up per resource key to avoid duplicate fetches during reconnect bursts.
+All server data is fetched via `ui/src/lib/api-client.ts`. App-level project events, multiplexed chat streams, and service log streams now share one project-scoped WebSocket (`/api/projects/{projectId}/ws`). The app uses targeted reloads for affected sessions and workspaces, with full refreshes on reconnect. The store layer coalesces concurrent reloads into at most one active request plus one queued follow-up per resource key to avoid duplicate fetches during reconnect bursts.
 
 ### 3. API Configuration
 
@@ -84,10 +84,12 @@ All server data is fetched via `ui/src/lib/api-client.ts`. The app-level SSE sub
 
 ### 4. Chat Streaming
 
-The thread chat stream reducer (`ui/src/lib/session/runtime/chat-stream-state.ts`) processes SSE events:
+The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes AI SDK-style data frames:
 - Buffers `history-start`/`history-message`/`history-end` replay events
 - Applies `chunk`/`done` events to materialize live AI messages
 - Surfaces mode/model/reasoning metadata
+
+Mounted thread workspaces subscribe through a single app-scoped project WebSocket, which multiplexes chat streams, project events, and service logs across multiple sessions and avoids holding separate SSE connections per mounted workspace or service panel. The shell only preloads the active session plus recent sessions the user has already opened, so sidebar recents can remain visible without eagerly creating session or thread contexts for untouched sessions.
 
 Reasoning is level-based and sourced from each model's `reasoningLevels`/`defaultReasoning` metadata.
 

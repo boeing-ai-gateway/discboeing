@@ -12,16 +12,22 @@ function readSessionWorkspaceSource() {
 	return readFileSync(SESSION_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("session workspace computes desktop sidebar min size from a 40px target", () => {
+test("session workspace is a per-session mounted wrapper around thread workspace", () => {
 	const source = readSessionWorkspaceSource();
 
-	assert.match(source, /const SIDEBAR_MIN_WIDTH_PX = 40;/);
-	assert.match(source, /const SIDEBAR_MIN_SIZE_FALLBACK = 4;/);
-	assert.match(source, /function updateDesktopSidebarMinSize\(width: number\)/);
-	assert.match(source, /\(SIDEBAR_MIN_WIDTH_PX \/ width\) \* 100/);
-	assert.match(source, /Math\.min\(\s*48,/);
-	assert.match(source, /Math\.max\(SIDEBAR_MIN_SIZE_FALLBACK,/);
-	assert.match(source, /minSize=\{desktopSidebarMinSize\}/);
-	assert.match(source, /bind:this=\{desktopPaneGroupElement\}/);
-	assert.match(source, /new ResizeObserver/);
+	assert.match(source, /type Props = \{/);
+	assert.match(source, /sessionId: string;/);
+	assert.match(source, /visible: boolean;/);
+	assert.match(source, /mainClass: string;/);
+	assert.match(source, /useSessionContext\(untrack\(\(\) => sessionId\)\)/);
+	assert.match(source, /const threadId = \$derived\.by\(/);
+	assert.match(source, /\{#key threadId\}/);
+	assert.match(source, /<ThreadWorkspace/);
+	assert.match(source, /\{threadId\}/);
+	assert.match(
+		source,
+		/mode=\{session\.isPending \? "conversation-only" : undefined\}/,
+	);
+	assert.doesNotMatch(source, /new ResizeObserver/);
+	assert.doesNotMatch(source, /<SessionSidebar/);
 });
