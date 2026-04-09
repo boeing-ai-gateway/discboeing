@@ -19,11 +19,15 @@ test("session workspace is a per-session mounted wrapper around thread workspace
 	assert.match(source, /sessionId: string;/);
 	assert.match(source, /visible: boolean;/);
 	assert.match(source, /mainClass: string;/);
+	assert.match(source, /showSidebarToggle\?: boolean;/);
+	assert.match(source, /reserveSidebarSpace\?: boolean;/);
 	assert.match(source, /useSessionContext\(untrack\(\(\) => sessionId\)\)/);
 	assert.match(source, /const threadId = \$derived\.by\(/);
 	assert.match(source, /\{#key threadId\}/);
 	assert.match(source, /<ThreadWorkspace/);
 	assert.match(source, /\{threadId\}/);
+	assert.match(source, /\{showSidebarToggle\}/);
+	assert.match(source, /\{reserveSidebarSpace\}/);
 	assert.match(
 		source,
 		/mode=\{session\.isPending \? "conversation-only" : undefined\}/,

@@ -99,11 +99,14 @@ test("session sidebar nests thread children only for the active session", () => 
 		source,
 		/function visibleThreadsForSession\(sessionId: string\): Thread\[] \{/,
 	);
-	assert.match(source, /if \(sessions\.selectedId !== sessionId\) \{/);
-	assert.match(source, /return session\.threads\.list;/);
 	assert.match(
 		source,
-		/if \(isCurrentSession && session\.threads\.list\.length > 1\) \{/,
+		/if \(sessions\.selectedId !== sessionId \|\| !selectedSessionContext\) \{/,
+	);
+	assert.match(source, /return selectedSessionContext\.threads\.list;/);
+	assert.match(
+		source,
+		/if \(\s*isCurrentSession &&\s*\(selectedSessionContext\?\.threads\.list\.length \?\? 0\) > 1\s*\) \{/,
 	);
 	assert.match(source, /\{#if sessionHasNestedThreads\(sessionObj\.id\)\}/);
 	assert.match(
@@ -117,8 +120,11 @@ test("session sidebar thread rows include rename and delete actions", () => {
 
 	assert.match(source, /function openRenameThreadDialog\(threadId: string\)/);
 	assert.match(source, /function openDeleteThreadDialog\(threadId: string\)/);
-	assert.match(source, /await session\.threads\.rename\(/);
-	assert.match(source, /await session\.threads\.remove\(deleteThreadId\)/);
+	assert.match(source, /await selectedSessionContext\?\.threads\.rename\(/);
+	assert.match(
+		source,
+		/await selectedSessionContext\?\.threads\.remove\(deleteThreadId\)/,
+	);
 	assert.match(source, /Thread actions for/);
 	assert.match(source, /Rename thread/);
 	assert.match(source, /Delete thread\?/);
@@ -128,7 +134,7 @@ test("session sidebar hides delete for the primary session thread", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /function isPrimaryThread\(threadId: string\)/);
-	assert.match(source, /threadId === session\.sessionId/);
+	assert.match(source, /threadId === sessions\.selectedId/);
 	assert.match(source, /isPrimaryThread\(threadId\) \|\|/);
 	assert.match(source, /\{#if !isPrimaryThread\(threadObj\.id\)\}/);
 });
@@ -149,6 +155,7 @@ test("session sidebar owns the collapsed floating overlay state", () => {
 	assert.match(source, /collapsed\?: boolean/);
 	assert.match(source, /let floatingOpen = \$state\(false\)/);
 	assert.match(source, /function toggleFloatingSidebar\(\)/);
+	assert.match(source, /\{#if onToggleSidebar && !dropdownMode\}/);
 	assert.match(
 		source,
 		/const showSidebarBody = \$derived\(!floatingCollapsed \|\| floatingOpen\)/,

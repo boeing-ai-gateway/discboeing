@@ -197,7 +197,10 @@
 	function handleSelectSession(sessionId: string) {
 		const isCurrentSession = sessions.selectedId === sessionId;
 		sessions.select(sessionId);
-		if (isCurrentSession && (selectedSessionContext?.threads.list.length ?? 0) > 1) {
+		if (
+			isCurrentSession &&
+			(selectedSessionContext?.threads.list.length ?? 0) > 1
+		) {
 			selectedSessionContext?.ui.selectThread(null);
 		}
 		closeFloatingSidebar();
@@ -343,7 +346,9 @@
 	function openDeleteThreadDialog(threadId: string) {
 		if (
 			isPrimaryThread(threadId) ||
-			!selectedSessionContext?.threads.list.some((thread) => thread.id === threadId)
+			!selectedSessionContext?.threads.list.some(
+				(thread) => thread.id === threadId,
+			)
 		) {
 			return;
 		}
@@ -380,7 +385,8 @@
 			return;
 		}
 		deletingThread = true;
-		const deleted = await selectedSessionContext?.threads.remove(deleteThreadId);
+		const deleted =
+			await selectedSessionContext?.threads.remove(deleteThreadId);
 		deletingThread = false;
 		if (deleted) {
 			closeDeleteThreadDialog();
@@ -399,8 +405,9 @@
 			return "this thread";
 		}
 		return (
-			selectedSessionContext?.threads.list.find((thread) => thread.id === deleteThreadId)
-				?.name ?? "this thread"
+			selectedSessionContext?.threads.list.find(
+				(thread) => thread.id === deleteThreadId,
+			)?.name ?? "this thread"
 		);
 	}
 

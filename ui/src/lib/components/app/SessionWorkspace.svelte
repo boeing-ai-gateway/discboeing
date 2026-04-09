@@ -7,12 +7,19 @@
 		sessionId: string;
 		visible: boolean;
 		mainClass: string;
-		sidebarOpen?: boolean;
+		showSidebarToggle?: boolean;
+		reserveSidebarSpace?: boolean;
 		onToggleSidebar?: () => void;
 	};
 
-	let { sessionId, visible, mainClass, sidebarOpen, onToggleSidebar }: Props =
-		$props();
+	let {
+		sessionId,
+		visible,
+		mainClass,
+		showSidebarToggle,
+		reserveSidebarSpace,
+		onToggleSidebar,
+	}: Props = $props();
 	const session = useSessionContext(untrack(() => sessionId));
 	const threadId = $derived.by(
 		() => session.threads.selectedId ?? session.sessionId,
@@ -28,7 +35,8 @@
 		<ThreadWorkspace
 			{threadId}
 			{mainClass}
-			{sidebarOpen}
+			{showSidebarToggle}
+			{reserveSidebarSpace}
 			{onToggleSidebar}
 			mode={session.isPending ? "conversation-only" : undefined}
 		/>

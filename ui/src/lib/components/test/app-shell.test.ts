@@ -38,3 +38,59 @@ test("app shell only preloads recent sessions after they have been visited", () 
 		/\{#each preloadSessionIds as sessionId \(sessionId\)\}/,
 	);
 });
+
+test("app shell restores dynamic desktop sidebar sizing", () => {
+	const source = readAppShellSource();
+
+	assert.match(source, /const SIDEBAR_MIN_WIDTH_PX = 300;/);
+	assert.match(source, /const SIDEBAR_MIN_SIZE_FALLBACK = 10;/);
+	assert.match(
+		source,
+		/let desktopPaneGroupElement = \$state<HTMLDivElement \| null>\(null\)/,
+	);
+	assert.match(
+		source,
+		/let desktopSidebarMinSize = \$state\(SIDEBAR_MIN_SIZE_FALLBACK\)/,
+	);
+	assert.match(source, /function updateDesktopSidebarMinSize\(width: number\)/);
+	assert.match(source, /new ResizeObserver\(\(entries\) => \{/);
+	assert.match(source, /resizeObserver\.observe\(desktopPaneGroupElement\)/);
+	assert.match(source, /bind:this=\{desktopPaneGroupElement\}/);
+	assert.match(source, /minSize=\{desktopSidebarMinSize\}/);
+});
+
+test("app shell renders the floating sidebar trigger when the desktop pane is collapsed", () => {
+	const source = readAppShellSource();
+
+	assert.match(source, /\{#if !sessionView\.desktopSidebarOpen\}/);
+	assert.match(source, /<AppSidebar\s+mode="floating"\s+collapsed/);
+	assert.match(
+		source,
+		/showSidebarToggle=\{isMobile\.current && !sidebarOpen\(\)\}/,
+	);
+	assert.match(
+		source,
+		/reserveSidebarSpace=\{!isMobile\.current && !sidebarOpen\(\)\}/,
+	);
+});
+
+test("app shell re-syncs the desktop pane state when the selected session changes", () => {
+	const source = readAppShellSource();
+
+	assert.match(
+		source,
+		/selectedSession\.ui\.desktopSidebarOpen = !desktopSidebarPane\.isCollapsed\(\);/,
+	);
+	assert.match(
+		source,
+		/const paneCollapsed = desktopSidebarPane\.isCollapsed\(\)/,
+	);
+	assert.match(
+		source,
+		/if \(sessionView\.desktopSidebarOpen && paneCollapsed\) \{\s*desktopSidebarPane\.expand\(\);/,
+	);
+	assert.match(
+		source,
+		/if \(!sessionView\.desktopSidebarOpen && !paneCollapsed\) \{\s*desktopSidebarPane\.collapse\(\);/,
+	);
+});
