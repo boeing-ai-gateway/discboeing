@@ -2227,8 +2227,11 @@ func TestChatStream_ContinuesIntoLaterCompletionOnSameConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ma := &streamTestAgent{promptFn: yieldChunksAndFinish(nextChunk)}
+	// Use yieldChunksAndBlock so the completion is always in-progress when
+	// WaitNextCompletion returns, making the test deterministic.
+	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(nextChunk)}
 	cm := agent.NewCompletionManager(ma)
+	cleanupCompletion(t, cm, "thread-6")
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = 25 * time.Millisecond
 	ts := newStreamTestServer(t, h)
@@ -2254,9 +2257,9 @@ func TestChatStream_ContinuesIntoLaterCompletionOnSameConnection(t *testing.T) {
 		startErrCh <- startErr
 	})
 
-	frames := readNonPingFramesFromScanner(t, scanner, 3)
-	if len(frames) != 3 {
-		t.Fatalf("expected 3 non-ping frames, got %d", len(frames))
+	frames := readNonPingFramesFromScanner(t, scanner, 4)
+	if len(frames) != 4 {
+		t.Fatalf("expected 4 non-ping frames, got %d", len(frames))
 	}
 	if frames[0].Event != "history-start" {
 		t.Fatalf("expected history-start, got %+v", frames[0])
@@ -2264,9 +2267,16 @@ func TestChatStream_ContinuesIntoLaterCompletionOnSameConnection(t *testing.T) {
 	if frames[1].Event != "history-end" {
 		t.Fatalf("expected history-end, got %+v", frames[1])
 	}
-	if frames[2].Event != "chunk" || frames[2].Data != string(nextChunkJSON) {
-		t.Fatalf("expected next completion chunk, got %+v", frames[2])
+	assertCompletionStatusFrame(t, frames[2], "thread-6", "", true)
+	if frames[3].Event != "chunk" || frames[3].Data != string(nextChunkJSON) {
+		t.Fatalf("expected next completion chunk, got %+v", frames[3])
 	}
+
+	cm.Cancel("thread-6")
+
+	endFrames := readNonPingFramesFromScanner(t, scanner, 1)
+	assertCompletionStatusFrame(t, endFrames[0], "thread-6", "", false)
+
 	pingFrame := readFramesFromScanner(t, scanner, 1, false)
 	if len(pingFrame) != 1 || pingFrame[0].Event != "ping" {
 		t.Fatalf("expected ping after later completion, got %+v", pingFrame)
