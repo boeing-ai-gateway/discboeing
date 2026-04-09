@@ -11,6 +11,13 @@
 
 	let { entries, onDelete }: Props = $props();
 
+	const displayEntries = $derived(
+		entries.map((entry, index) => ({
+			entry,
+			renderKey: `${entry.id}:${entry.createdAt ?? ""}:${index}`,
+		})),
+	);
+
 	function getPromptText(entry: QueuedPrompt): string {
 		const parts = entry.message.parts ?? [];
 		const text: string[] = [];
@@ -39,7 +46,7 @@
 			Queued prompts ({entries.length})
 		</div>
 		<div class="flex flex-col gap-1 p-1">
-			{#each entries as entry (entry.id)}
+			{#each displayEntries as { entry, renderKey } (renderKey)}
 				<div
 					class="flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
 				>
