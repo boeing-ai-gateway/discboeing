@@ -92,7 +92,7 @@ test("session sidebar session actions include new thread", () => {
 	assert.match(source, /New thread/);
 });
 
-test("session sidebar nests thread children only for the active session", () => {
+test("session sidebar keeps thread children visible for loaded sessions and refreshes on session select", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(
@@ -101,12 +101,18 @@ test("session sidebar nests thread children only for the active session", () => 
 	);
 	assert.match(
 		source,
-		/if \(sessions\.selectedId !== sessionId \|\| !selectedSessionContext\) \{/,
+		/const sessionContext = app\.sessions\.sessionContexts\.get\(sessionId\);/,
 	);
-	assert.match(source, /return selectedSessionContext\.threads\.list;/);
+	assert.match(source, /if \(!sessionContext\) \{/);
+	assert.match(source, /return sessionContext\.threads\.list;/);
 	assert.match(
 		source,
-		/if \(\s*isCurrentSession &&\s*\(selectedSessionContext\?\.threads\.list\.length \?\? 0\) > 1\s*\) \{/,
+		/const sessionContext = ensureSessionContext\(sessionId\);/,
+	);
+	assert.match(source, /void sessionContext\.threads\.refresh\(\);/);
+	assert.match(
+		source,
+		/if \(isCurrentSession && sessionContext\.threads\.list\.length > 1\) \{/,
 	);
 	assert.match(source, /\{#if sessionHasNestedThreads\(sessionObj\.id\)\}/);
 	assert.match(

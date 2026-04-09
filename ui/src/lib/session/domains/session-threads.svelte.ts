@@ -74,6 +74,13 @@ export function createSessionThreadsDomain(
 
 	const list = $derived.by(() => currentList());
 
+	function syncAfterFetch(nextList = currentList()) {
+		syncSelectedThread(nextList);
+		notifyThreadListChanged(nextList);
+		notifyThreadsUpdated(nextList);
+		notifySelectedThread(nextList);
+	}
+
 	return {
 		get list() {
 			return list;
@@ -105,10 +112,21 @@ export function createSessionThreadsDomain(
 				store.list.length > 0
 					? store.list
 					: buildImplicitThread(args.getSession());
-			syncSelectedThread(nextList);
-			notifyThreadListChanged(nextList);
-			notifyThreadsUpdated(nextList);
-			notifySelectedThread(nextList);
+			syncAfterFetch(nextList);
+		},
+		refresh: async () => {
+			if (!args.hasSession()) {
+				store.reset();
+				syncSelectedThread([]);
+				notifyThreadListChanged([]);
+				return;
+			}
+			await store.fetch(args.sessionId);
+			const nextList =
+				store.list.length > 0
+					? store.list
+					: buildImplicitThread(args.getSession());
+			syncAfterFetch(nextList);
 		},
 		select: (threadId: string) => {
 			const selectedThread = list.find((thread) => thread.id === threadId);

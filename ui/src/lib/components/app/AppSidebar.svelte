@@ -31,6 +31,7 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { ensureSessionContext } from "$lib/context/session-context.svelte";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -166,10 +167,11 @@
 	}
 
 	function visibleThreadsForSession(sessionId: string): Thread[] {
-		if (sessions.selectedId !== sessionId || !selectedSessionContext) {
+		const sessionContext = app.sessions.sessionContexts.get(sessionId);
+		if (!sessionContext) {
 			return [];
 		}
-		return selectedSessionContext.threads.list;
+		return sessionContext.threads.list;
 	}
 
 	function sessionHasNestedThreads(sessionId: string) {
@@ -196,13 +198,12 @@
 
 	function handleSelectSession(sessionId: string) {
 		const isCurrentSession = sessions.selectedId === sessionId;
+		const sessionContext = ensureSessionContext(sessionId);
 		sessions.select(sessionId);
-		if (
-			isCurrentSession &&
-			(selectedSessionContext?.threads.list.length ?? 0) > 1
-		) {
-			selectedSessionContext?.ui.selectThread(null);
+		if (isCurrentSession && sessionContext.threads.list.length > 1) {
+			sessionContext.ui.selectThread(null);
 		}
+		void sessionContext.threads.refresh();
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}

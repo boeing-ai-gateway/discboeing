@@ -43,6 +43,7 @@ export type SessionThreadsService = {
 	selectedId: string | null;
 	selected: Thread | null;
 	load: () => Promise<void>;
+	refresh: () => Promise<void>;
 	select: (threadId: string) => void;
 	create: (name?: string) => void;
 	rename: (threadId: string, nextName: string) => Promise<boolean>;
