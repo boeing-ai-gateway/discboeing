@@ -27,7 +27,7 @@ Download the macOS app from [Releases](https://github.com/obot-platform/discobot
 
 ## Community
 
-Join the [#discobot channel](https://discord.gg/z2WcjDfw) on the Obot AI Discord.
+Join the [#discobot channel](https://discord.gg/tHWRW6PVjP) on the Obot AI Discord.
 
 ## License
 
