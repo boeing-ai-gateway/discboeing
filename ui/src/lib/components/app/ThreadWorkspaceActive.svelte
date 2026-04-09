@@ -9,6 +9,7 @@
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
 
 	type Props = {
+		visible: boolean;
 		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
 		onToggleSidebar?: () => void;
@@ -57,7 +58,7 @@
 					state={session.threads.selected?.state}
 				/>
 				<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
-					<ConversationPane />
+					<ConversationPane visible={props.visible} />
 				</div>
 			</div>
 		</Resizable.Pane>
@@ -79,6 +80,6 @@
 	/>
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-		<ConversationPane />
+		<ConversationPane visible={props.visible} />
 	</div>
 {/if}

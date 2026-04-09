@@ -6,6 +6,7 @@
 
 	type Props = {
 		threadId: string;
+		visible: boolean;
 		mainClass: string;
 		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
@@ -31,6 +32,7 @@
 <main class={props.mainClass}>
 	{#if hasSelectedThread}
 		<ThreadWorkspaceActive
+			visible={props.visible}
 			showSidebarToggle={props.showSidebarToggle}
 			reserveSidebarSpace={props.reserveSidebarSpace}
 			onToggleSidebar={props.onToggleSidebar}

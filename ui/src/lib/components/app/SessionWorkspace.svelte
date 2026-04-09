@@ -34,6 +34,7 @@
 	{#key threadId}
 		<ThreadWorkspace
 			{threadId}
+			{visible}
 			{mainClass}
 			{showSidebarToggle}
 			{reserveSidebarSpace}

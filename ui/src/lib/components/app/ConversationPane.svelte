@@ -68,6 +68,7 @@
 		chatWidthMode?: ChatWidthMode;
 		showComposer?: boolean;
 		toolDefaultOpen?: boolean;
+		visible?: boolean;
 	};
 
 	const SCROLL_TO_BOTTOM_BUFFER = 64;
@@ -81,6 +82,7 @@
 		chatWidthMode,
 		showComposer = true,
 		toolDefaultOpen = false,
+		visible = true,
 	}: Props = $props();
 
 	const app = getAppContextIfPresent();
@@ -124,6 +126,12 @@
 	const latestConversationMessageId = $derived.by(
 		() => conversationMessages.at(-1)?.id ?? null,
 	);
+	const savedScrollTop = $derived.by(() => {
+		if (!activeThreadId || !session) {
+			return null;
+		}
+		return session.conversationScrollTopByThreadId.get(activeThreadId) ?? null;
+	});
 
 	let viewport = $state<HTMLDivElement | null>(null);
 	let hasInitialBottomScroll = $state(false);
@@ -140,6 +148,7 @@
 	let expandedErrorBanners = $state<
 		Partial<Record<ConversationPaneErrorBannerKey, boolean>>
 	>({});
+	let lastRestoredVisibleThreadId = $state<string | null>(null);
 
 	function getHookFileLanguage(path: string | undefined): string {
 		const extension = path?.split(".").at(-1)?.toLowerCase() ?? "";
@@ -291,6 +300,16 @@
 		isNearBottom = distanceToBottom <= SCROLL_TO_BOTTOM_BUFFER;
 	}
 
+	function saveScrollPosition(element: HTMLDivElement | null = viewport) {
+		if (!element || !activeThreadId || !session) {
+			return;
+		}
+		session.conversationScrollTopByThreadId.set(
+			activeThreadId,
+			element.scrollTop,
+		);
+	}
+
 	function scrollToBottom(behavior: ScrollBehavior = "auto") {
 		const element = viewport;
 		if (!element) {
@@ -300,6 +319,7 @@
 		element.scrollTo({ top: element.scrollHeight, behavior });
 		if (behavior === "auto") {
 			requestAnimationFrame(() => {
+				saveScrollPosition(element);
 				updateIsNearBottom();
 			});
 		}
@@ -354,6 +374,7 @@
 		}
 
 		const handleScroll = () => {
+			saveScrollPosition(element);
 			updateIsNearBottom();
 		};
 
@@ -363,6 +384,39 @@
 		return () => {
 			element.removeEventListener("scroll", handleScroll);
 		};
+	});
+
+	$effect(() => {
+		if (!visible) {
+			lastRestoredVisibleThreadId = null;
+		}
+	});
+
+	$effect(() => {
+		const element = viewport;
+		const threadId = activeThreadId;
+		if (!visible || !element || !threadId) {
+			return;
+		}
+		if (savedScrollTop === null) {
+			return;
+		}
+		if (lastRestoredVisibleThreadId === threadId) {
+			return;
+		}
+
+		lastRestoredVisibleThreadId = threadId;
+		void tick().then(() => {
+			if (!visible || viewport !== element || activeThreadId !== threadId) {
+				return;
+			}
+			element.scrollTop = Math.min(
+				savedScrollTop,
+				Math.max(0, element.scrollHeight - element.clientHeight),
+			);
+			saveScrollPosition(element);
+			updateIsNearBottom();
+		});
 	});
 
 	$effect(() => {
@@ -385,6 +439,10 @@
 			return;
 		}
 		if (conversationStatus !== "ready" && conversationStatus !== "streaming") {
+			return;
+		}
+		if (savedScrollTop !== null) {
+			hasInitialBottomScroll = true;
 			return;
 		}
 

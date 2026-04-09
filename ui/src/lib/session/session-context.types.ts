@@ -199,4 +199,5 @@ export type SessionContextValue = {
 	files: SessionFilesDomain;
 	services: SessionServicesDomain;
 	threadContexts: Map<string, ThreadContextValue>;
+	conversationScrollTopByThreadId: Map<string, number>;
 };

@@ -101,6 +101,7 @@ function createSessionContext(
 	});
 
 	const threadContexts = new SvelteMap<string, ThreadContextValue>();
+	const conversationScrollTopByThreadId = new SvelteMap<string, number>();
 
 	async function load() {
 		if (!hasSession) {
@@ -148,6 +149,7 @@ function createSessionContext(
 		files: filesDomain,
 		services,
 		threadContexts,
+		conversationScrollTopByThreadId,
 	};
 }
 
