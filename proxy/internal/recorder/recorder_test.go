@@ -336,7 +336,7 @@ func TestBeginUpgradeStream_WritesBidirectionalFrames(t *testing.T) {
 
 func TestUpgradeStreamSession_DropsChunksWhenWriterBlocks(t *testing.T) {
 	writer := &blockingWriteCloser{allowWrites: make(chan struct{})}
-	session := newUpgradeStreamSession(writer, 1)
+	session := newUpgradeStreamSession(writer, 1, nil)
 
 	session.RecordChunk(UpgradeStreamClientToServer, []byte("one"))
 	session.RecordChunk(UpgradeStreamClientToServer, []byte("two"))

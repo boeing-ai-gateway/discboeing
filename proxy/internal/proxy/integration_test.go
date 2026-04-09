@@ -311,6 +311,18 @@ func TestIntegration_HTTPProxy_WSSWebSocketUpgrade(t *testing.T) {
 		t.Fatal("timed out waiting for backend websocket handler")
 	}
 
+	// Close the proxy server to force the bidirectional copy goroutine to
+	// exit, which triggers the UpgradeStreamSession to close and flush its
+	// binary recording to disk. Then wait for all streams to finish.
+	proxyServer.Close()
+	done := make(chan struct{})
+	go func() { rec.WaitForStreams(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for stream recording to flush")
+	}
+
 	recordings := readRecordedEntries(t, recordingDir)
 	if len(recordings) != 1 {
 		t.Fatalf("len(recordings) = %d, want 1", len(recordings))

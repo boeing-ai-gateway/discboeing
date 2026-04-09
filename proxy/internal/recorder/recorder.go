@@ -80,10 +80,11 @@ func generateID() string {
 
 // Recorder writes HTTP exchange entries to daily-rotated JSONL files.
 type Recorder struct {
-	cfg     Config
-	mu      sync.Mutex
-	file    *os.File
-	fileDay string // "YYYY-MM-DD" of the currently open file
+	cfg      Config
+	mu       sync.Mutex
+	file     *os.File
+	fileDay  string // "YYYY-MM-DD" of the currently open file
+	streamWg sync.WaitGroup
 }
 
 // ResponseCapture incrementally captures a streamed response body for later
@@ -132,6 +133,7 @@ type UpgradeStreamSession struct {
 	events    chan streamEvent
 	done      chan struct{}
 	closeOnce sync.Once
+	wg        *sync.WaitGroup // parent Recorder's streamWg; may be nil
 
 	droppedChunks atomic.Uint64
 	droppedBytes  atomic.Uint64
@@ -178,7 +180,7 @@ func (r *Recorder) BeginUpgradeStream(entry *Entry, upgradeType string) (*Upgrad
 		return nil, fmt.Errorf("write stream recording header: %w", err)
 	}
 
-	session := newUpgradeStreamSession(file, defaultUpgradeStreamQueueSize)
+	session := newUpgradeStreamSession(file, defaultUpgradeStreamQueueSize, &r.streamWg)
 	if entry != nil {
 		entry.Upgrade = true
 		entry.UpgradeType = upgradeType
@@ -241,11 +243,15 @@ func (r *Recorder) CaptureRequestBody(entry *Entry, req *http.Request) {
 	entry.Request.BodyTruncated = truncated
 }
 
-func newUpgradeStreamSession(writer io.WriteCloser, queueSize int) *UpgradeStreamSession {
+func newUpgradeStreamSession(writer io.WriteCloser, queueSize int, wg *sync.WaitGroup) *UpgradeStreamSession {
+	if wg != nil {
+		wg.Add(1)
+	}
 	session := &UpgradeStreamSession{
 		writer: writer,
 		events: make(chan streamEvent, queueSize),
 		done:   make(chan struct{}),
+		wg:     wg,
 	}
 
 	go session.run()
@@ -420,6 +426,12 @@ func (r *Recorder) Close() error {
 	return nil
 }
 
+// WaitForStreams blocks until all open UpgradeStreamSessions have been closed
+// and their binary recordings fully flushed to disk.
+func (r *Recorder) WaitForStreams() {
+	r.streamWg.Wait()
+}
+
 func (s *UpgradeStreamSession) run() {
 	defer close(s.done)
 
@@ -440,6 +452,10 @@ func (s *UpgradeStreamSession) run() {
 
 	_ = writeUpgradeStreamSummaryFrame(s.writer, time.Now().UTC(), s)
 	_ = s.writer.Close()
+
+	if s.wg != nil {
+		s.wg.Done()
+	}
 }
 
 func writeUpgradeStreamHeader(w io.Writer, sessionID, upgradeType string, startedAt time.Time) error {
