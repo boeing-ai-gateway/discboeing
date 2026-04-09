@@ -12,9 +12,13 @@ function readAppShellSource() {
 	return readFileSync(APP_SHELL_COMPONENT, "utf-8");
 }
 
-test("app shell only preloads recent sessions after they have been visited", () => {
+test("app shell only preloads app-ui mounted sessions after they have been visited", () => {
 	const source = readAppShellSource();
 
+	assert.match(
+		source,
+		/const mountedSessionIds = \$derived\.by\(\(\) => app\.ui\.mountedSessionIds\)/,
+	);
 	assert.match(source, /let visitedSessionIds = \$state<string\[\]>\(\[\]\)/);
 	assert.match(source, /const preloadSessionIds = \$derived\.by\(\(\) =>/);
 	assert.match(

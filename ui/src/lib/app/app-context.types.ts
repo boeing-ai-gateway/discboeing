@@ -76,6 +76,8 @@ export type AppContextBootstrap = {
 export type AppUI = {
 	credentialFlowIntent: "github-git" | null;
 	supportInfoDialogOpen: boolean;
+	visibleRecentThreads: RecentThreadSummary[];
+	mountedSessionIds: string[];
 	settingsDialog: {
 		open: boolean;
 		tab: SettingsDialogTab;

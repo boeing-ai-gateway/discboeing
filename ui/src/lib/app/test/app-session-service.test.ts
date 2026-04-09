@@ -600,6 +600,79 @@ test("getVisibleRecentThreads picks the newest entries while preserving stable l
 	);
 });
 
+test("visible recent sessions mount from the rendered recent subset rather than the first stored entries", () => {
+	const visibleRecentThreads = getVisibleRecentThreads(
+		[
+			{
+				sessionId: "session-1",
+				threadId: "thread-1",
+				sessionName: "One",
+				sessionStatus: "ready",
+				threadName: "Thread One",
+				lastMessage: "one",
+				lastAccessedAt: "2026-01-01T00:00:00Z",
+			},
+			{
+				sessionId: "session-2",
+				threadId: "thread-2",
+				sessionName: "Two",
+				sessionStatus: "ready",
+				threadName: "Thread Two",
+				lastMessage: "two",
+				lastAccessedAt: "2026-01-05T00:00:00Z",
+			},
+			{
+				sessionId: "session-3",
+				threadId: "thread-3",
+				sessionName: "Three",
+				sessionStatus: "ready",
+				threadName: "Thread Three",
+				lastMessage: "three",
+				lastAccessedAt: "2026-01-02T00:00:00Z",
+			},
+			{
+				sessionId: "session-4",
+				threadId: "thread-4",
+				sessionName: "Four",
+				sessionStatus: "ready",
+				threadName: "Thread Four",
+				lastMessage: "four",
+				lastAccessedAt: "2026-01-06T00:00:00Z",
+			},
+			{
+				sessionId: "session-5",
+				threadId: "thread-5",
+				sessionName: "Five",
+				sessionStatus: "ready",
+				threadName: "Thread Five",
+				lastMessage: "five",
+				lastAccessedAt: "2026-01-03T00:00:00Z",
+			},
+			{
+				sessionId: "session-6",
+				threadId: "thread-6",
+				sessionName: "Six",
+				sessionStatus: "ready",
+				threadName: "Thread Six",
+				lastMessage: "six",
+				lastAccessedAt: "2026-01-04T00:00:00Z",
+			},
+		],
+		4,
+	);
+
+	assert.deepEqual(
+		visibleRecentThreads.map((thread) => thread.sessionId),
+		["session-2", "session-4", "session-5", "session-6"],
+	);
+	assert.deepEqual(getMountedSessionIds(null, visibleRecentThreads, 4), [
+		"session-2",
+		"session-4",
+		"session-5",
+		"session-6",
+	]);
+});
+
 test("getMountedSessionIds keeps the selected session and fills unique recent sessions", () => {
 	assert.deepEqual(
 		getMountedSessionIds(

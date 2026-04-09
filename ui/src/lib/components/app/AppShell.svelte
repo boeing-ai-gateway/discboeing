@@ -1,10 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from "svelte";
 	import type { PaneAPI } from "paneforge";
-	import {
-		getMountedSessionIds,
-		RECENT_SESSIONS_LIMIT,
-	} from "$lib/app/app-helpers";
 	import AppHeader from "$lib/components/app/AppHeader.svelte";
 	import AppSidebar from "$lib/components/app/AppSidebar.svelte";
 	import SessionWorkspace from "$lib/components/app/SessionWorkspace.svelte";
@@ -38,13 +34,7 @@
 	const sessionView = $derived.by(() => selectedSession.ui);
 	const selectedSessionId = $derived.by(() => selectedSession.sessionId);
 	const showSessionToolbar = $derived.by(() => !selectedSession.isPending);
-	const mountedSessionIds = $derived.by(() =>
-		getMountedSessionIds(
-			app.sessions.selectedId,
-			app.sessions.recentThreads,
-			RECENT_SESSIONS_LIMIT,
-		),
-	);
+	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
 	const preloadSessionIds = $derived.by(() =>
 		mountedSessionIds.filter(
 			(sessionId) =>

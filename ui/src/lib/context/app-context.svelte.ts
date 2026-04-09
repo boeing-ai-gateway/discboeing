@@ -164,7 +164,6 @@ function startProjectEventsSubscription(app: AppContext) {
 }
 
 function createAppContext(bootstrap: AppContextBootstrap): AppContext {
-	const ui = createAppViewState();
 	const preferences = createAppPreferencesDomain({ bootstrap });
 	const environment = createAppEnvironmentDomain({ bootstrap });
 	const updates = createAppUpdatesDomain();
@@ -190,6 +189,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		store: stores.sessions,
 		initialSelectedSessionId: bootstrap.selectedSessionId,
 	});
+	const ui = createAppViewState({ sessions, preferences });
 
 	const refresh = async () => {
 		await Promise.all([

@@ -1,19 +1,9 @@
 <script lang="ts">
-	import {
-		getMountedSessionIds,
-		RECENT_SESSIONS_LIMIT,
-	} from "$lib/app/app-helpers";
 	import SessionToolbar from "$lib/components/app/SessionToolbar.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 
 	const app = useAppContext();
-	const mountedSessionIds = $derived.by(() =>
-		getMountedSessionIds(
-			app.sessions.selectedId,
-			app.sessions.recentThreads,
-			RECENT_SESSIONS_LIMIT,
-		),
-	);
+	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
 	const selectedSessionId = $derived.by(
 		() => app.sessions.selectedId ?? app.sessions.pendingId,
 	);

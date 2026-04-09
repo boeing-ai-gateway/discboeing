@@ -1,5 +1,15 @@
-import type { AppUI, SettingsDialogTab } from "$lib/app/app-context.types";
-import { getDefaultSettingsTab } from "$lib/app/app-helpers";
+import type {
+	AppPreferences,
+	AppSessions,
+	AppUI,
+	SettingsDialogTab,
+} from "$lib/app/app-context.types";
+import {
+	getDefaultSettingsTab,
+	getMountedSessionIds,
+	getVisibleRecentThreads,
+	RECENT_SESSIONS_LIMIT,
+} from "$lib/app/app-helpers";
 
 export type AppViewState = AppUI & {
 	credentialsDialogOpen: boolean;
@@ -8,12 +18,29 @@ export type AppViewState = AppUI & {
 	closeCredentialsDialog: () => void;
 };
 
-export function createAppViewState(): AppViewState {
+export function createAppViewState(args: {
+	sessions: AppSessions;
+	preferences: AppPreferences;
+}): AppViewState {
+	const { sessions, preferences } = args;
 	let settingsDialogTab = $state<SettingsDialogTab>(getDefaultSettingsTab());
 	let credentialFlowIntent = $state<"github-git" | null>(null);
 	let settingsDialogOpen = $state(false);
 	let credentialsDialogOpen = $state(false);
 	let supportInfoDialogOpen = $state(false);
+	const visibleRecentThreads = $derived.by(() =>
+		getVisibleRecentThreads(
+			sessions.recentThreads,
+			preferences.recentThreadsVisibleLimit,
+		),
+	);
+	const mountedSessionIds = $derived.by(() =>
+		getMountedSessionIds(
+			sessions.selectedId,
+			visibleRecentThreads,
+			RECENT_SESSIONS_LIMIT,
+		),
+	);
 
 	const openSettingsDialogAt = (tab: SettingsDialogTab) => {
 		credentialsDialogOpen = false;
@@ -55,6 +82,12 @@ export function createAppViewState(): AppViewState {
 		},
 		set credentialsDialogOpen(value) {
 			credentialsDialogOpen = value;
+		},
+		get visibleRecentThreads() {
+			return visibleRecentThreads;
+		},
+		get mountedSessionIds() {
+			return mountedSessionIds;
 		},
 		settingsDialog,
 		openSettings: (tab?: SettingsDialogTab) => {
