@@ -32,7 +32,6 @@
 	import { Input } from "$lib/components/ui/input";
 	import { getVisibleRecentThreads } from "$lib/app/app-helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { ensureSessionContext } from "$lib/context/session-context.svelte";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -202,12 +201,16 @@
 
 	function handleSelectSession(sessionId: string) {
 		const isCurrentSession = sessions.selectedId === sessionId;
-		const sessionContext = ensureSessionContext(app, sessionId);
+		const sessionContext = app.sessions.sessionContexts.get(sessionId);
 		sessions.select(sessionId);
-		if (isCurrentSession && sessionContext.threads.list.length > 1) {
+		if (
+			isCurrentSession &&
+			sessionContext &&
+			sessionContext.threads.list.length > 1
+		) {
 			sessionContext.threads.select(null);
 		}
-		void sessionContext.threads.refresh();
+		void sessionContext?.threads.refresh();
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
