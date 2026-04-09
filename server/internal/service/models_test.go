@@ -29,7 +29,7 @@ func TestGetModelsForProject_SkipsInactiveCredentials(t *testing.T) {
 		"Anthropic",
 		"",
 		"sk-ant-test-123",
-		false,
+		CredentialVisibility{},
 		false,
 	)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestGetModelsForProject_SkipsInactiveCredentials(t *testing.T) {
 		"OpenAI",
 		"",
 		"sk-openai-test-123",
-		false,
+		CredentialVisibility{},
 		true,
 	)
 	if err != nil {

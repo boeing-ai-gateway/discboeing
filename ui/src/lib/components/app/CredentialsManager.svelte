@@ -12,6 +12,7 @@
 		CredentialAuthType,
 		CredentialEnvVar,
 		CredentialOAuthKind,
+		CredentialVisibility,
 	} from "$lib/api-types";
 	import {
 		parseBulkEnvVarPaste,
@@ -85,7 +86,12 @@
 	let copiedOAuthAuthUrl = $state(false);
 	let inactiveDraft = $state(false);
 	let replaceSecretDraft = $state(false);
-	let agentVisibleDraft = $state(false);
+	let visibilityDraft = $state<CredentialVisibility>({
+		tools: false,
+		console: false,
+		services: false,
+		hooks: false,
+	});
 	let envVarRows = $state<EnvVarRow[]>([]);
 	let pendingBulkEnvVarPaste = $state<PendingBulkEnvVarPaste | null>(null);
 	let submitting = $state(false);
@@ -266,6 +272,13 @@
 		});
 	}
 
+	function notifyCredentialsChanged() {
+		if (typeof window === "undefined") {
+			return;
+		}
+		window.dispatchEvent(new CustomEvent("discobot:credentials-changed"));
+	}
+
 	function resetEditor() {
 		if (oauthPollTimer) {
 			clearTimeout(oauthPollTimer);
@@ -307,7 +320,12 @@
 		copiedOAuthAuthUrl = false;
 		inactiveDraft = false;
 		replaceSecretDraft = false;
-		agentVisibleDraft = false;
+		visibilityDraft = {
+			tools: false,
+			console: false,
+			services: false,
+			hooks: false,
+		};
 		envVarRows = [makeEnvVarRow()];
 		pendingBulkEnvVarPaste = null;
 		submitting = false;
@@ -379,6 +397,19 @@
 		return envKeySummary(credential.envKeys);
 	}
 
+	function visibilitySummary(visibility: CredentialVisibility) {
+		const contexts = [
+			visibility.tools ? "tools" : null,
+			visibility.console ? "console" : null,
+			visibility.services ? "services" : null,
+			visibility.hooks ? "hooks" : null,
+		].filter((value): value is string => value !== null);
+		if (contexts.length === 0) {
+			return "internal only";
+		}
+		return contexts.join(", ");
+	}
+
 	async function load() {
 		loading = true;
 		errorMessage = null;
@@ -414,7 +445,7 @@
 		descriptionDraft = credential.description ?? "";
 		showNameDraft = credential.name.trim().length > 0;
 		showDescriptionDraft = (credential.description ?? "").trim().length > 0;
-		agentVisibleDraft = credential.agentVisible;
+		visibilityDraft = { ...credential.visibility };
 		inactiveDraft = credential.inactive;
 		replaceSecretDraft = false;
 		if (selectedProvider === CUSTOM_PROVIDER) {
@@ -528,6 +559,7 @@
 				if (response.status === "success") {
 					resetEditor();
 					await load();
+					notifyCredentialsChanged();
 					return;
 				}
 				if (response.status === "error") {
@@ -730,7 +762,7 @@
 					description: descriptionDraft.trim() || undefined,
 					authType: "api_key",
 					envVars: envVarsFromRows(),
-					agentVisible: agentVisibleDraft,
+					visibility: visibilityDraft,
 					inactive: inactiveDraft,
 				});
 			} else if (selectedAuthType === "oauth") {
@@ -743,7 +775,7 @@
 					name: nameDraft.trim() || "",
 					description: descriptionDraft.trim() || undefined,
 					authType: selectedAuthType,
-					agentVisible: agentVisibleDraft,
+					visibility: visibilityDraft,
 					inactive: inactiveDraft,
 				});
 			} else {
@@ -755,7 +787,7 @@
 						name: nameDraft.trim() || "",
 						description: descriptionDraft.trim() || undefined,
 						authType: selectedAuthType,
-						agentVisible: agentVisibleDraft,
+						visibility: visibilityDraft,
 						inactive: inactiveDraft,
 					});
 				} else {
@@ -773,13 +805,14 @@
 						description: descriptionDraft.trim() || undefined,
 						authType: selectedAuthType,
 						apiKey: trimmedKey,
-						agentVisible: agentVisibleDraft,
+						visibility: visibilityDraft,
 						inactive: inactiveDraft,
 					});
 				}
 			}
 			resetEditor();
 			await load();
+			notifyCredentialsChanged();
 		} catch (error) {
 			errorMessage =
 				error instanceof Error ? error.message : "Failed to save credential";
@@ -792,6 +825,7 @@
 		deletingId = id;
 		try {
 			await credentialsApi.remove(id);
+			notifyCredentialsChanged();
 		} finally {
 			deletingId = null;
 		}
@@ -799,6 +833,19 @@
 
 	$effect(() => {
 		void load();
+	});
+
+	$effect(() => {
+		const targetId = app.ui.credentialsDialogTargetId;
+		if (!targetId || loading) {
+			return;
+		}
+		const credential = credentialsApi.list.find((item) => item.id === targetId);
+		if (!credential) {
+			return;
+		}
+		startEdit(credential);
+		app.ui.credentialsDialogTargetId = null;
 	});
 
 	$effect(() => {
@@ -856,9 +903,7 @@
 										)} ·
 										{credential.inactive
 											? "inactive"
-											: credential.agentVisible
-												? "visible to agent"
-												: "internal only"} ·
+											: visibilitySummary(credential.visibility)} ·
 										{credentialSummary(credential)}
 									</ItemDescription>
 								</ItemContent>
@@ -905,7 +950,12 @@
 								selectedProvider = "";
 								selectedAuthType = "api_key";
 								replaceSecretDraft = false;
-								agentVisibleDraft = false;
+								visibilityDraft = {
+									tools: false,
+									console: false,
+									services: false,
+									hooks: false,
+								};
 								return;
 							}
 							const option = providerOptions.find(
@@ -921,7 +971,12 @@
 							selectedAuthType = option.authType;
 							replaceSecretDraft =
 								option.authType === "oauth" ? false : mode === "create";
-							agentVisibleDraft = false;
+							visibilityDraft = {
+								tools: false,
+								console: false,
+								services: false,
+								hooks: false,
+							};
 							apiKeyDraft = "";
 							if (oauthPollTimer) {
 								clearTimeout(oauthPollTimer);
@@ -1320,56 +1375,100 @@
 						</div>
 					{/if}
 
-					{#if selectedAuthType !== "oauth"}
-						<div class="space-y-2">
-							<div class="flex items-center gap-2 text-sm">
-								<label class="flex items-center gap-2 text-sm">
-									<input
-										type="checkbox"
-										checked={agentVisibleDraft}
-										onchange={(event) =>
-											(agentVisibleDraft = (
-												event.currentTarget as HTMLInputElement
-											).checked)}
-									/>
-									Visible to the agent and tool environment
-								</label>
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										{#snippet child({ props })}
-											<button
-												type="button"
-												class="text-muted-foreground hover:text-foreground inline-flex items-center"
-												aria-label="Explain agent visibility"
-												{...props}
-											>
-												<CircleHelpIcon class="size-4" />
-											</button>
-										{/snippet}
-									</Tooltip.Trigger>
-									<Tooltip.Content side="top" align="start" class="max-w-72">
-										When enabled, this credential can be exposed inside the
-										agent runtime and may be read or used by tools and
-										model-driven actions. Only enable this when the agent truly
-										needs direct access.
-									</Tooltip.Content>
-								</Tooltip.Root>
-							</div>
-							{#if agentVisibleDraft}
-								<div
-									class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100"
-								>
-									<div class="font-medium">
-										Warning: agent-visible credentials increase exposure.
-									</div>
-									<div class="mt-1 text-current/90">
-										The agent and its tools may be able to read or use this
-										credential during a conversation.
-									</div>
-								</div>
-							{/if}
+					<div class="space-y-2">
+						<div class="flex items-center gap-2 text-sm">
+							<div class="font-medium">Runtime visibility</div>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<button
+											type="button"
+											class="text-muted-foreground hover:text-foreground inline-flex items-center"
+											aria-label="Explain credential visibility"
+											{...props}
+										>
+											<CircleHelpIcon class="size-4" />
+										</button>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content side="top" align="start" class="max-w-72">
+									Choose which runtime contexts receive this credential. Tools
+									allows the agent and developer tools to use it directly.
+									Console / SSH / IDE applies to SSH and terminal sessions.
+									Services and hooks apply to workspace automation under <code
+										>.discobot/</code
+									>.
+								</Tooltip.Content>
+							</Tooltip.Root>
 						</div>
+						<div class="grid gap-2 sm:grid-cols-2">
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									checked={visibilityDraft.tools}
+									onchange={(event) =>
+										(visibilityDraft = {
+											...visibilityDraft,
+											tools: (event.currentTarget as HTMLInputElement).checked,
+										})}
+								/>
+								Tools
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									checked={visibilityDraft.console}
+									onchange={(event) =>
+										(visibilityDraft = {
+											...visibilityDraft,
+											console: (event.currentTarget as HTMLInputElement)
+												.checked,
+										})}
+								/>
+								Console
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									checked={visibilityDraft.services}
+									onchange={(event) =>
+										(visibilityDraft = {
+											...visibilityDraft,
+											services: (event.currentTarget as HTMLInputElement)
+												.checked,
+										})}
+								/>
+								Services
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									checked={visibilityDraft.hooks}
+									onchange={(event) =>
+										(visibilityDraft = {
+											...visibilityDraft,
+											hooks: (event.currentTarget as HTMLInputElement).checked,
+										})}
+								/>
+								Hooks
+							</label>
+						</div>
+						{#if visibilityDraft.tools}
+							<div
+								class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100"
+							>
+								<div class="font-medium">
+									Warning: tool visibility increases exposure.
+								</div>
+								<div class="mt-1 text-current/90">
+									The agent and its tools may be able to read or use this
+									credential during a conversation.
+								</div>
+							</div>
+						{/if}
+					</div>
 
+					{#if selectedAuthType !== "oauth"}
 						<div class="space-y-2">
 							<div class="flex flex-wrap gap-2">
 								{#if !showNameDraft}

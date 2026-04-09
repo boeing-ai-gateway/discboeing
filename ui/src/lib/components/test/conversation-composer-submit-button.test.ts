@@ -88,7 +88,7 @@ test("conversation composer keeps session credentials interactive during pending
 test("session credentials control only shows a numeric badge when multiple credentials are visible", () => {
 	const source = readConversationCredentialsControlSource();
 
-	assert.match(source, /\{#if visibleCount > 1\}/);
-	assert.match(source, /<span>\{visibleCount\}<\/span>/);
+	assert.match(source, /visibleCount > 1 \? "text-foreground" : "invisible"/);
+	assert.match(source, /\{visibleCount\}/);
 	assert.doesNotMatch(source, /visibleCount\/\{availableCredentials\.length\}/);
 });

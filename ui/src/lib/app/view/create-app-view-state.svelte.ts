@@ -14,7 +14,7 @@ import {
 export type AppViewState = AppUI & {
 	credentialsDialogOpen: boolean;
 	openSettingsDialogAt: (tab: SettingsDialogTab) => void;
-	openCredentialsDialog: () => void;
+	openCredentialsDialog: (credentialId?: string | Event) => void;
 	closeCredentialsDialog: () => void;
 };
 
@@ -25,6 +25,7 @@ export function createAppViewState(args: {
 	const { sessions, preferences } = args;
 	let settingsDialogTab = $state<SettingsDialogTab>(getDefaultSettingsTab());
 	let credentialFlowIntent = $state<"github-git" | null>(null);
+	let credentialsDialogTargetId = $state<string | null>(null);
 	let settingsDialogOpen = $state(false);
 	let credentialsDialogOpen = $state(false);
 	let supportInfoDialogOpen = $state(false);
@@ -71,6 +72,12 @@ export function createAppViewState(args: {
 		set credentialFlowIntent(value) {
 			credentialFlowIntent = value;
 		},
+		get credentialsDialogTargetId() {
+			return credentialsDialogTargetId;
+		},
+		set credentialsDialogTargetId(value) {
+			credentialsDialogTargetId = value;
+		},
 		get supportInfoDialogOpen() {
 			return supportInfoDialogOpen;
 		},
@@ -92,32 +99,39 @@ export function createAppViewState(args: {
 		settingsDialog,
 		openSettings: (tab?: SettingsDialogTab) => {
 			credentialFlowIntent = null;
+			credentialsDialogTargetId = null;
 			openSettingsDialogAt(tab ?? getDefaultSettingsTab());
 		},
 		closeSettings: () => {
 			settingsDialogOpen = false;
 			settingsDialogTab = getDefaultSettingsTab();
 			credentialFlowIntent = null;
+			credentialsDialogTargetId = null;
 		},
 		openGitHubCredentialFlow: () => {
 			credentialFlowIntent = "github-git";
+			credentialsDialogTargetId = null;
 			openSettingsDialogAt("credentials");
 		},
 		openSupportInfo: () => {
 			settingsDialogOpen = false;
 			credentialsDialogOpen = false;
+			credentialsDialogTargetId = null;
 			supportInfoDialogOpen = true;
 		},
 		closeSupportInfo: () => {
 			supportInfoDialogOpen = false;
 		},
 		openSettingsDialogAt,
-		openCredentialsDialog: () => {
+		openCredentialsDialog: (credentialId?: string | Event) => {
+			credentialsDialogTargetId =
+				typeof credentialId === "string" ? credentialId : null;
 			credentialsDialogOpen = true;
 			openSettingsDialogAt("credentials");
 		},
 		closeCredentialsDialog: () => {
 			credentialsDialogOpen = false;
+			credentialsDialogTargetId = null;
 		},
 	};
 }

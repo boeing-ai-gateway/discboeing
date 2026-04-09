@@ -1802,5 +1802,5 @@ func (a *sshEnvVarAdapter) GetEnvVarsForSession(ctx context.Context, sessionID s
 	if a.credSvc == nil {
 		return map[string]string{}, nil
 	}
-	return a.credSvc.GetVisibleEnvVarsForSession(ctx, sessionID)
+	return a.credSvc.GetVisibleEnvVarsForSession(ctx, sessionID, service.CredentialVisibilityContextConsole)
 }

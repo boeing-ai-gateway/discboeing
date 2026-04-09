@@ -22,6 +22,9 @@ type EnvVar struct {
 	Provider            string          `json:"provider"`
 	AuthType            string          `json:"authType"` // "api_key" or "oauth"
 	AgentVisible        bool            `json:"agentVisible"`
+	ConsoleVisible      bool            `json:"consoleVisible"`
+	ServiceVisible      bool            `json:"serviceVisible"`
+	HookVisible         bool            `json:"hookVisible"`
 	ExpiresAt           *int64          `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
 }
 
@@ -54,12 +57,24 @@ func NewManager() *Manager {
 
 // Snapshot returns a copy of the currently applied env vars keyed by name.
 func (m *Manager) Snapshot() map[string]string {
+	return m.snapshot(func(cred EnvVar) bool { return cred.AgentVisible })
+}
+
+func (m *Manager) ServicesSnapshot() map[string]string {
+	return m.snapshot(func(cred EnvVar) bool { return cred.ServiceVisible })
+}
+
+func (m *Manager) HooksSnapshot() map[string]string {
+	return m.snapshot(func(cred EnvVar) bool { return cred.HookVisible })
+}
+
+func (m *Manager) snapshot(include func(EnvVar) bool) map[string]string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	out := make(map[string]string, len(m.creds))
 	for _, cred := range m.creds {
-		if !cred.AgentVisible {
+		if !include(cred) {
 			continue
 		}
 		out[cred.EnvVar] = cred.Value
@@ -130,6 +145,9 @@ func parseHeader(headerValue string) []EnvVar {
 		Provider            string          `json:"provider"`
 		AuthType            string          `json:"authType"`
 		AgentVisible        *bool           `json:"agentVisible"`
+		ConsoleVisible      *bool           `json:"consoleVisible"`
+		ServiceVisible      *bool           `json:"serviceVisible"`
+		HookVisible         *bool           `json:"hookVisible"`
 		ExpiresAt           *int64          `json:"expiresAt,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(headerValue), &raw); err != nil {
@@ -142,6 +160,18 @@ func parseHeader(headerValue string) []EnvVar {
 		if entry.AgentVisible != nil {
 			agentVisible = *entry.AgentVisible
 		}
+		consoleVisible := false
+		if entry.ConsoleVisible != nil {
+			consoleVisible = *entry.ConsoleVisible
+		}
+		serviceVisible := false
+		if entry.ServiceVisible != nil {
+			serviceVisible = *entry.ServiceVisible
+		}
+		hookVisible := false
+		if entry.HookVisible != nil {
+			hookVisible = *entry.HookVisible
+		}
 		creds = append(creds, EnvVar{
 			CredentialID:        entry.CredentialID,
 			SessionCredentialID: entry.SessionCredentialID,
@@ -151,6 +181,9 @@ func parseHeader(headerValue string) []EnvVar {
 			Provider:            entry.Provider,
 			AuthType:            entry.AuthType,
 			AgentVisible:        agentVisible,
+			ConsoleVisible:      consoleVisible,
+			ServiceVisible:      serviceVisible,
+			HookVisible:         hookVisible,
 			ExpiresAt:           entry.ExpiresAt,
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/providers"
 )
 
@@ -83,7 +84,7 @@ func TestGetAllDecrypted_SkipsInactiveCredentials(t *testing.T) {
 		"Anthropic",
 		"",
 		"sk-ant-test-123",
-		true,
+		CredentialVisibility{Tools: true},
 		true,
 	)
 	if err != nil {
@@ -588,7 +589,7 @@ func TestSetCustomCredential_BlankValuesPreserveExistingSecrets(t *testing.T) {
 	created, err := credSvc.SetCustomCredential(ctx, projectID, "", "", "", []SecretEnvVar{
 		{Key: "FOO_TOKEN", Value: "foo-secret"},
 		{Key: "BAR_TOKEN", Value: "bar-secret"},
-	}, false, false)
+	}, CredentialVisibility{}, false)
 	if err != nil {
 		t.Fatalf("Failed to create custom credential: %v", err)
 	}
@@ -597,7 +598,7 @@ func TestSetCustomCredential_BlankValuesPreserveExistingSecrets(t *testing.T) {
 		{Key: "FOO_TOKEN", Value: ""},
 		{Key: "BAR_TOKEN", Value: "updated-bar-secret"},
 		{Key: "BAZ_TOKEN", Value: ""},
-	}, false, false)
+	}, CredentialVisibility{}, false)
 	if err != nil {
 		t.Fatalf("Failed to update custom credential: %v", err)
 	}
@@ -777,7 +778,7 @@ func TestImportEnvCredentials_DoesNotOverrideExistingEnvVar(t *testing.T) {
 	if _, err := credSvc.SetCustomCredential(ctx, projectID, "", "", "", []SecretEnvVar{{
 		Key:   "OPENAI_API_KEY",
 		Value: "existing-secret",
-	}}, false, false); err != nil {
+	}}, CredentialVisibility{}, false); err != nil {
 		t.Fatalf("Failed to create existing credential: %v", err)
 	}
 
@@ -854,5 +855,98 @@ func TestImportEnvCredentials_PrefersExistingProvider(t *testing.T) {
 	}
 	if envVars[0].EnvVar != "ANTHROPIC_API_KEY" {
 		t.Fatalf("expected API key import to win for anthropic, got %s", envVars[0].EnvVar)
+	}
+}
+
+func TestSessionCredentialVisibility_UsesGlobalAndSessionCombination(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	project := &model.Project{ID: "test-project", Name: "Test Project", Slug: "test-project"}
+	if err := st.CreateProject(ctx, project); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "test-workspace",
+		ProjectID:  project.ID,
+		Path:       "/tmp/test-workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Test Session",
+		Status:      model.SessionStatusReady,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	cred, err := credSvc.SetAPIKeyWithMetadata(
+		ctx,
+		project.ID,
+		ProviderAnthropic,
+		"Anthropic",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{Tools: true, Console: false, Services: true, Hooks: false},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential: %v", err)
+	}
+
+	assignments, err := credSvc.SetSessionAssignments(ctx, project.ID, session.ID, []SessionCredentialAssignmentInfo{{
+		CredentialID: cred.ID,
+		Visibility:   CredentialVisibility{Tools: true, Console: true, Services: false, Hooks: true},
+	}})
+	if err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+	if len(assignments) != 1 {
+		t.Fatalf("expected 1 assignment, got %d", len(assignments))
+	}
+	if !assignments[0].Visibility.Console {
+		t.Fatal("expected raw session assignment to keep console visibility enabled")
+	}
+	if assignments[0].Credential.Visibility.Console {
+		t.Fatal("expected credential visibility to keep the global console setting")
+	}
+
+	toolEnvVars, err := credSvc.GetVisibleEnvVarsForSession(ctx, session.ID, CredentialVisibilityContextTools)
+	if err != nil {
+		t.Fatalf("GetVisibleEnvVarsForSession(tools) failed: %v", err)
+	}
+	if toolEnvVars["ANTHROPIC_API_KEY"] != "sk-ant-test-123" {
+		t.Fatalf("expected tools env var to remain visible, got %#v", toolEnvVars)
+	}
+
+	consoleEnvVars, err := credSvc.GetVisibleEnvVarsForSession(ctx, session.ID, CredentialVisibilityContextConsole)
+	if err != nil {
+		t.Fatalf("GetVisibleEnvVarsForSession(console) failed: %v", err)
+	}
+	if consoleEnvVars["ANTHROPIC_API_KEY"] != "sk-ant-test-123" {
+		t.Fatalf("expected session assignment to be able to enable console visibility, got %#v", consoleEnvVars)
+	}
+
+	servicesEnvVars, err := credSvc.GetVisibleEnvVarsForSession(ctx, session.ID, CredentialVisibilityContextServices)
+	if err != nil {
+		t.Fatalf("GetVisibleEnvVarsForSession(services) failed: %v", err)
+	}
+	if servicesEnvVars["ANTHROPIC_API_KEY"] != "sk-ant-test-123" {
+		t.Fatalf("expected global service visibility to remain enabled despite session assignment, got %#v", servicesEnvVars)
 	}
 }

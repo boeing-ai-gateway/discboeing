@@ -18,6 +18,13 @@ import {
 	preferredSourceEnvVar,
 } from "../ai/tool-renderers/requestusercredential-helpers";
 
+const hiddenVisibility = {
+	tools: false,
+	console: false,
+	services: false,
+	hooks: false,
+} as const;
+
 const existingCredential: CredentialInfo = {
 	id: "cred-1",
 	name: "GitHub Token",
@@ -26,6 +33,7 @@ const existingCredential: CredentialInfo = {
 	isConfigured: true,
 	inactive: false,
 	agentVisible: false,
+	visibility: hiddenVisibility,
 	envKeys: ["GITHUB_TOKEN"],
 };
 
@@ -37,6 +45,7 @@ const secondCredential: CredentialInfo = {
 	isConfigured: true,
 	inactive: false,
 	agentVisible: false,
+	visibility: hiddenVisibility,
 	envKeys: ["GITHUB_TOKEN"],
 };
 
@@ -44,6 +53,12 @@ const assignment: SessionCredentialAssignment = {
 	credentialId: "cred-2",
 	sessionCredentialId: "cred_s_abc123",
 	agentVisible: true,
+	visibility: {
+		tools: true,
+		console: false,
+		services: false,
+		hooks: false,
+	},
 	uses: [
 		{ id: "use_s_1", description: "create pull requests" },
 		{ id: "use_s_2", description: "clone private repositories" },
@@ -84,6 +99,7 @@ test("listAnyCredentials includes non-matching credentials sorted after assigned
 		isConfigured: true,
 		inactive: false,
 		agentVisible: false,
+		visibility: hiddenVisibility,
 		envKeys: ["OPENAI_API_KEY"],
 	};
 

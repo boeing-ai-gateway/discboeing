@@ -205,6 +205,12 @@ export const credentialFixtures: CredentialInfo[] = [
 		isConfigured: true,
 		inactive: false,
 		agentVisible: true,
+		visibility: {
+			tools: true,
+			console: false,
+			services: false,
+			hooks: false,
+		},
 		updatedAt: new Date(Date.UTC(2026, 2, 9, 11, 45)).toISOString(),
 	},
 	{
@@ -215,6 +221,12 @@ export const credentialFixtures: CredentialInfo[] = [
 		isConfigured: true,
 		inactive: false,
 		agentVisible: true,
+		visibility: {
+			tools: true,
+			console: false,
+			services: false,
+			hooks: false,
+		},
 		updatedAt: new Date(Date.UTC(2026, 2, 10, 14, 20)).toISOString(),
 	},
 	{
@@ -225,6 +237,12 @@ export const credentialFixtures: CredentialInfo[] = [
 		isConfigured: true,
 		inactive: false,
 		agentVisible: true,
+		visibility: {
+			tools: true,
+			console: false,
+			services: false,
+			hooks: false,
+		},
 		expiresAt: new Date(Date.UTC(2026, 5, 1, 8, 0)).toISOString(),
 		updatedAt: new Date(Date.UTC(2026, 2, 8, 9, 30)).toISOString(),
 	},

@@ -397,6 +397,13 @@ export interface Credential {
 }
 
 /** Client-safe credential (no secrets) */
+export interface CredentialVisibility {
+	tools: boolean;
+	console: boolean;
+	services: boolean;
+	hooks: boolean;
+}
+
 export interface CredentialInfo {
 	id: string;
 	name: string;
@@ -406,6 +413,7 @@ export interface CredentialInfo {
 	isConfigured: boolean;
 	inactive: boolean;
 	agentVisible: boolean;
+	visibility: CredentialVisibility;
 	envKeys?: string[];
 	envVars?: CredentialEnvVar[];
 	expiresAt?: string; // For OAuth credentials
@@ -421,6 +429,7 @@ export interface CreateCredentialRequest {
 	apiKey?: string;
 	envVars?: CredentialEnvVar[];
 	agentVisible?: boolean;
+	visibility?: CredentialVisibility;
 	inactive?: boolean;
 	oauthData?: OAuthData;
 }
@@ -431,6 +440,7 @@ export interface SessionCredentialAssignment {
 	envVar?: string;
 	sourceEnvVar?: string;
 	agentVisible: boolean;
+	visibility: CredentialVisibility;
 	uses?: SessionCredentialUse[];
 	credential: CredentialInfo;
 }
@@ -450,6 +460,7 @@ export interface SetSessionCredentialsRequest {
 		envVar?: string;
 		sourceEnvVar?: string;
 		agentVisible: boolean;
+		visibility?: CredentialVisibility;
 		uses?: SessionCredentialUse[];
 	}>;
 }

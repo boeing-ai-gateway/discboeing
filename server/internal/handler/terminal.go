@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/terminal"
 )
 
@@ -106,7 +107,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	// the terminal still opens without them.
 	envVars := map[string]string{}
 	if h.credentialService != nil {
-		credentialVars, err := h.credentialService.GetVisibleEnvVarsForSession(ctx, sessionID)
+		credentialVars, err := h.credentialService.GetVisibleEnvVarsForSession(ctx, sessionID, service.CredentialVisibilityContextConsole)
 		if err != nil {
 			log.Printf("failed to get visible credential env vars for session %s: %v", sessionID, err)
 		} else {

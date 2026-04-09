@@ -76,6 +76,42 @@ func TestManagerGet(t *testing.T) {
 	}
 }
 
+func TestManagerSnapshotsRespectVisibilityContexts(t *testing.T) {
+	mgr := NewManager()
+	mgr.update([]EnvVar{
+		{
+			EnvVar:         "TOOLS_ONLY",
+			Value:          "tools",
+			Provider:       "anthropic",
+			AuthType:       "api_key",
+			AgentVisible:   true,
+			ConsoleVisible: false,
+			ServiceVisible: false,
+			HookVisible:    false,
+		},
+		{
+			EnvVar:         "CONSOLE_SERVICE_HOOK",
+			Value:          "shared",
+			Provider:       "custom:test",
+			AuthType:       "api_key",
+			AgentVisible:   false,
+			ConsoleVisible: true,
+			ServiceVisible: true,
+			HookVisible:    true,
+		},
+	})
+
+	if got := mgr.Snapshot(); len(got) != 1 || got["TOOLS_ONLY"] != "tools" {
+		t.Fatalf("Snapshot() = %#v, want only tools-visible env var", got)
+	}
+	if got := mgr.ServicesSnapshot(); len(got) != 1 || got["CONSOLE_SERVICE_HOOK"] != "shared" {
+		t.Fatalf("ServicesSnapshot() = %#v, want only service-visible env var", got)
+	}
+	if got := mgr.HooksSnapshot(); len(got) != 1 || got["CONSOLE_SERVICE_HOOK"] != "shared" {
+		t.Fatalf("HooksSnapshot() = %#v, want only hook-visible env var", got)
+	}
+}
+
 func TestManagerForProvider(t *testing.T) {
 	mgr := NewManager()
 	mgr.update([]EnvVar{

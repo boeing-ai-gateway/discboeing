@@ -10,6 +10,7 @@ import type {
 	CodexPollRequest,
 	CodexPollResponse,
 	CredentialAuthType,
+	CredentialVisibility,
 	CredentialInfo,
 	GitHubDeviceCodeRequest,
 	GitHubDeviceCodeResponse,
@@ -45,7 +46,7 @@ export function createAppCredentialsDomain(
 		authType: CredentialAuthType;
 		apiKey?: string;
 		envVars?: { key: string; value: string }[];
-		agentVisible?: boolean;
+		visibility?: CredentialVisibility;
 		inactive?: boolean;
 	}): Promise<CredentialInfo> => {
 		return refreshModelsAfter(() => store.save(data));

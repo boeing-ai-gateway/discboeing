@@ -24,6 +24,7 @@ Both use the same file format: executable scripts with YAML front matter.
 All `.discobot/` files use YAML front matter to declare configuration. Three delimiter styles are supported:
 
 **Hash-prefixed (shell scripts):**
+
 ```bash
 #!/bin/bash
 #---
@@ -34,16 +35,18 @@ echo "hello"
 ```
 
 **Slash-prefixed (JavaScript/TypeScript):**
+
 ```javascript
 #!/usr/bin/env node
 //---
 // name: Node Script
 // http: 3000
 //---
-require('./server').start();
+require("./server").start();
 ```
 
 **Plain delimiters:**
+
 ```yaml
 ---
 name: My Config
@@ -63,19 +66,19 @@ Hooks are executable scripts in `.discobot/hooks/` that run at specific points d
 
 There are three hook types, set via the `type` field in front matter:
 
-| Type | When it runs | On failure |
-|------|-------------|------------|
-| `session` | Once at container startup | Logged, does not block startup |
-| `file` | After each LLM turn, when matching files changed | LLM is re-prompted to fix the issue |
-| `pre-commit` | On `git commit` (installed as a git hook) | Commit is blocked |
+| Type         | When it runs                                     | On failure                          |
+| ------------ | ------------------------------------------------ | ----------------------------------- |
+| `session`    | Once at container startup                        | Logged, does not block startup      |
+| `file`       | After each LLM turn, when matching files changed | LLM is re-prompted to fix the issue |
+| `pre-commit` | On `git commit` (installed as a git hook)        | Commit is blocked                   |
 
 ### Common Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | No | Display name (defaults to filename) |
-| `type` | string | **Yes** | `session`, `file`, or `pre-commit` |
-| `description` | string | No | Human-readable description |
+| Field         | Type   | Required | Description                         |
+| ------------- | ------ | -------- | ----------------------------------- |
+| `name`        | string | No       | Display name (defaults to filename) |
+| `type`        | string | **Yes**  | `session`, `file`, or `pre-commit`  |
+| `description` | string | No       | Human-readable description          |
 
 ### File Requirements
 
@@ -96,9 +99,9 @@ Session hooks run once when the container starts, before the AI agent begins. Th
 
 **Additional fields:**
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `run_as` | `root` or `user` | `user` | Execute as root or as the discobot user |
+| Field    | Type             | Default | Description                             |
+| -------- | ---------------- | ------- | --------------------------------------- |
+| `run_as` | `root` or `user` | `user`  | Execute as root or as the discobot user |
 
 **Behavior:**
 
@@ -109,11 +112,14 @@ Session hooks run once when the container starts, before the AI agent begins. Th
 
 **Environment variables:**
 
-| Variable | Description |
-|----------|-------------|
-| `DISCOBOT_SESSION_ID` | Current session ID |
-| `DISCOBOT_WORKSPACE` | Workspace path (`/home/discobot/workspace`) |
-| `DISCOBOT_HOOK_TYPE` | `session` |
+| Variable              | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `DISCOBOT_SESSION_ID` | Current session ID                          |
+| `DISCOBOT_WORKSPACE`  | Workspace path (`/home/discobot/workspace`) |
+| `DISCOBOT_HOOK_TYPE`  | `session`                                   |
+
+Workspace credentials are scoped per runtime context. A credential must be
+marked visible to **hooks** before Discobot injects it into hook processes.
 
 **Example — Install system packages (as root):**
 
@@ -144,10 +150,10 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 
 **Additional fields:**
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `pattern` | string | **Required** | Glob pattern for file matching (e.g., `"*.go"`, `"src/**/*.ts"`) |
-| `notify_llm` | boolean | `true` | Whether to re-prompt the LLM on failure |
+| Field        | Type    | Default      | Description                                                      |
+| ------------ | ------- | ------------ | ---------------------------------------------------------------- |
+| `pattern`    | string  | **Required** | Glob pattern for file matching (e.g., `"*.go"`, `"src/**/*.ts"`) |
+| `notify_llm` | boolean | `true`       | Whether to re-prompt the LLM on failure                          |
 
 **Behavior:**
 
@@ -160,20 +166,20 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 
 **Environment variables:**
 
-| Variable | Description |
-|----------|-------------|
+| Variable                 | Description                                                        |
+| ------------------------ | ------------------------------------------------------------------ |
 | `DISCOBOT_CHANGED_FILES` | Space-separated list of changed file paths (relative to workspace) |
-| `DISCOBOT_SESSION_ID` | Current session ID |
-| `DISCOBOT_HOOK_TYPE` | `file` |
+| `DISCOBOT_SESSION_ID`    | Current session ID                                                 |
+| `DISCOBOT_HOOK_TYPE`     | `file`                                                             |
 
 **Glob pattern syntax** uses [picomatch](https://github.com/micromatch/picomatch) patterns:
 
-| Pattern | Matches |
-|---------|---------|
-| `"*.go"` | All `.go` files in any directory |
-| `"src/**/*.ts"` | All `.ts` files under `src/` |
-| `"*.{ts,tsx}"` | All `.ts` and `.tsx` files |
-| `"**/*.go"` | All `.go` files recursively |
+| Pattern                       | Matches                                   |
+| ----------------------------- | ----------------------------------------- |
+| `"*.go"`                      | All `.go` files in any directory          |
+| `"src/**/*.ts"`               | All `.ts` files under `src/`              |
+| `"*.{ts,tsx}"`                | All `.ts` and `.tsx` files                |
+| `"**/*.go"`                   | All `.go` files recursively               |
 | `"{package.json,pnpm*.yaml}"` | `package.json` and any `pnpm*.yaml` files |
 
 **Example — Lint Go files:**
@@ -234,9 +240,9 @@ Pre-commit hooks are installed as git pre-commit hooks. They run automatically w
 
 **Additional fields:**
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `notify_llm` | boolean | `true` | Reserved for future use |
+| Field        | Type    | Default | Description             |
+| ------------ | ------- | ------- | ----------------------- |
+| `notify_llm` | boolean | `true`  | Reserved for future use |
 
 **Behavior:**
 
@@ -311,25 +317,29 @@ Hooks are automatically reloaded when files in `.discobot/hooks/` change. Adding
 
 Services are background processes defined in `.discobot/services/`. They allow you to run development servers, databases, or any long-running process alongside your AI agent session, with built-in HTTP proxying and output streaming.
 
+Services receive only credentials marked visible to the **services** runtime
+context. Credentials marked only for tools are not injected into background
+services, hooks, SSH, or terminal sessions.
+
 ### Service Types
 
 There are two types of services:
 
-| Type | Description | Requirements |
-|------|-------------|--------------|
-| **Executable** | Scripts started/stopped by Discobot | Executable file with shebang and script body |
-| **Passive** | Declarations for externally-managed services | Front matter only, no script body |
+| Type           | Description                                  | Requirements                                 |
+| -------------- | -------------------------------------------- | -------------------------------------------- |
+| **Executable** | Scripts started/stopped by Discobot          | Executable file with shebang and script body |
+| **Passive**    | Declarations for externally-managed services | Front matter only, no script body            |
 
 ### Configuration Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | No | Display name (defaults to filename) |
-| `description` | string | No | Human-readable description |
-| `order` | number | No | Optional UI sort order for service buttons and panels (lower numbers appear first) |
-| `http` | number | No | HTTP port the service listens on |
-| `https` | number | No | HTTPS port the service listens on |
-| `path` | string | No | Default URL path for web preview (e.g., `"/app"`, `"/api/docs"`) |
+| Field         | Type   | Required | Description                                                                        |
+| ------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `name`        | string | No       | Display name (defaults to filename)                                                |
+| `description` | string | No       | Human-readable description                                                         |
+| `order`       | number | No       | Optional UI sort order for service buttons and panels (lower numbers appear first) |
+| `http`        | number | No       | HTTP port the service listens on                                                   |
+| `https`       | number | No       | HTTPS port the service listens on                                                  |
+| `path`        | string | No       | Default URL path for web preview (e.g., `"/app"`, `"/api/docs"`)                   |
 
 ### Service ID
 
@@ -466,6 +476,7 @@ Here's a full `.discobot/` configuration for a Go + React project:
 ```
 
 **`.discobot/hooks/01-install-deps.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -477,6 +488,7 @@ cd server && go mod download 2>&1
 ```
 
 **`.discobot/hooks/02-go-mod-tidy.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -491,6 +503,7 @@ done
 ```
 
 **`.discobot/hooks/03-lint-frontend.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -502,6 +515,7 @@ pnpm check:frontend:fix
 ```
 
 **`.discobot/hooks/04-lint-backend.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -513,6 +527,7 @@ pnpm check:backend:fix
 ```
 
 **`.discobot/hooks/05-build.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -524,6 +539,7 @@ pnpm build
 ```
 
 **`.discobot/hooks/06-ci.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -534,6 +550,7 @@ pnpm run ci
 ```
 
 **`.discobot/services/ui.sh`:**
+
 ```bash
 #!/bin/bash
 #---
@@ -546,6 +563,7 @@ pnpm install && pnpm dev
 ```
 
 **`.discobot/services/db.sh`:**
+
 ```bash
 #!/bin/bash
 #---

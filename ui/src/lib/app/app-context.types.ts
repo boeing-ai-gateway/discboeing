@@ -75,6 +75,7 @@ export type AppContextBootstrap = {
 
 export type AppUI = {
 	credentialFlowIntent: "github-git" | null;
+	credentialsDialogTargetId: string | null;
 	supportInfoDialogOpen: boolean;
 	visibleRecentThreads: RecentThreadSummary[];
 	mountedSessionIds: string[];
@@ -85,7 +86,7 @@ export type AppUI = {
 	openSettings: (tab?: SettingsDialogTab) => void;
 	closeSettings: () => void;
 	openGitHubCredentialFlow: () => void;
-	openCredentialsDialog: () => void;
+	openCredentialsDialog: (credentialId?: string | Event) => void;
 	closeCredentialsDialog: () => void;
 	openSupportInfo: () => void;
 	closeSupportInfo: () => void;
@@ -211,7 +212,7 @@ export type AppCredentials = {
 		authType: CredentialAuthType;
 		apiKey?: string;
 		envVars?: CredentialEnvVar[];
-		agentVisible?: boolean;
+		visibility?: import("$lib/api-types").CredentialVisibility;
 		inactive?: boolean;
 	}) => Promise<CredentialInfo>;
 	update: (data: {
@@ -222,7 +223,7 @@ export type AppCredentials = {
 		authType: CredentialAuthType;
 		apiKey?: string;
 		envVars?: CredentialEnvVar[];
-		agentVisible?: boolean;
+		visibility?: import("$lib/api-types").CredentialVisibility;
 		inactive?: boolean;
 	}) => Promise<CredentialInfo>;
 	remove: (identifier: string) => Promise<void>;

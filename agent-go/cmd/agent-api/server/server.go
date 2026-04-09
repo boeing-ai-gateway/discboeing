@@ -109,7 +109,7 @@ func Run(cfg *config.Config) {
 			log.Printf("warn: hooks init: %v", err)
 		}
 		hookMgr.SetEnvSnapshot(func() map[string]string {
-			return credMgr.Snapshot()
+			return credMgr.HooksSnapshot()
 		})
 		// The HTTP handler owns post-completion hook evaluation so hook-failure
 		// re-prompts preserve structured metadata for optimized UI rendering.
@@ -118,7 +118,7 @@ func Run(cfg *config.Config) {
 	// ── Service manager ──────────────────────────────────────────────────────
 	svcMgr := services.NewManager()
 	svcMgr.SetEnvSnapshot(func() map[string]string {
-		return credMgr.Snapshot()
+		return credMgr.ServicesSnapshot()
 	})
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────

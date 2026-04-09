@@ -732,6 +732,7 @@ class ApiClient {
 			envVar?: string;
 			sourceEnvVar?: string;
 			agentVisible: boolean;
+			visibility?: import("./api-types").CredentialVisibility;
 			uses?: SessionCredentialAssignment["uses"];
 		}>,
 	): Promise<{ credentials: SessionCredentialAssignment[] }> {

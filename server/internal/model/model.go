@@ -291,18 +291,21 @@ func NewTextParts(text string) json.RawMessage {
 
 // Credential represents stored credentials for AI providers and custom env bundles.
 type Credential struct {
-	ID            string    `gorm:"primaryKey;type:text" json:"id"`
-	ProjectID     string    `gorm:"column:project_id;not null;type:text;uniqueIndex:idx_project_provider" json:"project_id"`
-	Provider      string    `gorm:"not null;type:text;uniqueIndex:idx_project_provider" json:"provider"`
-	Name          string    `gorm:"not null;type:text" json:"name"`
-	Description   *string   `gorm:"type:text" json:"description,omitempty"`
-	AuthType      string    `gorm:"column:auth_type;not null;type:text" json:"auth_type"`
-	EncryptedData []byte    `gorm:"column:encrypted_data" json:"-"`
-	IsConfigured  bool      `gorm:"column:is_configured;default:false" json:"is_configured"`
-	Inactive      bool      `gorm:"column:inactive;not null;default:false" json:"inactive"`
-	AgentVisible  bool      `gorm:"column:agent_visible;not null;default:false" json:"agent_visible"`
-	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID             string    `gorm:"primaryKey;type:text" json:"id"`
+	ProjectID      string    `gorm:"column:project_id;not null;type:text;uniqueIndex:idx_project_provider" json:"project_id"`
+	Provider       string    `gorm:"not null;type:text;uniqueIndex:idx_project_provider" json:"provider"`
+	Name           string    `gorm:"not null;type:text" json:"name"`
+	Description    *string   `gorm:"type:text" json:"description,omitempty"`
+	AuthType       string    `gorm:"column:auth_type;not null;type:text" json:"auth_type"`
+	EncryptedData  []byte    `gorm:"column:encrypted_data" json:"-"`
+	IsConfigured   bool      `gorm:"column:is_configured;default:false" json:"is_configured"`
+	Inactive       bool      `gorm:"column:inactive;not null;default:false" json:"inactive"`
+	AgentVisible   bool      `gorm:"column:agent_visible;not null;default:false" json:"agent_visible"`
+	ConsoleVisible bool      `gorm:"column:console_visible;not null;default:false" json:"console_visible"`
+	ServiceVisible bool      `gorm:"column:service_visible;not null;default:false" json:"service_visible"`
+	HookVisible    bool      `gorm:"column:hook_visible;not null;default:false" json:"hook_visible"`
+	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
 	Project *Project `gorm:"foreignKey:ProjectID" json:"-"`
 }
@@ -326,6 +329,9 @@ type SessionCredentialAssignment struct {
 	EnvVar              string          `gorm:"column:env_var;type:text" json:"envVar,omitempty"`
 	SourceEnvVar        string          `gorm:"column:source_env_var;type:text" json:"sourceEnvVar,omitempty"`
 	AgentVisible        bool            `gorm:"column:agent_visible;not null;default:false" json:"agentVisible"`
+	ConsoleVisible      bool            `gorm:"column:console_visible;not null;default:false" json:"consoleVisible"`
+	ServiceVisible      bool            `gorm:"column:service_visible;not null;default:false" json:"serviceVisible"`
+	HookVisible         bool            `gorm:"column:hook_visible;not null;default:false" json:"hookVisible"`
 	UsesJSON            json.RawMessage `gorm:"column:uses_json;type:text" json:"uses,omitempty"`
 	CreatedAt           time.Time       `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt           time.Time       `gorm:"autoUpdateTime" json:"updatedAt"`

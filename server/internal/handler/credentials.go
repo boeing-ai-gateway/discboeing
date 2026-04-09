@@ -30,6 +30,7 @@ type CreateCredentialRequest struct {
 	APIKey       string                          `json:"apiKey,omitempty"`
 	EnvVars      []createCredentialEnvVarRequest `json:"envVars,omitempty"`
 	AgentVisible *bool                           `json:"agentVisible,omitempty"`
+	Visibility   *service.CredentialVisibility   `json:"visibility,omitempty"`
 	Inactive     *bool                           `json:"inactive,omitempty"`
 }
 
@@ -65,10 +66,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		req.Name = strings.TrimSpace(req.Name)
 	}
 
-	agentVisible := false
-	if req.AgentVisible != nil {
-		agentVisible = *req.AgentVisible
-	}
+	visibility := service.CredentialVisibility{}
 	inactive := false
 
 	var existingCredential *service.CredentialInfo
@@ -94,7 +92,14 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		if req.Provider == "" {
 			req.Provider = existingCredential.Provider
 		}
+		visibility = existingCredential.Visibility
 		inactive = existingCredential.Inactive
+	}
+	if req.AgentVisible != nil {
+		visibility.Tools = *req.AgentVisible
+	}
+	if req.Visibility != nil {
+		visibility = *req.Visibility
 	}
 	if req.Inactive != nil {
 		inactive = *req.Inactive
@@ -106,7 +111,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(envVars) > 0 || req.Provider == "custom" || req.Provider == "" {
-		info, err := h.credentialService.SetCustomCredential(r.Context(), projectID, req.CredentialID, req.Name, req.Description, envVars, agentVisible, inactive)
+		info, err := h.credentialService.SetCustomCredential(r.Context(), projectID, req.CredentialID, req.Name, req.Description, envVars, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrCredentialNotFound) {
 				h.Error(w, http.StatusNotFound, "Credential not found")
@@ -127,7 +132,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	if req.AuthType == "" || req.AuthType == service.AuthTypeAPIKey {
 		if req.APIKey == "" {
 			if req.CredentialID != "" {
-				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, agentVisible, inactive)
+				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
 				if err != nil {
 					if errors.Is(err, service.ErrCredentialNotFound) {
 						h.Error(w, http.StatusNotFound, "Credential not found")
@@ -143,7 +148,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		info, err := h.credentialService.SetAPIKeyWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, agentVisible, inactive)
+		info, err := h.credentialService.SetAPIKeyWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrInvalidProvider) {
 				h.Error(w, http.StatusBadRequest, "Invalid provider")
@@ -160,7 +165,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	if req.AuthType == service.AuthTypeID {
 		if req.APIKey == "" {
 			if req.CredentialID != "" {
-				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, agentVisible, inactive)
+				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
 				if err != nil {
 					if errors.Is(err, service.ErrCredentialNotFound) {
 						h.Error(w, http.StatusNotFound, "Credential not found")
@@ -176,7 +181,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		info, err := h.credentialService.SetIDWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, agentVisible, inactive)
+		info, err := h.credentialService.SetIDWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrInvalidProvider) {
 				h.Error(w, http.StatusBadRequest, "Invalid provider")
@@ -191,7 +196,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.AuthType == service.AuthTypeOAuth && req.CredentialID != "" {
-		info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, agentVisible, inactive)
+		info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrCredentialNotFound) {
 				h.Error(w, http.StatusNotFound, "Credential not found")
@@ -264,6 +269,7 @@ type setSessionCredentialAssignmentRequest struct {
 	EnvVar              string                         `json:"envVar,omitempty"`
 	SourceEnvVar        string                         `json:"sourceEnvVar,omitempty"`
 	AgentVisible        bool                           `json:"agentVisible"`
+	Visibility          *service.CredentialVisibility  `json:"visibility,omitempty"`
 	Uses                []service.SessionCredentialUse `json:"uses,omitempty"`
 }
 
@@ -296,12 +302,17 @@ func (h *Handler) SetSessionCredentialAssignments(w http.ResponseWriter, r *http
 
 	assignments := make([]service.SessionCredentialAssignmentInfo, 0, len(req.Credentials))
 	for _, credential := range req.Credentials {
+		visibility := service.CredentialVisibility{Tools: credential.AgentVisible}
+		if credential.Visibility != nil {
+			visibility = *credential.Visibility
+		}
 		assignments = append(assignments, service.SessionCredentialAssignmentInfo{
 			CredentialID:        credential.CredentialID,
 			SessionCredentialID: credential.SessionCredentialID,
 			EnvVar:              credential.EnvVar,
 			SourceEnvVar:        credential.SourceEnvVar,
-			AgentVisible:        credential.AgentVisible,
+			AgentVisible:        visibility.Tools,
+			Visibility:          visibility,
 			Uses:                credential.Uses,
 		})
 	}

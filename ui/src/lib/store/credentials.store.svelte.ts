@@ -65,6 +65,7 @@ export class CredentialStore {
 		apiKey?: string;
 		envVars?: CredentialEnvVar[];
 		agentVisible?: boolean;
+		visibility?: import("$lib/api-types").CredentialVisibility;
 		inactive?: boolean;
 	}): Promise<CredentialInfo> {
 		await api.createCredential(data);
