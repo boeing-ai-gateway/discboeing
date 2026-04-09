@@ -10,6 +10,7 @@ export default tseslint.config(
 			".svelte-kit/**",
 			".svelte-kit-hook/**",
 			"build/**",
+			"build-hook/**",
 			"dist/**",
 			"coverage/**",
 		],

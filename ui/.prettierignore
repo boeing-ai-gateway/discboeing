@@ -1,6 +1,7 @@
 .svelte-kit
 .svelte-kit-hook
 build
+build-hook
 dist
 coverage
 package-lock.json
