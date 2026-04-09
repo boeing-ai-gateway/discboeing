@@ -15,6 +15,7 @@ import {
 } from "$lib/session/domains/session-domain.helpers";
 
 const RETRY_TOAST_ID_PREFIX = "thread-retry-status:";
+const LOST_PROJECT_STREAM_CONNECTION_MESSAGE = "Lost project stream connection";
 
 type CreateConversationDomainArgs = {
 	sessionId: string;
@@ -37,6 +38,18 @@ function normalizeModelId(modelId: string | null): string | undefined {
 	return modelId.endsWith(":thinking")
 		? modelId.slice(0, -":thinking".length)
 		: modelId;
+}
+
+function getStreamErrorMessage(error: unknown): string {
+	return error instanceof Error
+		? error.message
+		: "Failed to process chat stream";
+}
+
+function isLostProjectStreamConnection(error: unknown): boolean {
+	return (
+		getStreamErrorMessage(error) === LOST_PROJECT_STREAM_CONNECTION_MESSAGE
+	);
 }
 
 async function showRetryToast(
@@ -249,10 +262,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		activeStreamKey = streamKey(args.sessionId);
 		const listeners = createChatStreamEventListeners(streamState, {
 			onError: (error) => {
-				streamError =
-					error instanceof Error
-						? error.message
-						: "Failed to process chat stream";
+				streamError = getStreamErrorMessage(error);
 				fatalStreamError = true;
 				disconnectStream();
 				if (loadStatus === "loading") {
@@ -278,11 +288,15 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				});
 			},
 			onError: (error) => {
+				const errorMessage = getStreamErrorMessage(error);
+				if (isLostProjectStreamConnection(error)) {
+					if (loadStatus !== "loading") {
+						streamError = errorMessage;
+					}
+					return;
+				}
 				fatalStreamError = true;
-				streamError =
-					error instanceof Error
-						? error.message
-						: "Failed to process chat stream";
+				streamError = errorMessage;
 				disconnectStream();
 				if (loadStatus === "loading") {
 					rejectLoad(error, "Failed to load messages");

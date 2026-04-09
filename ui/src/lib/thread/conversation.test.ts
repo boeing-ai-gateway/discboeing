@@ -154,49 +154,42 @@ test("getStartChatErrorDetails suppresses the auto-resume conflict message", () 
 	});
 });
 
-test("conversation loader derives running state from backend lifecycle", () => {
+test("conversation loader derives running state from websocket-backed lifecycle state", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(source, /completionRunning/);
 	assert.match(source, /onCompletionStatus/);
-	assert.match(source, /getThreadChatStreamUrl/);
+	assert.match(source, /app\.chatStreams\.subscribe/);
 	assert.match(source, /onHistoryReplayEnd/);
 	assert.doesNotMatch(source, /getThreadMessages/);
 	assert.doesNotMatch(source, /isStreamingAssistantMessage/);
 	assert.doesNotMatch(source, /hasStreamingAssistantMessage/);
 });
 
-test("conversation loader preserves streamed error text when the SSE connection closes unexpectedly", () => {
+test("conversation loader no longer treats websocket close as an immediate fatal error", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(
 		source,
-		/const shouldIgnoreClosedStreamError =\s*args\.shouldIgnoreClosedStreamError\?\.\(\) \?\? false/,
+		/const LOST_PROJECT_STREAM_CONNECTION_MESSAGE = "Lost project stream connection";/,
 	);
+	assert.match(source, /if \(isLostProjectStreamConnection\(error\)\) \{/);
 	assert.match(
 		source,
-		/if \(!shouldIgnoreClosedStreamError\) \{[\s\S]*const error = new Error\("Lost chat stream connection"\);/,
+		/if \(loadStatus !== "loading"\) \{[\s\S]*streamError = errorMessage;/,
 	);
-	assert.match(source, /streamError = resolvedErrorMessage/);
-	assert.match(
-		source,
-		/rejectLoad\(new Error\(resolvedErrorMessage\), resolvedErrorMessage\)/,
-	);
+	assert.doesNotMatch(source, /Lost chat stream connection/);
 });
 
-test("conversation loader silently reconnects when closed stream errors are expected", () => {
+test("conversation loader keeps closed-stream recovery at the websocket layer", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(source, /shouldIgnoreClosedStreamError\?: \(\) => boolean;/);
-	assert.match(
-		source,
-		/if \(!shouldIgnoreClosedStreamError\) \{[\s\S]*\} else \{[\s\S]*disconnectStream\(\);/,
-	);
 	assert.doesNotMatch(
 		source,
-		/else \{[\s\S]*streamError = resolvedErrorMessage/,
+		/disconnectStream\(\);[\s\S]*shouldIgnoreClosedStreamError/,
 	);
-	assert.match(source, /if \(args\.hasSession\(\) && !fatalStreamError\) \{/);
+	assert.match(source, /if \(fatalStreamError\) \{/);
 });
 
 test("conversation loader only clears stream errors when a completion starts", () => {
@@ -208,14 +201,24 @@ test("conversation loader only clears stream errors when a completion starts", (
 	);
 });
 
-test("conversation loader stops reconnecting after fatal stream parse errors", () => {
+test("conversation loader keeps websocket disconnects transient while preserving fatal stream parse errors", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
-	assert.match(source, /fatalStreamError/);
 	assert.match(
 		source,
-		/onError: \(error\) => \{[\s\S]*fatalStreamError = true/,
+		/const LOST_PROJECT_STREAM_CONNECTION_MESSAGE = "Lost project stream connection";/,
 	);
-	assert.match(source, /onError: \(error\) => \{[\s\S]*disconnectStream\(\)/);
-	assert.match(source, /if \(args\.hasSession\(\) && !fatalStreamError\)/);
+	assert.match(
+		source,
+		/function isLostProjectStreamConnection\(error: unknown\): boolean/,
+	);
+	assert.match(
+		source,
+		/onError: \(error\) => \{[\s\S]*if \(isLostProjectStreamConnection\(error\)\) \{[\s\S]*return;[\s\S]*\}[\s\S]*fatalStreamError = true/,
+	);
+	assert.match(
+		source,
+		/onError: \(error\) => \{[\s\S]*fatalStreamError = true[\s\S]*disconnectStream\(\)/,
+	);
+	assert.match(source, /if \(fatalStreamError\) \{/);
 });

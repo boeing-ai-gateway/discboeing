@@ -51,7 +51,7 @@ test("conversation pane reads the session error directly from the active session
 	assert.doesNotMatch(source, /session\?\.current\?\.status === "error"/);
 });
 
-test("conversation pane renders expandable top-level error banners", () => {
+test("conversation pane renders expandable top-level error banners with thread retry actions", () => {
 	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
 
 	assert.match(
@@ -62,6 +62,10 @@ test("conversation pane renders expandable top-level error banners", () => {
 		source,
 		/function shouldCollapseErrorBanner\(errorText: string\): boolean/,
 	);
+	assert.match(source, /function getErrorBannerAction\(/);
+	assert.match(source, /if \(key !== "thread" \|\| !thread\) \{/);
+	assert.match(source, /label: "Retry"/);
+	assert.match(source, /void thread\.refresh\(\)/);
 	assert.match(source, /line-clamp-3/);
 	assert.match(source, /Show full error/);
 	assert.match(source, /Show less/);

@@ -248,6 +248,21 @@
 		return isErrorBannerExpanded(key) ? "Show less" : "Show full error";
 	}
 
+	function getErrorBannerAction(
+		key: ConversationPaneErrorBannerKey,
+	): { label: string; run: () => void } | null {
+		if (key !== "thread" || !thread) {
+			return null;
+		}
+
+		return {
+			label: "Retry",
+			run: () => {
+				void thread.refresh();
+			},
+		};
+	}
+
 	function isActiveStreamingAssistantMessage(message: ChatMessage): boolean {
 		return (
 			isStreaming &&
@@ -589,6 +604,7 @@
 )}
 	{@const shouldCollapse = shouldCollapseErrorBanner(errorText)}
 	{@const isExpanded = isErrorBannerExpanded(key)}
+	{@const action = getErrorBannerAction(key)}
 	<Alert variant="destructive">
 		<AlertDescription class="min-w-0">
 			<div class="flex min-w-0 flex-col items-start gap-2">
@@ -597,17 +613,29 @@
 				>
 					{errorText}
 				</p>
-				{#if shouldCollapse}
-					<Button
-						aria-expanded={isExpanded}
-						class="h-auto px-0 text-xs text-destructive hover:text-destructive"
-						onclick={() => setErrorBannerExpanded(key, !isExpanded)}
-						size="sm"
-						variant="link"
-					>
-						{getErrorBannerToggleLabel(key)}
-					</Button>
-				{/if}
+				<div class="flex flex-wrap items-center gap-3">
+					{#if action}
+						<Button
+							class="h-auto px-0 text-xs text-destructive hover:text-destructive"
+							onclick={action.run}
+							size="sm"
+							variant="link"
+						>
+							{action.label}
+						</Button>
+					{/if}
+					{#if shouldCollapse}
+						<Button
+							aria-expanded={isExpanded}
+							class="h-auto px-0 text-xs text-destructive hover:text-destructive"
+							onclick={() => setErrorBannerExpanded(key, !isExpanded)}
+							size="sm"
+							variant="link"
+						>
+							{getErrorBannerToggleLabel(key)}
+						</Button>
+					{/if}
+				</div>
 			</div>
 		</AlertDescription>
 	</Alert>
