@@ -1,6 +1,7 @@
 import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
+import type { AppContext } from "$lib/context/app-context.svelte";
 import { useAppContext } from "$lib/context/app-context.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
 import { createSessionHooksDomain } from "$lib/session/domains/session-hooks.svelte";
@@ -17,8 +18,10 @@ import { ThreadStore } from "$lib/store/threads.store.svelte";
 
 const SESSION_CONTEXT_KEY = Symbol.for("discobot-ui-session-context");
 
-function createSessionContext(sessionId: string): SessionContextValue {
-	const app = useAppContext();
+function createSessionContext(
+	app: AppContext,
+	sessionId: string,
+): SessionContextValue {
 	let loaded = $state(false);
 	const initialSelectedThreadId = app.sessions.takeRequestedThreadId(sessionId);
 	let selectedThreadId = $state<string | null>(initialSelectedThreadId);
@@ -148,11 +151,13 @@ function createSessionContext(sessionId: string): SessionContextValue {
 	};
 }
 
-export function ensureSessionContext(sessionId: string): SessionContextValue {
-	const app = useAppContext();
+export function ensureSessionContext(
+	app: AppContext,
+	sessionId: string,
+): SessionContextValue {
 	let context = app.sessions.sessionContexts.get(sessionId);
 	if (!context) {
-		context = createSessionContext(sessionId);
+		context = createSessionContext(app, sessionId);
 		app.sessions.sessionContexts.set(sessionId, context);
 	}
 	return context;
@@ -162,7 +167,7 @@ export function setSessionContext(sessionId?: string): SessionContextValue {
 	const app = useAppContext();
 	const resolvedSessionId =
 		sessionId ?? app.sessions.selectedId ?? app.sessions.pendingId;
-	const context = ensureSessionContext(resolvedSessionId);
+	const context = ensureSessionContext(app, resolvedSessionId);
 	setContext(SESSION_CONTEXT_KEY, context);
 	return context;
 }

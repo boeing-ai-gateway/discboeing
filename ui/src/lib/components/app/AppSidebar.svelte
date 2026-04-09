@@ -202,7 +202,7 @@
 
 	function handleSelectSession(sessionId: string) {
 		const isCurrentSession = sessions.selectedId === sessionId;
-		const sessionContext = ensureSessionContext(sessionId);
+		const sessionContext = ensureSessionContext(app, sessionId);
 		sessions.select(sessionId);
 		if (isCurrentSession && sessionContext.threads.list.length > 1) {
 			sessionContext.threads.select(null);

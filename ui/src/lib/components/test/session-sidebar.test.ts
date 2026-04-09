@@ -111,7 +111,7 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	assert.match(source, /return sessionContext\.threads\.list;/);
 	assert.match(
 		source,
-		/const sessionContext = ensureSessionContext\(sessionId\);/,
+		/const sessionContext = ensureSessionContext\(app, sessionId\);/,
 	);
 	assert.match(source, /void sessionContext\.threads\.refresh\(\);/);
 	assert.match(

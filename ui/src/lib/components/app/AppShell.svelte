@@ -30,7 +30,10 @@
 		() => app.sessions.selectedId ?? app.sessions.pendingId,
 	);
 	let selectedSession = $state(
-		ensureSessionContext(app.sessions.selectedId ?? app.sessions.pendingId),
+		ensureSessionContext(
+			app,
+			app.sessions.selectedId ?? app.sessions.pendingId,
+		),
 	);
 	const sessionView = $derived.by(() => selectedSession.ui);
 	const selectedSessionId = $derived.by(() => selectedSession.sessionId);
@@ -112,9 +115,9 @@
 		const nextManagedIds = Array.from(
 			new Set([...preloadSessionIds, currentSelectedSessionId]),
 		);
-		selectedSession = ensureSessionContext(currentSelectedSessionId);
+		selectedSession = ensureSessionContext(app, currentSelectedSessionId);
 		for (const sessionId of nextManagedIds) {
-			ensureSessionContext(sessionId);
+			ensureSessionContext(app, sessionId);
 		}
 		for (const sessionId of managedSessionIds) {
 			if (nextManagedIds.includes(sessionId)) {
