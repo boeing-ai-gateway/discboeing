@@ -31,7 +31,6 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -54,7 +53,11 @@
 	const app = useAppContext();
 	const sessions = app.sessions;
 	const preferences = app.preferences;
-	const session = useSessionContext();
+	const selectedSessionContext = $derived(
+		sessions.selectedId
+			? app.sessions.sessionContexts.get(sessions.selectedId)
+			: undefined,
+	);
 	type SessionGroup = {
 		key: string;
 		workspaceId: string | null;
@@ -163,10 +166,10 @@
 	}
 
 	function visibleThreadsForSession(sessionId: string): Thread[] {
-		if (sessions.selectedId !== sessionId) {
+		if (sessions.selectedId !== sessionId || !selectedSessionContext) {
 			return [];
 		}
-		return session.threads.list;
+		return selectedSessionContext.threads.list;
 	}
 
 	function sessionHasNestedThreads(sessionId: string) {
@@ -180,7 +183,7 @@
 	function isSessionThreadSelected(sessionId: string, threadId: string) {
 		return (
 			sessions.selectedId === sessionId &&
-			session.threads.selectedId === threadId
+			selectedSessionContext?.threads.selectedId === threadId
 		);
 	}
 
@@ -192,10 +195,10 @@
 	}
 
 	function handleSelectSession(sessionId: string) {
-		const isCurrentSession = session.sessionId === sessionId;
+		const isCurrentSession = sessions.selectedId === sessionId;
 		sessions.select(sessionId);
-		if (isCurrentSession && session.threads.list.length > 1) {
-			session.ui.selectThread(null);
+		if (isCurrentSession && (selectedSessionContext?.threads.list.length ?? 0) > 1) {
+			selectedSessionContext?.ui.selectThread(null);
 		}
 		closeFloatingSidebar();
 		onThreadSelect?.();
@@ -263,7 +266,7 @@
 	}
 
 	function openRenameThreadDialog(threadId: string) {
-		const threadItem = session.threads.list.find(
+		const threadItem = selectedSessionContext?.threads.list.find(
 			(thread) => thread.id === threadId,
 		);
 		if (!threadItem) {
@@ -305,7 +308,7 @@
 			return;
 		}
 		renamingThread = true;
-		const renamed = await session.threads.rename(
+		const renamed = await selectedSessionContext?.threads.rename(
 			renameThreadId,
 			renameThreadDraft,
 		);
@@ -340,7 +343,7 @@
 	function openDeleteThreadDialog(threadId: string) {
 		if (
 			isPrimaryThread(threadId) ||
-			!session.threads.list.some((thread) => thread.id === threadId)
+			!selectedSessionContext?.threads.list.some((thread) => thread.id === threadId)
 		) {
 			return;
 		}
@@ -377,7 +380,7 @@
 			return;
 		}
 		deletingThread = true;
-		const deleted = await session.threads.remove(deleteThreadId);
+		const deleted = await selectedSessionContext?.threads.remove(deleteThreadId);
 		deletingThread = false;
 		if (deleted) {
 			closeDeleteThreadDialog();
@@ -396,21 +399,20 @@
 			return "this thread";
 		}
 		return (
-			session.threads.list.find((thread) => thread.id === deleteThreadId)
+			selectedSessionContext?.threads.list.find((thread) => thread.id === deleteThreadId)
 				?.name ?? "this thread"
 		);
 	}
 
 	function isPrimaryThread(threadId: string) {
-		return threadId === session.sessionId;
+		return threadId === sessions.selectedId;
 	}
 
 	function isRecentThreadSelected(sessionId: string, threadId: string) {
 		const selectedSessionId = sessions.selectedId ?? sessions.pendingId;
-		const selectedSessionContext =
-			sessions.sessionContexts.get(selectedSessionId);
+		const sessionCtx = sessions.sessionContexts.get(selectedSessionId);
 		const selectedThreadId =
-			selectedSessionContext?.threads.selectedId ?? selectedSessionId;
+			sessionCtx?.threads.selectedId ?? selectedSessionId;
 		return selectedSessionId === sessionId && selectedThreadId === threadId;
 	}
 
