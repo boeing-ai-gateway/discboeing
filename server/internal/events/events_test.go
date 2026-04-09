@@ -199,6 +199,35 @@ func TestPoller_FiltersEventsByProjectID(t *testing.T) {
 	}
 }
 
+func TestPoller_SubscribeGeneratesUniqueSubscriberIDs(t *testing.T) {
+	env := testSetup(t)
+	defer env.Cleanup()
+
+	poller := NewPoller(env.Store, DefaultPollerConfig())
+
+	const subscriberCount = 30
+	subs := make([]*Subscriber, 0, subscriberCount)
+	seen := make(map[string]bool, subscriberCount)
+
+	for range subscriberCount {
+		sub := poller.Subscribe(env.ProjectID)
+		subs = append(subs, sub)
+
+		if seen[sub.ID] {
+			t.Fatalf("duplicate subscriber ID generated: %s", sub.ID)
+		}
+		seen[sub.ID] = true
+	}
+
+	if got := len(poller.subscribers); got != subscriberCount {
+		t.Fatalf("expected %d subscribers in poller, got %d", subscriberCount, got)
+	}
+
+	for _, sub := range subs {
+		poller.Unsubscribe(sub)
+	}
+}
+
 func TestBroker_PublishPersistsAndNotifies(t *testing.T) {
 	env := testSetup(t)
 	defer env.Cleanup()

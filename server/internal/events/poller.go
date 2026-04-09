@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -124,7 +125,7 @@ func (p *Poller) Subscribe(projectID string) *Subscriber {
 	defer p.subscribersMu.Unlock()
 
 	p.nextSubID++
-	subID := string(rune('a' + (p.nextSubID % 26)))
+	subID := strconv.Itoa(p.nextSubID)
 
 	sub := &Subscriber{
 		ID:        subID,
