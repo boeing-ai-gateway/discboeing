@@ -23,6 +23,9 @@ test("thread workspace delegates threaded content and supports no-selection stat
 	assert.match(source, /sidebarOpen\?: boolean;/);
 	assert.match(source, /<ThreadWorkspaceActive/);
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
+	assert.match(source, /const sandboxReady = \$derived\.by/);
+	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
+	assert.match(source, /<ConversationComposerSessionSetupStatus/);
 	assert.match(source, /title="No thread selected"/);
 	assert.match(source, /Select a thread to continue\./);
 });
