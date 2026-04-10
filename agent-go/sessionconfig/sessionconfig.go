@@ -49,6 +49,11 @@ type SessionConfig struct {
 	// commands. They are listed in the system-reminder so the model knows which
 	// slash commands are available.
 	Skills []SkillConfig
+
+	// SkillDiscoveryWarnings are non-fatal skill loading issues, such as
+	// malformed frontmatter in SKILL.md files. These are surfaced to the model in
+	// a system reminder so it can tell the user to fix them.
+	SkillDiscoveryWarnings []string
 }
 
 // Load discovers and loads session configuration from the given working directory.
@@ -96,12 +101,16 @@ func Load(cwd string) (*SessionConfig, error) {
 	}
 
 	// 5. Discover skills.
-	skills, err := discoverSkills(projectRoot)
+	skills, warnings, err := discoverSkills(projectRoot)
 	if err != nil {
 		log.Printf("sessionconfig: warning: skill discovery: %v", err)
 		// Non-fatal — continue without skills.
 	} else {
 		cfg.Skills = skills
+		cfg.SkillDiscoveryWarnings = warnings
+		for _, warning := range warnings {
+			log.Printf("sessionconfig: warning: skill discovery: %s", warning)
+		}
 	}
 
 	return cfg, nil

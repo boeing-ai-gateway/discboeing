@@ -17,7 +17,7 @@ description: Organize and create commits.
 
 Run git commit logic here.`)
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ description: Run CI pipeline.
 
 Run pnpm ci.`)
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ description: Tag a new release.
 
 Run git tag.`)
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ description: Run and fix checks.
 
 Run check fix.`)
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ description: Fix checks from skill.
 
 Use the check fix skill.`)
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestDiscoverSkills_DiscobotSkillsDir(t *testing.T) {
 	mkdirAll(t, skillsDir)
 	writeFile(t, filepath.Join(skillsDir, "SKILL.md"), "---\nname: deploy\ndescription: Deploy via discobot.\n---\nDeploy.")
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestDiscoverSkills_ClaudeTakesPriorityOverDiscobot(t *testing.T) {
 	mkdirAll(t, discobotDir)
 	writeFile(t, filepath.Join(discobotDir, "SKILL.md"), "---\nname: deploy\ndescription: Discobot version.\n---\nDiscobot deploy.")
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestDiscoverSkills_Deduplication(t *testing.T) {
 	mkdirAll(t, cmdDir)
 	writeFile(t, filepath.Join(cmdDir, "SKILL.md"), "---\nname: deploy\ndescription: Deploy from commands.\n---\nCommand content.")
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestDiscoverSkills_Deduplication(t *testing.T) {
 
 func TestDiscoverSkills_MissingDirs(t *testing.T) {
 	root := t.TempDir()
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestDiscoverSkills_SkipsNonDirsInSkillsDir(t *testing.T) {
 	// A loose .md file in skills/ should be ignored (must be in subdirectory).
 	writeFile(t, filepath.Join(skillsDir, "loose.md"), "---\nname: loose\n---\nShould be ignored.")
 
-	skills, err := discoverSkillsWithHome(root, "")
+	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestDiscoverSkills_UserAgentsSkillsDir(t *testing.T) {
 	mkdirAll(t, skillsDir)
 	writeFile(t, filepath.Join(skillsDir, "SKILL.md"), "---\nname: standard\ndescription: Standard user skill.\n---\nStandard body.")
 
-	skills, err := discoverSkillsWithHome(root, home)
+	skills, _, err := discoverSkillsWithHome(root, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestDiscoverSkills_UserClaudeTakesPriorityOverAgents(t *testing.T) {
 	mkdirAll(t, agentsDir)
 	writeFile(t, filepath.Join(agentsDir, "SKILL.md"), "---\nname: deploy\ndescription: Agents user version.\n---\nAgents deploy.")
 
-	skills, err := discoverSkillsWithHome(root, home)
+	skills, _, err := discoverSkillsWithHome(root, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestDiscoverSkills_UserAgentsCommandsDir(t *testing.T) {
 	mkdirAll(t, cmdDir)
 	writeFile(t, filepath.Join(cmdDir, "SKILL.md"), "---\nname: release\ndescription: Standard user command.\n---\nRun the standard command.")
 
-	skills, err := discoverSkillsWithHome(root, home)
+	skills, _, err := discoverSkillsWithHome(root, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestDiscoverSkills_UserClaudeCommandsTakePriorityOverAgents(t *testing.T) {
 	mkdirAll(t, agentsDir)
 	writeFile(t, filepath.Join(agentsDir, "SKILL.md"), "---\nname: release\ndescription: Agents user command.\n---\nAgents command.")
 
-	skills, err := discoverSkillsWithHome(root, home)
+	skills, _, err := discoverSkillsWithHome(root, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,6 +541,57 @@ func TestFormatSkillsReminder_WithSkills(t *testing.T) {
 	}
 	if !strings.Contains(got, "</system-reminder>") {
 		t.Error("missing </system-reminder> tag")
+	}
+}
+
+func TestFormatSkillDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
+	got := FormatSkillDiscoveryWarningsReminder([]string{
+		"parse skill /tmp/release/SKILL.md: parse frontmatter: yaml: line 2: mapping values are not allowed in this context",
+	})
+
+	if !strings.Contains(got, "<system-reminder>") {
+		t.Error("missing <system-reminder> tag")
+	}
+	if !strings.Contains(got, "could not be loaded") {
+		t.Error("missing malformed-skill summary")
+	}
+	if !strings.Contains(got, "parse skill /tmp/release/SKILL.md") {
+		t.Error("missing warning details")
+	}
+	if !strings.Contains(got, "Tell the user") {
+		t.Error("missing instruction to notify the user")
+	}
+	if !strings.Contains(got, "</system-reminder>") {
+		t.Error("missing </system-reminder> tag")
+	}
+}
+
+func TestDiscoverSkills_CollectsMalformedSkillWarnings(t *testing.T) {
+	root := t.TempDir()
+
+	goodDir := filepath.Join(root, ".claude", "commands", "good")
+	mkdirAll(t, goodDir)
+	writeFile(t, filepath.Join(goodDir, "SKILL.md"), "---\nname: good\ndescription: Good command.\n---\nRun good.")
+
+	badDir := filepath.Join(root, ".claude", "commands", "bad")
+	mkdirAll(t, badDir)
+	writeFile(t, filepath.Join(badDir, "SKILL.md"), "---\nname: bad\ndescription: Broken command: still broken\n---\nRun bad.")
+
+	skills, warnings, err := discoverSkillsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 valid skill, got %d", len(skills))
+	}
+	if skills[0].Name != "good" {
+		t.Fatalf("expected valid skill to be preserved, got %q", skills[0].Name)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(warnings))
+	}
+	if !strings.Contains(warnings[0], "parse skill") || !strings.Contains(warnings[0], "bad") {
+		t.Fatalf("unexpected warning: %q", warnings[0])
 	}
 }
 

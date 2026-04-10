@@ -1129,10 +1129,13 @@ func hasStartupBootstrapContent(
 	if formatRuntimeEnvironmentReminder("", displayName) != "" {
 		return true
 	}
-	if !hasNamedTool(sessionCfg.Tools, "Skill") {
-		return false
+	if hasNamedTool(sessionCfg.Tools, "Skill") {
+		if sessionconfig.FormatSkillDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings) != "" {
+			return true
+		}
+		return sessionconfig.FormatSkillsReminder(sessionCfg.Skills) != ""
 	}
-	return sessionconfig.FormatSkillsReminder(sessionCfg.Skills) != ""
+	return false
 }
 
 func (a *DefaultAgent) resolveExistingLeafForPrompt(threadID string, startFresh bool) (string, error) {
@@ -1190,6 +1193,11 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 	}
 
 	if hasNamedTool(sessionCfg.Tools, "Skill") {
+		skillWarningsReminder := sessionconfig.FormatSkillDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings)
+		if err := appendMessage("skill-warnings-"+agent.GenerateID(), "user", skillWarningsReminder); err != nil {
+			return "", fmt.Errorf("save skill discovery warnings reminder: %w", err)
+		}
+
 		skillsReminder := sessionconfig.FormatSkillsReminder(sessionCfg.Skills)
 		if err := appendMessage("skills-"+agent.GenerateID(), "user", skillsReminder); err != nil {
 			return "", fmt.Errorf("save skills reminder: %w", err)

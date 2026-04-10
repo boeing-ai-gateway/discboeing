@@ -36,13 +36,14 @@ type SkillConfig struct {
 // Priority: project skills (.claude then .discobot) → user skills →
 // project commands → user commands.
 // Later entries with a duplicate name are ignored.
-func discoverSkills(projectRoot string) ([]SkillConfig, error) {
+func discoverSkills(projectRoot string) ([]SkillConfig, []string, error) {
 	home, _ := os.UserHomeDir()
 	return discoverSkillsWithHome(projectRoot, home)
 }
 
-func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
+func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, error) {
 	var skills []SkillConfig
+	var warnings []string
 	seen := make(map[string]bool)
 
 	add := func(s SkillConfig) {
@@ -52,10 +53,11 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 		}
 	}
 
-	addFrom := func(list []SkillConfig, err error) error {
+	addFrom := func(list []SkillConfig, listWarnings []string, err error) error {
 		if err != nil {
 			return err
 		}
+		warnings = append(warnings, listWarnings...)
 		for _, s := range list {
 			add(s)
 		}
@@ -65,7 +67,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 	// 1. Project skills: .claude/skills/*/SKILL.md then .discobot/skills/*/SKILL.md
 	for _, dir := range []string{".claude", ".discobot"} {
 		if err := addFrom(loadSkillsDir(filepath.Join(projectRoot, dir, "skills"))); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -74,7 +76,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			if err := addFrom(loadSkillsDir(filepath.Join(home, dir, "skills"))); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
@@ -82,7 +84,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 	// 3. Project commands: .claude/commands/ then .discobot/commands/ (both formats).
 	for _, dir := range []string{".claude", ".discobot"} {
 		if err := addFrom(loadCommandsDir(filepath.Join(projectRoot, dir, "commands"))); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -91,12 +93,12 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, error) {
 	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			if err := addFrom(loadCommandsDir(filepath.Join(home, dir, "commands"))); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
 
-	return skills, nil
+	return skills, warnings, nil
 }
 
 // LookupSkill searches for a skill by name in skills/ directories only.
@@ -239,22 +241,22 @@ type skillFileCandidate struct {
 
 // loadSkillsDir loads all skills from a directory recursively.
 // Supports dir-based SKILL.md and nested markdown files (e.g. check/fix.md).
-func loadSkillsDir(dir string) ([]SkillConfig, error) {
+func loadSkillsDir(dir string) ([]SkillConfig, []string, error) {
 	return loadSkillTree(dir, "skill", false)
 }
 
 // loadCommandsDir loads skills from a .claude/commands directory recursively.
 // Supports subdirectory format (name/SKILL.md), flat format (name.md), and nested markdown files.
-func loadCommandsDir(dir string) ([]SkillConfig, error) {
+func loadCommandsDir(dir string) ([]SkillConfig, []string, error) {
 	return loadSkillTree(dir, "command", true)
 }
 
-func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfig, error) {
+func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfig, []string, error) {
 	if _, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("stat skills dir %s: %w", dir, err)
+		return nil, nil, fmt.Errorf("stat skills dir %s: %w", dir, err)
 	}
 
 	var candidates []skillFileCandidate
@@ -282,7 +284,7 @@ func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfi
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("walk skills dir %s: %w", dir, err)
+		return nil, nil, fmt.Errorf("walk skills dir %s: %w", dir, err)
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -296,22 +298,24 @@ func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfi
 	})
 
 	skills := make([]SkillConfig, 0, len(candidates))
+	warnings := make([]string, 0)
 	for _, candidate := range candidates {
 		content, err := readFileIfExists(candidate.path)
 		if err != nil {
-			return nil, fmt.Errorf("read skill %s: %w", candidate.path, err)
+			return nil, nil, fmt.Errorf("read skill %s: %w", candidate.path, err)
 		}
 		if content == "" {
 			continue
 		}
 		skill, err := parseSkill(candidate.name, content)
 		if err != nil {
-			return nil, fmt.Errorf("parse skill %s: %w", candidate.path, err)
+			warnings = append(warnings, fmt.Sprintf("parse skill %s: %v", candidate.path, err))
+			continue
 		}
 		skill.Kind = kind
 		skills = append(skills, skill)
 	}
-	return skills, nil
+	return skills, warnings, nil
 }
 
 func skillCandidateName(rootDir, path string, includeTopLevelMarkdown bool) (string, int, bool, error) {
@@ -415,5 +419,23 @@ func FormatSkillsReminder(skills []SkillConfig) string {
 
 	b.WriteString("\nWhen users reference a \"slash command\" or \"/<something>\" (e.g., \"/commit\", \"/review-pr\"), they are referring to a skill. Use the Skill tool to invoke it.")
 	b.WriteString("\n</system-reminder>")
+	return b.String()
+}
+
+// FormatSkillDiscoveryWarningsReminder formats non-fatal skill parse warnings as
+// a <system-reminder> block. Returns empty string if warnings is empty.
+func FormatSkillDiscoveryWarningsReminder(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("<system-reminder>\n")
+	b.WriteString("Some skills or slash commands could not be loaded. Do not try to use them. Tell the user that these skill files need to be fixed:\n\n")
+	for _, warning := range warnings {
+		fmt.Fprintf(&b, "- %s\n", warning)
+	}
+	b.WriteString("\nIf the user asks about one of these skills, explain that it is malformed and include the error above.\n")
+	b.WriteString("</system-reminder>")
 	return b.String()
 }
