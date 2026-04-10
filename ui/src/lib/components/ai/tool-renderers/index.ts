@@ -8,6 +8,7 @@ import GlobToolRenderer from "./GlobToolRenderer.svelte";
 import GrepToolRenderer from "./GrepToolRenderer.svelte";
 import OptimizedToolRenderer from "./OptimizedToolRenderer.svelte";
 import ReadToolRenderer from "./ReadToolRenderer.svelte";
+import RequestUserCredentialToolRenderer from "./RequestUserCredentialToolRenderer.svelte";
 import SkillToolRenderer from "./SkillToolRenderer.svelte";
 import TaskToolRenderer from "./TaskToolRenderer.svelte";
 import TodoWriteToolRenderer from "./TodoWriteToolRenderer.svelte";
@@ -26,6 +27,7 @@ export {
 	GrepToolRenderer,
 	OptimizedToolRenderer,
 	ReadToolRenderer,
+	RequestUserCredentialToolRenderer,
 	SkillToolRenderer,
 	TaskToolRenderer,
 	TodoWriteToolRenderer,

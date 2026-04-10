@@ -9,6 +9,7 @@ import ExitPlanModeToolRenderer from "./ExitPlanModeToolRenderer.svelte";
 import GlobToolRenderer from "./GlobToolRenderer.svelte";
 import GrepToolRenderer from "./GrepToolRenderer.svelte";
 import ReadToolRenderer from "./ReadToolRenderer.svelte";
+import RequestUserCredentialToolRenderer from "./RequestUserCredentialToolRenderer.svelte";
 import SkillToolRenderer from "./SkillToolRenderer.svelte";
 import TaskToolRenderer from "./TaskToolRenderer.svelte";
 import TodoWriteToolRenderer from "./TodoWriteToolRenderer.svelte";
@@ -31,6 +32,7 @@ const TOOL_RENDERERS: Record<string, RendererComponent> = {
 	ExitPlanMode: ExitPlanModeToolRenderer,
 	Grep: GrepToolRenderer,
 	Glob: GlobToolRenderer,
+	RequestUserCredential: RequestUserCredentialToolRenderer,
 	apply_patch: ApplyPatchToolRenderer,
 	WebSearch: WebSearchToolRenderer,
 	WebFetch: WebFetchToolRenderer,

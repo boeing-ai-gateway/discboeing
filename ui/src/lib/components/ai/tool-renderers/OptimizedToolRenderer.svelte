@@ -37,6 +37,8 @@
 		defaultOpen ||
 		toolPart.toolName === "AskUserQuestion" ||
 		(toolPart.toolName === "ExitPlanMode" &&
+			toolPart.state === "approval-requested") ||
+		(toolPart.toolName === "RequestUserCredential" &&
 			toolPart.state === "approval-requested");
 
 	let isRaw = $state(false);
@@ -50,6 +52,8 @@
 		if (
 			toolPart.toolName === "AskUserQuestion" ||
 			(toolPart.toolName === "ExitPlanMode" &&
+				toolPart.state === "approval-requested") ||
+			(toolPart.toolName === "RequestUserCredential" &&
 				toolPart.state === "approval-requested")
 		) {
 			open = true;
@@ -65,6 +69,8 @@
 		() =>
 			toolPart.toolName === "AskUserQuestion" ||
 			(toolPart.toolName === "ExitPlanMode" &&
+				toolPart.state === "approval-requested") ||
+			(toolPart.toolName === "RequestUserCredential" &&
 				toolPart.state === "approval-requested"),
 	);
 	const showRaw = $derived.by(() => !hasOptimizedView || isRaw);
