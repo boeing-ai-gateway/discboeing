@@ -1,9 +1,6 @@
 <script lang="ts">
-	import MoonIcon from "@lucide/svelte/icons/moon";
 	import PlusIcon from "@lucide/svelte/icons/plus";
-	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
-	import SunIcon from "@lucide/svelte/icons/sun";
 	import AppMacWindowSpacer from "$lib/components/app/AppMacWindowSpacer.svelte";
 	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
 	import RightWindowControls from "$lib/components/app/parts/RightWindowControls.svelte";
@@ -20,17 +17,12 @@
 
 	const app = useAppContext();
 	const environment = app.environment;
-	const preferences = app.preferences;
 	const sessions = app.sessions;
 	const ui = app.ui;
 	const updates = app.updates;
 
 	function showWindowsLinuxControls(): boolean {
 		return environment.isTauri && environment.windowControlsSide === "right";
-	}
-
-	function refreshWindow(): void {
-		window.location.reload();
 	}
 </script>
 
@@ -70,34 +62,6 @@
 		</button>
 
 		<div class="flex min-w-0 items-center gap-1 pr-2">
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				onclick={preferences.toggleTheme}
-				aria-label={preferences.resolvedTheme === "dark"
-					? "Switch to light theme"
-					: "Switch to dark theme"}
-				title={preferences.resolvedTheme === "dark"
-					? "Switch to light theme"
-					: "Switch to dark theme"}
-			>
-				{#if preferences.resolvedTheme === "dark"}
-					<SunIcon class="size-4" />
-				{:else}
-					<MoonIcon class="size-4" />
-				{/if}
-			</Button>
-			{#if environment.isTauri}
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					onclick={refreshWindow}
-					aria-label="Refresh"
-					title="Refresh"
-				>
-					<RefreshCwIcon class="size-4" />
-				</Button>
-			{/if}
 			<Button
 				variant="ghost"
 				size="icon-sm"
