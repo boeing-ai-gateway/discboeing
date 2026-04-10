@@ -35,11 +35,11 @@ test("app shell only preloads app-ui mounted sessions after they have been visit
 	);
 	assert.match(
 		source,
-		/new Set\(\[\.\.\.preloadSessionIds, currentSelectedSessionId\]\)/,
+		/new Set\(\[selectedSessionId, \.\.\.preloadSessionIds\]\)/,
 	);
 	assert.match(
 		source,
-		/\{#each preloadSessionIds as sessionId \(sessionId\)\}/,
+		/\{#each renderedSessionIds as sessionId \(sessionId\)\}/,
 	);
 });
 

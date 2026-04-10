@@ -42,6 +42,9 @@
 				visitedSessionIds.includes(sessionId),
 		),
 	);
+	const renderedSessionIds = $derived.by(() =>
+		Array.from(new Set([selectedSessionId, ...preloadSessionIds])),
+	);
 
 	function sidebarOpen() {
 		return isMobile.current
@@ -198,7 +201,7 @@
 			onToggleSidebar={toggleSidebar}
 		/>
 	{/if}
-	{#each preloadSessionIds as sessionId (sessionId)}
+	{#each renderedSessionIds as sessionId (sessionId)}
 		<SessionWorkspace
 			{sessionId}
 			visible={sessionId === selectedSessionId}
