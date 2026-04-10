@@ -708,7 +708,7 @@
 	</Alert>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+<div class="flex h-full min-h-0 flex-col overflow-hidden bg-background pt-1">
 	{#if visibleSessionError || threadError}
 		<div class="flex flex-col gap-2 p-3">
 			{#if visibleSessionError}
