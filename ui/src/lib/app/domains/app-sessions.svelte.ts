@@ -232,8 +232,11 @@ export function createAppSessionsDomain(
 				return null;
 			}
 
+			const { threads } = await api.getThreads(sessionId);
 			const created = await api.createThread(sessionId, {
-				id: generateId(),
+				id: threads.some((thread) => thread.id === sessionId)
+					? generateId()
+					: sessionId,
 			});
 			const thread = await api.getThread(sessionId, created.id);
 			const sessionContext = sessionContexts.get(sessionId);
