@@ -1,6 +1,6 @@
 ---
 name: release
-description: Run the autonomous release procedure: infer the next version when needed, verify upstream main and CI, create and push the tag, update GitHub release notes, and watch the release workflow to completion.
+description: "Run the autonomous release procedure: infer the next version when needed, verify upstream main and CI, create and push the tag, update GitHub release notes, and watch the release workflow to completion."
 allowed-tools: Bash(git tag, git log, git describe, git push, git branch, git remote, git fetch, git rev-parse, git ls-remote, git for-each-ref, gh run list, gh run view, gh run watch, gh release view, gh release edit, gh api, pnpm ci, pnpm check, pnpm test, go test), Read, Glob, Grep, Edit, AskUserQuestion
 metadata:
   argument-hint: "[version-or-tag]"
