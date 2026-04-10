@@ -195,8 +195,13 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"  # Strip 'v' prefix
+          SHORT_SHA="${GITHUB_SHA::12}"
           echo "full=$TAG" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "release=discobot@${TAG}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "Full version: $TAG"
+          echo "Short SHA: $SHORT_SHA"
+          echo "Sentry release: discobot@${TAG}+${SHORT_SHA}"
           # Strip alpha/beta/rc text for Tauri (Windows installer compatibility)
           TAURI_VERSION=$(echo "$TAG" | sed -E 's/(alpha|beta|rc)//g')
           echo "tauri=$TAURI_VERSION" >> "$GITHUB_OUTPUT"
@@ -210,7 +215,13 @@ jobs:
           TAURI_TARGET_TRIPLE: ${{ matrix.target }}
           TAURI_BUNDLER_DMG_IGNORE_CI: false
           DISCOBOT_VERSION: ${{ steps.version.outputs.full }}
-          GITHUB_OAUTH_CLIENT_ID: ${{ secrets.DISCOBOT_GITHUB_OAUTH_CLIENT_ID }}
+          PUBLIC_SENTRY_DSN: ${{ secrets.DISCOBOT_SENTRY_DSN }}
+          PUBLIC_SENTRY_APP_VERSION: ${{ steps.version.outputs.full }}
+          PUBLIC_SENTRY_RELEASE: ${{ steps.version.outputs.release }}
+          PUBLIC_SENTRY_DIST: tauri
+          PUBLIC_SENTRY_GIT_COMMIT: ${{ github.sha }}
+          PUBLIC_SENTRY_GIT_TAG: ${{ github.ref_name }}
+          DISCOBOT_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.DISCOBOT_GITHUB_OAUTH_CLIENT_ID }}
           # Tauri updater signing
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

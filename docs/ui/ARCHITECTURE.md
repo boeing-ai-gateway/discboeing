@@ -26,6 +26,7 @@ The UI is a single-page SvelteKit application. It renders an IDE-style interface
 ```
 ui/src/
 ├── app.html                   # HTML shell (favicon, meta)
+├── hooks.client.ts            # Browser startup hooks (Sentry init, build-time release metadata, client error capture)
 ├── routes/
 │   └── +layout.svelte         # AppContext provider, shared project stream subscription
 ├── lib/
@@ -50,21 +51,21 @@ ui/src/
 
 Components live under `ui/src/lib/components/` in three folders:
 
-| Folder | Role | Context |
-|--------|------|---------|
-| `ui/` | Pure primitives — buttons, inputs, dialogs, etc. | None |
-| `ai/` | Self-contained compound components | Component-local only |
-| `app/` | App shell — session UI, composer, panels | Global app/session/thread contexts |
+| Folder | Role                                             | Context                            |
+| ------ | ------------------------------------------------ | ---------------------------------- |
+| `ui/`  | Pure primitives — buttons, inputs, dialogs, etc. | None                               |
+| `ai/`  | Self-contained compound components               | Component-local only               |
+| `app/` | App shell — session UI, composer, panels         | Global app/session/thread contexts |
 
 ### Global Context System
 
 Three contexts flow top-down, each set by a single provider:
 
-| Context | Provider | Provides |
-|---------|----------|---------|
-| `AppContext` | `routes/+layout.svelte` | Sessions, workspaces, models, credentials, preferences |
-| `SessionContext` | `app/SessionWorkspace.svelte` | Threads, files, hooks, services, session credentials |
-| `ThreadContext` | `app/ThreadWorkspace.svelte` | Conversation, messages, plan entries |
+| Context          | Provider                      | Provides                                               |
+| ---------------- | ----------------------------- | ------------------------------------------------------ |
+| `AppContext`     | `routes/+layout.svelte`       | Sessions, workspaces, models, credentials, preferences |
+| `SessionContext` | `app/SessionWorkspace.svelte` | Threads, files, hooks, services, session credentials   |
+| `ThreadContext`  | `app/ThreadWorkspace.svelte`  | Conversation, messages, plan entries                   |
 
 Access via `useAppContext()`, `useSessionContext()`, `useThreadContext()` from `$lib/context/`.
 
@@ -85,6 +86,7 @@ All server data is fetched via `ui/src/lib/api-client.ts`. App-level project eve
 ### 4. Chat Streaming
 
 The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes AI SDK-style data frames:
+
 - Buffers `history-start`/`history-message`/`history-end` replay events
 - Applies `chunk`/`done` events to materialize live AI messages
 - Surfaces mode/model/reasoning metadata
@@ -99,18 +101,19 @@ A native markdown engine (`ui/src/lib/markdown/`) preprocesses streaming content
 
 ## Key Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `svelte` / `@sveltejs/kit` | UI framework and SPA scaffold |
-| `@sveltejs/adapter-static` | Static SPA output |
-| `monaco-editor` | Code editor |
-| `ghostty-web` | Terminal emulator |
-| `@novnc/novnc` | VNC display |
-| `@pierre/diffs` | Diff rendering |
-| `bits-ui` | Headless UI primitives |
-| `lucide-svelte` | Icons |
-| `tailwindcss` | Styling |
-| `remend` / `unified` | Markdown processing |
+| Package                    | Purpose                                                |
+| -------------------------- | ------------------------------------------------------ |
+| `svelte` / `@sveltejs/kit` | UI framework and SPA scaffold                          |
+| `@sveltejs/adapter-static` | Static SPA output                                      |
+| `@sentry/sveltekit`        | Browser error reporting and SvelteKit hook integration |
+| `monaco-editor`            | Code editor                                            |
+| `ghostty-web`              | Terminal emulator                                      |
+| `@novnc/novnc`             | VNC display                                            |
+| `@pierre/diffs`            | Diff rendering                                         |
+| `bits-ui`                  | Headless UI primitives                                 |
+| `lucide-svelte`            | Icons                                                  |
+| `tailwindcss`              | Styling                                                |
+| `remend` / `unified`       | Markdown processing                                    |
 
 ## Module Documentation
 
