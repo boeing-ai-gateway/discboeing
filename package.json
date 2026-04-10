@@ -49,7 +49,7 @@
 		"check:backend:fix": "cd server && go tool golangci-lint run --fix && cd ../proxy && go tool golangci-lint run --fix && cd ../agent-go && go tool golangci-lint run --fix --build-tags mcp_go_client_oauth && cd ../authservice && go tool golangci-lint run --fix",
 		"check:skills": ".claude/scripts/validate-skills.sh",
 		"format": "pnpm ui:format",
-		"ci": "pnpm check && pnpm test:unit && pnpm build:frontend && ([ \"$CI\" = \"true\" ] && git diff --exit-code || true)",
+		"ci": "pnpm check && pnpm test:unit && ([ \"$CI\" = \"true\" ] && pnpm build:frontend && git diff --exit-code || true)",
 		"tauri": "tauri",
 		"refresh-models": "./scripts/refresh-models-data.sh"
 	},
