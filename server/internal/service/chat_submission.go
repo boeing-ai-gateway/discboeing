@@ -75,8 +75,13 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 	}
 	started := promptSubmissionStartedResponse(latest)
 	if started == nil {
-		if latest.ErrorMessage != nil && *latest.ErrorMessage != "" {
-			return latest, nil, errors.New(*latest.ErrorMessage)
+		switch latest.Status {
+		case model.PromptSubmissionStatusPending, model.PromptSubmissionStatusDispatching:
+			return latest, &sandboxapi.ChatStartedResponse{Status: "queued"}, nil
+		case model.PromptSubmissionStatusFailed:
+			if latest.ErrorMessage != nil && *latest.ErrorMessage != "" {
+				return latest, nil, errors.New(*latest.ErrorMessage)
+			}
 		}
 		return latest, nil, fmt.Errorf("prompt dispatch did not reach sandbox")
 	}
