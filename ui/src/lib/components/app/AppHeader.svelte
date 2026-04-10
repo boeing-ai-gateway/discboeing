@@ -4,8 +4,8 @@
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import SunIcon from "@lucide/svelte/icons/sun";
+	import AppMacWindowSpacer from "$lib/components/app/AppMacWindowSpacer.svelte";
 	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
-	import LeftWindowControls from "$lib/components/app/parts/LeftWindowControls.svelte";
 	import RightWindowControls from "$lib/components/app/parts/RightWindowControls.svelte";
 	import SessionToolbarStack from "$lib/components/app/SessionToolbarStack.svelte";
 	import SettingsDialog from "$lib/components/app/SettingsDialog.svelte";
@@ -24,10 +24,6 @@
 	const sessions = app.sessions;
 	const ui = app.ui;
 	const updates = app.updates;
-
-	function showMacSpacer(): boolean {
-		return environment.isTauri && environment.windowControlsSide === "left";
-	}
 
 	function showWindowsLinuxControls(): boolean {
 		return environment.isTauri && environment.windowControlsSide === "right";
@@ -48,9 +44,7 @@
 	></div>
 
 	<div class="relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3">
-		{#if showMacSpacer()}
-			<LeftWindowControls />
-		{/if}
+		<AppMacWindowSpacer />
 
 		<DiscobotBrand heightClass="h-6" />
 	</div>

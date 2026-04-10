@@ -7,9 +7,17 @@ const APP_HEADER_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/AppHeader.svelte",
 );
+const APP_MAC_WINDOW_SPACER_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/AppMacWindowSpacer.svelte",
+);
 
 function readAppHeaderSource() {
 	return readFileSync(APP_HEADER_COMPONENT, "utf-8");
+}
+
+function readAppMacWindowSpacerSource() {
+	return readFileSync(APP_MAC_WINDOW_SPACER_COMPONENT, "utf-8");
 }
 
 test("app header preserves the toolbar grid slot even when the session toolbar is hidden", () => {
@@ -32,4 +40,25 @@ test("app header keeps window controls in a dedicated rightmost grid column", ()
 	);
 	assert.ok(source.includes("<SessionToolbarStack />"));
 	assert.ok(source.includes("<span>New Session</span>"));
+});
+
+test("app header delegates macOS spacer rendering to a dedicated component", () => {
+	const source = readAppHeaderSource();
+
+	assert.ok(source.includes("<AppMacWindowSpacer />"));
+	assert.doesNotMatch(source, /LeftWindowControls/);
+	assert.doesNotMatch(source, /isMacFullscreen/);
+});
+
+test("app mac window spacer skips the spacer while native fullscreen is active", () => {
+	const source = readAppMacWindowSpacerSource();
+
+	assert.match(source, /let isMacFullscreen = \$state\(false\);/);
+	assert.match(source, /await appWindow\.isFullscreen\(\)/);
+	assert.match(source, /appWindow\.onResized\(\(\) => \{/);
+	assert.match(
+		source,
+		/environment\.isTauri &&[\s\S]*environment\.windowControlsSide === "left" &&[\s\S]*!isMacFullscreen/,
+	);
+	assert.ok(source.includes("<LeftWindowControls />"));
 });
