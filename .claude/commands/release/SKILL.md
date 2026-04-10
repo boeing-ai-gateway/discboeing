@@ -1,42 +1,185 @@
 ---
 name: release
-description: Tag a new release version. Use when the user wants to create a git tag for a new release.
-allowed-tools: Bash(git tag, git log, git describe, git push, git branch, git remote), Read, Glob, AskUserQuestion
+description: Run the autonomous release procedure: infer the next version when needed, verify upstream main and CI, create and push the tag, update GitHub release notes, and watch the release workflow to completion.
+allowed-tools: Bash(git tag, git log, git describe, git push, git branch, git remote, git fetch, git rev-parse, git ls-remote, git for-each-ref, gh run list, gh run view, gh run watch, gh release view, gh release edit, gh api, pnpm ci, pnpm check, pnpm test, go test), Read, Glob, Grep, Edit, AskUserQuestion
 metadata:
-  argument-hint: "<version>"
+  argument-hint: "[version-or-tag]"
 ---
 
-# Release Tagging
+# Autonomous Release Procedure
 
-Create and tag a new release version.
+Run a release as autonomously as possible while keeping the user informed before risky follow-up actions.
 
-## Process
+## Core Rules
 
-1. **Check current state**: Run `git describe --tags --abbrev=0 2>/dev/null || echo "no tags"` to find the latest tag
-2. **List recent tags**: Run `git tag --sort=-v:refname | head -10` to show recent version history
-3. **Determine version**:
-   - If a version argument was provided, use it (ensure it starts with `v`, e.g., `v1.2.3`)
-   - Otherwise, ask the user what version to tag using AskUserQuestion with options:
-     - Patch bump (e.g., v1.0.0 -> v1.0.1)
-     - Minor bump (e.g., v1.0.0 -> v1.1.0)
-     - Major bump (e.g., v1.0.0 -> v2.0.0)
-     - Custom version
-4. **Show changes**: Run `git log --oneline $(git describe --tags --abbrev=0 2>/dev/null)..HEAD` to show commits since last tag
-5. **Create tag**: Run `git tag -a <version> -m "Release <version>"`
-6. **Select the publish remote**: Run `git remote -v` and choose the remote whose URL points to `obot-platform/discobot`. Do not assume the correct remote is named `origin` or `upstream`.
-7. **Check if commit is on that remote**: Run `git branch -r --contains HEAD` to check whether the tagged commit has already been pushed to the selected remote's main branch
-8. **Ask about push**: Ask the user whether to push the tag to the selected `obot-platform/discobot` remote. If the tagged commit is not yet on that remote's main branch, also offer to push main.
-9. **Push if requested**: Run `git push <selected-remote> <version>` and `git push <selected-remote> main` if needed
+- Treat `obot-platform/discobot` as the canonical upstream repository.
+- Do not create or push a release tag until the current `HEAD` commit is confirmed to be on that upstream repository's `main` branch.
+- Do not create or push a release tag until every CI run for that `HEAD` commit has completed successfully.
+- If CI is still running, explicitly wait with `gh run watch <run-id> --exit-status`.
+- If CI fails, investigate the failures, fix them locally, and ask the user to confirm the fixes before pushing anything.
+- After the tag is pushed, generate changelog/release notes, update the GitHub release, and then watch the release workflow until it succeeds.
 
-## Version Format
+## Version Inference
 
-This project uses semantic versioning with a `v` prefix:
-- `v1.0.0` - Major.Minor.Patch
-- `v0.1.0-alpha` - Pre-release versions are also supported
+1. If the user provided a version or tag, use it.
+   - Normalize it to start with `v`.
+2. Otherwise, inspect recent tags with:
+   - `git describe --tags --abbrev=0 2>/dev/null || echo "no tags"`
+   - `git tag --sort=-v:refname | head -20`
+3. Infer the next tag automatically:
+   - If the latest tag is an alpha tag like `v1.2.3-alpha4`, use the next alpha tag: `v1.2.3-alpha5`.
+   - If the latest tag is a beta tag like `v1.2.3-beta2`, use the next beta tag: `v1.2.3-beta3`.
+   - If the latest tag is an RC tag like `v1.2.3-rc7`, use the next RC tag: `v1.2.3-rc8`.
+   - If the latest tag is a normal release like `v1.2.3`, assume the next release should start an RC cycle for that same numeric base: `v1.2.3-rc1`.
+   - If there are no tags, default to `v0.1.0-rc1`.
+4. Before tagging, show the inferred version and the reason it was chosen.
+
+## Full Procedure
+
+### 1. Identify the canonical remote
+
+1. Run `git remote -v`.
+2. Select the remote whose fetch URL points to `obot-platform/discobot`.
+3. Do not assume the remote is named `origin` or `upstream`; discover it from the URL.
+4. Fetch the latest refs before making any decisions:
+   - `git fetch <remote> --tags`
+   - `git fetch <remote> main`
+
+### 2. Verify that HEAD is the upstream main commit
+
+1. Resolve the local and remote SHAs:
+   - `git rev-parse HEAD`
+   - `git rev-parse <remote>/main`
+2. If `HEAD` is not equal to `<remote>/main`:
+   - Explain that the release must be cut from the commit currently on upstream `main`.
+   - Ask the user whether to push the current `HEAD` to `<remote> main`.
+   - If the user approves, push `HEAD` to `<remote> main`.
+   - After pushing, fetch again and re-check that `HEAD == <remote>/main`.
+3. Do not proceed until this check passes.
+
+### 3. Verify CI for the head commit
+
+1. Determine the commit SHA being released from `git rev-parse HEAD`.
+2. Inspect all GitHub Actions runs for that commit with `gh run list --commit <sha>`.
+3. For every run associated with that commit:
+   - If it is queued, requested, waiting, or in progress, watch it with `gh run watch <run-id> --exit-status`.
+   - Re-list runs after each watch until no run for that commit is still active.
+4. Treat the commit as releasable only when every relevant run for that commit has concluded successfully.
+   - `success` is acceptable.
+   - `failure`, `cancelled`, `timed_out`, or `action_required` are blocking.
+5. If there is a failure:
+   - Inspect the failed run with `gh run view <run-id>` and, when helpful, `gh run view <run-id> --log-failed`.
+   - Fix the issue locally.
+   - Re-run the smallest appropriate local validation first (`pnpm check`, `pnpm test`, `pnpm ci`, `go test`, or narrower commands as needed).
+   - Summarize the fix and ask the user to confirm before pushing the fix to upstream `main`.
+   - Once confirmed, push the fix, then restart the CI verification cycle from the beginning for the new `HEAD` commit.
+
+### 4. Review release changes before tagging
+
+1. Determine the comparison base tag:
+   - For alpha releases, compare against the previous alpha tag.
+   - For beta releases, compare against the previous beta tag.
+   - For RC releases, compare against the previous RC tag.
+   - For normal releases, compare against the previous normal release tag.
+2. Show the commits since that comparison base with:
+   - `git log --oneline <previous-tag>..HEAD`
+3. If there is no matching previous tag in the same family, explain the fallback you are using.
+
+### 5. Create and push the release tag
+
+1. Create an annotated tag:
+   - `git tag -a <tag> -m "Release <tag>"`
+2. Record the existing workflow run IDs for the release workflow before pushing the tag.
+3. Push the tag to the canonical remote:
+   - `git push <remote> <tag>`
+
+### 6. Generate changelog and release notes
+
+1. Generate release notes relative to the correct previous tag.
+2. Use GitHub's generated notes API when possible so the notes are based on the actual comparison range:
+   - `gh api repos/obot-platform/discobot/releases/generate-notes -f tag_name=<tag> -f target_commitish=<sha> -f previous_tag_name=<previous-tag>`
+3. Also capture a concise changelog from git history for the same range.
+4. Update the GitHub release for the tag with the generated notes:
+   - `gh release edit <tag> --title "Discobot <tag>" --notes-file <file>`
+5. If the tag is an alpha, beta, or RC release, mark the GitHub release as a prerelease when updating it.
+
+### 7. Watch the release workflow after tagging
+
+1. After the tag push, identify the new workflow run triggered by that tag.
+   - Compare `gh run list` results from before and after the tag push.
+   - Focus on the release workflow (`.github/workflows/release.yml`) for the release commit/tag.
+2. If the release workflow is queued or running, wait with:
+   - `gh run watch <run-id> --exit-status`
+3. Re-check until all workflow runs triggered by the tag have completed.
+4. If the tagged release workflow succeeds:
+   - Confirm that the GitHub release exists and has the expected notes/body.
+   - Tell the user the release completed successfully.
+5. If the tagged release workflow fails:
+   - Report the failing run and the failure summary.
+   - Do not rewrite or move the tag without explicit user approval.
+
+## Decision Points That Still Require the User
+
+Ask the user before:
+- pushing `HEAD` to upstream `main` when it is not already there,
+- pushing fixes for failed CI runs,
+- taking any corrective action that would rewrite a published release tag or otherwise modify published history.
+
+## Expected Commands
+
+Use commands along these lines during the procedure:
+
+```bash
+# Determine canonical remote and current state
+git remote -v
+git fetch <remote> --tags
+git fetch <remote> main
+git rev-parse HEAD
+git rev-parse <remote>/main
+git tag --sort=-v:refname | head -20
+git describe --tags --abbrev=0 2>/dev/null || echo "no tags"
+
+# Inspect and wait for commit CI
+gh run list --commit <sha>
+gh run watch <run-id> --exit-status
+gh run view <run-id>
+gh run view <run-id> --log-failed
+
+# Review release delta
+git log --oneline <previous-tag>..HEAD
+
+# Tag and publish
+git tag -a <tag> -m "Release <tag>"
+git push <remote> <tag>
+
+# Generate and publish release notes
+gh api repos/obot-platform/discobot/releases/generate-notes \
+  -f tag_name=<tag> \
+  -f target_commitish=<sha> \
+  -f previous_tag_name=<previous-tag>
+gh release edit <tag> --title "Discobot <tag>" --notes-file <file>
+
+# Watch release workflow after tag push
+gh run list --workflow release.yml --commit <sha>
+gh run watch <run-id> --exit-status
+```
+
+## Output Expectations
+
+Keep the user updated with concise checkpoints:
+- inferred tag,
+- upstream remote chosen,
+- whether `HEAD` is on upstream `main`,
+- CI status for the release commit,
+- any local fixes made for failed CI,
+- tag creation and push status,
+- release notes update status,
+- tagged release workflow result.
 
 ## Example Usage
 
-```
-/release           # Interactive - will prompt for version
-/release v1.2.3    # Tag specific version
+```text
+/release
+/release v1.2.3
+/release v1.2.3-rc4
 ```
