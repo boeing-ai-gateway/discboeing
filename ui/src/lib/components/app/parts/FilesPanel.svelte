@@ -1297,6 +1297,7 @@
 								<div class="mx-auto flex min-h-full w-full max-w-4xl p-6">
 									<MessageResponse
 										text={activeBuffer.content}
+										mode="static"
 										class="w-full text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
 									/>
 								</div>

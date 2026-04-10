@@ -1,6 +1,7 @@
 import { harden } from "rehype-harden";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -9,6 +10,7 @@ import type { Pluggable } from "unified";
 import { unified } from "unified";
 import type { MarkdownPluginConfig } from "./types";
 import { remarkCodeMeta } from "./remark-code-meta";
+import { remarkFrontmatterTable } from "./remark-frontmatter-table";
 
 const sanitizeSchema = {
 	...defaultSchema,
@@ -47,7 +49,11 @@ export function parseMarkdownToHast(
 		}
 	}
 
-	processor.use(remarkGfm).use(remarkCodeMeta);
+	processor
+		.use(remarkFrontmatter, ["yaml"])
+		.use(remarkGfm)
+		.use(remarkCodeMeta)
+		.use(remarkFrontmatterTable);
 
 	if (plugins?.cjk) {
 		for (const plugin of plugins.cjk.remarkPluginsAfter) {

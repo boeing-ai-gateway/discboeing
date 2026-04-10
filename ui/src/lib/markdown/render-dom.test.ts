@@ -60,6 +60,58 @@ test("renderMarkdownTree shows explicit code fence languages", () => {
 	assert.equal(header?.textContent?.trim(), "yaml");
 });
 
+test("renderMarkdownTree renders YAML front matter as a table", () => {
+	const container = renderMarkdown(`---
+title: Release notes
+draft: false
+tags:
+  - ui
+  - markdown
+metadata:
+  owner: discobot
+---
+
+# Hello`);
+
+	const table = container.querySelector("table");
+	assert.ok(table);
+
+	const rows = Array.from(table?.querySelectorAll("tr") ?? []).map((row) =>
+		Array.from(row.querySelectorAll("th, td")).map(
+			(cell) => cell.textContent?.trim() ?? "",
+		),
+	);
+
+	assert.deepEqual(rows, [
+		["Field", "Value"],
+		["title", "Release notes"],
+		["draft", "false"],
+		["tags", "ui, markdown"],
+		["metadata.owner", "discobot"],
+	]);
+
+	const heading = container.querySelector("h1");
+	assert.ok(heading);
+	assert.equal(heading?.textContent?.trim(), "Hello");
+});
+
+test("renderMarkdownTree falls back to a YAML code block for invalid front matter", () => {
+	const container = renderMarkdown(`---
+title: [broken
+---`);
+	const header = container.querySelector(
+		'[data-streamdown="code-block-header"]',
+	);
+	const codeBlock = container.querySelector(
+		'[data-streamdown="code-block-body"]',
+	);
+
+	assert.ok(header);
+	assert.equal(header?.textContent?.trim(), "yaml");
+	assert.ok(codeBlock);
+	assert.match(codeBlock?.textContent ?? "", /title: \[broken/);
+});
+
 test("renderMarkdownTree falls back to plain text for unsupported code fence languages", () => {
 	const unsupportedCodePlugin: CodeHighlighterPlugin = {
 		getSupportedLanguages: () => ["typescript"],
