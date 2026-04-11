@@ -16,6 +16,7 @@
 	import DiffReviewFileRenderer from "$lib/components/app/parts/DiffReviewFileRenderer.svelte";
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
+	import { Checkbox } from "$lib/components/ui/checkbox";
 	import {
 		buildDiffFileContents,
 		DIFF_HARD_LIMIT,
@@ -23,6 +24,10 @@
 		type DiffRendererParams,
 		type DiffStyle,
 	} from "$lib/pierre-diff";
+	import {
+		equalIgnoringWhitespace,
+		normalizeWhitespaceForDiff,
+	} from "$lib/pierre-diff-utils";
 	import {
 		countDiffLinesFast,
 		hashString,
@@ -105,6 +110,7 @@
 	let refreshing = $state(false);
 	let loadGeneration = 0;
 	let diffStyle = $state<DiffStyle>("unified");
+	let ignoreWhitespaceByPath = $state<Record<string, boolean>>({});
 	let resolvedApprovalCount = $state(0);
 	let approvedCount = $state(0);
 
@@ -162,6 +168,7 @@
 
 		loadGeneration += 1;
 		clearDiffStates();
+		ignoreWhitespaceByPath = {};
 
 		if (!currentSessionId || currentEntries.length === 0) {
 			expandedPath = null;
@@ -602,6 +609,27 @@
 		return state.status === "ready" && state.lineCount > DIFF_WARNING_THRESHOLD;
 	}
 
+	function ignoringWhitespace(path: string): boolean {
+		return ignoreWhitespaceByPath[path] ?? false;
+	}
+
+	function toggleIgnoreWhitespace(path: string, checked: boolean) {
+		ignoreWhitespaceByPath = {
+			...ignoreWhitespaceByPath,
+			[path]: checked,
+		};
+	}
+
+	function hasOnlyWhitespaceChanges(state: ReadyDiffState): boolean {
+		if (state.snapshotStatus !== "ready" || !state.snapshot) {
+			return false;
+		}
+		return equalIgnoringWhitespace(
+			state.snapshot.originalContent,
+			state.snapshot.modifiedContent,
+		);
+	}
+
 	function getRendererParams(
 		path: string,
 		state: ReadyDiffState,
@@ -614,11 +642,33 @@
 		) {
 			return null;
 		}
+
+		if (!ignoringWhitespace(path)) {
+			return {
+				diffStyle,
+				resolvedTheme,
+				oldFile: state.oldFile,
+				newFile: state.newFile,
+				virtualized: useVirtualizedDiff(state),
+			};
+		}
+
+		const oldPath = state.response.oldPath ?? path;
+		const oldFile = buildDiffFileContents(
+			oldPath,
+			normalizeWhitespaceForDiff(state.snapshot.originalContent),
+			state.patchHash ? `${state.patchHash}:old:ignore-whitespace` : null,
+		);
+		const newFile = buildDiffFileContents(
+			path,
+			normalizeWhitespaceForDiff(state.snapshot.modifiedContent),
+			state.patchHash ? `${state.patchHash}:new:ignore-whitespace` : null,
+		);
 		return {
 			diffStyle,
 			resolvedTheme,
-			oldFile: state.oldFile,
-			newFile: state.newFile,
+			oldFile,
+			newFile,
 			virtualized: useVirtualizedDiff(state),
 		};
 	}
@@ -871,16 +921,26 @@
 													{/if}
 													{#if state.snapshotStatus === "ready" && state.snapshot?.source === "base-read"}
 														<span>Deleted snapshot loaded from base</span>
-													{:else if state.snapshotStatus === "ready" && state.snapshot?.source === "reverse-patch"}
-														<span
-															>Original snapshot reconstructed from patch</span
-														>
 													{:else if state.snapshotStatus === "error"}
 														<span>{state.snapshotError}</span>
 													{/if}
 												{/if}
 											</div>
 											<div class="flex flex-wrap items-center gap-2">
+												<label
+													class="flex items-center gap-2 text-xs text-muted-foreground"
+												>
+													<Checkbox
+														checked={ignoringWhitespace(file.path)}
+														aria-label={`Ignore whitespace changes for ${file.path}`}
+														onCheckedChange={(checked) =>
+															toggleIgnoreWhitespace(
+																file.path,
+																checked === true,
+															)}
+													/>
+													<span>Ignore whitespace</span>
+												</label>
 												<Button
 													variant={approved ? "secondary" : "outline"}
 													size="sm"
@@ -944,6 +1004,12 @@
 												class="rounded-md border border-border bg-background px-3 py-4 text-sm text-muted-foreground"
 											>
 												Preparing interactive diff…
+											</div>
+										{:else if ignoringWhitespace(file.path) && hasOnlyWhitespaceChanges(state)}
+											<div
+												class="rounded-md border border-border bg-background px-3 py-4 text-sm text-muted-foreground"
+											>
+												This file only has whitespace changes.
 											</div>
 										{:else}
 											{@const rendererParams = getRendererParams(

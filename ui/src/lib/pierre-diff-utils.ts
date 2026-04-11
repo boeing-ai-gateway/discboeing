@@ -52,6 +52,23 @@ export function getLanguageFromPath(
 	return LANGUAGE_MAP[extension];
 }
 
+export function normalizeWhitespaceForDiff(content: string): string {
+	return content
+		.split("\n")
+		.map((line) => line.replace(/\s+/g, " ").trim())
+		.join("\n");
+}
+
+export function equalIgnoringWhitespace(
+	leftContent: string,
+	rightContent: string,
+): boolean {
+	return (
+		normalizeWhitespaceForDiff(leftContent) ===
+		normalizeWhitespaceForDiff(rightContent)
+	);
+}
+
 export function buildDiffFileContents(
 	path: string,
 	content: string,

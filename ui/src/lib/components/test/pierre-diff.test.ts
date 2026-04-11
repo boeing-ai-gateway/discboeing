@@ -4,7 +4,9 @@ import test from "node:test";
 import {
 	buildDiffCacheKey,
 	buildDiffFileContents,
+	equalIgnoringWhitespace,
 	getLanguageFromPath,
+	normalizeWhitespaceForDiff,
 } from "../../pierre-diff-utils";
 
 test("getLanguageFromPath detects Go files", () => {
@@ -51,4 +53,28 @@ test("buildDiffFileContents falls back to a path-scoped length key without an ex
 	);
 
 	assert.equal(file.cacheKey, "ui/src/lib/example.svelte:svelte:7");
+});
+
+test("normalizeWhitespaceForDiff collapses whitespace-only changes", () => {
+	assert.equal(
+		normalizeWhitespaceForDiff("\tconst  value =  1;  \n\n  return value;\t"),
+		"const value = 1;\n\nreturn value;",
+	);
+});
+
+test("equalIgnoringWhitespace treats formatting-only edits as unchanged", () => {
+	assert.equal(
+		equalIgnoringWhitespace(
+			"function example() {\n\treturn 1;\n}",
+			"function   example()\t{\n  return 1;\n}",
+		),
+		true,
+	);
+	assert.equal(
+		equalIgnoringWhitespace(
+			"function example() {\n\treturn 1;\n}",
+			"function example() {\n\treturn 2;\n}",
+		),
+		false,
+	);
 });
