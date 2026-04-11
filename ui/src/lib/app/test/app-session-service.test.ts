@@ -257,6 +257,7 @@ test("touchRecentThread updates timestamps without reordering existing entries",
 			sessionName: "One renamed",
 			threadId: "thread-1",
 			threadName: "Thread One renamed",
+			lastMessage: "",
 			lastAccessedAt: "2026-02-01T00:00:00Z",
 		},
 		{
@@ -319,6 +320,7 @@ test("touchRecentThread inserts unseen entries at the head of the recent list", 
 			sessionName: "Five",
 			threadId: "thread-5",
 			threadName: "Thread Five",
+			lastMessage: "",
 			lastAccessedAt: "2026-02-01T00:00:00Z",
 		},
 		{
@@ -372,12 +374,18 @@ test("touchRecentThread trims the oldest entry while preserving list order", () 
 	);
 
 	assert.equal(nextEntries.length, 12);
-	assert.equal(nextEntries[0]?.threadId, "thread-13");
+	assert.deepEqual(
+		nextEntries.slice(0, 5).map((entry) => entry.threadId),
+		["thread-13", "thread-2", "thread-3", "thread-4", "thread-5"],
+	);
 	assert.equal(
 		nextEntries.some((entry) => entry.threadId === "thread-1"),
 		false,
 	);
-	assert.equal(nextEntries[1]?.threadId, "thread-2");
+	assert.equal(
+		nextEntries.some((entry) => entry.threadId === "thread-13"),
+		true,
+	);
 });
 
 test("getRecentThreadEntryForSessionSelection returns the selected thread", () => {
@@ -450,6 +458,7 @@ test("refreshRecentThread updates labels without adding missing threads", () => 
 				sessionName: "One renamed",
 				threadId: "thread-1",
 				threadName: "Thread One renamed",
+				lastMessage: "",
 				lastAccessedAt: "2026-01-01T00:00:00Z",
 			},
 		],
@@ -802,14 +811,6 @@ test("recent threads persist in local storage without reordering duplicates", ()
 			),
 			JSON.stringify([
 				{
-					sessionId: "session-1",
-					sessionName: "One updated",
-					threadId: "thread-1",
-					threadName: "Thread One updated",
-					lastMessage: "updated prompt",
-					lastAccessedAt: "2026-02-01T00:00:00Z",
-				},
-				{
 					sessionId: "session-2",
 					sessionName: "Two",
 					threadId: "thread-2",
@@ -817,17 +818,17 @@ test("recent threads persist in local storage without reordering duplicates", ()
 					lastMessage: "second prompt",
 					lastAccessedAt: "2026-01-02T00:00:00Z",
 				},
+				{
+					sessionId: "session-1",
+					sessionName: "One updated",
+					threadId: "thread-1",
+					threadName: "Thread One updated",
+					lastMessage: "updated prompt",
+					lastAccessedAt: "2026-02-01T00:00:00Z",
+				},
 			]),
 		);
 		assert.deepEqual(readRecentThreadEntries(), [
-			{
-				sessionId: "session-1",
-				sessionName: "One updated",
-				threadId: "thread-1",
-				threadName: "Thread One updated",
-				lastMessage: "updated prompt",
-				lastAccessedAt: "2026-02-01T00:00:00Z",
-			},
 			{
 				sessionId: "session-2",
 				sessionName: "Two",
@@ -835,6 +836,14 @@ test("recent threads persist in local storage without reordering duplicates", ()
 				threadName: "Thread Two",
 				lastMessage: "second prompt",
 				lastAccessedAt: "2026-01-02T00:00:00Z",
+			},
+			{
+				sessionId: "session-1",
+				sessionName: "One updated",
+				threadId: "thread-1",
+				threadName: "Thread One updated",
+				lastMessage: "updated prompt",
+				lastAccessedAt: "2026-02-01T00:00:00Z",
 			},
 		]);
 	});

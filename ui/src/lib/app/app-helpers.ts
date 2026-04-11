@@ -251,7 +251,7 @@ function normalizeRecentThreadEntries(
 	}
 
 	const oldestEntry = dedupedEntries.reduce((oldest, entry) =>
-		compareIsoDatesDesc(oldest.lastAccessedAt, entry.lastAccessedAt) < 0
+		compareIsoDatesDesc(oldest.lastAccessedAt, entry.lastAccessedAt) > 0
 			? oldest
 			: entry,
 	);
