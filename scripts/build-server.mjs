@@ -48,6 +48,8 @@ const uiBuildEnv = {
   PUBLIC_SENTRY_GIT_TAG: process.env.PUBLIC_SENTRY_GIT_TAG || gitTag,
 };
 
+const hasSentryDSN = Boolean(process.env.PUBLIC_SENTRY_DSN);
+
 // GitHub OAuth client ID for git operations (device flow, repo scope).
 // Set via DISCOBOT_GITHUB_OAUTH_CLIENT_ID in CI; empty string in dev builds.
 const githubOAuthClientID = process.env.DISCOBOT_GITHUB_OAUTH_CLIENT_ID || "";
@@ -59,6 +61,7 @@ function syncEmbeddedUI() {
   console.log(
     `Building Svelte UI with Sentry release ${uiBuildEnv.PUBLIC_SENTRY_RELEASE}...`,
   );
+  console.log(`Sentry DSN configured: ${hasSentryDSN ? "yes" : "no"}`);
   execSync("pnpm ui:build", {
     cwd: projectRoot,
     stdio: "inherit",
