@@ -5,7 +5,7 @@
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 
-	import { writeStorage } from "$lib/app/app-helpers";
+	import { writeStorage } from "$lib/local-storage";
 	import { api } from "$lib/api-client";
 	import type {
 		SessionDiffFileEntry,

@@ -30,7 +30,6 @@
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
-	import { getVisibleRecentThreads } from "$lib/app/app-helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 
 	type Props = {
@@ -91,12 +90,7 @@
 	let floatingOpen = $state(false);
 	let shellRef = $state<HTMLElement | null>(null);
 	const showSidebarBody = $derived(!floatingCollapsed || floatingOpen);
-	const visibleRecentThreads = $derived.by(() =>
-		getVisibleRecentThreads(
-			sessions.recentThreads,
-			preferences.recentThreadsVisibleLimit,
-		),
-	);
+	const visibleRecentThreads = $derived(app.ui.visibleRecentThreads);
 	const showRecentThreads = $derived(
 		preferences.recentThreadsVisibleLimit > 1 &&
 			visibleRecentThreads.length > 0,

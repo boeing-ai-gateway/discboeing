@@ -32,8 +32,6 @@ function createSessionContext(
 
 	const hasSession = $derived.by(() => current !== null);
 	const isPending = $derived.by(() => !hasSession);
-	const getSessionName = () =>
-		current?.displayName || current?.name || "New Session";
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -62,29 +60,6 @@ function createSessionContext(
 		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
 			selectedThreadId = threadId;
-		},
-		onThreadRenamed: (thread) => {
-			app.sessions.refreshRecentThread({
-				sessionId,
-				sessionName: getSessionName(),
-				threadId: thread.id,
-				threadName: thread.name,
-				state: thread.state,
-				lastMessage: thread.lastMessage || "",
-			});
-		},
-		onThreadUpdated: (thread) => {
-			app.sessions.refreshRecentThread({
-				sessionId,
-				sessionName: getSessionName(),
-				threadId: thread.id,
-				threadName: thread.name,
-				state: thread.state,
-				lastMessage: thread.lastMessage || "",
-			});
-		},
-		onThreadRemoved: (threadId) => {
-			app.sessions.removeRecentThread(sessionId, threadId);
 		},
 	});
 

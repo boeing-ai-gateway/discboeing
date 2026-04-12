@@ -1,39 +1,9 @@
-import {
-	CHAT_WIDTH_MODE_STORAGE_KEY,
-	DEFAULT_MODEL_STORAGE_KEY,
-	DEFAULT_PREFERRED_IDE,
-	DEFAULT_RECENT_THREADS_VISIBLE_LIMIT,
-	PINNED_PROMPTS_STORAGE_KEY,
-	PROMPT_HISTORY_STORAGE_KEY,
-	PREFERRED_IDE_STORAGE_KEY,
-	readPinnedPrompts,
-	readPromptHistory,
-	readRecentThreadsVisibleLimit,
-	SIDEBAR_ALL_OPEN_STORAGE_KEY,
-	SIDEBAR_ALL_GROUPED_STORAGE_KEY,
-	SIDEBAR_RECENT_OPEN_STORAGE_KEY,
-	RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY,
-	readChatWidthMode,
-	readDefaultModel,
-	readPreferredIde,
-	readSidebarAllOpen,
-	readSidebarAllGrouped,
-	readSidebarRecentOpen,
-	writeStorage,
-} from "$lib/app/app-helpers";
 import type {
 	AppContextBootstrap,
 	AppPreferences,
-	ChatWidthMode,
 } from "$lib/app/app-context.types";
 import type { ThemeColorScheme } from "$lib/api-types";
-import {
-	appendPromptHistoryEntry,
-	appendPinnedPrompt,
-	removePinnedPrompt,
-	removePromptHistoryEntry,
-} from "$lib/prompt-history-storage";
-import type { PreferredIde } from "$lib/shell-types";
+import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 import {
 	applyColorScheme,
 	applyTheme,
@@ -47,23 +17,16 @@ import {
 
 type CreateAppPreferencesDomainArgs = {
 	bootstrap: AppContextBootstrap;
+	uiStateStore: UIStateStore;
 };
 
 export function createAppPreferencesDomain(
 	args: CreateAppPreferencesDomainArgs,
 ): AppPreferences {
+	const { uiStateStore } = args;
 	let theme = $state<ThemeMode>("system");
 	let resolvedTheme = $state<ResolvedTheme>("dark");
 	let colorScheme = $state<ThemeColorScheme>("default");
-	let preferredIde = $state<PreferredIde>(DEFAULT_PREFERRED_IDE);
-	let chatWidthMode = $state<ChatWidthMode>("constrained");
-	let defaultModel = $state("");
-	let recentThreadsVisibleLimit = $state(DEFAULT_RECENT_THREADS_VISIBLE_LIMIT);
-	let sidebarRecentOpen = $state(true);
-	let sidebarAllOpen = $state(true);
-	let sidebarAllGroupedByWorkspace = $state(true);
-	let promptHistory = $state<string[]>([]);
-	let pinnedPrompts = $state<string[]>([]);
 
 	const availableThemes = $derived.by(() => getAvailableThemes(resolvedTheme));
 
@@ -84,24 +47,12 @@ export function createAppPreferencesDomain(
 		syncAppliedColorScheme();
 	};
 
-	const initializePreferences = () => {
-		applyThemeState(getThemeMode());
-		colorScheme = getColorScheme();
-		ensureColorSchemeForMode();
-		syncAppliedColorScheme();
-		preferredIde = readPreferredIde();
-		chatWidthMode = readChatWidthMode();
-		defaultModel = readDefaultModel();
-		recentThreadsVisibleLimit = readRecentThreadsVisibleLimit();
-		sidebarRecentOpen = readSidebarRecentOpen();
-		sidebarAllOpen = readSidebarAllOpen();
-		sidebarAllGroupedByWorkspace = readSidebarAllGrouped();
-		promptHistory = readPromptHistory();
-		pinnedPrompts = readPinnedPrompts();
-	};
-
-	// Initialize on construction
-	initializePreferences();
+	// Theme state still needs its own setup, but persisted UI preferences now
+	// read straight from UIStateStore instead of being copied here.
+	applyThemeState(getThemeMode());
+	colorScheme = getColorScheme();
+	ensureColorSchemeForMode();
+	syncAppliedColorScheme();
 
 	if (typeof window !== "undefined") {
 		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -125,32 +76,32 @@ export function createAppPreferencesDomain(
 			return availableThemes;
 		},
 		get promptHistory() {
-			return promptHistory;
+			return uiStateStore.promptHistory;
 		},
 		get pinnedPrompts() {
-			return pinnedPrompts;
+			return uiStateStore.pinnedPrompts;
 		},
 		get preferredIde() {
-			return preferredIde;
+			return uiStateStore.preferredIde;
 		},
 		ideOptions: args.bootstrap.ideOptions,
 		get chatWidthMode() {
-			return chatWidthMode;
+			return uiStateStore.chatWidthMode;
 		},
 		get defaultModel() {
-			return defaultModel;
+			return uiStateStore.defaultModel;
 		},
 		get recentThreadsVisibleLimit() {
-			return recentThreadsVisibleLimit;
+			return uiStateStore.recentThreadsVisibleLimit;
 		},
 		get sidebarRecentOpen() {
-			return sidebarRecentOpen;
+			return uiStateStore.sidebarRecentOpen;
 		},
 		get sidebarAllOpen() {
-			return sidebarAllOpen;
+			return uiStateStore.sidebarAllOpen;
 		},
 		get sidebarAllGroupedByWorkspace() {
-			return sidebarAllGroupedByWorkspace;
+			return uiStateStore.sidebarAllGroupedByWorkspace;
 		},
 		setTheme: (mode) => applyThemeState(mode),
 		setColorScheme: (scheme) => {
@@ -160,49 +111,38 @@ export function createAppPreferencesDomain(
 		toggleTheme: () =>
 			applyThemeState(resolvedTheme === "dark" ? "light" : "dark"),
 		addPromptToHistory: (prompt) => {
-			promptHistory = appendPromptHistoryEntry(promptHistory, prompt);
-			writeStorage(PROMPT_HISTORY_STORAGE_KEY, JSON.stringify(promptHistory));
+			uiStateStore.addPromptToHistory(prompt);
 		},
 		removePromptFromHistory: (prompt) => {
-			promptHistory = removePromptHistoryEntry(promptHistory, prompt);
-			writeStorage(PROMPT_HISTORY_STORAGE_KEY, JSON.stringify(promptHistory));
+			uiStateStore.removePromptFromHistory(prompt);
 		},
 		pinPrompt: (prompt) => {
-			pinnedPrompts = appendPinnedPrompt(pinnedPrompts, prompt);
-			writeStorage(PINNED_PROMPTS_STORAGE_KEY, JSON.stringify(pinnedPrompts));
+			uiStateStore.pinPrompt(prompt);
 		},
 		unpinPrompt: (prompt) => {
-			pinnedPrompts = removePinnedPrompt(pinnedPrompts, prompt);
-			writeStorage(PINNED_PROMPTS_STORAGE_KEY, JSON.stringify(pinnedPrompts));
+			uiStateStore.unpinPrompt(prompt);
 		},
-		isPromptPinned: (prompt) => pinnedPrompts.includes(prompt),
+		isPromptPinned: (prompt) => uiStateStore.isPromptPinned(prompt),
 		setPreferredIde: (ide) => {
-			preferredIde = ide;
-			writeStorage(PREFERRED_IDE_STORAGE_KEY, ide);
+			uiStateStore.setPreferredIde(ide);
 		},
 		setChatWidthMode: (mode) => {
-			chatWidthMode = mode;
-			writeStorage(CHAT_WIDTH_MODE_STORAGE_KEY, mode);
+			uiStateStore.setChatWidthMode(mode);
 		},
 		setDefaultModel: (modelId) => {
-			defaultModel = modelId;
-			writeStorage(DEFAULT_MODEL_STORAGE_KEY, modelId || null);
+			uiStateStore.setDefaultModel(modelId);
 		},
 		setRecentThreadsVisibleLimit: (value) => {
-			recentThreadsVisibleLimit = value;
-			writeStorage(RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY, String(value));
+			uiStateStore.setRecentThreadsVisibleLimit(value);
 		},
 		setSidebarRecentOpen: (value) => {
-			sidebarRecentOpen = value;
-			writeStorage(SIDEBAR_RECENT_OPEN_STORAGE_KEY, String(value));
+			uiStateStore.setSidebarRecentOpen(value);
 		},
 		setSidebarAllOpen: (value) => {
-			sidebarAllOpen = value;
-			writeStorage(SIDEBAR_ALL_OPEN_STORAGE_KEY, String(value));
+			uiStateStore.setSidebarAllOpen(value);
 		},
 		setSidebarAllGroupedByWorkspace: (value) => {
-			sidebarAllGroupedByWorkspace = value;
-			writeStorage(SIDEBAR_ALL_GROUPED_STORAGE_KEY, String(value));
+			uiStateStore.setSidebarAllGroupedByWorkspace(value);
 		},
 	};
 }

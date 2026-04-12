@@ -24,6 +24,8 @@ import { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
 import { ModelStore } from "$lib/store/models.store.svelte";
 import { CredentialStore } from "$lib/store/credentials.store.svelte";
 import { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
+import { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
+import { UIStateStore } from "$lib/store/ui-state.store.svelte";
 
 export type {
 	AppContext,
@@ -164,17 +166,22 @@ function startProjectEventsSubscription(app: AppContext) {
 }
 
 function createAppContext(bootstrap: AppContextBootstrap): AppContext {
-	const preferences = createAppPreferencesDomain({ bootstrap });
-	const environment = createAppEnvironmentDomain({ bootstrap });
-	const updates = createAppUpdatesDomain();
-
 	const stores: AppStores = {
 		sessions: new SessionStore(),
+		recentThreads: new RecentThreadStore(),
+		uiState: new UIStateStore(),
 		workspaces: new WorkspaceStore(),
 		models: new ModelStore(),
 		credentials: new CredentialStore(),
 		startup: new StartupTaskStore(),
 	};
+
+	const preferences = createAppPreferencesDomain({
+		bootstrap,
+		uiStateStore: stores.uiState,
+	});
+	const environment = createAppEnvironmentDomain({ bootstrap });
+	const updates = createAppUpdatesDomain({ uiStateStore: stores.uiState });
 
 	const workspaces = createAppWorkspacesDomain({ store: stores.workspaces });
 	const startup = createAppStartupStatusDomain({ store: stores.startup });
@@ -187,6 +194,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 	});
 	const sessions = createAppSessionsDomain({
 		store: stores.sessions,
+		recentThreadStore: stores.recentThreads,
 		initialSelectedSessionId: bootstrap.selectedSessionId,
 	});
 	const ui = createAppViewState({ sessions, preferences });

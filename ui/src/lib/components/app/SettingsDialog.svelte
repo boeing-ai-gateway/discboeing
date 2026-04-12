@@ -1,7 +1,7 @@
 <script lang="ts">
 	import InfoIcon from "@lucide/svelte/icons/info";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/app/app-helpers";
+	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import {
 		Card,

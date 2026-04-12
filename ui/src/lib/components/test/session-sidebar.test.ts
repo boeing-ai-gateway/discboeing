@@ -46,13 +46,13 @@ test("session sidebar keys session and recent thread rows", () => {
 test("session sidebar caps the visible recent thread list", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(
+	assert.doesNotMatch(
 		source,
 		/import \{ getVisibleRecentThreads \} from "\$lib\/app\/app-helpers";/,
 	);
 	assert.match(
 		source,
-		/const visibleRecentThreads = \$derived\.by\(\(\) =>\s*getVisibleRecentThreads\(\s*sessions\.recentThreads,\s*preferences\.recentThreadsVisibleLimit,\s*\),\s*\)/,
+		/const visibleRecentThreads = \$derived\(app\.ui\.visibleRecentThreads\);/,
 	);
 	assert.match(
 		source,

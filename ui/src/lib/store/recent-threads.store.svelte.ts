@@ -1,0 +1,208 @@
+import type { ThreadState } from "$lib/api-types";
+import {
+	compareIsoDatesDesc,
+	getCurrentTimestamp,
+	RECENT_THREAD_ENTRIES_LIMIT,
+} from "$lib/app/app-helpers";
+import { readStorage, writeStorage } from "$lib/local-storage";
+import type { SessionStatusValue } from "$lib/shell-types";
+
+const RECENT_THREADS_STORAGE_KEY = "recent.threads";
+
+export type SavedRecentThreadEntry = {
+	sessionId: string;
+	threadId: string;
+	lastAccessedAt: string;
+	sessionName?: string;
+	sessionStatus?: SessionStatusValue;
+	threadName?: string;
+	state?: ThreadState;
+	lastMessage?: string;
+};
+
+function recentThreadKey(sessionId: string, threadId: string): string {
+	return `${sessionId}:${threadId}`;
+}
+
+function splitRecentThreadKey(key: string): {
+	sessionId: string;
+	threadId: string;
+} | null {
+	const separatorIndex = key.indexOf(":");
+	if (separatorIndex <= 0 || separatorIndex >= key.length - 1) {
+		return null;
+	}
+
+	return {
+		sessionId: key.slice(0, separatorIndex),
+		threadId: key.slice(separatorIndex + 1),
+	};
+}
+
+type LegacyRecentThreadEntry = {
+	sessionId: string;
+	threadId: string;
+	lastAccessedAt: string;
+};
+
+function isLegacyRecentThreadEntry(
+	value: unknown,
+): value is LegacyRecentThreadEntry {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const candidate = value as Partial<LegacyRecentThreadEntry>;
+	return (
+		typeof candidate.sessionId === "string" &&
+		candidate.sessionId.length > 0 &&
+		typeof candidate.threadId === "string" &&
+		candidate.threadId.length > 0 &&
+		typeof candidate.lastAccessedAt === "string"
+	);
+}
+
+function isSavedRecentThreadEntry(
+	value: unknown,
+): value is SavedRecentThreadEntry {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const candidate = value as Partial<SavedRecentThreadEntry>;
+	return (
+		typeof candidate.sessionId === "string" &&
+		candidate.sessionId.length > 0 &&
+		typeof candidate.threadId === "string" &&
+		candidate.threadId.length > 0 &&
+		typeof candidate.lastAccessedAt === "string"
+	);
+}
+
+// Keep only valid entries and the most recent items so the store stays compact.
+function normalizeEntries(
+	entries: SavedRecentThreadEntry[],
+): SavedRecentThreadEntry[] {
+	const validEntries = entries.filter((entry) =>
+		splitRecentThreadKey(recentThreadKey(entry.sessionId, entry.threadId)),
+	);
+
+	validEntries.sort((left, right) =>
+		compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
+	);
+	return validEntries.slice(0, RECENT_THREAD_ENTRIES_LIMIT);
+}
+
+// Support both the new entry list and the older storage formats already in use.
+function readEntries(): SavedRecentThreadEntry[] {
+	const stored = readStorage(RECENT_THREADS_STORAGE_KEY);
+	if (!stored) {
+		return [];
+	}
+
+	try {
+		const parsed = JSON.parse(stored) as unknown;
+		if (Array.isArray(parsed)) {
+			if (parsed.every(isSavedRecentThreadEntry)) {
+				return normalizeEntries(parsed);
+			}
+
+			return normalizeEntries(
+				parsed.filter(isLegacyRecentThreadEntry).map((entry) => ({
+					sessionId: entry.sessionId,
+					threadId: entry.threadId,
+					lastAccessedAt: entry.lastAccessedAt,
+				})),
+			);
+		}
+
+		if (!parsed || typeof parsed !== "object") {
+			return [];
+		}
+
+		return normalizeEntries(
+			Object.entries(parsed).flatMap(([key, value]) => {
+				const parts = splitRecentThreadKey(key);
+				return typeof value === "string" && parts
+					? [{ ...parts, lastAccessedAt: value }]
+					: [];
+			}),
+		);
+	} catch {
+		return [];
+	}
+}
+
+export class RecentThreadStore {
+	#entries = $state<SavedRecentThreadEntry[]>(readEntries());
+	#lastRecordedKey: string | null = null;
+
+	get entries(): SavedRecentThreadEntry[] {
+		return this.#entries;
+	}
+
+	clearTrackedSelection(): void {
+		this.#lastRecordedKey = null;
+	}
+
+	recordSelection(entry: Omit<SavedRecentThreadEntry, "lastAccessedAt">): void {
+		const key = recentThreadKey(entry.sessionId, entry.threadId);
+		const currentEntry = this.#entries.find(
+			(item) =>
+				item.sessionId === entry.sessionId && item.threadId === entry.threadId,
+		);
+
+		if (this.#lastRecordedKey === key && currentEntry) {
+			const nextEntry = {
+				...currentEntry,
+				...entry,
+				lastAccessedAt: currentEntry.lastAccessedAt,
+			};
+			if (JSON.stringify(nextEntry) === JSON.stringify(currentEntry)) {
+				return;
+			}
+			this.#setEntries([
+				nextEntry,
+				...this.#entries.filter(
+					(item) =>
+						item.sessionId !== entry.sessionId ||
+						item.threadId !== entry.threadId,
+				),
+			]);
+			return;
+		}
+
+		this.#lastRecordedKey = key;
+		this.#setEntries([
+			{
+				...currentEntry,
+				...entry,
+				lastAccessedAt: getCurrentTimestamp(),
+			},
+			...this.#entries.filter(
+				(item) =>
+					item.sessionId !== entry.sessionId ||
+					item.threadId !== entry.threadId,
+			),
+		]);
+	}
+
+	pruneSession(sessionId: string): void {
+		this.#setEntries(
+			this.#entries.filter((entry) => entry.sessionId !== sessionId),
+		);
+
+		if (this.#lastRecordedKey?.startsWith(`${sessionId}:`)) {
+			this.#lastRecordedKey = null;
+		}
+	}
+
+	#setEntries(entries: SavedRecentThreadEntry[]): void {
+		const nextEntries = normalizeEntries(entries);
+		this.#entries = nextEntries;
+		writeStorage(
+			RECENT_THREADS_STORAGE_KEY,
+			nextEntries.length > 0 ? JSON.stringify(nextEntries) : null,
+		);
+	}
+}

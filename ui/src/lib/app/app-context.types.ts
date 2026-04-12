@@ -3,6 +3,8 @@ import type { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
 import type { ModelStore } from "$lib/store/models.store.svelte";
 import type { CredentialStore } from "$lib/store/credentials.store.svelte";
 import type { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
+import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
+import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 import type {
 	ModelInfo,
 	CodexAuthorizeResponse,
@@ -151,15 +153,6 @@ export type AppSessions = {
 	rename: (sessionId: string, nextName: string) => Promise<boolean>;
 	remove: (sessionId: string) => Promise<boolean>;
 	removeFromMemory: (sessionId: string) => boolean;
-	refreshRecentThread: (payload: {
-		sessionId: string;
-		sessionName: string;
-		threadId: string;
-		threadName: string;
-		state?: import("$lib/api-types").ThreadState;
-		lastMessage: string;
-	}) => void;
-	removeRecentThread: (sessionId: string, threadId: string) => void;
 	takeRequestedThreadId: (sessionId: string) => string | null;
 };
 
@@ -267,6 +260,8 @@ export type AppUpdates = {
 
 export type AppStores = {
 	sessions: SessionStore;
+	recentThreads: RecentThreadStore;
+	uiState: UIStateStore;
 	workspaces: WorkspaceStore;
 	models: ModelStore;
 	credentials: CredentialStore;

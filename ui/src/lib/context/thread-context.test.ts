@@ -10,9 +10,8 @@ import {
 	resolveThreadComposerSubmitValues,
 } from "./thread-context.svelte";
 
-test("applyStreamedThreadUpdate refreshes the recent thread entry, syncs the primary session title, and reloads it", async () => {
+test("applyStreamedThreadUpdate syncs the primary session title and reloads it", async () => {
 	const upserted: string[] = [];
-	const refreshed: Array<Record<string, string | undefined>> = [];
 	const synced: string[] = [];
 	let reloaded = false;
 
@@ -33,9 +32,6 @@ test("applyStreamedThreadUpdate refreshes the recent thread entry, syncs the pri
 		syncSessionName: (name) => {
 			synced.push(name);
 		},
-		refreshRecentThread: (payload) => {
-			refreshed.push(payload);
-		},
 		reloadSession: async () => {
 			reloaded = true;
 		},
@@ -43,16 +39,6 @@ test("applyStreamedThreadUpdate refreshes the recent thread entry, syncs the pri
 
 	assert.deepEqual(upserted, ["Fix flaky sidebar refresh"]);
 	assert.deepEqual(synced, ["Fix flaky sidebar refresh"]);
-	assert.deepEqual(refreshed, [
-		{
-			sessionId: "session-1",
-			sessionName: "New Session",
-			threadId: "session-1",
-			threadName: "Fix flaky sidebar refresh",
-			state: undefined,
-			lastMessage: "Fix the delayed sidebar titles",
-		},
-	]);
 	assert.equal(reloaded, true);
 });
 
@@ -72,7 +58,6 @@ test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions",
 		},
 		upsertThread: () => {},
 		syncSessionName: () => {},
-		refreshRecentThread: () => {},
 		reloadSession: () => {
 			reloadCount += 1;
 		},
@@ -91,7 +76,6 @@ test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions",
 		},
 		upsertThread: () => {},
 		syncSessionName: () => {},
-		refreshRecentThread: () => {},
 		reloadSession: () => {
 			reloadCount += 1;
 		},

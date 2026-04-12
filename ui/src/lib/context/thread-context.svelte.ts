@@ -119,7 +119,6 @@ export function applyStreamedThreadUpdate({
 	thread,
 	upsertThread,
 	syncSessionName,
-	refreshRecentThread,
 	reloadSession,
 }: {
 	sessionId: string;
@@ -129,25 +128,9 @@ export function applyStreamedThreadUpdate({
 	thread: Thread;
 	upsertThread: (thread: Thread) => void;
 	syncSessionName: (name: string) => void;
-	refreshRecentThread: (payload: {
-		sessionId: string;
-		sessionName: string;
-		threadId: string;
-		threadName: string;
-		state?: Thread["state"];
-		lastMessage: string;
-	}) => void;
 	reloadSession: () => void | Promise<void>;
 }): void {
 	upsertThread(thread);
-	refreshRecentThread({
-		sessionId,
-		sessionName,
-		threadId: thread.id,
-		threadName: thread.name,
-		state: thread.state,
-		lastMessage: thread.lastMessage || "",
-	});
 
 	if (
 		thread.id !== sessionId ||
@@ -221,7 +204,6 @@ function createThreadContext(
 						name,
 					});
 				},
-				refreshRecentThread: app.sessions.refreshRecentThread,
 				reloadSession: () => app.sessions.reloadSession(session.sessionId),
 			});
 		},

@@ -4,12 +4,8 @@ import type {
 	AppUI,
 	SettingsDialogTab,
 } from "$lib/app/app-context.types";
-import {
-	getDefaultSettingsTab,
-	getMountedSessionIds,
-	getVisibleRecentThreads,
-	RECENT_SESSIONS_LIMIT,
-} from "$lib/app/app-helpers";
+
+const RECENT_SESSIONS_LIMIT = 4;
 
 export type AppViewState = AppUI & {
 	credentialsDialogOpen: boolean;
@@ -17,6 +13,80 @@ export type AppViewState = AppUI & {
 	openCredentialsDialog: (credentialId?: string | Event) => void;
 	closeCredentialsDialog: () => void;
 };
+
+function getDefaultSettingsTab(): SettingsDialogTab {
+	return "appearance";
+}
+
+function compareIsoDatesDesc(left: string, right: string): number {
+	const leftTime = new Date(left).getTime();
+	const rightTime = new Date(right).getTime();
+	if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+		return 0;
+	}
+	return rightTime - leftTime;
+}
+
+function getVisibleRecentThreads(args: {
+	recentThreads: AppSessions["recentThreads"];
+	sessions: AppSessions["sessions"];
+	limit: number;
+}): AppSessions["recentThreads"] {
+	const { recentThreads, sessions, limit } = args;
+	if (limit <= 0 || recentThreads.length === 0) {
+		return [];
+	}
+
+	const sessionsById = new Map(
+		sessions.map((session) => [session.id, session]),
+	);
+
+	// First pick the most recently visited threads, then keep the sidebar grouped
+	// by newer sessions so the list feels stable next to the full session list.
+	return [...recentThreads]
+		.sort((left, right) =>
+			compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
+		)
+		.slice(0, limit)
+		.sort((left, right) =>
+			compareIsoDatesDesc(
+				sessionsById.get(left.sessionId)?.createdAt ?? "",
+				sessionsById.get(right.sessionId)?.createdAt ?? "",
+			),
+		);
+}
+
+function getMountedSessionIds(args: {
+	selectedSessionId: string | null;
+	recentThreads: AppUI["visibleRecentThreads"];
+	limit?: number;
+}): string[] {
+	const {
+		selectedSessionId,
+		recentThreads,
+		limit = RECENT_SESSIONS_LIMIT,
+	} = args;
+	const sessionIds: string[] = [];
+	const seen: Record<string, true> = {};
+
+	// Keep the selected session mounted first, then add sessions referenced by the
+	// visible recent-thread list until we hit the small preload budget.
+	for (const sessionId of [
+		selectedSessionId,
+		...recentThreads.map((thread) => thread.sessionId),
+	]) {
+		if (!sessionId || seen[sessionId]) {
+			continue;
+		}
+		seen[sessionId] = true;
+		sessionIds.push(sessionId);
+		if (sessionIds.length >= limit) {
+			break;
+		}
+	}
+
+	return sessionIds;
+}
 
 export function createAppViewState(args: {
 	sessions: AppSessions;
@@ -30,17 +100,18 @@ export function createAppViewState(args: {
 	let credentialsDialogOpen = $state(false);
 	let supportInfoDialogOpen = $state(false);
 	const visibleRecentThreads = $derived.by(() =>
-		getVisibleRecentThreads(
-			sessions.recentThreads,
-			preferences.recentThreadsVisibleLimit,
-		),
+		getVisibleRecentThreads({
+			recentThreads: sessions.recentThreads,
+			sessions: sessions.sessions,
+			limit: preferences.recentThreadsVisibleLimit,
+		}),
 	);
 	const mountedSessionIds = $derived.by(() =>
-		getMountedSessionIds(
-			sessions.selectedId,
-			visibleRecentThreads,
-			RECENT_SESSIONS_LIMIT,
-		),
+		getMountedSessionIds({
+			selectedSessionId: sessions.selectedId,
+			recentThreads: visibleRecentThreads,
+			limit: RECENT_SESSIONS_LIMIT,
+		}),
 	);
 
 	const openSettingsDialogAt = (tab: SettingsDialogTab) => {

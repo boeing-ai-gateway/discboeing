@@ -1,24 +1,29 @@
-import {
-	IGNORED_UPDATE_VERSION_STORAGE_KEY,
-	readIgnoredUpdateVersion,
-	writeStorage,
-} from "$lib/app/app-helpers";
 import type {
 	DownloadEvent,
 	Update as TauriUpdate,
 } from "@tauri-apps/plugin-updater";
 import type { AppUpdates, UpdateStatus } from "$lib/app/app-context.types";
 import { isTauriShell } from "$lib/environment";
+import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
-export function createAppUpdatesDomain(): AppUpdates {
+type CreateAppUpdatesDomainArgs = {
+	uiStateStore: UIStateStore;
+};
+
+export function createAppUpdatesDomain(
+	args: CreateAppUpdatesDomainArgs,
+): AppUpdates {
+	const { uiStateStore } = args;
 	let updateStatus = $state<UpdateStatus>("idle");
 	let availableVersion = $state<string | null>(null);
 	let updateError = $state<string | null>(null);
 	let downloadedBytes = $state(0);
 	let totalBytes = $state<number | null>(null);
-	let ignoredUpdateVersion = $state<string | null>(readIgnoredUpdateVersion());
+	let ignoredUpdateVersion = $state<string | null>(
+		uiStateStore.ignoredUpdateVersion,
+	);
 
 	const isUpdateIgnored = $derived.by(
 		() =>
@@ -196,8 +201,8 @@ export function createAppUpdatesDomain(): AppUpdates {
 			if (!availableVersion) return;
 			void closePendingUpdate();
 			resetProgress();
-			ignoredUpdateVersion = availableVersion;
-			writeStorage(IGNORED_UPDATE_VERSION_STORAGE_KEY, availableVersion);
+			uiStateStore.ignoreUpdateVersion(availableVersion);
+			ignoredUpdateVersion = uiStateStore.ignoredUpdateVersion;
 		},
 	};
 }

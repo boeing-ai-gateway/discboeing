@@ -2,159 +2,151 @@ import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
-import {
-	getRecentThreadEntryForSessionSelection,
-	readRecentThreadEntries,
-	reconcileRecentThreadsWithSessions,
-	refreshRecentSessionName,
-	refreshRecentThread,
-	removeRecentThread,
-	removeRecentThreadsForSession,
-	toRecentThreadSummaries,
-	toSessionSummaries,
-	touchRecentThread,
-	writeRecentThreadEntries,
-} from "$lib/app/app-helpers";
+import { compareIsoDatesDesc, toSessionSummaries } from "$lib/app/app-helpers";
 import type { AppSessions } from "$lib/app/app-context.types";
 import type { SessionContextValue } from "$lib/session/session-context.types";
+import type { RecentThreadSummary } from "$lib/shell-types";
+import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import type { SessionStore } from "$lib/store/sessions.store.svelte";
 
 type CreateAppSessionsDomainArgs = {
 	store: SessionStore;
+	recentThreadStore: RecentThreadStore;
 	initialSelectedSessionId?: string;
 };
 
 export function createAppSessionsDomain(
 	args: CreateAppSessionsDomainArgs,
 ): AppSessions {
-	const { store } = args;
+	const { store, recentThreadStore } = args;
 	let currentSelectedSessionId = $state<string | null>(
 		args.initialSelectedSessionId ?? null,
 	);
 	let pendingSessionId = $state<string>(generateId());
 	let awaitingInitialStatusId = $state<string | null>(null);
-	let recentThreadEntries = $state(readRecentThreadEntries());
-	let lastTrackedRecentThreadKey: string | null = null;
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
-
-	const persistRecentThreadEntries = (entries: typeof recentThreadEntries) => {
-		recentThreadEntries = entries;
-		writeRecentThreadEntries(entries);
-	};
 
 	const selectSession = (sessionId: string) => {
 		currentSelectedSessionId = sessionId;
 		store.get(sessionId);
 	};
 
-	const recordRecentThread = (payload: {
-		sessionId: string;
-		sessionName: string;
-		threadId: string;
-		threadName: string;
-		state?: import("$lib/api-types").ThreadState;
-		lastMessage: string;
-	}) => {
-		persistRecentThreadEntries(touchRecentThread(recentThreadEntries, payload));
-	};
-
-	const updateRecentThread = (payload: {
-		sessionId: string;
-		sessionName: string;
-		threadId: string;
-		threadName: string;
-		state?: import("$lib/api-types").ThreadState;
-		lastMessage: string;
-	}) => {
-		const nextEntries = refreshRecentThread(recentThreadEntries, payload);
-		if (nextEntries === recentThreadEntries) {
-			return;
-		}
-		persistRecentThreadEntries(nextEntries);
-	};
-
-	const dropRecentThread = (sessionId: string, threadId: string) => {
-		const nextEntries = removeRecentThread(
-			recentThreadEntries,
-			sessionId,
-			threadId,
-		);
-		if (nextEntries.length === recentThreadEntries.length) {
-			return;
-		}
-		persistRecentThreadEntries(nextEntries);
-	};
-
-	const dropRecentThreadsForSession = (sessionId: string) => {
-		const nextEntries = removeRecentThreadsForSession(
-			recentThreadEntries,
-			sessionId,
-		);
-		if (nextEntries.length === recentThreadEntries.length) {
-			return;
-		}
-		persistRecentThreadEntries(nextEntries);
-	};
-
 	const list = $derived.by(() => toSessionSummaries(store.list));
-	const recentThreads = $derived.by(() =>
-		toRecentThreadSummaries(list, recentThreadEntries),
-	);
+	const recentThreads = $derived.by(() => {
+		const sessionsById = Object.fromEntries(
+			store.list.map((session) => [session.id, session] as const),
+		);
+
+		return recentThreadStore.entries
+			.flatMap((savedEntry) => {
+				const session = sessionsById[savedEntry.sessionId];
+				const liveThread = sessionContexts
+					.get(savedEntry.sessionId)
+					?.threads.list.find((thread) => thread.id === savedEntry.threadId);
+
+				if (session && liveThread) {
+					return [
+						{
+							sessionId: savedEntry.sessionId,
+							sessionName: session.displayName || session.name,
+							sessionStatus: session.status,
+							threadId: liveThread.id,
+							threadName: liveThread.name,
+							...(liveThread.state ? { state: liveThread.state } : {}),
+							lastMessage: liveThread.lastMessage ?? "",
+							lastAccessedAt: savedEntry.lastAccessedAt,
+						},
+					];
+				}
+
+				const fallbackSessionName =
+					session?.displayName || session?.name || savedEntry.sessionName;
+				const fallbackSessionStatus =
+					session?.status ?? savedEntry.sessionStatus;
+				const fallbackThreadName = savedEntry.threadName ?? fallbackSessionName;
+				if (
+					!fallbackSessionName ||
+					!fallbackSessionStatus ||
+					!fallbackThreadName
+				) {
+					return [];
+				}
+
+				const fallbackSummary: RecentThreadSummary = {
+					sessionId: savedEntry.sessionId,
+					sessionName: fallbackSessionName,
+					sessionStatus: fallbackSessionStatus,
+					threadId: savedEntry.threadId,
+					threadName: fallbackThreadName,
+					lastAccessedAt: savedEntry.lastAccessedAt,
+				};
+				if (savedEntry.state) {
+					fallbackSummary.state = savedEntry.state;
+				}
+				if (savedEntry.lastMessage !== undefined) {
+					fallbackSummary.lastMessage = savedEntry.lastMessage;
+				}
+				return [fallbackSummary];
+			})
+			.sort((left, right) =>
+				compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
+			);
+	});
 	const selected = $derived.by(
 		() =>
 			list.find((session) => session.id === currentSelectedSessionId) ?? null,
 	);
-
-	$effect(() => {
-		if (store.status !== "ready") {
-			return;
-		}
-
-		const nextEntries = reconcileRecentThreadsWithSessions(
-			recentThreadEntries,
-			store.list.map((session) => session.id),
-		);
-		if (nextEntries !== recentThreadEntries) {
-			persistRecentThreadEntries(nextEntries);
-		}
-	});
 
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
 	$effect(() => {
 		const selectedSessionId = currentSelectedSessionId;
 		if (!selectedSessionId) {
-			lastTrackedRecentThreadKey = null;
+			recentThreadStore.clearTrackedSelection();
 			return;
 		}
 
-		const session = list.find((entry) => entry.id === selectedSessionId);
-		if (!session) {
-			lastTrackedRecentThreadKey = null;
-			return;
-		}
+		const session =
+			store.list.find((item) => item.id === selectedSessionId) ?? null;
+		const selectedThreadId =
+			sessionContexts.get(selectedSessionId)?.threads.selectedId ?? null;
+		const threadId = selectedThreadId ?? selectedSessionId;
 
-		const recentThread = getRecentThreadEntryForSessionSelection({
-			session,
-			sessionContext: sessionContexts.get(selectedSessionId) ?? null,
+		const thread = sessionContexts
+			.get(selectedSessionId)
+			?.threads.list.find((item) => item.id === threadId);
+
+		// Save whatever display data we have now. The sidebar can use live thread
+		// data when a session is in memory, and fall back to this saved snapshot
+		// without waking stopped sessions back up.
+		recentThreadStore.recordSelection({
+			sessionId: selectedSessionId,
+			threadId,
+			...(session
+				? {
+						sessionName: session.displayName || session.name,
+						sessionStatus: session.status,
+					}
+				: {}),
+			...(thread
+				? {
+						threadName: thread.name,
+						...(thread.state ? { state: thread.state } : {}),
+						lastMessage: thread.lastMessage ?? "",
+					}
+				: session
+					? {
+							threadName: session.displayName || session.name,
+						}
+					: {}),
 		});
-		if (!recentThread) {
-			lastTrackedRecentThreadKey = null;
-			return;
-		}
-		const recentThreadKey = `${recentThread.sessionId}:${recentThread.threadId}`;
-		if (lastTrackedRecentThreadKey === recentThreadKey) {
-			return;
-		}
-		lastTrackedRecentThreadKey = recentThreadKey;
-		recordRecentThread(recentThread);
 	});
 
 	const removeFromMemory = (sessionId: string): boolean => {
 		sessionContexts.get(sessionId)?.dispose();
 		sessionContexts.delete(sessionId);
 		requestedThreadIdBySession.delete(sessionId);
-		dropRecentThreadsForSession(sessionId);
+		recentThreadStore.pruneSession(sessionId);
 
 		if (sessionId === currentSelectedSessionId) {
 			currentSelectedSessionId = null;
@@ -275,10 +267,6 @@ export function createAppSessionsDomain(
 			const updatedSession = await store.update(sessionId, {
 				displayName: trimmedName,
 			});
-			const sessionName = updatedSession.displayName || updatedSession.name;
-			persistRecentThreadEntries(
-				refreshRecentSessionName(recentThreadEntries, sessionId, sessionName),
-			);
 
 			try {
 				const { threads } = await api.getThreads(sessionId);
@@ -295,14 +283,6 @@ export function createAppSessionsDomain(
 						},
 					);
 					sessionContexts.get(sessionId)?.stores.threads.upsert(updatedThread);
-					updateRecentThread({
-						sessionId,
-						sessionName,
-						threadId: updatedThread.id,
-						threadName: updatedThread.name,
-						state: updatedThread.state,
-						lastMessage: updatedThread.lastMessage || "",
-					});
 				}
 			} catch (error) {
 				console.error(
@@ -322,15 +302,13 @@ export function createAppSessionsDomain(
 			sessionContexts.get(sessionId)?.dispose();
 			sessionContexts.delete(sessionId);
 			requestedThreadIdBySession.delete(sessionId);
-			dropRecentThreadsForSession(sessionId);
+			recentThreadStore.pruneSession(sessionId);
 			if (sessionId === currentSelectedSessionId) {
 				currentSelectedSessionId = null;
 			}
 			return true;
 		},
 		removeFromMemory,
-		refreshRecentThread: updateRecentThread,
-		removeRecentThread: dropRecentThread,
 		takeRequestedThreadId: (sessionId) => {
 			const threadId = requestedThreadIdBySession.get(sessionId) ?? null;
 			requestedThreadIdBySession.delete(sessionId);
