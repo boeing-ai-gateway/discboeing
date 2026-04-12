@@ -170,6 +170,14 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 - **Go version**: 1.26 — use `new(value)` to create a pointer to a value (e.g. `new(true)` for `*bool`); avoid `boolPtr`/`intPtr` helper functions
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
 - **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible, followed by a blank line and a wrapped body with lines of 72 characters or fewer when a body is needed
+- **Code style**:
+  - Prefer straightforward, compact code over excessive abstraction
+  - Do not introduce helper functions, layers, or temporary variables unless they clearly improve readability
+  - Keep related logic together instead of splitting it across many tiny functions
+  - Accept a bit of duplication when it avoids premature abstraction
+  - Name things clearly, but avoid overlong or overly technical names
+  - Favor code that is easy to read in one pass over code that is “clean” in a doctrinaire sense
+  - Use comments to improve readability: add function comments for non-trivial code, and inline comments for tricky logic, non-obvious steps, or important edge cases
 
 ## Documentation
 
