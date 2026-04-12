@@ -14,6 +14,8 @@ export function createAppModelsDomain(
 		get list() {
 			return store.list;
 		},
+		peek: (modelId) => store.peek(modelId),
+		ensure: (modelId) => store.ensure(modelId),
 		refresh: () => store.fetch(),
 	};
 }

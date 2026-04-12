@@ -17,7 +17,8 @@ export function createAppWorkspacesDomain(
 		get status() {
 			return store.status;
 		},
-		get: (workspaceId) => store.get(workspaceId),
+		peek: (workspaceId) => store.peek(workspaceId),
+		ensure: (workspaceId) => store.ensure(workspaceId),
 		refresh: () => store.fetch(),
 		reloadWorkspace: (workspaceId) => store.fetchOne(workspaceId),
 		validate: (path, sourceType) => store.validate(path, sourceType),

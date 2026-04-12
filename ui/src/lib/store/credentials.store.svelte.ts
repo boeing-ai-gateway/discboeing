@@ -27,12 +27,18 @@ export class CredentialStore {
 		return this.#status;
 	}
 
-	/** Returns the cached credential. Triggers a background fetch of the full list on cache miss. */
-	get(idOrProvider: string): CredentialInfo | null {
-		const cached =
+	/** Returns the cached credential without side effects. */
+	peek(idOrProvider: string): CredentialInfo | null {
+		return (
 			this.#items.find(
 				(c) => c.id === idOrProvider || c.provider === idOrProvider,
-			) ?? null;
+			) ?? null
+		);
+	}
+
+	/** Returns the cached credential and triggers a background fetch of the full list on cache miss. */
+	ensure(idOrProvider: string): CredentialInfo | null {
+		const cached = this.peek(idOrProvider);
 		if (cached === null && this.#status === "idle") {
 			void this.fetch();
 		}

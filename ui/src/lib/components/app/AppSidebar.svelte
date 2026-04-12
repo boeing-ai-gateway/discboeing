@@ -160,7 +160,7 @@
 	});
 
 	function sessionById(sessionId: string) {
-		return sessions.list.find((s) => s.id === sessionId) ?? null;
+		return sessions.peek(sessionId);
 	}
 
 	function visibleThreadsForSession(sessionId: string): Thread[] {
@@ -190,7 +190,7 @@
 		if (!workspaceId) {
 			return null;
 		}
-		return app.workspaces.get(workspaceId);
+		return app.workspaces.peek(workspaceId);
 	}
 
 	function handleSelectSession(sessionId: string) {
@@ -523,7 +523,7 @@
 
 		for (const sessionObj of sessions.list) {
 			const workspace = sessionObj.workspaceId
-				? app.workspaces.get(sessionObj.workspaceId)
+				? app.workspaces.peek(sessionObj.workspaceId)
 				: null;
 			const sourceType = workspace?.sourceType ?? "managed";
 			const key =

@@ -25,9 +25,14 @@ export class WorkspaceStore {
 		return this.#status;
 	}
 
-	/** Returns the cached workspace. Triggers a background fetchOne on cache miss. */
-	get(id: string): Workspace | null {
-		const cached = this.#items.find((w) => w.id === id) ?? null;
+	/** Returns the cached workspace without side effects. */
+	peek(id: string): Workspace | null {
+		return this.#items.find((w) => w.id === id) ?? null;
+	}
+
+	/** Returns the cached workspace and triggers a background fetchOne on cache miss. */
+	ensure(id: string): Workspace | null {
+		const cached = this.peek(id);
 		if (cached === null && !this.#inflight.has(id)) {
 			this.#inflight.add(id);
 			void this.fetchOne(id).finally(() => this.#inflight.delete(id));

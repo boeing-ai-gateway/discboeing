@@ -66,7 +66,7 @@
 		if (!modelId) {
 			return null;
 		}
-		return models.list.find((model) => model.id === modelId) ?? null;
+		return models.peek(modelId);
 	}
 
 	function normalizeReasoningForModel(

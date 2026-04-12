@@ -141,6 +141,7 @@ export type AppSessions = {
 	pendingId: string;
 	awaitingInitialStatusId: string | null;
 	selected: SessionSummary | null;
+	peek: (sessionId: string) => Session | null;
 	sessionContexts: Map<string, SessionContextValue>;
 	select: (sessionId: string) => void;
 	openThread: (sessionId: string, threadId: string) => void;
@@ -159,7 +160,8 @@ export type AppSessions = {
 export type AppWorkspaces = {
 	list: Workspace[];
 	status: AsyncStatus;
-	get: (workspaceId: string) => Workspace | null;
+	peek: (workspaceId: string) => Workspace | null;
+	ensure: (workspaceId: string) => Workspace | null;
 	refresh: () => Promise<void>;
 	reloadWorkspace: (workspaceId: string) => Promise<void>;
 	validate: (
@@ -178,6 +180,8 @@ export type AppStartupStatus = {
 	tasks: StartupTask[];
 	visibleTasks: StartupTask[];
 	hasActiveTasks: boolean;
+	peek: (taskId: string) => StartupTask | null;
+	ensure: (taskId: string) => StartupTask | null;
 	refresh: () => Promise<void>;
 };
 
@@ -189,13 +193,16 @@ export type AppChatRequest = Omit<StartChatRequest, "sessionId"> & {
 
 export type AppModels = {
 	list: ModelInfo[];
+	peek: (modelId: string) => ModelInfo | null;
+	ensure: (modelId: string) => ModelInfo | null;
 	refresh: () => Promise<void>;
 };
 
 export type AppCredentials = {
 	list: CredentialInfo[];
 	credentialTypes: CredentialType[];
-	get: (idOrProvider: string) => CredentialInfo | null;
+	peek: (idOrProvider: string) => CredentialInfo | null;
+	ensure: (idOrProvider: string) => CredentialInfo | null;
 	refresh: () => Promise<void>;
 	create: (data: {
 		provider?: string;

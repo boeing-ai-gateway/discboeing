@@ -840,7 +840,7 @@
 		if (!targetId || loading) {
 			return;
 		}
-		const credential = credentialsApi.list.find((item) => item.id === targetId);
+		const credential = credentialsApi.peek(targetId);
 		if (!credential) {
 			return;
 		}

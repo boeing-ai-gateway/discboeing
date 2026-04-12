@@ -17,9 +17,14 @@ export class ModelStore {
 		return this.#status;
 	}
 
-	/** Returns the cached model. Triggers a background fetch of the full list on cache miss. */
-	get(id: string): ModelInfo | null {
-		const cached = this.#items.find((m) => m.id === id) ?? null;
+	/** Returns the cached model without side effects. */
+	peek(id: string): ModelInfo | null {
+		return this.#items.find((m) => m.id === id) ?? null;
+	}
+
+	/** Returns the cached model and triggers a background fetch of the full list on cache miss. */
+	ensure(id: string): ModelInfo | null {
+		const cached = this.peek(id);
 		if (cached === null && this.#status === "idle") {
 			void this.fetch();
 		}

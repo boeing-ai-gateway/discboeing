@@ -59,7 +59,8 @@ export function createAppCredentialsDomain(
 		get credentialTypes() {
 			return store.credentialTypes;
 		},
-		get: (idOrProvider) => store.get(idOrProvider),
+		peek: (idOrProvider) => store.peek(idOrProvider),
+		ensure: (idOrProvider) => store.ensure(idOrProvider),
 		refresh: () => store.fetch(),
 		create: saveCredential,
 		update: saveCredential,

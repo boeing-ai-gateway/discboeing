@@ -29,6 +29,8 @@ export function createAppStartupStatusDomain(
 		get hasActiveTasks() {
 			return hasActiveTasks;
 		},
+		peek: (taskId) => store.peek(taskId),
+		ensure: (taskId) => store.ensure(taskId),
 		refresh: () => store.fetch(),
 	};
 }

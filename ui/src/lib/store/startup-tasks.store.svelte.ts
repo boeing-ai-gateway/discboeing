@@ -17,9 +17,14 @@ export class StartupTaskStore {
 		return this.#status;
 	}
 
-	/** Returns the cached task. Triggers a background fetch of the full list on cache miss. */
-	get(id: string): StartupTask | null {
-		const cached = this.#items.find((t) => t.id === id) ?? null;
+	/** Returns the cached task without side effects. */
+	peek(id: string): StartupTask | null {
+		return this.#items.find((t) => t.id === id) ?? null;
+	}
+
+	/** Returns the cached task and triggers a background fetch of the full list on cache miss. */
+	ensure(id: string): StartupTask | null {
+		const cached = this.peek(id);
 		if (cached === null && this.#status === "idle") {
 			void this.fetch();
 		}

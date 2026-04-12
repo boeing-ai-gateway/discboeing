@@ -28,7 +28,7 @@ export function createAppSessionsDomain(
 
 	const selectSession = (sessionId: string) => {
 		currentSelectedSessionId = sessionId;
-		store.get(sessionId);
+		store.ensure(sessionId);
 	};
 
 	const list = $derived.by(() => toSessionSummaries(store.list));
@@ -106,8 +106,7 @@ export function createAppSessionsDomain(
 			return;
 		}
 
-		const session =
-			store.list.find((item) => item.id === selectedSessionId) ?? null;
+		const session = store.peek(selectedSessionId);
 		const selectedThreadId =
 			sessionContexts.get(selectedSessionId)?.threads.selectedId ?? null;
 		const threadId = selectedThreadId ?? selectedSessionId;
@@ -178,7 +177,7 @@ export function createAppSessionsDomain(
 	const reloadSession = async (sessionId: string) => {
 		await store.fetchOne(sessionId);
 		if (awaitingInitialStatusId === sessionId) {
-			const session = store.list.find((item) => item.id === sessionId) ?? null;
+			const session = store.peek(sessionId);
 			if (session?.status) {
 				awaitingInitialStatusId = null;
 			}
@@ -208,6 +207,7 @@ export function createAppSessionsDomain(
 		get selected() {
 			return selected;
 		},
+		peek: (sessionId) => store.peek(sessionId),
 		sessionContexts,
 		select: selectSession,
 		openThread: (sessionId, threadId) => {

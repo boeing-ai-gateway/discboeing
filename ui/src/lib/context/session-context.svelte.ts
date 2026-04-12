@@ -27,7 +27,7 @@ function createSessionContext(
 	let selectedThreadId = $state<string | null>(initialSelectedThreadId);
 
 	const current = $derived.by(() => {
-		return app.sessions.sessions.find((s) => s.id === sessionId) ?? null;
+		return app.sessions.peek(sessionId);
 	});
 
 	const hasSession = $derived.by(() => current !== null);

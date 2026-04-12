@@ -29,9 +29,14 @@ export class SessionStore {
 		return this.#status;
 	}
 
-	/** Returns the cached session. Triggers a background fetchOne on cache miss. */
-	get(id: string): Session | null {
-		const cached = this.#items.find((s) => s.id === id) ?? null;
+	/** Returns the cached session without side effects. */
+	peek(id: string): Session | null {
+		return this.#items.find((s) => s.id === id) ?? null;
+	}
+
+	/** Returns the cached session and triggers a background fetchOne on cache miss. */
+	ensure(id: string): Session | null {
+		const cached = this.peek(id);
 		if (cached === null && !this.#inflight.has(id)) {
 			this.#inflight.add(id);
 			void this.fetchOne(id).finally(() => this.#inflight.delete(id));
