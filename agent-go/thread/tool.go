@@ -55,6 +55,7 @@ type ToolContext struct {
 	CurrentTaskID    string
 	ProviderResolver providers.ProviderResolver
 	Agent            agent.Agent
+	ResolveTools     func(context.Context) ([]providers.ToolDefinition, error)
 	ModeChange       *string // set by a tool that changes the mode; consumed by the turn loop
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/providers/transport"
+	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/modelsdev"
 )
 
@@ -351,6 +352,9 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 	if cfg.MaxSteps > 0 && stepIndex >= cfg.MaxSteps {
 		return loopStepDone
 	}
+	if !lc.refreshTurnTools(cfg) {
+		return loopStepStop
+	}
 
 	// Always rebuild history from storage so resumed turns use the same source of
 	// truth as fresh turns.
@@ -439,6 +443,51 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 		return loopStepStop
 	}
 	return loopStepContinue
+}
+
+func (lc *loopContext) refreshTurnTools(cfg *TurnConfig) bool {
+	if lc.toolCtx == nil || lc.toolCtx.ResolveTools == nil {
+		return true
+	}
+	latestTools, err := lc.toolCtx.ResolveTools(lc.ctx)
+	if err != nil {
+		lc.yield(nil, fmt.Errorf("refresh tools: %w", err))
+		return false
+	}
+	reminderText := sessionconfig.FormatToolAvailabilityChangeReminder(cfg.Tools, latestTools)
+	if reminderText == "" {
+		return true
+	}
+	reminderMsgID := generateID()
+	if err := lc.store.SaveMessage(lc.threadID, StoredMessage{
+		ID:       reminderMsgID,
+		ParentID: lc.turnState.LeafMsgID,
+		Message: message.Message{
+			Role:      "user",
+			Synthetic: true,
+			Parts:     []message.Part{message.TextPart{Text: reminderText}},
+		},
+	}); err != nil {
+		lc.yield(nil, fmt.Errorf("save tool change reminder: %w", err))
+		return false
+	}
+	lc.turnState.LeafMsgID = reminderMsgID
+
+	cfg.Tools = cloneTools(latestTools)
+	if err := lc.store.SaveTurnState(lc.threadID, *lc.turnState); err != nil {
+		lc.yield(nil, fmt.Errorf("save turn state (tools refresh): %w", err))
+		return false
+	}
+	return true
+}
+
+func cloneTools(tools []providers.ToolDefinition) []providers.ToolDefinition {
+	if len(tools) == 0 {
+		return nil
+	}
+	cloned := make([]providers.ToolDefinition, len(tools))
+	copy(cloned, tools)
+	return cloned
 }
 
 // runCompletionWithMaybeCompaction runs a provider completion once and retries

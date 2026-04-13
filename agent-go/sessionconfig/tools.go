@@ -6,6 +6,7 @@ import (
 	"maps"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -132,4 +133,63 @@ func loadBuiltinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 	}
 
 	return tools, nil
+}
+
+// FormatToolAvailabilityChangeReminder formats a mid-conversation tool change as
+// a <system-reminder> block. It lists newly available and removed tool names.
+// Returns empty string when the tool-name sets are unchanged.
+func FormatToolAvailabilityChangeReminder(previous, current []providers.ToolDefinition) string {
+	previousNames := sortedToolNames(previous)
+	currentNames := sortedToolNames(current)
+	added := diffSortedToolNames(currentNames, previousNames)
+	removed := diffSortedToolNames(previousNames, currentNames)
+	if len(added) == 0 && len(removed) == 0 {
+		return ""
+	}
+
+	lines := []string{
+		"<system-reminder>",
+		"Tool availability changed at this point in the conversation.",
+		"Treat any tools listed below as unavailable before this reminder.",
+	}
+	if len(added) > 0 {
+		lines = append(lines, "Newly available tools: "+strings.Join(added, ", "))
+	}
+	if len(removed) > 0 {
+		lines = append(lines, "No longer available tools: "+strings.Join(removed, ", "))
+	}
+	lines = append(lines, "</system-reminder>")
+	return strings.Join(lines, "\n")
+}
+
+func sortedToolNames(tools []providers.ToolDefinition) []string {
+	if len(tools) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if strings.TrimSpace(tool.Name) == "" {
+			continue
+		}
+		names = append(names, tool.Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func diffSortedToolNames(a, b []string) []string {
+	if len(a) == 0 {
+		return nil
+	}
+	other := make(map[string]struct{}, len(b))
+	for _, name := range b {
+		other[name] = struct{}{}
+	}
+	var diff []string
+	for _, name := range a {
+		if _, ok := other[name]; !ok {
+			diff = append(diff, name)
+		}
+	}
+	return diff
 }

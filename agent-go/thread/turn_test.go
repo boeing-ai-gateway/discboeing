@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,6 +261,96 @@ func TestRunTurn_WithToolCall(t *testing.T) {
 	lastMsg := step1Msgs[len(step1Msgs)-1]
 	if lastMsg.Role != "tool" {
 		t.Errorf("expected last message role=tool, got %s", lastMsg.Role)
+	}
+}
+
+func TestRunTurn_RefreshesToolsAndInjectsReminderMidTurn(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-refresh-tools"
+	toolCallID := "tc-refresh"
+
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.ToolCallChunk{
+					ToolCallID: toolCallID,
+					ToolName:   "read_file",
+					Input:      `{"path":"test.txt"}`,
+				},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "tool-calls"}},
+			},
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "done"},
+				message.TextEndChunk{ID: "t1"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
+		},
+	}
+
+	executor := &mockExecutor{
+		results: map[string]message.ToolResultPart{
+			toolCallID: {
+				ToolCallID: toolCallID,
+				ToolName:   "read_file",
+				Output:     message.TextOutput{Value: "hello"},
+			},
+		},
+	}
+
+	refreshCallCount := 0
+	toolCtx := &ToolContext{
+		ResolveTools: func(context.Context) ([]providers.ToolDefinition, error) {
+			refreshCallCount++
+			if refreshCallCount == 1 {
+				return []providers.ToolDefinition{{Name: "read_file"}}, nil
+			}
+			return []providers.ToolDefinition{
+				{Name: "read_file"},
+				{Name: "server__search"},
+			}, nil
+		},
+	}
+
+	collectChunks(t, RunTurn(
+		context.Background(), prov, executor, store,
+		threadID, "", TurnConfig{
+			Model:     "test-model",
+			UserParts: []message.Part{message.TextPart{Text: "read test.txt"}},
+			Tools:     []providers.ToolDefinition{{Name: "read_file"}},
+		},
+		toolCtx,
+	))
+
+	if len(prov.requests) != 2 {
+		t.Fatalf("expected 2 provider requests, got %d", len(prov.requests))
+	}
+	if len(prov.requests[0].Tools) != 1 || prov.requests[0].Tools[0].Name != "read_file" {
+		t.Fatalf("unexpected step 0 tools: %#v", prov.requests[0].Tools)
+	}
+	if len(prov.requests[1].Tools) != 2 {
+		t.Fatalf("expected 2 tools on step 1, got %d", len(prov.requests[1].Tools))
+	}
+	if prov.requests[1].Tools[1].Name != "server__search" {
+		t.Fatalf("expected refreshed tool on step 1, got %#v", prov.requests[1].Tools)
+	}
+
+	step1Msgs := prov.requests[1].Messages
+	lastMsg := step1Msgs[len(step1Msgs)-1]
+	if lastMsg.Role != "user" {
+		t.Fatalf("expected tool refresh reminder as last message, got role %q", lastMsg.Role)
+	}
+	lastText, ok := lastMsg.Parts[0].(message.TextPart)
+	if !ok {
+		t.Fatalf("expected reminder text part, got %#v", lastMsg.Parts)
+	}
+	if !strings.Contains(lastText.Text, "Tool availability changed at this point in the conversation.") {
+		t.Fatalf("expected tool availability reminder, got %q", lastText.Text)
+	}
+	if !strings.Contains(lastText.Text, "Newly available tools: server__search") {
+		t.Fatalf("expected newly available tool in reminder, got %q", lastText.Text)
 	}
 }
 

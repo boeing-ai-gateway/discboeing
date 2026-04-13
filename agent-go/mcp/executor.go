@@ -12,13 +12,20 @@ import (
 // Executor wraps a ToolExecutor and routes "servername__toolname" calls to the MCP Manager.
 // All other tool calls are delegated to the inner executor.
 type Executor struct {
-	inner   thread.ToolExecutor
-	manager *Manager
+	inner           thread.ToolExecutor
+	managerProvider func() *Manager
 }
 
 // NewExecutor creates an Executor that routes MCP tool calls via manager.
-func NewExecutor(inner thread.ToolExecutor, manager *Manager) *Executor {
-	return &Executor{inner: inner, manager: manager}
+func NewExecutor(inner thread.ToolExecutor, managerProvider func() *Manager) *Executor {
+	return &Executor{inner: inner, managerProvider: managerProvider}
+}
+
+func (e *Executor) currentManager() *Manager {
+	if e.managerProvider == nil {
+		return nil
+	}
+	return e.managerProvider()
 }
 
 // Execute routes MCP tool calls (name contains "__") to the Manager.
@@ -27,7 +34,11 @@ func (e *Executor) Execute(ctx context.Context, toolCtx *thread.ToolContext, cal
 	if !IsMCPTool(call.ToolName) {
 		return e.inner.Execute(ctx, toolCtx, call)
 	}
-	result, err := e.manager.CallTool(ctx, call.ToolName, json.RawMessage(call.Input), call.ToolCallID)
+	manager := e.currentManager()
+	if manager == nil {
+		return e.inner.Execute(ctx, toolCtx, call)
+	}
+	result, err := manager.CallTool(ctx, call.ToolName, json.RawMessage(call.Input), call.ToolCallID)
 	if err != nil {
 		return thread.ToolExecuteResult{}, err
 	}

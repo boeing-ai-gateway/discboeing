@@ -47,9 +47,9 @@ type DefaultAgent struct {
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
 
-	mcpMu      sync.Mutex
-	mcpMgr     *mcp.Manager                    // nil until first Prompt with MCP servers
-	mcpServers []sessionconfig.MCPServerConfig // config the manager was initialized with
+	mcpMu    sync.Mutex
+	mcpMgr   *mcp.Manager // nil until first Prompt with MCP servers
+	mcpToken string
 }
 
 type threadNameResult struct {
@@ -161,6 +161,14 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		Agent:            a,
 		ProviderID:       env.modelRef.ProviderID,
 		ModelID:          env.modelRef.ModelID,
+		ResolveTools: func(ctx context.Context) ([]providers.ToolDefinition, error) {
+			tools := resolvePromptTools(req, env.sessionCfg, env.subAgentCfg, env.currentDepth)
+			mcpMgr := a.resolveMCPManager(ctx)
+			if mcpMgr != nil {
+				tools = append(tools, mcpMgr.Tools()...)
+			}
+			return tools, nil
+		},
 	}
 
 	expandedUserParts, originalText := expandLegacyCommand(a.cwd, req.UserParts)
@@ -382,8 +390,8 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string) iter.Seq2[me
 		resumeMessageID := a.resolveResumeMessageID(threadID, state)
 
 		executor := thread.ToolExecutor(a.executor)
-		if mcpMgr := a.resolveMCPManager(ctx, sessionCfg); mcpMgr != nil {
-			executor = mcp.NewExecutor(a.executor, mcpMgr)
+		if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {
+			executor = mcp.NewExecutor(a.executor, a.MCPManager)
 		}
 
 		promptCtx, cancel := context.WithCancel(ctx)
@@ -450,13 +458,13 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 		systemPrompt = subAgentCfg.Prompt
 	}
 
-	mcpMgr := a.resolveMCPManager(ctx, sessionCfg)
+	mcpMgr := a.resolveMCPManager(ctx)
 	if mcpMgr != nil {
 		tools = append(tools, mcpMgr.Tools()...)
 	}
 	executor := thread.ToolExecutor(a.executor)
 	if mcpMgr != nil {
-		executor = mcp.NewExecutor(a.executor, mcpMgr)
+		executor = mcp.NewExecutor(a.executor, a.MCPManager)
 	}
 
 	model := req.Model
@@ -537,34 +545,28 @@ func resolvePromptTools(req agent.PromptRequest, sessionCfg *sessionconfig.Sessi
 	return tools
 }
 
-func (a *DefaultAgent) resolveMCPManager(ctx context.Context, sessionCfg *sessionconfig.SessionConfig) *mcp.Manager {
+func (a *DefaultAgent) resolveMCPManager(ctx context.Context) *mcp.Manager {
 	a.mcpMu.Lock()
 	defer a.mcpMu.Unlock()
-	if !mcpServersEqual(a.mcpServers, sessionCfg.MCPServers) {
+	state, err := sessionconfig.DiscoverMCPState(a.cwd)
+	if err != nil {
+		log.Printf("agent: warning: MCP discovery: %v", err)
+		return a.mcpMgr
+	}
+	if a.mcpToken != state.ReloadToken {
 		if a.mcpMgr != nil {
 			log.Printf("agent: .mcp.json changed, reloading MCP manager")
 			a.mcpMgr.Close()
 			a.mcpMgr = nil
 		}
-		if len(sessionCfg.MCPServers) > 0 {
+		if len(state.Servers) > 0 {
 			callback := mcp.MakeTokenCallback(a.mcpCfg.discobotServerURL, a.mcpCfg.projectID)
 			a.mcpMgr = mcp.NewManager(callback)
-			a.mcpMgr.Connect(ctx, sessionCfg.MCPServers, a.mcpCfg.redirectBase, a.mcpCfg.sessionID)
+			a.mcpMgr.Connect(ctx, state.Servers, a.mcpCfg.redirectBase, a.mcpCfg.sessionID)
 		}
-		a.mcpServers = sessionCfg.MCPServers
+		a.mcpToken = state.ReloadToken
 	}
 	return a.mcpMgr
-}
-
-// mcpServersEqual reports whether two MCP server config slices are identical.
-// Uses JSON marshaling so that any field change (URL, auth, args, etc.) triggers a reload.
-func mcpServersEqual(a, b []sessionconfig.MCPServerConfig) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	aj, _ := json.Marshal(a)
-	bj, _ := json.Marshal(b)
-	return string(aj) == string(bj)
 }
 
 func resolvePlanMode(reqMode string, cfg thread.Config, hasConfig bool) (planMode bool, changedByPrompt bool) {

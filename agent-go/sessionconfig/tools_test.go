@@ -314,6 +314,32 @@ func findToolSchema(t *testing.T, name string) map[string]any {
 	return nil
 }
 
+func TestFormatToolAvailabilityChangeReminder(t *testing.T) {
+	got := FormatToolAvailabilityChangeReminder(
+		[]providers.ToolDefinition{{Name: "Read"}, {Name: "Write"}},
+		[]providers.ToolDefinition{{Name: "Read"}, {Name: "server__search"}},
+	)
+	if !strings.Contains(got, "<system-reminder>") {
+		t.Fatalf("expected system reminder, got %q", got)
+	}
+	if !strings.Contains(got, "Newly available tools: server__search") {
+		t.Fatalf("expected added tool in reminder, got %q", got)
+	}
+	if !strings.Contains(got, "No longer available tools: Write") {
+		t.Fatalf("expected removed tool in reminder, got %q", got)
+	}
+}
+
+func TestFormatToolAvailabilityChangeReminder_Unchanged(t *testing.T) {
+	got := FormatToolAvailabilityChangeReminder(
+		[]providers.ToolDefinition{{Name: "Read"}, {Name: "Write"}},
+		[]providers.ToolDefinition{{Name: "Write"}, {Name: "Read"}},
+	)
+	if got != "" {
+		t.Fatalf("expected empty reminder for unchanged tool names, got %q", got)
+	}
+}
+
 func hasTool(tools []providers.ToolDefinition, name string) bool {
 	for _, tool := range tools {
 		if tool.Name == name {

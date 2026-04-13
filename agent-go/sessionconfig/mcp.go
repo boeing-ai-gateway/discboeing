@@ -1,6 +1,7 @@
 package sessionconfig
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -58,30 +59,105 @@ type mcpServerEntry struct {
 	OAuth *MCPOAuthConfig   `json:"oauth,omitempty"`
 }
 
-// discoverMCPServers loads MCP server definitions from .mcp.json files.
-// It checks the project root and ~/.claude/.mcp.json (Claude Code convention).
+// MCPDiscoveryState captures the current discovered MCP config plus a cheap
+// reload token derived from the source file contents.
+type MCPDiscoveryState struct {
+	Servers     []MCPServerConfig
+	ReloadToken string
+	ProjectRoot string
+	SourceFiles []string
+}
+
+// discoverMCPServers loads MCP server definitions from the configured MCP files.
 func discoverMCPServers(projectRoot string) ([]MCPServerConfig, error) {
-	var servers []MCPServerConfig
-
-	// 1. Project-level .mcp.json
-	projectMCP := filepath.Join(projectRoot, ".mcp.json")
-	s, err := parseMCPFile(projectMCP)
+	state, err := DiscoverMCPState(projectRoot)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", projectMCP, err)
+		return nil, err
 	}
-	servers = append(servers, s...)
+	return state.Servers, nil
+}
 
-	// 2. User-level ~/.claude/.mcp.json (Claude Code convention)
-	if home, err := os.UserHomeDir(); err == nil {
-		userMCP := filepath.Join(home, ".claude", ".mcp.json")
-		s, err := parseMCPFile(userMCP)
+// DiscoverMCPState loads MCP server definitions and computes a reload token for
+// the MCP config files relevant to the given working directory. It checks the
+// project .mcp.json, ~/.claude/.mcp.json, and ~/.discobot/mcp.json.
+func DiscoverMCPState(cwd string) (*MCPDiscoveryState, error) {
+	projectRoot := findProjectRoot(cwd)
+	paths, err := discoverMCPPaths(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	var servers []MCPServerConfig
+	for _, path := range paths {
+		s, err := parseMCPFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", userMCP, err)
+			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 		servers = append(servers, s...)
 	}
 
-	return servers, nil
+	token, err := computeMCPReloadToken(paths)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MCPDiscoveryState{
+		Servers:     servers,
+		ReloadToken: token,
+		ProjectRoot: projectRoot,
+		SourceFiles: paths,
+	}, nil
+}
+
+func discoverMCPPaths(projectRoot string) ([]string, error) {
+	paths := []string{filepath.Join(projectRoot, ".mcp.json")}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths,
+			filepath.Join(home, ".claude", ".mcp.json"),
+			filepath.Join(home, ".discobot", "mcp.json"),
+		)
+	} else if err != nil {
+		return nil, err
+	}
+	return paths, nil
+}
+
+func computeMCPReloadToken(paths []string) (string, error) {
+	sum := sha256.New()
+	for _, path := range paths {
+		if _, err := sum.Write([]byte(path)); err != nil {
+			return "", err
+		}
+		if _, err := sum.Write([]byte{0}); err != nil {
+			return "", err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				if _, err := sum.Write([]byte("missing")); err != nil {
+					return "", err
+				}
+				if _, err := sum.Write([]byte{0}); err != nil {
+					return "", err
+				}
+				continue
+			}
+			return "", fmt.Errorf("read %s: %w", path, err)
+		}
+		if _, err := sum.Write([]byte("present")); err != nil {
+			return "", err
+		}
+		if _, err := sum.Write([]byte{0}); err != nil {
+			return "", err
+		}
+		if _, err := sum.Write(data); err != nil {
+			return "", err
+		}
+		if _, err := sum.Write([]byte{0}); err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%x", sum.Sum(nil)), nil
 }
 
 // parseMCPFile reads and parses a single .mcp.json file.

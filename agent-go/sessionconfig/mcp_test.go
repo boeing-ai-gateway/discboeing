@@ -197,6 +197,63 @@ func TestDiscoverMCPServers_ProjectLevel(t *testing.T) {
 	}
 }
 
+func TestDiscoverMCPState_LoadsDiscobotUserConfig(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(root, ".git"))
+	mkdirAll(t, filepath.Join(home, ".discobot"))
+	t.Setenv("HOME", home)
+
+	writeFile(t, filepath.Join(home, ".discobot", "mcp.json"), `{
+		"mcpServers": {
+			"discobot-user": {"command": "discobot-mcp"}
+		}
+	}`)
+
+	state, err := DiscoverMCPState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, s := range state.Servers {
+		if s.Name == "discobot-user" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected to discover ~/.discobot/mcp.json server, got %#v", state.Servers)
+	}
+}
+
+func TestDiscoverMCPState_ReloadTokenChangesWhenFilesChange(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(root, ".git"))
+	mkdirAll(t, filepath.Join(home, ".discobot"))
+	t.Setenv("HOME", home)
+
+	projectFile := filepath.Join(root, ".mcp.json")
+	writeFile(t, projectFile, `{"mcpServers":{"local":{"command":"one"}}}`)
+
+	state1, err := DiscoverMCPState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writeFile(t, projectFile, `{"mcpServers":{"local":{"command":"two"}}}`)
+
+	state2, err := DiscoverMCPState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if state1.ReloadToken == state2.ReloadToken {
+		t.Fatalf("expected reload token to change when MCP file content changes")
+	}
+}
+
 func TestParseMCPFile_TransportAutoDetect(t *testing.T) {
 	dir := t.TempDir()
 	mcpFile := filepath.Join(dir, ".mcp.json")
