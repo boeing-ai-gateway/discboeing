@@ -51,6 +51,9 @@
 		urlOrChannel: string | WebSocket,
 	) => RFBInstance;
 
+	const DESKTOP_WIDTH = 1280;
+	const DESKTOP_HEIGHT = 1024;
+
 	let {
 		sessionId,
 		desktopAvailable,
@@ -253,7 +256,9 @@
 		</div>
 	{/snippet}
 
-	<div class="relative h-full min-h-0 min-w-0 overflow-hidden p-3">
+	<div
+		class="relative flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden p-3"
+	>
 		{#if connectionStatus !== "connected"}
 			<div
 				class="absolute inset-3 z-10 flex items-center justify-center rounded-md bg-black/35"
@@ -282,7 +287,21 @@
 
 		<div
 			bind:this={desktopHost}
-			class="h-full w-full overflow-hidden rounded-md border border-white/10 bg-zinc-900"
+			class="desktop-vnc-host w-full overflow-hidden rounded-md border border-white/10 bg-zinc-900"
+			style={`aspect-ratio: ${DESKTOP_WIDTH} / ${DESKTOP_HEIGHT};`}
 		></div>
 	</div>
 </DockWindowChrome>
+
+<style>
+	.desktop-vnc-host > :global(div) {
+		overflow: hidden !important;
+		align-items: flex-start !important;
+		justify-content: flex-start !important;
+	}
+
+	.desktop-vnc-host :global(canvas) {
+		display: block !important;
+		margin: 0 !important;
+	}
+</style>
