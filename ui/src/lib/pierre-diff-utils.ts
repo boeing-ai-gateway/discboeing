@@ -1,4 +1,9 @@
-import type { FileContents, SupportedLanguages } from "@pierre/diffs";
+import {
+	parseDiffFromFile,
+	type FileContents,
+	type FileDiffMetadata,
+	type SupportedLanguages,
+} from "@pierre/diffs";
 
 const LANGUAGE_MAP: Record<string, SupportedLanguages> = {
 	js: "javascript",
@@ -67,6 +72,39 @@ export function equalIgnoringWhitespace(
 		normalizeWhitespaceForDiff(leftContent) ===
 		normalizeWhitespaceForDiff(rightContent)
 	);
+}
+
+export function buildWhitespaceIgnoredFileDiff(
+	oldFile: FileContents,
+	newFile: FileContents,
+): FileDiffMetadata {
+	const originalDiff = parseDiffFromFile(oldFile, newFile);
+	const normalizedOldFile = {
+		...oldFile,
+		contents: normalizeWhitespaceForDiff(oldFile.contents),
+		cacheKey: oldFile.cacheKey
+			? `${oldFile.cacheKey}:ignore-whitespace`
+			: undefined,
+	};
+	const normalizedNewFile = {
+		...newFile,
+		contents: normalizeWhitespaceForDiff(newFile.contents),
+		cacheKey: newFile.cacheKey
+			? `${newFile.cacheKey}:ignore-whitespace`
+			: undefined,
+	};
+	const normalizedDiff = parseDiffFromFile(
+		normalizedOldFile,
+		normalizedNewFile,
+	);
+	return {
+		...normalizedDiff,
+		deletionLines: originalDiff.deletionLines,
+		additionLines: originalDiff.additionLines,
+		cacheKey: normalizedDiff.cacheKey
+			? `${normalizedDiff.cacheKey}:render-original-whitespace`
+			: undefined,
+	};
 }
 
 export function buildDiffFileContents(

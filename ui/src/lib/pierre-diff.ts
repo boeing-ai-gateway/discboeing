@@ -1,4 +1,8 @@
-import type { FileContents, FileDiffOptions } from "@pierre/diffs";
+import type {
+	FileContents,
+	FileDiffMetadata,
+	FileDiffOptions,
+} from "@pierre/diffs";
 import { getOrCreateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import WorkerUrl from "@pierre/diffs/worker/worker.js?worker&url";
 
@@ -20,6 +24,7 @@ export type DiffRendererParams = {
 	resolvedTheme: ResolvedTheme;
 	oldFile: FileContents;
 	newFile: FileContents;
+	fileDiff?: FileDiffMetadata;
 	virtualized: boolean;
 };
 

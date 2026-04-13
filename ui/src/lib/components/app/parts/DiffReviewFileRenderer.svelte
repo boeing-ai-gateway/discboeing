@@ -56,6 +56,7 @@
 			nextParams.newFile.name,
 			nextParams.newFile.lang ?? "text",
 			nextParams.newFile.cacheKey,
+			nextParams.fileDiff?.cacheKey ?? "no-file-diff",
 		].join("|");
 	}
 
@@ -100,6 +101,7 @@
 				currentInstance.render({
 					oldFile: nextParams.oldFile,
 					newFile: nextParams.newFile,
+					fileDiff: nextParams.fileDiff,
 					containerWrapper: getContainerWrapper(nextParams),
 				}),
 			);

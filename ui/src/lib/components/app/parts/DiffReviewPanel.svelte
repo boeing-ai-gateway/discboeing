@@ -25,8 +25,8 @@
 		type DiffStyle,
 	} from "$lib/pierre-diff";
 	import {
+		buildWhitespaceIgnoredFileDiff,
 		equalIgnoringWhitespace,
-		normalizeWhitespaceForDiff,
 	} from "$lib/pierre-diff-utils";
 	import {
 		countDiffLinesFast,
@@ -653,22 +653,16 @@
 			};
 		}
 
-		const oldPath = state.response.oldPath ?? path;
-		const oldFile = buildDiffFileContents(
-			oldPath,
-			normalizeWhitespaceForDiff(state.snapshot.originalContent),
-			state.patchHash ? `${state.patchHash}:old:ignore-whitespace` : null,
-		);
-		const newFile = buildDiffFileContents(
-			path,
-			normalizeWhitespaceForDiff(state.snapshot.modifiedContent),
-			state.patchHash ? `${state.patchHash}:new:ignore-whitespace` : null,
+		const whitespaceIgnoredDiff = buildWhitespaceIgnoredFileDiff(
+			state.oldFile,
+			state.newFile,
 		);
 		return {
 			diffStyle,
 			resolvedTheme,
-			oldFile,
-			newFile,
+			oldFile: state.oldFile,
+			newFile: state.newFile,
+			fileDiff: whitespaceIgnoredDiff,
 			virtualized: useVirtualizedDiff(state),
 		};
 	}

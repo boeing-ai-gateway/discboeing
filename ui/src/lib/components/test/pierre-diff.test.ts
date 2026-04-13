@@ -4,6 +4,7 @@ import test from "node:test";
 import {
 	buildDiffCacheKey,
 	buildDiffFileContents,
+	buildWhitespaceIgnoredFileDiff,
 	equalIgnoringWhitespace,
 	getLanguageFromPath,
 	normalizeWhitespaceForDiff,
@@ -77,4 +78,23 @@ test("equalIgnoringWhitespace treats formatting-only edits as unchanged", () => 
 		),
 		false,
 	);
+});
+
+test("buildWhitespaceIgnoredFileDiff preserves original indentation", () => {
+	const oldFile = buildDiffFileContents(
+		"ui/src/lib/example.ts",
+		"function example() {\n\treturn 1;\n}\n",
+		"old",
+	);
+	const newFile = buildDiffFileContents(
+		"ui/src/lib/example.ts",
+		"function example() {\n    return 2;\n}\n",
+		"new",
+	);
+
+	const diff = buildWhitespaceIgnoredFileDiff(oldFile, newFile);
+
+	assert.equal(diff.hunks.length, 1);
+	assert.equal(diff.deletionLines[1], "\treturn 1;\n");
+	assert.equal(diff.additionLines[1], "    return 2;\n");
 });
