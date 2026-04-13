@@ -140,10 +140,16 @@
 	);
 	const latestPlan = $derived.by(() => getLatestPlanState(thread.messages));
 	const hasAvailableModels = $derived.by(() => models.list.length > 0);
+	const awaitingInitialStatus = $derived.by(
+		() => sessions.awaitingInitialStatusId === session.sessionId,
+	);
 	const sessionSetupDisabled = $derived.by(
 		() =>
 			sessionView.pendingWorkspaceRequiresSourceInput &&
 			!sessionView.pendingWorkspaceSourceIsValid,
+	);
+	const showPendingWorkspaceSelector = $derived.by(
+		() => session.isPending && !awaitingInitialStatus,
 	);
 
 	function handleModeSelect(nextMode: ComposerMode) {
@@ -485,7 +491,7 @@
 
 		{#if session.isPending || session.current?.status !== "ready"}
 			<ConversationComposerSessionSetupStatus />
-			{#if session.isPending}
+			{#if showPendingWorkspaceSelector}
 				<div class="mb-2 flex w-full items-center gap-2 px-1 md:hidden">
 					<ConversationWorkspaceSelector
 						bind:this={sessionSetupRef}
@@ -575,11 +581,11 @@
 						</div>
 
 						<div class="tauri-no-drag flex items-center justify-end gap-2">
-							{#if session.isPending}
+							{#if showPendingWorkspaceSelector}
 								<div class="hidden md:contents">
 									<ConversationWorkspaceSelector />
 								</div>
-							{:else}
+							{:else if !session.isPending}
 								<ConversationComposerHooksControl
 									bind:expanded={sessionView.hooksExpanded}
 									hooksStatus={sessionHooks.status}
