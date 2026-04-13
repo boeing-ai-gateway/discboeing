@@ -121,6 +121,8 @@ type imageIDAwareReconcileProvider struct {
 	configuredImage   string
 	configuredImageID string
 	createCount       int
+	startCount        int
+	removeCount       int
 	cleanupCalls      int
 }
 
@@ -175,6 +177,7 @@ func (p *imageIDAwareReconcileProvider) Start(_ context.Context, sessionID strin
 		return sandbox.ErrNotFound
 	}
 
+	p.startCount++
 	now := time.Now()
 	sb.Status = sandbox.StatusRunning
 	sb.StartedAt = &now
@@ -192,6 +195,7 @@ func (p *imageIDAwareReconcileProvider) Stop(_ context.Context, sessionID string
 }
 
 func (p *imageIDAwareReconcileProvider) Remove(_ context.Context, sessionID string, _ ...sandbox.RemoveOption) error {
+	p.removeCount++
 	delete(p.sandboxes, sessionID)
 	return nil
 }
@@ -590,6 +594,47 @@ func TestReconcileSandboxes_UsesImageIDAndRunsCleanup(t *testing.T) {
 
 	if provider.cleanupCalls != 1 {
 		t.Fatalf("expected cleanup to run once, got %d", provider.cleanupCalls)
+	}
+}
+
+func TestReconcileSandboxes_RemovesStoppedOutdatedSandboxWithoutRestart(t *testing.T) {
+	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	testStore := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: testEncryptionKey}
+	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	svc.SetSessionInitializer(&sandboxCreatingInitializer{sandboxSvc: svc})
+
+	ctx := context.Background()
+	sessionID := "test-session-stopped-image-id"
+	workspacePath := "/workspace"
+	createTestSession(t, testStore, sessionID, workspacePath)
+
+	provider.sandboxes[sessionID] = &sandbox.Sandbox{
+		ID:        "old-stopped-sandbox",
+		SessionID: sessionID,
+		Status:    sandbox.StatusStopped,
+		Image:     provider.configuredImage,
+		CreatedAt: time.Now(),
+		Metadata: map[string]string{
+			sandbox.MetadataImageID: "sha256:old",
+		},
+	}
+
+	if err := svc.ReconcileSandboxes(ctx); err != nil {
+		t.Fatalf("ReconcileSandboxes failed: %v", err)
+	}
+
+	if _, err := provider.Get(ctx, sessionID); !errors.Is(err, sandbox.ErrNotFound) {
+		t.Fatalf("expected stopped outdated sandbox to be removed, got %v", err)
+	}
+	if provider.createCount != 0 {
+		t.Fatalf("expected stopped outdated sandbox not to be recreated, got %d creates", provider.createCount)
+	}
+	if provider.startCount != 0 {
+		t.Fatalf("expected stopped outdated sandbox not to be restarted, got %d starts", provider.startCount)
+	}
+	if provider.removeCount != 1 {
+		t.Fatalf("expected stopped outdated sandbox to be removed once, got %d removes", provider.removeCount)
 	}
 }
 

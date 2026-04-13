@@ -574,8 +574,14 @@ func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
 			continue
 		}
 
-		// Recreate the sandbox with the correct image via job system
-		// This ensures proper serialization with any concurrent user operations
+		if sb.Status == sandbox.StatusStopped || sb.Status == sandbox.StatusCreated {
+			log.Printf("Removed outdated inactive sandbox for session %s; it will be recreated on demand", sb.SessionID)
+			continue
+		}
+
+		// Recreate the sandbox with the correct image via job system only when the
+		// sandbox had been active. Stopped sandboxes stay stopped after image updates.
+		// This ensures proper serialization with any concurrent user operations.
 		if err := s.ReconcileSandbox(ctx, sb.SessionID); err != nil {
 			log.Printf("Failed to recreate sandbox for session %s: %v", sb.SessionID, err)
 			continue

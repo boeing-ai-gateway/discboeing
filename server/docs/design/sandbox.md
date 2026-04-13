@@ -729,7 +729,9 @@ On server startup, sandbox reconciliation does more than prune orphaned containe
 1. List all managed sandboxes.
 2. Compare each sandbox against the configured sandbox image.
    - For Docker, this comparison uses the resolved image ID when available, not just the configured image ref string.
-3. Recreate sandboxes that are using an outdated image while preserving their named data volumes.
+3. For sandboxes using an outdated image:
+   - running sandboxes are recreated with the new image while preserving their named data volumes.
+   - stopped or never-started sandboxes are removed but not restarted; they are recreated later on demand.
 4. After sandbox migration completes, clean up labeled sandbox images that are no longer referenced by either:
    - the currently configured sandbox image, or
    - any managed sandbox container.
