@@ -6,15 +6,18 @@ export const PENDING_COMPOSER_DRAFT_STORAGE_KEY = `${COMPOSER_DRAFT_STORAGE_PREF
 export function resolveComposerDraftStorageKey({
 	isPending,
 	threadId,
+	sessionId,
 }: {
 	isPending: boolean;
 	threadId: string | null | undefined;
+	sessionId?: string | null | undefined;
 }): string {
-	if (isPending || !threadId) {
+	const resolvedId = threadId || sessionId;
+	if (isPending || !resolvedId) {
 		return PENDING_COMPOSER_DRAFT_STORAGE_KEY;
 	}
 
-	return `${COMPOSER_DRAFT_STORAGE_PREFIX}${threadId}`;
+	return `${COMPOSER_DRAFT_STORAGE_PREFIX}${resolvedId}`;
 }
 
 export function readComposerDraft(storageKey: string): string {

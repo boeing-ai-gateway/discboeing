@@ -60,8 +60,20 @@ test("saved sessions use the active thread id for draft storage", () => {
 		resolveComposerDraftStorageKey({
 			isPending: false,
 			threadId: "thread-123",
+			sessionId: "session-123",
 		}),
 		"discobot:composer-draft:thread-123",
+	);
+});
+
+test("saved sessions fall back to the session id when no thread id is available", () => {
+	assert.equal(
+		resolveComposerDraftStorageKey({
+			isPending: false,
+			threadId: null,
+			sessionId: "session-123",
+		}),
+		"discobot:composer-draft:session-123",
 	);
 });
 

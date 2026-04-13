@@ -261,6 +261,7 @@ function createThreadContext(
 		resolveComposerDraftStorageKey({
 			isPending: session.isPending,
 			threadId,
+			sessionId: session.sessionId,
 		}),
 	);
 
