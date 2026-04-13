@@ -42,9 +42,12 @@
 				visitedSessionIds.includes(sessionId),
 		),
 	);
-	const renderedSessionIds = $derived.by(() =>
-		Array.from(new Set([selectedSessionId, ...preloadSessionIds])),
-	);
+	const renderedSessionIds = $derived.by(() => {
+		const sessionIds = selectedSession.isPending
+			? preloadSessionIds
+			: [selectedSessionId, ...preloadSessionIds];
+		return Array.from(new Set(sessionIds));
+	});
 
 	function sidebarOpen() {
 		return isMobile.current
@@ -196,9 +199,7 @@
 			sessionId={selectedSessionId}
 			visible={true}
 			{mainClass}
-			showSidebarToggle={isMobile.current && !sidebarOpen()}
 			reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
-			onToggleSidebar={toggleSidebar}
 		/>
 	{/if}
 	{#each renderedSessionIds as sessionId (sessionId)}
@@ -206,15 +207,13 @@
 			{sessionId}
 			visible={sessionId === selectedSessionId}
 			{mainClass}
-			showSidebarToggle={isMobile.current && !sidebarOpen()}
 			reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
-			onToggleSidebar={toggleSidebar}
 		/>
 	{/each}
 {/snippet}
 
-<div class="h-screen flex flex-col bg-background text-foreground">
-	<AppHeader {showSessionToolbar} />
+<div class="h-[100dvh] flex flex-col bg-background text-foreground">
+	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
 	<StartupTasksBanner startup={app.startup} />
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
@@ -222,6 +221,7 @@
 			<Sheet.Root bind:open={sessionView.mobileSidebarOpen}>
 				<Sheet.Content
 					side="left"
+					overlayClass="bg-transparent"
 					class="w-64 max-w-none bg-background p-3 [&>button]:hidden"
 				>
 					<AppSidebar

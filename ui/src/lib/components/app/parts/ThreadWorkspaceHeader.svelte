@@ -1,23 +1,13 @@
 <script lang="ts">
-	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
-	import { Button } from "$lib/components/ui/button";
 	import type { ThreadState } from "$lib/api-types";
 
 	type Props = {
-		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
-		onToggleSidebar?: () => void;
 		title: string;
 		state?: ThreadState;
 	};
 
-	let {
-		showSidebarToggle = false,
-		reserveSidebarSpace = false,
-		onToggleSidebar,
-		title,
-		state,
-	}: Props = $props();
+	let { reserveSidebarSpace = false, title, state }: Props = $props();
 
 	function threadStateLabel(value: ThreadState | undefined) {
 		if (value === "interrupted") {
@@ -41,21 +31,7 @@
 </script>
 
 <div class="flex h-10 min-w-0 items-center gap-1 bg-background px-3">
-	{#if showSidebarToggle}
-		<div>
-			{#if onToggleSidebar}
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					onclick={onToggleSidebar}
-					aria-label="Expand sessions panel"
-					title="Expand sessions panel"
-				>
-					<PanelLeftIcon class="size-3.5" />
-				</Button>
-			{/if}
-		</div>
-	{:else if reserveSidebarSpace}
+	{#if reserveSidebarSpace}
 		<div class="w-[10.75rem] shrink-0" aria-hidden="true"></div>
 	{/if}
 	<div class="flex min-w-0 items-center gap-2">

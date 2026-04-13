@@ -29,17 +29,35 @@ test("app header preserves the toolbar grid slot even when the session toolbar i
 	);
 });
 
-test("app header keeps window controls in a dedicated rightmost grid column", () => {
+test("app header keeps window controls in a dedicated rightmost grid column on desktop", () => {
 	const source = readAppHeaderSource();
 
 	assert.match(source, /grid-cols-\[auto_minmax\(0,1fr\)_auto_auto\]/);
-	assert.match(source, /class="tauri-drag-region relative z-\[60\] grid h-10/);
+	assert.match(source, /grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
 	assert.match(
 		source,
-		/class="relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>/,
+		/class=\{`tauri-drag-region relative \$\{isMobile\.current \? "" : "z-\[60\]"\} grid h-10/,
+	);
+	assert.match(
+		source,
+		/\{#if !isMobile\.current\}[\s\S]*class="relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>[\s\S]*\{\/if\}/,
 	);
 	assert.ok(source.includes("<SessionToolbarStack />"));
-	assert.ok(source.includes("<span>New Session</span>"));
+	assert.ok(source.includes('{isMobile.current ? "New" : "New Session"}'));
+});
+
+test("app header shows the mobile Sessions toggle to the right of the logo", () => {
+	const source = readAppHeaderSource();
+
+	assert.match(
+		source,
+		/\{#if isMobile\.current\}[\s\S]*<DiscobotLogo size=\{24\} \/>/,
+	);
+	assert.match(
+		source,
+		/\{#if onToggleSidebar\}[\s\S]*class="tauri-no-drag gap-1 px-1\.5 text-xs font-medium uppercase tracking-\[0\.16em\] text-muted-foreground"[\s\S]*<PanelLeftIcon class="size-3\.5" \/>[\s\S]*<span>Sessions<\/span>[\s\S]*\{\/if\}/,
+	);
+	assert.doesNotMatch(source, /onclick=\{\(\) => onToggleSidebar\?\.\(\)\}/);
 });
 
 test("app header delegates macOS spacer rendering to a dedicated component", () => {

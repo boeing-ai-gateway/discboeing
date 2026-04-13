@@ -10,14 +10,11 @@
 
 	type Props = {
 		visible: boolean;
-		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
-		onToggleSidebar?: () => void;
 		mode?: "full" | "conversation-only";
 	};
 
 	const props: Props = $props();
-	const noop = () => {};
 
 	const session = useSessionContext();
 	const thread = setThreadContext(
@@ -50,9 +47,7 @@
 		<Resizable.Pane defaultSize={35} minSize={25} class="min-h-0 min-w-0">
 			<div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
 				<ThreadWorkspaceHeader
-					showSidebarToggle={props.showSidebarToggle ?? false}
 					reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-					onToggleSidebar={props.onToggleSidebar ?? noop}
 					title={session.threads.selected?.name ??
 						(session.isPending ? "" : "No thread selected")}
 					state={session.threads.selected?.state}
@@ -71,9 +66,7 @@
 	</Resizable.PaneGroup>
 {:else}
 	<ThreadWorkspaceHeader
-		showSidebarToggle={props.showSidebarToggle ?? false}
 		reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-		onToggleSidebar={props.onToggleSidebar ?? noop}
 		title={session.threads.selected?.name ??
 			(session.isPending ? "" : "No thread selected")}
 		state={session.threads.selected?.state}

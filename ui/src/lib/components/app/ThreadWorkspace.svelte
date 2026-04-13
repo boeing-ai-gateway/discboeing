@@ -8,15 +8,12 @@
 		threadId: string;
 		visible: boolean;
 		mainClass: string;
-		showSidebarToggle?: boolean;
 		reserveSidebarSpace?: boolean;
-		onToggleSidebar?: () => void;
 		mode?: "full" | "conversation-only";
 		sidebarOpen?: boolean;
 	};
 
 	const props: Props = $props();
-	const noop = () => {};
 	const session = useSessionContext();
 	const hasSelectedThread = $derived.by(
 		() => session.isPending || session.threads.selectedId !== null,
@@ -33,16 +30,12 @@
 	{#if hasSelectedThread}
 		<ThreadWorkspaceActive
 			visible={props.visible}
-			showSidebarToggle={props.showSidebarToggle}
 			reserveSidebarSpace={props.reserveSidebarSpace}
-			onToggleSidebar={props.onToggleSidebar}
 			mode={props.mode}
 		/>
 	{:else}
 		<ThreadWorkspaceHeader
-			showSidebarToggle={props.showSidebarToggle ?? false}
 			reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-			onToggleSidebar={props.onToggleSidebar ?? noop}
 			title="No thread selected"
 		/>
 		{#if showThreadSelectionPrompt}

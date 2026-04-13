@@ -24,19 +24,21 @@
 	import { Dialog as SheetPrimitive } from "bits-ui";
 	import XIcon from "@lucide/svelte/icons/x";
 	import type { Snippet } from "svelte";
+	import type { ComponentProps } from "svelte";
 	import SheetPortal from "./sheet-portal.svelte";
 	import SheetOverlay from "./sheet-overlay.svelte";
 	import { cn, type WithoutChildrenOrChild } from "$lib/utils.js";
-	import type { ComponentProps } from "svelte";
 
 	let {
 		ref = $bindable(null),
 		class: className,
+		overlayClass,
 		side = "right",
 		portalProps,
 		children,
 		...restProps
 	}: WithoutChildrenOrChild<SheetPrimitive.ContentProps> & {
+		overlayClass?: string;
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof SheetPortal>>;
 		side?: Side;
 		children: Snippet;
@@ -44,7 +46,7 @@
 </script>
 
 <SheetPortal {...portalProps}>
-	<SheetOverlay />
+	<SheetOverlay class={overlayClass} />
 	<SheetPrimitive.Content
 		bind:ref
 		data-slot="sheet-content"

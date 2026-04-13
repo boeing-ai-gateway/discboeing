@@ -35,7 +35,7 @@ test("app shell only preloads app-ui mounted sessions after they have been visit
 	);
 	assert.match(
 		source,
-		/new Set\(\[selectedSessionId, \.\.\.preloadSessionIds\]\)/,
+		/const renderedSessionIds = \$derived\.by\(\(\) => \{[\s\S]*const sessionIds = selectedSession\.isPending[\s\S]*\? preloadSessionIds[\s\S]*: \[selectedSessionId, \.\.\.preloadSessionIds\];[\s\S]*new Set\(sessionIds\)/,
 	);
 	assert.match(
 		source,
@@ -70,11 +70,11 @@ test("app shell renders the floating sidebar trigger when the desktop pane is co
 	assert.match(source, /<AppSidebar\s+mode="floating"\s+collapsed/);
 	assert.match(
 		source,
-		/showSidebarToggle=\{isMobile\.current && !sidebarOpen\(\)\}/,
+		/reserveSidebarSpace=\{!isMobile\.current && !sidebarOpen\(\)\}/,
 	);
 	assert.match(
 		source,
-		/reserveSidebarSpace=\{!isMobile\.current && !sidebarOpen\(\)\}/,
+		/<AppHeader \{showSessionToolbar\} onToggleSidebar=\{toggleSidebar\} \/>/,
 	);
 });
 

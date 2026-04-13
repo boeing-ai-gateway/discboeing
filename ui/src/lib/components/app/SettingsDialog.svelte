@@ -46,6 +46,8 @@
 	const preferences = app.preferences;
 	const ui = app.ui;
 	const updates = app.updates;
+	const environment = app.environment;
+	const showUpdateTab = $derived(environment.isTauri);
 	const themeModes: ThemeMode[] = ["light", "dark", "system"];
 
 	function formatBytes(bytes: number): string {
@@ -78,6 +80,10 @@
 			return;
 		}
 
+		if (!showUpdateTab && ui.settingsDialog.tab === "update") {
+			ui.settingsDialog.tab = "appearance";
+		}
+
 		ui.settingsDialog.open = true;
 	}
 
@@ -85,8 +91,8 @@
 		if (
 			value !== "appearance" &&
 			value !== "chat" &&
-			value !== "update" &&
-			value !== "credentials"
+			value !== "credentials" &&
+			(showUpdateTab || value !== "update")
 		) {
 			return;
 		}
@@ -115,7 +121,9 @@
 		<Dialog.Header>
 			<Dialog.Title>Settings</Dialog.Title>
 			<Dialog.Description>
-				Configure appearance, chat defaults, updates, and support tools.
+				Configure appearance, chat defaults, {showUpdateTab
+					? "updates, and support tools"
+					: "and support tools"}.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -124,10 +132,14 @@
 			onValueChange={handleSettingsTabChange}
 			class="mt-1"
 		>
-			<TabsList class="grid w-full grid-cols-4">
+			<TabsList
+				class={`grid w-full ${showUpdateTab ? "grid-cols-4" : "grid-cols-3"}`}
+			>
 				<TabsTrigger value="appearance">Appearance</TabsTrigger>
 				<TabsTrigger value="chat">Chat</TabsTrigger>
-				<TabsTrigger value="update">Update</TabsTrigger>
+				{#if showUpdateTab}
+					<TabsTrigger value="update">Update</TabsTrigger>
+				{/if}
 				<TabsTrigger value="credentials">Credentials</TabsTrigger>
 			</TabsList>
 
@@ -315,104 +327,110 @@
 					</Card>
 				</TabsContent>
 
-				<TabsContent value="update" class="mt-0 h-full">
-					<Card class="gap-4 py-4">
-						<CardHeader class="gap-1 border-b pb-4">
-							<CardTitle class="text-sm">Update</CardTitle>
-							<CardDescription
-								>Check, download, and install app updates.</CardDescription
-							>
-							<CardAction>
-								<Button
-									variant="ghost"
-									size="xs"
-									onclick={() => {
-										void updates.check();
-									}}
-									disabled={updates.status === "checking" ||
-										updates.status === "downloading" ||
-										updates.status === "installing"}
+				{#if showUpdateTab}
+					<TabsContent value="update" class="mt-0 h-full">
+						<Card class="gap-4 py-4">
+							<CardHeader class="gap-1 border-b pb-4">
+								<CardTitle class="text-sm">Update</CardTitle>
+								<CardDescription
+									>Check, download, and install app updates.</CardDescription
 								>
-									<RefreshCwIcon
-										class={`size-3.5 ${updates.status === "checking" ? "animate-spin" : ""}`}
-									/>
-									Check
-								</Button>
-							</CardAction>
-						</CardHeader>
-						<CardContent class="space-y-3">
-							{#if updates.status === "ready" && !updates.isIgnored}
-								<div class="rounded-md border border-border bg-background p-3">
-									<p class="text-sm text-muted-foreground">
-										Version {updates.availableVersion} is ready to install.
-									</p>
-									<div class="mt-3 flex items-center gap-2">
-										<Button
-											variant="default"
-											size="xs"
-											onclick={() => void updates.installAndRelaunch()}
-										>
-											Restart to update
-										</Button>
-										<Button variant="outline" size="xs" onclick={updates.ignore}
-											>Ignore</Button
-										>
-									</div>
-								</div>
-							{:else if updates.status === "ready" && updates.isIgnored}
-								<div
-									class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
-								>
-									Version {updates.availableVersion} available (ignored).
-								</div>
-							{:else if updates.status === "checking"}
-								<div
-									class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
-								>
-									Checking for updates...
-								</div>
-							{:else if updates.status === "downloading"}
-								<div
-									class="space-y-2 rounded-md border border-border bg-background p-3"
-								>
-									<div
-										class="flex items-center justify-between text-xs text-muted-foreground"
+								<CardAction>
+									<Button
+										variant="ghost"
+										size="xs"
+										onclick={() => {
+											void updates.check();
+										}}
+										disabled={updates.status === "checking" ||
+											updates.status === "downloading" ||
+											updates.status === "installing"}
 									>
-										<span>Downloading update...</span>
-										<span>
-											{#if updates.totalBytes !== null}
-												{formatBytes(updates.downloadedBytes)} / {formatBytes(
-													updates.totalBytes,
-												)}
-											{:else}
-												{formatBytes(updates.downloadedBytes)}
-											{/if}
-										</span>
+										<RefreshCwIcon
+											class={`size-3.5 ${updates.status === "checking" ? "animate-spin" : ""}`}
+										/>
+										Check
+									</Button>
+								</CardAction>
+							</CardHeader>
+							<CardContent class="space-y-3">
+								{#if updates.status === "ready" && !updates.isIgnored}
+									<div
+										class="rounded-md border border-border bg-background p-3"
+									>
+										<p class="text-sm text-muted-foreground">
+											Version {updates.availableVersion} is ready to install.
+										</p>
+										<div class="mt-3 flex items-center gap-2">
+											<Button
+												variant="default"
+												size="xs"
+												onclick={() => void updates.installAndRelaunch()}
+											>
+												Restart to update
+											</Button>
+											<Button
+												variant="outline"
+												size="xs"
+												onclick={updates.ignore}>Ignore</Button
+											>
+										</div>
 									</div>
-									<Progress value={updateProgress} />
-								</div>
-							{:else if updates.status === "installing"}
-								<div
-									class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
-								>
-									Installing update...
-								</div>
-							{:else if updates.status === "error"}
-								<div
-									class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-								>
-									Update failed: {updates.error}
-								</div>
-							{:else}
-								<div
-									class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
-								>
-									You're on the latest version.
-								</div>
-							{/if}
-						</CardContent>
-					</Card>
-				</TabsContent>
+								{:else if updates.status === "ready" && updates.isIgnored}
+									<div
+										class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
+									>
+										Version {updates.availableVersion} available (ignored).
+									</div>
+								{:else if updates.status === "checking"}
+									<div
+										class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
+									>
+										Checking for updates...
+									</div>
+								{:else if updates.status === "downloading"}
+									<div
+										class="space-y-2 rounded-md border border-border bg-background p-3"
+									>
+										<div
+											class="flex items-center justify-between text-xs text-muted-foreground"
+										>
+											<span>Downloading update...</span>
+											<span>
+												{#if updates.totalBytes !== null}
+													{formatBytes(updates.downloadedBytes)} / {formatBytes(
+														updates.totalBytes,
+													)}
+												{:else}
+													{formatBytes(updates.downloadedBytes)}
+												{/if}
+											</span>
+										</div>
+										<Progress value={updateProgress} />
+									</div>
+								{:else if updates.status === "installing"}
+									<div
+										class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
+									>
+										Installing update...
+									</div>
+								{:else if updates.status === "error"}
+									<div
+										class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+									>
+										Update failed: {updates.error}
+									</div>
+								{:else}
+									<div
+										class="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground"
+									>
+										You're on the latest version.
+									</div>
+								{/if}
+							</CardContent>
+						</Card>
+					</TabsContent>
+				{/if}
 
 				<TabsContent value="credentials" class="mt-0 h-full">
 					<Card class="gap-4 py-4">

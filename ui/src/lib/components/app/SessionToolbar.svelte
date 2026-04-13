@@ -20,9 +20,10 @@
 	import { getSSHPort } from "$lib/api-config";
 	import { api } from "$lib/api-client";
 	import type { CommitOperation } from "$lib/api-types";
+	import { getSessionToolbarOperationState } from "$lib/components/app/session-toolbar-actions";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { getSessionToolbarOperationState } from "$lib/components/app/session-toolbar-actions";
+	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/tauri";
 	import {
 		DESKTOP_SERVICE_ID,
@@ -36,6 +37,7 @@
 
 	let { sessionId }: Props = $props();
 	const app = useAppContext();
+	const isMobile = new IsMobile(1024);
 	const preferences = app.preferences;
 	const session = useSessionContext(untrack(() => sessionId));
 	const sessionView = session.ui;
@@ -263,35 +265,64 @@
 	class="flex h-full w-full min-w-0 items-center justify-end gap-2 bg-background px-2"
 	data-tauri-drag-region
 >
-	<div
-		class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
-	>
-		<Button
-			variant={sessionView.activeView.kind === "terminal"
-				? "secondary"
-				: "ghost"}
-			size="xs"
-			onclick={toggleTerminal}
+	{#if !isMobile.current}
+		<div
+			class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 		>
-			Terminal
-		</Button>
-		<Button
-			variant={sessionView.activeView.kind === "desktop"
-				? "secondary"
-				: "ghost"}
-			size="xs"
-			onclick={toggleDesktop}
+			<Button
+				variant={sessionView.activeView.kind === "terminal"
+					? "secondary"
+					: "ghost"}
+				size="xs"
+				onclick={toggleTerminal}
+			>
+				Terminal
+			</Button>
+			<Button
+				variant={sessionView.activeView.kind === "desktop"
+					? "secondary"
+					: "ghost"}
+				size="xs"
+				onclick={toggleDesktop}
+			>
+				Desktop
+			</Button>
+			<Button
+				variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
+				size="xs"
+				onclick={toggleFiles}
+			>
+				Files
+			</Button>
+			{#if diffStats.filesChanged > 0}
+				<Button
+					variant={sessionView.activeView.kind === "diff-review"
+						? "secondary"
+						: "ghost"}
+					size="xs"
+					onclick={toggleDiffReview}
+					class="gap-1"
+				>
+					<span class="text-green-500">+{diffStats.additions}</span>
+					<span class="text-red-500">-{diffStats.deletions}</span>
+					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
+				</Button>
+			{/if}
+			<Button
+				variant={sessionView.activeView.kind === "services"
+					? "secondary"
+					: "ghost"}
+				size="xs"
+				onclick={toggleServices}
+				disabled={sessionServices.length === 0}
+			>
+				Services
+			</Button>
+		</div>
+	{:else if diffStats.filesChanged > 0}
+		<div
+			class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 		>
-			Desktop
-		</Button>
-		<Button
-			variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
-			size="xs"
-			onclick={toggleFiles}
-		>
-			Files
-		</Button>
-		{#if diffStats.filesChanged > 0}
 			<Button
 				variant={sessionView.activeView.kind === "diff-review"
 					? "secondary"
@@ -304,18 +335,8 @@
 				<span class="text-red-500">-{diffStats.deletions}</span>
 				<span class="text-muted-foreground">{diffStats.filesChanged}</span>
 			</Button>
-		{/if}
-		<Button
-			variant={sessionView.activeView.kind === "services"
-				? "secondary"
-				: "ghost"}
-			size="xs"
-			onclick={toggleServices}
-			disabled={sessionServices.length === 0}
-		>
-			Services
-		</Button>
-	</div>
+		</div>
+	{/if}
 
 	{#if session.current}
 		{#if operationState.showSplitButton}
@@ -389,52 +410,54 @@
 		{/if}
 	{/if}
 
-	<SplitDropdownButton
-		class="tauri-no-drag"
-		label={`Open ${selectedIdeOption?.label ?? "Cursor"}`}
-		menuAriaLabel="Select preferred IDE"
-		onclick={openPreferredIde}
-		primaryDisabled={preferredIdeActionDisabled}
-		variant="outline"
-		size="xs"
-		contentClass="min-w-[11rem]"
-	>
-		<DropdownMenuLabel
-			class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
+	{#if !isMobile.current}
+		<SplitDropdownButton
+			class="tauri-no-drag"
+			label={`Open ${selectedIdeOption?.label ?? "Cursor"}`}
+			menuAriaLabel="Select preferred IDE"
+			onclick={openPreferredIde}
+			primaryDisabled={preferredIdeActionDisabled}
+			variant="outline"
+			size="xs"
+			contentClass="min-w-[11rem]"
 		>
-			Preferred IDE
-		</DropdownMenuLabel>
-		{#each standardIdeOptions as option}
-			<DropdownMenuItem
-				onclick={() => preferences.setPreferredIde(option.id)}
-				class="justify-between gap-3"
+			<DropdownMenuLabel
+				class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
 			>
-				<span>{option.label}</span>
-				{#if preferences.preferredIde === option.id}
-					<span class="text-xs font-medium">Default</span>
-				{/if}
-			</DropdownMenuItem>
-		{/each}
-		<DropdownMenuSub>
-			<DropdownMenuSubTrigger class="gap-3">
-				<span>JetBrains</span>
-				{#if selectedIdeOption?.family === "jetbrains"}
-					<span class="text-xs font-medium">Default</span>
-				{/if}
-			</DropdownMenuSubTrigger>
-			<DropdownMenuSubContent class="min-w-[13rem]">
-				{#each jetbrainsIdeOptions as option}
-					<DropdownMenuItem
-						onclick={() => preferences.setPreferredIde(option.id)}
-						class="justify-between gap-3"
-					>
-						<span>{option.label}</span>
-						{#if preferences.preferredIde === option.id}
-							<span class="text-xs font-medium">Default</span>
-						{/if}
-					</DropdownMenuItem>
-				{/each}
-			</DropdownMenuSubContent>
-		</DropdownMenuSub>
-	</SplitDropdownButton>
+				Preferred IDE
+			</DropdownMenuLabel>
+			{#each standardIdeOptions as option}
+				<DropdownMenuItem
+					onclick={() => preferences.setPreferredIde(option.id)}
+					class="justify-between gap-3"
+				>
+					<span>{option.label}</span>
+					{#if preferences.preferredIde === option.id}
+						<span class="text-xs font-medium">Default</span>
+					{/if}
+				</DropdownMenuItem>
+			{/each}
+			<DropdownMenuSub>
+				<DropdownMenuSubTrigger class="gap-3">
+					<span>JetBrains</span>
+					{#if selectedIdeOption?.family === "jetbrains"}
+						<span class="text-xs font-medium">Default</span>
+					{/if}
+				</DropdownMenuSubTrigger>
+				<DropdownMenuSubContent class="min-w-[13rem]">
+					{#each jetbrainsIdeOptions as option}
+						<DropdownMenuItem
+							onclick={() => preferences.setPreferredIde(option.id)}
+							class="justify-between gap-3"
+						>
+							<span>{option.label}</span>
+							{#if preferences.preferredIde === option.id}
+								<span class="text-xs font-medium">Default</span>
+							{/if}
+						</DropdownMenuItem>
+					{/each}
+				</DropdownMenuSubContent>
+			</DropdownMenuSub>
+		</SplitDropdownButton>
+	{/if}
 </div>

@@ -25,16 +25,16 @@ test("thread workspace header can reserve space for the floating sidebar", () =>
 	const source = readThreadWorkspaceHeaderSource();
 
 	assert.match(source, /reserveSidebarSpace\?: boolean/);
-	assert.match(source, /\{:else if reserveSidebarSpace\}/);
+	assert.match(source, /\{#if reserveSidebarSpace\}/);
 	assert.match(source, /w-\[10\.75rem\]/);
 });
 
-test("thread workspace header can render the sidebar toggle button", () => {
+test("thread workspace header no longer renders a mobile sidebar toggle", () => {
 	const source = readThreadWorkspaceHeaderSource();
 
-	assert.match(source, /showSidebarToggle\?: boolean/);
-	assert.match(source, /\{#if showSidebarToggle\}/);
-	assert.match(source, /aria-label="Expand sessions panel"/);
+	assert.doesNotMatch(source, /showSidebarToggle\?: boolean/);
+	assert.doesNotMatch(source, /Expand sessions panel/);
+	assert.doesNotMatch(source, /<PanelLeftIcon/);
 });
 
 test("thread workspace header keeps the intended non-drag layout and is not a tauri drag region", () => {
