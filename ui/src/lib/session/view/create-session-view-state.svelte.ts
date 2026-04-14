@@ -13,7 +13,6 @@ type CreateSessionViewStateArgs = {
 export function resolveOpenFileState(
 	file: string | undefined,
 	selectedFile: string,
-	availableFiles: string[],
 ): { activeView: SessionActiveView; selectedFile: string } {
 	if (file !== undefined) {
 		return {
@@ -22,16 +21,15 @@ export function resolveOpenFileState(
 		};
 	}
 
-	const nextFile = selectedFile || (availableFiles[0] ?? "");
-	if (nextFile.length === 0) {
+	if (selectedFile.length === 0) {
 		return {
 			activeView: { kind: "file", path: "" },
 			selectedFile: "",
 		};
 	}
 	return {
-		activeView: { kind: "file", path: nextFile },
-		selectedFile: nextFile,
+		activeView: { kind: "file", path: selectedFile },
+		selectedFile,
 	};
 }
 
@@ -128,7 +126,7 @@ export function createSessionViewState(
 	};
 
 	const openFile = (file?: string) => {
-		const nextState = resolveOpenFileState(file, selectedFile, args.getFiles());
+		const nextState = resolveOpenFileState(file, selectedFile);
 		selectedFile = nextState.selectedFile;
 		activeView = nextState.activeView;
 	};

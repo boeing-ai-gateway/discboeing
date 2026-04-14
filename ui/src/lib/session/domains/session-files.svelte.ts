@@ -815,10 +815,13 @@ export function createSessionFilesDomain(
 			if (list.length === 0 && searchable.length === 0) {
 				await refresh();
 			}
-			const nextFile =
-				(file ?? args.getSelectedFile()) || list[0] || searchable[0] || "";
-			if (!nextFile) {
+			if (file === undefined) {
 				args.openFile();
+				return;
+			}
+			const nextFile = file;
+			if (!nextFile) {
+				args.openFile("");
 				return;
 			}
 			if (!openPaths.includes(nextFile)) {
