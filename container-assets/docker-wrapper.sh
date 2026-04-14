@@ -74,10 +74,11 @@ if is_build_command "$@"; then
         exit 0
     fi
 
-    # On failure, check for the "parent snapshot does not exist" cache
-    # corruption error that BuildKit occasionally produces with a stale
-    # local cache.  If detected, prune the cache once and retry.
-    if grep -qE "parent snapshot .* does not exist|failed to compute cache key.*not found" "$tmpout"; then
+    # On failure, check for known local BuildKit cache corruption/export
+    # errors. If detected, prune the cache once and retry.
+    if grep -qE \
+        "parent snapshot .* does not exist|failed to compute cache key.*not found|error writing layer blob: .*rename tmp file: .*startedat\.tmp .* no such file or directory|failed to resume the status from path .*buildkit/ingest/.* no such file or directory" \
+        "$tmpout"; then
         echo "⚠️  BuildKit cache corruption detected. Pruning cache and retrying..." >&2
         "$REAL_DOCKER" builder prune -f >&2
         rm -f "$tmpout"
