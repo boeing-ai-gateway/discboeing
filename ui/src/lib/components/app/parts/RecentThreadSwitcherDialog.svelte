@@ -1,0 +1,69 @@
+<script lang="ts">
+	import { recentThreadKey } from "$lib/app/thread-switcher";
+	import type { RecentThreadSummary } from "$lib/shell-types";
+	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
+
+	type Props = {
+		open: boolean;
+		threads: RecentThreadSummary[];
+		selectedKey: string | null;
+		helpText: string;
+		onHover: (sessionId: string, threadId: string) => void;
+		onSelect: (sessionId: string, threadId: string) => void;
+	};
+
+	let { open, threads, selectedKey, helpText, onHover, onSelect }: Props =
+		$props();
+</script>
+
+{#if open}
+	<div
+		class="pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/20 px-4 pt-24 backdrop-blur-[2px]"
+	>
+		<div
+			class="pointer-events-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-border/80 bg-background/95 shadow-2xl"
+		>
+			<div
+				class="flex items-center justify-between border-b border-border/70 px-4 py-3"
+			>
+				<p
+					class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+				>
+					Threads
+				</p>
+				<p class="text-xs text-muted-foreground">{helpText}</p>
+			</div>
+
+			<div class="max-h-[min(70vh,32rem)] overflow-y-auto p-2">
+				{#each threads as thread (`${thread.sessionId}:${thread.threadId}`)}
+					<button
+						type="button"
+						class={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+							selectedKey === recentThreadKey(thread.sessionId, thread.threadId)
+								? "bg-accent text-accent-foreground shadow-sm"
+								: "text-foreground/85 hover:bg-accent/70 hover:text-accent-foreground"
+						}`}
+						onmouseenter={() => onHover(thread.sessionId, thread.threadId)}
+						onclick={() => onSelect(thread.sessionId, thread.threadId)}
+					>
+						<SessionStatus
+							status={thread.sessionStatus}
+							showLabel={false}
+							class="mt-0.5 shrink-0"
+						/>
+						<span class="min-w-0 flex-1">
+							<span class="block truncate text-sm font-medium">
+								{thread.threadName || "New Thread"}
+							</span>
+							<span class="mt-1 block truncate text-xs text-current/60">
+								{thread.lastMessage?.trim() ||
+									thread.sessionName ||
+									"New Session"}
+							</span>
+						</span>
+					</button>
+				{/each}
+			</div>
+		</div>
+	</div>
+{/if}

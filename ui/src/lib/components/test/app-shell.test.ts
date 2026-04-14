@@ -98,3 +98,15 @@ test("app shell re-syncs the desktop pane state when the selected session change
 		/if \(!sessionView\.desktopSidebarOpen && !paneCollapsed\) \{\s*desktopSidebarPane\.collapse\(\);/,
 	);
 });
+
+test("app shell renders the extracted keyboard shortcut controller", () => {
+	const source = readAppShellSource();
+
+	assert.match(
+		source,
+		/import AppKeyboardShortcuts from "\$lib\/components\/app\/AppKeyboardShortcuts\.svelte";/,
+	);
+	assert.match(source, /<AppKeyboardShortcuts \/>/);
+	assert.doesNotMatch(source, /function handleWindowKeydown/);
+	assert.doesNotMatch(source, /\{#if keyboardHelpOpen\}/);
+});

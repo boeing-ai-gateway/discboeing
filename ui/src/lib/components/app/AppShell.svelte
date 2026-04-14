@@ -2,6 +2,7 @@
 	import { onDestroy } from "svelte";
 	import type { PaneAPI } from "paneforge";
 	import AppHeader from "$lib/components/app/AppHeader.svelte";
+	import AppKeyboardShortcuts from "$lib/components/app/AppKeyboardShortcuts.svelte";
 	import AppSidebar from "$lib/components/app/AppSidebar.svelte";
 	import SessionWorkspace from "$lib/components/app/SessionWorkspace.svelte";
 	import StartupTasksBanner from "$lib/components/app/parts/StartupTasksBanner.svelte";
@@ -213,6 +214,7 @@
 {/snippet}
 
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
+	<AppKeyboardShortcuts />
 	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
 	<StartupTasksBanner startup={app.startup} />
 
