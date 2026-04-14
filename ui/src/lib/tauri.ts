@@ -97,3 +97,24 @@ export async function openUrl(url: string): Promise<void> {
 
 	window.location.href = url;
 }
+
+export async function pickDirectory(): Promise<string | null> {
+	if (!isTauriShell()) {
+		return null;
+	}
+
+	try {
+		const { open } = await import("@tauri-apps/plugin-dialog");
+		const selection = await open({
+			directory: true,
+			multiple: false,
+		});
+
+		return typeof selection === "string" ? selection : null;
+	} catch (error) {
+		throw new Error(
+			`Failed to open the directory picker: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
+		);
+	}
+}

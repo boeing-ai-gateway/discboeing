@@ -1,6 +1,7 @@
 <script lang="ts">
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import FolderIcon from "@lucide/svelte/icons/folder";
+	import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import GithubIcon from "@lucide/svelte/icons/github";
@@ -10,6 +11,8 @@
 	import type { WorkspaceSelectionResult } from "$lib/components/app/conversation-composer.types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import { isTauriShell } from "$lib/environment";
+	import { pickDirectory } from "$lib/tauri";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
@@ -32,6 +35,8 @@
 	let hasUserSelectedWorkspace = $state(false);
 	let hasInitializedSelection = $state(false);
 	let workspaceSelectRef = $state<HTMLSelectElement | null>(null);
+	let workspaceSourceInputRef = $state<HTMLInputElement | null>(null);
+	let shouldFocusWorkspaceSourceInput = $state(false);
 
 	let workspaceValidationDebounce: ReturnType<typeof setTimeout> | null = null;
 	let workspaceValidationRequestId = 0;
@@ -88,6 +93,9 @@
 	);
 	const workspaceSuggestions = $derived.by(
 		() => sessionView.pendingWorkspaceValidation?.suggestions ?? [],
+	);
+	const showLocalDirectoryPicker = $derived.by(
+		() => isTauriShell() && workspaceSourceType === "local",
 	);
 
 	function shortenHomePath(path: string): string {
@@ -151,11 +159,18 @@
 		workspaceSuggestionsCloseTimeout = null;
 	}
 
-	function focusWorkspaceSourceInput() {
-		const input = document.getElementById(
-			"session-setup-source-inline",
-		) as HTMLInputElement | null;
-		input?.focus();
+	function focusWorkspaceSourceInput(): boolean {
+		const input = workspaceSourceInputRef;
+		if (!input || input.getClientRects().length === 0 || input.disabled) {
+			return false;
+		}
+
+		input.focus({ preventScroll: true });
+		return document.activeElement === input;
+	}
+
+	function requestWorkspaceSourceInputFocus() {
+		shouldFocusWorkspaceSourceInput = true;
 	}
 
 	function resetToWorkspaceDropdown() {
@@ -212,9 +227,7 @@
 
 		if (nextOption === "local-directory" || nextOption === "git-repo") {
 			sessionView.setPendingWorkspaceSourceInput("");
-			void tick().then(() => {
-				focusWorkspaceSourceInput();
-			});
+			requestWorkspaceSourceInputFocus();
 			return;
 		}
 
@@ -295,6 +308,26 @@
 	function handleWorkspaceSourceFocus() {
 		clearWorkspaceSuggestionsCloseTimeout();
 		showWorkspaceSuggestions = true;
+	}
+
+	async function handleLocalDirectoryPickerClick() {
+		try {
+			const selectedDirectory = await pickDirectory();
+			if (!selectedDirectory) {
+				requestWorkspaceSourceInputFocus();
+				return;
+			}
+
+			handleWorkspaceSourceInputChange(selectedDirectory);
+			requestWorkspaceSourceInputFocus();
+		} catch (error) {
+			sessionView.setPendingWorkspaceSetupMessage(
+				error instanceof Error
+					? error.message
+					: `Failed to open the directory picker: ${String(error)}`,
+			);
+			requestWorkspaceSourceInputFocus();
+		}
 	}
 
 	function handleWorkspaceSourceBlur() {
@@ -562,7 +595,45 @@
 			syncPendingWorkspaceSelection();
 			syncPendingWorkspaceBranch();
 			scheduleWorkspaceValidation();
+			if (requiresSourceInput) {
+				requestWorkspaceSourceInputFocus();
+			}
 		})();
+	});
+
+	$effect(() => {
+		if (!requiresSourceInput || !shouldFocusWorkspaceSourceInput) {
+			return;
+		}
+
+		let cancelled = false;
+		let attemptCount = 0;
+
+		const tryFocus = () => {
+			if (cancelled) {
+				return;
+			}
+
+			attemptCount += 1;
+			if (focusWorkspaceSourceInput() || attemptCount >= 4) {
+				shouldFocusWorkspaceSourceInput = false;
+				return;
+			}
+
+			requestAnimationFrame(() => {
+				window.setTimeout(tryFocus, 0);
+			});
+		};
+
+		void tick().then(() => {
+			requestAnimationFrame(() => {
+				window.setTimeout(tryFocus, 0);
+			});
+		});
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	onDestroy(() => {
@@ -610,22 +681,42 @@
 
 	{#if requiresSourceInput}
 		<div class="relative {fullWidth ? 'flex-1' : ''}">
-			<Input
-				id="session-setup-source-inline"
-				class="h-8 {fullWidth ? 'w-full' : 'w-[320px]'} min-w-0 text-xs"
-				value={sessionView.pendingWorkspaceSourceInput}
-				placeholder={workspaceSourceType === "local"
-					? "~/projects/my-app"
-					: "https://github.com/org/repo or org/repo"}
-				onfocus={handleWorkspaceSourceFocus}
-				onblur={handleWorkspaceSourceBlur}
-				oninput={(event) => {
-					handleWorkspaceSourceInputChange(
-						(event.currentTarget as HTMLInputElement).value,
-					);
-				}}
-				onkeydown={handleSourceKeydown}
-			/>
+			<div class="flex items-center gap-1.5">
+				<Input
+					id="session-setup-source-inline"
+					bind:ref={workspaceSourceInputRef}
+					class="h-8 {fullWidth
+						? 'w-full'
+						: 'w-[320px]'} min-w-0 flex-1 text-xs"
+					value={sessionView.pendingWorkspaceSourceInput}
+					placeholder={workspaceSourceType === "local"
+						? "~/projects/my-app"
+						: "https://github.com/org/repo or org/repo"}
+					onfocus={handleWorkspaceSourceFocus}
+					onblur={handleWorkspaceSourceBlur}
+					oninput={(event) => {
+						handleWorkspaceSourceInputChange(
+							(event.currentTarget as HTMLInputElement).value,
+						);
+					}}
+					onkeydown={handleSourceKeydown}
+				/>
+
+				{#if showLocalDirectoryPicker}
+					<InputGroupButton
+						type="button"
+						size="icon-sm"
+						variant="ghost"
+						aria-label="Choose local directory"
+						title="Choose local directory"
+						onclick={() => {
+							void handleLocalDirectoryPickerClick();
+						}}
+					>
+						<FolderOpenIcon class="size-4" />
+					</InputGroupButton>
+				{/if}
+			</div>
 
 			{#if showWorkspaceSuggestions && workspaceSuggestions.length > 0}
 				<div
@@ -657,7 +748,7 @@
 	{:else}
 		<NativeSelect
 			id="session-setup-workspace-inline"
-			ref={workspaceSelectRef}
+			bind:ref={workspaceSelectRef}
 			class="h-8 {fullWidth ? 'w-full' : 'w-[320px]'} min-w-0 text-xs"
 			value={sessionView.pendingWorkspaceOption}
 			disabled={loadingWorkspaces}
