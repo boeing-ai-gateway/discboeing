@@ -21,12 +21,10 @@ import (
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
-// maxOutputLen is the maximum number of characters returned inline to the LLM.
-// Outputs longer than this are written to a file and truncated.
-const maxOutputLen = 30_000
-
-// previewLen is the number of characters shown inline when output is spilled.
-const previewLen = 5_000
+const (
+	maxOutputLines = 2000
+	maxOutputBytes = 50 * 1024
+)
 
 // fileRecord stores the mtime and size of a file at the time it was last read
 // via the Read tool. It is used to enforce the read-before-write invariant.
@@ -475,32 +473,39 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 	}
 }
 
-// limitOutput checks whether a successful TextOutput exceeds maxOutputLen.
+// limitOutput checks whether a successful TextOutput exceeds the model-facing
+// inline limits.
 // If it does, the full content is written to a file and the inline value is
 // replaced with a short preview plus a path to the full output.
 func (e *Executor) limitOutput(toolCtx *thread.ToolContext, call message.ToolCallPart, result thread.ToolExecuteResult) thread.ToolExecuteResult {
+	if call.ToolName == "Read" {
+		return result
+	}
 	to, ok := result.Result.Output.(message.TextOutput)
-	if !ok || len(to.Value) <= maxOutputLen {
+	if !ok {
+		return result
+	}
+	preview, truncated := truncateTextOutput(to.Value)
+	if !truncated {
 		return result
 	}
 
 	outPath, writeErr := e.spillToFile(toolCtx, call, to.Value)
 
-	preview := to.Value[:previewLen]
-	var truncated string
+	var text string
 	if writeErr != nil {
-		truncated = fmt.Sprintf(
-			"[Output too long (%d chars). Could not write to file: %v]\n\n%s\n\n[...truncated]",
-			len(to.Value), writeErr, preview,
+		text = fmt.Sprintf(
+			"%s\n\nThe tool call succeeded but the output was truncated. Could not write the full output to a file: %v",
+			preview, writeErr,
 		)
 	} else {
-		truncated = fmt.Sprintf(
-			"[Output too long (%d chars). Full output written to: %s]\n\n%s\n\n[...truncated — read %s for the full output]",
-			len(to.Value), outPath, preview, outPath,
+		text = fmt.Sprintf(
+			"%s\n\nThe tool call succeeded but the output was truncated. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.",
+			preview, outPath,
 		)
 	}
 
-	result.Result.Output = message.TextOutput{Value: truncated}
+	result.Result.Output = message.TextOutput{Value: text}
 	return result
 }
 
@@ -597,6 +602,42 @@ func errorResult(call message.ToolCallPart, msg string) message.ToolResultPart {
 // errResult wraps errorResult in a ToolExecuteResult.
 func errResult(call message.ToolCallPart, msg string) thread.ToolExecuteResult {
 	return thread.ToolExecuteResult{Result: errorResult(call, msg)}
+}
+
+func truncateTextOutput(text string) (string, bool) {
+	lines := strings.Split(text, "\n")
+	totalBytes := len(text)
+	if len(lines) <= maxOutputLines && totalBytes <= maxOutputBytes {
+		return text, false
+	}
+
+	out := make([]string, 0, min(len(lines), maxOutputLines))
+	bytes := 0
+	hitBytes := false
+	for i, line := range lines {
+		if i >= maxOutputLines {
+			break
+		}
+		size := len(line)
+		if i > 0 {
+			size++
+		}
+		if bytes+size > maxOutputBytes {
+			hitBytes = true
+			break
+		}
+		out = append(out, line)
+		bytes += size
+	}
+
+	removed := len(lines) - len(out)
+	unit := "lines"
+	if hitBytes {
+		removed = totalBytes - bytes
+		unit = "bytes"
+	}
+
+	return fmt.Sprintf("%s\n\n...%d %s truncated...", strings.Join(out, "\n"), removed, unit), true
 }
 
 // unmarshalInput decodes the tool call input JSON into dst.

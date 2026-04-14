@@ -186,6 +186,87 @@ func TestRead_SVGReturnsTextContent(t *testing.T) {
 	}
 }
 
+func TestRead_DefaultsToFirst2000Lines(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "many-lines.txt")
+	lines := make([]string, 0, 2500)
+	for i := range 2500 {
+		lines = append(lines, fmt.Sprintf("line%d", i+1))
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{"file_path": path})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "1→line1") {
+		t.Fatalf("expected first line in output, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "2000→line2000") {
+		t.Fatalf("expected line 2000 in output, got %q", text.Value)
+	}
+	if strings.Contains(text.Value, "2001→line2001") {
+		t.Fatalf("did not expect line 2001 in default output, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=2001 to continue") {
+		t.Fatalf("expected continuation hint, got %q", text.Value)
+	}
+}
+
+func TestRead_OffsetBeyondEOFReturnsError(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "short.txt")
+	if err := os.WriteFile(path, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeReadRaw(t, e, nil, map[string]any{
+		"file_path": path,
+		"offset":    5,
+	})
+
+	errOut, ok := output.(message.ErrorTextOutput)
+	if !ok {
+		t.Fatalf("expected ErrorTextOutput, got %T", output)
+	}
+	if !strings.Contains(errOut.Value, "offset 5 is out of range for this file (3 lines)") {
+		t.Fatalf("expected out-of-range message, got %q", errOut.Value)
+	}
+}
+
+func TestRead_TruncatesLongLinesAndCapsBytes(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "large.txt")
+	longLine := strings.Repeat("x", 3000)
+	lines := make([]string, 0, 40)
+	for range 40 {
+		lines = append(lines, longLine)
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{"file_path": path})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "(line truncated to 2000 chars)") {
+		t.Fatalf("expected long-line truncation marker, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Output capped at 50 KB") {
+		t.Fatalf("expected byte-cap marker, got %q", text.Value)
+	}
+}
+
 func TestRead_PDFWithSupportedModelReturnsMultimodalContent(t *testing.T) {
 	cwd := t.TempDir()
 	pdfPath := filepath.Join(cwd, "sample.pdf")

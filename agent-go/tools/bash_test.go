@@ -243,6 +243,27 @@ func TestBash_Timeout(t *testing.T) {
 	}
 }
 
+func TestBash_LargeOutputUsesOpenCodeStyleTruncation(t *testing.T) {
+	skipOnWindows(t)
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+
+	out, ok := runBash(t, e, map[string]any{
+		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+	})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "...") || !strings.Contains(out, "truncated") {
+		t.Fatalf("expected truncation marker, got: %q", out)
+	}
+	if !strings.Contains(out, "The tool call succeeded but the output was truncated.") {
+		t.Fatalf("expected spill notice, got: %q", out)
+	}
+	if !strings.Contains(out, "Use Grep to search the full content or Read with offset/limit") {
+		t.Fatalf("expected follow-up guidance, got: %q", out)
+	}
+}
+
 // TestBash_BackgroundReturnsPIDAndLogPath verifies the immediate response for a background command.
 func TestBash_SyncCommandWithShellBackgroundingReturnsPromptly(t *testing.T) {
 	skipOnWindows(t)

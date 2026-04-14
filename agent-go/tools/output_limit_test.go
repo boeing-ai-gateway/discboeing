@@ -33,20 +33,6 @@ func runTool(t *testing.T, e *Executor, toolName string, input map[string]any) (
 	return "", false
 }
 
-// bigFile writes n lines of 30 chars each to path and returns the full content.
-func bigFile(t *testing.T, path string, lines int) string {
-	t.Helper()
-	var b strings.Builder
-	for range lines {
-		b.WriteString(strings.Repeat("x", 30) + "\n")
-	}
-	content := b.String()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return content
-}
-
 // TestLimitOutput_ShortOutput verifies output within the limit passes through unchanged.
 func TestLimitOutput_ShortOutput(t *testing.T) {
 	cwd := t.TempDir()
@@ -66,50 +52,39 @@ func TestLimitOutput_ShortOutput(t *testing.T) {
 	}
 }
 
-// TestLimitOutput_LongOutputTruncated verifies output exceeding maxOutputLen is
+// TestLimitOutput_LongOutputTruncated verifies output exceeding the inline caps is
 // truncated and the full content is written to a file.
 func TestLimitOutput_LongOutputTruncated(t *testing.T) {
-	cwd := t.TempDir()
-	// 3_000 lines × ~37 chars with line numbers > maxOutputLen (30_000).
-	bigFile(t, filepath.Join(cwd, "big.txt"), 3_000)
-
-	e := New(cwd, t.TempDir(), t.Name())
-	out, ok := runTool(t, e, "Read", map[string]any{"file_path": "big.txt"})
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	out, ok := runTool(t, e, "Bash", map[string]any{
+		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
-	if !strings.Contains(out, "Output too long") {
+	if !strings.Contains(out, "The tool call succeeded but the output was truncated.") {
 		t.Error("expected truncation notice in output")
 	}
-	if !strings.Contains(out, "Full output written to") {
+	if !strings.Contains(out, "Full output saved to") {
 		t.Error("expected file path in truncation notice")
 	}
 	if !strings.Contains(out, "truncated") {
 		t.Error("expected truncation footer in output")
 	}
-	if len(out) >= maxOutputLen {
-		t.Errorf("truncated output length %d should be < maxOutputLen %d", len(out), maxOutputLen)
+	if len(out) > maxOutputBytes+1024 {
+		t.Errorf("truncated output length %d should stay near the inline cap %d", len(out), maxOutputBytes)
 	}
 }
 
 // TestLimitOutput_SpillFileContainsFullOutput verifies the spill file holds the
 // complete original content, including content beyond the inline preview.
 func TestLimitOutput_SpillFileContainsFullOutput(t *testing.T) {
-	cwd := t.TempDir()
 	needle := "UNIQUE_NEEDLE_CONTENT"
 
-	// Put the needle past the previewLen so it won't appear inline.
-	var b strings.Builder
-	for range 2_900 {
-		b.WriteString(strings.Repeat("y", 30) + "\n")
-	}
-	b.WriteString(needle + "\n")
-	if err := os.WriteFile(filepath.Join(cwd, "big.txt"), []byte(b.String()), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	e := New(cwd, t.TempDir(), t.Name())
-	out, ok := runTool(t, e, "Read", map[string]any{"file_path": "big.txt"})
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	out, ok := runTool(t, e, "Bash", map[string]any{
+		"command": "i=1; while [ \"$i\" -le 2500 ]; do echo line-$i; i=$((i+1)); done; echo " + needle,
+	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
@@ -118,12 +93,12 @@ func TestLimitOutput_SpillFileContainsFullOutput(t *testing.T) {
 	}
 
 	// Extract the spill file path from the message.
-	const marker = "Full output written to: "
+	const marker = "Full output saved to: "
 	_, after, ok := strings.Cut(out, marker)
 	if !ok {
 		t.Fatalf("could not find spill file path in output: %s", out)
 	}
-	spillPath := strings.TrimSpace(strings.SplitN(after, "]", 2)[0])
+	spillPath := strings.TrimSpace(strings.SplitN(after, "\n", 2)[0])
 
 	spillData, err := os.ReadFile(spillPath)
 	if err != nil {
@@ -137,13 +112,12 @@ func TestLimitOutput_SpillFileContainsFullOutput(t *testing.T) {
 // TestLimitOutput_SpillPathUnderDataDir verifies spill files land in
 // threads/{threadID}/output/ under the configured data directory.
 func TestLimitOutput_SpillPathUnderDataDir(t *testing.T) {
-	cwd := t.TempDir()
-	bigFile(t, filepath.Join(cwd, "big.txt"), 3_000)
-
 	threadID := "my-thread"
 	dataDir := t.TempDir()
-	e := New(cwd, dataDir, threadID)
-	out, ok := runTool(t, e, "Read", map[string]any{"file_path": "big.txt"})
+	e := New(t.TempDir(), dataDir, threadID)
+	out, ok := runTool(t, e, "Bash", map[string]any{
+		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
@@ -157,14 +131,14 @@ func TestLimitOutput_SpillPathUnderDataDir(t *testing.T) {
 // TestLimitOutput_AppliesToBash verifies that long Bash output is also truncated.
 func TestLimitOutput_AppliesToBash(t *testing.T) {
 	e := New(t.TempDir(), t.TempDir(), t.Name())
-	// Generate > maxOutputLen chars via bash (printf repeats a char N times).
+	// Generate output beyond the inline caps.
 	out, ok := runTool(t, e, "Bash", map[string]any{
-		"command": "python3 -c \"print('a' * 35000)\"",
+		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
-	if !strings.Contains(out, "Output too long") {
+	if !strings.Contains(out, "The tool call succeeded but the output was truncated.") {
 		t.Error("expected truncation notice for long Bash output")
 	}
 }

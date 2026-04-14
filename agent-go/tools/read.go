@@ -1,9 +1,11 @@
 package tools
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,6 +18,15 @@ import (
 	"github.com/obot-platform/discobot/agent-go/thread"
 	"github.com/obot-platform/discobot/modelsdev"
 )
+
+const (
+	defaultReadLimit = 2000
+	maxReadLineLen   = 2000
+	maxReadBytes     = 50 * 1024
+	readFooterBytes  = 128
+)
+
+var maxReadLineSuffix = fmt.Sprintf("... (line truncated to %d chars)", maxReadLineLen)
 
 type readInput struct {
 	FilePath string `json:"file_path"`
@@ -47,34 +58,26 @@ func (e *Executor) executeRead(toolCtx *thread.ToolContext, call message.ToolCal
 		return errResult(call, fmt.Sprintf("%s is a directory", input.FilePath)), nil
 	}
 
-	const maxBytes = 10 * 1024 * 1024 // 10 MB
-	if info.Size() > maxBytes {
-		return errResult(call, fmt.Sprintf("file too large (%d bytes, max %d)", info.Size(), maxBytes)), nil
-	}
-
-	data, err := os.ReadFile(path)
+	sample, err := readFileSample(path, 512)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
 
-	// Record the mtime+size so Write/Edit know the file was read.
-	e.recordFileRead(path, info)
-
-	mediaType := detectReadMediaType(path, data)
+	mediaType := detectReadMediaType(path, sample)
 	if shouldReadFileAsText(mediaType) {
-		content := string(data)
-
-		// Apply line offset and limit if requested.
-		if input.Offset > 0 || input.Limit > 0 {
-			content = sliceLines(content, input.Offset, input.Limit)
+		output, err := readTextOutput(path, input.Offset, input.Limit)
+		if err != nil {
+			return errResult(call, err.Error()), nil
 		}
-
-		// Format output with line numbers (matching Claude Code's cat -n style).
-		output := addLineNumbers(content, maxOf(input.Offset, 1))
-
+		e.recordFileRead(path, info)
 		return textResult(call, output), nil
 	}
 	if strings.HasPrefix(mediaType, "image/") {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return errResult(call, err.Error()), nil
+		}
+		e.recordFileRead(path, info)
 		if e.modelSupportsInputModality(toolCtx, "image") {
 			return contentResult(call,
 				message.ContentTextItem{
@@ -90,6 +93,11 @@ func (e *Executor) executeRead(toolCtx *thread.ToolContext, call message.ToolCal
 	}
 
 	if mediaType == "application/pdf" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return errResult(call, err.Error()), nil
+		}
+		e.recordFileRead(path, info)
 		pageSelection, err := parsePDFPageSelection(input.Pages)
 		if err != nil {
 			return errResult(call, err.Error()), nil
@@ -151,16 +159,11 @@ func (e *Executor) executeRead(toolCtx *thread.ToolContext, call message.ToolCal
 		return textResult(call, fmt.Sprintf("Read PDF file %q (%d bytes)%s. Current model %s does not advertise PDF input support, so returning metadata only.%s", input.FilePath, info.Size(), pageCountDetails, toolContextModelRef(toolCtx), pageDetails)), nil
 	}
 
-	content := string(data)
-
-	// Apply line offset and limit if requested.
-	if input.Offset > 0 || input.Limit > 0 {
-		content = sliceLines(content, input.Offset, input.Limit)
+	output, err := readTextOutput(path, input.Offset, input.Limit)
+	if err != nil {
+		return errResult(call, err.Error()), nil
 	}
-
-	// Format output with line numbers (matching Claude Code's cat -n style).
-	output := addLineNumbers(content, maxOf(input.Offset, 1))
-
+	e.recordFileRead(path, info)
 	return textResult(call, output), nil
 }
 
@@ -439,27 +442,6 @@ func trailingNumberBeforeExtension(path string) (int, bool) {
 	return n, true
 }
 
-// sliceLines extracts lines [offset, offset+limit) from content.
-// offset is 1-based; 0 means start from beginning.
-func sliceLines(content string, offset, limit int) string {
-	lines := strings.Split(content, "\n")
-
-	start := 0
-	if offset > 1 {
-		start = offset - 1
-	}
-	if start >= len(lines) {
-		return ""
-	}
-
-	end := len(lines)
-	if limit > 0 && start+limit < end {
-		end = start + limit
-	}
-
-	return strings.Join(lines[start:end], "\n")
-}
-
 // addLineNumbers prefixes each line with its line number (cat -n style).
 // startLine is the 1-based line number of the first line.
 func addLineNumbers(content string, startLine int) string {
@@ -484,4 +466,111 @@ func maxOf(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type textReadResult struct {
+	lines  []string
+	count  int
+	offset int
+	more   bool
+	cut    bool
+}
+
+func readTextOutput(path string, offset, limit int) (string, error) {
+	result, err := readTextFile(path, maxOf(offset, 1), limit)
+	if err != nil {
+		return "", err
+	}
+	if result.count < result.offset && (result.count != 0 || result.offset != 1) {
+		return "", fmt.Errorf("offset %d is out of range for this file (%d lines)", result.offset, result.count)
+	}
+
+	output := addLineNumbers(strings.Join(result.lines, "\n"), result.offset)
+	last := result.offset + len(result.lines) - 1
+	next := last + 1
+
+	switch {
+	case result.cut:
+		output += fmt.Sprintf("\n\n(Output capped at %d KB. Showing lines %d-%d. Use offset=%d to continue.)", maxReadBytes/1024, result.offset, last, next)
+	case result.more:
+		output += fmt.Sprintf("\n\n(Showing lines %d-%d of %d. Use offset=%d to continue.)", result.offset, last, result.count, next)
+	default:
+		output += fmt.Sprintf("\n\n(End of file - total %d lines)", result.count)
+	}
+
+	return output, nil
+}
+
+func readTextFile(path string, offset, limit int) (textReadResult, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return textReadResult{}, err
+	}
+	defer file.Close()
+
+	if limit <= 0 {
+		limit = defaultReadLimit
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+
+	start := offset - 1
+	lines := make([]string, 0, min(limit, 128))
+	bytesRead := 0
+	count := 0
+	more := false
+	cut := false
+
+	for scanner.Scan() {
+		count++
+		if count <= start {
+			continue
+		}
+		if len(lines) >= limit {
+			more = true
+			continue
+		}
+
+		line := scanner.Text()
+		if len(line) > maxReadLineLen {
+			line = line[:maxReadLineLen] + maxReadLineSuffix
+		}
+
+		numbered := fmt.Sprintf("%6d→%s\n", count, line)
+		if bytesRead+len(numbered) > maxReadBytes-readFooterBytes {
+			cut = true
+			more = true
+			break
+		}
+
+		lines = append(lines, line)
+		bytesRead += len(numbered)
+	}
+	if err := scanner.Err(); err != nil {
+		return textReadResult{}, err
+	}
+
+	return textReadResult{
+		lines:  lines,
+		count:  count,
+		offset: offset,
+		more:   more,
+		cut:    cut,
+	}, nil
+}
+
+func readFileSample(path string, size int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	buf := make([]byte, size)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return buf[:n], nil
 }
