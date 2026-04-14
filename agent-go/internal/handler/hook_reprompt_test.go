@@ -309,4 +309,17 @@ exit 1
 	}
 
 	close(release)
+	select {
+	case queuedReq := <-reqCh:
+		part, ok := queuedReq.UserParts[0].(message.UITextPart)
+		if !ok {
+			t.Fatalf("expected queued UITextPart, got %T", queuedReq.UserParts[0])
+		}
+		if !strings.Contains(part.Text, "### Hook failed: Go Check") {
+			t.Fatalf("queued prompt text = %q, want hook failure prompt", part.Text)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for queued hook re-prompt to start")
+	}
+	waitForCompletionDone(t, cm, "thread-1")
 }
