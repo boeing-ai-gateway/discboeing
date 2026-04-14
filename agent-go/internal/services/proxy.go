@@ -153,8 +153,14 @@ func connectionRefusedHTML(port int) string {
     retries++;
     document.getElementById('status').textContent = 'Retry #' + retries + '...';
     try {
-      const res = await fetch(window.location.href, { method: 'HEAD' });
-      if (res.ok) { window.location.reload(); return; }
+      const res = await fetch(window.location.href, {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+      if (res.status !== 502 && res.status !== 503) {
+        window.location.reload();
+        return;
+      }
     } catch {}
     setTimeout(check, 2000);
   }
