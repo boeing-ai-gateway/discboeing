@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -410,6 +411,57 @@ func TestBash_RequestScopedEnvOverridesProcessEnv(t *testing.T) {
 	}
 	if !strings.Contains(out, "→from-request") {
 		t.Errorf("expected request-scoped env var to override process env, got: %q", out)
+	}
+}
+
+func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
+	skipOnWindows(t)
+
+	cwd := t.TempDir()
+	envDir := filepath.Join(cwd, ".discobot")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	envPath := filepath.Join(envDir, "env")
+	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_DYNAMIC=first\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(first): %v", err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	e.SetEnvSnapshot(func() map[string]string {
+		return workspaceenv.FileSnapshot(cwd)
+	})
+
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC}\""})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "→first") {
+		t.Fatalf("expected first workspace env value, got: %q", out)
+	}
+
+	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_DYNAMIC=second\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(second): %v", err)
+	}
+
+	out, ok = runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC}\""})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "→second") {
+		t.Fatalf("expected updated workspace env value, got: %q", out)
+	}
+
+	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_OTHER=present\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(third): %v", err)
+	}
+
+	out, ok = runBash(t, e, map[string]any{"command": "printf '%s|%s' \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC:-}\" \"${DISCOBOT_BASH_ENV_TEST_OTHER:-}\""})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "→|present") {
+		t.Fatalf("expected removed workspace env key to be unset, got: %q", out)
 	}
 }
 

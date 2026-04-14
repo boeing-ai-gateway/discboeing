@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 )
 
 // subscriber receives live output events from a managed service.
@@ -207,7 +209,7 @@ func (mgr *Manager) StartService(workspaceRoot, serviceID string) (*ServiceInfo,
 	clearOutput(serviceID)
 
 	// Spawn the service with the visible environment snapshot from this request.
-	requestEnv := mgr.visibleEnvSnapshot()
+	requestEnv := mgr.visibleEnvSnapshot(workspaceRoot)
 	mgr.spawnService(workspaceRoot, *svcTemplate, requestEnv)
 
 	svc := ServiceInfo{
@@ -407,31 +409,23 @@ func buildServiceCommand(path string) (string, []string) {
 	}
 }
 
-func (mgr *Manager) visibleEnvSnapshot() map[string]string {
+func (mgr *Manager) visibleEnvSnapshot(workspaceRoot string) map[string]string {
+	env := workspaceenv.FileSnapshot(workspaceRoot)
+	if env == nil {
+		env = map[string]string{}
+	}
 	mgr.mu.RLock()
 	fn := mgr.envSnapshot
 	mgr.mu.RUnlock()
 	if fn == nil {
-		return nil
+		return env
 	}
-	return fn()
+	maps.Copy(env, fn())
+	return env
 }
 
 func mergedEnv(requestEnv map[string]string) []string {
-	env := make(map[string]string, len(os.Environ())+len(requestEnv))
-	for _, entry := range os.Environ() {
-		key, value, ok := strings.Cut(entry, "=")
-		if !ok {
-			continue
-		}
-		env[key] = value
-	}
-	maps.Copy(env, requestEnv)
-	out := make([]string, 0, len(env))
-	for key, value := range env {
-		out = append(out, key+"="+value)
-	}
-	return out
+	return workspaceenv.List(workspaceenv.MergeProcessSnapshot(requestEnv))
 }
 
 func parseServiceShebang(path string) (string, []string) {

@@ -175,6 +175,86 @@ printf 'VISIBLE_FROM_OS=%%s\n' "${VISIBLE_FROM_OS:-}" >> %q
 	waitForServiceStopped(t, mgr, workspaceRoot, serviceID)
 }
 
+func TestStartServiceReloadsWorkspaceEnvOnEachLaunch(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	outputPath := filepath.Join(workspaceRoot, "workspace-env.txt")
+	t.Setenv("HOME", homeDir)
+
+	envDir := filepath.Join(workspaceRoot, ".discobot")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(envDir) failed: %v", err)
+	}
+	envPath := filepath.Join(envDir, "env")
+	if err := os.WriteFile(envPath, []byte("WORKSPACE_DYNAMIC=first\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(first env) failed: %v", err)
+	}
+
+	servicesDir := filepath.Join(workspaceRoot, ServicesDir)
+	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(servicesDir) failed: %v", err)
+	}
+
+	serviceID := "workspace-env-test"
+	scriptPath := filepath.Join(servicesDir, serviceID+".sh")
+	script := fmt.Sprintf(`#!/bin/sh
+set -eu
+printf 'WORKSPACE_DYNAMIC=%%s\n' "${WORKSPACE_DYNAMIC:-}" > %q
+`, outputPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) failed: %v", err)
+	}
+
+	mgr := NewManager()
+
+	if _, code, err := mgr.StartService(workspaceRoot, serviceID); err != nil {
+		t.Fatalf("StartService(first) failed: code=%q err=%v", code, err)
+	}
+	waitForServiceStopped(t, mgr, workspaceRoot, serviceID)
+
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile(first output) failed: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, "WORKSPACE_DYNAMIC=first") {
+		t.Fatalf("first launch output = %q, want first workspace env value", got)
+	}
+
+	if err := os.WriteFile(envPath, []byte("WORKSPACE_DYNAMIC=second\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(second env) failed: %v", err)
+	}
+
+	if _, code, err := mgr.StartService(workspaceRoot, serviceID); err != nil {
+		t.Fatalf("StartService(second) failed: code=%q err=%v", code, err)
+	}
+	waitForServiceStopped(t, mgr, workspaceRoot, serviceID)
+
+	data, err = os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile(second output) failed: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, "WORKSPACE_DYNAMIC=second") {
+		t.Fatalf("second launch output = %q, want updated workspace env value", got)
+	}
+
+	if err := os.WriteFile(envPath, []byte("WORKSPACE_OTHER=present\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(third env) failed: %v", err)
+	}
+
+	if _, code, err := mgr.StartService(workspaceRoot, serviceID); err != nil {
+		t.Fatalf("StartService(third) failed: code=%q err=%v", code, err)
+	}
+	waitForServiceStopped(t, mgr, workspaceRoot, serviceID)
+
+	data, err = os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile(third output) failed: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, "WORKSPACE_DYNAMIC=") || strings.Contains(got, "WORKSPACE_DYNAMIC=second") {
+		t.Fatalf("third launch output = %q, want removed workspace env key to be unset", got)
+	}
+}
+
 func waitForServiceStopped(t *testing.T, mgr *Manager, workspaceRoot, serviceID string) {
 	t.Helper()
 

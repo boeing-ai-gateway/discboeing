@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 )
 
 // DefaultTimeout is the default hook execution timeout (15 minutes).
@@ -52,21 +54,18 @@ func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
 	cmd.Dir = opts.Cwd
 
 	// Build environment
-	env := os.Environ()
-	env = append(env, "DISCOBOT_HOOK_TYPE="+string(hook.Type))
+	env := workspaceenv.MergeProcessSnapshot(opts.Env)
+	env["DISCOBOT_HOOK_TYPE"] = string(hook.Type)
 	if opts.SessionID != "" {
-		env = append(env, "DISCOBOT_SESSION_ID="+opts.SessionID)
+		env["DISCOBOT_SESSION_ID"] = opts.SessionID
 	}
 	if opts.Cwd != "" {
-		env = append(env, "DISCOBOT_WORKSPACE="+opts.Cwd)
+		env["DISCOBOT_WORKSPACE"] = opts.Cwd
 	}
 	if len(opts.ChangedFiles) > 0 {
-		env = append(env, "DISCOBOT_CHANGED_FILES="+strings.Join(opts.ChangedFiles, " "))
+		env["DISCOBOT_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
 	}
-	for k, v := range opts.Env {
-		env = append(env, k+"="+v)
-	}
-	cmd.Env = env
+	cmd.Env = workspaceenv.List(env)
 
 	// Set process group so we can kill the entire group on timeout
 	setSysProcAttr(cmd)

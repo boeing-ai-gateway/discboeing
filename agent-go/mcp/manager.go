@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	gosdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
 
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
@@ -73,6 +75,7 @@ type serverConn struct {
 // for concurrent use after Connect returns.
 type Manager struct {
 	tokenCallback TokenCallback
+	workspaceRoot string
 
 	mu      sync.RWMutex
 	servers map[string]*serverConn
@@ -128,9 +131,10 @@ func MakeTokenCallback(serverURL, projectID string) TokenCallback {
 // NewManager creates a new Manager.
 // tokenCallback is called (possibly nil-safe to skip persistence) after each
 // successful OAuth token exchange.
-func NewManager(tokenCallback TokenCallback) *Manager {
+func NewManager(workspaceRoot string, tokenCallback TokenCallback) *Manager {
 	return &Manager{
 		tokenCallback: tokenCallback,
+		workspaceRoot: workspaceRoot,
 		servers:       make(map[string]*serverConn),
 	}
 }
@@ -192,7 +196,7 @@ func (m *Manager) connectServer(
 
 	switch cfg.Transport {
 	case "stdio":
-		transport, connectErr = buildStdioTransport(cfg)
+		transport, connectErr = buildStdioTransport(m.workspaceRoot, cfg)
 	case "http", "sse", "":
 		if cfg.URL == "" {
 			sc.setError("URL is required for HTTP/SSE transport")
@@ -258,17 +262,19 @@ func (sc *serverConn) setError(msg string) {
 }
 
 // buildStdioTransport creates a CommandTransport for a stdio MCP server.
-func buildStdioTransport(cfg sessionconfig.MCPServerConfig) (gosdkmcp.Transport, error) {
+func buildStdioTransport(workspaceRoot string, cfg sessionconfig.MCPServerConfig) (gosdkmcp.Transport, error) {
 	if cfg.Command == "" {
 		return nil, fmt.Errorf("command is required for stdio transport")
 	}
 	//nolint:gosec // Command is from user-provided .mcp.json config.
 	cmd := exec.Command(cfg.Command, cfg.Args...)
 	// Pass through current environment plus server-specific overrides.
-	cmd.Env = os.Environ()
-	for k, v := range cfg.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+	env := workspaceenv.FileSnapshot(workspaceRoot)
+	if env == nil {
+		env = map[string]string{}
 	}
+	maps.Copy(env, cfg.Env)
+	cmd.Env = workspaceenv.List(workspaceenv.MergeProcessSnapshot(env))
 	return &gosdkmcp.CommandTransport{Command: cmd}, nil
 }
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
@@ -209,48 +210,35 @@ func (e *Executor) authorizeCredentialUses(toolCallID, command, description stri
 }
 
 // getenv returns the value of the environment variable named by key.
-// It consults e.envLookup first (if set), then os.Getenv.
+// It consults e.envLookup first (if set), then the latest workspace-aware
+// environment snapshot.
 func (e *Executor) getenv(key string) string {
 	if e.envLookup != nil {
 		if v := e.envLookup(key); v != "" {
 			return v
 		}
 	}
-	return os.Getenv(key)
+	return e.currentEnv()[key]
+}
+
+func (e *Executor) currentEnv() map[string]string {
+	env := workspaceenv.ProcessSnapshot()
+	if e.envSnapshot != nil {
+		maps.Copy(env, e.envSnapshot())
+	}
+	return env
 }
 
 func (e *Executor) bashEnv() []string {
 	if len(e.bashEnvAllowlist) == 0 {
-		env := make(map[string]string, len(os.Environ()))
-		for _, entry := range os.Environ() {
-			key, value, ok := strings.Cut(entry, "=")
-			if !ok {
-				continue
-			}
-			env[key] = value
-		}
-		if e.envSnapshot != nil {
-			maps.Copy(env, e.envSnapshot())
-		}
-		out := make([]string, 0, len(env))
-		for key, value := range env {
-			out = append(out, key+"="+value)
-		}
-		return out
+		return workspaceenv.List(e.currentEnv())
 	}
 
-	requestEnv := map[string]string{}
-	if e.envSnapshot != nil {
-		requestEnv = e.envSnapshot()
-	}
+	current := e.currentEnv()
 
 	env := make([]string, 0, len(e.bashEnvAllowlist))
 	for _, key := range e.bashEnvAllowlist {
-		if value, ok := requestEnv[key]; ok {
-			env = append(env, key+"="+value)
-			continue
-		}
-		if value, ok := os.LookupEnv(key); ok {
+		if value, ok := current[key]; ok {
 			env = append(env, key+"="+value)
 		}
 	}

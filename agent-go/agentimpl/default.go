@@ -561,7 +561,7 @@ func (a *DefaultAgent) resolveMCPManager(ctx context.Context) *mcp.Manager {
 		}
 		if len(state.Servers) > 0 {
 			callback := mcp.MakeTokenCallback(a.mcpCfg.discobotServerURL, a.mcpCfg.projectID)
-			a.mcpMgr = mcp.NewManager(callback)
+			a.mcpMgr = mcp.NewManager(a.cwd, callback)
 			a.mcpMgr.Connect(ctx, state.Servers, a.mcpCfg.redirectBase, a.mcpCfg.sessionID)
 		}
 		a.mcpToken = state.ReloadToken

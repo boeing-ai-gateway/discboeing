@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,6 +25,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/middleware"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/thread"
 	"github.com/obot-platform/discobot/agent-go/tools"
@@ -61,7 +63,9 @@ func Run(cfg *config.Config) {
 		return ""
 	})
 	exec.SetEnvSnapshot(func() map[string]string {
-		return credMgr.Snapshot()
+		env := workspaceenv.FileSnapshot(cfg.AgentCwd)
+		maps.Copy(env, credMgr.Snapshot())
+		return env
 	})
 	exec.SetCredentialUseAuthorizer(func(_ string, _, _ string, uses []tools.CredentialUseBinding) error {
 		for _, use := range uses {

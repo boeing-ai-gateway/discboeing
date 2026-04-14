@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
+	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -91,13 +93,18 @@ func (m *Manager) SetEnvSnapshot(fn func() map[string]string) {
 }
 
 func (m *Manager) visibleEnvSnapshot() map[string]string {
+	env := workspaceenv.FileSnapshot(m.workspaceRoot)
+	if env == nil {
+		env = map[string]string{}
+	}
 	m.mu.Lock()
 	fn := m.envSnapshot
 	m.mu.Unlock()
 	if fn == nil {
-		return nil
+		return env
 	}
-	return fn()
+	maps.Copy(env, fn())
+	return env
 }
 
 // SetChunkEmitter configures how hook status updates are emitted as message chunks.
