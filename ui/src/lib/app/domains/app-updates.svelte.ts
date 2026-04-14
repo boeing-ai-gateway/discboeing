@@ -1,15 +1,56 @@
-import type {
-	DownloadEvent,
-	Update as TauriUpdate,
-} from "@tauri-apps/plugin-updater";
 import type { AppUpdates, UpdateStatus } from "$lib/app/app-context.types";
 import { isTauriShell } from "$lib/environment";
 import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const GITHUB_RELEASES_API_URL =
+	import.meta.env.PUBLIC_DISCOBOT_RELEASES_API_URL ?? "";
+
+type DownloadEvent =
+	| {
+			event: "Started";
+			data: {
+				contentLength?: number;
+			};
+	  }
+	| {
+			event: "Progress";
+			data: {
+				chunkLength: number;
+			};
+	  }
+	| {
+			event: "Finished";
+	  };
+
+type PendingUpdate = {
+	updateRid: number;
+	bytesRid: number | null;
+};
+
+type UpdateMetadata = {
+	rid: number;
+	currentVersion: string;
+	version: string;
+	date?: string;
+	body?: string;
+	rawJson: Record<string, unknown>;
+};
 
 type CreateAppUpdatesDomainArgs = {
 	uiStateStore: UIStateStore;
+};
+
+type GitHubReleaseAsset = {
+	name: string;
+	browser_download_url: string;
+};
+
+type GitHubRelease = {
+	prerelease: boolean;
+	draft: boolean;
+	tag_name: string;
+	assets: GitHubReleaseAsset[];
 };
 
 export function createAppUpdatesDomain(
@@ -24,6 +65,8 @@ export function createAppUpdatesDomain(
 	let ignoredUpdateVersion = $state<string | null>(
 		uiStateStore.ignoredUpdateVersion,
 	);
+	let trackPrereleases = $state(uiStateStore.trackPrereleases);
+	const canTrackPrereleases = GITHUB_RELEASES_API_URL.length > 0;
 
 	const isUpdateIgnored = $derived.by(
 		() =>
@@ -35,7 +78,7 @@ export function createAppUpdatesDomain(
 	);
 
 	let updateCheckInFlight = false;
-	let pendingUpdate: TauriUpdate | null = null;
+	let pendingUpdate: PendingUpdate | null = null;
 
 	async function closePendingUpdate(): Promise<void> {
 		if (!pendingUpdate) return;
@@ -44,7 +87,11 @@ export function createAppUpdatesDomain(
 		pendingUpdate = null;
 
 		try {
-			await update.close();
+			const { invoke } = await import("@tauri-apps/api/core");
+			await invoke("close_app_update", {
+				updateRid: update.updateRid,
+				bytesRid: update.bytesRid,
+			});
 		} catch {
 			// Ignore cleanup failures.
 		}
@@ -64,6 +111,45 @@ export function createAppUpdatesDomain(
 			availableVersion,
 			isTauri: isTauriShell(),
 		});
+	}
+
+	async function resolveUpdateEndpoint(): Promise<string | null> {
+		if (!trackPrereleases) {
+			return null;
+		}
+		if (!canTrackPrereleases) {
+			return null;
+		}
+
+		const response = await fetch(GITHUB_RELEASES_API_URL, {
+			headers: {
+				Accept: "application/vnd.github+json",
+			},
+		});
+		if (!response.ok) {
+			throw new Error(
+				`Failed to query GitHub pre-releases: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const releases = (await response.json()) as GitHubRelease[];
+		const release = releases.find(
+			(release) => release.prerelease && !release.draft,
+		);
+		if (!release) {
+			throw new Error("No GitHub pre-release is available.");
+		}
+
+		const latestJson = release.assets.find(
+			(asset) => asset.name === "latest.json",
+		);
+		if (!latestJson) {
+			throw new Error(
+				`GitHub pre-release ${release.tag_name} does not include latest.json.`,
+			);
+		}
+
+		return latestJson.browser_download_url;
 	}
 
 	$effect(() => {
@@ -94,11 +180,16 @@ export function createAppUpdatesDomain(
 		resetProgress();
 
 		try {
-			const { check } = await import("@tauri-apps/plugin-updater");
+			const { Channel, invoke } = await import("@tauri-apps/api/core");
 
 			await closePendingUpdate();
 
-			const nextUpdate = await check();
+			const nextUpdate = await invoke<UpdateMetadata | null>(
+				"check_for_app_update",
+				{
+					endpoint: await resolveUpdateEndpoint(),
+				},
+			);
 			if (!nextUpdate) {
 				availableVersion = null;
 				updateStatus = "idle";
@@ -108,14 +199,21 @@ export function createAppUpdatesDomain(
 			availableVersion = nextUpdate.version;
 
 			if (ignoredUpdateVersion === nextUpdate.version) {
-				await nextUpdate.close();
+				await invoke("close_app_update", {
+					updateRid: nextUpdate.rid,
+					bytesRid: null,
+				});
 				updateStatus = "ready";
 				return;
 			}
 
-			pendingUpdate = nextUpdate;
+			pendingUpdate = {
+				updateRid: nextUpdate.rid,
+				bytesRid: null,
+			};
 			updateStatus = "downloading";
-			await nextUpdate.download((event: DownloadEvent) => {
+			const channel = new Channel<DownloadEvent>();
+			channel.onmessage = (event: DownloadEvent) => {
 				switch (event.event) {
 					case "Started":
 						totalBytes = event.data?.contentLength ?? null;
@@ -130,7 +228,12 @@ export function createAppUpdatesDomain(
 						}
 						break;
 				}
+			};
+			const bytesRid = await invoke<number>("download_app_update", {
+				rid: nextUpdate.rid,
+				onEvent: channel,
 			});
+			pendingUpdate.bytesRid = bytesRid;
 			updateStatus = "ready";
 		} catch (error) {
 			logUpdateError("check", error);
@@ -166,6 +269,12 @@ export function createAppUpdatesDomain(
 		get showBadge() {
 			return showUpdateBadge;
 		},
+		get canTrackPrereleases() {
+			return canTrackPrereleases;
+		},
+		get trackPrereleases() {
+			return canTrackPrereleases && trackPrereleases;
+		},
 		check: async () => {
 			if (!isTauriShell()) {
 				updateStatus = "error";
@@ -186,8 +295,16 @@ export function createAppUpdatesDomain(
 			updateStatus = "installing";
 			updateError = null;
 			try {
+				if (pendingUpdate.bytesRid === null) {
+					throw new Error("Update download is not ready yet.");
+				}
+
+				const { invoke } = await import("@tauri-apps/api/core");
 				const { relaunch } = await import("@tauri-apps/plugin-process");
-				await pendingUpdate.install();
+				await invoke("install_app_update", {
+					updateRid: pendingUpdate.updateRid,
+					bytesRid: pendingUpdate.bytesRid,
+				});
 				await relaunch();
 			} catch (error) {
 				logUpdateError("install", error);
@@ -203,6 +320,19 @@ export function createAppUpdatesDomain(
 			resetProgress();
 			uiStateStore.ignoreUpdateVersion(availableVersion);
 			ignoredUpdateVersion = uiStateStore.ignoredUpdateVersion;
+		},
+		setTrackPrereleases: async (value: boolean) => {
+			if (!canTrackPrereleases) return;
+			if (trackPrereleases === value) return;
+
+			trackPrereleases = value;
+			uiStateStore.setTrackPrereleases(value);
+			await closePendingUpdate();
+			availableVersion = null;
+			updateError = null;
+			resetProgress();
+			updateStatus = "idle";
+			await checkForUpdates();
 		},
 	};
 }

@@ -796,6 +796,8 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "time",
+ "url",
 ]
 
 [[package]]

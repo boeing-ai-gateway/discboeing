@@ -260,9 +260,12 @@ export type AppUpdates = {
 	totalBytes: number | null;
 	isIgnored: boolean;
 	showBadge: boolean;
+	canTrackPrereleases: boolean;
+	trackPrereleases: boolean;
 	check: () => Promise<void>;
 	installAndRelaunch: () => Promise<void>;
 	ignore: () => void;
+	setTrackPrereleases: (value: boolean) => Promise<void>;
 };
 
 export type AppStores = {

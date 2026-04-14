@@ -1,219 +1,20 @@
-#[cfg(not(debug_assertions))]
-use std::net::TcpListener;
+mod app_updater;
+mod commands;
+mod server;
+mod tray;
+
 use std::sync::Mutex;
 
-#[cfg(not(debug_assertions))]
-use std::fs;
-#[cfg(not(debug_assertions))]
-use std::path::PathBuf;
-
-#[cfg(not(debug_assertions))]
-use tauri_plugin_shell::ShellExt;
-
-#[cfg(not(debug_assertions))]
-use rand::Rng;
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
-};
-#[cfg(not(debug_assertions))]
-use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_window_state::StateFlags;
+use tray::show_window;
 
 fn window_state_flags() -> StateFlags {
     // Save all state except decorations (we manage those ourselves)
     StateFlags::all() - StateFlags::DECORATIONS
 }
 
-struct ServerState {
-    port: u16,
-    secret: String,
-    /// Held to keep the sidecar's stdin pipe open (server exits when stdin closes).
-    #[cfg(not(debug_assertions))]
-    #[allow(dead_code)]
-    process: Option<CommandChild>,
-}
-
-#[tauri::command]
-fn get_server_port(state: tauri::State<'_, Mutex<ServerState>>) -> u16 {
-    state.lock().unwrap().port
-}
-
-#[tauri::command]
-fn get_server_secret(state: tauri::State<'_, Mutex<ServerState>>) -> String {
-    state.lock().unwrap().secret.clone()
-}
-
-#[tauri::command]
-fn save_file_to_downloads(filename: String, content: Vec<u8>) -> Result<String, String> {
-    let downloads_dir = dirs::download_dir().or_else(|| {
-        dirs::home_dir().map(|h| h.join("Downloads"))
-    }).ok_or_else(|| "Could not determine Downloads directory".to_string())?;
-    std::fs::create_dir_all(&downloads_dir)
-        .map_err(|e| format!("Failed to create Downloads directory: {}", e))?;
-    let path = downloads_dir.join(&filename);
-    std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
-    Ok(path.to_string_lossy().to_string())
-}
-
-fn show_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        #[cfg(target_os = "macos")]
-        {
-            use tauri::ActivationPolicy;
-            let _ = app.set_activation_policy(ActivationPolicy::Regular);
-        }
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
-}
-
-fn hide_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
-        #[cfg(target_os = "macos")]
-        {
-            use tauri::ActivationPolicy;
-            let _ = app.set_activation_policy(ActivationPolicy::Accessory);
-        }
-    }
-}
-
-fn toggle_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        // Check if window is visible and focused
-        let is_visible = window.is_visible().unwrap_or(false);
-        let is_focused = window.is_focused().unwrap_or(false);
-
-        if is_visible && is_focused {
-            // Window is visible and focused, hide it
-            hide_window(app);
-        } else {
-            // Window is hidden or not focused, show and focus it
-            show_window(app);
-        }
-    }
-}
-
-#[cfg(not(debug_assertions))]
-fn find_available_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .expect("Failed to bind to find available port")
-        .local_addr()
-        .expect("Failed to get local address")
-        .port()
-}
-
-#[cfg(not(debug_assertions))]
-fn generate_secret() -> String {
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let mut rng = rand::rng();
-    (0..32)
-        .map(|_| {
-            let idx = rng.random_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
-}
-
-#[cfg(not(debug_assertions))]
-fn get_log_file_path() -> Result<PathBuf, String> {
-    // Try XDG_STATE_HOME first, fallback to XDG_DATA_HOME, then ~/.local/state
-    let state_dir = dirs::state_dir()
-        .or_else(|| dirs::data_dir())
-        .ok_or_else(|| "Could not determine state directory".to_string())?;
-
-    let log_dir = state_dir.join("discobot").join("logs");
-
-    // Create the directory if it doesn't exist
-    fs::create_dir_all(&log_dir).map_err(|e| format!("Failed to create log directory: {}", e))?;
-
-    Ok(log_dir.join("server.log"))
-}
-
-#[cfg(not(debug_assertions))]
-fn start_server(
-    app: &tauri::AppHandle,
-    port: u16,
-    ssh_port: u16,
-    secret: &str,
-) -> Result<CommandChild, String> {
-    let log_path = get_log_file_path()?;
-
-    #[allow(unused_mut)]
-    let mut sidecar = app
-        .shell()
-        .sidecar("discobot-server")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .env("PORT", port.to_string())
-        .env("SSH_PORT", ssh_port.to_string())
-        .env("CORS_ORIGINS", "http://tauri.localhost,tauri://localhost")
-        .env("DISCOBOT_SECRET", secret)
-        .env("TAURI", "true")
-        .env("SUGGESTIONS_ENABLED", "true")
-        .env("STDIN_KEEPALIVE", "true")
-        .env(
-            "LOG_FILE",
-            log_path.to_string_lossy().to_string(),
-        );
-
-    // Check for bundled VZ resources (macOS only)
-    #[cfg(target_os = "macos")]
-    {
-        use tauri::Manager;
-        if let Ok(resource_dir) = app.path().resource_dir() {
-            let vz_dir = resource_dir.join("vz");
-            let kernel_path = vz_dir.join("vmlinux");
-            let rootfs_path = vz_dir.join("discobot-rootfs.squashfs");
-
-            // Check if both files exist
-            if kernel_path.exists() && rootfs_path.exists() {
-                println!("Found bundled VZ resources:");
-                println!("  Kernel: {}", kernel_path.display());
-                println!("  Rootfs: {}", rootfs_path.display());
-
-                sidecar = sidecar
-                    .env("VZ_KERNEL_PATH", kernel_path.to_string_lossy().to_string())
-                    .env(
-                        "VZ_BASE_DISK_PATH",
-                        rootfs_path.to_string_lossy().to_string(),
-                    );
-            } else {
-                println!("No bundled VZ resources found, will download from registry");
-            }
-        }
-    }
-
-    let (_rx, child) = sidecar
-        .spawn()
-        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
-
-    // The server handles its own logging via LOG_FILE + dup2.
-    // We keep _rx alive (dropped when this function returns is fine since
-    // child is moved out), but don't need to process stdout/stderr.
-
-    Ok(child)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // In dev mode, use fixed ports and no secret (server runs separately).
-    // In release mode, find available ports and generate a shared secret.
-    #[cfg(debug_assertions)]
-    let (port, secret) = (3001_u16, String::new());
-
-    #[cfg(not(debug_assertions))]
-    let (port, ssh_port, secret) = {
-        let ssh = if TcpListener::bind("127.0.0.1:3333").is_ok() {
-            3333
-        } else {
-            find_available_port()
-        };
-        (find_available_port(), ssh, generate_secret())
-    };
-
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -230,92 +31,23 @@ pub fn run() {
                 .with_state_flags(window_state_flags())
                 .build(),
         )
-        .manage(Mutex::new(ServerState {
-            port,
-            secret: secret.clone(),
-            #[cfg(not(debug_assertions))]
-            process: None,
-        }))
-        .setup(move |app| {
-            // On macOS, set activation policy based on window visibility
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::ActivationPolicy;
-                // Check if main window is visible
-                if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = app.set_activation_policy(ActivationPolicy::Regular);
-                    } else {
-                        let _ = app.set_activation_policy(ActivationPolicy::Accessory);
-                    }
-                } else {
-                    let _ = app.set_activation_policy(ActivationPolicy::Accessory);
-                }
-            }
-
-            // Only start the Go server in release mode
-            // In dev mode, run it separately via `pnpm dev:api`
-            #[cfg(not(debug_assertions))]
-            {
-                // Show log file location
-                if let Ok(log_path) = get_log_file_path() {
-                    println!("Server logs will be written to: {}", log_path.display());
-                }
-
-                match start_server(app.handle(), port, ssh_port, &secret) {
-                    Ok(child) => {
-                        let state = app.state::<Mutex<ServerState>>();
-                        state.lock().unwrap().process = Some(child);
-                        println!("Server started on port {}", port);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to start server: {}", e);
-                    }
-                }
-            }
-
-            // Create tray menu
-            let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-
-            // Create tray icon with monochrome template image for macOS light/dark mode
-            let tray_icon = tauri::image::Image::from_bytes(include_bytes!(
-                "../icons/tray-icon@2x.png"
-            ))?;
-            TrayIconBuilder::new()
-                .icon(tray_icon)
-                .icon_as_template(true)
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_window(app),
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        toggle_window(tray.app_handle());
-                    }
-                })
-                .build(app)?;
-
+        .manage(Mutex::new(server::initial_server_state()))
+        .setup(|app| {
+            tray::sync_macos_activation_policy(app);
+            server::setup_server(app);
+            tray::setup_tray(app)?;
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                hide_window(window.app_handle());
-                api.prevent_close();
-            }
-        })
-        .invoke_handler(tauri::generate_handler![get_server_port, get_server_secret, save_file_to_downloads])
+        .on_window_event(tray::handle_window_event)
+        .invoke_handler(tauri::generate_handler![
+            commands::get_server_port,
+            commands::get_server_secret,
+            commands::save_file_to_downloads,
+            app_updater::check_for_app_update,
+            app_updater::download_app_update,
+            app_updater::install_app_update,
+            app_updater::close_app_update
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

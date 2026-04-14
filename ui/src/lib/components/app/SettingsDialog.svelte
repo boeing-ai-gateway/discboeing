@@ -354,12 +354,33 @@
 								</CardAction>
 							</CardHeader>
 							<CardContent class="space-y-3">
+								{#if updates.canTrackPrereleases}
+									<div
+										class="flex items-start justify-between gap-4 rounded-md border border-border bg-background p-3"
+									>
+										<div class="space-y-1">
+											<Label class="text-sm font-medium"
+												>Track pre-releases</Label
+											>
+											<p class="text-sm text-muted-foreground">
+												Use the latest GitHub pre-release channel instead of
+												stable releases.
+											</p>
+										</div>
+										<Switch
+											checked={updates.trackPrereleases}
+											onCheckedChange={(checked) =>
+												void updates.setTrackPrereleases(checked === true)}
+										/>
+									</div>
+								{/if}
 								{#if updates.status === "ready" && !updates.isIgnored}
 									<div
 										class="rounded-md border border-border bg-background p-3"
 									>
 										<p class="text-sm text-muted-foreground">
-											Version {updates.availableVersion} is ready to install.
+											Version {updates.availableVersion} is ready to install{#if updates.trackPrereleases}
+												from the pre-release channel{/if}.
 										</p>
 										<div class="mt-3 flex items-center gap-2">
 											<Button

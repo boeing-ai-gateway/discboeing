@@ -221,6 +221,7 @@ jobs:
           PUBLIC_SENTRY_DIST: tauri
           PUBLIC_SENTRY_GIT_COMMIT: ${{ github.sha }}
           PUBLIC_SENTRY_GIT_TAG: ${{ github.ref_name }}
+          PUBLIC_DISCOBOT_RELEASES_API_URL: https://api.github.com/repos/${{ github.repository }}/releases?per_page=20
           DISCOBOT_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.DISCOBOT_GITHUB_OAUTH_CLIENT_ID }}
           # Tauri updater signing
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

@@ -99,6 +99,10 @@ Reasoning is level-based and sourced from each model's `reasoningLevels`/`defaul
 
 A native markdown engine (`ui/src/lib/markdown/`) preprocesses streaming content with `remend`, splits into incremental blocks, and renders via unified/remark/rehype. Markdown link safety uses a Tauri-aware link safety modal for URL opening behavior.
 
+### 6. Desktop Updates
+
+The desktop update settings live in the `AppUpdates` domain and bridge to Rust Tauri commands instead of relying on the JavaScript updater binding alone. That Rust layer keeps the stable channel on the bundled `latest.json` endpoint and can switch to a GitHub pre-release channel by resolving the newest non-draft pre-release release asset named `latest.json` before building the updater request.
+
 ## Key Dependencies
 
 | Package                    | Purpose                                                |

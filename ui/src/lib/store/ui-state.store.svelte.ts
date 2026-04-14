@@ -11,6 +11,7 @@ export const PREFERRED_IDE_STORAGE_KEY = "preferred.ide";
 export const CHAT_WIDTH_MODE_STORAGE_KEY = "chat.width.mode";
 export const DEFAULT_MODEL_STORAGE_KEY = "chat.default.model";
 export const IGNORED_UPDATE_VERSION_STORAGE_KEY = "update.ignored.version";
+export const TRACK_PRERELEASES_STORAGE_KEY = "update.track.prereleases";
 export const SIDEBAR_RECENT_OPEN_STORAGE_KEY = "sidebar.recent.open";
 export const SIDEBAR_ALL_OPEN_STORAGE_KEY = "sidebar.all.open";
 export const SIDEBAR_ALL_GROUPED_STORAGE_KEY = "sidebar.all.grouped";
@@ -87,6 +88,7 @@ export class UIStateStore {
 	#ignoredUpdateVersion = $state<string | null>(
 		readStorage(IGNORED_UPDATE_VERSION_STORAGE_KEY),
 	);
+	#trackPrereleases = $state(readBoolean(TRACK_PRERELEASES_STORAGE_KEY, false));
 
 	get preferredIde(): PreferredIde {
 		return this.#preferredIde;
@@ -126,6 +128,10 @@ export class UIStateStore {
 
 	get ignoredUpdateVersion(): string | null {
 		return this.#ignoredUpdateVersion;
+	}
+
+	get trackPrereleases(): boolean {
+		return this.#trackPrereleases;
 	}
 
 	addPromptToHistory(prompt: string): void {
@@ -198,6 +204,11 @@ export class UIStateStore {
 	ignoreUpdateVersion(version: string | null): void {
 		this.#ignoredUpdateVersion = version;
 		writeStorage(IGNORED_UPDATE_VERSION_STORAGE_KEY, version);
+	}
+
+	setTrackPrereleases(value: boolean): void {
+		this.#trackPrereleases = value;
+		writeStorage(TRACK_PRERELEASES_STORAGE_KEY, String(value));
 	}
 
 	isPromptPinned(prompt: string): boolean {
