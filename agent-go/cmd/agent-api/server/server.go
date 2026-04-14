@@ -34,6 +34,18 @@ import (
 	staticFiles "github.com/obot-platform/discobot/agent-go/cmd/agent-api/static"
 )
 
+func visibleEnvSnapshot(workspaceRoot string, envSnapshot func() map[string]string) map[string]string {
+	env := workspaceenv.FileSnapshot(workspaceRoot)
+	if env == nil {
+		env = map[string]string{}
+	}
+	if envSnapshot == nil {
+		return env
+	}
+	maps.Copy(env, envSnapshot())
+	return env
+}
+
 // Run starts the HTTP API server and blocks until SIGINT/SIGTERM.
 func Run(cfg *config.Config) {
 	// ── Credential manager ───────────────────────────────────────────────────
@@ -63,9 +75,7 @@ func Run(cfg *config.Config) {
 		return ""
 	})
 	exec.SetEnvSnapshot(func() map[string]string {
-		env := workspaceenv.FileSnapshot(cfg.AgentCwd)
-		maps.Copy(env, credMgr.Snapshot())
-		return env
+		return visibleEnvSnapshot(cfg.AgentCwd, credMgr.Snapshot)
 	})
 	exec.SetCredentialUseAuthorizer(func(_ string, _, _ string, uses []tools.CredentialUseBinding) error {
 		for _, use := range uses {
