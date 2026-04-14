@@ -110,8 +110,12 @@
 
 	$effect(() => {
 		const nextManagedIds = Array.from(
-			new Set([...preloadSessionIds, currentSelectedSessionId]),
-		);
+			new Set([
+				currentSelectedSessionId,
+				...preloadSessionIds,
+				...managedSessionIds,
+			]),
+		).slice(0, mountedSessionIds.length || 1);
 		selectedSession = ensureSessionContext(app, currentSelectedSessionId);
 		for (const sessionId of nextManagedIds) {
 			ensureSessionContext(app, sessionId);

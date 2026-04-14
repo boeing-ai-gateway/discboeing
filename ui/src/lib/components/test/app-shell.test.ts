@@ -39,6 +39,15 @@ test("app shell only preloads app-ui mounted sessions after they have been visit
 	);
 	assert.match(
 		source,
+		/const nextManagedIds = Array\.from\([\s\S]*new Set\(\[[\s\S]*currentSelectedSessionId,[\s\S]*\.\.\.preloadSessionIds,[\s\S]*\.\.\.managedSessionIds,[\s\S]*\]\),[\s\S]*\)\.slice\(0, mountedSessionIds\.length \|\| 1\);/,
+	);
+	assert.match(
+		source,
+		/for \(const sessionId of managedSessionIds\) \{[\s\S]*if \(nextManagedIds\.includes\(sessionId\)\) \{[\s\S]*continue;/,
+	);
+	assert.match(source, /managedSessionIds = nextManagedIds;/);
+	assert.match(
+		source,
 		/\{#each renderedSessionIds as sessionId \(sessionId\)\}/,
 	);
 });
