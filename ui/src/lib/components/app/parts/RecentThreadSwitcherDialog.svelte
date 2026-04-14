@@ -14,6 +14,20 @@
 
 	let { open, threads, selectedKey, helpText, onHover, onSelect }: Props =
 		$props();
+	let listRef = $state<HTMLDivElement | null>(null);
+
+	$effect(() => {
+		if (!open || !listRef || !selectedKey) {
+			return;
+		}
+
+		const selectedItem = listRef.querySelector(
+			`[data-thread-key="${selectedKey}"]`,
+		);
+		if (selectedItem && "scrollIntoView" in selectedItem) {
+			(selectedItem as HTMLElement).scrollIntoView({ block: "nearest" });
+		}
+	});
 </script>
 
 {#if open}
@@ -34,10 +48,14 @@
 				<p class="text-xs text-muted-foreground">{helpText}</p>
 			</div>
 
-			<div class="max-h-[min(70vh,32rem)] overflow-y-auto p-2">
+			<div
+				bind:this={listRef}
+				class="max-h-[min(70vh,32rem)] overflow-y-auto p-2"
+			>
 				{#each threads as thread (`${thread.sessionId}:${thread.threadId}`)}
 					<button
 						type="button"
+						data-thread-key={recentThreadKey(thread.sessionId, thread.threadId)}
 						class={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
 							selectedKey === recentThreadKey(thread.sessionId, thread.threadId)
 								? "bg-accent text-accent-foreground shadow-sm"
