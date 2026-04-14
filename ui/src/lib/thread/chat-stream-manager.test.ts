@@ -55,6 +55,20 @@ function flush() {
 
 test.beforeEach(() => {
 	MockWebSocket.instances = [];
+	Object.defineProperty(globalThis, "window", {
+		configurable: true,
+		writable: true,
+		value: {
+			...globalThis,
+			location: {
+				origin: "http://localhost:3100",
+				hostname: "localhost",
+				protocol: "http:",
+			},
+			setTimeout,
+			clearTimeout,
+		},
+	});
 	Object.defineProperty(globalThis, "WebSocket", {
 		configurable: true,
 		writable: true,
@@ -168,6 +182,50 @@ test("chat stream manager binds provided listeners before subscribe starts strea
 	});
 
 	assert.deepEqual(chunkEvents, ['{"type":"text","text":"early"}']);
+
+	subscription.unsubscribe();
+	manager.dispose();
+});
+
+test("chat stream manager does not reconnect completed chat streams until explicitly resubscribed", async () => {
+	const manager = createChatStreamManager();
+	const subscription = manager.subscribe({
+		sessionId: "session-complete",
+		threadId: "thread-complete",
+		replay: true,
+	});
+
+	const firstSocket = MockWebSocket.instances[0];
+	firstSocket.emitOpen();
+	firstSocket.emitMessage({
+		type: "subscribed",
+		stream: "chat",
+		sessionId: "session-complete",
+		threadId: "thread-complete",
+	});
+	firstSocket.emitMessage({
+		type: "complete",
+		stream: "chat",
+		sessionId: "session-complete",
+		threadId: "thread-complete",
+	});
+
+	firstSocket.emitClose();
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+
+	assert.equal(MockWebSocket.instances.length, 2);
+	const secondSocket = MockWebSocket.instances[1];
+	secondSocket.emitOpen();
+	assert.equal(secondSocket.sent.length, 0);
+
+	subscription.resubscribe();
+	assert.deepEqual(JSON.parse(secondSocket.sent[0]), {
+		type: "subscribe",
+		stream: "chat",
+		sessionId: "session-complete",
+		threadId: "thread-complete",
+		replay: true,
+	});
 
 	subscription.unsubscribe();
 	manager.dispose();

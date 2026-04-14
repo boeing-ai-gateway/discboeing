@@ -247,11 +247,26 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		if (typeof window === "undefined") {
 			return;
 		}
-		if (fatalStreamError) {
+		if (fatalStreamError && !forceResubscribe) {
+			console.warn(
+				"[WS] Skipping chat stream subscribe because the stream is in a fatal state",
+				{
+					threadId: args.threadId,
+					sessionId: args.sessionId,
+					streamError,
+				},
+			);
 			return;
 		}
 		if (activeStreamKey === streamKey(args.sessionId)) {
-			if (forceResubscribe || activeSubscription?.getState() === "idle") {
+			if (forceResubscribe) {
+				console.debug("[WS] Forcing chat stream resubscribe", {
+					threadId: args.threadId,
+					sessionId: args.sessionId,
+					streamError,
+					fatalStreamError,
+				});
+				fatalStreamError = false;
 				activeSubscription?.resubscribe();
 			}
 			return;
@@ -259,7 +274,13 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 		disconnectStream();
 		streamError = null;
+		fatalStreamError = false;
 		activeStreamKey = streamKey(args.sessionId);
+		console.debug("[WS] Creating chat stream subscription", {
+			threadId: args.threadId,
+			sessionId: args.sessionId,
+			forceResubscribe,
+		});
 		const listeners = createChatStreamEventListeners(streamState, {
 			onError: (error) => {
 				streamError = getStreamErrorMessage(error);
@@ -276,6 +297,10 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			replay: true,
 			listeners,
 			onOpen: () => {
+				console.debug("[WS] Chat stream opened", {
+					threadId: args.threadId,
+					sessionId: args.sessionId,
+				});
 				streamError = null;
 				void Promise.all([
 					args.refreshThread(),
@@ -289,6 +314,13 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			},
 			onError: (error) => {
 				const errorMessage = getStreamErrorMessage(error);
+				console.warn("[WS] Chat stream subscription error", {
+					threadId: args.threadId,
+					sessionId: args.sessionId,
+					error: errorMessage,
+					loadStatus,
+					fatalStreamError,
+				});
 				if (isLostProjectStreamConnection(error)) {
 					if (loadStatus !== "loading") {
 						streamError = errorMessage;
@@ -445,6 +477,14 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					};
 				}
 
+				console.debug("[WS] Preparing chat submit", {
+					threadId: args.threadId,
+					sessionId: args.sessionId,
+					status,
+					loadStatus,
+					fatalStreamError,
+					activeSubscriptionState: activeSubscription?.getState() ?? null,
+				});
 				ensureStream(true);
 				const response = await app.chat({
 					sessionId: args.sessionId,

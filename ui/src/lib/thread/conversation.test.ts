@@ -189,7 +189,11 @@ test("conversation loader keeps closed-stream recovery at the websocket layer", 
 		source,
 		/disconnectStream\(\);[\s\S]*shouldIgnoreClosedStreamError/,
 	);
-	assert.match(source, /if \(fatalStreamError\) \{/);
+	assert.match(source, /if \(fatalStreamError && !forceResubscribe\) \{/);
+	assert.match(
+		source,
+		/if \(activeStreamKey === streamKey\(args\.sessionId\)\) \{[\s\S]*if \(forceResubscribe\) \{[\s\S]*fatalStreamError = false;[\s\S]*activeSubscription\?\.resubscribe\(\);/,
+	);
 });
 
 test("conversation loader only clears stream errors when a completion starts", () => {
@@ -220,5 +224,5 @@ test("conversation loader keeps websocket disconnects transient while preserving
 		source,
 		/onError: \(error\) => \{[\s\S]*fatalStreamError = true[\s\S]*disconnectStream\(\)/,
 	);
-	assert.match(source, /if \(fatalStreamError\) \{/);
+	assert.match(source, /if \(fatalStreamError && !forceResubscribe\) \{/);
 });

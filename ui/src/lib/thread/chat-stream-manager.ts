@@ -111,6 +111,7 @@ type StreamConsumer = {
 type StreamEntry = {
 	key: string;
 	state: ProjectStreamSubscriptionState;
+	wantsSubscription: boolean;
 	source: StreamSource;
 	consumers: Map<symbol, StreamConsumer>;
 	subscribeMessage: () => ProjectStreamSocketRequest;
@@ -178,7 +179,12 @@ export function createChatStreamManager(): ChatStreamManager {
 	};
 
 	const sendSubscribe = (entry: StreamEntry) => {
+		entry.wantsSubscription = true;
 		entry.state = "subscribing";
+		console.debug("[WS] Subscribing to project stream", {
+			key: entry.key,
+			message: entry.subscribeMessage(),
+		});
 		if (!send(entry.subscribeMessage())) {
 			entry.state = "idle";
 		}
@@ -193,6 +199,14 @@ export function createChatStreamManager(): ChatStreamManager {
 		) {
 			return;
 		}
+		console.warn("[WS] Project stream socket closed; scheduling reconnect", {
+			delayMs: CHAT_STREAM_RECONNECT_DELAY_MS,
+			entries: [...entries.values()].map((entry) => ({
+				key: entry.key,
+				state: entry.state,
+				wantsSubscription: entry.wantsSubscription,
+			})),
+		});
 		reconnectTimeoutId = window.setTimeout(() => {
 			reconnectTimeoutId = null;
 			ensureSocket();
@@ -210,6 +224,10 @@ export function createChatStreamManager(): ChatStreamManager {
 		switch (message.type) {
 			case "subscribed":
 				entry.state = "streaming";
+				console.debug("[WS] Project stream subscribed", {
+					key: entry.key,
+					stream: message.stream,
+				});
 				notifyOpen(entry);
 				return;
 			case "event":
@@ -218,9 +236,21 @@ export function createChatStreamManager(): ChatStreamManager {
 			case "complete":
 			case "unsubscribed":
 				entry.state = "idle";
+				entry.wantsSubscription = false;
+				console.debug("[WS] Project stream became idle", {
+					key: entry.key,
+					reason: message.type,
+					stream: message.stream,
+				});
 				return;
 			case "error":
 				entry.state = "idle";
+				entry.wantsSubscription = false;
+				console.warn("[WS] Project stream error", {
+					key: entry.key,
+					stream: message.stream,
+					error: message.error || "Failed to process project stream",
+				});
 				notifyError(
 					entry,
 					new Error(message.error || "Failed to process project stream"),
@@ -247,7 +277,17 @@ export function createChatStreamManager(): ChatStreamManager {
 			if (socket !== nextSocket) {
 				return;
 			}
+			console.debug("[WS] Project stream socket opened", {
+				entries: [...entries.values()].map((entry) => ({
+					key: entry.key,
+					state: entry.state,
+					wantsSubscription: entry.wantsSubscription,
+				})),
+			});
 			for (const entry of entries.values()) {
+				if (!entry.wantsSubscription) {
+					continue;
+				}
 				sendSubscribe(entry);
 			}
 		};
@@ -270,6 +310,13 @@ export function createChatStreamManager(): ChatStreamManager {
 			if (socket !== nextSocket) {
 				return;
 			}
+			console.warn("[WS] Project stream socket error", {
+				entries: [...entries.values()].map((entry) => ({
+					key: entry.key,
+					state: entry.state,
+					wantsSubscription: entry.wantsSubscription,
+				})),
+			});
 			for (const entry of entries.values()) {
 				entry.state = "idle";
 			}
@@ -346,6 +393,11 @@ export function createChatStreamManager(): ChatStreamManager {
 				if (!currentEntry) {
 					return;
 				}
+				currentEntry.wantsSubscription = true;
+				console.debug("[WS] Project stream resubscribe requested", {
+					key: currentEntry.key,
+					state: currentEntry.state,
+				});
 				ensureSocket();
 				if (socket?.readyState === WebSocket.OPEN) {
 					sendSubscribe(currentEntry);
@@ -375,6 +427,7 @@ export function createChatStreamManager(): ChatStreamManager {
 						entry = {
 							key,
 							state: "idle",
+							wantsSubscription: true,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
@@ -436,6 +489,7 @@ export function createChatStreamManager(): ChatStreamManager {
 						entry = {
 							key,
 							state: "idle",
+							wantsSubscription: true,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
@@ -479,6 +533,7 @@ export function createChatStreamManager(): ChatStreamManager {
 						entry = {
 							key,
 							state: "idle",
+							wantsSubscription: true,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
