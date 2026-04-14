@@ -137,9 +137,9 @@ func cleanupCompletion(t *testing.T, cm *agent.CompletionManager, threadID strin
 	t.Helper()
 
 	t.Cleanup(func() {
-		cm.Cancel(threadID)
 		deadline := time.Now().Add(2 * time.Second)
 		for time.Now().Before(deadline) {
+			cm.Cancel(threadID)
 			result := cm.PollChunks(threadID, 0)
 			if result == nil || result.Done {
 				return
@@ -607,6 +607,96 @@ func TestOnTurnComplete_StartsNextQueuedPrompt(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for queued prompt to start")
+	}
+}
+
+func TestOnTurnComplete_StartsNextQueuedPromptAfterError(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 2)
+	releaseFirst := make(chan struct{})
+	var callCount int
+	var callCountMu sync.Mutex
+	ma := &streamTestAgent{
+		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			callCountMu.Lock()
+			callCount++
+			currentCall := callCount
+			callCountMu.Unlock()
+			reqCh <- req
+			if currentCall == 1 {
+				return func(yield func(message.MessageChunk, error) bool) {
+					if !yield(message.StartChunk{MessageID: "assistant-1"}, nil) {
+						return
+					}
+					<-releaseFirst
+					yield(nil, errors.New("provider 500"))
+				}
+			}
+			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-2"})(ctx, "thread-1", req)
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	ts := newFullHandlerTestServer(t, h)
+	defer ts.Close()
+
+	firstBody, err := json.Marshal(api.ChatRequest{Messages: []message.UIMessage{{
+		ID:    "msg-1",
+		Role:  "user",
+		Parts: []message.UIPart{message.UITextPart{Text: "first", State: "done"}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBody, err := json.Marshal(api.ChatRequest{Messages: []message.UIMessage{{
+		ID:    "msg-2",
+		Role:  "user",
+		Parts: []message.UIPart{message.UITextPart{Text: "second", State: "done"}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstResp, err := ts.Client().Post(ts.URL+"/threads/thread-1/chat", "application/json", strings.NewReader(string(firstBody)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstResp.Body.Close()
+
+	select {
+	case req := <-reqCh:
+		part, ok := req.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "first" {
+			t.Fatalf("expected first prompt, got %#v", req.UserParts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first prompt")
+	}
+
+	secondResp, err := ts.Client().Post(ts.URL+"/threads/thread-1/chat", "application/json", strings.NewReader(string(secondBody)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondResp.Body.Close()
+
+	close(releaseFirst)
+
+	select {
+	case req := <-reqCh:
+		part, ok := req.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "second" {
+			t.Fatalf("expected queued prompt after error, got %#v", req.UserParts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for queued prompt to start after error")
 	}
 }
 

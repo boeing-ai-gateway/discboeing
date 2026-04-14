@@ -79,9 +79,7 @@ func (h *Handler) OnTurnComplete(threadID string, err error) {
 		// Fire-and-forget goroutine matching the TS scheduleHookEvaluation pattern.
 		go h.scheduleHookEvaluation(threadID)
 	}
-	if err == nil {
-		go h.startNextQueuedPrompt(threadID)
-	}
+	go h.startNextQueuedPrompt(threadID)
 }
 
 func (h *Handler) persistThreadError(threadID string, err error) {
