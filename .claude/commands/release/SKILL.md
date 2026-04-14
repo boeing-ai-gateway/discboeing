@@ -8,15 +8,18 @@ metadata:
 
 # Autonomous Release Procedure
 
-Run a release as autonomously as possible while keeping the user informed before risky follow-up actions.
+Run a release as autonomously as possible. Treat `/release` as authorization to perform the normal release flow end-to-end without pausing for approval on the happy path. Keep the user informed with brief status updates, but continue automatically unless a blocking failure, missing permission, ambiguous repository state, or history-rewriting correction requires a decision.
 
 ## Core Rules
 
 - Treat `obot-platform/discobot` as the canonical upstream repository.
+- Treat invoking `/release` as approval to perform the standard release actions for the chosen tag: fetching refs, pushing the current `HEAD` to the canonical `main` branch when needed, waiting for CI, creating and pushing the release tag, updating the GitHub release, and watching the release workflow to completion.
+- Do not stop to ask for routine confirmations, acknowledgements, or permission to continue during the normal release flow.
 - Do not create or push a release tag until the current `HEAD` commit is confirmed to be on that upstream repository's `main` branch.
 - Do not create or push a release tag until every CI run for that `HEAD` commit has completed successfully.
 - If CI is still running, explicitly wait with `gh run watch <run-id> --exit-status`.
-- If CI fails, investigate the failures, fix them locally, and ask the user to confirm the fixes before pushing anything.
+- If CI fails, investigate and fix it autonomously when the cause and remedy are clear, re-run the smallest appropriate local validation, push the fix, and restart CI verification for the new `HEAD`.
+- Ask the user only when recovery is not straightforward, the required fix is ambiguous, the remediation would materially change release scope, permissions are missing, or any action would rewrite published history.
 - After the tag is pushed, generate changelog/release notes, update the GitHub release, and then watch the release workflow until it succeeds.
 
 ## Version Inference
@@ -51,9 +54,8 @@ Run a release as autonomously as possible while keeping the user informed before
    - `git rev-parse HEAD`
    - `git rev-parse <remote>/main`
 2. If `HEAD` is not equal to `<remote>/main`:
-   - Explain that the release must be cut from the commit currently on upstream `main`.
-   - Ask the user whether to push the current `HEAD` to `<remote> main`.
-   - If the user approves, push `HEAD` to `<remote> main`.
+   - Explain briefly that the release must be cut from the commit on upstream `main`.
+   - Push the current `HEAD` to `<remote> main` automatically.
    - After pushing, fetch again and re-check that `HEAD == <remote>/main`.
 3. Do not proceed until this check passes.
 
@@ -69,10 +71,10 @@ Run a release as autonomously as possible while keeping the user informed before
    - `failure`, `cancelled`, `timed_out`, or `action_required` are blocking.
 5. If there is a failure:
    - Inspect the failed run with `gh run view <run-id>` and, when helpful, `gh run view <run-id> --log-failed`.
-   - Fix the issue locally.
+   - Fix the issue locally when the remedy is clear.
    - Re-run the smallest appropriate local validation first (`pnpm check`, `pnpm test`, `pnpm ci`, `go test`, or narrower commands as needed).
-   - Summarize the fix and ask the user to confirm before pushing the fix to upstream `main`.
-   - Once confirmed, push the fix, then restart the CI verification cycle from the beginning for the new `HEAD` commit.
+   - Push the fix to upstream `main` automatically and restart the CI verification cycle from the beginning for the new `HEAD`.
+   - Ask the user only if the failure is ambiguous, the fix is risky or broad, local validation is inconclusive, or pushing the fix would exceed the normal release flow.
 
 ### 4. Review release changes before tagging
 
@@ -120,10 +122,11 @@ Run a release as autonomously as possible while keeping the user informed before
 
 ## Decision Points That Still Require the User
 
-Ask the user before:
-- pushing `HEAD` to upstream `main` when it is not already there,
-- pushing fixes for failed CI runs,
-- taking any corrective action that would rewrite a published release tag or otherwise modify published history.
+Ask the user only when:
+- a failed CI run cannot be fixed confidently or would require a broad or risky remediation,
+- GitHub authentication, authorization, or repository state prevents the standard flow,
+- a tag or GitHub release already exists in a conflicting state,
+- taking corrective action would rewrite a published release tag or otherwise modify published history.
 
 ## Expected Commands
 
@@ -166,7 +169,7 @@ gh run watch <run-id> --exit-status
 
 ## Output Expectations
 
-Keep the user updated with concise checkpoints:
+Keep the user updated with concise status updates:
 - inferred tag,
 - upstream remote chosen,
 - whether `HEAD` is on upstream `main`,
