@@ -2,7 +2,7 @@ import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
-import { compareIsoDatesDesc, toSessionSummaries } from "$lib/app/app-helpers";
+import { toSessionSummaries } from "$lib/app/app-helpers";
 import type { AppSessions } from "$lib/app/app-context.types";
 import type { SessionContextValue } from "$lib/session/session-context.types";
 import type { RecentThreadSummary } from "$lib/shell-types";
@@ -25,6 +25,7 @@ export function createAppSessionsDomain(
 	let pendingSessionId = $state<string>(generateId());
 	let awaitingInitialStatusId = $state<string | null>(null);
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
+	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
 	const selectSession = (sessionId: string) => {
 		currentSelectedSessionId = sessionId;
@@ -32,72 +33,66 @@ export function createAppSessionsDomain(
 	};
 
 	const list = $derived.by(() => toSessionSummaries(store.list));
+
 	const recentThreads = $derived.by(() => {
 		const sessionsById = Object.fromEntries(
 			store.list.map((session) => [session.id, session] as const),
 		);
 
-		return recentThreadStore.entries
-			.flatMap((savedEntry) => {
-				const session = sessionsById[savedEntry.sessionId];
-				const liveThread = sessionContexts
-					.get(savedEntry.sessionId)
-					?.threads.list.find((thread) => thread.id === savedEntry.threadId);
+		return recentThreadStore.entries.flatMap((savedEntry) => {
+			const session = sessionsById[savedEntry.sessionId];
+			const liveThread = sessionContexts
+				.get(savedEntry.sessionId)
+				?.threads.list.find((thread) => thread.id === savedEntry.threadId);
 
-				if (session && liveThread) {
-					return [
-						{
-							sessionId: savedEntry.sessionId,
-							sessionName: session.displayName || session.name,
-							sessionStatus: session.status,
-							threadId: liveThread.id,
-							threadName: liveThread.name,
-							...(liveThread.state ? { state: liveThread.state } : {}),
-							lastMessage: liveThread.lastMessage ?? "",
-							lastAccessedAt: savedEntry.lastAccessedAt,
-						},
-					];
-				}
+			if (session && liveThread) {
+				return [
+					{
+						sessionId: savedEntry.sessionId,
+						sessionName: session.displayName || session.name,
+						sessionStatus: session.status,
+						threadId: liveThread.id,
+						threadName: liveThread.name,
+						...(liveThread.state ? { state: liveThread.state } : {}),
+						lastMessage: liveThread.lastMessage ?? "",
+						lastAccessedAt: savedEntry.lastAccessedAt,
+					},
+				];
+			}
 
-				const fallbackSessionName =
-					session?.displayName || session?.name || savedEntry.sessionName;
-				const fallbackSessionStatus =
-					session?.status ?? savedEntry.sessionStatus;
-				const fallbackThreadName = savedEntry.threadName ?? fallbackSessionName;
-				if (
-					!fallbackSessionName ||
-					!fallbackSessionStatus ||
-					!fallbackThreadName
-				) {
-					return [];
-				}
+			const fallbackSessionName =
+				session?.displayName || session?.name || savedEntry.sessionName;
+			const fallbackSessionStatus = session?.status ?? savedEntry.sessionStatus;
+			const fallbackThreadName = savedEntry.threadName ?? fallbackSessionName;
+			if (
+				!fallbackSessionName ||
+				!fallbackSessionStatus ||
+				!fallbackThreadName
+			) {
+				return [];
+			}
 
-				const fallbackSummary: RecentThreadSummary = {
-					sessionId: savedEntry.sessionId,
-					sessionName: fallbackSessionName,
-					sessionStatus: fallbackSessionStatus,
-					threadId: savedEntry.threadId,
-					threadName: fallbackThreadName,
-					lastAccessedAt: savedEntry.lastAccessedAt,
-				};
-				if (savedEntry.state) {
-					fallbackSummary.state = savedEntry.state;
-				}
-				if (savedEntry.lastMessage !== undefined) {
-					fallbackSummary.lastMessage = savedEntry.lastMessage;
-				}
-				return [fallbackSummary];
-			})
-			.sort((left, right) =>
-				compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
-			);
+			const fallbackSummary: RecentThreadSummary = {
+				sessionId: savedEntry.sessionId,
+				sessionName: fallbackSessionName,
+				sessionStatus: fallbackSessionStatus,
+				threadId: savedEntry.threadId,
+				threadName: fallbackThreadName,
+				lastAccessedAt: savedEntry.lastAccessedAt,
+			};
+			if (savedEntry.state) {
+				fallbackSummary.state = savedEntry.state;
+			}
+			if (savedEntry.lastMessage !== undefined) {
+				fallbackSummary.lastMessage = savedEntry.lastMessage;
+			}
+			return [fallbackSummary];
+		});
 	});
 	const selected = $derived.by(
 		() =>
 			list.find((session) => session.id === currentSelectedSessionId) ?? null,
 	);
-
-	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
 	$effect(() => {
 		const selectedSessionId = currentSelectedSessionId;
@@ -264,7 +259,7 @@ export function createAppSessionsDomain(
 			if (!trimmedName || !list.some((session) => session.id === sessionId)) {
 				return false;
 			}
-			const updatedSession = await store.update(sessionId, {
+			await store.update(sessionId, {
 				displayName: trimmedName,
 			});
 

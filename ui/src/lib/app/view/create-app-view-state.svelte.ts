@@ -27,7 +27,34 @@ function compareIsoDatesDesc(left: string, right: string): number {
 	return rightTime - leftTime;
 }
 
-function getVisibleRecentThreads(args: {
+function compareVisibleRecentThreadOrder(args: {
+	left: AppSessions["recentThreads"][number];
+	right: AppSessions["recentThreads"][number];
+	sessionsById: Record<string, AppSessions["sessions"][number]>;
+}): number {
+	const { left, right, sessionsById } = args;
+	const sessionCreatedAtCompare = compareIsoDatesDesc(
+		sessionsById[left.sessionId]?.createdAt ?? "",
+		sessionsById[right.sessionId]?.createdAt ?? "",
+	);
+	if (sessionCreatedAtCompare !== 0) {
+		return sessionCreatedAtCompare;
+	}
+
+	if (left.sessionId !== right.sessionId) {
+		return left.sessionId.localeCompare(right.sessionId);
+	}
+
+	const leftIsPrimaryThread = left.threadId === left.sessionId;
+	const rightIsPrimaryThread = right.threadId === right.sessionId;
+	if (leftIsPrimaryThread !== rightIsPrimaryThread) {
+		return leftIsPrimaryThread ? -1 : 1;
+	}
+
+	return left.threadId.localeCompare(right.threadId);
+}
+
+export function getVisibleRecentThreads(args: {
 	recentThreads: AppSessions["recentThreads"];
 	sessions: AppSessions["sessions"];
 	limit: number;
@@ -37,22 +64,21 @@ function getVisibleRecentThreads(args: {
 		return [];
 	}
 
-	const sessionsById = new Map(
-		sessions.map((session) => [session.id, session]),
+	const sessionsById = Object.fromEntries(
+		sessions.map((session) => [session.id, session] as const),
 	);
 
 	// First pick the most recently visited threads, then keep the sidebar grouped
 	// by newer sessions so the list feels stable next to the full session list.
+	// Use a deterministic tie-breaker within each session group so touching a
+	// thread does not reshuffle the visible rows every time.
 	return [...recentThreads]
 		.sort((left, right) =>
 			compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
 		)
 		.slice(0, limit)
 		.sort((left, right) =>
-			compareIsoDatesDesc(
-				sessionsById.get(left.sessionId)?.createdAt ?? "",
-				sessionsById.get(right.sessionId)?.createdAt ?? "",
-			),
+			compareVisibleRecentThreadOrder({ left, right, sessionsById }),
 		);
 }
 

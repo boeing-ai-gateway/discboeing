@@ -1,9 +1,5 @@
 import type { ThreadState } from "$lib/api-types";
-import {
-	compareIsoDatesDesc,
-	getCurrentTimestamp,
-	RECENT_THREAD_ENTRIES_LIMIT,
-} from "$lib/app/app-helpers";
+import { compareIsoDatesDesc, getCurrentTimestamp } from "$lib/app/app-helpers";
 import { readStorage, writeStorage } from "$lib/local-storage";
 import type { SessionStatusValue } from "$lib/shell-types";
 
@@ -79,7 +75,7 @@ function isSavedRecentThreadEntry(
 	);
 }
 
-// Keep only valid entries and the most recent items so the store stays compact.
+// Keep only valid entries and sort the newest ones first.
 function normalizeEntries(
 	entries: SavedRecentThreadEntry[],
 ): SavedRecentThreadEntry[] {
@@ -90,7 +86,7 @@ function normalizeEntries(
 	validEntries.sort((left, right) =>
 		compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
 	);
-	return validEntries.slice(0, RECENT_THREAD_ENTRIES_LIMIT);
+	return validEntries;
 }
 
 // Support both the new entry list and the older storage formats already in use.

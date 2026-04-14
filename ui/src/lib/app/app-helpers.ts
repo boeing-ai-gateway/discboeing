@@ -2,8 +2,6 @@ import type { Session } from "$lib/api-types";
 import { getApiBase, isTauriShell } from "$lib/environment";
 import { type SessionSummary, type WindowControlsSide } from "$lib/shell-types";
 
-export const RECENT_THREAD_ENTRIES_LIMIT = 12;
-
 export function detectWindowControlsSide(): WindowControlsSide {
 	if (typeof navigator === "undefined") {
 		return "right";
