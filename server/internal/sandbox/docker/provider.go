@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,6 +57,7 @@ const (
 	dataVolumePrefix = "discobot-data-"
 
 	sandboxSSHKeyStagingDir = "/.discobot-secrets/ssh"
+	sessionEnvWrapperCmd    = "discobot-session-env"
 )
 
 // DetectDockerHost resolves the Docker host from the current Docker context.
@@ -1068,12 +1070,38 @@ func (p *Provider) extractPorts(settings *containerTypes.NetworkSettings) []sand
 	return ports
 }
 
+// wrapCommandWithSessionEnv ensures docker exec-based sessions see the same
+// session environment bootstrap as the agent process. docker exec does not
+// inherit environment from running processes, so we route commands through a
+// small runtime wrapper that loads the shared env files first.
+func wrapCommandWithSessionEnv(cmd []string, injectedEnv map[string]string) []string {
+	if len(cmd) == 0 {
+		return nil
+	}
+
+	wrapped := make([]string, 0, len(cmd)+4)
+	wrapped = append(wrapped, sessionEnvWrapperCmd)
+	if len(injectedEnv) > 0 {
+		keys := make([]string, 0, len(injectedEnv))
+		for key := range injectedEnv {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		wrapped = append(wrapped, "--preserve", strings.Join(keys, ","))
+	}
+	wrapped = append(wrapped, "--")
+	wrapped = append(wrapped, cmd...)
+	return wrapped
+}
+
 // Exec runs a non-interactive command in the sandbox.
 func (p *Provider) Exec(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error) {
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
+
+	wrappedCmd := wrapCommandWithSessionEnv(cmd, opts.Env)
 
 	// Convert environment to slice
 	env := make([]string, 0, len(opts.Env))
@@ -1082,7 +1110,7 @@ func (p *Provider) Exec(ctx context.Context, sessionID string, cmd []string, opt
 	}
 
 	execConfig := containerTypes.ExecOptions{
-		Cmd:          cmd,
+		Cmd:          wrappedCmd,
 		AttachStdout: true,
 		AttachStderr: true,
 		AttachStdin:  opts.Stdin != nil,
@@ -1214,6 +1242,7 @@ func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.At
 	if len(cmd) == 0 {
 		cmd = p.detectShell(ctx, containerID)
 	}
+	wrappedCmd := wrapCommandWithSessionEnv(cmd, opts.Env)
 
 	// Convert environment to slice
 	env := make([]string, 0, len(opts.Env))
@@ -1222,7 +1251,7 @@ func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.At
 	}
 
 	execConfig := containerTypes.ExecOptions{
-		Cmd:          cmd,
+		Cmd:          wrappedCmd,
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -1266,6 +1295,8 @@ func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []strin
 		return nil, err
 	}
 
+	wrappedCmd := wrapCommandWithSessionEnv(cmd, opts.Env)
+
 	// Convert environment to slice
 	env := make([]string, 0, len(opts.Env))
 	for k, v := range opts.Env {
@@ -1273,7 +1304,7 @@ func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []strin
 	}
 
 	execConfig := containerTypes.ExecOptions{
-		Cmd:          cmd,
+		Cmd:          wrappedCmd,
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,

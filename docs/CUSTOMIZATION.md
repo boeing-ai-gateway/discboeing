@@ -1,7 +1,8 @@
 # Workspace Customization
 
-Discobot supports per-workspace customization through the `.discobot/` directory at the root of your workspace. Two types of customizations are available:
+Discobot supports per-workspace customization through the `.discobot/` directory at the root of your workspace. Three workspace-level customizations are available:
 
+- **Environment file** (`.discobot/env`) — Environment variables loaded into tools, console sessions, hooks, and services
 - **Hooks** (`.discobot/hooks/`) — Automation scripts that run at specific lifecycle points
 - **Services** (`.discobot/services/`) — Background processes and HTTP endpoints
 
@@ -9,6 +10,7 @@ Both use the same file format: executable scripts with YAML front matter.
 
 ```
 .discobot/
+├── env
 ├── hooks/
 │   ├── install-deps.sh
 │   ├── lint.sh
@@ -55,6 +57,17 @@ http: 8080
 ```
 
 For comment-prefixed styles (`#---`, `//---`), all whitespace after the prefix is trimmed, so `#   name: Foo` and `# name: Foo` are equivalent.
+
+---
+
+## Environment File
+
+If `.discobot/env` exists at the workspace root, Discobot loads it into the session environment used by tools, console sessions, hooks, and services.
+Changes are picked up for new tool executions, hook runs, service launches, and console sessions without restarting the session.
+
+Each non-empty line must be a `KEY=VALUE` assignment. Leading whitespace is ignored, lines starting with `#` are treated as comments, and `export KEY=VALUE` is also supported. Quoted values are allowed and are treated literally.
+
+Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
 
 ---
 

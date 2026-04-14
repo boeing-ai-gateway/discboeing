@@ -2,6 +2,19 @@
 
 Users can customize their workspace by adding files to `.discobot/` at the workspace root.
 
+## .discobot/env
+
+Optional workspace env file loaded into tools, console sessions, hooks, and services.
+Changes are picked up for new tool executions, hook runs, service launches, and console sessions without restarting the session.
+
+Format:
+- One `KEY=VALUE` assignment per line
+- `export KEY=VALUE` is also supported
+- Blank lines and lines starting with `#` are ignored
+- Quoted values are allowed and treated literally
+
+Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
+
 ## .discobot/hooks/
 
 Executable scripts with YAML front matter that run at lifecycle points.

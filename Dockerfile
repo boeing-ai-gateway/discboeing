@@ -276,6 +276,7 @@ COPY --from=agent-builder --chmod=755 /discobot-agent /opt/discobot/bin/discobot
 # Docker wrapper: injects --output type=docker for build commands so remote
 # buildx builders always load images into the local daemon.
 COPY --chmod=755 container-assets/docker-wrapper.sh /usr/local/bin/docker
+COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobot-session-env
 
 # Copy systemd service files for container service management
 COPY container-assets/systemd/ /etc/systemd/system/

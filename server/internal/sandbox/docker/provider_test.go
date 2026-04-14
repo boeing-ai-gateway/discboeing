@@ -72,6 +72,42 @@ func TestIsLocalImage(t *testing.T) {
 	}
 }
 
+func TestWrapCommandWithSessionEnv(t *testing.T) {
+	cmd := wrapCommandWithSessionEnv([]string{"/bin/bash", "-lc", "echo hi"}, map[string]string{
+		"SSH_AUTH_SOCK": "/tmp/agent.sock",
+		"TOKEN":         "secret",
+	})
+
+	if len(cmd) != 7 {
+		t.Fatalf("wrapped command length = %d, want 7", len(cmd))
+	}
+	if cmd[0] != sessionEnvWrapperCmd {
+		t.Fatalf("wrapped command prefix = %q, want %q", cmd[0], sessionEnvWrapperCmd)
+	}
+	if cmd[1] != "--preserve" || cmd[2] != "SSH_AUTH_SOCK,TOKEN" {
+		t.Fatalf("preserve args = %q %q, want --preserve SSH_AUTH_SOCK,TOKEN", cmd[1], cmd[2])
+	}
+	if cmd[3] != "--" {
+		t.Fatalf("separator = %q, want --", cmd[3])
+	}
+	if got := strings.Join(cmd[4:], " "); got != "/bin/bash -lc echo hi" {
+		t.Fatalf("wrapped payload command = %q", got)
+	}
+}
+
+func TestWrapCommandWithSessionEnvWithoutOverrides(t *testing.T) {
+	cmd := wrapCommandWithSessionEnv([]string{"/bin/sh"}, nil)
+	if len(cmd) != 3 {
+		t.Fatalf("wrapped command length = %d, want 3", len(cmd))
+	}
+	if cmd[0] != sessionEnvWrapperCmd {
+		t.Fatalf("wrapped command prefix = %q, want %q", cmd[0], sessionEnvWrapperCmd)
+	}
+	if cmd[1] != "--" || cmd[2] != "/bin/sh" {
+		t.Fatalf("wrapped command = %#v", cmd)
+	}
+}
+
 func TestBuildSSHKeyArchive(t *testing.T) {
 	archive, err := buildSSHKeyArchive(&sandbox.SSHKeyProvision{
 		Filename:   "discobot_sandbox",
