@@ -22,8 +22,9 @@ func TestDiscobotSessionEnvScriptLoadsValidEntries(t *testing.T) {
 		t.Fatalf("WriteFile(workspace): %v", err)
 	}
 
+	shell := sessionEnvShell()
 	stdout, stderr, err := runSessionEnvScript(t, agentEnv, workspaceEnv,
-		"/bin/sh", "-c", `printf 'FROM_AGENT=%s\n' "$FROM_AGENT"; printf 'FROM_WORKSPACE=%s\n' "$FROM_WORKSPACE"; printf 'QUOTED=%s\n' "$QUOTED"`)
+		shell, "-c", `printf 'FROM_AGENT=%s\n' "$FROM_AGENT"; printf 'FROM_WORKSPACE=%s\n' "$FROM_WORKSPACE"; printf 'QUOTED=%s\n' "$QUOTED"`)
 	if err != nil {
 		t.Fatalf("runSessionEnvScript failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
@@ -63,8 +64,9 @@ func TestDiscobotSessionEnvScriptIgnoresInvalidAndMaliciousLines(t *testing.T) {
 		t.Fatalf("WriteFile(workspace): %v", err)
 	}
 
+	shell := sessionEnvShell()
 	stdout, stderr, err := runSessionEnvScript(t, agentEnv, workspaceEnv,
-		"/bin/sh", "-c", `printf 'SAFE=%s\n' "$SAFE"; printf 'MALICIOUS_VALUE=%s\n' "$MALICIOUS_VALUE"; echo READY`)
+		shell, "-c", `printf 'SAFE=%s\n' "$SAFE"; printf 'MALICIOUS_VALUE=%s\n' "$MALICIOUS_VALUE"; echo READY`)
 	if err != nil {
 		t.Fatalf("runSessionEnvScript failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
@@ -97,7 +99,7 @@ func runSessionEnvScript(t *testing.T, agentEnvPath, workspaceEnvPath string, ar
 	t.Helper()
 
 	cmdArgs := append([]string{sessionEnvScriptPath(t)}, args...)
-	cmd := exec.Command("/bin/sh", cmdArgs...)
+	cmd := exec.Command(sessionEnvShell(), cmdArgs...)
 	cmd.Env = append(os.Environ(),
 		"DISCOBOT_AGENT_ENV_FILE="+agentEnvPath,
 		"DISCOBOT_WORKSPACE_ENV_FILE="+workspaceEnvPath,
@@ -108,6 +110,13 @@ func runSessionEnvScript(t *testing.T, agentEnvPath, workspaceEnvPath string, ar
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
+}
+
+func sessionEnvShell() string {
+	if runtime.GOOS == "windows" {
+		return "bash"
+	}
+	return "/bin/sh"
 }
 
 func sessionEnvScriptPath(t *testing.T) string {

@@ -203,6 +203,7 @@ func TestDiscoverMCPState_LoadsDiscobotUserConfig(t *testing.T) {
 	mkdirAll(t, filepath.Join(root, ".git"))
 	mkdirAll(t, filepath.Join(home, ".discobot"))
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	writeFile(t, filepath.Join(home, ".discobot", "mcp.json"), `{
 		"mcpServers": {
@@ -233,6 +234,7 @@ func TestDiscoverMCPState_ReloadTokenChangesWhenFilesChange(t *testing.T) {
 	mkdirAll(t, filepath.Join(root, ".git"))
 	mkdirAll(t, filepath.Join(home, ".discobot"))
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	projectFile := filepath.Join(root, ".mcp.json")
 	writeFile(t, projectFile, `{"mcpServers":{"local":{"command":"one"}}}`)
