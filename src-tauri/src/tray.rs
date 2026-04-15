@@ -41,7 +41,7 @@ fn toggle_window(app: &AppHandle) {
     }
 }
 
-pub(crate) fn sync_macos_activation_policy(_app: &App) {
+pub(crate) fn sync_macos_activation_policy(_app: &mut App) {
     #[cfg(target_os = "macos")]
     {
         use tauri::ActivationPolicy;
