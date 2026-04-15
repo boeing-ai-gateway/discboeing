@@ -583,8 +583,10 @@ func installCommitCommandVariant(homeDir string, useRemoteVariant bool, u *userI
 		return fmt.Errorf("commit command variant %s not found: %w", sourcePath, err)
 	}
 
-	if err := copyFile(sourcePath, commandPath); err != nil {
-		return fmt.Errorf("copy commit command variant: %w", err)
+	if sourcePath != commandPath {
+		if err := copyFile(sourcePath, commandPath); err != nil {
+			return fmt.Errorf("copy commit command variant: %w", err)
+		}
 	}
 
 	if u != nil {

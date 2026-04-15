@@ -187,18 +187,31 @@ func TestInstallCommitCommandVariant(t *testing.T) {
 
 	defaultBody := "default command\n"
 	remoteBody := "remote command\n"
-	if err := os.WriteFile(filepath.Join(commandsDir, "discobot-commit.md"), []byte(defaultBody), 0o644); err != nil {
+	defaultPath := filepath.Join(commandsDir, "discobot-commit.md")
+	if err := os.WriteFile(defaultPath, []byte(defaultBody), 0o644); err != nil {
 		t.Fatalf("write default command: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(commandsDir, "discobot-commit-remote.md"), []byte(remoteBody), 0o644); err != nil {
 		t.Fatalf("write remote command: %v", err)
 	}
 
+	if err := installCommitCommandVariant(homeDir, false, nil); err != nil {
+		t.Fatalf("installCommitCommandVariant(false) failed: %v", err)
+	}
+
+	got, err := os.ReadFile(defaultPath)
+	if err != nil {
+		t.Fatalf("read default command after local install: %v", err)
+	}
+	if string(got) != defaultBody {
+		t.Fatalf("local installed command = %q, want %q", string(got), defaultBody)
+	}
+
 	if err := installCommitCommandVariant(homeDir, true, nil); err != nil {
 		t.Fatalf("installCommitCommandVariant(true) failed: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(commandsDir, "discobot-commit.md"))
+	got, err = os.ReadFile(defaultPath)
 	if err != nil {
 		t.Fatalf("read installed command: %v", err)
 	}
