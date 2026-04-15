@@ -206,7 +206,7 @@ The dispatcher now shuts down in two phases:
 1. **Drain mode**: `BeginDrain` / `DrainAndStop` stops claiming new jobs but does **not** cancel the contexts of jobs that are already running.
 2. **Final stop**: once the in-flight jobs finish (or the shutdown deadline expires), the dispatcher cancels its background loops, releases leadership, and lets the rest of the server tear down.
 
-This allows long-running commit/rebase jobs to finish cleanly during a dev-server restart while preventing any new background work from starting during shutdown.
+This allows long-running commit jobs to finish cleanly during a dev-server restart while preventing any new background work from starting during shutdown.
 
 Before the dispatcher drain begins, the server now first closes long-lived SSE
 streams and terminal WebSockets. HTTP shutdown still happens last with a short

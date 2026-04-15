@@ -213,6 +213,17 @@ export type CredentialTypeGroup =
 
 export type CredentialOAuthKind = "authorization_code" | "device_code";
 
+export interface CredentialTypeOAuthScopeOption {
+	value: string;
+	label: string;
+	description?: string;
+	group?: string;
+	access?: string;
+	includeInSimple?: boolean;
+	simpleLabel?: string;
+	simpleHelpText?: string;
+}
+
 export interface CredentialTypeOAuthConfig {
 	provider: string;
 	kind: CredentialOAuthKind;
@@ -221,6 +232,8 @@ export interface CredentialTypeOAuthConfig {
 	inputLabel?: string;
 	inputPlaceholder?: string;
 	allowsDirectToken?: boolean;
+	defaultScopes?: string[];
+	scopeOptions?: CredentialTypeOAuthScopeOption[];
 }
 
 export interface CredentialType {
@@ -242,6 +255,31 @@ export interface CredentialType {
 	groupName: string;
 	authType: CredentialAuthType;
 	oauth?: CredentialTypeOAuthConfig;
+}
+
+export interface AgentCommandApprovedUse {
+	description: string;
+}
+
+export interface AgentCommandCredentialRequest {
+	envVar: string;
+	name: string;
+	justification: string;
+	approvedUses?: AgentCommandApprovedUse[];
+}
+
+export interface AgentCommandDiscobotMetadata {
+	ui?: boolean;
+	label?: string;
+	order?: number;
+	credentialRequest?: AgentCommandCredentialRequest[];
+}
+
+export interface AgentCommand {
+	name: string;
+	description: string;
+	kind: string;
+	discobot?: AgentCommandDiscobotMetadata;
 }
 
 export interface ModelInfo {
@@ -416,6 +454,7 @@ export interface CredentialInfo {
 	visibility: CredentialVisibility;
 	envKeys?: string[];
 	envVars?: CredentialEnvVar[];
+	scopes?: string[];
 	expiresAt?: string; // For OAuth credentials
 	updatedAt?: string;
 }
@@ -449,6 +488,7 @@ export interface SessionCredentialUse {
 	id: string;
 	description: string;
 	createdAt?: string;
+	expiresAt?: string;
 	lastUsedAt?: string;
 	lastUsedToolCallId?: string;
 }
@@ -514,6 +554,7 @@ export interface GitHubCopilotPollResponse {
 // GitHub OAuth types (git operations: repo scope, device flow)
 export interface GitHubDeviceCodeRequest {
 	enterpriseUrl?: string;
+	scopes?: string[];
 }
 
 export interface GitHubDeviceCodeResponse {
@@ -528,6 +569,11 @@ export interface GitHubDeviceCodeResponse {
 export interface GitHubPollRequest {
 	deviceCode: string;
 	domain: string;
+	credentialId?: string;
+	name?: string;
+	description?: string;
+	visibility?: CredentialVisibility;
+	inactive?: boolean;
 }
 
 export interface GitHubPollResponse {

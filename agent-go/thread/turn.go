@@ -24,6 +24,7 @@ type TurnConfig struct {
 	ProviderID       string                     `json:"providerId"`
 	Model            string                     `json:"model"`
 	SupportingModels providers.SupportingModels `json:"supportingModels,omitempty"` // supporting model type -> full "providerId/modelId" ref
+	PreludeMessages  []message.Message          `json:"preludeMessages,omitempty"`
 	UserParts        []message.Part             `json:"-"`
 	UserMessage      message.Message            `json:"userMessage"` // serializable form of UserParts
 	Metadata         json.RawMessage            `json:"metadata,omitempty"`
@@ -69,6 +70,28 @@ func RunTurn(
 			CreatedAt: &startedAt,
 		}
 
+		parentID := leafID
+		for i := range cfg.PreludeMessages {
+			prelude := cfg.PreludeMessages[i]
+			if prelude.ID == "" {
+				prelude.ID = generateID()
+			}
+			if prelude.CreatedAt == nil {
+				preludeCreatedAt := startedAt
+				prelude.CreatedAt = &preludeCreatedAt
+			}
+			if err := store.SaveMessage(threadID, StoredMessage{
+				ID:       prelude.ID,
+				ParentID: parentID,
+				Message:  prelude,
+			}); err != nil {
+				yield(nil, fmt.Errorf("save prelude message: %w", err))
+				return
+			}
+			cfg.PreludeMessages[i] = prelude
+			parentID = prelude.ID
+		}
+
 		turnID := generateID()
 		turnState := TurnState{
 			ID:          turnID,
@@ -77,7 +100,7 @@ func RunTurn(
 			Config:      cfg,
 			CurrentStep: 0,
 			Phase:       PhaseStreaming,
-			LeafMsgID:   leafID,
+			LeafMsgID:   parentID,
 			StartedAt:   &startedAt,
 		}
 
@@ -86,7 +109,7 @@ func RunTurn(
 		cfg.UserMessage.ID = userMsgID
 		if err := store.SaveMessage(threadID, StoredMessage{
 			ID:       userMsgID,
-			ParentID: leafID,
+			ParentID: parentID,
 			Message:  cfg.UserMessage,
 		}); err != nil {
 			yield(nil, fmt.Errorf("save user message: %w", err))
@@ -98,7 +121,7 @@ func RunTurn(
 		// message ID to associate with the streaming content.
 		turnState.AssistantMsgID = generateID()
 
-		// 3. Persist turn state before starting.
+		// 4. Persist turn state before starting.
 		if err := store.SaveTurnState(threadID, turnState); err != nil {
 			yield(nil, fmt.Errorf("save turn state: %w", err))
 			return
@@ -139,7 +162,7 @@ func RunTurn(
 			execToolCtx = toolCtx[0]
 		}
 
-		// 4. Execute the turn loop.
+		// 5. Execute the turn loop.
 		if !executeLoop(ctx, provider, executor, execToolCtx, store, threadID, turnID, &turnState, yield) {
 			// If context was cancelled (e.g. Ctrl+C), clean up turn state
 			// so the turn is not resumed on the next prompt or restart.
@@ -153,7 +176,7 @@ func RunTurn(
 			return // keep turn state on disk
 		}
 
-		// 5. Turn complete — emit finish envelope and delete turn state.
+		// 6. Turn complete — emit finish envelope and delete turn state.
 		if err := completeTurn(store, threadID, &turnState); err != nil {
 			yield(nil, fmt.Errorf("save finished turn state: %w", err))
 			return
@@ -1066,6 +1089,10 @@ func (lc *loopContext) runWaitingForAnswerPhase() loopStepResult {
 	}
 
 	resolved := next.Result
+	if err := recordCommunicatedCredentialResult(lc.store, lc.threadID, resolved); err != nil {
+		lc.yield(nil, fmt.Errorf("record communicated credential ids: %w", err))
+		return loopStepStop
+	}
 	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, resolved); err != nil {
 		lc.yield(nil, fmt.Errorf("append resolved tool result message: %w", err))
 		return loopStepStop
@@ -1096,6 +1123,59 @@ func cloneRawMessage(data json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), data...)
+}
+
+func recordCommunicatedCredentialResult(store *Store, threadID string, result message.ToolResultPart) error {
+	if result.ToolName != "RequestUserCredential" {
+		return nil
+	}
+	output, ok := result.Output.(message.JSONOutput)
+	if !ok || len(output.Value) == 0 {
+		return nil
+	}
+	var granted struct {
+		GrantedCredentials []api.GrantedCredential `json:"grantedCredentials"`
+	}
+	if err := json.Unmarshal(output.Value, &granted); err != nil {
+		return fmt.Errorf("parse granted credentials output: %w", err)
+	}
+	if len(granted.GrantedCredentials) == 0 {
+		return nil
+	}
+	updates := make([]CommunicatedCredentialBinding, 0, len(granted.GrantedCredentials))
+	for _, credential := range granted.GrantedCredentials {
+		if strings.TrimSpace(credential.CredentialID) == "" {
+			continue
+		}
+		uses := make([]CommunicatedCredentialUse, 0, len(credential.ApprovedUses))
+		for _, use := range credential.ApprovedUses {
+			useID := strings.TrimSpace(use.ID)
+			if useID == "" {
+				continue
+			}
+			uses = append(uses, CommunicatedCredentialUse{
+				ID:          useID,
+				Description: strings.TrimSpace(use.Description),
+			})
+		}
+		updates = append(updates, CommunicatedCredentialBinding{
+			CredentialID: strings.TrimSpace(credential.CredentialID),
+			EnvVar:       strings.TrimSpace(credential.EnvVar),
+			Uses:         uses,
+		})
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	cfg, err := store.LoadConfig(threadID)
+	if err != nil {
+		return fmt.Errorf("load thread config: %w", err)
+	}
+	cfg.CommunicatedCredentials = MergeCommunicatedCredentialBindings(cfg.CommunicatedCredentials, updates)
+	if err := store.SaveConfig(threadID, cfg); err != nil {
+		return fmt.Errorf("save thread config: %w", err)
+	}
+	return nil
 }
 
 func saveAssistantStepMessage(

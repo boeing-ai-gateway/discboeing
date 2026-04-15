@@ -47,7 +47,9 @@ A working directory linked to either a local folder or a git repository.
 | status | `initializing` → `cloning` → `ready` or `error` |
 
 For git workspaces:
-- Repository is cloned to a local cache
+- The server passes the git URL and target ref to the sandbox
+- The sandbox agent performs the clone locally
+- Git object mirrors are cached in the sandbox's persistent `/home/discobot/.cache`
 - Tracks current commit SHA
 - Supports branch operations, diffs, commits
 

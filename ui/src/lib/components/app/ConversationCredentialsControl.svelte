@@ -2,9 +2,11 @@
 	import FishingHookIcon from "@lucide/svelte/icons/fishing-hook";
 	import HammerIcon from "@lucide/svelte/icons/hammer";
 	import KeyRoundIcon from "@lucide/svelte/icons/key-round";
+	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import ServerIcon from "@lucide/svelte/icons/server";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
+	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import { api } from "$lib/api-client";
 	import type {
 		CredentialVisibility,
@@ -43,6 +45,7 @@
 	let globalVisibilityDialogAssignment =
 		$state<SessionCredentialAssignment | null>(null);
 	let globalVisibilityDialogContexts = $state<string[]>([]);
+	let expandedUses = $state<Record<string, boolean>>({});
 
 	const visibleCount = $derived.by(
 		() =>
@@ -132,6 +135,88 @@
 			return matchedType.name;
 		}
 		return credential.provider;
+	}
+
+	function assignmentKey(assignment: SessionCredentialAssignment) {
+		return [
+			assignment.credentialId,
+			assignment.envVar ?? "",
+			assignment.sessionCredentialId ?? "",
+		].join("\x00");
+	}
+
+	function useIsExpired(
+		use: NonNullable<SessionCredentialAssignment["uses"]>[number],
+	) {
+		if (!use.expiresAt) {
+			return false;
+		}
+		return new Date(use.expiresAt).getTime() <= Date.now();
+	}
+
+	function formatDuration(milliseconds: number) {
+		if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+			return "0m";
+		}
+		const totalMinutes = Math.round(milliseconds / 60000);
+		if (totalMinutes < 60) {
+			return `${totalMinutes}m`;
+		}
+		const hours = Math.floor(totalMinutes / 60);
+		const minutes = totalMinutes % 60;
+		if (hours < 24) {
+			return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+		}
+		const days = Math.floor(hours / 24);
+		const remainingHours = hours % 24;
+		return remainingHours === 0 ? `${days}d` : `${days}d ${remainingHours}h`;
+	}
+
+	function formatUseTiming(
+		use: NonNullable<SessionCredentialAssignment["uses"]>[number],
+	) {
+		const createdAt = use.createdAt ? new Date(use.createdAt).getTime() : NaN;
+		const expiresAt = use.expiresAt ? new Date(use.expiresAt).getTime() : NaN;
+		const duration =
+			Number.isFinite(createdAt) && Number.isFinite(expiresAt)
+				? formatDuration(expiresAt - createdAt)
+				: null;
+		if (!Number.isFinite(expiresAt)) {
+			return duration ? `Valid for ${duration}` : "No expiration";
+		}
+		const remaining = expiresAt - Date.now();
+		if (remaining <= 0) {
+			return duration ? `Expired • was valid for ${duration}` : "Expired";
+		}
+		const remainingText = formatDuration(remaining);
+		return duration
+			? `Valid for ${duration} • ${remainingText} left`
+			: `${remainingText} left`;
+	}
+
+	function toggleUses(assignment: SessionCredentialAssignment) {
+		const key = assignmentKey(assignment);
+		expandedUses = {
+			...expandedUses,
+			[key]: !expandedUses[key],
+		};
+	}
+
+	async function removeUse(
+		targetAssignment: SessionCredentialAssignment,
+		useId: string,
+	) {
+		const key = assignmentKey(targetAssignment);
+		const nextAssignments = assignments.map((assignment) => {
+			if (assignmentKey(assignment) !== key) {
+				return assignment;
+			}
+			return {
+				...assignment,
+				uses: (assignment.uses ?? []).filter((use) => use.id !== useId),
+			};
+		});
+		await saveAssignments(nextAssignments);
 	}
 
 	function hasAnyVisibility(visibility: CredentialVisibility) {
@@ -447,76 +532,133 @@
 					{@const effective = effectiveVisibility(assignment)}
 					{@const allVisibilityState = allVisibilityCheckedState(effective)}
 					<div
-						class="flex items-center gap-2 rounded-md border border-border/70 bg-background/70 px-2.5 py-2"
+						class="rounded-md border border-border/70 bg-background/70 px-2.5 py-2"
 					>
-						<div class="min-w-0 flex-1">
-							<div class="truncate text-sm font-medium">
-								{credentialDisplayName(assignment)}
+						<div class="flex items-start gap-2">
+							<div class="min-w-0 flex-1">
+								<div class="truncate text-sm font-medium">
+									{credentialDisplayName(assignment)}
+								</div>
+								{#if (assignment.uses?.length ?? 0) > 0}
+									<div class="mt-1">
+										<button
+											type="button"
+											class="inline-flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground"
+											onclick={() => toggleUses(assignment)}
+										>
+											<ChevronDownIcon
+												class={`size-3 transition-transform ${
+													expandedUses[assignmentKey(assignment)]
+														? "rotate-180"
+														: ""
+												}`}
+											/>
+											<span>
+												{assignment.uses?.length}
+												{assignment.uses?.length === 1 ? " use" : " uses"}
+											</span>
+										</button>
+									</div>
+								{/if}
+							</div>
+							<div class="flex items-center gap-1">
+								<button
+									type="button"
+									title="Tools"
+									aria-label="Toggle tools visibility"
+									class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
+										effective.tools,
+										runtimeDisabled(assignment, "tools"),
+									)}`}
+									disabled={runtimeDisabled(assignment, "tools")}
+									onclick={() => handleRuntimeToggle(assignment, "tools")}
+								>
+									<HammerIcon class="size-3.5" />
+								</button>
+								<button
+									type="button"
+									title="Console / SSH / IDE"
+									aria-label="Toggle console SSH IDE visibility"
+									class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
+										effective.console,
+										runtimeDisabled(assignment, "console"),
+									)}`}
+									disabled={runtimeDisabled(assignment, "console")}
+									onclick={() => handleRuntimeToggle(assignment, "console")}
+								>
+									<TerminalIcon class="size-3.5" />
+								</button>
+								<button
+									type="button"
+									title="Services"
+									aria-label="Toggle services visibility"
+									class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
+										effective.services,
+										runtimeDisabled(assignment, "services"),
+									)}`}
+									disabled={runtimeDisabled(assignment, "services")}
+									onclick={() => handleRuntimeToggle(assignment, "services")}
+								>
+									<ServerIcon class="size-3.5" />
+								</button>
+								<button
+									type="button"
+									title="Hooks"
+									aria-label="Toggle hooks visibility"
+									class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
+										effective.hooks,
+										runtimeDisabled(assignment, "hooks"),
+									)}`}
+									disabled={runtimeDisabled(assignment, "hooks")}
+									onclick={() => handleRuntimeToggle(assignment, "hooks")}
+								>
+									<FishingHookIcon class="size-3.5" />
+								</button>
+								<div class="ml-1 border-l border-border/70 pl-2">
+									<Checkbox
+										checked={allVisibilityState.checked}
+										indeterminate={allVisibilityState.indeterminate}
+										disabled={runtimeDisabled(assignment)}
+										aria-label="Toggle all session credential visibility"
+										onCheckedChange={() =>
+											handleAllVisibilityToggle(assignment)}
+									/>
+								</div>
 							</div>
 						</div>
-						<div class="flex items-center gap-1">
-							<button
-								type="button"
-								title="Tools"
-								aria-label="Toggle tools visibility"
-								class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
-									effective.tools,
-									runtimeDisabled(assignment, "tools"),
-								)}`}
-								disabled={runtimeDisabled(assignment, "tools")}
-								onclick={() => handleRuntimeToggle(assignment, "tools")}
-							>
-								<HammerIcon class="size-3.5" />
-							</button>
-							<button
-								type="button"
-								title="Console / SSH / IDE"
-								aria-label="Toggle console SSH IDE visibility"
-								class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
-									effective.console,
-									runtimeDisabled(assignment, "console"),
-								)}`}
-								disabled={runtimeDisabled(assignment, "console")}
-								onclick={() => handleRuntimeToggle(assignment, "console")}
-							>
-								<TerminalIcon class="size-3.5" />
-							</button>
-							<button
-								type="button"
-								title="Services"
-								aria-label="Toggle services visibility"
-								class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
-									effective.services,
-									runtimeDisabled(assignment, "services"),
-								)}`}
-								disabled={runtimeDisabled(assignment, "services")}
-								onclick={() => handleRuntimeToggle(assignment, "services")}
-							>
-								<ServerIcon class="size-3.5" />
-							</button>
-							<button
-								type="button"
-								title="Hooks"
-								aria-label="Toggle hooks visibility"
-								class={`inline-flex size-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${visibilityToggleClass(
-									effective.hooks,
-									runtimeDisabled(assignment, "hooks"),
-								)}`}
-								disabled={runtimeDisabled(assignment, "hooks")}
-								onclick={() => handleRuntimeToggle(assignment, "hooks")}
-							>
-								<FishingHookIcon class="size-3.5" />
-							</button>
-							<div class="ml-1 border-l border-border/70 pl-2">
-								<Checkbox
-									checked={allVisibilityState.checked}
-									indeterminate={allVisibilityState.indeterminate}
-									disabled={runtimeDisabled(assignment)}
-									aria-label="Toggle all session credential visibility"
-									onCheckedChange={() => handleAllVisibilityToggle(assignment)}
-								/>
+						{#if (assignment.uses?.length ?? 0) > 0 && expandedUses[assignmentKey(assignment)]}
+							<div class="mt-2 w-full space-y-1.5">
+								{#each assignment.uses ?? [] as use (use.id)}
+									<div
+										class={`flex w-full items-start gap-2 rounded-md border px-2 py-1.5 ${
+											useIsExpired(use)
+												? "border-border/50 bg-muted/25 text-muted-foreground"
+												: "border-border/70 bg-muted/35"
+										}`}
+									>
+										<div class="min-w-0 flex-1">
+											<div
+												class="whitespace-normal break-words text-[12px] font-medium"
+											>
+												{use.description}
+											</div>
+											<div class="text-[11px] text-muted-foreground">
+												{formatUseTiming(use)}
+											</div>
+										</div>
+										<button
+											type="button"
+											class="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-background hover:text-foreground"
+											aria-label="Remove authorized use"
+											title="Remove authorized use"
+											onclick={() => removeUse(assignment, use.id)}
+										>
+											<Trash2Icon class="size-3.5" />
+										</button>
+									</div>
+								{/each}
 							</div>
-						</div>
+						{/if}
 					</div>
 				{/each}
 			</div>

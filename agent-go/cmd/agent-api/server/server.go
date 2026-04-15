@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,7 +27,9 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
+	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
 	"github.com/obot-platform/discobot/agent-go/tools"
 
@@ -44,6 +47,40 @@ func visibleEnvSnapshot(workspaceRoot string, envSnapshot func() map[string]stri
 	}
 	maps.Copy(env, envSnapshot())
 	return env
+}
+
+type credentialUseAuthorizerResolver struct {
+	registry *providers.ProviderRegistry
+}
+
+func (r credentialUseAuthorizerResolver) ResolveAuthorizationModel(currentProviderID string) (credentials.AuthorizationModelRef, error) {
+	ref, err := r.registry.ResolveModelInProvider(currentProviderID, "", providers.ModelTaskAuthorization, providers.ModelTaskChat)
+	if err != nil {
+		return credentials.AuthorizationModelRef{}, err
+	}
+	return credentials.AuthorizationModelRef{ProviderID: ref.ProviderID, ModelID: ref.ModelID}, nil
+}
+
+func (r credentialUseAuthorizerResolver) CompleteText(ctx context.Context, model credentials.AuthorizationModelRef, messages []message.Message, maxTokens *int) (string, error) {
+	provider, err := r.registry.Get(model.ProviderID)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for chunk, err := range provider.Complete(ctx, providers.CompleteRequest{
+		Model:     providers.ModelRef{ProviderID: model.ProviderID, ModelID: model.ModelID},
+		Messages:  messages,
+		MaxTokens: maxTokens,
+	}) {
+		if err != nil {
+			return "", err
+		}
+		switch delta := chunk.(type) {
+		case message.TextDeltaChunk:
+			b.WriteString(delta.Delta)
+		}
+	}
+	return strings.TrimSpace(b.String()), nil
 }
 
 // Run starts the HTTP API server and blocks until SIGINT/SIGTERM.
@@ -77,30 +114,21 @@ func Run(cfg *config.Config) {
 	exec.SetEnvSnapshot(func() map[string]string {
 		return visibleEnvSnapshot(cfg.AgentCwd, credMgr.Snapshot)
 	})
-	exec.SetCredentialUseAuthorizer(func(_ string, _, _ string, uses []tools.CredentialUseBinding) error {
+	authorizer := credentials.NewCredentialUseAuthorizer(
+		credentialUseAuthorizerResolver{registry: reg},
+		credMgr,
+		sessionconfig.CredentialUseAuthorizerSystemPrompt(),
+	)
+	exec.SetCredentialUseAuthorizer(func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []tools.CredentialUseBinding) error {
+		converted := make([]credentials.CredentialUseBinding, 0, len(uses))
 		for _, use := range uses {
-			cred := credMgr.SessionCredential(use.CredentialID)
-			if cred == nil {
-				return fmt.Errorf("credential id %s is not available in this session", use.CredentialID)
-			}
-			if !cred.AgentVisible {
-				return fmt.Errorf("credential id %s is not visible to the agent in this session", use.CredentialID)
-			}
-			if cred.EnvVar != use.EnvVar {
-				return fmt.Errorf("credential id %s is not authorized for environment variable %s", use.CredentialID, use.EnvVar)
-			}
-			authorized := false
-			for _, approvedUse := range cred.Uses {
-				if approvedUse.ID == use.UseID {
-					authorized = true
-					break
-				}
-			}
-			if !authorized {
-				return fmt.Errorf("credential use %s is not authorized for credential id %s", use.UseID, use.CredentialID)
-			}
+			converted = append(converted, credentials.CredentialUseBinding{
+				CredentialID: use.CredentialID,
+				UseID:        use.UseID,
+				EnvVar:       use.EnvVar,
+			})
 		}
-		return nil
+		return authorizer.Authorize(ctx, currentProviderID, toolCallID, command, description, converted)
 	})
 
 	// ── DefaultAgent ─────────────────────────────────────────────────────────

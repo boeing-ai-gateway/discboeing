@@ -74,3 +74,77 @@ func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
 		t.Fatalf("stored message metadata = %#v, want %#v", gotStoredMeta, wantMeta)
 	}
 }
+
+func TestRunTurn_PersistsPreludeMessagesBeforeUserMessage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-prelude"
+
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "Hello!"},
+				message.TextEndChunk{ID: "t1"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
+		},
+	}
+
+	prelude := message.Message{
+		Role:      "user",
+		Synthetic: true,
+		Parts: []message.Part{message.TextPart{
+			Text: "prelude reminder",
+			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ReminderKind: "credentials",
+			}),
+		}},
+	}
+
+	chunks := collectChunks(t, RunTurn(
+		context.Background(), prov, &mockExecutor{}, store,
+		threadID, "", TurnConfig{
+			Model:           "test-model",
+			PreludeMessages: []message.Message{prelude},
+			UserParts:       []message.Part{message.TextPart{Text: "hello"}},
+		},
+	))
+
+	userChunkCount := 0
+	var userChunk message.UserMessageChunk
+	for _, chunk := range chunks {
+		next, ok := chunk.(message.UserMessageChunk)
+		if ok {
+			userChunkCount++
+			userChunk = next
+		}
+	}
+	if userChunkCount != 1 {
+		t.Fatalf("expected exactly 1 user message chunk, got %d", userChunkCount)
+	}
+
+	storedUser, err := store.LoadMessage(threadID, userChunk.Data.Message.ID)
+	if err != nil {
+		t.Fatalf("load stored user message: %v", err)
+	}
+	if storedUser.ParentID == "" {
+		t.Fatal("expected stored user message to have prelude parent")
+	}
+	storedPrelude, err := store.LoadMessage(threadID, storedUser.ParentID)
+	if err != nil {
+		t.Fatalf("load stored prelude message: %v", err)
+	}
+
+	if !storedPrelude.Message.Synthetic {
+		t.Fatal("expected prelude message to be synthetic")
+	}
+	preludeText, ok := storedPrelude.Message.Parts[0].(message.TextPart)
+	if !ok || preludeText.Text != "prelude reminder" {
+		t.Fatalf("unexpected prelude message %#v", storedPrelude.Message)
+	}
+	userText, ok := storedUser.Message.Parts[0].(message.TextPart)
+	if !ok || userText.Text != "hello" {
+		t.Fatalf("unexpected user message %#v", storedUser.Message)
+	}
+}

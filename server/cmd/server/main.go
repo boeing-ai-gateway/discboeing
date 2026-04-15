@@ -294,7 +294,6 @@ func main() {
 			disp.RegisterExecutor(dispatcher.NewSessionDeleteExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionSandboxDeleteExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionCommitExecutor(sessionSvc))
-			disp.RegisterExecutor(dispatcher.NewSessionRebaseExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewPromptDispatchExecutor(dispChatSvc))
 		}
 
@@ -1024,16 +1023,6 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
-						Method: "POST", Pattern: "/rebase",
-						Handler: h.RebaseSession,
-						Meta: routes.Meta{
-							Group:       "Sessions",
-							Description: "Rebase session changes onto workspace HEAD",
-							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
-						},
-					})
-
-					sidReg.Register(r, routes.Route{
 						Method: "GET", Pattern: "/files",
 						Handler: h.ListSessionFiles,
 						Meta: routes.Meta{
@@ -1131,6 +1120,16 @@ func main() {
 								{Name: "path", In: "query", Example: "README.md"},
 								{Name: "format", In: "query", Example: "files"},
 							},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/commands",
+						Handler: h.ListCommands,
+						Meta: routes.Meta{
+							Group:       "Commands",
+							Description: "List available session slash commands",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
 						},
 					})
 

@@ -7,9 +7,11 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -50,6 +52,9 @@ const (
 	overlayFSDir = "/.data/.overlayfs"
 	mountHome    = "/home/discobot" // Where overlayfs mounts
 	symlinkPath  = "/workspace"     // Symlink to /home/discobot/workspace
+
+	defaultCommitCommandRelPath = ".discobot/commands/discobot-commit.md"
+	remoteCommitCommandRelPath  = ".discobot/commands/discobot-commit-remote.md"
 )
 
 func main() {
@@ -101,7 +106,9 @@ func runSetup() error {
 	runAsUser := envOrDefault("AGENT_USER", defaultUser)
 	sessionID := os.Getenv("SESSION_ID")
 	workspacePath := os.Getenv("WORKSPACE_ORIGIN_PATH")
+	workspaceSource := os.Getenv("WORKSPACE_SOURCE")
 	workspaceCommit := os.Getenv("WORKSPACE_COMMIT")
+	workspaceTargetRef := os.Getenv("WORKSPACE_TARGET_REF")
 
 	if sessionID == "" {
 		return fmt.Errorf("SESSION_ID environment variable is required")
@@ -124,11 +131,14 @@ func runSetup() error {
 	if err := setupBaseHome(userInfo); err != nil {
 		return fmt.Errorf("base home setup failed: %w", err)
 	}
+	if err := installCommitCommandVariant(baseHomeDir, isGitURL(workspaceSource), userInfo); err != nil {
+		return fmt.Errorf("commit command setup failed: %w", err)
+	}
 	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 2: Clone workspace
 	stepStart = time.Now()
-	if err := setupWorkspace(workspacePath, workspaceCommit, userInfo); err != nil {
+	if err := setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspaceCommit, userInfo); err != nil {
 		return fmt.Errorf("workspace setup failed: %w", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] workspace setup completed\n", time.Since(stepStart).Seconds())
@@ -528,21 +538,20 @@ func setupGitSafeDirectories(workspacePath string) error {
 	return nil
 }
 
-// setupBaseHome copies /home/discobot to /.data/discobot if it doesn't exist,
-// or syncs new files if it already exists
+// setupBaseHome refreshes /.data/discobot from /home/discobot on every startup,
+// replacing any previously persisted contents so the base home matches the
+// current image exactly.
 func setupBaseHome(u *userInfo) error {
-	// Check if base home already exists
 	if _, err := os.Stat(baseHomeDir); err == nil {
-		fmt.Printf("discobot-agent: base home already exists at %s, syncing new files\n", baseHomeDir)
-		// Sync any new files from /home/discobot to /.data/discobot
-		// This ensures new files added to the container image get propagated
-		if err := syncNewFiles(mountHome, baseHomeDir, u); err != nil {
-			return fmt.Errorf("failed to sync new files: %w", err)
+		fmt.Printf("discobot-agent: base home already exists at %s, replacing it from %s\n", baseHomeDir, mountHome)
+		if err := os.RemoveAll(baseHomeDir); err != nil {
+			return fmt.Errorf("failed to remove existing base home: %w", err)
 		}
-		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat base home: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: copying /home/discobot to %s\n", baseHomeDir)
+	fmt.Printf("discobot-agent: copying %s to %s\n", mountHome, baseHomeDir)
 
 	// Create parent directory
 	if err := os.MkdirAll(filepath.Dir(baseHomeDir), 0755); err != nil {
@@ -563,66 +572,28 @@ func setupBaseHome(u *userInfo) error {
 	return nil
 }
 
-// syncNewFiles copies files from src to dst that don't exist in dst.
-// It does not overwrite existing files to preserve user modifications.
-func syncNewFiles(src, dst string, u *userInfo) error {
-	return filepath.Walk(src, func(srcPath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+func installCommitCommandVariant(homeDir string, useRemoteVariant bool, u *userInfo) error {
+	commandPath := filepath.Join(homeDir, defaultCommitCommandRelPath)
+	sourcePath := commandPath
+	if useRemoteVariant {
+		sourcePath = filepath.Join(homeDir, remoteCommitCommandRelPath)
+	}
 
-		// Calculate relative path and destination path
-		relPath, err := filepath.Rel(src, srcPath)
-		if err != nil {
-			return err
-		}
-		dstPath := filepath.Join(dst, relPath)
+	if _, err := os.Stat(sourcePath); err != nil {
+		return fmt.Errorf("commit command variant %s not found: %w", sourcePath, err)
+	}
 
-		// Check if destination already exists
-		_, dstErr := os.Lstat(dstPath)
-		if dstErr == nil {
-			// Destination exists, skip (don't overwrite)
-			return nil
-		}
-		if !os.IsNotExist(dstErr) {
-			// Some other error
-			return dstErr
-		}
+	if err := copyFile(sourcePath, commandPath); err != nil {
+		return fmt.Errorf("copy commit command variant: %w", err)
+	}
 
-		// Destination doesn't exist, copy it
-		if info.IsDir() {
-			fmt.Printf("discobot-agent: syncing new directory %s\n", relPath)
-			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
-				return err
-			}
-			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
-				return err
-			}
-		} else if info.Mode()&os.ModeSymlink != 0 {
-			// Handle symlinks
-			link, err := os.Readlink(srcPath)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("discobot-agent: syncing new symlink %s\n", relPath)
-			if err := os.Symlink(link, dstPath); err != nil {
-				return err
-			}
-			if err := os.Lchown(dstPath, u.uid, u.gid); err != nil {
-				return err
-			}
-		} else if info.Mode().IsRegular() {
-			fmt.Printf("discobot-agent: syncing new file %s\n", relPath)
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
-			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
-				return err
-			}
+	if u != nil {
+		if err := os.Chown(commandPath, u.uid, u.gid); err != nil {
+			return fmt.Errorf("chown commit command variant: %w", err)
 		}
+	}
 
-		return nil
-	})
+	return nil
 }
 
 // copyDir recursively copies a directory preserving permissions
@@ -769,16 +740,18 @@ func installSandboxSSHKeyFile(src, dst string, mode os.FileMode, uid, gid int) e
 }
 
 // setupWorkspace clones the workspace if it doesn't exist.
-func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
+func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspaceCommit string, u *userInfo) error {
 	// If workspace already exists, nothing to do
 	if _, err := os.Stat(workspaceDir); err == nil {
 		fmt.Printf("discobot-agent: workspace already exists at %s\n", workspaceDir)
 		return nil
 	}
 
+	cloneSource := workspaceCloneSource(workspacePath, workspaceSource)
+
 	// If no workspace path specified, create empty workspace owned by user
-	if workspacePath == "" {
-		fmt.Println("discobot-agent: no WORKSPACE_ORIGIN_PATH specified, creating empty workspace")
+	if cloneSource == "" {
+		fmt.Println("discobot-agent: no workspace source specified, creating empty workspace")
 		if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 			return fmt.Errorf("failed to create workspace directory: %w", err)
 		}
@@ -788,7 +761,7 @@ func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
 		return nil
 	}
 
-	fmt.Printf("discobot-agent: cloning workspace from %s\n", workspacePath)
+	fmt.Printf("discobot-agent: cloning workspace from %s\n", cloneSource)
 
 	// Clean up any existing staging directory
 	if err := os.RemoveAll(stagingDir); err != nil {
@@ -797,8 +770,17 @@ func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
 
 	// Note: git safe.directory is configured system-wide in setupGitSafeDirectories()
 
+	mirrorDir := ""
+	if isGitURL(cloneSource) {
+		var err error
+		mirrorDir, err = ensureGitMirrorCache(cloneSource)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Clone to staging directory first
-	cloneArgs := []string{"clone", "--single-branch", workspacePath, stagingDir}
+	cloneArgs := buildWorkspaceCloneArgs(cloneSource, workspaceTargetRef, mirrorDir)
 
 	cmd := exec.Command("git", cloneArgs...)
 	cmd.Stdout = os.Stdout
@@ -808,17 +790,33 @@ func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
-	// If specific commit requested, create a branch at that commit to avoid detached HEAD
+	branchName, err := currentBranchName(stagingDir)
+	if err != nil {
+		return err
+	}
+
+	// If specific commit requested, move the tracked branch to that commit without
+	// detaching HEAD so sandbox-local rebases can use the origin upstream directly.
 	if workspaceCommit != "" {
-		// Create a temporary branch at the target commit
-		branchName := "discobot-session"
-		cmd = exec.Command("git", "-C", stagingDir, "checkout", "-B", branchName, workspaceCommit)
+		cmd = exec.Command("git", "-C", stagingDir, "reset", "--hard", workspaceCommit)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		fmt.Printf("discobot-agent: creating branch %s at commit %s\n", branchName, workspaceCommit)
+		fmt.Printf("discobot-agent: resetting branch %s to commit %s\n", branchName, workspaceCommit)
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("git checkout -B %s %s failed: %w", branchName, workspaceCommit, err)
+			return fmt.Errorf("git reset --hard %s failed: %w", workspaceCommit, err)
 		}
+	} else if shouldResetWorkspaceToTargetRef(workspaceTargetRef) {
+		cmd = exec.Command("git", "-C", stagingDir, "reset", "--hard", workspaceTargetRef)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		fmt.Printf("discobot-agent: resetting branch %s to target ref %s\n", branchName, workspaceTargetRef)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("git reset --hard %s failed: %w", workspaceTargetRef, err)
+		}
+	}
+
+	if err := ensureBranchTracksOrigin(stagingDir, branchName); err != nil {
+		return err
 	}
 
 	// Change ownership of all files to the target user
@@ -833,6 +831,143 @@ func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
 	}
 
 	fmt.Printf("discobot-agent: workspace cloned successfully\n")
+	return nil
+}
+
+func workspaceCloneSource(workspacePath, workspaceSource string) string {
+	workspacePath = strings.TrimSpace(workspacePath)
+	workspaceSource = strings.TrimSpace(workspaceSource)
+	if isGitURL(workspaceSource) {
+		return workspaceSource
+	}
+	if workspacePath != "" {
+		return workspacePath
+	}
+	return workspaceSource
+}
+
+func buildWorkspaceCloneArgs(cloneSource, workspaceTargetRef, mirrorDir string) []string {
+	args := []string{"clone"}
+	if branch := branchNameFromTargetRef(workspaceTargetRef); branch != "" {
+		args = append(args, "--single-branch", "--branch", branch)
+	} else if strings.TrimSpace(workspaceTargetRef) == "" || strings.TrimSpace(workspaceTargetRef) == "HEAD" {
+		args = append(args, "--single-branch")
+	}
+	if mirrorDir != "" {
+		args = append(args, "--reference-if-able", mirrorDir)
+	}
+	args = append(args, cloneSource, stagingDir)
+	return args
+}
+
+func shouldResetWorkspaceToTargetRef(targetRef string) bool {
+	targetRef = strings.TrimSpace(targetRef)
+	if targetRef == "" || targetRef == "HEAD" {
+		return false
+	}
+	return branchNameFromTargetRef(targetRef) == ""
+}
+
+func branchNameFromTargetRef(targetRef string) string {
+	targetRef = strings.TrimSpace(targetRef)
+	if targetRef == "" || targetRef == "HEAD" {
+		return ""
+	}
+	if strings.HasPrefix(targetRef, "refs/heads/") {
+		return strings.TrimPrefix(targetRef, "refs/heads/")
+	}
+	if strings.HasPrefix(targetRef, "refs/") || strings.Contains(targetRef, "/") {
+		return ""
+	}
+	return targetRef
+}
+
+func isGitURL(source string) bool {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return false
+	}
+	return strings.HasPrefix(source, "http://") ||
+		strings.HasPrefix(source, "https://") ||
+		strings.HasPrefix(source, "ssh://") ||
+		strings.HasPrefix(source, "git@")
+}
+
+func ensureGitMirrorCache(cloneSource string) (string, error) {
+	cacheBase := persistentCachePath("/home/discobot/.cache/discobot/git")
+	if err := os.MkdirAll(cacheBase, 0777); err != nil {
+		return "", fmt.Errorf("failed to create git cache directory: %w", err)
+	}
+
+	mirrorDir := filepath.Join(cacheBase, hashWorkspaceSource(cloneSource)+".git")
+	if _, err := os.Stat(mirrorDir); os.IsNotExist(err) {
+		cmd := exec.Command("git", "clone", "--mirror", cloneSource, mirrorDir)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		fmt.Printf("discobot-agent: creating git mirror cache at %s\n", mirrorDir)
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("git clone --mirror failed: %w", err)
+		}
+		return mirrorDir, nil
+	} else if err != nil {
+		return "", fmt.Errorf("failed to stat git mirror cache: %w", err)
+	}
+
+	cmd := exec.Command("git", "-C", mirrorDir, "remote", "update", "--prune")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	fmt.Printf("discobot-agent: updating git mirror cache at %s\n", mirrorDir)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git remote update failed for mirror cache: %w", err)
+	}
+	return mirrorDir, nil
+}
+
+func persistentCachePath(runtimePath string) string {
+	runtimePath = filepath.Clean(runtimePath)
+	if runtimePath == "/" || runtimePath == "." {
+		return filepath.Join(dataDir, "cache")
+	}
+	return filepath.Join(dataDir, "cache", strings.TrimPrefix(runtimePath, "/"))
+}
+
+func hashWorkspaceSource(source string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(source)))
+	return hex.EncodeToString(sum[:])
+}
+
+func currentBranchName(repoDir string) (string, error) {
+	cmd := exec.Command("git", "-C", repoDir, "branch", "--show-current")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine current branch: %w", err)
+	}
+
+	branchName := strings.TrimSpace(string(output))
+	if branchName == "" {
+		return "", fmt.Errorf("cloned workspace has no current branch")
+	}
+	return branchName, nil
+}
+
+func ensureBranchTracksOrigin(repoDir, branchName string) error {
+	upstreamRef := "origin/" + branchName
+
+	verifyCmd := exec.Command("git", "-C", repoDir, "rev-parse", "--verify", upstreamRef)
+	verifyCmd.Stdout = io.Discard
+	verifyCmd.Stderr = io.Discard
+	if err := verifyCmd.Run(); err != nil {
+		fmt.Printf("discobot-agent: skipping upstream tracking setup for %s; remote ref %s not found\n", branchName, upstreamRef)
+		return nil
+	}
+
+	cmd := exec.Command("git", "-C", repoDir, "branch", "--set-upstream-to", upstreamRef, branchName)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	fmt.Printf("discobot-agent: setting branch %s to track %s\n", branchName, upstreamRef)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set upstream %s for branch %s: %w", upstreamRef, branchName, err)
+	}
 	return nil
 }
 

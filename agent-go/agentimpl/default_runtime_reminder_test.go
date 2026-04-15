@@ -51,7 +51,7 @@ func TestFormatRuntimeEnvironmentReminder_IncludesModelName(t *testing.T) {
 }
 
 func TestFormatModeChangeReminder_IncludesTargetMode(t *testing.T) {
-	plan := formatModeChangeReminder(true)
+	plan := sessionconfig.FormatModeChangeReminder(true)
 	if !strings.Contains(plan, "<system-reminder>") || !strings.Contains(plan, "</system-reminder>") {
 		t.Error("plan reminder should be wrapped in <system-reminder> tags")
 	}
@@ -59,7 +59,7 @@ func TestFormatModeChangeReminder_IncludesTargetMode(t *testing.T) {
 		t.Errorf("expected plan reminder to mention plan mode, got %q", plan)
 	}
 
-	build := formatModeChangeReminder(false)
+	build := sessionconfig.FormatModeChangeReminder(false)
 	if !strings.Contains(build, "mode is now build") {
 		t.Errorf("expected build reminder to mention build mode, got %q", build)
 	}

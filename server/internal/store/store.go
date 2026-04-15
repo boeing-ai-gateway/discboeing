@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -513,15 +514,28 @@ func (s *Store) UpdateSessionSSHKey(ctx context.Context, id string, encryptedDat
 		Update("ssh_key_encrypted_data", encryptedData).Error
 }
 
-// UpdateSessionWorkspace updates the workspace path and commit for a session.
-func (s *Store) UpdateSessionWorkspace(ctx context.Context, id, workspacePath, workspaceCommit string) error {
+// UpdateSessionWorkspace updates the workspace path and target ref for a session.
+func (s *Store) UpdateSessionWorkspace(ctx context.Context, id, workspacePath, targetRef string) error {
 	updates := map[string]any{
 		"workspace_path": workspacePath,
 	}
-	if workspaceCommit != "" {
-		updates["workspace_commit"] = workspaceCommit
+	if strings.TrimSpace(targetRef) != "" {
+		updates["target_ref"] = strings.TrimSpace(targetRef)
 	}
 	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (s *Store) CreateSessionCommitLog(ctx context.Context, entry *model.SessionCommitLog) error {
+	return s.writeDB.WithContext(ctx).Create(entry).Error
+}
+
+func (s *Store) ListSessionCommitLogs(ctx context.Context, sessionID string) ([]*model.SessionCommitLog, error) {
+	var entries []*model.SessionCommitLog
+	err := s.readDB.WithContext(ctx).
+		Where("session_id = ?", sessionID).
+		Order("created_at DESC").
+		Find(&entries).Error
+	return entries, err
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id string) error {
@@ -536,6 +550,11 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 			return err
 		}
 		if err := tx.Where("session_id = ?", id).Delete(&model.PromptSubmission{}).Error; err != nil {
+			return err
+		}
+
+		// Delete session commit logs
+		if err := tx.Where("session_id = ?", id).Delete(&model.SessionCommitLog{}).Error; err != nil {
 			return err
 		}
 
@@ -564,7 +583,12 @@ func (s *Store) GetCredentialByID(ctx context.Context, id string) (*model.Creden
 
 func (s *Store) GetCredentialByProvider(ctx context.Context, projectID, provider string) (*model.Credential, error) {
 	var credential model.Credential
-	if err := s.readDB.WithContext(ctx).First(&credential, "project_id = ? AND provider = ?", projectID, provider).Error; err != nil {
+	if err := s.readDB.WithContext(ctx).
+		Where("project_id = ? AND provider = ?", projectID, provider).
+		Order("inactive ASC").
+		Order("updated_at DESC").
+		Order("created_at DESC").
+		First(&credential).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -586,7 +610,11 @@ func (s *Store) GetCredentialByIDForProject(ctx context.Context, projectID, id s
 
 func (s *Store) ListCredentialsByProject(ctx context.Context, projectID string) ([]*model.Credential, error) {
 	var credentials []*model.Credential
-	err := s.readDB.WithContext(ctx).Where("project_id = ?", projectID).Find(&credentials).Error
+	err := s.readDB.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Order("updated_at DESC").
+		Order("created_at DESC").
+		Find(&credentials).Error
 	return credentials, err
 }
 

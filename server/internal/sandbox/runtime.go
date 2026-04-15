@@ -234,9 +234,10 @@ type CreateOptions struct {
 	// SSHKey contains optional SSH identity material to provision into the sandbox.
 	SSHKey *SSHKeyProvision
 
-	// WorkspacePath is the local directory to mount inside the sandbox at /.workspace.
-	// This is always a local directory path (either a local workspace or a cloned git repo).
-	// Sets WORKSPACE_ORIGIN_PATH env var to /.workspace (the mount point).
+	// WorkspacePath is an optional local directory to mount inside the sandbox at
+	// /.workspace. Local workspaces use this; git URL workspaces may leave it empty
+	// and let the agent clone from WorkspaceSource instead.
+	// Sets WORKSPACE_ORIGIN_PATH env var to /.workspace (the mount point) when set.
 	WorkspacePath string
 
 	// WorkspaceSource is the original workspace source (local path or git URL).
@@ -245,9 +246,16 @@ type CreateOptions struct {
 	// For git workspaces, this is the git URL (e.g., https://github.com/user/repo.git).
 	WorkspaceSource string
 
-	// WorkspaceCommit is the git commit to checkout (optional).
+	// WorkspaceCommit is an optional workspace commit to check out while bootstrapping
+	// the sandbox repository. It is a sandbox creation input, not persisted session
+	// commit state.
 	// Set as WORKSPACE_COMMIT environment variable.
 	WorkspaceCommit string
+
+	// WorkspaceTargetRef is the git ref the sandbox should clone or check out when
+	// bootstrapping a git URL workspace. Examples: HEAD, main, refs/heads/main.
+	// Set as WORKSPACE_TARGET_REF environment variable.
+	WorkspaceTargetRef string
 
 	// ProjectID is the project this session belongs to.
 	// Set as DISCOBOT_PROJECT_ID environment variable (used by agent for MCP token persistence).

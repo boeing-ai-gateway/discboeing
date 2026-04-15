@@ -149,6 +149,9 @@ func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.Crea
 	if opts.WorkspaceCommit != "" {
 		env["WORKSPACE_COMMIT"] = opts.WorkspaceCommit
 	}
+	if opts.WorkspaceTargetRef != "" {
+		env["WORKSPACE_TARGET_REF"] = opts.WorkspaceTargetRef
+	}
 
 	// MCP OAuth env vars (agent uses these to persist tokens back to the server)
 	if opts.ProjectID != "" {

@@ -21,9 +21,10 @@
 
 	type Props = {
 		params: DiffRendererParams;
+		onRenderStateChange?: (rendering: boolean) => void;
 	};
 
-	let { params }: Props = $props();
+	let { params, onRenderStateChange }: Props = $props();
 
 	let standardHost = $state<HTMLDivElement | null>(null);
 	let virtualScrollRoot = $state<HTMLDivElement | null>(null);
@@ -37,6 +38,7 @@
 
 	function cleanupRenderer() {
 		renderRequestId += 1;
+		onRenderStateChange?.(false);
 		instance?.cleanUp();
 		instance = null;
 		virtualizer?.cleanUp();
@@ -96,6 +98,7 @@
 		nextParams: DiffRendererParams,
 		requestId: number,
 	) {
+		onRenderStateChange?.(true);
 		try {
 			await Promise.resolve(
 				currentInstance.render({
@@ -105,11 +108,15 @@
 					containerWrapper: getContainerWrapper(nextParams),
 				}),
 			);
+			if (requestId === renderRequestId) {
+				onRenderStateChange?.(false);
+			}
 		} catch (error) {
 			if (requestId !== renderRequestId) {
 				return;
 			}
 
+			onRenderStateChange?.(false);
 			console.error("[DiffReviewFileRenderer] Failed to render diff", {
 				error,
 				oldFile: nextParams.oldFile.name,

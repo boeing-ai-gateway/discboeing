@@ -76,6 +76,35 @@ type ModelsResponse struct {
 	Models []ModelInfo `json:"models"`
 }
 
+type CommandApprovedUse struct {
+	Description string `json:"description"`
+}
+
+type CommandCredentialRequest struct {
+	EnvVar        string               `json:"envVar"`
+	Name          string               `json:"name"`
+	Justification string               `json:"justification"`
+	ApprovedUses  []CommandApprovedUse `json:"approvedUses,omitempty"`
+}
+
+type CommandDiscobotMetadata struct {
+	UI                bool                       `json:"ui,omitempty"`
+	Label             string                     `json:"label,omitempty"`
+	Order             int                        `json:"order,omitempty"`
+	CredentialRequest []CommandCredentialRequest `json:"credentialRequest,omitempty"`
+}
+
+type Command struct {
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Kind        string                  `json:"kind"`
+	Discobot    CommandDiscobotMetadata `json:"discobot"`
+}
+
+type ListCommandsResponse struct {
+	Commands []Command `json:"commands"`
+}
+
 // ChatStatusResponse is the GET /chat/status response.
 type ChatStatusResponse struct {
 	IsRunning    bool    `json:"isRunning"`
@@ -300,7 +329,7 @@ type SingleFileDiffResponse struct {
 // ============================================================================
 
 // CommitsResponse is the GET /commits response (success case).
-// Returns git format-patch output for commits since a parent.
+// Returns git format-patch output for changes relative to a target commit.
 type CommitsResponse struct {
 	Patches     string `json:"patches"`     // git format-patch --stdout output
 	CommitCount int    `json:"commitCount"` // Number of commits in the patch set
@@ -309,7 +338,7 @@ type CommitsResponse struct {
 
 // CommitsErrorResponse is the GET /commits error response.
 type CommitsErrorResponse struct {
-	Error      string `json:"error"`                // "parent_mismatch", "no_commits", "invalid_parent", "not_git_repo"
+	Error      string `json:"error"`                // "no_commits", "invalid_target", "not_git_repo"
 	Message    string `json:"message"`              // Human-readable error message
 	IsClean    bool   `json:"isClean,omitempty"`    // Only set for "no_commits": true when working tree has no uncommitted changes
 	HeadCommit string `json:"headCommit,omitempty"` // Only set for "no_commits": the current HEAD commit SHA

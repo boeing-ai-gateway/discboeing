@@ -384,6 +384,9 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	if opts.WorkspaceCommit != "" {
 		env = append(env, fmt.Sprintf("WORKSPACE_COMMIT=%s", opts.WorkspaceCommit))
 	}
+	if opts.WorkspaceTargetRef != "" {
+		env = append(env, fmt.Sprintf("WORKSPACE_TARGET_REF=%s", opts.WorkspaceTargetRef))
+	}
 
 	// MCP OAuth env vars (agent uses these to persist tokens back to the server)
 	if opts.ProjectID != "" {

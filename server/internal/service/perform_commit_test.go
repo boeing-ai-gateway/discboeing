@@ -194,6 +194,8 @@ func (e *testEnv) createTestWorkspace(t *testing.T, projectID string) (*model.Wo
 // createTestSession creates a test session.
 func (e *testEnv) createTestSession(t *testing.T, projectID, workspaceID, baseCommit string) *model.Session {
 	t.Helper()
+	_ = baseCommit
+	targetRef := defaultSessionTargetRef
 	session := &model.Session{
 		ID:           "test-session",
 		ProjectID:    projectID,
@@ -201,7 +203,7 @@ func (e *testEnv) createTestSession(t *testing.T, projectID, workspaceID, baseCo
 		Name:         "Test Session",
 		Status:       model.SessionStatusReady,
 		CommitStatus: model.CommitStatusNone,
-		BaseCommit:   ptrString(baseCommit),
+		TargetRef:    &targetRef,
 	}
 	if err := e.store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -633,7 +635,7 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
 
 	// Add a new commit to the workspace (simulating external change)
-	newCommit := env.addCommitToWorkspace(t, workspace.Path, "external.txt", "external content\n")
+	_ = env.addCommitToWorkspace(t, workspace.Path, "external.txt", "external content\n")
 
 	// Set up mock handler with patches available (simulating agent already has work done)
 	handler := newMockHandler()
@@ -668,7 +670,7 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 		t.Errorf("Expected 0 chat requests (optimistic path should skip prompt), got %d", handler.getChatRequestCount())
 	}
 
-	// Verify: should have called GetCommits once (during syncBaseCommit)
+	// Verify: should have called GetCommits once during the optimistic target diff check.
 	if handler.getCommitsRequestCount() != 1 {
 		t.Errorf("Expected 1 commits request (optimistic check), got %d", handler.getCommitsRequestCount())
 	}
@@ -679,9 +681,8 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	// BaseCommit should be updated to the new commit
-	if updatedSession.BaseCommit == nil || *updatedSession.BaseCommit != newCommit {
-		t.Errorf("Expected baseCommit to be updated to %s, got %v", newCommit, updatedSession.BaseCommit)
+	if trimStringPtr(updatedSession.TargetRef) != defaultSessionTargetRef {
+		t.Errorf("Expected targetRef to remain %q, got %q", defaultSessionTargetRef, trimStringPtr(updatedSession.TargetRef))
 	}
 
 	if updatedSession.CommitStatus != model.CommitStatusCompleted {
@@ -706,7 +707,7 @@ func TestPerformCommit_WorkspaceChangedNoPatches(t *testing.T) {
 	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
 
 	// Add a new commit to the workspace
-	newCommit := env.addCommitToWorkspace(t, workspace.Path, "external.txt", "external content\n")
+	_ = env.addCommitToWorkspace(t, workspace.Path, "external.txt", "external content\n")
 
 	// Track request order
 	var requestOrder []string
@@ -787,8 +788,8 @@ func TestPerformCommit_WorkspaceChangedNoPatches(t *testing.T) {
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.BaseCommit == nil || *updatedSession.BaseCommit != newCommit {
-		t.Errorf("Expected baseCommit to be %s, got %v", newCommit, updatedSession.BaseCommit)
+	if trimStringPtr(updatedSession.TargetRef) != defaultSessionTargetRef {
+		t.Errorf("Expected targetRef to remain %q, got %q", defaultSessionTargetRef, trimStringPtr(updatedSession.TargetRef))
 	}
 
 	if updatedSession.CommitStatus != model.CommitStatusCompleted {
@@ -944,9 +945,8 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	// BaseCommit should remain unchanged
-	if updatedSession.BaseCommit == nil || *updatedSession.BaseCommit != initialCommit {
-		t.Errorf("Expected baseCommit to remain %s, got %v", initialCommit, updatedSession.BaseCommit)
+	if trimStringPtr(updatedSession.TargetRef) != defaultSessionTargetRef {
+		t.Errorf("Expected targetRef to remain %q, got %q", defaultSessionTargetRef, trimStringPtr(updatedSession.TargetRef))
 	}
 
 	if updatedSession.CommitStatus != model.CommitStatusCompleted {
@@ -955,189 +955,6 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 
 	if updatedSession.AppliedCommit == nil || *updatedSession.AppliedCommit == "" {
 		t.Error("Expected appliedCommit to be set")
-	}
-}
-
-func TestPerformRebase_ParentMismatchPrecheckContinuesToPrompt(t *testing.T) {
-	env := newTestEnv(t)
-	defer env.cleanup()
-
-	project := env.createTestProject(t)
-	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
-	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
-
-	callCount := 0
-	requestOrder := make([]string, 0, 3)
-	var mu sync.Mutex
-
-	handler := &trackingHandler{
-		onChat: func(w http.ResponseWriter, _ *http.Request) {
-			mu.Lock()
-			requestOrder = append(requestOrder, "chat")
-			mu.Unlock()
-			w.WriteHeader(http.StatusAccepted)
-		},
-		onCommits: func(w http.ResponseWriter, _ *http.Request) {
-			mu.Lock()
-			callCount++
-			currentCall := callCount
-			requestOrder = append(requestOrder, "commits")
-			mu.Unlock()
-
-			w.Header().Set("Content-Type", "application/json")
-			if currentCall == 1 {
-				w.WriteHeader(http.StatusBadRequest)
-				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
-					Error:   "parent_mismatch",
-					Message: "Parent commit not found",
-				})
-				return
-			}
-
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{CommitCount: 1})
-		},
-	}
-	env.mockSandbox.HTTPHandler = handler
-
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Failed to create sandbox: %v", err)
-	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
-		t.Fatalf("Failed to start sandbox: %v", err)
-	}
-
-	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
-	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
-
-	err = sessionSvc.PerformRebase(context.Background(), project.ID, session.ID)
-	if err != nil {
-		t.Fatalf("PerformRebase failed: %v", err)
-	}
-
-	mu.Lock()
-	order := append([]string(nil), requestOrder...)
-	mu.Unlock()
-
-	if len(order) != 3 {
-		t.Fatalf("Expected 3 requests, got %d: %v", len(order), order)
-	}
-	if order[0] != "commits" {
-		t.Errorf("Expected first request to be commits (precheck), got %s", order[0])
-	}
-	if order[1] != "chat" {
-		t.Errorf("Expected second request to be chat (rebase prompt), got %s", order[1])
-	}
-	if order[2] != "commits" {
-		t.Errorf("Expected third request to be commits (post-prompt validation), got %s", order[2])
-	}
-
-	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
-	if err != nil {
-		t.Fatalf("Failed to get session: %v", err)
-	}
-
-	if updatedSession.CommitStatus != model.CommitStatusCompleted {
-		t.Fatalf("Expected commit status %q, got %q", model.CommitStatusCompleted, updatedSession.CommitStatus)
-	}
-	if updatedSession.CommitOperation == nil || *updatedSession.CommitOperation != model.CommitOperationRebase {
-		t.Fatalf("Expected commit operation %q after rebase, got %v", model.CommitOperationRebase, updatedSession.CommitOperation)
-	}
-	if updatedSession.CommitError != nil {
-		t.Fatalf("Expected commit error to be cleared, got %v", updatedSession.CommitError)
-	}
-	if updatedSession.WorkspaceCommit == nil || *updatedSession.WorkspaceCommit != initialCommit {
-		t.Fatalf("Expected workspace commit %q, got %v", initialCommit, updatedSession.WorkspaceCommit)
-	}
-}
-
-func TestPerformRebase_StreamEndsBeforeFinishContinuesValidation(t *testing.T) {
-	env := newTestEnv(t)
-	defer env.cleanup()
-
-	project := env.createTestProject(t)
-	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
-	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
-
-	requestOrder := make([]string, 0, 3)
-	var mu sync.Mutex
-
-	handler := &trackingHandler{
-		onChat: func(w http.ResponseWriter, _ *http.Request) {
-			mu.Lock()
-			requestOrder = append(requestOrder, "chat")
-			mu.Unlock()
-			w.WriteHeader(http.StatusAccepted)
-		},
-		onStream: func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprintf(w, "event: chunk\n")
-			_, _ = fmt.Fprintf(w, "data: {\"type\":\"start\"}\n\n")
-		},
-		onCommits: func(w http.ResponseWriter, _ *http.Request) {
-			mu.Lock()
-			callNumber := len(requestOrder)
-			requestOrder = append(requestOrder, "commits")
-			mu.Unlock()
-
-			w.Header().Set("Content-Type", "application/json")
-			if callNumber == 0 {
-				w.WriteHeader(http.StatusConflict)
-				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
-					Error:   "parent_mismatch",
-					Message: "Parent commit not found",
-				})
-				return
-			}
-
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{CommitCount: 1})
-		},
-	}
-	env.mockSandbox.HTTPHandler = handler
-
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Failed to create sandbox: %v", err)
-	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
-		t.Fatalf("Failed to start sandbox: %v", err)
-	}
-
-	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
-	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
-
-	err = sessionSvc.PerformRebase(context.Background(), project.ID, session.ID)
-	if err != nil {
-		t.Fatalf("PerformRebase failed: %v", err)
-	}
-
-	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
-	if err != nil {
-		t.Fatalf("Failed to get session: %v", err)
-	}
-	if updatedSession.CommitStatus != model.CommitStatusCompleted {
-		t.Fatalf("Expected commit status %q, got %q", model.CommitStatusCompleted, updatedSession.CommitStatus)
-	}
-	if updatedSession.CommitError != nil {
-		t.Fatalf("Expected commit error to be cleared, got %v", updatedSession.CommitError)
-	}
-	if updatedSession.CommitOperation == nil || *updatedSession.CommitOperation != model.CommitOperationRebase {
-		t.Fatalf("Expected commit operation %q after rebase, got %v", model.CommitOperationRebase, updatedSession.CommitOperation)
-	}
-
-	mu.Lock()
-	order := append([]string(nil), requestOrder...)
-	mu.Unlock()
-	if len(order) != 3 {
-		t.Fatalf("Expected 3 requests, got %d: %v", len(order), order)
-	}
-	if order[0] != "commits" || order[1] != "chat" || order[2] != "commits" {
-		t.Fatalf("Expected commits -> chat -> commits request order, got %v", order)
 	}
 }
 
@@ -1279,7 +1096,7 @@ func TestPerformCommit_NoCommitsAfterPrompt_DirtyWorkTree_MarksFailed(t *testing
 	}
 }
 
-func TestPerformCommit_NoCommitsAfterPrompt_HeadMismatch_MarksFailed(t *testing.T) {
+func TestPerformCommit_NoCommitsAfterPrompt_CleanTargetMatchCompletes(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.cleanup()
 
@@ -1296,7 +1113,7 @@ func TestPerformCommit_NoCommitsAfterPrompt_HeadMismatch_MarksFailed(t *testing.
 				Error:      "no_commits",
 				Message:    "No commits found",
 				IsClean:    true,
-				HeadCommit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", // does not match base commit
+				HeadCommit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 			})
 		},
 	}
@@ -1323,8 +1140,8 @@ func TestPerformCommit_NoCommitsAfterPrompt_HeadMismatch_MarksFailed(t *testing.
 	if err != nil {
 		t.Fatalf("Failed to get session: %v", err)
 	}
-	if updatedSession.CommitStatus != model.CommitStatusFailed {
-		t.Fatalf("Expected commit status %q for head mismatch, got %q", model.CommitStatusFailed, updatedSession.CommitStatus)
+	if updatedSession.CommitStatus != model.CommitStatusCompleted {
+		t.Fatalf("Expected commit status %q for clean no-op, got %q", model.CommitStatusCompleted, updatedSession.CommitStatus)
 	}
 }
 
@@ -1379,6 +1196,148 @@ func TestPerformCommit_PromptErrorStillMarksFailed(t *testing.T) {
 	}
 	if updatedSession.CommitError == nil || !strings.Contains(*updatedSession.CommitError, "boom") {
 		t.Fatalf("Expected commit error containing boom, got %v", updatedSession.CommitError)
+	}
+}
+
+func TestPerformCommit_RepeatedCommitsAdvanceSandboxBaseAndRecordLogs(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+
+	firstSandboxHead := strings.Repeat("1", 40)
+	secondSandboxHead := strings.Repeat("2", 40)
+	firstPatch := addedFilePatch("First sandbox commit", "Test", "test@example.com", "first.txt", "first content\n")
+	secondPatch := addedFilePatch("Second sandbox commit", "Test", "test@example.com", "second.txt", "second content\n")
+
+	var (
+		mu                 sync.Mutex
+		observedParents    []string
+		firstAppliedCommit string
+	)
+
+	handler := &trackingHandler{
+		onChat: func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unexpected chat request", http.StatusInternalServerError)
+		},
+		onCommits: func(w http.ResponseWriter, r *http.Request) {
+			parent := r.URL.Query().Get("target")
+			mu.Lock()
+			observedParents = append(observedParents, parent)
+			mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			switch parent {
+			case initialCommit:
+				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
+					Patches:     firstPatch,
+					CommitCount: 1,
+					HeadCommit:  firstSandboxHead,
+				})
+			case firstAppliedCommit:
+				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
+					Patches:     secondPatch,
+					CommitCount: 1,
+					HeadCommit:  secondSandboxHead,
+				})
+			default:
+				http.Error(w, "unexpected parent "+parent, http.StatusConflict)
+			}
+		},
+	}
+	env.mockSandbox.HTTPHandler = handler
+
+	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
+
+	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
+	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
+	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+
+	if err := sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{}); err != nil {
+		t.Fatalf("first PerformCommit failed: %v", err)
+	}
+	afterFirstCommit, err := env.store.GetSessionByID(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to load session after first commit: %v", err)
+	}
+	firstAppliedCommit = trimStringPtr(afterFirstCommit.AppliedCommit)
+	if firstAppliedCommit == "" {
+		t.Fatal("Expected first applied commit to be recorded")
+	}
+	if trimStringPtr(afterFirstCommit.TargetRef) != defaultSessionTargetRef {
+		t.Fatalf("Expected targetRef %q after first commit, got %q", defaultSessionTargetRef, trimStringPtr(afterFirstCommit.TargetRef))
+	}
+
+	if err := sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{}); err != nil {
+		t.Fatalf("second PerformCommit failed: %v", err)
+	}
+
+	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to load updated session: %v", err)
+	}
+	if updatedSession.CommitStatus != model.CommitStatusCompleted {
+		t.Fatalf("Expected commit status %q, got %q", model.CommitStatusCompleted, updatedSession.CommitStatus)
+	}
+	if trimStringPtr(updatedSession.TargetRef) != defaultSessionTargetRef {
+		t.Fatalf("Expected targetRef %q, got %q", defaultSessionTargetRef, trimStringPtr(updatedSession.TargetRef))
+	}
+
+	mu.Lock()
+	gotParents := append([]string(nil), observedParents...)
+	mu.Unlock()
+	if len(gotParents) != 2 {
+		t.Fatalf("Expected 2 commit parent requests, got %d: %v", len(gotParents), gotParents)
+	}
+	if gotParents[0] != initialCommit || gotParents[1] != firstAppliedCommit {
+		t.Fatalf("Expected target request order [%s %s], got %v", initialCommit, firstAppliedCommit, gotParents)
+	}
+
+	logs, err := env.store.ListSessionCommitLogs(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to list session commit logs: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("Expected 2 session commit logs, got %d", len(logs))
+	}
+
+	findLogByHead := func(head string) *model.SessionCommitLog {
+		for _, entry := range logs {
+			if trimStringPtr(entry.SandboxHeadCommit) == head {
+				return entry
+			}
+		}
+		return nil
+	}
+
+	firstLog := findLogByHead(firstSandboxHead)
+	if firstLog == nil {
+		t.Fatalf("Expected commit log for sandbox head %q", firstSandboxHead)
+	}
+	if trimStringPtr(firstLog.TargetRef) != defaultSessionTargetRef {
+		t.Fatalf("Expected first log target ref %q, got %q", defaultSessionTargetRef, trimStringPtr(firstLog.TargetRef))
+	}
+	if trimStringPtr(firstLog.TargetCommit) != initialCommit {
+		t.Fatalf("Expected first log target commit %q, got %q", initialCommit, trimStringPtr(firstLog.TargetCommit))
+	}
+
+	secondLog := findLogByHead(secondSandboxHead)
+	if secondLog == nil {
+		t.Fatalf("Expected commit log for sandbox head %q", secondSandboxHead)
+	}
+	if trimStringPtr(secondLog.TargetRef) != defaultSessionTargetRef {
+		t.Fatalf("Expected second log target ref %q, got %q", defaultSessionTargetRef, trimStringPtr(secondLog.TargetRef))
+	}
+	if trimStringPtr(secondLog.TargetCommit) != firstAppliedCommit {
+		t.Fatalf("Expected second log target commit %q, got %q", firstAppliedCommit, trimStringPtr(secondLog.TargetCommit))
 	}
 }
 

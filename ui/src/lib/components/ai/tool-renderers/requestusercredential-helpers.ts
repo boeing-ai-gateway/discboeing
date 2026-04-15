@@ -102,7 +102,7 @@ export function defaultCredentialName(request: RequestedCredential): string {
 }
 
 export function formatApprovedUses(request: RequestedCredential): string[] {
-	return request.approvedUses
+	return (request.approvedUses ?? [])
 		.map((use) => use.description.trim())
 		.filter((description) => description.length > 0);
 }
@@ -116,13 +116,23 @@ export function buildAssignmentUses(
 	}));
 }
 
+function isActiveSessionCredentialUse(use: SessionCredentialUse): boolean {
+	if (!use.expiresAt) {
+		return true;
+	}
+	return new Date(use.expiresAt).getTime() > Date.now();
+}
+
 export function buildGrantedCredentialPayload(
 	requests: RequestedCredential[],
 	selectedCredentialIdsByEnvVar: Record<string, string>,
 	assignments: SessionCredentialAssignment[],
 ): { grantedCredentials: GrantedCredential[] } {
-	const assignmentByCredentialId = new Map(
-		assignments.map((assignment) => [assignment.credentialId, assignment]),
+	const assignmentByBindingKey = new Map(
+		assignments.map((assignment) => [
+			`${assignment.credentialId}\x00${assignment.envVar ?? ""}`,
+			assignment,
+		]),
 	);
 	return {
 		grantedCredentials: requests.flatMap((request) => {
@@ -131,7 +141,9 @@ export function buildGrantedCredentialPayload(
 			if (!credentialId) {
 				return [];
 			}
-			const assignment = assignmentByCredentialId.get(credentialId);
+			const assignment = assignmentByBindingKey.get(
+				`${credentialId}\x00${request.envVar}`,
+			);
 			if (!assignment?.sessionCredentialId) {
 				return [];
 			}
@@ -140,10 +152,12 @@ export function buildGrantedCredentialPayload(
 					credentialId: assignment.sessionCredentialId,
 					envVar: request.envVar,
 					name: request.name,
-					approvedUses: (assignment.uses ?? []).map((use) => ({
-						id: use.id,
-						description: use.description,
-					})),
+					approvedUses: (assignment.uses ?? [])
+						.filter(isActiveSessionCredentialUse)
+						.map((use) => ({
+							id: use.id,
+							description: use.description,
+						})),
 				},
 			];
 		}),

@@ -7,29 +7,28 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/gitops"
 )
 
-// GetCommits handles GET /commits — returns format-patch output for commits since a parent.
+// GetCommits handles GET /commits — returns format-patch output for changes
+// relative to a target commit.
 // Query params:
-//   - parent: required, the parent commit hash
+//   - target: required, the target commit hash
 func (h *Handler) GetCommits(w http.ResponseWriter, r *http.Request) {
-	parent := r.URL.Query().Get("parent")
-	if parent == "" {
+	target := r.URL.Query().Get("target")
+	if target == "" {
 		h.JSON(w, http.StatusBadRequest, api.CommitsErrorResponse{
-			Error:   "invalid_parent",
-			Message: "parent query parameter is required",
+			Error:   "invalid_target",
+			Message: "target query parameter is required",
 		})
 		return
 	}
 
-	result, commitsErr := gitops.GetCommitPatches(h.agentCwd, parent)
+	result, commitsErr := gitops.GetCommitPatches(h.agentCwd, target)
 	if commitsErr != nil {
 		status := http.StatusInternalServerError
 		switch commitsErr.Code {
-		case "invalid_parent":
+		case "invalid_target":
 			status = http.StatusBadRequest
 		case "not_git_repo":
 			status = http.StatusBadRequest
-		case "parent_mismatch":
-			status = http.StatusConflict
 		case "no_commits":
 			status = http.StatusNotFound
 		}

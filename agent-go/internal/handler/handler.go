@@ -323,6 +323,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Health", Description: "Health check"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/user", Handler: h.User,
 		Meta: routes.Meta{Group: "Health", Description: "Current user info"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/commands", Handler: h.ListCommands,
+		Meta: routes.Meta{Group: "Commands", Description: "List available slash commands"}})
 
 	// Thread routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads", Handler: h.ListThreads,

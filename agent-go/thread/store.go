@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -673,9 +674,187 @@ type Config struct {
 	LastTurnState State `json:"lastTurnState,omitempty"`
 	// ActiveLeafID tracks the currently selected branch head for this thread.
 	ActiveLeafID string `json:"activeLeafId,omitempty"`
+	// CommunicatedCredentials tracks which session-scoped credential and use IDs
+	// have already been reported to the LLM for this thread.
+	CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials,omitempty"`
 	// PromptQueue stores queued follow-up prompts waiting to run after the
 	// current completion finishes.
 	PromptQueue []QueuedPrompt `json:"promptQueue,omitempty"`
+}
+
+// CommunicatedCredentialBinding records one session-scoped credential binding
+// that has been explicitly reported to the LLM.
+type CommunicatedCredentialBinding struct {
+	CredentialID string                      `json:"credentialId"`
+	EnvVar       string                      `json:"envVar,omitempty"`
+	Uses         []CommunicatedCredentialUse `json:"uses,omitempty"`
+}
+
+// CommunicatedCredentialUse records one approved use ID that has been reported
+// to the LLM for a communicated credential binding.
+type CommunicatedCredentialUse struct {
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+}
+
+func communicatedCredentialBindingKey(binding CommunicatedCredentialBinding) string {
+	return strings.TrimSpace(binding.CredentialID) + "\x00" + strings.TrimSpace(binding.EnvVar)
+}
+
+func communicatedCredentialUseKey(use CommunicatedCredentialUse) string {
+	return strings.TrimSpace(use.ID)
+}
+
+func normalizeCommunicatedCredentialUses(uses []CommunicatedCredentialUse) []CommunicatedCredentialUse {
+	if len(uses) == 0 {
+		return nil
+	}
+	normalized := make([]CommunicatedCredentialUse, 0, len(uses))
+	seen := make(map[string]struct{}, len(uses))
+	for _, use := range uses {
+		use.ID = strings.TrimSpace(use.ID)
+		use.Description = strings.TrimSpace(use.Description)
+		if use.ID == "" {
+			continue
+		}
+		if _, ok := seen[use.ID]; ok {
+			continue
+		}
+		seen[use.ID] = struct{}{}
+		normalized = append(normalized, use)
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		return normalized[i].ID < normalized[j].ID
+	})
+	return normalized
+}
+
+// NormalizeCommunicatedCredentialBindings returns a deterministic,
+// deduplicated copy of communicated credential bindings.
+func NormalizeCommunicatedCredentialBindings(bindings []CommunicatedCredentialBinding) []CommunicatedCredentialBinding {
+	if len(bindings) == 0 {
+		return nil
+	}
+	normalized := make([]CommunicatedCredentialBinding, 0, len(bindings))
+	seen := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		binding.CredentialID = strings.TrimSpace(binding.CredentialID)
+		binding.EnvVar = strings.TrimSpace(binding.EnvVar)
+		if binding.CredentialID == "" {
+			continue
+		}
+		binding.Uses = normalizeCommunicatedCredentialUses(binding.Uses)
+		key := communicatedCredentialBindingKey(binding)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, binding)
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].CredentialID != normalized[j].CredentialID {
+			return normalized[i].CredentialID < normalized[j].CredentialID
+		}
+		return normalized[i].EnvVar < normalized[j].EnvVar
+	})
+	return normalized
+}
+
+// MergeCommunicatedCredentialBindings replaces or adds bindings from updates
+// into the existing communicated set.
+func MergeCommunicatedCredentialBindings(
+	existing []CommunicatedCredentialBinding,
+	updates []CommunicatedCredentialBinding,
+) []CommunicatedCredentialBinding {
+	merged := NormalizeCommunicatedCredentialBindings(existing)
+	if len(updates) == 0 {
+		return merged
+	}
+	byKey := make(map[string]CommunicatedCredentialBinding, len(merged)+len(updates))
+	for _, binding := range merged {
+		byKey[communicatedCredentialBindingKey(binding)] = binding
+	}
+	for _, binding := range NormalizeCommunicatedCredentialBindings(updates) {
+		byKey[communicatedCredentialBindingKey(binding)] = binding
+	}
+	result := make([]CommunicatedCredentialBinding, 0, len(byKey))
+	for _, binding := range byKey {
+		result = append(result, binding)
+	}
+	return NormalizeCommunicatedCredentialBindings(result)
+}
+
+// DiffCommunicatedCredentialBindings computes added and removed binding or use
+// IDs between two communicated credential snapshots.
+func DiffCommunicatedCredentialBindings(
+	before []CommunicatedCredentialBinding,
+	after []CommunicatedCredentialBinding,
+) (added []CommunicatedCredentialBinding, removed []CommunicatedCredentialBinding) {
+	before = NormalizeCommunicatedCredentialBindings(before)
+	after = NormalizeCommunicatedCredentialBindings(after)
+
+	beforeByKey := make(map[string]CommunicatedCredentialBinding, len(before))
+	for _, binding := range before {
+		beforeByKey[communicatedCredentialBindingKey(binding)] = binding
+	}
+	afterByKey := make(map[string]CommunicatedCredentialBinding, len(after))
+	for _, binding := range after {
+		afterByKey[communicatedCredentialBindingKey(binding)] = binding
+	}
+
+	for key, current := range afterByKey {
+		previous, ok := beforeByKey[key]
+		if !ok {
+			added = append(added, current)
+			continue
+		}
+		prevUses := make(map[string]CommunicatedCredentialUse, len(previous.Uses))
+		for _, use := range previous.Uses {
+			prevUses[communicatedCredentialUseKey(use)] = use
+		}
+		var addedUses []CommunicatedCredentialUse
+		for _, use := range current.Uses {
+			if _, ok := prevUses[communicatedCredentialUseKey(use)]; ok {
+				continue
+			}
+			addedUses = append(addedUses, use)
+		}
+		if len(addedUses) > 0 {
+			added = append(added, CommunicatedCredentialBinding{
+				CredentialID: current.CredentialID,
+				EnvVar:       current.EnvVar,
+				Uses:         addedUses,
+			})
+		}
+	}
+
+	for key, previous := range beforeByKey {
+		current, ok := afterByKey[key]
+		if !ok {
+			removed = append(removed, previous)
+			continue
+		}
+		currentUses := make(map[string]CommunicatedCredentialUse, len(current.Uses))
+		for _, use := range current.Uses {
+			currentUses[communicatedCredentialUseKey(use)] = use
+		}
+		var removedUses []CommunicatedCredentialUse
+		for _, use := range previous.Uses {
+			if _, ok := currentUses[communicatedCredentialUseKey(use)]; ok {
+				continue
+			}
+			removedUses = append(removedUses, use)
+		}
+		if len(removedUses) > 0 {
+			removed = append(removed, CommunicatedCredentialBinding{
+				CredentialID: previous.CredentialID,
+				EnvVar:       previous.EnvVar,
+				Uses:         removedUses,
+			})
+		}
+	}
+
+	return NormalizeCommunicatedCredentialBindings(added), NormalizeCommunicatedCredentialBindings(removed)
 }
 
 // QueuedPrompt stores one queued user submission for a thread.
@@ -730,6 +909,7 @@ func (s *Store) SaveConfig(threadID string, cfg Config) error {
 	if strings.TrimSpace(cfg.Mode.Value) == "" {
 		cfg.Mode.Value = "build"
 	}
+	cfg.CommunicatedCredentials = NormalizeCommunicatedCredentialBindings(cfg.CommunicatedCredentials)
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal thread config: %w", err)
@@ -751,18 +931,19 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 	}
 	// Use a raw struct for migration: old format had separate providerId + bare model.
 	var raw struct {
-		Name          string              `json:"name"`
-		NameSource    string              `json:"nameSource"`
-		LastMessage   string              `json:"lastMessage"`
-		ErrorMessage  string              `json:"errorMessage"`
-		Model         string              `json:"model"`
-		ProviderID    string              `json:"providerId"`
-		Reasoning     providers.Reasoning `json:"reasoning"`
-		CWD           string              `json:"cwd"`
-		Mode          ModeState           `json:"mode"`
-		LastTurnState State               `json:"lastTurnState"`
-		ActiveLeafID  string              `json:"activeLeafId"`
-		PromptQueue   []QueuedPrompt      `json:"promptQueue"`
+		Name                    string                          `json:"name"`
+		NameSource              string                          `json:"nameSource"`
+		LastMessage             string                          `json:"lastMessage"`
+		ErrorMessage            string                          `json:"errorMessage"`
+		Model                   string                          `json:"model"`
+		ProviderID              string                          `json:"providerId"`
+		Reasoning               providers.Reasoning             `json:"reasoning"`
+		CWD                     string                          `json:"cwd"`
+		Mode                    ModeState                       `json:"mode"`
+		LastTurnState           State                           `json:"lastTurnState"`
+		ActiveLeafID            string                          `json:"activeLeafId"`
+		CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials"`
+		PromptQueue             []QueuedPrompt                  `json:"promptQueue"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("unmarshal thread config: %w", err)
@@ -778,17 +959,18 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		mode = ModeState{Value: "build"}
 	}
 	return Config{
-		Name:          raw.Name,
-		NameSource:    raw.NameSource,
-		LastMessage:   raw.LastMessage,
-		ErrorMessage:  raw.ErrorMessage,
-		Model:         model,
-		Reasoning:     raw.Reasoning,
-		CWD:           raw.CWD,
-		Mode:          mode,
-		LastTurnState: raw.LastTurnState,
-		ActiveLeafID:  raw.ActiveLeafID,
-		PromptQueue:   raw.PromptQueue,
+		Name:                    raw.Name,
+		NameSource:              raw.NameSource,
+		LastMessage:             raw.LastMessage,
+		ErrorMessage:            raw.ErrorMessage,
+		Model:                   model,
+		Reasoning:               raw.Reasoning,
+		CWD:                     raw.CWD,
+		Mode:                    mode,
+		LastTurnState:           raw.LastTurnState,
+		ActiveLeafID:            raw.ActiveLeafID,
+		CommunicatedCredentials: NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
+		PromptQueue:             raw.PromptQueue,
 	}, nil
 }
 

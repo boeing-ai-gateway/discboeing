@@ -34,6 +34,17 @@ type AuthorizedUse struct {
 	LastUsedToolCallID string `json:"lastUsedToolCallId,omitempty"`
 }
 
+type ReportableUse struct {
+	ID          string
+	Description string
+}
+
+type ReportableBinding struct {
+	CredentialID string
+	EnvVar       string
+	Uses         []ReportableUse
+}
+
 type gitConfigSetter func(key, value string) error
 
 // Manager holds the current set of credentials received via the request header.
@@ -199,6 +210,53 @@ func (m *Manager) SessionCredential(id string) *EnvVar {
 		}
 	}
 	return nil
+}
+
+// ReportableBindings returns the current agent-visible session-scoped
+// credential bindings that can be safely communicated back to the LLM.
+func (m *Manager) ReportableBindings() []ReportableBinding {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	bindings := make([]ReportableBinding, 0, len(m.creds))
+	for _, cred := range m.creds {
+		credentialID := strings.TrimSpace(cred.SessionCredentialID)
+		if !cred.AgentVisible || credentialID == "" {
+			continue
+		}
+		uses := make([]ReportableUse, 0, len(cred.Uses))
+		seenUses := make(map[string]struct{}, len(cred.Uses))
+		for _, use := range cred.Uses {
+			useID := strings.TrimSpace(use.ID)
+			if useID == "" {
+				continue
+			}
+			if _, ok := seenUses[useID]; ok {
+				continue
+			}
+			seenUses[useID] = struct{}{}
+			uses = append(uses, ReportableUse{
+				ID:          useID,
+				Description: strings.TrimSpace(use.Description),
+			})
+		}
+		sort.Slice(uses, func(i, j int) bool {
+			return uses[i].ID < uses[j].ID
+		})
+		bindings = append(bindings, ReportableBinding{
+			CredentialID: credentialID,
+			EnvVar:       strings.TrimSpace(cred.EnvVar),
+			Uses:         uses,
+		})
+	}
+
+	sort.Slice(bindings, func(i, j int) bool {
+		if bindings[i].CredentialID != bindings[j].CredentialID {
+			return bindings[i].CredentialID < bindings[j].CredentialID
+		}
+		return bindings[i].EnvVar < bindings[j].EnvVar
+	})
+	return bindings
 }
 
 // update checks if credentials changed and stores the new set if so.

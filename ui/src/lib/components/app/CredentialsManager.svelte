@@ -51,6 +51,7 @@
 		rowId: string;
 		entries: BulkEnvVarPaste[];
 	};
+	type ScopePickerMode = "simple" | "advanced";
 
 	const CUSTOM_PROVIDER = "__custom__";
 	const app = useAppContext();
@@ -77,6 +78,8 @@
 	let oauthPollIntervalSeconds = $state(5);
 	let oauthPollDomainDraft = $state("");
 	let oauthVerifierDraft = $state("");
+	let oauthScopesDraft = $state<string[]>([]);
+	let oauthScopePickerMode = $state<ScopePickerMode>("simple");
 	let oauthCallbackListening = $state(false);
 	let oauthCallbackPolling = $state(false);
 	let oauthKindDraft = $state<CredentialOAuthKind | null>(null);
@@ -182,6 +185,31 @@
 			return oauthKindDraft;
 		}
 		return selectedOAuthConfig.kind;
+	});
+	const selectedOAuthScopeOptions = $derived.by(
+		() => selectedOAuthConfig?.scopeOptions ?? [],
+	);
+	const simpleOAuthScopeOptions = $derived.by(() =>
+		selectedOAuthScopeOptions.filter((scope) => scope.includeInSimple),
+	);
+	const advancedOAuthScopeGroups = $derived.by(() => {
+		const groups: Array<{
+			group: string;
+			scopes: (typeof selectedOAuthScopeOptions)[number][];
+		}> = [];
+		for (const scope of selectedOAuthScopeOptions) {
+			const group = scope.group ?? "Other";
+			const existingGroup = groups.find((entry) => entry.group === group);
+			if (existingGroup) {
+				existingGroup.scopes.push(scope);
+				continue;
+			}
+			groups.push({
+				group,
+				scopes: [scope],
+			});
+		}
+		return groups;
 	});
 
 	function makeEnvVarRow(
@@ -311,6 +339,8 @@
 		oauthPollIntervalSeconds = 5;
 		oauthPollDomainDraft = "";
 		oauthVerifierDraft = "";
+		oauthScopesDraft = [];
+		oauthScopePickerMode = "simple";
 		oauthCallbackListening = false;
 		oauthCallbackPolling = false;
 		oauthKindDraft = null;
@@ -392,9 +422,21 @@
 
 	function credentialSummary(credential: ConfiguredCredential) {
 		if (credential.authType === "oauth") {
-			return "OAuth";
+			return credential.scopes && credential.scopes.length > 0
+				? `OAuth · ${credential.scopes.join(", ")}`
+				: "OAuth";
 		}
 		return envKeySummary(credential.envKeys);
+	}
+
+	function setOAuthScopeEnabled(scope: string, enabled: boolean) {
+		oauthScopesDraft = enabled
+			? Array.from(new Set([...oauthScopesDraft, scope]))
+			: oauthScopesDraft.filter((value) => value !== scope);
+	}
+
+	function isOAuthScopeEnabled(scope: string) {
+		return oauthScopesDraft.includes(scope);
 	}
 
 	function visibilitySummary(visibility: CredentialVisibility) {
@@ -447,6 +489,17 @@
 		showDescriptionDraft = (credential.description ?? "").trim().length > 0;
 		visibilityDraft = { ...credential.visibility };
 		inactiveDraft = credential.inactive;
+		oauthScopesDraft = [
+			...(credential.scopes ?? selectedOAuthConfig?.defaultScopes ?? []),
+		];
+		oauthScopePickerMode = credential.scopes?.some(
+			(scope) =>
+				!(selectedCredentialType?.oauth?.scopeOptions ?? []).some(
+					(option) => option.value === scope && option.includeInSimple,
+				),
+		)
+			? "advanced"
+			: "simple";
 		replaceSecretDraft = false;
 		if (selectedProvider === CUSTOM_PROVIDER) {
 			envVarRows = credential.envKeys?.map((envKey) =>
@@ -482,7 +535,9 @@
 					break;
 				}
 				case "github-git": {
-					const response = await credentialsApi.githubDeviceCode();
+					const response = await credentialsApi.githubDeviceCode({
+						scopes: oauthScopesDraft,
+					});
 					oauthDeviceIdDraft = response.deviceCode;
 					oauthUserCodeDraft = response.userCode;
 					oauthVerificationUrl = response.verificationUri;
@@ -613,6 +668,11 @@
 						const response = await credentialsApi.githubPoll({
 							deviceCode: oauthDeviceIdDraft,
 							domain: oauthPollDomainDraft,
+							credentialId: editingCredentialId ?? undefined,
+							name: nameDraft.trim() || undefined,
+							description: descriptionDraft.trim() || undefined,
+							visibility: visibilityDraft,
+							inactive: inactiveDraft,
 						});
 						if (response.status === "success") {
 							resetEditor();
@@ -996,6 +1056,15 @@
 							oauthPollIntervalSeconds = 5;
 							oauthPollDomainDraft = "";
 							oauthVerifierDraft = "";
+							oauthScopesDraft =
+								option.authType === "oauth"
+									? [
+											...(credentialsApi.credentialTypes.find(
+												(type) => type.id === option.value,
+											)?.oauth?.defaultScopes ?? []),
+										]
+									: [];
+							oauthScopePickerMode = "simple";
 							oauthCallbackListening = false;
 							oauthCallbackPolling = false;
 							oauthKindDraft =
@@ -1118,6 +1187,118 @@
 										"Use ChatGPT device auth to connect this credential."}
 								</p>
 							</div>
+							{#if selectedOAuthConfig?.scopeOptions?.length}
+								<div class="space-y-2">
+									<div class="flex items-center justify-between gap-2">
+										<Label>Requested scopes</Label>
+										<div class="flex gap-2">
+											<Button
+												variant={oauthScopePickerMode === "simple"
+													? "default"
+													: "outline"}
+												size="xs"
+												onclick={() => {
+													oauthScopePickerMode = "simple";
+												}}
+											>
+												Simple
+											</Button>
+											<Button
+												variant={oauthScopePickerMode === "advanced"
+													? "default"
+													: "outline"}
+												size="xs"
+												onclick={() => {
+													oauthScopePickerMode = "advanced";
+												}}
+											>
+												Advanced
+											</Button>
+										</div>
+									</div>
+									{#if oauthScopePickerMode === "simple"}
+										<div
+											class="max-h-[min(24rem,50vh)] space-y-2 overflow-y-auto rounded-md border border-border bg-muted/40 p-3"
+										>
+											{#each simpleOAuthScopeOptions as scopeOption}
+												<label class="flex items-start gap-2 text-sm">
+													<input
+														type="checkbox"
+														checked={isOAuthScopeEnabled(scopeOption.value)}
+														onchange={(event) =>
+															setOAuthScopeEnabled(
+																scopeOption.value,
+																(event.currentTarget as HTMLInputElement)
+																	.checked,
+															)}
+													/>
+													<div class="space-y-0.5">
+														<div class="font-medium">
+															{scopeOption.simpleLabel ?? scopeOption.label}
+														</div>
+														{#if scopeOption.simpleHelpText}
+															<div class="text-muted-foreground">
+																{scopeOption.simpleHelpText}
+															</div>
+														{/if}
+													</div>
+												</label>
+											{/each}
+										</div>
+									{:else}
+										<div
+											class="max-h-[min(24rem,50vh)] space-y-3 overflow-y-auto rounded-md border border-border bg-muted/40 p-3"
+										>
+											{#each advancedOAuthScopeGroups as scopeGroup}
+												<div class="space-y-2">
+													<div
+														class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+													>
+														{scopeGroup.group}
+													</div>
+													<div class="space-y-2">
+														{#each scopeGroup.scopes as scopeOption}
+															<label class="flex items-start gap-2 text-sm">
+																<input
+																	type="checkbox"
+																	checked={isOAuthScopeEnabled(
+																		scopeOption.value,
+																	)}
+																	onchange={(event) =>
+																		setOAuthScopeEnabled(
+																			scopeOption.value,
+																			(event.currentTarget as HTMLInputElement)
+																				.checked,
+																		)}
+																/>
+																<div class="space-y-0.5">
+																	<div class="flex items-center gap-2">
+																		<div class="font-mono text-xs">
+																			{scopeOption.label}
+																		</div>
+																		{#if scopeOption.access}
+																			<div
+																				class="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+																			>
+																				{scopeOption.access}
+																			</div>
+																		{/if}
+																	</div>
+																	{#if scopeOption.description}
+																		<div class="text-muted-foreground">
+																			{scopeOption.description}
+																		</div>
+																	{/if}
+																</div>
+															</label>
+														{/each}
+													</div>
+												</div>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							{/if}
 							{#if availableOAuthKinds.length > 1}
 								<div class="flex flex-wrap gap-2">
 									{#each availableOAuthKinds as oauthKind}
@@ -1136,6 +1317,9 @@
 												oauthRedirectUriDraft = "";
 												oauthInputDraft = "";
 												oauthVerifierDraft = "";
+												oauthScopesDraft = [
+													...(selectedOAuthConfig?.defaultScopes ?? []),
+												];
 												oauthCallbackListening = false;
 												oauthCallbackPolling = false;
 												pollingOAuth = false;
@@ -1468,7 +1652,7 @@
 						{/if}
 					</div>
 
-					{#if selectedAuthType !== "oauth"}
+					{#if hasSelectedProvider}
 						<div class="space-y-2">
 							<div class="flex flex-wrap gap-2">
 								{#if !showNameDraft}

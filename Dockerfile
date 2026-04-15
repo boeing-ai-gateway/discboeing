@@ -281,9 +281,9 @@ COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobo
 # Copy systemd service files for container service management
 COPY container-assets/systemd/ /etc/systemd/system/
 
-# Copy container-specific agent configuration (Claude Code commands, etc.)
-# These are placed in /home/discobot/.claude/ for user-level availability
-COPY --chown=1000:1000 container-assets/claude /home/discobot/.claude
+# Copy container-specific agent configuration (Discobot commands, etc.)
+# These are placed in /home/discobot/.discobot/ for user-level availability
+COPY --chown=1000:1000 container-assets/claude /home/discobot/.discobot
 COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
 
 # Stage 3d: Minimal runtime without graphical tools

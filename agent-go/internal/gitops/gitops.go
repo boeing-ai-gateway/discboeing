@@ -3,6 +3,7 @@ package gitops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -46,7 +47,7 @@ type CommitsResult struct {
 
 // CommitsError represents an error during commit operations.
 type CommitsError struct {
-	Code       string // "invalid_parent", "not_git_repo", "parent_mismatch", "no_commits"
+	Code       string // "invalid_target", "not_git_repo", "no_commits"
 	Message    string
 	IsClean    bool   // populated for "no_commits": true when working tree has no uncommitted changes
 	HeadCommit string // populated for "no_commits": the current HEAD commit SHA
@@ -93,6 +94,27 @@ func gitCmdCtx(ctx context.Context, dir string, args ...string) (string, error) 
 	return strings.TrimRight(string(out), "\r\n"), err
 }
 
+func gitCmdCombined(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+	}
+	return strings.TrimRight(string(out), "\r\n"), nil
+}
+
+func gitCmdCombinedEnv(dir string, env []string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+	}
+	return strings.TrimRight(string(out), "\r\n"), nil
+}
+
 // fetchOrigin fetches from origin with a timeout.
 func fetchOrigin(dir string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -100,31 +122,6 @@ func fetchOrigin(dir string) {
 	if _, err := gitCmdCtx(ctx, dir, "fetch", "origin"); err != nil {
 		log.Printf("Warning: failed to fetch from origin: %v", err)
 	}
-}
-
-// getRemoteTrackingBranch finds the remote tracking branch.
-// Tries origin/HEAD, origin/main, origin/master.
-func getRemoteTrackingBranch(dir string) string {
-	for _, ref := range []string{"origin/HEAD", "origin/main", "origin/master"} {
-		if _, err := gitCmd(dir, "rev-parse", "--verify", ref); err == nil {
-			return ref
-		}
-	}
-	return ""
-}
-
-// getMergeBase calculates the merge-base between HEAD and the remote tracking branch.
-func getMergeBase(dir string) string {
-	remoteBranch := getRemoteTrackingBranch(dir)
-	if remoteBranch == "" {
-		return ""
-	}
-	base, err := gitCmd(dir, "merge-base", "HEAD", remoteBranch)
-	if err != nil {
-		log.Printf("Warning: failed to find merge-base with %s: %v", remoteBranch, err)
-		return ""
-	}
-	return base
 }
 
 // parseDiffOutput parses unified diff output into structured entries.
@@ -272,27 +269,31 @@ func getUntrackedFileDiff(dir, filePath string) FileDiffEntry {
 	}
 }
 
-// GetDiff returns the workspace diff. It fetches from origin, calculates merge-base,
-// runs git diff, and includes untracked files.
-func GetDiff(workspaceRoot string, singlePath string) DiffResult {
+// GetDiff returns the workspace diff relative to a target commit or ref.
+// When target is empty, HEAD is used. Untracked files are included separately.
+func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 	if !IsGitRepo(workspaceRoot) {
 		return DiffResult{
 			Files: []FileDiffEntry{},
 			Stats: DiffStats{},
-		}
+		}, nil
 	}
 
-	// Fetch from origin to get latest refs
+	target = strings.TrimSpace(target)
+	if target == "" {
+		target = "HEAD"
+	}
+
+	// Fetch from origin to update remote refs and make target commits reachable when
+	// the server resolved the target from the mounted workspace repository.
 	fetchOrigin(workspaceRoot)
 
-	// Calculate merge-base
-	mergeBase := getMergeBase(workspaceRoot)
+	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {
+		return DiffResult{}, fmt.Errorf("target %q does not exist in repository", target)
+	}
 
 	// Build git diff command
-	args := []string{"diff", "--no-color"}
-	if mergeBase != "" {
-		args = append(args, mergeBase)
-	}
+	args := []string{"diff", "--no-color", target}
 	if singlePath != "" {
 		args = append(args, "--", singlePath)
 	}
@@ -308,7 +309,7 @@ func GetDiff(workspaceRoot string, singlePath string) DiffResult {
 			stdout, _ := cmd.Output()
 			trackedDiff = parseDiffOutput(string(stdout))
 		} else {
-			trackedDiff = DiffResult{Files: []FileDiffEntry{}, Stats: DiffStats{}}
+			return DiffResult{}, fmt.Errorf("git diff failed: %w", err)
 		}
 	} else {
 		trackedDiff = parseDiffOutput(out)
@@ -340,50 +341,211 @@ func GetDiff(workspaceRoot string, singlePath string) DiffResult {
 		trackedDiff.Stats.Deletions += f.Deletions
 	}
 
-	return trackedDiff
+	return trackedDiff, nil
 }
 
-// GetCommitPatches returns format-patch output for commits since a parent.
-func GetCommitPatches(workspaceRoot, parent string) (*CommitsResult, *CommitsError) {
-	if parent == "" || strings.TrimSpace(parent) == "" {
-		return nil, &CommitsError{Code: "invalid_parent", Message: "Parent commit SHA is required"}
+// GetCommitPatches returns format-patch output for changes relative to a target
+// commit. If the target is an ancestor of HEAD, the existing commit series is
+// preserved. Otherwise a synthetic single-commit patch is generated from the
+// target tree to the current HEAD tree.
+func GetCommitPatches(workspaceRoot, target string) (*CommitsResult, *CommitsError) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil, &CommitsError{Code: "invalid_target", Message: "Target commit SHA is required"}
 	}
 
 	if !IsGitRepo(workspaceRoot) {
 		return nil, &CommitsError{Code: "not_git_repo", Message: "Workspace is not a git repository"}
 	}
 
-	if _, err := gitCmd(workspaceRoot, "cat-file", "-t", parent); err != nil {
-		return nil, &CommitsError{Code: "invalid_parent", Message: fmt.Sprintf("Parent commit %s does not exist in repository", parent)}
+	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {
+		return nil, &CommitsError{Code: "invalid_target", Message: fmt.Sprintf("Target commit %s does not exist in repository", target)}
 	}
 
-	if _, err := gitCmd(workspaceRoot, "merge-base", "--is-ancestor", parent, "HEAD"); err != nil {
-		return nil, &CommitsError{Code: "parent_mismatch", Message: fmt.Sprintf("Commit %s is not an ancestor of HEAD", parent)}
-	}
-
-	countStr, err := gitCmd(workspaceRoot, "rev-list", "--count", parent+"..HEAD")
-	if err != nil {
+	headCommit := HeadCommitSHA(workspaceRoot)
+	if headCommit == "" {
 		return nil, &CommitsError{
 			Code:       "no_commits",
-			Message:    "Failed to count commits",
+			Message:    fmt.Sprintf("No changes found between %s and HEAD", target),
 			IsClean:    IsWorkingTreeClean(workspaceRoot),
-			HeadCommit: HeadCommitSHA(workspaceRoot),
-		}
-	}
-	commitCount, err := strconv.Atoi(countStr)
-	if err != nil || commitCount == 0 {
-		return nil, &CommitsError{
-			Code:       "no_commits",
-			Message:    fmt.Sprintf("No commits found between %s and HEAD", parent),
-			IsClean:    IsWorkingTreeClean(workspaceRoot),
-			HeadCommit: HeadCommitSHA(workspaceRoot),
+			HeadCommit: headCommit,
 		}
 	}
 
-	patches, err := gitCmd(workspaceRoot, "format-patch", "--stdout", parent+"..HEAD")
+	diffExists, err := diffExistsBetweenCommits(workspaceRoot, target, "HEAD")
 	if err != nil {
-		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to generate patches: %v", err)}
+		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to compare %s and HEAD: %v", target, err)}
+	}
+	if !diffExists {
+		return nil, &CommitsError{
+			Code:       "no_commits",
+			Message:    fmt.Sprintf("No changes found between %s and HEAD", target),
+			IsClean:    IsWorkingTreeClean(workspaceRoot),
+			HeadCommit: headCommit,
+		}
 	}
 
-	return &CommitsResult{Patches: patches, CommitCount: commitCount, HeadCommit: HeadCommitSHA(workspaceRoot)}, nil
+	isAncestor, err := isAncestorCommit(workspaceRoot, target, "HEAD")
+	if err != nil {
+		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to inspect commit ancestry: %v", err)}
+	}
+	if isAncestor {
+		countStr, err := gitCmd(workspaceRoot, "rev-list", "--count", target+"..HEAD")
+		if err != nil {
+			return nil, &CommitsError{
+				Code:       "no_commits",
+				Message:    "Failed to count commits",
+				IsClean:    IsWorkingTreeClean(workspaceRoot),
+				HeadCommit: headCommit,
+			}
+		}
+		commitCount, err := strconv.Atoi(countStr)
+		if err != nil || commitCount == 0 {
+			return nil, &CommitsError{
+				Code:       "no_commits",
+				Message:    fmt.Sprintf("No changes found between %s and HEAD", target),
+				IsClean:    IsWorkingTreeClean(workspaceRoot),
+				HeadCommit: headCommit,
+			}
+		}
+
+		patches, err := gitCmd(workspaceRoot, "format-patch", "--stdout", target+"..HEAD")
+		if err != nil {
+			return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to generate patches: %v", err)}
+		}
+		return &CommitsResult{Patches: patches, CommitCount: commitCount, HeadCommit: headCommit}, nil
+	}
+
+	patches, err := synthesizePatchAgainstTarget(workspaceRoot, target)
+	if err != nil {
+		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to synthesize patches against %s: %v", target, err)}
+	}
+	return &CommitsResult{Patches: patches, CommitCount: 1, HeadCommit: headCommit}, nil
+}
+
+func diffExistsBetweenCommits(workspaceRoot, base, head string) (bool, error) {
+	cmd := exec.Command("git", "diff", "--quiet", "--binary", base, head)
+	cmd.Dir = workspaceRoot
+	err := cmd.Run()
+	if err == nil {
+		return false, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true, nil
+	}
+	return false, err
+}
+
+func isAncestorCommit(workspaceRoot, ancestor, descendant string) (bool, error) {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestor, descendant)
+	cmd.Dir = workspaceRoot
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
+}
+
+func synthesizePatchAgainstTarget(workspaceRoot, target string) (string, error) {
+	headMetadata, err := readHeadCommitMetadata(workspaceRoot)
+	if err != nil {
+		return "", err
+	}
+
+	tmpDir, err := os.MkdirTemp("", "discobot-target-patch-*")
+	if err != nil {
+		return "", fmt.Errorf("create temp worktree dir: %w", err)
+	}
+	defer func() {
+		_, _ = gitCmdCombined(workspaceRoot, "worktree", "remove", "--force", tmpDir)
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	if _, err := gitCmdCombined(workspaceRoot, "worktree", "add", "--detach", tmpDir, target); err != nil {
+		return "", fmt.Errorf("create temp worktree: %w", err)
+	}
+
+	diffOutput, err := gitCmd(workspaceRoot, "diff", "--binary", target, "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("generate target diff: %w", err)
+	}
+
+	patchPath := filepath.Join(tmpDir, ".discobot-target.patch")
+	if err := os.WriteFile(patchPath, []byte(diffOutput), 0600); err != nil {
+		return "", fmt.Errorf("write target diff: %w", err)
+	}
+	if _, err := gitCmdCombined(tmpDir, "apply", "--index", "--binary", patchPath); err != nil {
+		return "", fmt.Errorf("apply target diff: %w", err)
+	}
+
+	messagePath := filepath.Join(tmpDir, ".discobot-target-message.txt")
+	if err := os.WriteFile(messagePath, []byte(headMetadata.message), 0600); err != nil {
+		return "", fmt.Errorf("write synthetic commit message: %w", err)
+	}
+
+	env := []string{
+		"GIT_AUTHOR_NAME=" + headMetadata.authorName,
+		"GIT_AUTHOR_EMAIL=" + headMetadata.authorEmail,
+		"GIT_AUTHOR_DATE=" + headMetadata.authorDate,
+		"GIT_COMMITTER_NAME=" + headMetadata.committerName,
+		"GIT_COMMITTER_EMAIL=" + headMetadata.committerEmail,
+		"GIT_COMMITTER_DATE=" + headMetadata.committerDate,
+	}
+	if _, err := gitCmdCombinedEnv(tmpDir, env, "commit", "--allow-empty", "--file", messagePath); err != nil {
+		return "", fmt.Errorf("create synthetic commit: %w", err)
+	}
+
+	patches, err := gitCmdCombined(tmpDir, "format-patch", "--stdout", target+"..HEAD")
+	if err != nil {
+		return "", fmt.Errorf("format synthetic patch: %w", err)
+	}
+	return patches, nil
+}
+
+type commitMetadata struct {
+	message        string
+	authorName     string
+	authorEmail    string
+	authorDate     string
+	committerName  string
+	committerEmail string
+	committerDate  string
+}
+
+func readHeadCommitMetadata(workspaceRoot string) (*commitMetadata, error) {
+	out, err := gitCmd(workspaceRoot, "show", "-s", "--format=%B%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("read HEAD commit metadata: %w", err)
+	}
+	parts := strings.Split(out, "\x00")
+	if len(parts) != 7 {
+		return nil, fmt.Errorf("unexpected HEAD commit metadata format")
+	}
+	metadata := &commitMetadata{
+		message:        strings.TrimRight(parts[0], "\n"),
+		authorName:     strings.TrimSpace(parts[1]),
+		authorEmail:    strings.TrimSpace(parts[2]),
+		authorDate:     strings.TrimSpace(parts[3]),
+		committerName:  strings.TrimSpace(parts[4]),
+		committerEmail: strings.TrimSpace(parts[5]),
+		committerDate:  strings.TrimSpace(parts[6]),
+	}
+	if metadata.message == "" {
+		metadata.message = "Discobot synthetic patch"
+	}
+	if metadata.committerName == "" {
+		metadata.committerName = metadata.authorName
+	}
+	if metadata.committerEmail == "" {
+		metadata.committerEmail = metadata.authorEmail
+	}
+	if metadata.committerDate == "" {
+		metadata.committerDate = metadata.authorDate
+	}
+	return metadata, nil
 }

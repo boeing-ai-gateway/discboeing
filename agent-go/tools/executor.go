@@ -77,7 +77,7 @@ type Executor struct {
 	// to merge request-scoped variables into its process environment.
 	envSnapshot func() map[string]string
 
-	credentialUseAuthorizer func(toolCallID, command, description string, uses []CredentialUseBinding) error
+	credentialUseAuthorizer func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error
 }
 
 type CredentialUseBinding struct {
@@ -197,15 +197,15 @@ func (e *Executor) SetEnvSnapshot(fn func() map[string]string) {
 	e.envSnapshot = fn
 }
 
-func (e *Executor) SetCredentialUseAuthorizer(fn func(toolCallID, command, description string, uses []CredentialUseBinding) error) {
+func (e *Executor) SetCredentialUseAuthorizer(fn func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error) {
 	e.credentialUseAuthorizer = fn
 }
 
-func (e *Executor) authorizeCredentialUses(toolCallID, command, description string, uses []CredentialUseBinding) error {
+func (e *Executor) authorizeCredentialUses(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error {
 	if len(uses) == 0 || e.credentialUseAuthorizer == nil {
 		return nil
 	}
-	return e.credentialUseAuthorizer(toolCallID, command, description, uses)
+	return e.credentialUseAuthorizer(ctx, currentProviderID, toolCallID, command, description, uses)
 }
 
 // getenv returns the value of the environment variable named by key.

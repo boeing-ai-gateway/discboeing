@@ -419,6 +419,11 @@ func (cm *CompletionManager) ListThreads() ([]string, error) {
 	return cm.agent.ListThreads()
 }
 
+// ListCommands returns all available slash commands.
+func (cm *CompletionManager) ListCommands() ([]Command, error) {
+	return cm.agent.ListCommands()
+}
+
 // AddCompletionListener registers a completion lifecycle listener.
 func (cm *CompletionManager) AddCompletionListener(listener CompletionListener) {
 	cm.mu.Lock()

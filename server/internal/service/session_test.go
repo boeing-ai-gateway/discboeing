@@ -11,6 +11,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/local"
 	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
@@ -127,6 +128,80 @@ func TestSessionIDMaxLength(t *testing.T) {
 	// Verify the constant is set to 65
 	if SessionIDMaxLength != 65 {
 		t.Errorf("SessionIDMaxLength = %d, want 65", SessionIDMaxLength)
+	}
+}
+
+func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+
+	project := &model.Project{ID: "project-git", Name: "git project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+
+	workspace := &model.Workspace{
+		ID:         "workspace-git",
+		ProjectID:  project.ID,
+		Path:       "https://example.com/org/repo.git",
+		SourceType: model.WorkspaceSourceTypeGit,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	dbSession := &model.Session{
+		ID:          "session-git",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Git Session",
+		Status:      model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	opts, ok := provider.GetCreateOptions(dbSession.ID)
+	if !ok {
+		t.Fatalf("expected sandbox create options for session %s", dbSession.ID)
+	}
+	if opts.WorkspacePath != "" {
+		t.Fatalf("WorkspacePath = %q, want empty for git URL workspace", opts.WorkspacePath)
+	}
+	if opts.WorkspaceSource != workspace.Path {
+		t.Fatalf("WorkspaceSource = %q, want %q", opts.WorkspaceSource, workspace.Path)
+	}
+	if opts.WorkspaceTargetRef != defaultSessionTargetRef {
+		t.Fatalf("WorkspaceTargetRef = %q, want %q", opts.WorkspaceTargetRef, defaultSessionTargetRef)
+	}
+
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.WorkspacePath != nil && *stored.WorkspacePath != "" {
+		t.Fatalf("stored workspace path = %q, want empty", *stored.WorkspacePath)
+	}
+}
+
+func TestSandboxClonesGitWorkspace(t *testing.T) {
+	if !sandboxClonesGitWorkspace(mocksandbox.NewProvider()) {
+		t.Fatal("mock sandbox should support sandbox-owned git clones")
+	}
+
+	localProvider, err := local.NewProvider(&config.Config{LocalAgentBinary: "/bin/true"})
+	if err != nil {
+		t.Fatalf("failed to create local provider: %v", err)
+	}
+	if sandboxClonesGitWorkspace(localProvider) {
+		t.Fatal("local sandbox provider should not use sandbox-owned git clones")
 	}
 }
 
@@ -268,11 +343,10 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		CommitStatus:    "committed",
 		CommitOperation: strPtr("rebase"),
 		CommitError:     strPtr("commit error"),
-		BaseCommit:      strPtr("base123"),
+		TargetRef:       strPtr("HEAD"),
 		AppliedCommit:   strPtr("applied456"),
 		ErrorMessage:    strPtr("error message"),
 		WorkspacePath:   strPtr("/path/to/workspace"),
-		WorkspaceCommit: strPtr("commit789"),
 		CreatedAt:       createdAt,
 		UpdatedAt:       updatedAt,
 	}
@@ -296,16 +370,15 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		"CommitStatus":    "CommitStatus",
 		"CommitOperation": "CommitOperation",
 		"CommitError":     "CommitError",
-		"BaseCommit":      "BaseCommit",
+		"TargetRef":       "TargetRef",
 		"AppliedCommit":   "AppliedCommit",
 		"ErrorMessage":    "ErrorMessage",
 		"WorkspacePath":   "WorkspacePath",
-		"WorkspaceCommit": "WorkspaceCommit",
 		"CreatedAt":       "CreatedAt",
 		// Excluded fields (not part of API response):
 		// - SSHKeyEncryptedData: encrypted secret material, never exposed
 		// - UpdatedAt: mapped to Timestamp
-		// - Project, Workspace, Messages: relationships, not serialized
+		// - Project, Workspace, Messages, SessionCommitLogs: relationships, not serialized
 		// - Files: always initialized as empty array in mapSession
 	}
 
@@ -321,7 +394,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		if modelFieldName == "SSHKeyEncryptedData" || modelFieldName == "UpdatedAt" ||
 			modelFieldName == "DeletedAt" ||
 			modelFieldName == "Project" || modelFieldName == "Workspace" ||
-			modelFieldName == "Messages" {
+			modelFieldName == "Messages" || modelFieldName == "SessionCommitLogs" {
 			continue
 		}
 

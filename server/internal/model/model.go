@@ -216,7 +216,6 @@ const (
 // Commit operation constants representing the active operation using commit status fields.
 const (
 	CommitOperationCommit = "commit"
-	CommitOperationRebase = "rebase"
 )
 
 // Session represents a chat thread within a workspace.
@@ -231,24 +230,52 @@ type Session struct {
 	CommitStatus        string         `gorm:"column:commit_status;type:text;default:''" json:"commitStatus"`
 	CommitOperation     *string        `gorm:"column:commit_operation;type:text" json:"commitOperation,omitempty"`
 	CommitError         *string        `gorm:"column:commit_error;type:text" json:"commitError,omitempty"`
-	BaseCommit          *string        `gorm:"column:base_commit;type:text" json:"baseCommit,omitempty"`
+	TargetRef           *string        `gorm:"column:target_ref;type:text" json:"targetRef,omitempty"`
 	AppliedCommit       *string        `gorm:"column:applied_commit;type:text" json:"appliedCommit,omitempty"`
 	ErrorMessage        *string        `gorm:"column:error_message;type:text" json:"errorMessage,omitempty"`
 	WorkspacePath       *string        `gorm:"column:workspace_path;type:text" json:"workspacePath,omitempty"`
-	WorkspaceCommit     *string        `gorm:"column:workspace_commit;type:text" json:"workspaceCommit,omitempty"`
 	SSHKeyEncryptedData []byte         `gorm:"column:ssh_key_encrypted_data" json:"-"`
 	CreatedAt           time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt           time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Project   *Project   `gorm:"foreignKey:ProjectID" json:"-"`
-	Workspace *Workspace `gorm:"foreignKey:WorkspaceID" json:"-"`
-	Messages  []Message  `gorm:"foreignKey:SessionID" json:"-"`
+	Project           *Project           `gorm:"foreignKey:ProjectID" json:"-"`
+	Workspace         *Workspace         `gorm:"foreignKey:WorkspaceID" json:"-"`
+	Messages          []Message          `gorm:"foreignKey:SessionID" json:"-"`
+	SessionCommitLogs []SessionCommitLog `gorm:"foreignKey:SessionID" json:"-"`
 }
 
 func (Session) TableName() string { return "sessions" }
 
 func (s *Session) BeforeCreate(_ *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	return nil
+}
+
+// SessionCommitLog stores the patch bundle and commit references for a
+// successful session pull into the host workspace.
+type SessionCommitLog struct {
+	ID                  string    `gorm:"primaryKey;type:text" json:"id"`
+	SessionID           string    `gorm:"column:session_id;not null;type:text;index" json:"sessionId"`
+	Operation           string    `gorm:"column:operation;not null;type:text" json:"operation"`
+	TargetRef           *string   `gorm:"column:target_ref;type:text" json:"targetRef,omitempty"`
+	TargetCommit        *string   `gorm:"column:target_commit;type:text" json:"targetCommit,omitempty"`
+	SandboxHeadCommit   *string   `gorm:"column:sandbox_head_commit;type:text" json:"sandboxHeadCommit,omitempty"`
+	RequestedCommitHash *string   `gorm:"column:requested_commit_hash;type:text" json:"requestedCommitHash,omitempty"`
+	RequestedDirectory  *string   `gorm:"column:requested_directory;type:text" json:"requestedDirectory,omitempty"`
+	AppliedCommit       *string   `gorm:"column:applied_commit;type:text" json:"appliedCommit,omitempty"`
+	CommitCount         int       `gorm:"column:commit_count;not null;default:0" json:"commitCount"`
+	Patches             string    `gorm:"column:patches;type:text;not null;default:''" json:"patches"`
+	CreatedAt           time.Time `gorm:"autoCreateTime" json:"createdAt"`
+
+	Session *Session `gorm:"foreignKey:SessionID" json:"-"`
+}
+
+func (SessionCommitLog) TableName() string { return "session_commit_logs" }
+
+func (s *SessionCommitLog) BeforeCreate(_ *gorm.DB) error {
 	if s.ID == "" {
 		s.ID = uuid.New().String()
 	}
@@ -292,8 +319,8 @@ func NewTextParts(text string) json.RawMessage {
 // Credential represents stored credentials for AI providers and custom env bundles.
 type Credential struct {
 	ID             string    `gorm:"primaryKey;type:text" json:"id"`
-	ProjectID      string    `gorm:"column:project_id;not null;type:text;uniqueIndex:idx_project_provider" json:"project_id"`
-	Provider       string    `gorm:"not null;type:text;uniqueIndex:idx_project_provider" json:"provider"`
+	ProjectID      string    `gorm:"column:project_id;not null;type:text;index:idx_credentials_project_provider" json:"project_id"`
+	Provider       string    `gorm:"not null;type:text;index:idx_credentials_project_provider" json:"provider"`
 	Name           string    `gorm:"not null;type:text" json:"name"`
 	Description    *string   `gorm:"type:text" json:"description,omitempty"`
 	AuthType       string    `gorm:"column:auth_type;not null;type:text" json:"auth_type"`
@@ -323,10 +350,10 @@ func (c *Credential) BeforeCreate(_ *gorm.DB) error {
 // and whether each assignment is visible to the agent/LLM environment.
 type SessionCredentialAssignment struct {
 	ID                  string          `gorm:"primaryKey;type:text" json:"id"`
-	SessionID           string          `gorm:"column:session_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"sessionId"`
-	CredentialID        string          `gorm:"column:credential_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment" json:"credentialId"`
+	SessionID           string          `gorm:"column:session_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment_binding,priority:1" json:"sessionId"`
+	CredentialID        string          `gorm:"column:credential_id;not null;type:text;index;uniqueIndex:idx_session_credential_assignment_binding,priority:2" json:"credentialId"`
 	SessionCredentialID string          `gorm:"column:session_credential_id;type:text;index" json:"sessionCredentialId"`
-	EnvVar              string          `gorm:"column:env_var;type:text" json:"envVar,omitempty"`
+	EnvVar              string          `gorm:"column:env_var;type:text;uniqueIndex:idx_session_credential_assignment_binding,priority:3" json:"envVar,omitempty"`
 	SourceEnvVar        string          `gorm:"column:source_env_var;type:text" json:"sourceEnvVar,omitempty"`
 	AgentVisible        bool            `gorm:"column:agent_visible;not null;default:false" json:"agentVisible"`
 	ConsoleVisible      bool            `gorm:"column:console_visible;not null;default:false" json:"consoleVisible"`
@@ -492,6 +519,7 @@ func AllModels() []any {
 		&Agent{},
 		&Workspace{},
 		&Session{},
+		&SessionCommitLog{},
 		&Message{},
 		&PromptSubmission{},
 		&Credential{},

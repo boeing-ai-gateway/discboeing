@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
@@ -256,6 +257,22 @@ func (c *ChatService) ListThreads(ctx context.Context, projectID, sessionID stri
 	return client.ListThreads(ctx)
 }
 
+// ListCommands retrieves available slash commands for a session from the sandbox agent.
+func (c *ChatService) ListCommands(ctx context.Context, projectID, sessionID string) (*sandboxapi.ListCommandsResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.ListCommands(ctx)
+}
+
 // GetThread retrieves a single thread for a session from the sandbox agent.
 func (c *ChatService) GetThread(ctx context.Context, projectID, sessionID, threadID string) (*sandboxapi.Thread, error) {
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
@@ -460,20 +477,10 @@ func (c *ChatService) ReadFileFromBase(ctx context.Context, projectID, sessionID
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// Use base commit from session if available, otherwise fetch current git HEAD
-	var baseCommit string
-	if session.BaseCommit != nil {
-		baseCommit = *session.BaseCommit
-	} else {
-		// Fetch current git HEAD as the base commit
-		gitStatus, err := c.gitService.Status(ctx, workspace.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get workspace git status: %w", err)
-		}
-		if gitStatus.Commit == "" {
-			return nil, fmt.Errorf("workspace has no commit")
-		}
-		baseCommit = gitStatus.Commit
+	// Deleted-file previews read from the session target's current resolved commit.
+	baseCommit, err := resolveSessionTargetCommit(ctx, c.gitService, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve session target commit: %w", err)
 	}
 
 	// Read file from git at base commit
@@ -541,20 +548,32 @@ func (c *ChatService) RenameFile(ctx context.Context, projectID, sessionID strin
 // If path is non-empty, returns a single file diff.
 // If format is "files", returns just file paths.
 // Otherwise returns full diff with patches.
-// The agent-api calculates the merge-base automatically.
+// Git-backed sessions diff against the current resolved session target.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, format string) (any, error) {
-	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+	session, err := c.GetSession(ctx, projectID, sessionID)
+	if err != nil {
 		return nil, err
 	}
 	if c.sandboxService == nil {
 		return nil, fmt.Errorf("sandbox provider not available")
 	}
+	targetCommit := ""
+	if c.gitService != nil {
+		resolvedTargetCommit, resolveErr := resolveSessionTargetCommit(ctx, c.gitService, session)
+		if resolveErr != nil {
+			if session.WorkspacePath == nil || strings.TrimSpace(*session.WorkspacePath) == "" {
+				return nil, fmt.Errorf("failed to resolve session target commit: %w", resolveErr)
+			}
+		} else {
+			targetCommit = resolvedTargetCommit
+		}
+	}
 	client, err := c.sandboxService.GetClient(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	return client.GetDiff(ctx, path, format)
+	return client.GetDiff(ctx, path, format, targetCommit)
 }
 
 // ============================================================================

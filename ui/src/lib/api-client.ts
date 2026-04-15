@@ -329,12 +329,6 @@ class ApiClient {
 		await this.fetch(`/sessions/${id}`, { method: "DELETE" });
 	}
 
-	async rebaseSession(id: string): Promise<{ success: boolean }> {
-		return this.fetch<{ success: boolean }>(`/sessions/${id}/rebase`, {
-			method: "POST",
-		});
-	}
-
 	// Session Files
 	/**
 	 * List files in a session's workspace directory.
@@ -591,6 +585,14 @@ class ApiClient {
 	}
 
 	// Threads
+	async getSessionCommands(
+		sessionId: string,
+	): Promise<{ commands: import("./api-types").AgentCommand[] }> {
+		return this.fetch<{ commands: import("./api-types").AgentCommand[] }>(
+			`/sessions/${sessionId}/commands`,
+		);
+	}
+
 	async getThreads(sessionId: string): Promise<ListThreadsResponse> {
 		return this.fetch<ListThreadsResponse>(`/sessions/${sessionId}/threads`);
 	}

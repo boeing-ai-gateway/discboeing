@@ -382,6 +382,246 @@ func TestCredentialInfo_IncludesExpiresAt(t *testing.T) {
 	}
 }
 
+func TestSetSessionAssignments_AssignsUseExpiration(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+	sessionID := "test-session"
+	createTestSession(t, st, sessionID, t.TempDir())
+
+	info, err := credSvc.SetAPIKey(ctx, projectID, ProviderOpenAI, "OpenAI", "sk-test-123")
+	if err != nil {
+		t.Fatalf("Failed to set API key: %v", err)
+	}
+
+	assignments, err := credSvc.SetSessionAssignments(ctx, projectID, sessionID, []SessionCredentialAssignmentInfo{
+		{
+			CredentialID: info.ID,
+			Visibility:   CredentialVisibility{Tools: true},
+			Uses: []SessionCredentialUse{
+				{Description: "run tests"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+	if len(assignments) != 1 {
+		t.Fatalf("Expected 1 assignment, got %d", len(assignments))
+	}
+	if len(assignments[0].Uses) != 1 {
+		t.Fatalf("Expected 1 use, got %d", len(assignments[0].Uses))
+	}
+
+	use := assignments[0].Uses[0]
+	if use.ExpiresAt.IsZero() {
+		t.Fatal("Expected use expiration to be set")
+	}
+	if use.CreatedAt.IsZero() {
+		t.Fatal("Expected use creation time to be set")
+	}
+	duration := use.ExpiresAt.Sub(use.CreatedAt)
+	if duration < sessionCredentialUseDuration-time.Second || duration > sessionCredentialUseDuration+time.Second {
+		t.Fatalf("Expected use duration around %v, got %v", sessionCredentialUseDuration, duration)
+	}
+}
+
+func TestGetAllForSession_SkipsAssignmentsWithOnlyExpiredUses(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+	sessionID := "test-session"
+	createTestSession(t, st, sessionID, t.TempDir())
+
+	info, err := credSvc.SetAPIKey(ctx, projectID, ProviderOpenAI, "OpenAI", "sk-test-123")
+	if err != nil {
+		t.Fatalf("Failed to set API key: %v", err)
+	}
+
+	expiredUse := SessionCredentialUse{
+		ID:          "use_s_expired",
+		Description: "create pull requests",
+		CreatedAt:   time.Now().UTC().Add(-2 * time.Hour),
+		ExpiresAt:   time.Now().UTC().Add(-1 * time.Hour),
+	}
+	assignments, err := credSvc.SetSessionAssignments(ctx, projectID, sessionID, []SessionCredentialAssignmentInfo{
+		{
+			CredentialID: info.ID,
+			Visibility:   CredentialVisibility{Tools: true},
+			Uses:         []SessionCredentialUse{expiredUse},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+	if len(assignments) != 1 || len(assignments[0].Uses) != 1 {
+		t.Fatalf("Expected assignment with expired use to remain visible in session list")
+	}
+
+	envVars, err := credSvc.GetAllForSession(ctx, projectID, sessionID)
+	if err != nil {
+		t.Fatalf("Failed to get session credentials: %v", err)
+	}
+	if len(envVars) != 0 {
+		t.Fatalf("Expected expired-use assignment to be omitted from session env vars, got %d entries", len(envVars))
+	}
+}
+
+func TestSetOAuthTokensWithMetadata_AllowsMultipleGitHubCredentials(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+
+	first, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		projectID,
+		"",
+		ProviderGitHub,
+		"GitHub Work",
+		"",
+		CredentialVisibility{Tools: true},
+		false,
+		&OAuthCredential{AccessToken: "token-1", TokenType: "Bearer", Scope: "repo read:user"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create first GitHub credential: %v", err)
+	}
+
+	second, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		projectID,
+		"",
+		ProviderGitHub,
+		"GitHub Personal",
+		"",
+		CredentialVisibility{Tools: false},
+		false,
+		&OAuthCredential{AccessToken: "token-2", TokenType: "Bearer", Scope: "public_repo user:email"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create second GitHub credential: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatal("expected distinct GitHub credential IDs")
+	}
+
+	credentials, err := credSvc.List(ctx, projectID)
+	if err != nil {
+		t.Fatalf("Failed to list credentials: %v", err)
+	}
+	if len(credentials) != 2 {
+		t.Fatalf("expected 2 GitHub credentials, got %d", len(credentials))
+	}
+}
+
+func TestCredentialInfo_IncludesOAuthScopes(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+
+	created, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		projectID,
+		"",
+		ProviderGitHub,
+		"GitHub",
+		"",
+		CredentialVisibility{},
+		false,
+		&OAuthCredential{AccessToken: "token", TokenType: "Bearer", Scope: "repo read:user repo"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create GitHub credential: %v", err)
+	}
+
+	info, err := credSvc.GetByID(ctx, projectID, created.ID)
+	if err != nil {
+		t.Fatalf("Failed to fetch GitHub credential: %v", err)
+	}
+
+	if len(info.Scopes) != 2 {
+		t.Fatalf("expected 2 unique scopes, got %v", info.Scopes)
+	}
+	if info.Scopes[0] != "repo" || info.Scopes[1] != "read:user" {
+		t.Fatalf("unexpected scopes: %v", info.Scopes)
+	}
+}
+
+func TestCredentialInfo_OAuthIncludesEnvKeys(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+
+	created, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		projectID,
+		"",
+		ProviderGitHub,
+		"GitHub",
+		"",
+		CredentialVisibility{},
+		false,
+		&OAuthCredential{AccessToken: "token", TokenType: "Bearer", Scope: "repo"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create GitHub credential: %v", err)
+	}
+
+	info, err := credSvc.GetByID(ctx, projectID, created.ID)
+	if err != nil {
+		t.Fatalf("Failed to fetch GitHub credential: %v", err)
+	}
+
+	if len(info.EnvKeys) != 1 || info.EnvKeys[0] != "GITHUB_TOKEN" {
+		t.Fatalf("expected OAuth env key GITHUB_TOKEN, got %v", info.EnvKeys)
+	}
+}
+
 func TestDirectToken_StoredWithOneYearExpiration(t *testing.T) {
 	// Create in-memory store
 	st := setupTestStore(t)
@@ -948,5 +1188,103 @@ func TestSessionCredentialVisibility_UsesGlobalAndSessionCombination(t *testing.
 	}
 	if servicesEnvVars["ANTHROPIC_API_KEY"] != "sk-ant-test-123" {
 		t.Fatalf("expected global service visibility to remain enabled despite session assignment, got %#v", servicesEnvVars)
+	}
+}
+
+func TestCredentialService_SetSessionAssignments_AllowsMultipleEnvVarBindingsForSameCredential(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	project := &model.Project{ID: "test-project", Name: "Test Project", Slug: "test-project"}
+	if err := st.CreateProject(ctx, project); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "test-workspace",
+		ProjectID:  project.ID,
+		Path:       "/tmp/test-workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Test Session",
+		Status:      model.SessionStatusReady,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	cred, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		project.ID,
+		"",
+		ProviderGitHub,
+		"GitHub",
+		"",
+		CredentialVisibility{Tools: true},
+		false,
+		&OAuthCredential{AccessToken: "gho_test_token"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential: %v", err)
+	}
+
+	assignments, err := credSvc.SetSessionAssignments(ctx, project.ID, session.ID, []SessionCredentialAssignmentInfo{
+		{
+			CredentialID:        cred.ID,
+			SessionCredentialID: "cred_s_shared",
+			EnvVar:              "GH_TOKEN",
+			SourceEnvVar:        "GITHUB_TOKEN",
+			Visibility:          CredentialVisibility{Tools: true},
+			Uses:                []SessionCredentialUse{{Description: "authenticate gh"}},
+		},
+		{
+			CredentialID:        cred.ID,
+			SessionCredentialID: "cred_s_shared",
+			EnvVar:              "GITHUB_TOKEN",
+			SourceEnvVar:        "GITHUB_TOKEN",
+			Visibility:          CredentialVisibility{Tools: true},
+			Uses:                []SessionCredentialUse{{Description: "authenticate git"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+	if len(assignments) != 2 {
+		t.Fatalf("expected 2 assignments, got %d", len(assignments))
+	}
+
+	envVars, err := credSvc.GetAllForSession(ctx, project.ID, session.ID)
+	if err != nil {
+		t.Fatalf("GetAllForSession failed: %v", err)
+	}
+	found := map[string]bool{}
+	for _, envVar := range envVars {
+		if envVar.CredentialID != cred.ID {
+			continue
+		}
+		if envVar.Value != "gho_test_token" {
+			t.Fatalf("unexpected token value for %s", envVar.EnvVar)
+		}
+		if envVar.EnvVar == "GH_TOKEN" || envVar.EnvVar == "GITHUB_TOKEN" {
+			found[envVar.EnvVar] = true
+		}
+	}
+	if !found["GH_TOKEN"] || !found["GITHUB_TOKEN"] {
+		t.Fatalf("expected both GH_TOKEN and GITHUB_TOKEN bindings, got %#v", envVars)
 	}
 }

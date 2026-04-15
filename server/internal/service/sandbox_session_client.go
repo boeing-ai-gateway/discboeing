@@ -176,6 +176,13 @@ func (c *SessionClient) GetChatStatus(ctx context.Context) (*sandboxapi.ChatStat
 	})
 }
 
+// ListCommands retrieves available slash commands from the sandbox.
+func (c *SessionClient) ListCommands(ctx context.Context) (*sandboxapi.ListCommandsResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.ListCommandsResponse, error) {
+		return c.inner.ListCommands(ctx, c.sessionID)
+	})
+}
+
 // CancelCompletion cancels an in-progress completion in the sandbox.
 func (c *SessionClient) CancelCompletion(ctx context.Context, threadID string) (*CancelCompletionResponse, error) {
 	return withReconciliation(ctx, c, func() (*CancelCompletionResponse, error) {
@@ -241,16 +248,16 @@ func (c *SessionClient) RenameFile(ctx context.Context, req *sandboxapi.RenameFi
 }
 
 // GetDiff retrieves diff information from the sandbox.
-func (c *SessionClient) GetDiff(ctx context.Context, path, format string) (any, error) {
+func (c *SessionClient) GetDiff(ctx context.Context, path, format, targetCommit string) (any, error) {
 	return withReconciliation(ctx, c, func() (any, error) {
-		return c.inner.GetDiff(ctx, c.sessionID, path, format)
+		return c.inner.GetDiff(ctx, c.sessionID, path, format, targetCommit)
 	})
 }
 
 // GetCommits retrieves git format-patch output from the sandbox.
-func (c *SessionClient) GetCommits(ctx context.Context, parentCommit string) (*sandboxapi.CommitsResponse, error) {
+func (c *SessionClient) GetCommits(ctx context.Context, targetCommit string) (*sandboxapi.CommitsResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.CommitsResponse, error) {
-		return c.inner.GetCommits(ctx, c.sessionID, parentCommit)
+		return c.inner.GetCommits(ctx, c.sessionID, targetCommit)
 	})
 }
 

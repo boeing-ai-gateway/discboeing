@@ -18,6 +18,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	sandboxlocal "github.com/obot-platform/discobot/server/internal/sandbox/local"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -28,10 +29,9 @@ const SessionIDMaxLength = 65
 // Commit operation constants for API/session state.
 const (
 	CommitOperationCommit = model.CommitOperationCommit
-	CommitOperationRebase = model.CommitOperationRebase
 )
 
-// ErrSessionOperationInProgress indicates a commit/rebase operation is already running.
+// ErrSessionOperationInProgress indicates a commit operation is already running.
 var ErrSessionOperationInProgress = errors.New("session operation already in progress")
 
 // CommitsNoOpError is returned by GetCommits when the sandbox has no commits beyond the
@@ -56,6 +56,7 @@ func (e *CommitsNoOpError) Error() string {
 const (
 	legacySessionStatusRunning          = "running"
 	defaultSandboxCleanupRetentionDelay = 1 * time.Minute
+	defaultSessionTargetRef             = "HEAD"
 )
 
 // sessionIDRegex matches valid session IDs (alphanumeric and hyphens only).
@@ -103,13 +104,12 @@ type Session struct {
 	CommitStatus    string     `json:"commitStatus,omitempty"`
 	CommitOperation string     `json:"commitOperation,omitempty"`
 	CommitError     string     `json:"commitError,omitempty"`
-	BaseCommit      string     `json:"baseCommit,omitempty"`
+	TargetRef       string     `json:"targetRef,omitempty"`
 	AppliedCommit   string     `json:"appliedCommit,omitempty"`
 	ErrorMessage    string     `json:"errorMessage,omitempty"`
 	Files           []FileNode `json:"files"`
 	WorkspaceID     string     `json:"workspaceId,omitempty"`
 	WorkspacePath   string     `json:"workspacePath,omitempty"`
-	WorkspaceCommit string     `json:"workspaceCommit,omitempty"`
 }
 
 // FileNode represents a file in a session
@@ -439,25 +439,6 @@ func (s *SessionService) CommitSession(ctx context.Context, projectID, sessionID
 	return nil
 }
 
-// RebaseSession initiates async rebase of a session.
-func (s *SessionService) RebaseSession(ctx context.Context, projectID, sessionID string, jobQueue JobEnqueuer) error {
-	// Get session to verify it exists and get workspace ID
-	sess, err := s.store.GetSessionByID(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("session not found: %w", err)
-	}
-
-	if err := s.markSessionOperationPending(ctx, projectID, sess, CommitOperationRebase); err != nil {
-		return err
-	}
-
-	if err = jobQueue.Enqueue(ctx, jobs.SessionRebasePayload{ProjectID: projectID, SessionID: sessionID, WorkspaceID: sess.WorkspaceID}); err != nil {
-		return fmt.Errorf("failed to enqueue rebase job: %w", err)
-	}
-
-	return nil
-}
-
 func (s *SessionService) markSessionOperationPending(ctx context.Context, projectID string, sess *model.Session, operation string) error {
 	if sess.CommitStatus == model.CommitStatusPending || sess.CommitStatus == model.CommitStatusCommitting {
 		return ErrSessionOperationInProgress
@@ -466,9 +447,6 @@ func (s *SessionService) markSessionOperationPending(ctx context.Context, projec
 	sess.CommitStatus = model.CommitStatusPending
 	sess.CommitOperation = ptrString(operation)
 	sess.CommitError = nil
-	if operation == CommitOperationRebase {
-		sess.AppliedCommit = nil
-	}
 	if err := s.store.UpdateSession(ctx, sess); err != nil {
 		return fmt.Errorf("failed to update session commit status: %w", err)
 	}
@@ -512,14 +490,20 @@ func (s *SessionService) ReconcileCommitStates(ctx context.Context) error {
 			operation = *sess.CommitOperation
 		}
 
-		resourceType := jobs.ResourceTypeWorkspace
-		resourceID := sess.WorkspaceID
-		if operation == CommitOperationRebase {
-			resourceType = jobs.ResourceTypeSession
-			resourceID = sess.ID
+		if operation != CommitOperationCommit {
+			log.Printf("Clearing stale non-commit operation state for session %s (operation=%q status=%q)", sess.ID, operation, sess.CommitStatus)
+			sess.CommitStatus = model.CommitStatusNone
+			sess.CommitOperation = nil
+			sess.CommitError = nil
+			if err := s.store.UpdateSession(ctx, sess); err != nil {
+				log.Printf("Failed to clear stale operation state for session %s: %v", sess.ID, err)
+				continue
+			}
+			s.publishCommitStatusChanged(ctx, sess.ProjectID, sess.ID, model.CommitStatusNone)
+			continue
 		}
 
-		hasJob, err := s.store.HasActiveJobForResource(ctx, resourceType, resourceID)
+		hasJob, err := s.store.HasActiveJobForResource(ctx, jobs.ResourceTypeWorkspace, sess.WorkspaceID)
 		if err != nil {
 			log.Printf("Failed to check job for session %s: %v", sess.ID, err)
 			continue
@@ -530,22 +514,11 @@ func (s *SessionService) ReconcileCommitStates(ctx context.Context) error {
 			continue
 		}
 
-		var payload jobs.JobPayload
-		switch operation {
-		case CommitOperationRebase:
-			log.Printf("Re-enqueueing rebase job for session %s (commit_status: %s)", sess.ID, sess.CommitStatus)
-			payload = jobs.SessionRebasePayload{
-				ProjectID:   sess.ProjectID,
-				SessionID:   sess.ID,
-				WorkspaceID: sess.WorkspaceID,
-			}
-		default:
-			log.Printf("Re-enqueueing commit job for session %s (commit_status: %s)", sess.ID, sess.CommitStatus)
-			payload = jobs.SessionCommitPayload{
-				ProjectID:   sess.ProjectID,
-				SessionID:   sess.ID,
-				WorkspaceID: sess.WorkspaceID,
-			}
+		log.Printf("Re-enqueueing commit job for session %s (commit_status: %s)", sess.ID, sess.CommitStatus)
+		payload := jobs.SessionCommitPayload{
+			ProjectID:   sess.ProjectID,
+			SessionID:   sess.ID,
+			WorkspaceID: sess.WorkspaceID,
 		}
 
 		if s.jobEnqueuer != nil {
@@ -652,9 +625,9 @@ func (s *SessionService) mapSession(sess *model.Session) *Session {
 		commitOperation = *sess.CommitOperation
 	}
 
-	baseCommit := ""
-	if sess.BaseCommit != nil {
-		baseCommit = *sess.BaseCommit
+	targetRef := defaultSessionTargetRef
+	if sess.TargetRef != nil && strings.TrimSpace(*sess.TargetRef) != "" {
+		targetRef = strings.TrimSpace(*sess.TargetRef)
 	}
 
 	appliedCommit := ""
@@ -665,11 +638,6 @@ func (s *SessionService) mapSession(sess *model.Session) *Session {
 	workspacePath := ""
 	if sess.WorkspacePath != nil {
 		workspacePath = *sess.WorkspacePath
-	}
-
-	workspaceCommit := ""
-	if sess.WorkspaceCommit != nil {
-		workspaceCommit = *sess.WorkspaceCommit
 	}
 
 	timestamp := sess.UpdatedAt.Format(time.RFC3339)
@@ -694,14 +662,75 @@ func (s *SessionService) mapSession(sess *model.Session) *Session {
 		CommitStatus:    sess.CommitStatus,
 		CommitOperation: commitOperation,
 		CommitError:     commitError,
-		BaseCommit:      baseCommit,
+		TargetRef:       targetRef,
 		AppliedCommit:   appliedCommit,
 		ErrorMessage:    errorMessage,
 		Files:           []FileNode{},
 		WorkspaceID:     sess.WorkspaceID,
 		WorkspacePath:   workspacePath,
-		WorkspaceCommit: workspaceCommit,
 	}
+}
+
+func trimStringPtr(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
+func sessionTargetRef(sess *model.Session) string {
+	if sess == nil {
+		return defaultSessionTargetRef
+	}
+	targetRef := trimStringPtr(sess.TargetRef)
+	if targetRef == "" {
+		return defaultSessionTargetRef
+	}
+	return targetRef
+}
+
+func sandboxClonesGitWorkspace(provider sandbox.Provider) bool {
+	_, isLocal := provider.(*sandboxlocal.Provider)
+	return !isLocal
+}
+
+func ensureSessionTargetRef(sess *model.Session) bool {
+	if sess == nil {
+		return false
+	}
+	if trimStringPtr(sess.TargetRef) != "" {
+		return false
+	}
+	sess.TargetRef = ptrString(defaultSessionTargetRef)
+	return true
+}
+
+func resolveWorkspaceTargetCommit(ctx context.Context, gitService *GitService, workspaceID, targetRef string) (string, error) {
+	if gitService == nil {
+		return "", fmt.Errorf("git service is unavailable")
+	}
+	targetRef = strings.TrimSpace(targetRef)
+	if targetRef == "" {
+		targetRef = defaultSessionTargetRef
+	}
+	if targetRef != defaultSessionTargetRef {
+		return "", fmt.Errorf("unsupported target ref %q", targetRef)
+	}
+	gitStatus, err := gitService.Status(ctx, workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("resolve target ref %q: %w", targetRef, err)
+	}
+	if gitStatus == nil || strings.TrimSpace(gitStatus.Commit) == "" {
+		return "", fmt.Errorf("resolve target ref %q: workspace commit is unavailable", targetRef)
+	}
+	return strings.TrimSpace(gitStatus.Commit), nil
+}
+
+func resolveSessionTargetCommit(ctx context.Context, gitService *GitService, sess *model.Session) (string, error) {
+	if sess == nil {
+		return "", fmt.Errorf("session is unavailable")
+	}
+	return resolveWorkspaceTargetCommit(ctx, gitService, sess.WorkspaceID, sessionTargetRef(sess))
 }
 
 // SessionConfig contains all the configuration needed for agent startup.
@@ -751,9 +780,13 @@ func (s *SessionService) initializeSync(
 	var workspacePath string
 	var currentCommit string
 
-	if s.gitService != nil {
-		isGit := workspace.SourceType == "git" || git.IsGitURL(workspace.Path)
-		if isGit {
+	isGitWorkspace := workspace.SourceType == model.WorkspaceSourceTypeGit || git.IsGitURL(workspace.Path)
+	cloneInSandbox := isGitWorkspace && git.IsGitURL(workspace.Path) && sandboxClonesGitWorkspace(s.sandboxProvider)
+
+	if cloneInSandbox {
+		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCloning, nil)
+	} else if s.gitService != nil {
+		if isGitWorkspace {
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCloning, nil)
 		}
 
@@ -769,22 +802,19 @@ func (s *SessionService) initializeSync(
 		workspacePath = workspace.Path
 	}
 
-	// Step 2: Determine which commit to use for the sandbox
-	// On first initialization, save the workspace info and use the current commit.
-	// On reconcile (values already set), use the stored commit to maintain consistency.
-	var workspaceCommit string
-	if session.WorkspacePath != "" {
-		// Already initialized - use existing values (reconcile case)
+	// Step 2: Determine which workspace bootstrap inputs to use for the sandbox.
+	// Sessions track the merge target by ref, not by storing a rolling base SHA.
+	// When the sandbox is created or recreated, always clone the workspace's
+	// current target commit.
+	workspaceCommit := currentCommit
+	if session.WorkspacePath != "" && !cloneInSandbox {
+		// Already initialized - keep the existing workspace path.
 		workspacePath = session.WorkspacePath
-		workspaceCommit = session.WorkspaceCommit
-	} else {
-		// First initialization - save workspace path and commit
-		workspaceCommit = currentCommit
-		if err := s.store.UpdateSessionWorkspace(ctx, sessionID, workspacePath, workspaceCommit); err != nil {
-			log.Printf("Failed to update session workspace info for %s: %v", sessionID, err)
-			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to save workspace info: "+err.Error()))
-			return fmt.Errorf("failed to save workspace info: %w", err)
-		}
+	}
+	if err := s.store.UpdateSessionWorkspace(ctx, sessionID, workspacePath, session.TargetRef); err != nil {
+		log.Printf("Failed to update session workspace info for %s: %v", sessionID, err)
+		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to save workspace info: "+err.Error()))
+		return fmt.Errorf("failed to save workspace info: %w", err)
 	}
 
 	// Step 3: Create or get existing sandbox (idempotent)
@@ -884,9 +914,10 @@ func (s *SessionService) initializeSync(
 				"discobot.workspace.id": workspace.ID,
 				"discobot.project.id":   projectID,
 			},
-			WorkspacePath:   workspacePath,
-			WorkspaceSource: workspace.Path, // Original source (git URL or local path) for WORKSPACE_ORIGIN_PATH env var
-			WorkspaceCommit: workspaceCommit,
+			WorkspacePath:      workspacePath,
+			WorkspaceSource:    workspace.Path,
+			WorkspaceCommit:    workspaceCommit,
+			WorkspaceTargetRef: session.TargetRef,
 		}
 
 		_, err := s.sandboxProvider.Create(ctx, sessionID, opts)
@@ -949,10 +980,10 @@ func ptrString(s string) *string {
 // precondition checks on commit status are needed.
 //
 // Flow:
-// 1. Set workspace/session to committing, get fresh base commit
-// 2. If workspace commit changed, update baseCommit and check for existing patches
+// 1. Set session commit state and ensure the target ref is present
+// 2. If patches are already available relative to the current target, apply them
 // 3. If pending: send /discobot-commit to agent, transition to committing
-// 4. If appliedCommit not set: fetch patches from agent-api and apply them to the workspace
+// 4. If appliedCommit not set: resolve the current target, fetch patches, and apply them
 // 5. Transition to completed
 func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID string, opts CommitSessionOptions) (retErr error) {
 	// Get session
@@ -979,16 +1010,14 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 		}
 	}()
 
-	// Get current git status and set up session for this commit
-	gitStatus, err := s.gitService.Status(ctx, sess.WorkspaceID)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to get workspace status: %v", err))
-		return nil
+	if ensureSessionTargetRef(sess) {
+		if err := s.store.UpdateSession(ctx, sess); err != nil {
+			return fmt.Errorf("failed to backfill session target ref: %w", err)
+		}
 	}
 
 	sess.CommitStatus = model.CommitStatusPending
 	sess.CommitOperation = ptrString(CommitOperationCommit)
-	sess.BaseCommit = ptrString(gitStatus.Commit)
 	sess.AppliedCommit = nil
 	sess.CommitError = nil
 	if err := s.store.UpdateSession(ctx, sess); err != nil {
@@ -996,15 +1025,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 	}
 	s.publishCommitStatusChanged(ctx, projectID, sess.ID, model.CommitStatusPending)
 
-	// Step 1: Handle workspace commit changes
-	if err := s.syncBaseCommit(ctx, projectID, workspace, sess); err != nil {
-		return err
-	}
-	if sess.CommitStatus == model.CommitStatusFailed {
-		return nil
-	}
-
-	// Step 1.5: Optimistically check if the agent already has patches ready
+	// Step 1: Optimistically check if the agent already has patches ready.
 	if sess.CommitStatus == model.CommitStatusPending && (sess.AppliedCommit == nil || *sess.AppliedCommit == "") {
 		if err := s.tryApplyExistingPatches(ctx, projectID, workspace, sess, opts); err != nil {
 			return err
@@ -1048,114 +1069,6 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 	return nil
 }
 
-// PerformRebase performs session rebase work synchronously.
-// It ensures sandbox commits are rebased on the current workspace HEAD.
-func (s *SessionService) PerformRebase(ctx context.Context, projectID, sessionID string) (retErr error) {
-	// Get session
-	sess, err := s.store.GetSessionByID(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("session not found: %w", err)
-	}
-
-	// Get workspace
-	workspace, err := s.store.GetWorkspaceByID(ctx, sess.WorkspaceID)
-	if err != nil {
-		return fmt.Errorf("workspace not found: %w", err)
-	}
-
-	defer func() {
-		if retErr != nil {
-			failCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			s.setCommitFailed(failCtx, projectID, workspace, sess, retErr.Error())
-			retErr = nil
-		}
-	}()
-
-	// Get current git status and set up session for this rebase
-	gitStatus, err := s.gitService.Status(ctx, sess.WorkspaceID)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to get workspace status: %v", err))
-		return nil
-	}
-
-	sess.CommitStatus = model.CommitStatusPending
-	sess.CommitOperation = ptrString(CommitOperationRebase)
-	sess.BaseCommit = ptrString(gitStatus.Commit)
-	sess.AppliedCommit = nil
-	sess.CommitError = nil
-	if err := s.store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session for rebase: %w", err)
-	}
-	s.publishCommitStatusChanged(ctx, projectID, sess.ID, model.CommitStatusPending)
-
-	// Step 1: Handle workspace commit changes
-	if err := s.syncBaseCommit(ctx, projectID, workspace, sess); err != nil {
-		return err
-	}
-	if sess.CommitStatus == model.CommitStatusFailed {
-		return nil
-	}
-
-	// Step 1.5: Optimistically check if sandbox is already rebased.
-	// Parent mismatch here means "not rebased yet" and should fall through to prompting.
-	if sess.CommitStatus == model.CommitStatusPending {
-		validated, err := s.validateSandboxRebased(ctx, projectID, workspace, sess, true)
-		if err != nil {
-			return err
-		}
-		if validated {
-			return nil
-		}
-		if sess.CommitStatus == model.CommitStatusFailed {
-			return nil
-		}
-	}
-
-	// Step 2: Send /discobot-rebase to agent
-	if sess.CommitStatus == model.CommitStatusPending {
-		if err := s.sendRebasePrompt(ctx, projectID, workspace, sess); err != nil {
-			return err
-		}
-		if sess.CommitStatus == model.CommitStatusFailed {
-			return nil
-		}
-	}
-
-	// Step 3: Validate rebased state
-	validated, err := s.validateSandboxRebased(ctx, projectID, workspace, sess, false)
-	if err != nil {
-		return err
-	}
-	if validated {
-		log.Printf("Workspace %s rebased successfully in sandbox via session %s", workspace.ID, sess.ID)
-	}
-	return nil
-}
-
-// syncBaseCommit checks if the workspace commit has changed and updates baseCommit.
-// If patches are already available from the agent, it applies them directly.
-func (s *SessionService) syncBaseCommit(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session) error {
-	gitStatus, err := s.gitService.Status(ctx, sess.WorkspaceID)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to get workspace status: %v", err))
-		return nil
-	}
-
-	// No change - nothing to do
-	if gitStatus.Commit == *sess.BaseCommit {
-		return nil
-	}
-
-	log.Printf("Session %s: workspace commit changed from %s to %s, updating baseCommit", sess.ID, *sess.BaseCommit, gitStatus.Commit)
-	sess.BaseCommit = ptrString(gitStatus.Commit)
-	if err := s.store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session baseCommit: %w", err)
-	}
-
-	return nil
-}
-
 // tryApplyExistingPatches checks if the agent already has patches ready and applies them.
 // This is called optimistically before sending /discobot-commit in case commits are already available.
 func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, opts CommitSessionOptions) error {
@@ -1163,7 +1076,12 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 		return nil
 	}
 
-	log.Printf("Session %s: checking if agent has existing patches for commit %s", sess.ID, *sess.BaseCommit)
+	targetCommit, err := resolveSessionTargetCommit(ctx, s.gitService, sess)
+	if err != nil {
+		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
+		return nil
+	}
+	log.Printf("Session %s: checking if agent has existing patches for target %s (%s)", sess.ID, sessionTargetRef(sess), targetCommit)
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
@@ -1171,7 +1089,7 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 		return nil
 	}
 
-	commitsResp, err := client.GetCommits(ctx, *sess.BaseCommit)
+	commitsResp, err := client.GetCommits(ctx, targetCommit)
 	if err != nil {
 		log.Printf("Session %s: no existing patches available (error: %v), continuing with prompt", sess.ID, err)
 		return nil
@@ -1186,12 +1104,12 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 	}
 
 	// Agent already has commits ready - apply the patches directly
-	log.Printf("Session %s: agent has %d existing commits, skipping prompt and applying patches (dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
-	return s.applyPatches(ctx, projectID, workspace, sess, commitsResp.Patches, commitsResp.CommitCount)
+	log.Printf("Session %s: agent has %d existing commits, skipping prompt and applying patches (target=%s resolvedTarget=%s dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, sessionTargetRef(sess), targetCommit, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
+	return s.applyPatches(ctx, projectID, workspace, sess, targetCommit, commitsResp.Patches, commitsResp.CommitCount, commitsResp.HeadCommit, opts)
 }
 
 // waitForPromptTerminalEvent waits for a prompt stream to reach a terminal state.
-// Newer agent streams stay open across turns, so commit/rebase operations must
+// Newer agent streams stay open across turns, so commit operations must
 // stop on terminal chunk types rather than waiting for the SSE connection to close.
 func waitForPromptTerminalEvent(ctx context.Context, streamCh <-chan SSELine) error {
 	for {
@@ -1306,103 +1224,6 @@ func (s *SessionService) sendCommitPrompt(ctx context.Context, projectID string,
 	return nil
 }
 
-// sendRebasePrompt sends the /discobot-rebase command to the agent.
-func (s *SessionService) sendRebasePrompt(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session) error {
-	if s.sandboxService == nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, "Sandbox service not available")
-		return nil
-	}
-
-	log.Printf("Session %s: sending /discobot-rebase %s to agent", sess.ID, *sess.BaseCommit)
-
-	rebaseMessage := fmt.Sprintf("/discobot-rebase %s", *sess.BaseCommit)
-	messages, err := buildCommitMessage(sess.ID+"-rebase", rebaseMessage)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to build rebase message: %v", err))
-		return nil
-	}
-
-	client, err := s.sandboxService.GetClient(ctx, sess.ID)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to get sandbox client: %v", err))
-		return nil
-	}
-
-	modelID := ""
-	streamCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	streamCh, err := client.SendMessages(streamCtx, sess.ID, messages, modelID, nil)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to send rebase message to agent: %v", err))
-		return nil
-	}
-
-	sess.CommitStatus = model.CommitStatusCommitting
-	if err := s.store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session status: %w", err)
-	}
-	s.publishCommitStatusChanged(ctx, projectID, sess.ID, model.CommitStatusCommitting)
-
-	if err := waitForPromptTerminalEvent(streamCtx, streamCh); err != nil {
-		if isPromptStreamInterruption(err) {
-			log.Printf("Session %s: rebase prompt stream interrupted before terminal chunk (%v), continuing with rebase validation", sess.ID, err)
-			return nil
-		}
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed while waiting for rebase prompt to finish: %v", err))
-		return nil
-	}
-
-	log.Printf("Session %s: /discobot-rebase message completed", sess.ID)
-	return nil
-}
-
-// validateSandboxRebased checks whether sandbox history is rebased onto baseCommit.
-// When allowParentMismatch is true, parent mismatch is treated as "not yet rebased"
-// and the caller can continue by sending a rebase prompt.
-func (s *SessionService) validateSandboxRebased(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, allowParentMismatch bool) (bool, error) {
-	if s.sandboxService == nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, "Sandbox service not available")
-		return false, nil
-	}
-
-	client, err := s.sandboxService.GetClient(ctx, sess.ID)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to get sandbox client: %v", err))
-		return false, nil
-	}
-
-	commitsResp, err := client.GetCommits(ctx, *sess.BaseCommit)
-	if err != nil {
-		var noOp *CommitsNoOpError
-		if errors.As(err, &noOp) {
-			if err := s.validateAndCompleteNoOp(ctx, projectID, workspace, sess, noOp, "sandbox already aligned with workspace base commit"); err != nil {
-				return false, err
-			}
-			return true, nil
-		}
-
-		if allowParentMismatch && strings.Contains(err.Error(), "commits error (parent_mismatch)") {
-			log.Printf("Session %s: sandbox not yet rebased onto %s (parent mismatch), continuing with rebase prompt", sess.ID, *sess.BaseCommit)
-			return false, nil
-		}
-
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to validate rebased commits: %v", err))
-		return false, nil
-	}
-
-	if commitsResp.CommitCount > 0 {
-		log.Printf("Session %s: sandbox rebased with %d commits on base %s", sess.ID, commitsResp.CommitCount, *sess.BaseCommit)
-	} else {
-		log.Printf("Session %s: sandbox rebased on base %s", sess.ID, *sess.BaseCommit)
-	}
-
-	if err := s.markCommitCompleted(ctx, projectID, sess); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 // fetchAndApplyPatches fetches patches from the agent and applies them to the workspace.
 func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, opts CommitSessionOptions) error {
 	if s.sandboxService == nil {
@@ -1410,7 +1231,12 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		return nil
 	}
 
-	log.Printf("Session %s: fetching commits from agent-api (parent=%s dir=%s requestedCommit=%s)", sess.ID, *sess.BaseCommit, opts.RequestedDirectory, opts.RequestedCommitHash)
+	targetCommit, err := resolveSessionTargetCommit(ctx, s.gitService, sess)
+	if err != nil {
+		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
+		return nil
+	}
+	log.Printf("Session %s: fetching commits from agent-api (target=%s resolvedTarget=%s dir=%s requestedCommit=%s)", sess.ID, sessionTargetRef(sess), targetCommit, opts.RequestedDirectory, opts.RequestedCommitHash)
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
@@ -1418,11 +1244,11 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		return nil
 	}
 
-	commitsResp, err := client.GetCommits(ctx, *sess.BaseCommit)
+	commitsResp, err := client.GetCommits(ctx, targetCommit)
 	if err != nil {
 		var noOp *CommitsNoOpError
 		if errors.As(err, &noOp) {
-			if completeErr := s.validateAndCompleteNoOp(ctx, projectID, workspace, sess, noOp, "agent reported no commits to replay"); completeErr != nil {
+			if completeErr := s.validateAndCompleteNoOp(ctx, projectID, workspace, sess, noOp, targetCommit, "agent reported no changes relative to the current target"); completeErr != nil {
 				return completeErr
 			}
 			return nil
@@ -1442,12 +1268,12 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		return nil
 	}
 
-	log.Printf("Session %s: received %d commits from agent, applying patches to workspace (dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
-	return s.applyPatches(ctx, projectID, workspace, sess, commitsResp.Patches, commitsResp.CommitCount)
+	log.Printf("Session %s: received %d commits from agent, applying patches to workspace (target=%s resolvedTarget=%s dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, sessionTargetRef(sess), targetCommit, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
+	return s.applyPatches(ctx, projectID, workspace, sess, targetCommit, commitsResp.Patches, commitsResp.CommitCount, commitsResp.HeadCommit, opts)
 }
 
 // applyPatches applies the given patches to the workspace and updates the session.
-func (s *SessionService) applyPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, patches string, commitCount int) error {
+func (s *SessionService) applyPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, targetCommit, patches string, commitCount int, sandboxHeadCommit string, opts CommitSessionOptions) error {
 	if sess.CommitStatus != model.CommitStatusCommitting {
 		sess.CommitStatus = model.CommitStatusCommitting
 		if err := s.store.UpdateSession(ctx, sess); err != nil {
@@ -1466,30 +1292,65 @@ func (s *SessionService) applyPatches(ctx context.Context, projectID string, wor
 	if err := s.store.UpdateSession(ctx, sess); err != nil {
 		return fmt.Errorf("failed to update session applied commit: %w", err)
 	}
+	if err := s.recordSessionCommitLog(ctx, sess, patches, commitCount, targetCommit, sandboxHeadCommit, finalCommit, opts); err != nil {
+		log.Printf("Session %s: failed to record session commit log: %v", sess.ID, err)
+	}
 	s.publishCommitStatusChanged(ctx, projectID, sess.ID, model.CommitStatusCommitting)
-	log.Printf("Session %s: %d patches applied, final commit=%s", sess.ID, commitCount, finalCommit)
+	log.Printf("Session %s: %d patches applied, final commit=%s target=%s sandboxHead=%s", sess.ID, commitCount, finalCommit, strings.TrimSpace(targetCommit), strings.TrimSpace(sandboxHeadCommit))
 	return nil
 }
 
+func (s *SessionService) recordSessionCommitLog(ctx context.Context, sess *model.Session, patches string, commitCount int, targetCommit, sandboxHeadCommit, appliedCommit string, opts CommitSessionOptions) error {
+	if s.store == nil || sess == nil {
+		return nil
+	}
+
+	targetCommit = strings.TrimSpace(targetCommit)
+	requestedCommitHash := strings.TrimSpace(opts.RequestedCommitHash)
+	requestedDirectory := strings.TrimSpace(opts.RequestedDirectory)
+	sandboxHeadCommit = strings.TrimSpace(sandboxHeadCommit)
+	appliedCommit = strings.TrimSpace(appliedCommit)
+
+	entry := &model.SessionCommitLog{
+		SessionID:   sess.ID,
+		Operation:   CommitOperationCommit,
+		CommitCount: commitCount,
+		Patches:     patches,
+	}
+	if commitOperation := trimStringPtr(sess.CommitOperation); commitOperation != "" {
+		entry.Operation = commitOperation
+	}
+	if targetRef := sessionTargetRef(sess); targetRef != "" {
+		entry.TargetRef = new(targetRef)
+	}
+	if targetCommit != "" {
+		entry.TargetCommit = new(targetCommit)
+	}
+	if sandboxHeadCommit != "" {
+		entry.SandboxHeadCommit = new(sandboxHeadCommit)
+	}
+	if requestedCommitHash != "" {
+		entry.RequestedCommitHash = new(requestedCommitHash)
+	}
+	if requestedDirectory != "" {
+		entry.RequestedDirectory = new(requestedDirectory)
+	}
+	if appliedCommit != "" {
+		entry.AppliedCommit = new(appliedCommit)
+	}
+	return s.store.CreateSessionCommitLog(ctx, entry)
+}
+
 // validateAndCompleteNoOp checks whether a no_commits response from the sandbox is safe
-// to treat as a completed no-op. It requires:
-//  1. The sandbox working tree is clean (no uncommitted changes).
-//  2. The sandbox HEAD commit matches the session base commit, confirming the sandbox
-//     is exactly at the target workspace state with nothing left behind.
-//
-// If either condition fails the commit is marked as failed so the work is not silently lost.
-func (s *SessionService) validateAndCompleteNoOp(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, noOp *CommitsNoOpError, logMsg string) error {
+// to treat as a completed no-op. It requires the sandbox working tree to be
+// clean so there are no uncommitted changes hidden behind an empty target diff.
+func (s *SessionService) validateAndCompleteNoOp(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, noOp *CommitsNoOpError, targetCommit, logMsg string) error {
 	if !noOp.IsClean {
 		s.setCommitFailed(ctx, projectID, workspace, sess,
-			fmt.Sprintf("Sandbox reports no commits but working tree is dirty (uncommitted changes present); head=%s base=%s", noOp.HeadCommit, *sess.BaseCommit))
+			fmt.Sprintf("Sandbox reports no changes relative to target %s but working tree is dirty (uncommitted changes present); head=%s", strings.TrimSpace(targetCommit), noOp.HeadCommit))
 		return nil
 	}
-	if noOp.HeadCommit != *sess.BaseCommit {
-		s.setCommitFailed(ctx, projectID, workspace, sess,
-			fmt.Sprintf("Sandbox reports no commits but HEAD (%s) does not match session base (%s); changes may be uncommitted", noOp.HeadCommit, *sess.BaseCommit))
-		return nil
-	}
-	log.Printf("Session %s: %s %s (head=%s isClean=true)", sess.ID, logMsg, *sess.BaseCommit, noOp.HeadCommit)
+	log.Printf("Session %s: %s target=%s (head=%s isClean=true)", sess.ID, logMsg, strings.TrimSpace(targetCommit), noOp.HeadCommit)
 	return s.markCommitCompleted(ctx, projectID, sess)
 }
 
@@ -1561,9 +1422,7 @@ func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, 
 }
 
 func (s *SessionService) markCommitCompleted(ctx context.Context, projectID string, sess *model.Session) error {
-	if sess.CommitOperation != nil && *sess.CommitOperation == CommitOperationRebase {
-		sess.WorkspaceCommit = sess.BaseCommit
-	}
+	ensureSessionTargetRef(sess)
 
 	sess.CommitStatus = model.CommitStatusCompleted
 	sess.CommitError = nil

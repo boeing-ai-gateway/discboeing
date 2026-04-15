@@ -197,6 +197,12 @@ func (db *DB) Migrate() error {
 	if err := db.AutoMigrate(db.migrateModels()...); err != nil {
 		return err
 	}
+	if err := dropObsoleteCredentialIndexes(db); err != nil {
+		return err
+	}
+	if err := dropObsoleteSessionCredentialAssignmentIndexes(db); err != nil {
+		return err
+	}
 
 	// Drop obsolete columns that are no longer in the model
 	// Note: AutoMigrate only adds columns, it never removes them.
@@ -256,6 +262,30 @@ func (db *DB) Migrate() error {
 		}
 	}
 
+	return nil
+}
+
+func dropObsoleteCredentialIndexes(db *DB) error {
+	migrator := db.Migrator()
+	if !migrator.HasIndex(&model.Credential{}, "idx_project_provider") {
+		return nil
+	}
+	log.Println("Dropping obsolete unique Credential index idx_project_provider...")
+	if err := migrator.DropIndex(&model.Credential{}, "idx_project_provider"); err != nil {
+		return fmt.Errorf("failed to drop obsolete Credential index idx_project_provider: %w", err)
+	}
+	return nil
+}
+
+func dropObsoleteSessionCredentialAssignmentIndexes(db *DB) error {
+	migrator := db.Migrator()
+	if !migrator.HasIndex(&model.SessionCredentialAssignment{}, "idx_session_credential_assignment") {
+		return nil
+	}
+	log.Println("Dropping obsolete SessionCredentialAssignment index idx_session_credential_assignment...")
+	if err := migrator.DropIndex(&model.SessionCredentialAssignment{}, "idx_session_credential_assignment"); err != nil {
+		return fmt.Errorf("failed to drop obsolete SessionCredentialAssignment index idx_session_credential_assignment: %w", err)
+	}
 	return nil
 }
 

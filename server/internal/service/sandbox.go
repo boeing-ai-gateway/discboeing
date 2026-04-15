@@ -292,11 +292,8 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 		return fmt.Errorf("session %s has no workspace path set", sessionID)
 	}
 
-	// Workspace commit may be empty for local (non-git) workspaces
+	// Recreated sandboxes clone the workspace's current HEAD by default.
 	workspaceCommit := ""
-	if session.WorkspaceCommit != nil {
-		workspaceCommit = *session.WorkspaceCommit
-	}
 
 	// Get workspace source for the WORKSPACE_SOURCE env var
 	workspace, err := s.store.GetWorkspaceByID(ctx, session.WorkspaceID)

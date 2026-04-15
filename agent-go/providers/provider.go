@@ -18,9 +18,16 @@ const (
 	// ModelTaskChat is the default general-purpose conversational/agent model.
 	ModelTaskChat ModelTaskType = "chat"
 
+	// ModelAuthorization is the auxiliary model kind used for policy-style
+	// authorization checks, such as validating credential uses for commands.
+	ModelAuthorization SupportingModelType = "authorization"
+
 	// SupportingModelThreadSummarization is the auxiliary model kind used for
 	// thread title generation and conversation summarization.
 	SupportingModelThreadSummarization SupportingModelType = "thread_summarization"
+
+	// ModelTaskAuthorization is used for auxiliary authorization checks.
+	ModelTaskAuthorization ModelTaskType = string(ModelAuthorization)
 
 	// ModelTaskThreadSummarization is used for auxiliary thread title and
 	// conversation summary generation.

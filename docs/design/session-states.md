@@ -97,21 +97,34 @@ The persisted prompt payload is encrypted at rest while the submission is pendin
 |--------|-------------|
 | `""` (empty) | No commit in progress (default state) |
 | `pending` | Commit requested, job enqueued, waiting to send to agent |
-| `committing` | Operation command (`/discobot-commit` or `/discobot-rebase`) sent to agent, waiting for patches or validation |
+| `committing` | Operation command (`/discobot-commit`) sent to agent, waiting for patches |
 | `completed` | Commit completed successfully |
 | `failed` | Commit failed. Check `commitError` for details. |
 
+The commit and rebase toolbar actions are discovered from agent command metadata.
+Discobot command frontmatter marks UI-visible commands with `discobot-ui: true`,
+so the toolbar follows whatever command variant the sandbox installs for the
+current workspace.
+
 ### Session Commit Fields
 
-Internal session state still stores commit metadata separately:
+Internal session state stores only the operation state plus a stable merge target:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `commitStatus` | string | Current commit/rebase state |
-| `commitOperation` | string | Active operation (`commit` or `rebase`) |
+| `commitStatus` | string | Current commit state |
+| `commitOperation` | string | Active operation (`commit`) |
 | `commitError` | string | Error message if `commitStatus = "failed"` |
-| `baseCommit` | string | Workspace commit SHA when operation started (expected parent) |
-| `appliedCommit` | string | Final commit SHA after patches applied to workspace (commit flow only) |
+| `targetRef` | string | Merge target ref resolved at operation time. Defaults to `HEAD`. |
+| `appliedCommit` | string | Final commit SHA after patches apply to the workspace (commit flow only) |
+
+No rolling base or ancestry watermark fields are stored on the session. The concrete
+target SHA is resolved fresh from the workspace whenever preview, commit, or rebase runs.
+
+Successful commit pulls are also recorded in `session_commit_logs`, which stores the
+operation type, `targetRef`, the resolved `targetCommit`, the sandbox `headCommit`,
+requested commit/directory metadata, the applied workspace commit, and the raw patch
+bundle for audit/debugging.
 
 ### REST API Projection
 
@@ -122,7 +135,7 @@ Instead it flattens commit state into the existing session fields:
 |---|---|---|
 | `commitStatus = "pending"` | `pending` | omitted |
 | `commitStatus = "committing"` | `committing` | omitted |
-| `commitStatus = "completed"` | `completed` | omitted |
+| `commitStatus = "completed"` + `commitOperation = "commit"` | `committed` | omitted |
 | `commitStatus = "failed"` | `error` | `commitError` |
 | no commit in progress | session lifecycle `status` | session `errorMessage` when applicable |
 
@@ -133,7 +146,8 @@ Instead it flattens commit state into the existing session fields:
 ### 1. User Clicks Commit Button
 
 The commit button now sends `/discobot-commit` to the active thread. There is no public session commit API anymore.
-That slash command runs inside the sandbox, prepares local commit(s), and then uses the `RequestCommitPull` approval flow.
+For local workspaces, that slash command runs inside the sandbox, prepares local commit(s), and then uses the `RequestCommitPull` approval flow.
+For git-URL workspaces cloned in the sandbox, `/discobot-commit` instead prepares commit(s), pushes a branch, and opens an upstream pull request directly.
 
 The server-side session commit job is still used after a `RequestCommitPull` approval is accepted:
 
@@ -154,49 +168,53 @@ func PerformCommit(ctx, projectID, sessionID) error {
         return nil
     }
 
-    // Check baseCommit still matches workspace (handles server restart)
-    currentCommit := getWorkspaceCurrentCommit(session.WorkspaceID)
-    if session.BaseCommit != currentCommit {
-        setCommitFailed(session, "Workspace has changed since commit started")
-        return nil
+    targetRef := session.TargetRef
+    if targetRef == "" {
+        targetRef = "HEAD"
     }
 
-    // Step 1: Send /discobot-commit to agent (if pending)
+    session.CommitStatus = "pending"
+    session.CommitOperation = "commit"
+    session.AppliedCommit = ""
+    updateSession(session)
+
+    // Step 1: Opportunistically apply any patches that are already available.
+    if session.CommitStatus == "pending" && session.AppliedCommit == "" {
+        targetCommit := resolveWorkspaceTargetCommit(session.WorkspaceID, targetRef)
+        patches, err := agentAPI.GetCommits(sessionID, targetCommit)
+        if err == nil && len(patches.Data) > 0 {
+            finalCommit := applyPatches(session.WorkspaceID, patches.Data)
+            recordSessionCommitLog(sessionID, targetRef, targetCommit, patches.HeadCommit, finalCommit, patches.Data)
+            session.AppliedCommit = finalCommit
+        }
+    }
+
+    // Step 2: Ask the sandbox to prepare commits if needed.
     if session.CommitStatus == "pending" {
         err := sendChatMessage(sessionID, "/discobot-commit")
         if err != nil {
             setCommitFailed(session, "Failed to send commit command: " + err.Error())
             return nil
         }
-        // Wait for the prompt turn to emit a terminal finish/error chunk.
-        // The thread SSE stream itself stays open for future turns, so commit
-        // completion is based on the turn lifecycle, not stream closure.
 
         session.CommitStatus = "committing"
         updateSession(session)
         fireSessionUpdatedEvent(projectID, sessionID)
     }
 
-    // Step 2: Fetch and apply patches (if not yet done)
+    // Step 3: Resolve the target again and fetch/apply patches.
     if session.AppliedCommit == "" {
-        // Call agent-api to get format-patch output
-        patches, err := agentAPI.GetCommits(sessionID, session.BaseCommit)
+        targetCommit := resolveWorkspaceTargetCommit(session.WorkspaceID, targetRef)
+        patches, err := agentAPI.GetCommits(sessionID, targetCommit)
+        if err == ErrNoCommits && sandboxIsCleanRelativeToTarget() {
+            markCompletedNoOp(session)
+            return nil
+        }
         if err != nil {
             setCommitFailed(session, "Failed to get commits: " + err.Error())
             return nil
         }
 
-        if patches.ParentMismatch {
-            setCommitFailed(session, "Agent commits have wrong parent")
-            return nil
-        }
-
-        if len(patches.Data) == 0 {
-            setCommitFailed(session, "No commits from agent")
-            return nil
-        }
-
-        // Apply patches to workspace (git am)
         finalCommit, err := applyPatches(session.WorkspaceID, patches.Data)
         if err != nil {
             setCommitFailed(session, "Failed to apply patches: " + err.Error())
@@ -205,10 +223,11 @@ func PerformCommit(ctx, projectID, sessionID) error {
 
         session.AppliedCommit = finalCommit
         updateSession(session)
+        recordSessionCommitLog(sessionID, targetRef, targetCommit, patches.HeadCommit, finalCommit, patches.Data)
         fireSessionUpdatedEvent(projectID, sessionID)
     }
 
-    // Step 3: Verify and complete
+    // Step 4: Verify and complete
     if commitExistsInWorkspace(session.WorkspaceID, session.AppliedCommit) {
         session.CommitStatus = "completed"
         session.CommitError = ""
@@ -231,39 +250,38 @@ func setCommitFailed(session, errorMsg) {
 
 ### Rebase Flow
 
-**API**: `POST /api/projects/{projectId}/sessions/{sessionId}/rebase`
-
-Rebase uses the same queue semantics and in-progress states as commit (`pending` → `committing`), but completion behavior differs:
-
-1. Set `commitOperation = "rebase"`, capture latest workspace `baseCommit`, and enqueue `session_rebase` job.
-2. Send `/discobot-rebase <baseCommit>` to the sandbox agent.
-3. Validate sandbox commit ancestry against `baseCommit` via `GET /commits?parent=<baseCommit>`.
-4. Update `workspaceCommit` to `baseCommit`, then clear operation state (`commitStatus = ""`, `commitOperation = null`, `commitError = null`); do **not** apply patches to workspace.
+Rebase is now a sandbox-local git action triggered through `/discobot-rebase`.
+It no longer uses a server endpoint, background job, or session commit state.
+The sandbox repository is expected to track its origin branch so the command can
+fetch the tracked remote and rebase onto the configured upstream directly,
+without asking the user for a separate target commit.
 
 ### 3. Agent-API Endpoint
 
 ```
-GET /commits?parent={expectedParent}
+GET /commits?target={resolvedTargetCommit}
 ```
 
 **Response (success)**:
 ```json
 {
     "patches": "<git format-patch output>",
-    "commitCount": 2
+    "commitCount": 2,
+    "headCommit": "<sandbox head sha>"
 }
 ```
 
 **Response (error)**:
 ```json
 {
-    "error": "parent_mismatch" | "no_commits"
+    "error": "invalid_target" | "no_commits" | "not_git_repo"
 }
 ```
 
-- Uses `git format-patch` to preserve all metadata (author, date, signatures)
-- Validates that the commits' parent matches the expected parent
-- Returns patches in order, ready for `git am`
+- When the target is an ancestor of `HEAD`, uses `git format-patch target..HEAD`
+- When the sandbox and target do not share a direct ancestry range, synthesizes a
+  `format-patch` bundle against the target tree so commit pulls are still possible
+- Preserves commit metadata and returns patches in order, ready for `git am`
 
 ### 4. Apply Patches to Workspace
 
@@ -284,16 +302,16 @@ The job is designed to handle server restarts safely:
 
 | Job restarts when... | State | Action |
 |---------------------|-------|--------|
-| Before sending to agent | `pending`, `appliedCommit=""` | Check baseCommit matches, send `/discobot-commit` |
-| After sending, before apply | `committing`, `appliedCommit=""` | Check baseCommit matches, fetch patches, apply |
+| Before sending to agent | `pending`, `appliedCommit=""` | Resolve current `targetRef`, try existing patches, send `/discobot-commit` if needed |
+| After sending, before apply | `committing`, `appliedCommit=""` | Resolve current `targetRef`, fetch patches, apply |
 | After apply, before complete | `committing`, `appliedCommit` set | Verify commit exists, mark `completed` |
 | Already done | `completed` | No-op |
-| Workspace changed | Any | Set `failed` with error |
+| Target moved before fetch | `pending`/`committing`, `appliedCommit=""` | Re-resolve the target commit and request a fresh bundle |
 
 **Key idempotency checks**:
-1. Always verify `baseCommit` matches current workspace commit before proceeding
+1. Always resolve `targetRef` to a concrete workspace commit immediately before preview, apply, or validation
 2. `appliedCommit` being set indicates patches were applied
-3. Agent is idempotent: `/discobot-commit` sent twice returns same patches
+3. Agent patch generation is idempotent: repeated fetches return changes relative to the current target
 
 ---
 
@@ -302,9 +320,8 @@ The job is designed to handle server restarts safely:
 | Error | Result | User Action |
 |-------|--------|-------------|
 | Sandbox not running | Auto-reconcile (start sandbox), retry operation | None - handled automatically |
-| Workspace changed since commit started | `failed` + error message | Click Commit to retry with new baseCommit |
-| Agent-api returns no commits | `failed` + error message | Click Commit to retry |
-| Agent-api parent mismatch | `failed` + error message | Click Commit to retry |
+| Agent-api returns `no_commits` with a dirty working tree | `failed` + error message | Finish or discard sandbox changes, then retry |
+| Agent-api returns `invalid_target` or `not_git_repo` | `failed` + error message | Reconcile the session, then retry |
 | Patch application fails | `failed` + error message | Click Commit to retry |
 | Verification fails | `failed` + error message | Click Commit to retry |
 
@@ -323,7 +340,8 @@ This reconciliation happens transparently at three points in the commit flow:
 
 Only if the sandbox fails to start (enters `error` state) will the commit job fail. This ensures commits succeed even if the sandbox was stopped or deleted between sessions.
 
-User can always click Commit again to retry - it starts fresh with a new `baseCommit`.
+User can always click Commit again to retry - it starts fresh by resolving the
+current `targetRef`.
 
 ---
 
@@ -363,26 +381,26 @@ Client re-fetches session to get updated public `status`, `errorMessage`, and `a
 
 | Component | File | Changes |
 |-----------|------|---------|
-| Model | `server/internal/model/model.go` | Add `CommitError`, `BaseCommit`, `AppliedCommit` fields |
-| Service | `server/internal/service/session.go` | Update `CommitSession()`, `PerformCommit()` |
+| Model | `server/internal/model/model.go` | Add `CommitError`, `TargetRef`, `AppliedCommit` fields and target-aware commit logs |
+| Service | `server/internal/service/session.go` | Update `CommitSession()`, `PerformCommit()`, and runtime target resolution |
 | Job | `server/internal/jobs/session_commit.go` | Already exists, update executor |
-| Git | `server/internal/service/git.go` | Add `ApplyPatches()` method |
-| Handler | `server/internal/handler/chat.go` | Block chat during commit |
+| Git | `server/internal/service/git.go` | Add `ApplyPatches()` method and target commit helpers |
+| Handler | `server/internal/handler/chat.go` | Approval answer handling, preview, and chat blocking during commit |
 
 ### Agent-API
 
 | Component | File | Changes |
 |-----------|------|---------|
-| Handler | `agent-api/internal/server/commits.go` | New endpoint |
-| Git | `agent-api/internal/...` | `git format-patch` execution |
+| Handler | `agent-go/internal/handler/commits.go` | `GET /commits?target=...` endpoint |
+| Git | `agent-go/internal/gitops/gitops.go` | Target-based `git format-patch` execution and synthetic bundle generation |
 
 ### Frontend
 
 | Component | File | Changes |
 |-----------|------|---------|
-| Types | `ui/src/lib/api-types.ts` | Add `commitError`, `baseCommit`, `appliedCommit` |
-| Chat Panel | `ui/src/lib/components/app/` | Display `commitError` |
-| Sidebar | `ui/src/lib/components/app/` | Show failed state |
+| Types | `ui/src/lib/api-types.ts` | Add `targetRef` and `appliedCommit` session fields |
+| Tool renderer | `ui/src/lib/components/ai/tool-renderers/` | Show approval-time commit preview and raw patch/diff views |
+| Session UI | `ui/src/lib/components/app/` | Surface public status/error states and commit action wiring |
 
 ---
 
@@ -390,6 +408,8 @@ Client re-fetches session to get updated public `status`, `errorMessage`, and `a
 
 ```sql
 ALTER TABLE sessions ADD COLUMN commit_error TEXT DEFAULT '';
-ALTER TABLE sessions ADD COLUMN base_commit TEXT DEFAULT '';
+ALTER TABLE sessions ADD COLUMN target_ref TEXT;
 ALTER TABLE sessions ADD COLUMN applied_commit TEXT DEFAULT '';
+ALTER TABLE session_commit_logs ADD COLUMN target_ref TEXT;
+ALTER TABLE session_commit_logs ADD COLUMN target_commit TEXT;
 ```

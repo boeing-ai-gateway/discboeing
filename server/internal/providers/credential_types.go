@@ -17,15 +17,28 @@ const (
 	OAuthKindDeviceCode        OAuthKind = "device_code"
 )
 
+type OAuthScopeOption struct {
+	Value           string `json:"value"`
+	Label           string `json:"label"`
+	Description     string `json:"description,omitempty"`
+	Group           string `json:"group,omitempty"`
+	Access          string `json:"access,omitempty"`
+	IncludeInSimple bool   `json:"includeInSimple,omitempty"`
+	SimpleLabel     string `json:"simpleLabel,omitempty"`
+	SimpleHelpText  string `json:"simpleHelpText,omitempty"`
+}
+
 // OAuthConfig describes how the UI should drive an OAuth credential flow.
 type OAuthConfig struct {
-	Provider          string      `json:"provider"`
-	Kind              OAuthKind   `json:"kind"`
-	SupportedKinds    []OAuthKind `json:"supportedKinds,omitempty"`
-	Description       string      `json:"description,omitempty"`
-	InputLabel        string      `json:"inputLabel,omitempty"`
-	InputPlaceholder  string      `json:"inputPlaceholder,omitempty"`
-	AllowsDirectToken bool        `json:"allowsDirectToken,omitempty"`
+	Provider          string             `json:"provider"`
+	Kind              OAuthKind          `json:"kind"`
+	SupportedKinds    []OAuthKind        `json:"supportedKinds,omitempty"`
+	Description       string             `json:"description,omitempty"`
+	InputLabel        string             `json:"inputLabel,omitempty"`
+	InputPlaceholder  string             `json:"inputPlaceholder,omitempty"`
+	AllowsDirectToken bool               `json:"allowsDirectToken,omitempty"`
+	DefaultScopes     []string           `json:"defaultScopes,omitempty"`
+	ScopeOptions      []OAuthScopeOption `json:"scopeOptions,omitempty"`
 }
 
 // CredentialType describes a selectable credential option in the current UI.
@@ -112,19 +125,48 @@ var credentialTypeSpecs = []credentialTypeSpec{
 			InputPlaceholder: "Paste the code or http://localhost:1455/auth/callback?...",
 		},
 	},
-	// {
-	// 	ID:                "github-git:oauth",
-	// 	DisplayProviderID: "github-git",
-	// 	BackendProviderID: "github-git",
-	// 	Group:             CredentialTypeGroupGitVersion,
-	// 	GroupName:         "Git / Version Control",
-	// 	AuthType:          "oauth",
-	// 	OAuth: &OAuthConfig{
-	// 		Provider:    "github-git",
-	// 		Kind:        OAuthKindDeviceCode,
-	// 		Description: "Use GitHub device flow to connect GitHub for git operations.",
-	// 	},
-	// },
+	{
+		ID:                "github-git:oauth",
+		DisplayProviderID: "github-git",
+		BackendProviderID: "github-git",
+		Group:             CredentialTypeGroupGitVersion,
+		GroupName:         "Git / Version Control",
+		AuthType:          "oauth",
+		OAuth: &OAuthConfig{
+			Provider:      "github-git",
+			Kind:          OAuthKindDeviceCode,
+			Description:   "Use GitHub device flow to connect GitHub for git operations.",
+			DefaultScopes: []string{"repo", "read:user", "user:email"},
+			ScopeOptions: []OAuthScopeOption{
+				{Value: "repo", Label: "repo", Description: "Read and write private and public repositories, including pushes and pull requests.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Repositories", SimpleHelpText: "Clone, push branches, and open pull requests on private and public repos."},
+				{Value: "public_repo", Label: "public_repo", Description: "Read and write public repositories only.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Public repositories only", SimpleHelpText: "Use GitHub on public repos without private repo access."},
+				{Value: "repo:status", Label: "repo:status", Description: "Read and write commit statuses without full repository code access.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Commit statuses", SimpleHelpText: "Read and update CI or commit status checks."},
+				{Value: "repo_deployment", Label: "repo_deployment", Description: "Manage deployment statuses for repositories.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Deployments", SimpleHelpText: "Read and update deployment status information."},
+				{Value: "repo:invite", Label: "repo:invite", Description: "Accept or manage repository invitations.", Group: "Repositories", Access: "write", IncludeInSimple: false},
+				{Value: "security_events", Label: "security_events", Description: "Read and write code scanning security events.", Group: "Repositories", Access: "write", IncludeInSimple: false},
+				{Value: "admin:repo_hook", Label: "admin:repo_hook", Description: "Read, write, ping, and delete repository webhooks.", Group: "Repositories", Access: "admin", IncludeInSimple: false},
+				{Value: "write:repo_hook", Label: "write:repo_hook", Description: "Read, write, and ping repository webhooks.", Group: "Repositories", Access: "write", IncludeInSimple: false},
+				{Value: "read:repo_hook", Label: "read:repo_hook", Description: "Read repository webhook configuration.", Group: "Repositories", Access: "read", IncludeInSimple: true, SimpleLabel: "Repository webhooks", SimpleHelpText: "Inspect repository webhook configuration."},
+				{Value: "read:user", Label: "read:user", Description: "Read basic user profile information.", Group: "Account", Access: "read", IncludeInSimple: true, SimpleLabel: "Profile", SimpleHelpText: "Read account profile details for GitHub-aware tooling."},
+				{Value: "user:email", Label: "user:email", Description: "Read user email addresses.", Group: "Account", Access: "read", IncludeInSimple: true, SimpleLabel: "Email addresses", SimpleHelpText: "Read verified email addresses when GitHub tooling needs them."},
+				{Value: "user:follow", Label: "user:follow", Description: "Follow or unfollow other users.", Group: "Account", Access: "write", IncludeInSimple: false},
+				{Value: "user", Label: "user", Description: "Read and update profile information. Includes user:email and user:follow.", Group: "Account", Access: "write", IncludeInSimple: true, SimpleLabel: "Profile write access", SimpleHelpText: "Update profile information and manage follows."},
+				{Value: "read:org", Label: "read:org", Description: "Read organization membership and metadata.", Group: "Organizations", Access: "read", IncludeInSimple: true, SimpleLabel: "Organizations", SimpleHelpText: "Read organization membership and metadata."},
+				{Value: "write:org", Label: "write:org", Description: "Manage organization membership and some organization resources.", Group: "Organizations", Access: "write", IncludeInSimple: true, SimpleLabel: "Organizations write access", SimpleHelpText: "Manage organization membership and related resources."},
+				{Value: "admin:org", Label: "admin:org", Description: "Fully manage organizations and teams.", Group: "Organizations", Access: "admin", IncludeInSimple: false},
+				{Value: "project", Label: "project", Description: "Read and write user and organization projects.", Group: "Projects", Access: "write", IncludeInSimple: true, SimpleLabel: "Projects", SimpleHelpText: "Read and update classic projects."},
+				{Value: "read:project", Label: "read:project", Description: "Read user and organization projects.", Group: "Projects", Access: "read", IncludeInSimple: true, SimpleLabel: "Projects read-only", SimpleHelpText: "Inspect classic projects without editing them."},
+				{Value: "write:packages", Label: "write:packages", Description: "Upload and publish packages.", Group: "Packages", Access: "write", IncludeInSimple: true, SimpleLabel: "Packages", SimpleHelpText: "Publish and manage packages."},
+				{Value: "read:packages", Label: "read:packages", Description: "Download and install packages.", Group: "Packages", Access: "read", IncludeInSimple: true, SimpleLabel: "Packages read-only", SimpleHelpText: "Download packages without publishing."},
+				{Value: "delete:packages", Label: "delete:packages", Description: "Delete packages.", Group: "Packages", Access: "admin", IncludeInSimple: false},
+				{Value: "gist", Label: "gist", Description: "Create and edit gists.", Group: "Content", Access: "write", IncludeInSimple: true, SimpleLabel: "Gists", SimpleHelpText: "Create and update gists."},
+				{Value: "notifications", Label: "notifications", Description: "Read notifications and manage thread subscriptions.", Group: "Content", Access: "read", IncludeInSimple: true, SimpleLabel: "Notifications", SimpleHelpText: "Read notifications and mark threads as read."},
+				{Value: "workflow", Label: "workflow", Description: "Update GitHub Actions workflow files.", Group: "Actions", Access: "write", IncludeInSimple: true, SimpleLabel: "Actions workflows", SimpleHelpText: "Modify workflow files in repositories."},
+				{Value: "read:discussion", Label: "read:discussion", Description: "Read discussions.", Group: "Discussions", Access: "read", IncludeInSimple: true, SimpleLabel: "Discussions", SimpleHelpText: "Read discussions in repositories and organizations."},
+				{Value: "write:discussion", Label: "write:discussion", Description: "Create and manage discussions.", Group: "Discussions", Access: "write", IncludeInSimple: true, SimpleLabel: "Discussions write access", SimpleHelpText: "Create and manage discussions."},
+			},
+		},
+	},
 	{
 		ID:                "tavily:api_key",
 		DisplayProviderID: "tavily",

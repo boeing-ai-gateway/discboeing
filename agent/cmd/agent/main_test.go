@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,4 +90,133 @@ func TestInstallSandboxSSHKeyFilesSkipsWhenNoKeyStaged(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(homeDir, ".ssh")); !os.IsNotExist(err) {
 		t.Fatalf("expected .ssh dir to remain absent, err=%v", err)
 	}
+}
+
+func TestEnsureBranchTracksOrigin(t *testing.T) {
+	originDir := filepath.Join(t.TempDir(), "origin.git")
+	runGit(t, "", "init", "--bare", originDir)
+
+	sourceDir := t.TempDir()
+	runGit(t, sourceDir, "init")
+	runGit(t, sourceDir, "config", "user.name", "Discobot Test")
+	runGit(t, sourceDir, "config", "user.email", "discobot@example.com")
+	runGit(t, sourceDir, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(sourceDir, "README.md"), []byte("hello\n"), 0644); err != nil {
+		t.Fatalf("failed to write README.md: %v", err)
+	}
+	runGit(t, sourceDir, "add", "README.md")
+	runGit(t, sourceDir, "commit", "-m", "initial commit")
+	runGit(t, sourceDir, "remote", "add", "origin", originDir)
+	runGit(t, sourceDir, "push", "-u", "origin", "main")
+	runGit(t, originDir, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+	runGit(t, "", "clone", "--single-branch", originDir, cloneDir)
+	runGit(t, cloneDir, "branch", "--unset-upstream")
+
+	branchName, err := currentBranchName(cloneDir)
+	if err != nil {
+		t.Fatalf("currentBranchName failed: %v", err)
+	}
+	if branchName != "main" {
+		t.Fatalf("currentBranchName = %q, want %q", branchName, "main")
+	}
+
+	if err := ensureBranchTracksOrigin(cloneDir, branchName); err != nil {
+		t.Fatalf("ensureBranchTracksOrigin failed: %v", err)
+	}
+
+	upstream := strings.TrimSpace(runGit(t, cloneDir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"))
+	if upstream != "origin/main" {
+		t.Fatalf("upstream = %q, want %q", upstream, "origin/main")
+	}
+}
+
+func TestBranchNameFromTargetRef(t *testing.T) {
+	tests := []struct {
+		targetRef string
+		want      string
+	}{
+		{targetRef: "", want: ""},
+		{targetRef: "HEAD", want: ""},
+		{targetRef: "main", want: "main"},
+		{targetRef: "refs/heads/release", want: "release"},
+		{targetRef: "origin/main", want: ""},
+		{targetRef: "refs/tags/v1.0.0", want: ""},
+	}
+
+	for _, tt := range tests {
+		if got := branchNameFromTargetRef(tt.targetRef); got != tt.want {
+			t.Fatalf("branchNameFromTargetRef(%q) = %q, want %q", tt.targetRef, got, tt.want)
+		}
+	}
+}
+
+func TestBuildWorkspaceCloneArgsUsesBranchAndMirror(t *testing.T) {
+	got := buildWorkspaceCloneArgs("https://example.com/repo.git", "refs/heads/main", "/cache/repo.git")
+	want := []string{
+		"clone",
+		"--single-branch",
+		"--branch",
+		"main",
+		"--reference-if-able",
+		"/cache/repo.git",
+		"https://example.com/repo.git",
+		stagingDir,
+	}
+
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("buildWorkspaceCloneArgs() = %v, want %v", got, want)
+	}
+}
+
+func TestPersistentCachePath(t *testing.T) {
+	got := persistentCachePath("/home/discobot/.cache/discobot/git")
+	want := filepath.Join(dataDir, "cache", "home/discobot/.cache/discobot/git")
+	if got != want {
+		t.Fatalf("persistentCachePath() = %q, want %q", got, want)
+	}
+}
+
+func TestInstallCommitCommandVariant(t *testing.T) {
+	homeDir := t.TempDir()
+	commandsDir := filepath.Join(homeDir, ".discobot", "commands")
+	if err := os.MkdirAll(commandsDir, 0o755); err != nil {
+		t.Fatalf("mkdir commands dir: %v", err)
+	}
+
+	defaultBody := "default command\n"
+	remoteBody := "remote command\n"
+	if err := os.WriteFile(filepath.Join(commandsDir, "discobot-commit.md"), []byte(defaultBody), 0o644); err != nil {
+		t.Fatalf("write default command: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(commandsDir, "discobot-commit-remote.md"), []byte(remoteBody), 0o644); err != nil {
+		t.Fatalf("write remote command: %v", err)
+	}
+
+	if err := installCommitCommandVariant(homeDir, true, nil); err != nil {
+		t.Fatalf("installCommitCommandVariant(true) failed: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(commandsDir, "discobot-commit.md"))
+	if err != nil {
+		t.Fatalf("read installed command: %v", err)
+	}
+	if string(got) != remoteBody {
+		t.Fatalf("installed command = %q, want %q", string(got), remoteBody)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, output)
+	}
+	return string(output)
 }

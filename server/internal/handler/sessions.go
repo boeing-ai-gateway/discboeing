@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -18,21 +17,20 @@ import (
 )
 
 type sessionResponse struct {
-	ID              string             `json:"id"`
-	ProjectID       string             `json:"projectId"`
-	Name            string             `json:"name"`
-	DisplayName     string             `json:"displayName,omitempty"`
-	Description     string             `json:"description"`
-	CreatedAt       string             `json:"createdAt"`
-	Timestamp       string             `json:"timestamp"`
-	Status          string             `json:"status"`
-	BaseCommit      string             `json:"baseCommit,omitempty"`
-	AppliedCommit   string             `json:"appliedCommit,omitempty"`
-	ErrorMessage    string             `json:"errorMessage,omitempty"`
-	Files           []service.FileNode `json:"files"`
-	WorkspaceID     string             `json:"workspaceId,omitempty"`
-	WorkspacePath   string             `json:"workspacePath,omitempty"`
-	WorkspaceCommit string             `json:"workspaceCommit,omitempty"`
+	ID            string             `json:"id"`
+	ProjectID     string             `json:"projectId"`
+	Name          string             `json:"name"`
+	DisplayName   string             `json:"displayName,omitempty"`
+	Description   string             `json:"description"`
+	CreatedAt     string             `json:"createdAt"`
+	Timestamp     string             `json:"timestamp"`
+	Status        string             `json:"status"`
+	TargetRef     string             `json:"targetRef,omitempty"`
+	AppliedCommit string             `json:"appliedCommit,omitempty"`
+	ErrorMessage  string             `json:"errorMessage,omitempty"`
+	Files         []service.FileNode `json:"files"`
+	WorkspaceID   string             `json:"workspaceId,omitempty"`
+	WorkspacePath string             `json:"workspacePath,omitempty"`
 }
 
 type workspaceResponse struct {
@@ -67,8 +65,8 @@ func deriveSessionStatusAndError(sess *service.Session) (string, string) {
 		return model.SessionStatusError, errorMessage
 	case strings.EqualFold(commitStatus, model.CommitStatusCompleted) && strings.EqualFold(commitOperation, service.CommitOperationCommit):
 		return "committed", sessionError
-	case strings.EqualFold(commitStatus, model.CommitStatusCompleted) && strings.EqualFold(commitOperation, service.CommitOperationRebase):
-		return "rebased", sessionError
+	case strings.EqualFold(commitStatus, model.CommitStatusCompleted):
+		return sess.Status, sessionError
 	default:
 		return commitStatus, sessionError
 	}
@@ -81,21 +79,20 @@ func mapSessionResponse(sess *service.Session) *sessionResponse {
 
 	status, errorMessage := deriveSessionStatusAndError(sess)
 	return &sessionResponse{
-		ID:              sess.ID,
-		ProjectID:       sess.ProjectID,
-		Name:            sess.Name,
-		DisplayName:     sess.DisplayName,
-		Description:     sess.Description,
-		CreatedAt:       sess.CreatedAt,
-		Timestamp:       sess.Timestamp,
-		Status:          status,
-		BaseCommit:      sess.BaseCommit,
-		AppliedCommit:   sess.AppliedCommit,
-		ErrorMessage:    errorMessage,
-		Files:           sess.Files,
-		WorkspaceID:     sess.WorkspaceID,
-		WorkspacePath:   sess.WorkspacePath,
-		WorkspaceCommit: sess.WorkspaceCommit,
+		ID:            sess.ID,
+		ProjectID:     sess.ProjectID,
+		Name:          sess.Name,
+		DisplayName:   sess.DisplayName,
+		Description:   sess.Description,
+		CreatedAt:     sess.CreatedAt,
+		Timestamp:     sess.Timestamp,
+		Status:        status,
+		TargetRef:     sess.TargetRef,
+		AppliedCommit: sess.AppliedCommit,
+		ErrorMessage:  errorMessage,
+		Files:         sess.Files,
+		WorkspaceID:   sess.WorkspaceID,
+		WorkspacePath: sess.WorkspacePath,
 	}
 }
 
@@ -217,28 +214,6 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, map[string]any{"sessions": mapSessionResponses(sessions)})
-}
-
-// RebaseSession initiates async rebase of a session
-func (h *Handler) RebaseSession(w http.ResponseWriter, r *http.Request) {
-	sessionID := chi.URLParam(r, "sessionId")
-	ctx := r.Context()
-	projectID := middleware.GetProjectID(ctx)
-
-	if err := h.sessionService.RebaseSession(ctx, projectID, sessionID, h.jobQueue); err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			h.Error(w, http.StatusNotFound, "Session not found")
-			return
-		}
-		if errors.Is(err, service.ErrSessionOperationInProgress) {
-			h.Error(w, http.StatusConflict, "Session operation already in progress")
-			return
-		}
-		h.Error(w, http.StatusInternalServerError, "Failed to initiate session rebase")
-		return
-	}
-
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 // CreateSessionRequest represents the request body for creating a session without sending a message.

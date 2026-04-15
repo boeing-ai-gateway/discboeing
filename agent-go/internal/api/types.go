@@ -142,6 +142,35 @@ type DeleteThreadResponse struct {
 	Success bool `json:"success"`
 }
 
+type CommandApprovedUse struct {
+	Description string `json:"description"`
+}
+
+type CommandCredentialRequest struct {
+	EnvVar        string               `json:"envVar"`
+	Name          string               `json:"name"`
+	Justification string               `json:"justification"`
+	ApprovedUses  []CommandApprovedUse `json:"approvedUses,omitempty"`
+}
+
+type CommandDiscobotMetadata struct {
+	UI                bool                       `json:"ui,omitempty"`
+	Label             string                     `json:"label,omitempty"`
+	Order             int                        `json:"order,omitempty"`
+	CredentialRequest []CommandCredentialRequest `json:"credentialRequest,omitempty"`
+}
+
+type Command struct {
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Kind        string                  `json:"kind"`
+	Discobot    CommandDiscobotMetadata `json:"discobot"`
+}
+
+type ListCommandsResponse struct {
+	Commands []Command `json:"commands"`
+}
+
 // DeleteQueuedPromptResponse is the DELETE /threads/{id}/queue/{queueId} response body.
 type DeleteQueuedPromptResponse struct {
 	Success bool `json:"success"`
@@ -324,7 +353,7 @@ type CommitsResponse struct {
 
 // CommitsErrorResponse is the GET /commits error response.
 type CommitsErrorResponse struct {
-	Error      string `json:"error"` // "parent_mismatch", "no_commits", "invalid_parent", "not_git_repo"
+	Error      string `json:"error"` // "no_commits", "invalid_target", "not_git_repo"
 	Message    string `json:"message"`
 	IsClean    bool   `json:"isClean,omitempty"`    // Only set for "no_commits": true when working tree has no uncommitted changes
 	HeadCommit string `json:"headCommit,omitempty"` // Only set for "no_commits": the current HEAD commit SHA

@@ -1,6 +1,9 @@
 ---
 name: discobot-commit
 description: Commit session changes back to the parent workspace
+discobot-ui: true
+discobot-label: Commit
+discobot-order: 10
 ---
 
 Commit the changes from this session back to the parent workspace.

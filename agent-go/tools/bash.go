@@ -32,7 +32,11 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 	if input.Command == "" {
 		return errResult(call, "command is required"), nil
 	}
-	if err := e.authorizeCredentialUses(call.ToolCallID, input.Command, input.Description, input.CredentialUses); err != nil {
+	currentProviderID := ""
+	if toolCtx != nil {
+		currentProviderID = toolCtx.ProviderID
+	}
+	if err := e.authorizeCredentialUses(ctx, currentProviderID, call.ToolCallID, input.Command, input.Description, input.CredentialUses); err != nil {
 		return errResult(call, err.Error()), nil
 	}
 

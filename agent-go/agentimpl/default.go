@@ -232,32 +232,10 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		}
 		requestedMode := strings.TrimSpace(req.Mode)
 		userChangedMode := requestedMode != "" && !strings.EqualFold(requestedMode, prevMode)
-		if userChangedMode {
-			modeReminderID := "mode-" + agent.GenerateID()
-			if err := a.store.SaveMessage(threadID, thread.StoredMessage{
-				ID:       modeReminderID,
-				ParentID: effectiveLeafID,
-				Message: message.Message{
-					Role:      "user",
-					Synthetic: true,
-					Parts: []message.Part{message.TextPart{
-						Text: formatModeChangeReminder(env.planMode),
-						ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
-							ReminderKind: "mode",
-							Mode:         map[bool]string{true: "plan", false: "build"}[env.planMode],
-						}),
-					}},
-				},
-			}); err != nil {
-				yield(nil, fmt.Errorf("save mode reminder: %w", err))
-				return
-			}
-			effectiveLeafID = modeReminderID
-
-			if !threadNameBg.flush(false, yield) {
-				return
-			}
-		}
+		currentCommunicatedCredentials, credentialReminder := a.buildCredentialChangeReminder(
+			env.threadCfg.CommunicatedCredentials,
+		)
+		cfg.PreludeMessages = buildTurnPreludeMessages(userChangedMode, env.planMode, credentialReminder)
 
 		// Resolve provider for new turn.
 		provider, resolveErr := a.registry.Get(cfg.ProviderID)
@@ -286,15 +264,16 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 			changedAt = time.Now().UTC()
 		}
 		cfgToSave := thread.Config{
-			Name:          env.threadCfg.Name,
-			NameSource:    env.threadCfg.NameSource,
-			LastMessage:   lastUserPromptFromUIParts(req.UserParts),
-			Model:         cfg.ProviderID + "/" + cfg.Model,
-			Reasoning:     cfg.Reasoning,
-			CWD:           cwd,
-			Mode:          thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
-			LastTurnState: "",
-			ActiveLeafID:  effectiveLeafID,
+			Name:                    env.threadCfg.Name,
+			NameSource:              env.threadCfg.NameSource,
+			LastMessage:             lastUserPromptFromUIParts(req.UserParts),
+			Model:                   cfg.ProviderID + "/" + cfg.Model,
+			Reasoning:               cfg.Reasoning,
+			CWD:                     cwd,
+			Mode:                    thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
+			LastTurnState:           "",
+			ActiveLeafID:            effectiveLeafID,
+			CommunicatedCredentials: currentCommunicatedCredentials,
 		}
 		if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
 			yield(nil, fmt.Errorf("save thread config: %w", err))
@@ -604,11 +583,39 @@ func lastUserPromptFromUIParts(parts []message.UIPart) string {
 	return strings.TrimSpace(strings.Join(textParts, "\n"))
 }
 
-func formatModeChangeReminder(planMode bool) string {
-	if planMode {
-		return "<system-reminder>\nMode update: the current mode is now plan. This change was triggered by the current prompt request.\n</system-reminder>"
+func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder string) []message.Message {
+	prelude := make([]message.Message, 0, 2)
+	if userChangedMode {
+		prelude = append(prelude, message.Message{
+			ID:        "mode-" + agent.GenerateID(),
+			Role:      "user",
+			Synthetic: true,
+			Parts: []message.Part{message.TextPart{
+				Text: sessionconfig.FormatModeChangeReminder(planMode),
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+					ReminderKind: "mode",
+					Mode:         map[bool]string{true: "plan", false: "build"}[planMode],
+				}),
+			}},
+		})
 	}
-	return "<system-reminder>\nMode update: the current mode is now build. Plan mode has been exited. This change was triggered by the current prompt request.\n</system-reminder>"
+	if strings.TrimSpace(credentialReminder) != "" {
+		prelude = append(prelude, message.Message{
+			ID:        "credentials-" + agent.GenerateID(),
+			Role:      "user",
+			Synthetic: true,
+			Parts: []message.Part{message.TextPart{
+				Text: credentialReminder,
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+					ReminderKind: "credentials",
+				}),
+			}},
+		})
+	}
+	if len(prelude) == 0 {
+		return nil
+	}
+	return prelude
 }
 
 const generatedThreadNameMaxRunes = 72
@@ -1309,7 +1316,36 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 
 	commands := make([]agent.Command, 0, len(sessionCfg.Skills)+len(builtinCommands))
 	for _, s := range sessionCfg.Skills {
-		commands = append(commands, agent.Command{Name: s.Name, Description: s.Description, Kind: agent.CommandKind(s.Kind)})
+		command := agent.Command{
+			Name:        s.Name,
+			Description: s.Description,
+			Kind:        agent.CommandKind(s.Kind),
+			Discobot: agent.DiscobotCommandMetadata{
+				UI:    s.Discobot.UI,
+				Label: s.Discobot.Label,
+				Order: s.Discobot.Order,
+			},
+		}
+		if len(s.Discobot.CredentialRequest) > 0 {
+			command.Discobot.CredentialRequest = make([]agent.DiscobotCredentialRequest, 0, len(s.Discobot.CredentialRequest))
+			for _, request := range s.Discobot.CredentialRequest {
+				converted := agent.DiscobotCredentialRequest{
+					EnvVar:        request.EnvVar,
+					Name:          request.Name,
+					Justification: request.Justification,
+				}
+				if len(request.ApprovedUses) > 0 {
+					converted.ApprovedUses = make([]agent.DiscobotCredentialApprovedUse, 0, len(request.ApprovedUses))
+					for _, use := range request.ApprovedUses {
+						converted.ApprovedUses = append(converted.ApprovedUses, agent.DiscobotCredentialApprovedUse{
+							Description: use.Description,
+						})
+					}
+				}
+				command.Discobot.CredentialRequest = append(command.Discobot.CredentialRequest, converted)
+			}
+		}
+		commands = append(commands, command)
 	}
 	commands = append(commands, builtinCommands...)
 	return commands, nil

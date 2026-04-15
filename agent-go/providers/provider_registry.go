@@ -117,6 +117,15 @@ func (r *ProviderRegistry) Resolve(modelRef string) (Provider, string, error) {
 	return p, ref.ModelID, nil
 }
 
+// ReportableCredentialBindings returns the current agent-visible
+// session-scoped credential bindings that are safe to communicate to the LLM.
+func (r *ProviderRegistry) ReportableCredentialBindings() []credentials.ReportableBinding {
+	if r == nil || r.credMgr == nil {
+		return nil
+	}
+	return r.credMgr.ReportableBindings()
+}
+
 // ResolveModel resolves a model reference string to a concrete ModelRef using
 // provider default models when needed. taskType should be one of the
 // ModelTask* constants (e.g. ModelTaskChat).
@@ -125,8 +134,8 @@ func (r *ProviderRegistry) Resolve(modelRef string) (Provider, string, error) {
 //     default for taskType and return it.
 //   - ref == "providerID":    use that provider's default for taskType.
 //   - ref == "provider/model": parse and return as-is.
-func (r *ProviderRegistry) ResolveModel(ref string, taskType string) (ModelRef, error) {
-	return r.ResolveModelInProvider("", ref, taskType)
+func (r *ProviderRegistry) ResolveModel(ref string, taskTypes ...string) (ModelRef, error) {
+	return r.ResolveModelInProvider("", ref, taskTypes...)
 }
 
 // ResolveModelInProvider resolves a model reference string relative to the
@@ -139,7 +148,10 @@ func (r *ProviderRegistry) ResolveModel(ref string, taskType string) (ModelRef, 
 //   - ref == "provider/model":      parse and return as-is
 //   - ref == "model":               resolve as currentProviderID/model when currentProviderID is set
 //   - ref == "supporting_model":    resolve the current provider's default for that supporting model type
-func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string, taskType string) (ModelRef, error) {
+func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string, taskTypes ...string) (ModelRef, error) {
+	if len(taskTypes) == 0 {
+		return ModelRef{}, fmt.Errorf("at least one model task type is required")
+	}
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		ids := r.IDs()
@@ -147,19 +159,33 @@ func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string,
 			return ModelRef{}, fmt.Errorf("no model providers are available; configure a provider, set DISCOBOT_MODEL, or pass --model")
 		}
 
-		// Find the first available provider with a default for this task type.
-		for _, id := range ids {
+		candidateIDs := ids
+		if currentProviderID != "" {
+			candidateIDs = make([]string, 0, len(ids))
+			candidateIDs = append(candidateIDs, currentProviderID)
+			for _, id := range ids {
+				if id == currentProviderID {
+					continue
+				}
+				candidateIDs = append(candidateIDs, id)
+			}
+		}
+
+		// Find the first available provider with a default for one of these task types.
+		for _, id := range candidateIDs {
 			p, err := r.Get(id)
 			if err != nil {
 				continue
 			}
-			if ref := p.DefaultModels()[taskType]; ref.ModelID != "" {
-				return ref, nil
+			for _, taskType := range taskTypes {
+				if ref := p.DefaultModels()[taskType]; ref.ModelID != "" {
+					return ref, nil
+				}
 			}
 		}
 		return ModelRef{}, fmt.Errorf(
-			"no provider available with a default %q model; available providers: %s; set DISCOBOT_MODEL or pass --model",
-			taskType,
+			"no provider available with a default model for tasks %q; available providers: %s; set DISCOBOT_MODEL or pass --model",
+			strings.Join(taskTypes, ", "),
 			strings.Join(ids, ", "),
 		)
 	}
@@ -178,11 +204,13 @@ func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string,
 
 	// Provider-only ref: look up that provider's default.
 	if p, err := r.Get(ref); err == nil {
-		modelRef := p.DefaultModels()[taskType]
-		if modelRef.ModelID == "" {
-			return ModelRef{}, fmt.Errorf("provider %q has no default %q model", ref, taskType)
+		for _, taskType := range taskTypes {
+			modelRef := p.DefaultModels()[taskType]
+			if modelRef.ModelID != "" {
+				return modelRef, nil
+			}
 		}
-		return modelRef, nil
+		return ModelRef{}, fmt.Errorf("provider %q has no default model for tasks %q", ref, strings.Join(taskTypes, ", "))
 	}
 
 	if currentProviderID != "" {
@@ -195,15 +223,19 @@ func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string,
 	if err != nil {
 		return ModelRef{}, fmt.Errorf("provider %q: %w", ref, err)
 	}
-	modelRef := p.DefaultModels()[taskType]
-	if modelRef.ModelID == "" {
-		return ModelRef{}, fmt.Errorf("provider %q has no default %q model", ref, taskType)
+	for _, taskType := range taskTypes {
+		modelRef := p.DefaultModels()[taskType]
+		if modelRef.ModelID != "" {
+			return modelRef, nil
+		}
 	}
-	return modelRef, nil
+	return ModelRef{}, fmt.Errorf("provider %q has no default model for tasks %q", ref, strings.Join(taskTypes, ", "))
 }
 
 func supportingModelTaskType(modelType SupportingModelType) (ModelTaskType, bool) {
 	switch modelType {
+	case ModelAuthorization:
+		return ModelTaskAuthorization, true
 	case SupportingModelThreadSummarization:
 		return ModelTaskThreadSummarization, true
 	default:

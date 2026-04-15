@@ -603,20 +603,7 @@ func TestCommitSessionRouteNotFound(t *testing.T) {
 	AssertStatus(t, resp, http.StatusNotFound)
 }
 
-func TestRebaseSession_NotFound(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	client := ts.AuthenticatedClient(user)
-
-	resp := client.Post("/api/projects/"+project.ID+"/sessions/nonexistent-session/rebase", nil)
-	defer resp.Body.Close()
-
-	AssertStatus(t, resp, http.StatusNotFound)
-}
-
-func TestRebaseSession_AlreadyInProgress(t *testing.T) {
+func TestGetSession_MapsInProgressCommitIntoStatusAndIncludesTargetRef(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -625,39 +612,16 @@ func TestRebaseSession_AlreadyInProgress(t *testing.T) {
 	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
 	client := ts.AuthenticatedClient(user)
 
-	session.CommitStatus = "pending"
+	// Set internal commit state and verify the public response is flattened.
+	session.CommitStatus = "committing"
 	operation := "commit"
 	session.CommitOperation = &operation
+	targetRef := "HEAD"
+	session.TargetRef = &targetRef
 	if err := ts.Store.UpdateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	resp := client.Post("/api/projects/"+project.ID+"/sessions/"+session.ID+"/rebase", nil)
-	defer resp.Body.Close()
-
-	AssertStatus(t, resp, http.StatusConflict)
-}
-
-func TestGetSession_IncludesCommitStatus(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
-	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
-	client := ts.AuthenticatedClient(user)
-
-	// Set commit status to test it's included in response
-	session.CommitStatus = "committing"
-	operation := "rebase"
-	session.CommitOperation = &operation
-	baseCommit := "abc123"
-	session.BaseCommit = &baseCommit
-	if err := ts.Store.UpdateSession(context.Background(), session); err != nil {
-		t.Fatalf("Failed to update session: %v", err)
-	}
-
-	// Get session and verify commit fields are included
 	resp := client.Get("/api/projects/" + project.ID + "/sessions/" + session.ID)
 	defer resp.Body.Close()
 
@@ -666,14 +630,17 @@ func TestGetSession_IncludesCommitStatus(t *testing.T) {
 	var result map[string]any
 	ParseJSON(t, resp, &result)
 
-	if result["commitStatus"] != "committing" {
-		t.Errorf("Expected commitStatus 'committing', got %v", result["commitStatus"])
+	if result["status"] != "committing" {
+		t.Errorf("Expected status 'committing', got %v", result["status"])
 	}
-	if result["commitOperation"] != "rebase" {
-		t.Errorf("Expected commitOperation 'rebase', got %v", result["commitOperation"])
+	if result["targetRef"] != "HEAD" {
+		t.Errorf("Expected targetRef 'HEAD', got %v", result["targetRef"])
 	}
-	if result["baseCommit"] != "abc123" {
-		t.Errorf("Expected baseCommit 'abc123', got %v", result["baseCommit"])
+	if _, ok := result["commitStatus"]; ok {
+		t.Errorf("Expected commitStatus to be omitted, got %v", result["commitStatus"])
+	}
+	if _, ok := result["commitOperation"]; ok {
+		t.Errorf("Expected commitOperation to be omitted, got %v", result["commitOperation"])
 	}
 }
 

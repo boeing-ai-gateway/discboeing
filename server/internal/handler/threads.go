@@ -44,6 +44,22 @@ func (h *Handler) ListThreads(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
+// ListCommands lists available slash commands in a session's sandbox.
+// GET /api/projects/{projectId}/sessions/{sessionId}/commands
+func (h *Handler) ListCommands(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+
+	result, err := h.chatService.ListCommands(ctx, projectID, sessionID)
+	if err != nil {
+		h.Error(w, threadErrorStatus(err), err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
 // GetThread returns a single thread from a session's sandbox.
 // GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}
 func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {

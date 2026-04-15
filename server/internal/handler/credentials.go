@@ -611,13 +611,19 @@ func (h *Handler) GitHubCopilotPoll(w http.ResponseWriter, r *http.Request) {
 
 // GitHubDeviceCodeRequest is the request for initiating GitHub device flow
 type GitHubDeviceCodeRequest struct {
-	EnterpriseURL string `json:"enterpriseUrl,omitempty"`
+	EnterpriseURL string   `json:"enterpriseUrl,omitempty"`
+	Scopes        []string `json:"scopes,omitempty"`
 }
 
 // GitHubPollRequest is the request for polling GitHub device authorization
 type GitHubPollRequest struct {
-	DeviceCode string `json:"deviceCode"`
-	Domain     string `json:"domain"`
+	DeviceCode   string                        `json:"deviceCode"`
+	Domain       string                        `json:"domain"`
+	CredentialID string                        `json:"credentialId,omitempty"`
+	Name         string                        `json:"name,omitempty"`
+	Description  string                        `json:"description,omitempty"`
+	Visibility   *service.CredentialVisibility `json:"visibility,omitempty"`
+	Inactive     *bool                         `json:"inactive,omitempty"`
 }
 
 // GitHubDeviceCode initiates device flow for GitHub git operations (repo scope)
@@ -642,7 +648,7 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain, req.Scopes)
 	deviceResp, err := provider.RequestDeviceCode(r.Context())
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to request device code: "+err.Error())
@@ -679,7 +685,7 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 		domain = oauth.DefaultGitHubDomain
 	}
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain, nil)
 	pollResp, err := provider.PollForToken(r.Context(), req.DeviceCode)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Poll request failed: "+err.Error())
@@ -723,7 +729,26 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 		// GitHub device flow does not issue refresh tokens
 	}
 
-	info, err := h.credentialService.SetOAuthTokens(r.Context(), projectID, service.ProviderGitHub, "GitHub", oauthCred)
+	visibility := service.CredentialVisibility{}
+	if req.Visibility != nil {
+		visibility = *req.Visibility
+	}
+	inactive := false
+	if req.Inactive != nil {
+		inactive = *req.Inactive
+	}
+
+	info, err := h.credentialService.SetOAuthTokensWithMetadata(
+		r.Context(),
+		projectID,
+		req.CredentialID,
+		service.ProviderGitHub,
+		req.Name,
+		req.Description,
+		visibility,
+		inactive,
+		oauthCred,
+	)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to store credential")
 		return

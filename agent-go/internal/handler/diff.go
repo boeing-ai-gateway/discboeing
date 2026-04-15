@@ -12,9 +12,11 @@ import (
 // Query params:
 //   - path: optional, single file diff
 //   - format: optional, "full" (default) or "files"
+//   - target: optional commit/ref to diff against (defaults to HEAD)
 func (h *Handler) GetDiff(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	format := r.URL.Query().Get("format")
+	target := r.URL.Query().Get("target")
 
 	// Validate single file path if provided
 	if path != "" {
@@ -24,7 +26,11 @@ func (h *Handler) GetDiff(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	diff := gitops.GetDiff(h.agentCwd, path)
+	diff, err := gitops.GetDiff(h.agentCwd, path, target)
+	if err != nil {
+		h.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Handle single file request
 	if path != "" {

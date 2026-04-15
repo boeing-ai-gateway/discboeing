@@ -81,13 +81,16 @@ func setupWorkspace(workspacePath, workspaceCommit string, u *userInfo) error {
         return err
     }
 
-    // Checkout specific commit if requested
+    // Reset the cloned branch to a specific commit if requested
     if workspaceCommit != "" {
-        cmd = exec.Command("git", "-C", stagingDir, "checkout", workspaceCommit)
+        cmd = exec.Command("git", "-C", stagingDir, "reset", "--hard", workspaceCommit)
         if err := cmd.Run(); err != nil {
             return err
         }
     }
+
+    // Keep the local branch tracking origin so sandbox-local rebase can use
+    // the upstream branch directly.
 
     // Change ownership to target user
     chownRecursive(stagingDir, u.uid, u.gid)

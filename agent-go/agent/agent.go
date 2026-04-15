@@ -42,6 +42,27 @@ type Command struct {
 
 	// Kind indicates the origin of the command.
 	Kind CommandKind
+
+	// Discobot carries optional Discobot-specific command metadata.
+	Discobot DiscobotCommandMetadata
+}
+
+type DiscobotCommandMetadata struct {
+	UI                bool
+	Label             string
+	Order             int
+	CredentialRequest []DiscobotCredentialRequest
+}
+
+type DiscobotCredentialRequest struct {
+	EnvVar        string
+	Name          string
+	Justification string
+	ApprovedUses  []DiscobotCredentialApprovedUse
+}
+
+type DiscobotCredentialApprovedUse struct {
+	Description string
 }
 
 // PendingQuestion represents an outstanding approval request that needs user input.

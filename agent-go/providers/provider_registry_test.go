@@ -171,8 +171,50 @@ func TestProviderRegistry_ResolveModel_NoDefaultIncludesAvailableProviders(t *te
 	if err == nil {
 		t.Fatal("expected error when no provider has a default model")
 	}
-	if got := err.Error(); got != `no provider available with a default "chat" model; available providers: anthropic, openai; set DISCOBOT_MODEL or pass --model` {
+	if got := err.Error(); got != `no provider available with a default model for tasks "chat"; available providers: anthropic, openai; set DISCOBOT_MODEL or pass --model` {
 		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
+func TestProviderRegistry_ResolveModelInProvider_UsesFirstMatchingTaskType(t *testing.T) {
+	r := NewProviderRegistry(nil)
+	r.Add(&testProvider{
+		id: "openai",
+		defaults: map[string]ModelRef{
+			ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	})
+
+	got, err := r.ResolveModelInProvider("openai", "", ModelTaskAuthorization, ModelTaskChat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (ModelRef{ProviderID: "openai", ModelID: "gpt-5.4"}) {
+		t.Fatalf("unexpected model ref: %+v", got)
+	}
+}
+
+func TestProviderRegistry_ResolveModelInProvider_PrefersCurrentProviderWhenRefEmpty(t *testing.T) {
+	r := NewProviderRegistry(nil)
+	r.Add(&testProvider{
+		id: "anthropic",
+		defaults: map[string]ModelRef{
+			ModelTaskAuthorization: {ProviderID: "anthropic", ModelID: "claude-auth"},
+		},
+	})
+	r.Add(&testProvider{
+		id: "openai",
+		defaults: map[string]ModelRef{
+			ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	})
+
+	got, err := r.ResolveModelInProvider("openai", "", ModelTaskAuthorization, ModelTaskChat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (ModelRef{ProviderID: "openai", ModelID: "gpt-5.4"}) {
+		t.Fatalf("unexpected model ref: %+v", got)
 	}
 }
 

@@ -10,20 +10,19 @@ import (
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
-// TestSessionInitialize_SetsWorkspaceCommitOnFirstInit verifies that
-// WorkspacePath and WorkspaceCommit are set during first initialization.
-func TestSessionInitialize_SetsWorkspaceCommitOnFirstInit(t *testing.T) {
+const expectedSessionTargetRef = "HEAD"
+
+// TestSessionInitialize_SetsTargetRefOnFirstInit verifies that
+// WorkspacePath is populated and TargetRef defaults to HEAD during first initialization.
+func TestSessionInitialize_SetsTargetRefOnFirstInit(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 
-	// Create a workspace with a real git repo
+	// Create a workspace with a real git repo.
 	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
-
-	// Get the current HEAD commit
 	expectedCommit := getGitHead(t, workspace.Path)
 
-	// Create session in initializing state (not ready yet)
 	session := &model.Session{
 		ProjectID:   workspace.ProjectID,
 		WorkspaceID: workspace.ID,
@@ -34,7 +33,6 @@ func TestSessionInitialize_SetsWorkspaceCommitOnFirstInit(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Verify session has no workspace path/commit yet
 	freshSession, err := ts.Store.GetSessionByID(context.Background(), session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get session: %v", err)
@@ -42,11 +40,10 @@ func TestSessionInitialize_SetsWorkspaceCommitOnFirstInit(t *testing.T) {
 	if freshSession.WorkspacePath != nil {
 		t.Errorf("Expected WorkspacePath to be nil before init, got %v", *freshSession.WorkspacePath)
 	}
-	if freshSession.WorkspaceCommit != nil {
-		t.Errorf("Expected WorkspaceCommit to be nil before init, got %v", *freshSession.WorkspaceCommit)
+	if freshSession.TargetRef != nil {
+		t.Errorf("Expected TargetRef to be nil before init, got %v", *freshSession.TargetRef)
 	}
 
-	// Create session service and call Initialize
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
 	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
 
@@ -55,39 +52,35 @@ func TestSessionInitialize_SetsWorkspaceCommitOnFirstInit(t *testing.T) {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
-	// Verify WorkspacePath and WorkspaceCommit are now set
 	updatedSession, err := ts.Store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get updated session: %v", err)
 	}
-
 	if updatedSession.WorkspacePath == nil || *updatedSession.WorkspacePath == "" {
 		t.Error("Expected WorkspacePath to be set after init")
 	}
+	assertSessionTargetRef(t, updatedSession, expectedSessionTargetRef)
 
-	if updatedSession.WorkspaceCommit == nil || *updatedSession.WorkspaceCommit == "" {
-		t.Error("Expected WorkspaceCommit to be set after init")
+	createOpts, ok := ts.MockSandbox.GetCreateOptions(session.ID)
+	if !ok {
+		t.Fatalf("Expected sandbox create options for session %s", session.ID)
 	}
-
-	if updatedSession.WorkspaceCommit != nil && *updatedSession.WorkspaceCommit != expectedCommit {
-		t.Errorf("Expected WorkspaceCommit to be %s, got %s", expectedCommit, *updatedSession.WorkspaceCommit)
+	if createOpts.WorkspaceCommit != expectedCommit {
+		t.Errorf("Expected sandbox WorkspaceCommit %s, got %s", expectedCommit, createOpts.WorkspaceCommit)
 	}
 }
 
-// TestSessionInitialize_PreservesWorkspaceCommitOnReconcile verifies that
-// WorkspacePath and WorkspaceCommit are NOT changed during reconcile (second initialization).
-func TestSessionInitialize_PreservesWorkspaceCommitOnReconcile(t *testing.T) {
+// TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile verifies that
+// reconcile preserves stored session metadata but recreates the sandbox from the
+// workspace's current HEAD.
+func TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 
-	// Create a workspace with a real git repo
 	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
-
-	// Get the initial HEAD commit
 	initialCommit := getGitHead(t, workspace.Path)
 
-	// Create session in initializing state
 	session := &model.Session{
 		ProjectID:   workspace.ProjectID,
 		WorkspaceID: workspace.ID,
@@ -98,7 +91,6 @@ func TestSessionInitialize_PreservesWorkspaceCommitOnReconcile(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Create session service and call Initialize (first time)
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
 	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
 
@@ -107,85 +99,84 @@ func TestSessionInitialize_PreservesWorkspaceCommitOnReconcile(t *testing.T) {
 		t.Fatalf("First Initialize failed: %v", err)
 	}
 
-	// Verify initial values
 	afterFirstInit, err := ts.Store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get session after first init: %v", err)
 	}
+	if afterFirstInit.WorkspacePath == nil || *afterFirstInit.WorkspacePath == "" {
+		t.Fatal("Expected WorkspacePath to be set after first init")
+	}
+	assertSessionTargetRef(t, afterFirstInit, expectedSessionTargetRef)
+	originalPath := *afterFirstInit.WorkspacePath
 
-	if afterFirstInit.WorkspaceCommit == nil || *afterFirstInit.WorkspaceCommit != initialCommit {
-		t.Fatalf("Expected WorkspaceCommit to be %s after first init, got %v", initialCommit, afterFirstInit.WorkspaceCommit)
+	firstCreateOpts, ok := ts.MockSandbox.GetCreateOptions(session.ID)
+	if !ok {
+		t.Fatalf("Expected sandbox create options for first init")
+	}
+	if firstCreateOpts.WorkspaceCommit != initialCommit {
+		t.Fatalf("Expected first sandbox WorkspaceCommit %s, got %s", initialCommit, firstCreateOpts.WorkspaceCommit)
 	}
 
-	originalPath := *afterFirstInit.WorkspacePath
-	originalCommit := *afterFirstInit.WorkspaceCommit
-
-	// Now make a new commit in the workspace (simulating changes during session)
 	makeCommit(t, workspace.Path, "second.txt", "Second commit")
 	newCommit := getGitHead(t, workspace.Path)
-
 	if newCommit == initialCommit {
 		t.Fatal("Expected new commit to be different from initial commit")
 	}
 
-	// Set session back to a state that triggers reconcile
 	afterFirstInit.Status = model.SessionStatusError
 	if err := ts.Store.UpdateSession(ctx, afterFirstInit); err != nil {
 		t.Fatalf("Failed to update session status: %v", err)
 	}
-
-	// Remove the sandbox so Initialize will recreate it
 	if err := ts.MockSandbox.Remove(ctx, session.ID); err != nil {
 		t.Fatalf("Failed to remove sandbox: %v", err)
 	}
 
-	// Call Initialize again (reconcile)
 	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
 		t.Fatalf("Second Initialize (reconcile) failed: %v", err)
 	}
 
-	// Verify WorkspacePath and WorkspaceCommit are PRESERVED (not updated to new values)
 	afterReconcile, err := ts.Store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get session after reconcile: %v", err)
 	}
-
 	if afterReconcile.WorkspacePath == nil || *afterReconcile.WorkspacePath != originalPath {
 		t.Errorf("Expected WorkspacePath to be preserved as %s, got %v", originalPath, afterReconcile.WorkspacePath)
 	}
+	assertSessionTargetRef(t, afterReconcile, expectedSessionTargetRef)
 
-	if afterReconcile.WorkspaceCommit == nil || *afterReconcile.WorkspaceCommit != originalCommit {
-		t.Errorf("Expected WorkspaceCommit to be preserved as %s (not updated to %s), got %v",
-			originalCommit, newCommit, afterReconcile.WorkspaceCommit)
+	reconcileCreateOpts, ok := ts.MockSandbox.GetCreateOptions(session.ID)
+	if !ok {
+		t.Fatalf("Expected sandbox create options after reconcile")
+	}
+	if reconcileCreateOpts.WorkspaceCommit != newCommit {
+		t.Errorf("Expected reconcile sandbox WorkspaceCommit %s, got %s", newCommit, reconcileCreateOpts.WorkspaceCommit)
 	}
 }
 
 // TestSessionInitialize_EnsuresWorkspaceOnReconcile verifies that
-// EnsureWorkspaceRepo is called even during reconcile (to ensure repo is cloned).
+// EnsureWorkspaceRepo is called even during reconcile so sandbox recreation can
+// use the current workspace commit.
 func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 
-	// Create a workspace with a real git repo
 	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
-
-	// Create session with WorkspacePath already set (simulating previous initialization)
 	workspacePath := workspace.Path
 	workspaceCommit := getGitHead(t, workspace.Path)
+	targetRef := expectedSessionTargetRef
 	session := &model.Session{
-		ProjectID:       workspace.ProjectID,
-		WorkspaceID:     workspace.ID,
-		Name:            "Test Session",
-		Status:          model.SessionStatusError, // Needs reconcile
-		WorkspacePath:   &workspacePath,
-		WorkspaceCommit: &workspaceCommit,
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		Status:        model.SessionStatusError,
+		WorkspacePath: &workspacePath,
+		TargetRef:     &targetRef,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Create session service and call Initialize (reconcile path)
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
 	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
 
@@ -194,19 +185,14 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 		t.Fatalf("Initialize (reconcile) failed: %v", err)
 	}
 
-	// Verify that initialization succeeded (sandbox was created)
-	// This implicitly verifies EnsureWorkspaceRepo was called because:
-	// 1. The git provider needs to have the workspace registered to work
-	// 2. If EnsureWorkspaceRepo wasn't called, sandbox creation would fail
 	sbx, err := ts.MockSandbox.Get(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox after reconcile: %v", err)
 	}
 	if sbx == nil {
-		t.Error("Expected sandbox to exist after reconcile")
+		t.Fatal("Expected sandbox to exist after reconcile")
 	}
 
-	// Verify session is now ready
 	updatedSession, err := ts.Store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get session: %v", err)
@@ -214,136 +200,39 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 	if updatedSession.Status != model.SessionStatusReady {
 		t.Errorf("Expected session status to be 'ready', got '%s'", updatedSession.Status)
 	}
-}
+	assertSessionTargetRef(t, updatedSession, expectedSessionTargetRef)
 
-// TestSessionInitialize_WorkspaceCommitUsedForSandbox verifies that the stored
-// WorkspaceCommit (not the current HEAD) is passed to sandbox creation on reconcile.
-func TestSessionInitialize_WorkspaceCommitUsedForSandbox(t *testing.T) {
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-
-	// Create a workspace with a real git repo
-	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
-
-	// Get the initial commit
-	initialCommit := getGitHead(t, workspace.Path)
-
-	// Create session in initializing state
-	session := &model.Session{
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusInitializing,
+	createOpts, ok := ts.MockSandbox.GetCreateOptions(session.ID)
+	if !ok {
+		t.Fatalf("Expected sandbox create options for reconcile")
 	}
-	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
-		t.Fatalf("Failed to create session: %v", err)
-	}
-
-	// First initialization
-	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
-	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
-
-	ctx := context.Background()
-	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
-		t.Fatalf("First Initialize failed: %v", err)
-	}
-
-	// Make a new commit
-	makeCommit(t, workspace.Path, "new-file.txt", "New commit after session init")
-	newCommit := getGitHead(t, workspace.Path)
-
-	if newCommit == initialCommit {
-		t.Fatal("Expected new commit to be different")
-	}
-
-	// Remove sandbox and set session to error state to trigger reconcile
-	if err := ts.MockSandbox.Remove(ctx, session.ID); err != nil {
-		t.Fatalf("Failed to remove sandbox: %v", err)
-	}
-
-	afterFirstInit, _ := ts.Store.GetSessionByID(ctx, session.ID)
-	afterFirstInit.Status = model.SessionStatusError
-	if err := ts.Store.UpdateSession(ctx, afterFirstInit); err != nil {
-		t.Fatalf("Failed to update session: %v", err)
-	}
-
-	// Reconcile
-	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
-		t.Fatalf("Reconcile Initialize failed: %v", err)
-	}
-
-	// Verify the session still has the original commit (sandbox should use this)
-	finalSession, err := ts.Store.GetSessionByID(ctx, session.ID)
-	if err != nil {
-		t.Fatalf("Failed to get session: %v", err)
-	}
-
-	if finalSession.WorkspaceCommit == nil || *finalSession.WorkspaceCommit != initialCommit {
-		t.Errorf("Expected WorkspaceCommit to remain %s, got %v", initialCommit, finalSession.WorkspaceCommit)
+	if createOpts.WorkspaceCommit != workspaceCommit {
+		t.Errorf("Expected sandbox WorkspaceCommit %s, got %s", workspaceCommit, createOpts.WorkspaceCommit)
 	}
 }
 
-// Helper functions
-
-func getGitHead(t *testing.T, repoPath string) string {
-	t.Helper()
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoPath
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to get git HEAD: %v", err)
-	}
-	return string(out[:len(out)-1]) // trim newline
-}
-
-func makeCommit(t *testing.T, repoPath, filename, message string) {
-	t.Helper()
-
-	// Create a new file
-	filepath := repoPath + "/" + filename
-	if err := os.WriteFile(filepath, []byte(message+"\n"), 0644); err != nil {
-		t.Fatalf("Failed to create file %s: %v", filename, err)
-	}
-
-	// Stage and commit
-	cmd := exec.Command("git", "add", filename)
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to git add: %v", err)
-	}
-
-	cmd = exec.Command("git", "commit", "-m", message)
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to git commit: %v", err)
-	}
-}
-
-// TestMapSession_IncludesWorkspaceFields verifies that mapSession includes
-// the WorkspacePath and WorkspaceCommit fields in the service.Session.
-func TestMapSession_IncludesWorkspaceFields(t *testing.T) {
+// TestMapSession_IncludesTargetRefAndWorkspacePath verifies that mapSession includes
+// the WorkspacePath and TargetRef fields in the service.Session.
+func TestMapSession_IncludesTargetRefAndWorkspacePath(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 
-	// Create session with workspace fields set
 	workspacePath := workspace.Path
-	workspaceCommit := "abc123def456"
+	targetRef := expectedSessionTargetRef
 	session := &model.Session{
-		ProjectID:       workspace.ProjectID,
-		WorkspaceID:     workspace.ID,
-		Name:            "Test Session",
-		Status:          model.SessionStatusReady,
-		WorkspacePath:   &workspacePath,
-		WorkspaceCommit: &workspaceCommit,
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		Status:        model.SessionStatusReady,
+		WorkspacePath: &workspacePath,
+		TargetRef:     &targetRef,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Use session service to get session (which uses mapSession internally)
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
 	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
 
@@ -353,12 +242,11 @@ func TestMapSession_IncludesWorkspaceFields(t *testing.T) {
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	// Verify the service.Session has the workspace fields
 	if svcSession.WorkspacePath != workspacePath {
 		t.Errorf("Expected WorkspacePath %s, got %s", workspacePath, svcSession.WorkspacePath)
 	}
-	if svcSession.WorkspaceCommit != workspaceCommit {
-		t.Errorf("Expected WorkspaceCommit %s, got %s", workspaceCommit, svcSession.WorkspaceCommit)
+	if svcSession.TargetRef != targetRef {
+		t.Errorf("Expected TargetRef %s, got %s", targetRef, svcSession.TargetRef)
 	}
 }
 
@@ -379,7 +267,6 @@ func TestSessionInitialize_NoGitService(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Create session service WITHOUT git service
 	sessionSvc := service.NewSessionService(ts.Store, nil, ts.MockSandbox, nil, nil, nil)
 
 	ctx := context.Background()
@@ -387,18 +274,64 @@ func TestSessionInitialize_NoGitService(t *testing.T) {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
-	// Verify WorkspacePath is set to workspace.Path, but WorkspaceCommit is empty
 	updatedSession, err := ts.Store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get session: %v", err)
 	}
-
 	if updatedSession.WorkspacePath == nil || *updatedSession.WorkspacePath != workspace.Path {
 		t.Errorf("Expected WorkspacePath to be %s, got %v", workspace.Path, updatedSession.WorkspacePath)
 	}
+	assertSessionTargetRef(t, updatedSession, expectedSessionTargetRef)
 
-	// Without git service, WorkspaceCommit should be nil or empty
-	if updatedSession.WorkspaceCommit != nil && *updatedSession.WorkspaceCommit != "" {
-		t.Errorf("Expected WorkspaceCommit to be nil/empty without git service, got %v", *updatedSession.WorkspaceCommit)
+	createOpts, ok := ts.MockSandbox.GetCreateOptions(session.ID)
+	if !ok {
+		t.Fatalf("Expected sandbox create options for session %s", session.ID)
+	}
+	if createOpts.WorkspaceCommit != "" {
+		t.Errorf("Expected empty sandbox WorkspaceCommit without git service, got %q", createOpts.WorkspaceCommit)
+	}
+}
+
+func assertSessionTargetRef(t *testing.T, session *model.Session, want string) {
+	t.Helper()
+	if session.TargetRef == nil {
+		t.Fatalf("Expected TargetRef %s, got nil", want)
+	}
+	if *session.TargetRef != want {
+		t.Fatalf("Expected TargetRef %s, got %s", want, *session.TargetRef)
+	}
+}
+
+// Helper functions
+
+func getGitHead(t *testing.T, repoPath string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get git HEAD: %v", err)
+	}
+	return string(out[:len(out)-1]) // trim newline
+}
+
+func makeCommit(t *testing.T, repoPath, filename, message string) {
+	t.Helper()
+
+	filepath := repoPath + "/" + filename
+	if err := os.WriteFile(filepath, []byte(message+"\n"), 0644); err != nil {
+		t.Fatalf("Failed to create file %s: %v", filename, err)
+	}
+
+	cmd := exec.Command("git", "add", filename)
+	cmd.Dir = repoPath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to git add: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", message)
+	cmd.Dir = repoPath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to git commit: %v", err)
 	}
 }

@@ -25,9 +25,8 @@ function readSessionSetupStatusSource() {
 	return readFileSync(SESSION_SETUP_STATUS_COMPONENT, "utf-8");
 }
 
-test("session status constants include committed and rebased", () => {
+test("session status constants include committed", () => {
 	assert.equal(SessionStatus.COMMITTED, "committed");
-	assert.equal(SessionStatus.REBASED, "rebased");
 });
 
 test("session transitioning status helper only flags non-resting states", () => {
@@ -41,21 +40,15 @@ test("session transitioning status helper only flags non-resting states", () => 
 	assert.equal(isSessionTransitioningStatus(null), false);
 });
 
-test("session status component renders dedicated git icons for committed and rebased", () => {
+test("session status component renders a dedicated git icon for committed", () => {
 	const source = readSessionStatusSource();
 
 	assert.match(
 		source,
 		/import GitCommitIcon from "@lucide\/svelte\/icons\/git-commit"/,
 	);
-	assert.match(
-		source,
-		/import GitBranchIcon from "@lucide\/svelte\/icons\/git-branch"/,
-	);
 	assert.match(source, /normalizedStatus\(status\) === "committed"/);
-	assert.match(source, /normalizedStatus\(status\) === "rebased"/);
 	assert.match(source, /<GitCommitIcon class="size-3\.5" \/>/);
-	assert.match(source, /<GitBranchIcon class="size-3\.5" \/>/);
 });
 
 test("session setup status distinguishes creating from restoring", () => {

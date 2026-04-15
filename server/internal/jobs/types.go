@@ -11,7 +11,6 @@ const (
 	JobTypeSessionDelete        JobType = "session_delete"
 	JobTypeSessionSandboxDelete JobType = "session_sandbox_delete"
 	JobTypeSessionCommit        JobType = "session_commit"
-	JobTypeSessionRebase        JobType = "session_rebase"
 	JobTypePromptDispatch       JobType = "prompt_dispatch"
 	JobTypeWorkspaceInit        JobType = "workspace_init"
 )
@@ -101,20 +100,6 @@ func (p SessionCommitPayload) ResourceKey() (string, string) {
 }
 func (p SessionCommitPayload) MaxAttempts() int      { return 1 }
 func (p SessionCommitPayload) AllowDuplicates() bool { return true }
-
-// SessionRebasePayload is the payload for session_rebase jobs.
-type SessionRebasePayload struct {
-	ProjectID   string `json:"projectId"`
-	SessionID   string `json:"sessionId"`
-	WorkspaceID string `json:"workspaceId"`
-}
-
-func (p SessionRebasePayload) JobType() JobType { return JobTypeSessionRebase }
-func (p SessionRebasePayload) ResourceKey() (string, string) {
-	return ResourceTypeSession, p.SessionID
-}
-func (p SessionRebasePayload) MaxAttempts() int      { return 1 }
-func (p SessionRebasePayload) AllowDuplicates() bool { return true }
 
 // PromptDispatchPayload is the payload for prompt_dispatch jobs.
 type PromptDispatchPayload struct {

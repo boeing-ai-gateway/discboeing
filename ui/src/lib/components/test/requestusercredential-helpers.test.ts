@@ -52,6 +52,7 @@ const secondCredential: CredentialInfo = {
 const assignment: SessionCredentialAssignment = {
 	credentialId: "cred-2",
 	sessionCredentialId: "cred_s_abc123",
+	envVar: "GITHUB_TOKEN",
 	agentVisible: true,
 	visibility: {
 		tools: true,
@@ -181,6 +182,50 @@ test("buildGrantedCredentialPayload returns session-scoped ids and uses", () => 
 		]),
 		{
 			grantedCredentials: [
+				{
+					credentialId: "cred_s_abc123",
+					envVar: "GITHUB_TOKEN",
+					name: "GitHub access token",
+					approvedUses: [
+						{ id: "use_s_1", description: "create pull requests" },
+						{ id: "use_s_2", description: "clone private repositories" },
+					],
+				},
+			],
+		},
+	);
+});
+
+test("buildGrantedCredentialPayload matches assignments by credential and env var", () => {
+	const ghTokenRequest: RequestedCredential = {
+		envVar: "GH_TOKEN",
+		name: "GitHub CLI token",
+		justification: "Authenticate gh",
+		approvedUses: [{ description: "authenticate gh" }],
+	};
+
+	assert.deepEqual(
+		buildGrantedCredentialPayload(
+			[ghTokenRequest, request],
+			{ GH_TOKEN: "cred-2", GITHUB_TOKEN: "cred-2" },
+			[
+				{
+					...assignment,
+					sessionCredentialId: "cred_s_shared",
+					envVar: "GH_TOKEN",
+					uses: [{ id: "use_s_gh", description: "authenticate gh" }],
+				},
+				assignment,
+			],
+		),
+		{
+			grantedCredentials: [
+				{
+					credentialId: "cred_s_shared",
+					envVar: "GH_TOKEN",
+					name: "GitHub CLI token",
+					approvedUses: [{ id: "use_s_gh", description: "authenticate gh" }],
+				},
 				{
 					credentialId: "cred_s_abc123",
 					envVar: "GITHUB_TOKEN",

@@ -63,7 +63,12 @@ The `discobot-agent` binary serves as the container's PID 1 process, providing:
 │  • Start git clone in goroutine (slowest operation)         │
 │  • Runs in parallel with filesystem/proxy/Docker setup      │
 │  • Check if /.data/discobot/workspace exists                 │
-│  • If not, clone WORKSPACE_ORIGIN_PATH to staging directory │
+│  • If not, clone WORKSPACE_SOURCE for git URL workspaces     │
+│  • Local workspaces still clone from WORKSPACE_ORIGIN_PATH   │
+│  • Reuse/update a mirror cache under                         │
+│    /.data/cache/home/discobot/.cache/discobot/git           │
+│    before cloning into the session workspace                 │
+│  • Use WORKSPACE_TARGET_REF when cloning a named branch      │
 │  • Checkout WORKSPACE_COMMIT if specified                   │
 │  • Change ownership to discobot user                         │
 │  • Atomically rename staging → workspace                    │

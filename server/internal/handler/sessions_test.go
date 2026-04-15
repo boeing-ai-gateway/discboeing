@@ -25,13 +25,13 @@ func TestDeriveSessionStatusAndError_MapsCompletedCommitOperation(t *testing.T) 
 			wantStatus: "committed",
 		},
 		{
-			name: "rebase completion maps to rebased",
+			name: "unknown completed operation falls back to session status",
 			session: &service.Session{
 				Status:          "ready",
 				CommitStatus:    "completed",
-				CommitOperation: service.CommitOperationRebase,
+				CommitOperation: "rebase",
 			},
-			wantStatus: "rebased",
+			wantStatus: "ready",
 		},
 	}
 
@@ -78,11 +78,11 @@ func TestDeriveSessionStatusAndError_RemovingOverridesDerivedCommitStates(t *tes
 			wantStatus: model.SessionStatusRemoving,
 		},
 		{
-			name: "removed overrides completed rebase",
+			name: "removed overrides completed unknown operation",
 			session: &service.Session{
 				Status:          model.SessionStatusRemoved,
 				CommitStatus:    model.CommitStatusCompleted,
-				CommitOperation: service.CommitOperationRebase,
+				CommitOperation: "rebase",
 			},
 			wantStatus: model.SessionStatusRemoved,
 		},
