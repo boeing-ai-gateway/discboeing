@@ -70,6 +70,9 @@ The agent automatically mounts these cache directories without configuration:
 ### Other Tools
 - `.docker/buildx` - Docker buildx cache
 - `.ccache` - ccache
+- `.config/JetBrains` - JetBrains IDE settings and shared config
+- `.local/share/JetBrains/Toolbox/apps` - JetBrains Toolbox-managed IDE installs
+- `.local/share/JetBrains/Daemon/bundles` - JetBrains daemon bundles
 - `.vscode-server` - VS Code Server
 - `.cursor-server` - Cursor Server
 - `.zed_server` - Zed Server
