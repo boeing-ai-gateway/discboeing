@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseNumberedToolOutput } from "../ai/tool-renderers/utils";
+import {
+	getPathBasename,
+	parseNumberedToolOutput,
+} from "../ai/tool-renderers/utils";
+
+test("getPathBasename returns the final path segment", () => {
+	assert.equal(
+		getPathBasename("/home/discobot/workspace/ui/src/lib/example.ts"),
+		"example.ts",
+	);
+	assert.equal(getPathBasename("relative/path/example.ts"), "example.ts");
+	assert.equal(getPathBasename("example.ts"), "example.ts");
+});
 
 test("parseNumberedToolOutput parses numbered lines", () => {
 	const parsed = parseNumberedToolOutput(

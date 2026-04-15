@@ -2,6 +2,10 @@ export function shortenPath(path: string): string {
 	return path.replace(/^\/home\/discobot/, "~");
 }
 
+export function getPathBasename(path: string): string {
+	return path.split("/").pop() || path;
+}
+
 export function getToolInputRecord(
 	value: unknown,
 ): Record<string, unknown> | undefined {

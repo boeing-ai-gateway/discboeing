@@ -18,7 +18,7 @@ import WebSearchToolRenderer from "./WebSearchToolRenderer.svelte";
 import WriteToolRenderer from "./WriteToolRenderer.svelte";
 import { summarizeApplyPatchTitle } from "./apply-patch";
 import type { ToolRendererComponentProps } from "./types";
-import { shortenPath } from "./utils";
+import { getPathBasename, shortenPath } from "./utils";
 
 type RendererComponent = Component<ToolRendererComponentProps>;
 
@@ -84,7 +84,7 @@ export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 		case "Edit": {
 			const filePath = safeInput.file_path;
 			if (typeof filePath === "string") {
-				const fileName = filePath.split("/").pop() || filePath;
+				const fileName = getPathBasename(filePath);
 				return `${toolName}: ${fileName}`;
 			}
 			break;

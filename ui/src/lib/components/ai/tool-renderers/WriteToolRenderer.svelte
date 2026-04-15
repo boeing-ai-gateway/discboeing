@@ -14,6 +14,7 @@
 	import type { ToolRendererComponentProps } from "./types";
 	import {
 		countLines,
+		getPathBasename,
 		getToolInputString,
 		renderToolValue,
 		shortenPath,
@@ -28,6 +29,9 @@
 	);
 	const headerFilePath = $derived.by(() =>
 		getToolInputString(toolPart.input, "file_path"),
+	);
+	const headerFileName = $derived.by(() =>
+		headerFilePath ? getPathBasename(headerFilePath) : headerFilePath,
 	);
 	const inputValidation = $derived.by(() => validateWriteInput(toolPart.input));
 	const validInput = $derived.by(() =>
@@ -56,8 +60,8 @@
 	>
 		<FilePenLineIcon class="size-4 shrink-0 text-muted-foreground" />
 		<span class="truncate font-medium text-sm">
-			{headerFilePath
-				? shortenPath(headerFilePath)
+			{headerFileName
+				? headerFileName
 				: isStreaming
 					? "Loading write details..."
 					: "Write file"}

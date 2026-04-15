@@ -15,6 +15,7 @@
 	import type { ToolRendererComponentProps } from "./types";
 	import {
 		countLines,
+		getPathBasename,
 		getToolInputString,
 		parseNumberedToolOutput,
 		renderToolValue,
@@ -31,8 +32,8 @@
 	const headerFilePath = $derived.by(() =>
 		getToolInputString(toolPart.input, "file_path"),
 	);
-	const headerFileName = $derived.by(
-		() => headerFilePath?.split("/").pop() || headerFilePath,
+	const headerFileName = $derived.by(() =>
+		headerFilePath ? getPathBasename(headerFilePath) : headerFilePath,
 	);
 	const inputValidation = $derived.by(() => validateReadInput(toolPart.input));
 	const validInput = $derived.by(() =>
@@ -60,7 +61,7 @@
 		if (!validInput?.file_path) {
 			return undefined;
 		}
-		return validInput.file_path.split("/").pop() || validInput.file_path;
+		return getPathBasename(validInput.file_path);
 	});
 	const readError = $derived.by(() => toolPart.errorText || validOutput?.error);
 	const rawOutputText = $derived.by(() => renderToolValue(toolPart.output));

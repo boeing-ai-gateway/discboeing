@@ -1,3 +1,5 @@
+import { getPathBasename } from "./utils";
+
 export type ApplyPatchLineKind = "context" | "add" | "remove";
 
 export type ApplyPatchLine = {
@@ -250,7 +252,7 @@ export function summarizeApplyPatchTitle(input: unknown): string | undefined {
 		return undefined;
 	}
 
-	const fileName = firstPath.split("/").at(-1) ?? firstPath;
+	const fileName = getPathBasename(firstPath);
 	if (operationCount === 1) {
 		return fileName;
 	}
