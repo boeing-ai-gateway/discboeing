@@ -29,6 +29,7 @@
 	const MIN_TERMINAL_COLS = 80;
 	const RESIZE_DEBOUNCE_MS = 150;
 	const COPY_RESET_MS = 2000;
+	const GIT_PULL_WORKSPACE_PATH = "/home/discobot/workspace";
 
 	let {
 		dockMaximized,
@@ -41,7 +42,7 @@
 
 	let terminalHost = $state<HTMLDivElement | null>(null);
 	let connectionStatus = $state<ConnectionStatus>("disconnected");
-	let copied = $state(false);
+	let copiedCommand = $state<"ssh" | "pull" | null>(null);
 	let terminalReady = $state(false);
 
 	let terminal: GhosttyTerminal | null = null;
@@ -68,6 +69,11 @@
 	const sshCommand = $derived.by(() => {
 		if (!sessionId) return null;
 		return `ssh -p ${getSSHPort()} ${sessionId}@${getSSHHost()}`;
+	});
+
+	const pullCommand = $derived.by(() => {
+		if (!sessionId) return null;
+		return `git pull "ssh://${sessionId}@${getSSHHost()}:${getSSHPort()}${GIT_PULL_WORKSPACE_PATH}" HEAD`;
 	});
 
 	const overlayMessage = $derived.by(() => {
@@ -321,17 +327,25 @@
 		void writeClipboardText(selection);
 	}
 
-	async function copySshCommand() {
-		if (!sshCommand) {
+	async function copyCommand(command: string | null, kind: "ssh" | "pull") {
+		if (!command) {
 			return;
 		}
 
-		await writeClipboardText(sshCommand);
-		copied = true;
+		await writeClipboardText(command);
+		copiedCommand = kind;
 		clearCopyTimer();
 		copyTimeout = setTimeout(() => {
-			copied = false;
+			copiedCommand = null;
 		}, COPY_RESET_MS);
+	}
+
+	function copySshCommand() {
+		return copyCommand(sshCommand, "ssh");
+	}
+
+	function copyPullCommand() {
+		return copyCommand(pullCommand, "pull");
 	}
 
 	function reconnectTerminal() {
@@ -450,7 +464,7 @@
 		return () => {
 			cancelled = true;
 			terminalReady = false;
-			copied = false;
+			copiedCommand = null;
 			lastSize = null;
 			updateConnectionStatus("disconnected");
 			clearResizeTimer();
@@ -524,12 +538,32 @@
 				class="gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 				title={`Copy SSH command: ${sshCommand}`}
 			>
-				{#if copied}
+				{#if copiedCommand === "ssh"}
 					<CheckIcon class="size-3.5" />
 				{:else}
 					<CopyIcon class="size-3.5" />
 				{/if}
-				<span class="hidden sm:inline">{copied ? "Copied!" : "Copy SSH"}</span>
+				<span class="hidden sm:inline"
+					>{copiedCommand === "ssh" ? "Copied!" : "Copy SSH"}</span
+				>
+			</Button>
+		{/if}
+		{#if pullCommand}
+			<Button
+				variant="ghost"
+				size="xs"
+				onclick={copyPullCommand}
+				class="gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+				title={`Copy pull command: ${pullCommand}`}
+			>
+				{#if copiedCommand === "pull"}
+					<CheckIcon class="size-3.5" />
+				{:else}
+					<CopyIcon class="size-3.5" />
+				{/if}
+				<span class="hidden sm:inline"
+					>{copiedCommand === "pull" ? "Copied!" : "Copy pull cmd"}</span
+				>
 			</Button>
 		{/if}
 	{/snippet}
