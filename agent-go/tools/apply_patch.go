@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	difflib "github.com/pmezard/go-difflib/difflib"
+
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
@@ -57,18 +59,27 @@ type patchAffectedPaths struct {
 	deleted  []string
 }
 
+type applyPatchFileUpdate struct {
+	unifiedDiff string
+	content     string
+}
+
 func (e *Executor) executeApplyPatch(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	patchText, err := parseApplyPatchInput(call.Input)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
 
+	return e.executeApplyPatchText(call, patchText, e.cwd)
+}
+
+func (e *Executor) executeApplyPatchText(call message.ToolCallPart, patchText, baseDir string) (thread.ToolExecuteResult, error) {
 	ops, err := parseApplyPatch(patchText)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
 
-	affected, err := e.applyPatchOperations(ops)
+	affected, err := e.applyPatchOperations(baseDir, ops)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
@@ -123,11 +134,11 @@ func parseApplyPatchInput(rawInput string) (string, error) {
 	return trimmed, nil
 }
 
-func (e *Executor) applyPatchOperations(ops []patchOperation) (*patchAffectedPaths, error) {
+func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*patchAffectedPaths, error) {
 	affected := &patchAffectedPaths{}
 
 	for _, op := range ops {
-		srcPath := resolvePath(e.cwd, op.path)
+		srcPath := resolvePath(baseDir, op.path)
 
 		srcInfo, srcExists, err := statIfExists(srcPath)
 		if err != nil {
@@ -182,18 +193,18 @@ func (e *Executor) applyPatchOperations(ops []patchOperation) (*patchAffectedPat
 				return nil, err
 			}
 
-			newContent, err := applyUpdateChunks(data, op.path, op.chunks)
+			update, err := computeApplyPatchFileUpdate(data, op.path, op.chunks)
 			if err != nil {
 				return nil, err
 			}
-			if err := validateToolWriteTextContent(newContent, op.path); err != nil {
+			if err := validateToolWriteTextContent(update.content, op.path); err != nil {
 				return nil, err
 			}
 
 			destPath := srcPath
 			displayPath := op.path
 			if op.movePath != "" {
-				destPath = resolvePath(e.cwd, op.movePath)
+				destPath = resolvePath(baseDir, op.movePath)
 				displayPath = op.movePath
 				if destPath != srcPath {
 					if err := e.checkWriteAllowed(destPath, op.movePath); err != nil {
@@ -205,7 +216,7 @@ func (e *Executor) applyPatchOperations(ops []patchOperation) (*patchAffectedPat
 			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 				return nil, fmt.Errorf("failed to create parent directory: %v", err)
 			}
-			if err := os.WriteFile(destPath, []byte(newContent), 0o644); err != nil {
+			if err := os.WriteFile(destPath, []byte(update.content), 0o644); err != nil {
 				return nil, fmt.Errorf("failed to write file: %v", err)
 			}
 
@@ -465,7 +476,7 @@ func parsePatchChunk(lines []string, allowMissingContext bool) (patchChunk, int,
 	return chunk, parsed + startIndex, nil
 }
 
-func applyUpdateChunks(data []byte, displayPath string, chunks []patchChunk) (string, error) {
+func computeApplyPatchFileUpdate(data []byte, displayPath string, chunks []patchChunk) (applyPatchFileUpdate, error) {
 	content := normalizePatchNewlines(string(data))
 	originalLines := strings.Split(content, "\n")
 	if len(originalLines) > 0 && originalLines[len(originalLines)-1] == "" {
@@ -474,7 +485,7 @@ func applyUpdateChunks(data []byte, displayPath string, chunks []patchChunk) (st
 
 	replacements, err := computePatchReplacements(originalLines, displayPath, chunks)
 	if err != nil {
-		return "", err
+		return applyPatchFileUpdate{}, err
 	}
 
 	updatedLines := applyPatchReplacements(originalLines, replacements)
@@ -482,7 +493,10 @@ func applyUpdateChunks(data []byte, displayPath string, chunks []patchChunk) (st
 		updatedLines = append(updatedLines, "")
 	}
 
-	return strings.Join(updatedLines, "\n"), nil
+	return applyPatchFileUpdate{
+		unifiedDiff: buildUnifiedDiff(originalLines, updatedLines[:len(updatedLines)-1]),
+		content:     strings.Join(updatedLines, "\n"),
+	}, nil
 }
 
 func computePatchReplacements(originalLines []string, displayPath string, chunks []patchChunk) ([]patchReplacement, error) {
@@ -492,12 +506,9 @@ func computePatchReplacements(originalLines []string, displayPath string, chunks
 	for _, chunk := range chunks {
 		if chunk.changeContext != nil {
 			ctx := []string{*chunk.changeContext}
-			idx, ambiguous := seekUniquePatchSequence(originalLines, ctx, lineIndex, false)
+			idx := seekPatchSequence(originalLines, ctx, lineIndex, false)
 			if idx < 0 {
 				return nil, fmt.Errorf("failed to find context '%s' in %s", *chunk.changeContext, displayPath)
-			}
-			if ambiguous {
-				return nil, fmt.Errorf("context '%s' is ambiguous in %s", *chunk.changeContext, displayPath)
 			}
 			lineIndex = idx + 1
 		}
@@ -517,14 +528,14 @@ func computePatchReplacements(originalLines []string, displayPath string, chunks
 
 		pattern := append([]string(nil), chunk.oldLines...)
 		newSlice := append([]string(nil), chunk.newLines...)
-		found, ambiguous := seekUniquePatchSequence(originalLines, pattern, lineIndex, chunk.isEndOfFile)
+		found := seekPatchSequence(originalLines, pattern, lineIndex, chunk.isEndOfFile)
 
 		if found < 0 && len(pattern) > 0 && pattern[len(pattern)-1] == "" {
 			pattern = pattern[:len(pattern)-1]
 			if len(newSlice) > 0 && newSlice[len(newSlice)-1] == "" {
 				newSlice = newSlice[:len(newSlice)-1]
 			}
-			found, ambiguous = seekUniquePatchSequence(originalLines, pattern, lineIndex, chunk.isEndOfFile)
+			found = seekPatchSequence(originalLines, pattern, lineIndex, chunk.isEndOfFile)
 		}
 
 		if found < 0 {
@@ -534,14 +545,6 @@ func computePatchReplacements(originalLines []string, displayPath string, chunks
 				strings.Join(chunk.oldLines, "\n"),
 			)
 		}
-		if ambiguous {
-			return nil, fmt.Errorf(
-				"expected lines are ambiguous in %s:\n%s",
-				displayPath,
-				strings.Join(chunk.oldLines, "\n"),
-			)
-		}
-
 		replacements = append(replacements, patchReplacement{
 			start:    found,
 			oldLen:   len(pattern),
@@ -586,60 +589,42 @@ func applyPatchReplacements(lines []string, replacements []patchReplacement) []s
 }
 
 func seekPatchSequence(lines []string, pattern []string, start int, eof bool) int {
-	idx, _ := seekUniquePatchSequence(lines, pattern, start, eof)
-	return idx
-}
-
-func seekUniquePatchSequence(lines []string, pattern []string, start int, eof bool) (int, bool) {
-	matches := seekPatchSequenceMatches(lines, pattern, start, eof)
-	if len(matches) == 0 {
-		return -1, false
-	}
-	return matches[0], len(matches) > 1
-}
-
-func seekPatchSequenceMatches(lines []string, pattern []string, start int, eof bool) []int {
 	if len(pattern) == 0 {
 		if start < 0 {
-			return []int{0}
+			return 0
 		}
-		return []int{start}
+		return start
 	}
 	if len(pattern) > len(lines) {
-		return nil
-	}
-
-	searchStart := max(start, 0)
-	if eof && len(lines) >= len(pattern) {
-		searchStart = len(lines) - len(pattern)
+		return -1
 	}
 
 	maxStart := len(lines) - len(pattern)
-	if searchStart > maxStart {
-		return nil
-	}
-
-	matches := make([]int, 0)
-	seen := make(map[int]struct{})
-	for _, matcher := range []func([]string, []string, int) bool{
-		patchExactMatch,
-		patchTrimEndMatch,
-		patchTrimMatch,
-		patchNormalizedMatch,
-	} {
-		for i := searchStart; i <= maxStart; i++ {
-			if !matcher(lines, pattern, i) {
-				continue
-			}
-			if _, ok := seen[i]; ok {
-				continue
-			}
-			seen[i] = struct{}{}
-			matches = append(matches, i)
+	searchStarts := []int{max(start, 0)}
+	if eof && len(lines) >= len(pattern) {
+		eofStart := len(lines) - len(pattern)
+		if eofStart != searchStarts[0] {
+			searchStarts = append([]int{eofStart}, searchStarts...)
 		}
 	}
-	sort.Ints(matches)
-	return matches
+	for _, searchStart := range searchStarts {
+		if searchStart > maxStart {
+			continue
+		}
+		for _, matcher := range []func([]string, []string, int) bool{
+			patchExactMatch,
+			patchTrimEndMatch,
+			patchTrimMatch,
+			patchNormalizedMatch,
+		} {
+			for i := searchStart; i <= maxStart; i++ {
+				if matcher(lines, pattern, i) {
+					return i
+				}
+			}
+		}
+	}
+	return -1
 }
 
 func patchExactMatch(lines []string, pattern []string, start int) bool {
@@ -708,6 +693,26 @@ func validatePatchPath(path string) error {
 		return fmt.Errorf("path is required")
 	}
 	return nil
+}
+
+func buildUnifiedDiff(originalLines, updatedLines []string) string {
+	linesWithNewlines := func(lines []string) []string {
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			out[i] = line + "\n"
+		}
+		return out
+	}
+
+	diff, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:       linesWithNewlines(originalLines),
+		B:       linesWithNewlines(updatedLines),
+		Context: 1,
+	})
+	if err != nil {
+		return ""
+	}
+	return diff
 }
 
 func maxInt(lhs, rhs int) int {

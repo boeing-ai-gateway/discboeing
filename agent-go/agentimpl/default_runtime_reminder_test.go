@@ -276,6 +276,30 @@ func TestEnsureHelperScripts_WritesManagedScripts(t *testing.T) {
 	if string(listData) != listThreadsScriptContent() {
 		t.Fatal("list-threads script content did not match expected managed content")
 	}
+
+	agentBin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyPatchData, err := os.ReadFile(applyPatchScriptPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(applyPatchData) != generateApplyPatchScriptContent(agentBin) {
+		t.Fatal("apply_patch script content did not match expected managed content")
+	}
+
+	applypatchData, err := os.ReadFile(applypatchScriptPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(applypatchData) != generateApplyPatchScriptContent(agentBin) {
+		t.Fatal("applypatch script content did not match expected managed content")
+	}
+
+	if got, want := os.Getenv("PATH"), filepath.Dir(applyPatchScriptPath()); !strings.HasPrefix(got, want+string(os.PathListSeparator)) && got != want {
+		t.Fatalf("expected helper bin %q to be prepended to PATH, got %q", want, got)
+	}
 }
 
 func TestEnsureHelperScripts_SkipsUnchangedScript(t *testing.T) {

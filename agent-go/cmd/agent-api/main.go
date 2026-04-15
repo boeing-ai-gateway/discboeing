@@ -7,8 +7,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/cmd/agent-api/cli"
 	"github.com/obot-platform/discobot/agent-go/cmd/agent-api/server"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/obot-platform/discobot/agent-go/tools"
 
 	// Side-effect imports register provider factories so the registry can
 	// build them on demand when credentials arrive via X-Discobot-Credentials.
@@ -25,8 +28,13 @@ import (
 	_ "github.com/obot-platform/discobot/agent-go/providers/openaicompatible"
 )
 
+const runAsApplyPatchArg = "--discobot-run-as-apply-patch"
+
 func main() {
 	// Handle subcommands before flag parsing so they get clean args.
+	if len(os.Args) >= 2 && os.Args[1] == runAsApplyPatchArg {
+		os.Exit(runStandaloneApplyPatch(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
 		if err := cli.RunLogin(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "login: %v\n", err)
@@ -47,5 +55,53 @@ func main() {
 		server.Run(cfg)
 	} else {
 		cli.Run(cfg, flags)
+	}
+}
+
+func runStandaloneApplyPatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	patch, err := standaloneApplyPatchInput(args, stdin)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply_patch: %v\n", err)
+		return 1
+	}
+
+	_ = godotenv.Load()
+	cfg := config.Load()
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(stderr, "apply_patch: determine working directory: %v\n", err)
+		return 1
+	}
+
+	out, err := tools.StandaloneApplyPatch(cwd, cfg.DataDir, cfg.ThreadsDir, patch)
+	if err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	_, _ = io.WriteString(stdout, out)
+	if !bytes.HasSuffix([]byte(out), []byte("\n")) {
+		_, _ = io.WriteString(stdout, "\n")
+	}
+	return 0
+}
+
+func standaloneApplyPatchInput(args []string, stdin io.Reader) (string, error) {
+	switch len(args) {
+	case 0:
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			return "", fmt.Errorf("read stdin: %w", err)
+		}
+		if len(bytes.TrimSpace(data)) == 0 {
+			return "", fmt.Errorf("patch input is required")
+		}
+		return string(data), nil
+	case 1:
+		if args[0] == "" {
+			return "", fmt.Errorf("patch input is required")
+		}
+		return args[0], nil
+	default:
+		return "", fmt.Errorf("expected patch input from stdin or a single argument")
 	}
 }

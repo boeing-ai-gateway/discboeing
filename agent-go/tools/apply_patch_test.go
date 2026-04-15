@@ -37,6 +37,18 @@ func runApplyPatchRaw(t *testing.T, e *Executor, rawInput string) (string, bool)
 	}
 }
 
+func parseSingleUpdateChunks(t *testing.T, patch string) []patchChunk {
+	t.Helper()
+	ops, err := parseApplyPatch(patch)
+	if err != nil {
+		t.Fatalf("parseApplyPatch failed: %v", err)
+	}
+	if len(ops) != 1 || ops[0].kind != patchUpdateFile {
+		t.Fatalf("expected a single update operation, got %#v", ops)
+	}
+	return ops[0].chunks
+}
+
 func TestApplyPatch_MissingInput(t *testing.T) {
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "apply_patch", map[string]any{})
@@ -425,7 +437,7 @@ func TestApplyPatch_RejectsBinarySourceFile(t *testing.T) {
 	}
 }
 
-func TestApplyPatch_AmbiguousExpectedLinesFail(t *testing.T) {
+func TestApplyPatch_AmbiguousExpectedLinesUseFirstMatch(t *testing.T) {
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, "file.txt"), []byte("foo\nbar\nfoo\nbar\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -443,15 +455,20 @@ func TestApplyPatch_AmbiguousExpectedLinesFail(t *testing.T) {
 *** End Patch`
 
 	out, ok := runApplyPatch(t, e, patch)
-	if ok {
-		t.Fatal("expected ambiguity failure")
+	if !ok {
+		t.Fatalf("unexpected error: %q", out)
 	}
-	if !strings.Contains(out, "ambiguous") {
-		t.Fatalf("unexpected output: %q", out)
+
+	data, err := os.ReadFile(filepath.Join(cwd, "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "foo\nbaz\nfoo\nbar\n" {
+		t.Fatalf("unexpected content after first-match apply: %q", string(data))
 	}
 }
 
-func TestApplyPatch_AmbiguousContextFails(t *testing.T) {
+func TestApplyPatch_AmbiguousContextUsesFirstMatch(t *testing.T) {
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, "file.txt"), []byte("ctx\nvalue\nctx\nvalue\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -467,11 +484,16 @@ func TestApplyPatch_AmbiguousContextFails(t *testing.T) {
 *** End Patch`
 
 	out, ok := runApplyPatch(t, e, patch)
-	if ok {
-		t.Fatal("expected ambiguity failure")
+	if !ok {
+		t.Fatalf("unexpected error: %q", out)
 	}
-	if !strings.Contains(out, "ambiguous") {
-		t.Fatalf("unexpected output: %q", out)
+
+	data, err := os.ReadFile(filepath.Join(cwd, "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "ctx\nVALUE\nctx\nvalue\n" {
+		t.Fatalf("unexpected content after first-match context apply: %q", string(data))
 	}
 }
 
@@ -506,6 +528,142 @@ func TestApplyPatch_UnicodeNormalizedMatching(t *testing.T) {
 	}
 	if string(data) != "import asyncio  # HELLO\n" {
 		t.Fatalf("unexpected content: %q", string(data))
+	}
+}
+
+func TestComputeApplyPatchFileUpdate_UnifiedDiff(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "multi.txt")
+	if err := os.WriteFile(path, []byte("foo\nbar\nbaz\nqux\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	chunks := parseSingleUpdateChunks(t, `*** Begin Patch
+*** Update File: multi.txt
+@@
+ foo
+-bar
++BAR
+@@
+ baz
+-qux
++QUX
+*** End Patch`)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update, err := computeApplyPatchFileUpdate(data, "multi.txt", chunks)
+	if err != nil {
+		t.Fatalf("computeApplyPatchFileUpdate failed: %v", err)
+	}
+
+	if update.unifiedDiff != "@@ -1,4 +1,4 @@\n foo\n-bar\n+BAR\n baz\n-qux\n+QUX\n" {
+		t.Fatalf("unexpected unified diff:\n%s", update.unifiedDiff)
+	}
+	if update.content != "foo\nBAR\nbaz\nQUX\n" {
+		t.Fatalf("unexpected updated content: %q", update.content)
+	}
+}
+
+func TestComputeApplyPatchFileUpdate_UnifiedDiffInsertAtEOF(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "insert.txt")
+	if err := os.WriteFile(path, []byte("foo\nbar\nbaz\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	chunks := parseSingleUpdateChunks(t, `*** Begin Patch
+*** Update File: insert.txt
+@@
++quux
+*** End of File
+*** End Patch`)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update, err := computeApplyPatchFileUpdate(data, "insert.txt", chunks)
+	if err != nil {
+		t.Fatalf("computeApplyPatchFileUpdate failed: %v", err)
+	}
+
+	if update.unifiedDiff != "@@ -3 +3,2 @@\n baz\n+quux\n" {
+		t.Fatalf("unexpected EOF unified diff:\n%s", update.unifiedDiff)
+	}
+	if update.content != "foo\nbar\nbaz\nquux\n" {
+		t.Fatalf("unexpected updated content: %q", update.content)
+	}
+}
+
+func TestComputeApplyPatchFileUpdate_UnifiedDiffInterleaved(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "interleaved.txt")
+	if err := os.WriteFile(path, []byte("a\nb\nc\nd\ne\nf\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	chunks := parseSingleUpdateChunks(t, `*** Begin Patch
+*** Update File: interleaved.txt
+@@
+ a
+-b
++B
+@@
+ d
+-e
++E
+@@
+ f
++g
+*** End of File
+*** End Patch`)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update, err := computeApplyPatchFileUpdate(data, "interleaved.txt", chunks)
+	if err != nil {
+		t.Fatalf("computeApplyPatchFileUpdate failed: %v", err)
+	}
+
+	if update.unifiedDiff != "@@ -1,6 +1,7 @@\n a\n-b\n+B\n c\n d\n-e\n+E\n f\n+g\n" {
+		t.Fatalf("unexpected interleaved unified diff:\n%s", update.unifiedDiff)
+	}
+	if update.content != "a\nB\nc\nd\nE\nf\ng\n" {
+		t.Fatalf("unexpected updated content: %q", update.content)
+	}
+}
+
+func TestStandaloneApplyPatch_UpdatesExistingFileWithoutExplicitRead(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "file.txt")
+	if err := os.WriteFile(path, []byte("before\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := StandaloneApplyPatch(cwd, t.TempDir(), "", `*** Begin Patch
+*** Update File: file.txt
+@@
+-before
++after
+*** End Patch`)
+	if err != nil {
+		t.Fatalf("StandaloneApplyPatch failed: %v", err)
+	}
+	if !strings.Contains(out, "M file.txt") {
+		t.Fatalf("expected modify summary, got: %q", out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "after\n" {
+		t.Fatalf("unexpected updated content: %q", string(data))
 	}
 }
 
@@ -561,6 +719,43 @@ func TestSeekPatchSequence_ConformanceCases(t *testing.T) {
 		pattern := []string{"too", "many", "lines"}
 		if got := seekPatchSequence(lines, pattern, 0, false); got != -1 {
 			t.Fatalf("expected -1, got %d", got)
+		}
+	})
+
+	t.Run("normalized unicode punctuation and spaces", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			lines   []string
+			pattern []string
+		}{
+			{
+				name:    "dash and hyphen",
+				lines:   []string{"import asyncio  # local import – avoids top‑level dep"},
+				pattern: []string{"import asyncio  # local import - avoids top-level dep"},
+			},
+			{
+				name:    "single quotes",
+				lines:   []string{"it’s quoted here"},
+				pattern: []string{"it's quoted here"},
+			},
+			{
+				name:    "double quotes",
+				lines:   []string{"say “hello” now"},
+				pattern: []string{"say \"hello\" now"},
+			},
+			{
+				name:    "non breaking space",
+				lines:   []string{"alpha\u00a0beta"},
+				pattern: []string{"alpha beta"},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := seekPatchSequence(tc.lines, tc.pattern, 0, false); got != 0 {
+					t.Fatalf("expected 0, got %d", got)
+				}
+			})
 		}
 	})
 }

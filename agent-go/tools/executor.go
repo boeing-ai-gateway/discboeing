@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -224,6 +225,7 @@ func (e *Executor) currentEnv() map[string]string {
 	if e.envSnapshot != nil {
 		maps.Copy(env, e.envSnapshot())
 	}
+	env["PATH"] = helperbin.PrependToPath(env["PATH"])
 	return env
 }
 
@@ -235,9 +237,18 @@ func (e *Executor) bashEnv() []string {
 	current := e.currentEnv()
 
 	env := make([]string, 0, len(e.bashEnvAllowlist))
+	pathAdded := false
 	for _, key := range e.bashEnvAllowlist {
 		if value, ok := current[key]; ok {
 			env = append(env, key+"="+value)
+			if key == "PATH" {
+				pathAdded = true
+			}
+		}
+	}
+	if !pathAdded {
+		if value, ok := current["PATH"]; ok {
+			env = append(env, "PATH="+value)
 		}
 	}
 	return env

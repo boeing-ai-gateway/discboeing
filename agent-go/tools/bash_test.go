@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
@@ -25,6 +27,35 @@ func skipIfBashUnavailable(t *testing.T) {
 	t.Helper()
 	if _, err := resolveBashCommand(); err != nil {
 		t.Skipf("bash unavailable: %v", err)
+	}
+}
+
+func stageApplyPatchShimForTests(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skipf("go unavailable: %v", err)
+	}
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to determine test file path")
+	}
+	agentBin := filepath.Join(t.TempDir(), "agent-api-test")
+	build := exec.Command("go", "build", "-o", agentBin, "./cmd/agent-api")
+	build.Dir = filepath.Join(filepath.Dir(file), "..")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build agent-api test binary: %v\n%s", err, string(out))
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := helperbin.Dir()
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"apply_patch", "applypatch"} {
+		script := "#!/usr/bin/env bash\nset -eu\nexec " + agentBin + " --discobot-run-as-apply-patch \"$@\"\n"
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -176,6 +207,68 @@ func TestBash_HeredocThenCwdPersistsAcrossCalls(t *testing.T) {
 	}
 	if !strings.Contains(out, "/tmp") {
 		t.Errorf("expected cwd '/tmp' after heredoc + cd, got: %s", out)
+	}
+}
+
+func TestBash_ApplyPatchHeredocViaShim(t *testing.T) {
+	skipOnWindows(t)
+	stageApplyPatchShimForTests(t)
+	cwd := t.TempDir()
+	e := New(cwd, t.TempDir(), t.Name())
+
+	out, ok := runBash(t, e, map[string]any{
+		"command": "apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: from-bash.txt\n+hello\n*** End Patch\nPATCH",
+	})
+	if !ok {
+		t.Fatalf("unexpected error: %s", out)
+	}
+	if !strings.Contains(out, "A from-bash.txt") {
+		t.Fatalf("expected apply_patch summary, got: %q", out)
+	}
+
+	data, err := os.ReadFile(filepath.Join(cwd, "from-bash.txt"))
+	if err != nil {
+		t.Fatalf("expected file to be created: %v", err)
+	}
+	if string(data) != "hello\n" {
+		t.Fatalf("unexpected file content: %q", string(data))
+	}
+}
+
+func TestBash_ApplypatchAliasWithCdViaShim(t *testing.T) {
+	skipOnWindows(t)
+	stageApplyPatchShimForTests(t)
+	cwd := t.TempDir()
+	subdir := filepath.Join(cwd, "sub dir")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := New(cwd, t.TempDir(), t.Name())
+
+	out, ok := runBash(t, e, map[string]any{
+		"command": "cd 'sub dir' && applypatch <<'PATCH'\n*** Begin Patch\n*** Add File: nested.txt\n+hello\n*** End Patch\nPATCH",
+	})
+	if !ok {
+		t.Fatalf("unexpected error: %s", out)
+	}
+	if !strings.Contains(out, "A nested.txt") {
+		t.Fatalf("expected apply_patch summary, got: %q", out)
+	}
+
+	data, err := os.ReadFile(filepath.Join(subdir, "nested.txt"))
+	if err != nil {
+		t.Fatalf("expected nested file to be created: %v", err)
+	}
+	if string(data) != "hello\n" {
+		t.Fatalf("unexpected nested file content: %q", string(data))
+	}
+
+	out, ok = runBash(t, e, map[string]any{"command": "pwd"})
+	if !ok {
+		t.Fatalf("unexpected pwd error: %s", out)
+	}
+	if !strings.Contains(out, subdir) {
+		t.Fatalf("expected cwd %q after apply_patch shim command, got: %q", subdir, out)
 	}
 }
 
@@ -414,6 +507,24 @@ func TestBash_RequestScopedEnvRespectsAllowlist(t *testing.T) {
 	}
 	if !strings.Contains(out, "→allowed-request|") {
 		t.Errorf("expected only allowlisted request-scoped env var in output, got: %q", out)
+	}
+}
+
+func TestBash_PATHAlwaysIncludesHelperBin(t *testing.T) {
+	skipOnWindows(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin")
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	e.SetBashEnvAllowlist([]string{"DISCOBOT_BASH_ENV_TEST_ALLOWED"})
+
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"$PATH\""})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, helperbin.Dir()) {
+		t.Fatalf("expected PATH to include helper bin %q, got: %q", helperbin.Dir(), out)
 	}
 }
 

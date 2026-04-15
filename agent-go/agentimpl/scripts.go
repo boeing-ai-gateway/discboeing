@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
@@ -24,11 +25,19 @@ type stagedScript struct {
 }
 
 func readThreadScriptPath() string {
-	return helperScriptPath("read-thread")
+	return helperbin.ScriptPath("read-thread")
 }
 
 func listThreadsScriptPath() string {
-	return helperScriptPath("list-threads")
+	return helperbin.ScriptPath("list-threads")
+}
+
+func applyPatchScriptPath() string {
+	return helperbin.ScriptPath("apply_patch")
+}
+
+func applypatchScriptPath() string {
+	return helperbin.ScriptPath("applypatch")
 }
 
 func readThreadScriptContent() string {
@@ -39,12 +48,8 @@ func listThreadsScriptContent() string {
 	return embeddedScriptContent(listThreadsEmbeddedScript)
 }
 
-func helperScriptPath(name string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		return filepath.Join(".discobot", "bin", name)
-	}
-	return filepath.Join(home, ".discobot", "bin", name)
+func generateApplyPatchScriptContent(agentBin string) string {
+	return "#!/usr/bin/env bash\nset -eu\n\nexec " + shellSingleQuote(agentBin) + " --discobot-run-as-apply-patch \"$@\"\n"
 }
 
 func embeddedScriptContent(path string) string {
@@ -60,6 +65,13 @@ func (a *DefaultAgent) ensureHelperScripts() {
 		{SourcePath: readThreadEmbeddedScript, TargetName: "read-thread"},
 		{SourcePath: listThreadsEmbeddedScript, TargetName: "list-threads"},
 	})
+	agentBin, err := os.Executable()
+	if err != nil || strings.TrimSpace(agentBin) == "" {
+		return
+	}
+	a.ensureHelperScript(applyPatchScriptPath(), []byte(generateApplyPatchScriptContent(agentBin)))
+	a.ensureHelperScript(applypatchScriptPath(), []byte(generateApplyPatchScriptContent(agentBin)))
+	_ = os.Setenv("PATH", helperbin.PrependToPath(os.Getenv("PATH")))
 }
 
 func (a *DefaultAgent) ensureStagedScripts(scripts []stagedScript) {
@@ -73,7 +85,7 @@ func (a *DefaultAgent) ensureStagedScript(script stagedScript) {
 	if err != nil {
 		return
 	}
-	a.ensureHelperScript(helperScriptPath(script.TargetName), content)
+	a.ensureHelperScript(helperbin.ScriptPath(script.TargetName), content)
 }
 
 func (a *DefaultAgent) ensureHelperScript(path string, content []byte) {
@@ -91,4 +103,8 @@ func (a *DefaultAgent) ensureHelperScript(path string, content []byte) {
 	}
 
 	_ = thread.WriteFileAtomic(path, content, 0o755)
+}
+
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
