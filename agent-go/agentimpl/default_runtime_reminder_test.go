@@ -4,10 +4,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
@@ -174,6 +177,199 @@ func TestGitStateSnapshot_CleanAndDirty(t *testing.T) {
 	if !strings.Contains(dirty, "working_tree=dirty") {
 		t.Errorf("expected dirty working tree, got %q", dirty)
 	}
+}
+
+func TestBootstrapNewThreadMessages_IncludesRecentThreadsReminder(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store := thread.NewStore(t.TempDir())
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+
+	for i := range 6 {
+		threadID := "thread-" + strconv.Itoa(i)
+		if err := store.CreateThread(threadID); err != nil {
+			t.Fatal(err)
+		}
+
+		if i == 1 {
+			if err := store.SaveConfig(threadID, thread.Config{Name: "Named thread subject"}); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := store.SaveConfig(threadID, thread.Config{}); err != nil {
+			t.Fatal(err)
+		}
+
+		mtime := time.Now().Add(time.Duration(i) * time.Minute)
+		if err := filepath.Walk(store.ThreadDir(threadID), func(path string, _ os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			return os.Chtimes(path, mtime, mtime)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	leafID, err := agent.bootstrapNewThreadMessages(
+		"current-thread",
+		"system prompt",
+		"Claude Sonnet 4",
+		&sessionconfig.SessionConfig{MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := store.BuildHistory("current-thread", leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) < 3 {
+		t.Fatalf("expected bootstrap history to include runtime and recent thread reminders, got %d messages", len(history))
+	}
+
+	recentReminder := messageText(history[2].Parts)
+	if !strings.Contains(recentReminder, "Recent threads from this session are available if you need to read prior conversation context.") {
+		t.Fatalf("expected recent threads reminder, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "Current thread ID: current-thread") {
+		t.Fatalf("expected current thread id in reminder, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "Use "+readThreadScriptPath()+" <thread-id> to print a thread transcript.") {
+		t.Fatalf("expected reader script path in reminder, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "Use "+listThreadsScriptPath()+" to list available thread IDs and names. It skips the current thread automatically when DISCOBOT_SESSION_ID is set.") {
+		t.Fatalf("expected list script path in reminder, got %q", recentReminder)
+	}
+	if strings.Contains(recentReminder, "- current-thread (thread ID: current-thread)") {
+		t.Fatalf("did not expect current thread in thread list, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "thread-5") || strings.Contains(recentReminder, "thread-0") {
+		t.Fatalf("expected only the five most recent threads, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "Named thread subject") {
+		t.Fatalf("expected named thread subject in reminder, got %q", recentReminder)
+	}
+	if !strings.Contains(recentReminder, "- thread-2 (thread ID: thread-2)") {
+		t.Fatalf("expected unnamed thread to fall back to thread id, got %q", recentReminder)
+	}
+}
+
+func TestEnsureHelperScripts_WritesManagedScripts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	agent := NewDefaultAgent(thread.NewStore(t.TempDir()), nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	data, err := os.ReadFile(readThreadScriptPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != readThreadScriptContent() {
+		t.Fatal("read-thread script content did not match expected managed content")
+	}
+
+	listData, err := os.ReadFile(listThreadsScriptPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(listData) != listThreadsScriptContent() {
+		t.Fatal("list-threads script content did not match expected managed content")
+	}
+}
+
+func TestEnsureHelperScripts_SkipsUnchangedScript(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	path := readThreadScriptPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := []byte(readThreadScriptContent())
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	agent := NewDefaultAgent(thread.NewStore(t.TempDir()), nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("expected unchanged script mtime, got before=%s after=%s", before.ModTime(), after.ModTime())
+	}
+}
+
+func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not available")
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	for _, tc := range []struct {
+		id   string
+		name string
+	}{
+		{id: "thread-current", name: "Current thread"},
+		{id: "thread-1", name: "First thread"},
+		{id: "thread-2", name: ""},
+	} {
+		if err := store.CreateThread(tc.id); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.SaveConfig(tc.id, thread.Config{Name: tc.name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmd := exec.Command(listThreadsScriptPath())
+	cmd.Env = append(os.Environ(),
+		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+		"DISCOBOT_SESSION_ID=thread-current",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list-threads failed: %v\n%s", err, string(out))
+	}
+
+	got := string(out)
+	if strings.Contains(got, "thread-current") {
+		t.Fatalf("expected current thread to be skipped, got %q", got)
+	}
+	if !strings.Contains(got, "thread-1\tFirst thread") {
+		t.Fatalf("expected named thread in output, got %q", got)
+	}
+	if !strings.Contains(got, "thread-2") {
+		t.Fatalf("expected unnamed thread id in output, got %q", got)
+	}
+}
+
+func messageText(parts []message.Part) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		textPart, ok := part.(message.TextPart)
+		if !ok {
+			continue
+		}
+		text := strings.TrimSpace(textPart.Text)
+		if text == "" {
+			continue
+		}
+		textParts = append(textParts, text)
+	}
+	return strings.TrimSpace(strings.Join(textParts, "\n"))
 }
 
 func runGit(t *testing.T, cwd string, args ...string) {

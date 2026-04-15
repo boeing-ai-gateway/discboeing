@@ -12,7 +12,6 @@ import (
 	"maps"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -93,7 +92,7 @@ func NewDefaultAgent(
 	cwd string,
 	mcpCfg MCPConfig,
 ) *DefaultAgent {
-	return &DefaultAgent{
+	agent := &DefaultAgent{
 		store:    store,
 		registry: registry,
 		executor: executor,
@@ -101,6 +100,8 @@ func NewDefaultAgent(
 		mcpCfg:   mcpCfg,
 		cancels:  make(map[string]context.CancelFunc),
 	}
+	go agent.ensureHelperScripts()
+	return agent
 }
 
 // NewMCPConfig creates an MCPConfig from individual configuration values.
@@ -876,20 +877,12 @@ func formatRuntimeEnvironmentReminder(cwd, modelName string) string {
 		resolvedCWD = abs
 	}
 
-	gitState := gitStateSnapshot(resolvedCWD)
-
-	var b strings.Builder
-	b.WriteString("<system-reminder>\n")
-	b.WriteString("Runtime environment snapshot:\n")
-	fmt.Fprintf(&b, "- Current working directory: %s\n", resolvedCWD)
-	fmt.Fprintf(&b, "- OS/platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Fprintf(&b, "- Current date/time: %s\n", time.Now().Format(time.RFC3339))
-	if modelName != "" {
-		fmt.Fprintf(&b, "- Current model: %s\n", modelName)
-	}
-	fmt.Fprintf(&b, "- Git state (captured at the current time of this reminder; this may change throughout the conversation): %s\n", gitState)
-	b.WriteString("</system-reminder>")
-	return b.String()
+	return sessionconfig.FormatRuntimeEnvironmentReminder(sessionconfig.RuntimeEnvironmentSnapshot{
+		CurrentWorkingDirectory: resolvedCWD,
+		CurrentModel:            modelName,
+		CurrentDateTime:         time.Now(),
+		GitState:                gitStateSnapshot(resolvedCWD),
+	})
 }
 
 func gitStateSnapshot(cwd string) string {
@@ -1192,6 +1185,11 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 	runtimeReminder := formatRuntimeEnvironmentReminder(a.cwd, displayName)
 	if err := appendMessage("runtime-"+agent.GenerateID(), "user", runtimeReminder); err != nil {
 		return "", fmt.Errorf("save runtime reminder: %w", err)
+	}
+
+	recentThreadsReminder := a.formatRecentThreadsReminder(threadID)
+	if err := appendMessage("recent-threads-"+agent.GenerateID(), "user", recentThreadsReminder); err != nil {
+		return "", fmt.Errorf("save recent threads reminder: %w", err)
 	}
 
 	if hasNamedTool(sessionCfg.Tools, "Skill") {

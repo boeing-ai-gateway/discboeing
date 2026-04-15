@@ -17,10 +17,10 @@ import (
 
 var ErrCorruptMessage = errors.New("corrupt message")
 
-// writeFileAtomic writes data to path atomically using a temp-file + rename.
+// WriteFileAtomic writes data to path atomically using a temp-file + rename.
 // The temp file is created in the same directory as path so the rename is
 // always within the same filesystem (guaranteed atomic on Linux/macOS).
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *Store) SaveMessage(threadID string, msg StoredMessage) error {
 	if err != nil {
 		return fmt.Errorf("marshal message: %w", err)
 	}
-	return writeFileAtomic(path, data, 0o644)
+	return WriteFileAtomic(path, data, 0o644)
 }
 
 // LoadMessage reads a single StoredMessage from disk.
@@ -198,6 +198,11 @@ func (s *Store) ListThreads() ([]string, error) {
 
 func (s *Store) threadDir(threadID string) string {
 	return filepath.Join(s.baseDir, threadID)
+}
+
+// ThreadDir returns the path to the thread directory on disk.
+func (s *Store) ThreadDir(threadID string) string {
+	return s.threadDir(threadID)
 }
 
 // ThreadExists reports whether a thread directory exists.
@@ -320,7 +325,7 @@ func (s *Store) SaveTurnState(threadID string, state TurnState) error {
 	if err != nil {
 		return fmt.Errorf("marshal turn state: %w", err)
 	}
-	if err := writeFileAtomic(s.turnStatePath(threadID), data, 0o644); err != nil {
+	if err := WriteFileAtomic(s.turnStatePath(threadID), data, 0o644); err != nil {
 		return err
 	}
 	if state.ID == "" {
@@ -330,7 +335,7 @@ func (s *Store) SaveTurnState(threadID string, state TurnState) error {
 	if err := os.MkdirAll(turnDir, 0o755); err != nil {
 		return fmt.Errorf("create turn dir: %w", err)
 	}
-	return writeFileAtomic(s.turnRecordPath(threadID, state.ID), data, 0o644)
+	return WriteFileAtomic(s.turnRecordPath(threadID, state.ID), data, 0o644)
 }
 
 // LoadTurnState loads the active turn state from disk.
@@ -402,7 +407,7 @@ func (s *Store) SaveStepResult(threadID, turnID string, step int, result StepRes
 	if err != nil {
 		return fmt.Errorf("marshal step result: %w", err)
 	}
-	return writeFileAtomic(s.stepResultPath(threadID, turnID, step), data, 0o644)
+	return WriteFileAtomic(s.stepResultPath(threadID, turnID, step), data, 0o644)
 }
 
 // LoadStepResult loads a step result from disk. Returns nil if not found.
@@ -434,7 +439,7 @@ func (s *Store) SaveToolResults(threadID, turnID string, step int, results StepT
 	if err != nil {
 		return fmt.Errorf("marshal tool results: %w", err)
 	}
-	return writeFileAtomic(s.toolResultsPath(threadID, turnID, step), data, 0o644)
+	return WriteFileAtomic(s.toolResultsPath(threadID, turnID, step), data, 0o644)
 }
 
 // LoadToolResults loads tool results for a step. Returns empty if not found.
@@ -476,7 +481,7 @@ func (s *Store) SaveAsyncContinuations(threadID, turnID string, step int, contin
 	if err != nil {
 		return fmt.Errorf("marshal async continuations: %w", err)
 	}
-	return writeFileAtomic(s.asyncContinuationsPath(threadID, turnID, step), data, 0o644)
+	return WriteFileAtomic(s.asyncContinuationsPath(threadID, turnID, step), data, 0o644)
 }
 
 // LoadAsyncContinuations loads async continuation metadata for a step. Returns
@@ -506,7 +511,7 @@ func (s *Store) SaveStepEventMessages(threadID, turnID string, step int, events 
 	if err != nil {
 		return fmt.Errorf("marshal step event messages: %w", err)
 	}
-	return writeFileAtomic(s.stepEventsPath(threadID, turnID, step), data, 0o644)
+	return WriteFileAtomic(s.stepEventsPath(threadID, turnID, step), data, 0o644)
 }
 
 // LoadStepEventMessages loads ordered immutable event message IDs for a step.
@@ -553,7 +558,7 @@ func (s *Store) SaveQuestion(threadID, turnID string, q PendingQuestionState) er
 	if err != nil {
 		return fmt.Errorf("marshal question: %w", err)
 	}
-	return writeFileAtomic(s.questionPath(threadID, turnID, q.ApprovalID), data, 0o644)
+	return WriteFileAtomic(s.questionPath(threadID, turnID, q.ApprovalID), data, 0o644)
 }
 
 // LoadQuestion loads a pending question from disk by approval ID. Returns nil if not found.
@@ -582,7 +587,7 @@ func (s *Store) SaveAnswer(threadID, turnID string, a QuestionAnswer) error {
 	if err != nil {
 		return fmt.Errorf("marshal answer: %w", err)
 	}
-	return writeFileAtomic(s.answerPath(threadID, turnID, a.ApprovalID), data, 0o644)
+	return WriteFileAtomic(s.answerPath(threadID, turnID, a.ApprovalID), data, 0o644)
 }
 
 // LoadAnswer loads the user's answer from disk by approval ID. Returns nil if not found.
@@ -618,7 +623,7 @@ func (s *Store) SaveCompaction(threadID string, record CompactionRecord) error {
 	if err != nil {
 		return fmt.Errorf("marshal compaction: %w", err)
 	}
-	return writeFileAtomic(s.compactionPath(threadID), data, 0o644)
+	return WriteFileAtomic(s.compactionPath(threadID), data, 0o644)
 }
 
 // LoadCompaction loads a compaction record from disk. Returns nil if not found.
@@ -729,7 +734,7 @@ func (s *Store) SaveConfig(threadID string, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("marshal thread config: %w", err)
 	}
-	return writeFileAtomic(s.threadConfigPath(threadID), data, 0o644)
+	return WriteFileAtomic(s.threadConfigPath(threadID), data, 0o644)
 }
 
 // LoadConfig loads durable thread-level config.
