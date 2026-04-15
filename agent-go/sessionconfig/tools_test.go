@@ -30,7 +30,7 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		// Background tasks
 		"TaskOutput", "TaskStop",
 		// User interaction
-		"AskUserQuestion", "RequestUserCredential",
+		"AskUserQuestion", "RequestUserCredential", "RequestCommitPull",
 		// Plan mode
 		"EnterPlanMode", "ExitPlanMode",
 		// Skills

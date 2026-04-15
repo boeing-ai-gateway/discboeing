@@ -288,7 +288,6 @@ const allSessionStatuses: SessionData["status"][] = [
 	SessionStatus.PENDING,
 	SessionStatus.COMMITTING,
 	SessionStatus.COMMITTED,
-	SessionStatus.REBASED,
 	SessionStatus.STOPPED,
 	SessionStatus.ERROR,
 	SessionStatus.REMOVING,

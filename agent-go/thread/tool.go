@@ -80,6 +80,10 @@ type ApprovalRequest struct {
 	Questions json.RawMessage
 	// Credentials is the raw JSON data for requested credentials.
 	Credentials json.RawMessage
+	// Metadata is tool-specific structured context for the approval flow.
+	Metadata json.RawMessage
+	// Context identifies specialized approval flows.
+	Context string
 	// Continuation is an executor-owned opaque payload that TURN persists and
 	// passes back into Continue when this approval is answered later.
 	Continuation json.RawMessage

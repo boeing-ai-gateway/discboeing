@@ -658,6 +658,7 @@
 				queued={isAssistantToolPartQueued(parts, index)}
 				sessionId={activeSessionId}
 				threadId={activeThreadId}
+				resolvedTheme={app?.preferences.resolvedTheme ?? "light"}
 				onToolApprovalResponse={thread?.addToolApprovalResponse}
 				defaultOpen={toolDefaultOpen}
 			/>

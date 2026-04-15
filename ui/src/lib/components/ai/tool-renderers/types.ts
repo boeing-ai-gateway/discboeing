@@ -1,10 +1,12 @@
 import type { DynamicToolPart } from "$lib/components/ai/types";
+import type { ResolvedTheme } from "$lib/theme";
 
 export type ToolRendererComponentProps = {
 	toolPart: DynamicToolPart;
 	queued?: boolean;
 	sessionId?: string | null;
 	threadId?: string | null;
+	resolvedTheme?: ResolvedTheme;
 	onToolApprovalResponse?: (payload: {
 		id: string;
 		approved: boolean;

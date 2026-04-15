@@ -50,6 +50,7 @@ import type {
 	CodexExchangeResponse,
 	CodexPollRequest,
 	CodexPollResponse,
+	CommitPullPreviewResponse,
 	CreateCredentialRequest,
 	CreateWorkspaceRequest,
 	CredentialInfo,
@@ -328,12 +329,6 @@ class ApiClient {
 		await this.fetch(`/sessions/${id}`, { method: "DELETE" });
 	}
 
-	async commitSession(id: string): Promise<{ success: boolean }> {
-		return this.fetch<{ success: boolean }>(`/sessions/${id}/commit`, {
-			method: "POST",
-		});
-	}
-
 	async rebaseSession(id: string): Promise<{ success: boolean }> {
 		return this.fetch<{ success: boolean }>(`/sessions/${id}/rebase`, {
 			method: "POST",
@@ -568,6 +563,16 @@ class ApiClient {
 	): Promise<PendingQuestionResponse> {
 		return this.fetch<PendingQuestionResponse>(
 			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/question/${encodeURIComponent(questionId)}`,
+		);
+	}
+
+	async getThreadCommitPullPreview(
+		sessionId: string,
+		threadId: string,
+		questionId: string,
+	): Promise<CommitPullPreviewResponse> {
+		return this.fetch<CommitPullPreviewResponse>(
+			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/question/${encodeURIComponent(questionId)}/commit-preview`,
 		);
 	}
 

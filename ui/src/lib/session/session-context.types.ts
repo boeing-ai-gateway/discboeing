@@ -1,9 +1,13 @@
 import type {
+	AgentCommand,
+	AgentCommandCredentialRequest,
 	ChatMessage,
+	CredentialInfo,
 	FileStatus,
 	HooksStatusResponse,
 	QueuedPrompt,
 	Session,
+	SessionCredentialAssignment,
 	SessionDiffFileEntry,
 	SessionDiffStats,
 	Thread,
@@ -127,6 +131,28 @@ export type SessionServicesDomain = {
 	refresh: () => Promise<void>;
 };
 
+export type SessionCommandCredentialDialogState = {
+	open: boolean;
+	command: AgentCommand | null;
+	requests: AgentCommandCredentialRequest[];
+	projectCredentials: CredentialInfo[];
+	sessionAssignments: SessionCredentialAssignment[];
+	selectedCredentialIdsByEnvVar: Record<string, string>;
+	error: string | null;
+	selectCredential: (envVar: string, credentialId: string) => void;
+	close: () => void;
+	confirm: () => Promise<void>;
+};
+
+export type SessionCommandsDomain = {
+	list: AgentCommand[];
+	uiVisible: AgentCommand[];
+	startingName: string | null;
+	credentialDialog: SessionCommandCredentialDialogState;
+	refresh: () => Promise<void>;
+	run: (command: AgentCommand) => Promise<void>;
+};
+
 export type SessionConversationDomain = {
 	messages: ChatMessage[];
 	status: AsyncStatus | "streaming";
@@ -198,6 +224,7 @@ export type SessionContextValue = {
 	hooks: SessionHooksService;
 	files: SessionFilesDomain;
 	services: SessionServicesDomain;
+	commands: SessionCommandsDomain;
 	threadContexts: Map<string, ThreadContextValue>;
 	conversationScrollTopByThreadId: Map<string, number>;
 };

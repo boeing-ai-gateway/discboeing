@@ -1044,6 +1044,14 @@ func TestApplyPatches(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for conflicting patch")
 		}
+		if err != nil {
+			if !strings.Contains(err.Error(), "Failed patch diff:") {
+				t.Errorf("Expected failed patch details in error, got: %v", err)
+			}
+			if !strings.Contains(err.Error(), "README.md") {
+				t.Errorf("Expected failed patch diff to mention README.md, got: %v", err)
+			}
+		}
 
 		// Verify local changes are preserved
 		content, err := os.ReadFile(filepath.Join(workDir, "README.md"))

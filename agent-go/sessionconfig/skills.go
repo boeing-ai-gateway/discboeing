@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -25,6 +26,28 @@ type SkillConfig struct {
 	// Kind is "skill" for entries from skills/ directories and "command" for
 	// entries from commands/ directories.
 	Kind string
+
+	// Discobot contains optional Discobot-specific metadata parsed from
+	// frontmatter.
+	Discobot DiscobotCommandMetadata
+}
+
+type DiscobotCommandMetadata struct {
+	UI                bool
+	Label             string
+	Order             int
+	CredentialRequest []DiscobotCredentialRequest
+}
+
+type DiscobotCredentialRequest struct {
+	EnvVar        string
+	Name          string
+	Justification string
+	ApprovedUses  []DiscobotCredentialApprovedUse
+}
+
+type DiscobotCredentialApprovedUse struct {
+	Description string
 }
 
 // discoverSkills loads skill configs from the project's .claude/skills and
@@ -393,9 +416,160 @@ func parseSkill(defaultName, content string) (SkillConfig, error) {
 		if desc, ok := fm["description"].(string); ok {
 			skill.Description = desc
 		}
+		skill.Discobot = parseDiscobotMetadata(fm)
 	}
 
 	return skill, nil
+}
+
+func parseDiscobotMetadata(fm map[string]any) DiscobotCommandMetadata {
+	meta := DiscobotCommandMetadata{}
+	if value, ok := boolFrontmatterValue(fm, "discobot-ui", "Discobot UI"); ok {
+		meta.UI = value
+	}
+	if value, ok := stringFrontmatterValue(fm, "discobot-label", "Discobot Label"); ok {
+		meta.Label = value
+	}
+	if value, ok := intFrontmatterValue(fm, "discobot-order", "Discobot Order"); ok {
+		meta.Order = value
+	}
+	if requests, ok := credentialRequestsFrontmatterValue(fm, "discobot-credential-request", "Discobot Credential Request"); ok {
+		meta.CredentialRequest = requests
+	}
+
+	if nested, ok := fm["discobot"].(map[string]any); ok {
+		if !meta.UI {
+			if value, ok := boolFrontmatterValue(nested, "ui"); ok {
+				meta.UI = value
+			}
+		}
+		if meta.Label == "" {
+			if value, ok := stringFrontmatterValue(nested, "label"); ok {
+				meta.Label = value
+			}
+		}
+		if meta.Order == 0 {
+			if value, ok := intFrontmatterValue(nested, "order"); ok {
+				meta.Order = value
+			}
+		}
+		if len(meta.CredentialRequest) == 0 {
+			if requests, ok := credentialRequestsFrontmatterValue(nested, "credential-request", "credentialRequest"); ok {
+				meta.CredentialRequest = requests
+			}
+		}
+	}
+
+	return meta
+}
+
+func boolFrontmatterValue(values map[string]any, keys ...string) (bool, bool) {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		typed, ok := value.(bool)
+		return typed, ok
+	}
+	return false, false
+}
+
+func stringFrontmatterValue(values map[string]any, keys ...string) (string, bool) {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		typed, ok := value.(string)
+		if !ok {
+			return "", false
+		}
+		return strings.TrimSpace(typed), true
+	}
+	return "", false
+}
+
+func intFrontmatterValue(values map[string]any, keys ...string) (int, bool) {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case int:
+			return typed, true
+		case int64:
+			return int(typed), true
+		case float64:
+			return int(typed), true
+		case string:
+			parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+			if err == nil {
+				return parsed, true
+			}
+		}
+		return 0, false
+	}
+	return 0, false
+}
+
+func credentialRequestsFrontmatterValue(values map[string]any, keys ...string) ([]DiscobotCredentialRequest, bool) {
+	raw, ok := frontmatterValue(values, keys...)
+	if !ok {
+		return nil, false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, false
+	}
+	requests := make([]DiscobotCredentialRequest, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		request := DiscobotCredentialRequest{}
+		if value, ok := stringFrontmatterValue(entry, "env-var", "envVar"); ok {
+			request.EnvVar = value
+		}
+		if value, ok := stringFrontmatterValue(entry, "name"); ok {
+			request.Name = value
+		}
+		if value, ok := stringFrontmatterValue(entry, "justification"); ok {
+			request.Justification = value
+		}
+		if uses, ok := frontmatterValue(entry, "approved-uses", "approvedUses"); ok {
+			if useItems, ok := uses.([]any); ok {
+				request.ApprovedUses = make([]DiscobotCredentialApprovedUse, 0, len(useItems))
+				for _, use := range useItems {
+					useEntry, ok := use.(map[string]any)
+					if !ok {
+						continue
+					}
+					description, ok := stringFrontmatterValue(useEntry, "description")
+					if !ok || description == "" {
+						continue
+					}
+					request.ApprovedUses = append(request.ApprovedUses, DiscobotCredentialApprovedUse{
+						Description: description,
+					})
+				}
+			}
+		}
+		requests = append(requests, request)
+	}
+	return requests, true
+}
+
+func frontmatterValue(values map[string]any, keys ...string) (any, bool) {
+	for _, key := range keys {
+		value, ok := values[key]
+		if ok {
+			return value, true
+		}
+	}
+	return nil, false
 }
 
 // FormatSkillsReminder formats the list of available skills as a

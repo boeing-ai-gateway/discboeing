@@ -3,6 +3,7 @@ import { SvelteMap } from "svelte/reactivity";
 
 import type { AppContext } from "$lib/context/app-context.svelte";
 import { useAppContext } from "$lib/context/app-context.svelte";
+import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
 import { createSessionHooksDomain } from "$lib/session/domains/session-hooks.svelte";
 import { createSessionServicesDomain } from "$lib/session/domains/session-services.svelte";
@@ -75,6 +76,13 @@ function createSessionContext(
 		openService: ui.openService,
 	});
 
+	const commands = createSessionCommandsDomain({
+		app,
+		sessionId,
+		hasSession: () => hasSession,
+		getSelectedThreadId: () => threads.selectedId ?? sessionId,
+	});
+
 	const threadContexts = new SvelteMap<string, ThreadContextValue>();
 	const conversationScrollTopByThreadId = new SvelteMap<string, number>();
 
@@ -89,6 +97,7 @@ function createSessionContext(
 				filesDomain.refresh(),
 				services.refresh(),
 				hooks.refresh(),
+				commands.refresh(),
 			]);
 			loaded = true;
 		}
@@ -123,6 +132,7 @@ function createSessionContext(
 		hooks,
 		files: filesDomain,
 		services,
+		commands,
 		threadContexts,
 		conversationScrollTopByThreadId,
 	};

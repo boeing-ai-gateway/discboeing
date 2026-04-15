@@ -46,5 +46,6 @@ func (h *Handler) GetCommits(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, api.CommitsResponse{
 		Patches:     result.Patches,
 		CommitCount: result.CommitCount,
+		HeadCommit:  result.HeadCommit,
 	})
 }

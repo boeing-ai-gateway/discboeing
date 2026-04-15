@@ -86,9 +86,13 @@ func (p SessionSandboxDeletePayload) Priority() int          { return 1 }
 
 // SessionCommitPayload is the payload for session_commit jobs.
 type SessionCommitPayload struct {
-	ProjectID   string `json:"projectId"`
-	SessionID   string `json:"sessionId"`
-	WorkspaceID string `json:"workspaceId"`
+	ProjectID           string `json:"projectId"`
+	SessionID           string `json:"sessionId"`
+	WorkspaceID         string `json:"workspaceId"`
+	RequestedDirectory  string `json:"requestedDirectory,omitempty"`
+	RequestedCommitHash string `json:"requestedCommitHash,omitempty"`
+	ApprovalThreadID    string `json:"approvalThreadId,omitempty"`
+	ApprovalQuestionID  string `json:"approvalQuestionId,omitempty"`
 }
 
 func (p SessionCommitPayload) JobType() JobType { return JobTypeSessionCommit }

@@ -218,6 +218,45 @@ func TestDiscoverSkills_MissingDirs(t *testing.T) {
 	}
 }
 
+func TestParseSkill_DiscobotMetadata(t *testing.T) {
+	skill, err := parseSkill("discobot-commit", `---
+description: Commit changes.
+discobot-ui: true
+discobot-label: Commit
+discobot-order: 10
+discobot-credential-request:
+  - env-var: GH_TOKEN
+    name: GitHub credential
+    justification: Authenticate push commands.
+    approved-uses:
+      - description: authenticate GitHub CLI for push operations
+---
+
+Body`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !skill.Discobot.UI {
+		t.Fatal("expected Discobot UI metadata")
+	}
+	if skill.Discobot.Label != "Commit" {
+		t.Fatalf("label = %q", skill.Discobot.Label)
+	}
+	if skill.Discobot.Order != 10 {
+		t.Fatalf("order = %d", skill.Discobot.Order)
+	}
+	if len(skill.Discobot.CredentialRequest) != 1 {
+		t.Fatalf("expected 1 credential request, got %d", len(skill.Discobot.CredentialRequest))
+	}
+	request := skill.Discobot.CredentialRequest[0]
+	if request.EnvVar != "GH_TOKEN" {
+		t.Fatalf("envVar = %q", request.EnvVar)
+	}
+	if len(request.ApprovedUses) != 1 || request.ApprovedUses[0].Description != "authenticate GitHub CLI for push operations" {
+		t.Fatalf("unexpected approved uses: %+v", request.ApprovedUses)
+	}
+}
+
 func TestDiscoverSkills_SkipsNonDirsInSkillsDir(t *testing.T) {
 	root := t.TempDir()
 	skillsDir := filepath.Join(root, ".claude", "skills")

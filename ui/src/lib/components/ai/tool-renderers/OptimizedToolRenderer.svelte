@@ -7,6 +7,7 @@
 		ToolOutput,
 	} from "$lib/components/ai/tool";
 	import type { DynamicToolPart } from "$lib/components/ai/types";
+	import type { ResolvedTheme } from "$lib/theme";
 	import { getToolRenderer, getToolTitle } from "./registry";
 
 	type Props = {
@@ -16,6 +17,7 @@
 		defaultOpen?: boolean;
 		sessionId?: string | null;
 		threadId?: string | null;
+		resolvedTheme?: ResolvedTheme;
 		onToolApprovalResponse?: (payload: {
 			id: string;
 			approved: boolean;
@@ -30,12 +32,15 @@
 		defaultOpen = false,
 		sessionId,
 		threadId,
+		resolvedTheme,
 		onToolApprovalResponse,
 	}: Props = $props();
 
 	const getInitialOpen = () =>
 		defaultOpen ||
 		toolPart.toolName === "AskUserQuestion" ||
+		(toolPart.toolName === "RequestCommitPull" &&
+			toolPart.state === "approval-requested") ||
 		(toolPart.toolName === "ExitPlanMode" &&
 			toolPart.state === "approval-requested") ||
 		(toolPart.toolName === "RequestUserCredential" &&
@@ -51,6 +56,8 @@
 	$effect(() => {
 		if (
 			toolPart.toolName === "AskUserQuestion" ||
+			(toolPart.toolName === "RequestCommitPull" &&
+				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "ExitPlanMode" &&
 				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "RequestUserCredential" &&
@@ -68,6 +75,8 @@
 	const isAlwaysExpanded = $derived.by(
 		() =>
 			toolPart.toolName === "AskUserQuestion" ||
+			(toolPart.toolName === "RequestCommitPull" &&
+				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "ExitPlanMode" &&
 				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "RequestUserCredential" &&
@@ -100,6 +109,7 @@
 			{queued}
 			{sessionId}
 			{threadId}
+			{resolvedTheme}
 			{onToolApprovalResponse}
 			{isRaw}
 			onToggleRaw={() => (isRaw = !isRaw)}

@@ -9,6 +9,7 @@ import ExitPlanModeToolRenderer from "./ExitPlanModeToolRenderer.svelte";
 import GlobToolRenderer from "./GlobToolRenderer.svelte";
 import GrepToolRenderer from "./GrepToolRenderer.svelte";
 import ReadToolRenderer from "./ReadToolRenderer.svelte";
+import RequestCommitPullToolRenderer from "./RequestCommitPullToolRenderer.svelte";
 import RequestUserCredentialToolRenderer from "./RequestUserCredentialToolRenderer.svelte";
 import SkillToolRenderer from "./SkillToolRenderer.svelte";
 import TaskToolRenderer from "./TaskToolRenderer.svelte";
@@ -26,6 +27,7 @@ const TOOL_RENDERERS: Record<string, RendererComponent> = {
 	AskUserQuestion: AskUserQuestionToolRenderer,
 	Bash: BashToolRenderer,
 	Read: ReadToolRenderer,
+	RequestCommitPull: RequestCommitPullToolRenderer,
 	Write: WriteToolRenderer,
 	Edit: EditToolRenderer,
 	EnterPlanMode: EnterPlanModeToolRenderer,
@@ -190,6 +192,9 @@ export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 			}
 			return "Credential Request";
 		}
+
+		case "RequestCommitPull":
+			return "Pull Sandbox Commit";
 	}
 
 	return undefined;

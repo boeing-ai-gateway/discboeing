@@ -2,12 +2,9 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -591,65 +588,19 @@ func TestListMessages(t *testing.T) {
 // Session Commit Tests
 // ============================================================================
 
-func TestCommitSession_NoWorkspaceCommit(t *testing.T) {
+func TestCommitSessionRouteNotFound(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
-
-	// Create a session with a running sandbox
 	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
 	client := ts.AuthenticatedClient(user)
 
-	// First verify the session exists and can be fetched
-	getResp := client.Get("/api/projects/" + project.ID + "/sessions/" + session.ID)
-	AssertStatus(t, getResp, http.StatusOK)
-	getResp.Body.Close()
-
-	// Initiate commit - the request is accepted synchronously and any workspace/git
-	// failure will happen during async job processing.
 	resp := client.Post("/api/projects/"+project.ID+"/sessions/"+session.ID+"/commit", nil)
-	defer resp.Body.Close()
-
-	AssertStatus(t, resp, http.StatusOK)
-}
-
-func TestCommitSession_NotFound(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	client := ts.AuthenticatedClient(user)
-
-	// Try to commit a non-existent session
-	resp := client.Post("/api/projects/"+project.ID+"/sessions/nonexistent-session/commit", nil)
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusNotFound)
-}
-
-func TestCommitSession_AlreadyInProgress(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
-	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
-	client := ts.AuthenticatedClient(user)
-
-	// Manually set commit status to pending to simulate in-progress commit
-	session.CommitStatus = "pending"
-	if err := ts.Store.UpdateSession(context.Background(), session); err != nil {
-		t.Fatalf("Failed to update session: %v", err)
-	}
-
-	// Try to commit again
-	resp := client.Post("/api/projects/"+project.ID+"/sessions/"+session.ID+"/commit", nil)
-	defer resp.Body.Close()
-
-	// Should return conflict
-	AssertStatus(t, resp, http.StatusConflict)
 }
 
 func TestRebaseSession_NotFound(t *testing.T) {
@@ -807,132 +758,5 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 	}
 	if _, ok := result.Sessions[0]["commitError"]; ok {
 		t.Errorf("Expected commitError to be omitted, got %v", result.Sessions[0]["commitError"])
-	}
-}
-
-func TestCommitSession_SendsCommitMessageToAgent(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	client := ts.AuthenticatedClient(user)
-
-	// Create a real git repo to get a valid base commit
-	repoPath := createTestGitRepo(t)
-	workspace := ts.CreateTestWorkspace(project, repoPath)
-
-	// Get the current commit SHA via the API (this also ensures workspace is indexed)
-	statusResp := client.Get("/api/projects/" + project.ID + "/workspaces/" + workspace.ID + "/git/status")
-	AssertStatus(t, statusResp, http.StatusOK)
-
-	var gitStatus struct {
-		Commit string `json:"commit"`
-	}
-	ParseJSON(t, statusResp, &gitStatus)
-	statusResp.Body.Close()
-	baseCommit := gitStatus.Commit
-
-	// Track messages sent to the agent
-	var capturedMessages []map[string]any
-	var messagesMu sync.Mutex
-
-	// Set up a custom HTTP handler to capture messages sent to /chat
-	ts.MockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST" {
-			// Capture the request body
-			body, _ := io.ReadAll(r.Body)
-			r.Body.Close()
-
-			var req map[string]any
-			if err := json.Unmarshal(body, &req); err == nil {
-				messagesMu.Lock()
-				capturedMessages = append(capturedMessages, req)
-				messagesMu.Unlock()
-			}
-
-			// Return 202 Accepted
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-
-		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" {
-			// Return SSE stream with DONE
-			if r.Header.Get("Accept") == "text/event-stream" {
-				w.Header().Set("Content-Type", "text/event-stream")
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("data: [DONE]\n\n"))
-				return
-			}
-			// Return empty messages
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"messages":[]}`))
-			return
-		}
-
-		if r.URL.Path == "/commits" && r.Method == "GET" {
-			// Return mock commits response (no commits - will fail but we want to test the message was sent)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(`{"error":"no_commits","message":"No commits found"}`))
-			return
-		}
-
-		http.NotFound(w, r)
-	})
-
-	// Create session with sandbox
-	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
-
-	// The session should be in ready state, call commit API to trigger the full flow
-	// This will set baseCommit, status to pending, and enqueue the job
-	resp := client.Post("/api/projects/"+project.ID+"/sessions/"+session.ID+"/commit", nil)
-	resp.Body.Close()
-
-	// Give the job time to be picked up and start processing
-	// (The commit API should return 202 Accepted)
-
-	// Wait for the job to process (with timeout)
-	timeout := time.After(5 * time.Second)
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	var foundCommitMessage bool
-waitLoop:
-	for {
-		select {
-		case <-timeout:
-			break waitLoop
-		case <-ticker.C:
-			messagesMu.Lock()
-			for _, msg := range capturedMessages {
-				if messages, ok := msg["messages"].([]any); ok {
-					for _, m := range messages {
-						if msgMap, ok := m.(map[string]any); ok {
-							if parts, ok := msgMap["parts"].([]any); ok {
-								for _, p := range parts {
-									if partMap, ok := p.(map[string]any); ok {
-										if text, ok := partMap["text"].(string); ok {
-											expectedMsg := "/discobot-commit " + baseCommit
-											if text == expectedMsg {
-												foundCommitMessage = true
-												break waitLoop
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			messagesMu.Unlock()
-		}
-	}
-
-	if !foundCommitMessage {
-		messagesMu.Lock()
-		t.Errorf("Expected /discobot-commit %s message to be sent to agent, captured messages: %+v", baseCommit, capturedMessages)
-		messagesMu.Unlock()
 	}
 }

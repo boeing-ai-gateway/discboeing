@@ -16,6 +16,19 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
+const (
+	requestCommitPullApprovalContext = "request_commit_pull"
+	requestCommitPullApprovedKey     = "__request_commit_pull_approved__"
+	requestCommitPullRejectedKey     = "__request_commit_pull_rejected__"
+)
+
+type requestCommitPullMetadata struct {
+	Directory   string `json:"directory"`
+	CommitHash  string `json:"commitHash"`
+	CommitTitle string `json:"commitTitle,omitempty"`
+	CommitBody  string `json:"commitBody,omitempty"`
+}
+
 // ChatRequest represents the request body for the chat endpoint.
 // This matches the AI SDK's DefaultChatTransport format.
 // Each element is a single UIMessage encoded as JSON.
@@ -314,6 +327,33 @@ func (h *Handler) ChatQuestion(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
+// ChatQuestionCommitPreview returns the parsed replay bundle preview for a pending
+// request_commit_pull approval on a session thread.
+// GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/question/{questionId}/commit-preview
+func (h *Handler) ChatQuestionCommitPreview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID, threadID, _, ok := h.resolveSessionAndThread(w, r, projectID, false)
+	if !ok {
+		return
+	}
+
+	questionID := r.PathValue("questionId")
+	if questionID == "" {
+		h.Error(w, http.StatusBadRequest, "questionId is required")
+		return
+	}
+
+	result, err := h.chatService.GetRequestCommitPullPreview(ctx, projectID, sessionID, threadID, questionID)
+	if err != nil {
+		log.Printf("[ChatQuestionCommitPreview] Error: %v", err)
+		h.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
 // ChatAnswer submits answers to a pending AskUserQuestion for a session thread.
 // POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/answer/{questionId}
 func (h *Handler) ChatAnswer(w http.ResponseWriter, r *http.Request) {
@@ -342,6 +382,31 @@ func (h *Handler) ChatAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pendingQuestion, err := h.chatService.GetQuestion(ctx, projectID, sessionID, threadID, questionID)
+	if err != nil {
+		log.Printf("[ChatAnswer] Error loading pending question: %v", err)
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if metadata, ok := approvedCommitPullMetadata(pendingQuestion, req.Answers); ok {
+		if err := h.sessionService.CommitSession(ctx, projectID, sessionID, h.jobQueue, service.CommitSessionOptions{
+			RequestedDirectory:  metadata.Directory,
+			RequestedCommitHash: metadata.CommitHash,
+			ApprovalThreadID:    threadID,
+			ApprovalQuestionID:  questionID,
+		}); err != nil {
+			if errors.Is(err, service.ErrSessionOperationInProgress) {
+				h.Error(w, http.StatusConflict, "Session operation already in progress")
+				return
+			}
+			log.Printf("[ChatAnswer] Error starting commit pull: %v", err)
+			h.Error(w, http.StatusInternalServerError, "Failed to initiate session commit")
+			return
+		}
+		h.JSON(w, http.StatusOK, &sandboxapi.AnswerQuestionResponse{Success: true})
+		return
+	}
+
 	result, err := h.chatService.AnswerQuestion(ctx, projectID, sessionID, threadID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrNoActiveCompletion) {
@@ -354,6 +419,26 @@ func (h *Handler) ChatAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, result)
+}
+
+func approvedCommitPullMetadata(question *sandboxapi.PendingQuestionResponse, answers map[string]string) (requestCommitPullMetadata, bool) {
+	if question == nil || question.Status != "pending" || question.Question == nil {
+		return requestCommitPullMetadata{}, false
+	}
+	if !strings.EqualFold(strings.TrimSpace(question.Question.Context), requestCommitPullApprovalContext) {
+		return requestCommitPullMetadata{}, false
+	}
+	if strings.TrimSpace(answers[requestCommitPullRejectedKey]) != "" {
+		return requestCommitPullMetadata{}, false
+	}
+	if strings.TrimSpace(answers[requestCommitPullApprovedKey]) == "" {
+		return requestCommitPullMetadata{}, false
+	}
+	var metadata requestCommitPullMetadata
+	if len(question.Question.Metadata) > 0 {
+		_ = json.Unmarshal(question.Question.Metadata, &metadata)
+	}
+	return metadata, true
 }
 
 // ChatCancel handles cancelling an in-progress chat completion.

@@ -650,11 +650,19 @@ func (p *LocalProvider) ApplyPatches(ctx context.Context, workspaceID string, pa
 	}
 
 	if err := p.runGitWithStdin(ctx, workDir, patches, "apply", "--check"); err != nil {
+		failedPatch := formatFailedPatchDiff(string(patches))
+		if failedPatch != "" {
+			return "", fmt.Errorf("patches will not apply cleanly: %w\n\nFailed patch diff:\n%s", err, failedPatch)
+		}
 		return "", fmt.Errorf("patches will not apply cleanly: %w", err)
 	}
 
 	if err := p.runGitWithStdin(ctx, workDir, patches, "am", "--keep-cr", "--no-gpg-sign"); err != nil {
+		failedPatch := p.failedAmPatch(ctx, workDir)
 		_ = p.runGit(ctx, workDir, "am", "--abort")
+		if failedPatch != "" {
+			return "", fmt.Errorf("failed to apply patches: %w\n\nFailed patch diff:\n%s", err, failedPatch)
+		}
 		return "", fmt.Errorf("failed to apply patches: %w", err)
 	}
 
@@ -663,6 +671,31 @@ func (p *LocalProvider) ApplyPatches(ctx context.Context, workspaceID string, pa
 		return "", fmt.Errorf("failed to get final commit: %w", err)
 	}
 	return strings.TrimSpace(finalCommit), nil
+}
+
+func (p *LocalProvider) failedAmPatch(ctx context.Context, workDir string) string {
+	patch, err := p.runGitOutput(ctx, workDir, "am", "--show-current-patch=diff")
+	if err != nil {
+		return ""
+	}
+	return formatFailedPatchDiff(patch)
+}
+
+func formatFailedPatchDiff(patch string) string {
+	patch = strings.TrimSpace(patch)
+	if patch == "" {
+		return ""
+	}
+
+	if diffIndex := strings.Index(patch, "diff --git "); diffIndex >= 0 {
+		patch = patch[diffIndex:]
+	}
+
+	const maxPatchLen = 12000
+	if len(patch) > maxPatchLen {
+		patch = patch[:maxPatchLen] + "\n... (truncated)"
+	}
+	return patch
 }
 
 func cleanGitEnv() []string {

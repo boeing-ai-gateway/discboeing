@@ -43,5 +43,19 @@ func (e *SessionCommitExecutor) Execute(ctx context.Context, job *model.Job) err
 		return fmt.Errorf("projectId is required")
 	}
 
-	return e.sessionService.PerformCommit(ctx, payload.ProjectID, payload.SessionID)
+	err := e.sessionService.PerformCommit(ctx, payload.ProjectID, payload.SessionID, service.CommitSessionOptions{
+		RequestedDirectory:  payload.RequestedDirectory,
+		RequestedCommitHash: payload.RequestedCommitHash,
+		ApprovalThreadID:    payload.ApprovalThreadID,
+		ApprovalQuestionID:  payload.ApprovalQuestionID,
+	})
+	if payload.ApprovalThreadID != "" && payload.ApprovalQuestionID != "" {
+		if answerErr := e.sessionService.FinalizeRequestCommitPullApproval(ctx, payload.SessionID, payload.ApprovalThreadID, payload.ApprovalQuestionID, err); answerErr != nil {
+			if err != nil {
+				return fmt.Errorf("perform commit: %w; finalize request commit pull approval: %v", err, answerErr)
+			}
+			return fmt.Errorf("finalize request commit pull approval: %w", answerErr)
+		}
+	}
+	return err
 }

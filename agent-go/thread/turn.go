@@ -1291,6 +1291,8 @@ func pauseForApproval(
 		Continuation: cloneRawMessage(continuation),
 		Questions:    pause.approval.Questions,
 		Credentials:  pause.approval.Credentials,
+		Metadata:     pause.approval.Metadata,
+		Context:      pause.approval.Context,
 	}); err != nil {
 		yield(nil, fmt.Errorf("save question: %w", err))
 		return false

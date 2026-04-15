@@ -49,6 +49,8 @@ type PendingQuestionState struct {
 	Continuation json.RawMessage `json:"continuation,omitempty"` // executor-owned continuation payload for resuming this approval
 	Questions    json.RawMessage `json:"questions,omitempty"`    // raw JSON array from tool input
 	Credentials  json.RawMessage `json:"credentials,omitempty"`  // raw JSON array from tool input
+	Metadata     json.RawMessage `json:"metadata,omitempty"`     // tool-specific approval metadata
+	Context      string          `json:"context,omitempty"`
 }
 
 // QuestionAnswer persists the user's response to a pending approval.

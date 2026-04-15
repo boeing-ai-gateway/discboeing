@@ -1,0 +1,12 @@
+name: RequestCommitPull
+description: |-
+  Ask Discobot to pull commit(s) you already prepared in the sandbox and apply them to the host workspace.
+
+  Use this after you have created one or more git commits in the sandbox and want Discobot to import them back into the parent workspace.
+inputSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    notes:
+      type: string
+      description: Optional additional notes that may be important for the end user to know about the prepared sandbox changes.

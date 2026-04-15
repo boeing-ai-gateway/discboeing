@@ -23,6 +23,7 @@ func TestBuiltinToolSchemasMatchImplementationInputFields(t *testing.T) {
 		"Glob":                  jsonFieldNames(globInput{}),
 		"Grep":                  jsonFieldNames(grepInput{}),
 		"Read":                  jsonFieldNames(readInput{}),
+		"RequestCommitPull":     jsonFieldNames(requestCommitPullInput{}),
 		"RequestUserCredential": jsonFieldNames(requestUserCredentialInput{}),
 		"Skill":                 jsonFieldNames(skillInput{}),
 		"Task":                  jsonFieldNames(taskInput{}),

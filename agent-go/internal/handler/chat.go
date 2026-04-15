@@ -528,6 +528,8 @@ func (h *Handler) GetQuestion(w http.ResponseWriter, r *http.Request) {
 				ToolUseID:   pending.ApprovalID,
 				Questions:   pending.Questions,
 				Credentials: pending.Credentials,
+				Metadata:    pending.Metadata,
+				Context:     pending.Context,
 			},
 		})
 		return

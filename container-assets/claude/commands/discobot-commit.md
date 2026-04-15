@@ -1,32 +1,32 @@
 ---
 name: discobot-commit
-description: Commit session changes back to the parent workspace at a target commit
-argument-hint: <commit-id>
+description: Commit session changes back to the parent workspace
 ---
 
-Commit the changes from this session back to the parent workspace, targeting commit $ARGUMENTS.
+Commit the changes from this session back to the parent workspace.
 
-1. **Check current state:** Run `git status` and `git log --oneline -5` to understand current HEAD and uncommitted changes.
+1. **Inspect the current repo state first:**
+   - Run `git status` and `git log --oneline -5`
+   - Understand the current HEAD, uncommitted changes, and any existing local commits
 
-2. **Create commit(s) first:** Before rebasing, commit all your local changes:
-   - Review changes with `git diff` to understand all modifications
-   - Group related changes logically if multiple commits are appropriate
-   - Each commit should be atomic and represent a logical unit of work
-   - Use imperative mood in messages ("Add feature" not "Added feature")
-   - First line 50 chars or less, explain the "why" in the body if needed
-   - Git user configuration (user.name and user.email) is automatically set from the server's git config
-   - Stage and commit all changes before proceeding to the next step
+2. **Prepare the sandbox commit(s):**
+   - Review the diff before committing
+   - Create one or more logical git commits for the work that should be pulled back
+   - Use imperative commit messages with a short subject line
+   - Leave the worktree clean before moving on
 
-3. **Pull with rebase:** Once all changes are committed, rebase onto the target commit:
-   - Run `GIT_EDITOR=true git pull -r origin $ARGUMENTS`
-   - This will fetch the target commit and rebase your commits on top of it
-   - Keep rebase-related git commands non-interactive in this environment so Git does not block waiting for an editor
+3. **Make sure the prepared commits are based correctly:**
+   - Confirm the prepared commits are based on the current sandbox branch state you intend to pull back
+   - If they are not, rebase non-interactively onto the correct base before continuing
+   - Keep any rebase-related git commands non-interactive in this environment so Git does not wait for an editor
+   - If conflicts occur, stop and work with the user to resolve them before continuing
 
-4. **Handle conflicts if they occur:**
-   - If rebase conflicts arise, work with the user to resolve them
-   - Show the conflicting files with `git status`
-   - Explain the conflicts clearly and ask the user how they want to proceed
-   - After resolving conflicts, continue with `GIT_EDITOR=true git rebase --continue`
-   - If the user wants to abort, use `git rebase --abort`
+4. **Request the host pull:**
+   - After the sandbox commits are ready, call `RequestCommitPull`
+   - Include optional additional notes that may be important for the end user to know
+   - Do not claim the work was pulled yet; the tool result is authoritative
 
-5. **Verify:** Confirm all changes are committed and history is rebased to $ARGUMENTS.
+5. **Wait for the tool result before responding:**
+   - If the tool reports success, confirm the pull succeeded and include the pertinent result details
+   - If the tool reports failure or rejection, explain that clearly and include the returned reason
+   - Do not say the changes landed in the host workspace unless the tool explicitly reports success

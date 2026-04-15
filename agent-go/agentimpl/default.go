@@ -1418,6 +1418,8 @@ func (a *DefaultAgent) PendingQuestion(threadID string) (*agent.PendingQuestion,
 		ApprovalID:  q.ApprovalID,
 		Questions:   questions,
 		Credentials: credentials,
+		Metadata:    q.Metadata,
+		Context:     q.Context,
 	}, nil
 }
 

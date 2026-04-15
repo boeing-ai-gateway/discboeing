@@ -15,6 +15,7 @@ allowedTools:
   - TaskStop
   - AskUserQuestion
   - RequestUserCredential
+  - RequestCommitPull
   - ExitPlanMode
   - Skill
 ---

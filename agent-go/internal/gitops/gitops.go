@@ -41,6 +41,7 @@ type DiffResult struct {
 type CommitsResult struct {
 	Patches     string `json:"patches"`
 	CommitCount int    `json:"commitCount"`
+	HeadCommit  string `json:"headCommit"`
 }
 
 // CommitsError represents an error during commit operations.
@@ -384,5 +385,5 @@ func GetCommitPatches(workspaceRoot, parent string) (*CommitsResult, *CommitsErr
 		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to generate patches: %v", err)}
 	}
 
-	return &CommitsResult{Patches: patches, CommitCount: commitCount}, nil
+	return &CommitsResult{Patches: patches, CommitCount: commitCount, HeadCommit: HeadCommitSHA(workspaceRoot)}, nil
 }

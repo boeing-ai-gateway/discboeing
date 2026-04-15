@@ -1024,16 +1024,6 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
-						Method: "POST", Pattern: "/commit",
-						Handler: h.CommitSession,
-						Meta: routes.Meta{
-							Group:       "Sessions",
-							Description: "Commit session changes",
-							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
-						},
-					})
-
-					sidReg.Register(r, routes.Route{
 						Method: "POST", Pattern: "/rebase",
 						Handler: h.RebaseSession,
 						Meta: routes.Meta{
@@ -1243,6 +1233,16 @@ func main() {
 						Meta: routes.Meta{
 							Group:       "Chat",
 							Description: "Get pending AskUserQuestion for a specific session thread",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}, {Name: "questionId", Example: "tool-use-id"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/threads/{threadId}/question/{questionId}/commit-preview",
+						Handler: h.ChatQuestionCommitPreview,
+						Meta: routes.Meta{
+							Group:       "Chat",
+							Description: "Get the parsed replay bundle preview for a pending request_commit_pull approval",
 							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}, {Name: "questionId", Example: "tool-use-id"}},
 						},
 					})

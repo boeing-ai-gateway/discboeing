@@ -17,10 +17,9 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Button } from "$lib/components/ui/button";
 	import { SplitDropdownButton } from "$lib/components/ui/split-dropdown-button";
+	import SessionCommandCredentialsDialog from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
 	import { getSSHPort } from "$lib/api-config";
-	import { api } from "$lib/api-client";
-	import type { CommitOperation } from "$lib/api-types";
-	import { getSessionToolbarOperationState } from "$lib/components/app/session-toolbar-actions";
+	import type { AgentCommand } from "$lib/api-types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
@@ -46,10 +45,6 @@
 			(service) => service.id !== DESKTOP_SERVICE_ID,
 		),
 	);
-
-	let startingOperation = $state<CommitOperation | null>(null);
-	let waitingForOperationEvent = $state(false);
-	let waitingForStatusChangeFrom = $state<string | undefined>(undefined);
 
 	function isJetBrainsIdeOption(
 		option: IdeOption,
@@ -192,72 +187,65 @@
 		return { additions, deletions, filesChanged };
 	});
 
-	const operationState = $derived.by(() =>
-		getSessionToolbarOperationState({
-			filesChanged: diffStats.filesChanged,
-			session: session.current,
-			startingOperation,
-		}),
-	);
-	const operationDisabled = $derived.by(
-		() => !session.current || operationState.showBusy,
-	);
-	const sessionStatus = $derived.by(() => session.current?.status);
-
-	$effect(() => {
-		const currentSessionStatus = sessionStatus;
-		if (currentSessionStatus === undefined || !waitingForOperationEvent) {
-			return;
-		}
-		if (currentSessionStatus === waitingForStatusChangeFrom) {
-			return;
-		}
-
-		waitingForOperationEvent = false;
-		waitingForStatusChangeFrom = undefined;
-		startingOperation = null;
+	const uiCommands = $derived.by(() => session.commands.uiVisible);
+	const primaryCommand = $derived.by(() => uiCommands[0] ?? null);
+	const secondaryCommands = $derived.by(() => uiCommands.slice(1));
+	const operationState = $derived.by(() => {
+		const isPending = session.current?.status === "pending";
+		const isCommitting = session.current?.status === "committing";
+		const showBusy =
+			session.commands.startingName !== null ||
+			session.commands.credentialDialog.open ||
+			isPending ||
+			isCommitting;
+		const startingCommand =
+			uiCommands.find(
+				(command) =>
+					command.name ===
+					(session.commands.startingName ??
+						session.commands.credentialDialog.command?.name),
+			) ?? null;
+		const primaryLabel =
+			primaryCommand?.discobot?.label || primaryCommand?.name || "Run";
+		const busyLabel = startingCommand
+			? `${startingCommand.discobot?.label || startingCommand.name}...`
+			: "Working...";
+		return {
+			showSplitButton: secondaryCommands.length > 0,
+			showPending: isPending,
+			showBusy,
+			buttonLabel: isPending
+				? "Pending..."
+				: showBusy
+					? busyLabel
+					: primaryLabel,
+		};
 	});
+	const operationDisabled = $derived.by(
+		() => !session.current || !primaryCommand || operationState.showBusy,
+	);
 
-	async function refreshSessionState() {
-		await app.sessions.reloadSession(session.sessionId);
+	function commandLabel(command: AgentCommand): string {
+		return command.discobot?.label?.trim() || command.name;
 	}
 
-	async function startOperation(operation: CommitOperation) {
-		if (!session.current || startingOperation || operationState.showBusy) {
+	function commandIcon(command: AgentCommand) {
+		return command.name.includes("rebase") ? GitBranchIcon : GitCommitIcon;
+	}
+
+	function handlePrimaryCommand() {
+		if (!primaryCommand) {
 			return;
 		}
-
-		const previousStatus = session.current.status;
-		startingOperation = operation;
-		try {
-			if (operation === "commit") {
-				await api.commitSession(session.sessionId);
-			} else {
-				await api.rebaseSession(session.sessionId);
-			}
-
-			waitingForStatusChangeFrom = previousStatus;
-			waitingForOperationEvent = true;
-			void refreshSessionState().catch((error) => {
-				console.error(
-					"Failed to refresh session state after starting operation:",
-					error,
-				);
-			});
-		} catch (error) {
-			console.error(`Failed to start ${operation}:`, error);
-			waitingForOperationEvent = false;
-			waitingForStatusChangeFrom = undefined;
-			startingOperation = null;
-		}
+		void session.commands.run(primaryCommand).catch((error) => {
+			console.error(`Failed to start ${primaryCommand.name}:`, error);
+		});
 	}
 
-	function handleCommit() {
-		void startOperation("commit");
-	}
-
-	function handleRebase() {
-		void startOperation("rebase");
+	function handleCommand(command: AgentCommand) {
+		void session.commands.run(command).catch((error) => {
+			console.error(`Failed to start ${command.name}:`, error);
+		});
 	}
 </script>
 
@@ -338,7 +326,7 @@
 		</div>
 	{/if}
 
-	{#if session.current}
+	{#if session.current && primaryCommand}
 		{#if operationState.showSplitButton}
 			<DropdownMenu>
 				<div
@@ -347,17 +335,18 @@
 					<Button
 						variant="outline"
 						size="xs"
-						onclick={handleCommit}
+						onclick={handlePrimaryCommand}
 						disabled={operationDisabled}
 						class="gap-1.5 rounded-l-[calc(var(--radius)-1px)] rounded-r-none border-0 bg-transparent shadow-none dark:bg-transparent"
-						title="Commit changes"
+						title={commandLabel(primaryCommand)}
 					>
 						{#if operationState.showPending}
 							<ClockIcon class="size-3.5" />
 						{:else if operationState.showBusy}
 							<Loader2Icon class="size-3.5 animate-spin" />
 						{:else}
-							<GitCommitIcon class="size-3.5" />
+							{@const PrimaryIcon = commandIcon(primaryCommand)}
+							<PrimaryIcon class="size-3.5" />
 						{/if}
 						{operationState.buttonLabel}
 					</Button>
@@ -383,27 +372,34 @@
 					>
 						Git actions
 					</DropdownMenuLabel>
-					<DropdownMenuItem onclick={handleRebase} class="gap-2">
-						<GitBranchIcon class="size-3.5" />
-						Rebase
-					</DropdownMenuItem>
+					{#each secondaryCommands as command}
+						<DropdownMenuItem
+							onclick={() => handleCommand(command)}
+							class="gap-2"
+						>
+							{@const Icon = commandIcon(command)}
+							<Icon class="size-3.5" />
+							{commandLabel(command)}
+						</DropdownMenuItem>
+					{/each}
 				</DropdownMenuContent>
 			</DropdownMenu>
 		{:else}
 			<Button
 				variant="outline"
 				size="xs"
-				onclick={handleRebase}
+				onclick={handlePrimaryCommand}
 				disabled={operationDisabled}
 				class="tauri-no-drag gap-1.5"
-				title="Rebase branch"
+				title={commandLabel(primaryCommand)}
 			>
 				{#if operationState.showPending}
 					<ClockIcon class="size-3.5" />
 				{:else if operationState.showBusy}
 					<Loader2Icon class="size-3.5 animate-spin" />
 				{:else}
-					<GitBranchIcon class="size-3.5" />
+					{@const PrimaryIcon = commandIcon(primaryCommand)}
+					<PrimaryIcon class="size-3.5" />
 				{/if}
 				{operationState.buttonLabel}
 			</Button>
@@ -460,4 +456,6 @@
 			</DropdownMenuSub>
 		</SplitDropdownButton>
 	{/if}
+
+	<SessionCommandCredentialsDialog dialog={session.commands.credentialDialog} />
 </div>

@@ -49,6 +49,8 @@ type PendingQuestion struct {
 	ApprovalID  string
 	Questions   []api.AskUserQuestion
 	Credentials []api.RequestedCredential
+	Metadata    json.RawMessage
+	Context     string
 }
 
 // Agent abstracts the underlying agent implementation.

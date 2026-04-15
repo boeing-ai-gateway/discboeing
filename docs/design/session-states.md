@@ -132,14 +132,16 @@ Instead it flattens commit state into the existing session fields:
 
 ### 1. User Clicks Commit Button
 
-**API**: `POST /api/projects/{projectId}/sessions/{sessionId}/commit`
+The commit button now sends `/discobot-commit` to the active thread. There is no public session commit API anymore.
+That slash command runs inside the sandbox, prepares local commit(s), and then uses the `RequestCommitPull` approval flow.
 
-1. Get current commit SHA of the workspace (from git)
-2. Save as `baseCommit` on session
-3. Clear `appliedCommit` and `commitError`
-4. Set `commitStatus` to `pending`
-5. Fire `session_updated` SSE event
-6. Enqueue `session_commit` job
+The server-side session commit job is still used after a `RequestCommitPull` approval is accepted:
+
+- The agent-side `RequestCommitPull` tool emits a specialized approval request
+- The UI presents approve/reject controls to the user
+- `POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/answer/{questionId}` submits the decision
+- When the server receives an approved `RequestCommitPull` answer, it enqueues the session commit job
+- `PerformCommit` still first checks for an existing replay bundle and applies it without re-sending `/discobot-commit` when commits are already present
 
 ### 2. Job Execution (PerformCommit)
 
@@ -161,7 +163,7 @@ func PerformCommit(ctx, projectID, sessionID) error {
 
     // Step 1: Send /discobot-commit to agent (if pending)
     if session.CommitStatus == "pending" {
-        err := sendChatMessage(sessionID, "/discobot-commit " + session.BaseCommit)
+        err := sendChatMessage(sessionID, "/discobot-commit")
         if err != nil {
             setCommitFailed(session, "Failed to send commit command: " + err.Error())
             return nil

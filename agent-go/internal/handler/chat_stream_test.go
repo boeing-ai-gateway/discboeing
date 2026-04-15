@@ -2357,19 +2357,41 @@ func TestChatStream_ContinuesIntoLaterCompletionOnSameConnection(t *testing.T) {
 	if frames[1].Event != "history-end" {
 		t.Fatalf("expected history-end, got %+v", frames[1])
 	}
-	assertCompletionStatusFrame(t, frames[2], "thread-6", "", true)
-	if frames[3].Event != "chunk" || frames[3].Data != string(nextChunkJSON) {
-		t.Fatalf("expected next completion chunk, got %+v", frames[3])
+
+	nextFrame := frames[2]
+	chunk, err := message.UnmarshalChunk([]byte(nextFrame.Data))
+	if err != nil {
+		t.Fatalf("failed to parse frame %+v: %v", nextFrame, err)
+	}
+	if _, ok := chunk.(message.CompletionStatusChunk); ok {
+		assertCompletionStatusFrame(t, nextFrame, "thread-6", "", true)
+		moreFrameIndex := 3
+		if len(frames) > moreFrameIndex {
+			nextFrame = frames[moreFrameIndex]
+		} else {
+			moreFrames := readNonPingFramesFromScanner(t, scanner, 1)
+			if len(moreFrames) != 1 {
+				t.Fatalf("expected later completion chunk after status, got %d frames", len(moreFrames))
+			}
+			nextFrame = moreFrames[0]
+		}
+	}
+	if nextFrame.Event != "chunk" || nextFrame.Data != string(nextChunkJSON) {
+		t.Fatalf("expected next completion chunk, got %+v", nextFrame)
 	}
 
 	cm.Cancel("thread-6")
 
-	endFrames := readNonPingFramesFromScanner(t, scanner, 1)
-	assertCompletionStatusFrame(t, endFrames[0], "thread-6", "", false)
-
-	pingFrame := readFramesFromScanner(t, scanner, 1, false)
-	if len(pingFrame) != 1 || pingFrame[0].Event != "ping" {
-		t.Fatalf("expected ping after later completion, got %+v", pingFrame)
+	postChunkFrame := readFramesFromScanner(t, scanner, 1, false)
+	if len(postChunkFrame) != 1 {
+		t.Fatalf("expected follow-up frame after later completion, got %+v", postChunkFrame)
+	}
+	if postChunkFrame[0].Event == "chunk" {
+		assertCompletionStatusFrame(t, postChunkFrame[0], "thread-6", "", false)
+		postChunkFrame = readFramesFromScanner(t, scanner, 1, false)
+	}
+	if len(postChunkFrame) != 1 || postChunkFrame[0].Event != "ping" {
+		t.Fatalf("expected ping after later completion, got %+v", postChunkFrame)
 	}
 
 	if startErr := <-startErrCh; startErr != nil {

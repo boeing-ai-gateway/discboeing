@@ -6,6 +6,8 @@
 package api //nolint:revive
 
 import (
+	"encoding/json"
+
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -317,6 +319,7 @@ type SingleFileDiffResponse struct {
 type CommitsResponse struct {
 	Patches     string `json:"patches"`     // git format-patch --stdout output
 	CommitCount int    `json:"commitCount"` // Number of commits in the patch set
+	HeadCommit  string `json:"headCommit"`
 }
 
 // CommitsErrorResponse is the GET /commits error response.
@@ -351,6 +354,8 @@ type PendingQuestion struct {
 	ToolUseID   string                `json:"toolUseID"`
 	Questions   []AskUserQuestion     `json:"questions,omitempty"`
 	Credentials []RequestedCredential `json:"credentials,omitempty"`
+	Metadata    json.RawMessage       `json:"metadata,omitempty"`
+	Context     string                `json:"context,omitempty"`
 }
 
 // PendingQuestionResponse is the GET /threads/{id}/chat/question/{questionId} response.

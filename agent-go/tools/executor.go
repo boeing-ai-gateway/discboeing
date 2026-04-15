@@ -465,6 +465,8 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return e.executeAskUserQuestion(call)
 	case "RequestUserCredential":
 		return e.executeRequestUserCredential(call)
+	case "RequestCommitPull":
+		return e.executeRequestCommitPull(call)
 	case "EnterPlanMode":
 		return e.executeEnterPlanMode(toolCtx, call)
 	case "ExitPlanMode":
@@ -567,6 +569,12 @@ func (e *Executor) Continue(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return thread.ToolExecuteResult{Result: result}, nil
 	case "ExitPlanMode":
 		result, err := e.resolveExitPlanMode(toolCtx, call, *req)
+		if err != nil {
+			return thread.ToolExecuteResult{}, err
+		}
+		return thread.ToolExecuteResult{Result: result}, nil
+	case "RequestCommitPull":
+		result, err := e.resolveRequestCommitPull(call, *req)
 		if err != nil {
 			return thread.ToolExecuteResult{}, err
 		}

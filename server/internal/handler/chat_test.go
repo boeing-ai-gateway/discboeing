@@ -21,6 +21,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -745,5 +746,55 @@ func TestChat_ReturnsJSONResponse(t *testing.T) {
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte("data: [DONE]")) {
 		t.Fatalf("expected JSON response instead of SSE body, got: %s", w.Body.String())
+	}
+}
+
+func TestApprovedCommitPullMetadata(t *testing.T) {
+	metadataJSON := []byte(`{"directory":"subdir","commitHash":"abc123def456"}`)
+	tests := []struct {
+		name     string
+		question *sandboxapi.PendingQuestionResponse
+		answers  map[string]string
+		want     bool
+	}{
+		{
+			name: "approved commit pull",
+			question: &sandboxapi.PendingQuestionResponse{
+				Status:   "pending",
+				Question: &sandboxapi.PendingQuestion{Context: requestCommitPullApprovalContext, Metadata: metadataJSON},
+			},
+			answers: map[string]string{requestCommitPullApprovedKey: "true"},
+			want:    true,
+		},
+		{
+			name: "rejected commit pull",
+			question: &sandboxapi.PendingQuestionResponse{
+				Status:   "pending",
+				Question: &sandboxapi.PendingQuestion{Context: requestCommitPullApprovalContext, Metadata: metadataJSON},
+			},
+			answers: map[string]string{requestCommitPullRejectedKey: "true"},
+			want:    false,
+		},
+		{
+			name: "different approval context",
+			question: &sandboxapi.PendingQuestionResponse{
+				Status:   "pending",
+				Question: &sandboxapi.PendingQuestion{Context: "request_user_credential", Metadata: metadataJSON},
+			},
+			answers: map[string]string{requestCommitPullApprovedKey: "true"},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := approvedCommitPullMetadata(tt.question, tt.answers)
+			if ok != tt.want {
+				t.Fatalf("approvedCommitPullMetadata() ok = %v, want %v", ok, tt.want)
+			}
+			if tt.want && (got.Directory != "subdir" || got.CommitHash != "abc123def456") {
+				t.Fatalf("unexpected metadata: %+v", got)
+			}
+		})
 	}
 }

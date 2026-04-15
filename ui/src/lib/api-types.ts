@@ -1069,12 +1069,52 @@ export interface PendingQuestion {
 	toolUseID: string;
 	questions?: AskUserQuestion[];
 	credentials?: RequestedCredential[];
+	metadata?: Record<string, unknown>;
+	context?: string;
 }
 
 /** Response from GET /sessions/{sessionId}/threads/{threadId}/question/{questionId} */
 export interface PendingQuestionResponse {
 	status: "pending" | "answered" | "expired";
 	question: PendingQuestion | null;
+}
+
+export interface CommitPullPreviewStats {
+	filesChanged: number;
+	additions: number;
+	deletions: number;
+	lineCount: number;
+}
+
+export interface CommitPullPreviewFile {
+	path: string;
+	oldPath?: string;
+	status: "added" | "modified" | "deleted" | "renamed";
+	additions: number;
+	deletions: number;
+	lineCount: number;
+	binary: boolean;
+	patch?: string;
+}
+
+export interface CommitPullPreviewCommit {
+	hash: string;
+	subject: string;
+	body?: string;
+	authorName?: string;
+	authorEmail?: string;
+	date?: string;
+	signedOffBy?: string[];
+	stats: CommitPullPreviewStats;
+	files: CommitPullPreviewFile[];
+}
+
+export interface CommitPullPreviewResponse {
+	commitCount: number;
+	headCommit: string;
+	rawPatch: string;
+	stats: CommitPullPreviewStats;
+	commits: CommitPullPreviewCommit[];
 }
 
 /** Request body for POST /sessions/{sessionId}/threads/{threadId}/answer/{questionId} */

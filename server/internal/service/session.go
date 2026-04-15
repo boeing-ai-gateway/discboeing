@@ -18,6 +18,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
@@ -41,6 +42,13 @@ type CommitsNoOpError struct {
 	HeadCommit string // the sandbox HEAD commit SHA
 }
 
+type CommitSessionOptions struct {
+	RequestedDirectory  string
+	RequestedCommitHash string
+	ApprovalThreadID    string
+	ApprovalQuestionID  string
+}
+
 func (e *CommitsNoOpError) Error() string {
 	return fmt.Sprintf("commits error (no_commits): head=%s isClean=%v", e.HeadCommit, e.IsClean)
 }
@@ -51,6 +59,12 @@ const (
 )
 
 // sessionIDRegex matches valid session IDs (alphanumeric and hyphens only).
+const (
+	requestCommitPullSucceededKey = "__request_commit_pull_succeeded__"
+	requestCommitPullFailedKey    = "__request_commit_pull_failed__"
+	requestCommitPullResultKey    = "__request_commit_pull_result__"
+)
+
 var sessionIDRegex = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
 
 // ValidateSessionID validates that a session ID meets format requirements:
@@ -399,7 +413,7 @@ func (s *SessionService) DeleteSession(ctx context.Context, projectID, sessionID
 }
 
 // CommitSession initiates async commit of a session.
-func (s *SessionService) CommitSession(ctx context.Context, projectID, sessionID string, jobQueue JobEnqueuer) error {
+func (s *SessionService) CommitSession(ctx context.Context, projectID, sessionID string, jobQueue JobEnqueuer, opts CommitSessionOptions) error {
 	// Get session to verify it exists and get workspace ID
 	sess, err := s.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -410,7 +424,15 @@ func (s *SessionService) CommitSession(ctx context.Context, projectID, sessionID
 		return err
 	}
 
-	if err = jobQueue.Enqueue(ctx, jobs.SessionCommitPayload{ProjectID: projectID, SessionID: sessionID, WorkspaceID: sess.WorkspaceID}); err != nil {
+	if err = jobQueue.Enqueue(ctx, jobs.SessionCommitPayload{
+		ProjectID:           projectID,
+		SessionID:           sessionID,
+		WorkspaceID:         sess.WorkspaceID,
+		RequestedDirectory:  opts.RequestedDirectory,
+		RequestedCommitHash: opts.RequestedCommitHash,
+		ApprovalThreadID:    opts.ApprovalThreadID,
+		ApprovalQuestionID:  opts.ApprovalQuestionID,
+	}); err != nil {
 		return fmt.Errorf("failed to enqueue commit job: %w", err)
 	}
 
@@ -932,7 +954,7 @@ func ptrString(s string) *string {
 // 3. If pending: send /discobot-commit to agent, transition to committing
 // 4. If appliedCommit not set: fetch patches from agent-api and apply them to the workspace
 // 5. Transition to completed
-func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID string) (retErr error) {
+func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID string, opts CommitSessionOptions) (retErr error) {
 	// Get session
 	sess, err := s.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -984,7 +1006,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 
 	// Step 1.5: Optimistically check if the agent already has patches ready
 	if sess.CommitStatus == model.CommitStatusPending && (sess.AppliedCommit == nil || *sess.AppliedCommit == "") {
-		if err := s.tryApplyExistingPatches(ctx, projectID, workspace, sess); err != nil {
+		if err := s.tryApplyExistingPatches(ctx, projectID, workspace, sess, opts); err != nil {
 			return err
 		}
 		if sess.CommitStatus == model.CommitStatusFailed {
@@ -1004,7 +1026,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 
 	// Step 3: Fetch and apply patches (if not yet done)
 	if sess.AppliedCommit == nil || *sess.AppliedCommit == "" {
-		if err := s.fetchAndApplyPatches(ctx, projectID, workspace, sess); err != nil {
+		if err := s.fetchAndApplyPatches(ctx, projectID, workspace, sess, opts); err != nil {
 			return err
 		}
 		if sess.CommitStatus == model.CommitStatusFailed {
@@ -1136,7 +1158,7 @@ func (s *SessionService) syncBaseCommit(ctx context.Context, projectID string, w
 
 // tryApplyExistingPatches checks if the agent already has patches ready and applies them.
 // This is called optimistically before sending /discobot-commit in case commits are already available.
-func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session) error {
+func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, opts CommitSessionOptions) error {
 	if s.sandboxService == nil {
 		return nil
 	}
@@ -1158,9 +1180,13 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 		log.Printf("Session %s: no existing patches available (commit count: 0), continuing with prompt", sess.ID)
 		return nil
 	}
+	if err := validateRequestedCommitHash(opts.RequestedCommitHash, commitsResp.HeadCommit); err != nil {
+		s.setCommitFailed(ctx, projectID, workspace, sess, err.Error())
+		return nil
+	}
 
 	// Agent already has commits ready - apply the patches directly
-	log.Printf("Session %s: agent has %d existing commits, skipping prompt and applying patches", sess.ID, commitsResp.CommitCount)
+	log.Printf("Session %s: agent has %d existing commits, skipping prompt and applying patches (dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
 	return s.applyPatches(ctx, projectID, workspace, sess, commitsResp.Patches, commitsResp.CommitCount)
 }
 
@@ -1234,9 +1260,9 @@ func (s *SessionService) sendCommitPrompt(ctx context.Context, projectID string,
 		return nil
 	}
 
-	log.Printf("Session %s: sending /discobot-commit %s to agent", sess.ID, *sess.BaseCommit)
+	log.Printf("Session %s: sending /discobot-commit to agent", sess.ID)
 
-	commitMessage := fmt.Sprintf("/discobot-commit %s", *sess.BaseCommit)
+	commitMessage := "/discobot-commit"
 	messages, err := buildCommitMessage(sess.ID+"-commit", commitMessage)
 	if err != nil {
 		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to build commit message: %v", err))
@@ -1378,13 +1404,13 @@ func (s *SessionService) validateSandboxRebased(ctx context.Context, projectID s
 }
 
 // fetchAndApplyPatches fetches patches from the agent and applies them to the workspace.
-func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session) error {
+func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, opts CommitSessionOptions) error {
 	if s.sandboxService == nil {
 		s.setCommitFailed(ctx, projectID, workspace, sess, "Sandbox service not available")
 		return nil
 	}
 
-	log.Printf("Session %s: fetching commits from agent-api (parent=%s)", sess.ID, *sess.BaseCommit)
+	log.Printf("Session %s: fetching commits from agent-api (parent=%s dir=%s requestedCommit=%s)", sess.ID, *sess.BaseCommit, opts.RequestedDirectory, opts.RequestedCommitHash)
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
@@ -1411,8 +1437,12 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		s.setCommitFailed(ctx, projectID, workspace, sess, "Agent returned zero commits in patch response without a clean working tree confirmation")
 		return nil
 	}
+	if err := validateRequestedCommitHash(opts.RequestedCommitHash, commitsResp.HeadCommit); err != nil {
+		s.setCommitFailed(ctx, projectID, workspace, sess, err.Error())
+		return nil
+	}
 
-	log.Printf("Session %s: received %d commits from agent, applying patches to workspace", sess.ID, commitsResp.CommitCount)
+	log.Printf("Session %s: received %d commits from agent, applying patches to workspace (dir=%s requestedCommit=%s actualHead=%s)", sess.ID, commitsResp.CommitCount, opts.RequestedDirectory, opts.RequestedCommitHash, commitsResp.HeadCommit)
 	return s.applyPatches(ctx, projectID, workspace, sess, commitsResp.Patches, commitsResp.CommitCount)
 }
 
@@ -1461,6 +1491,73 @@ func (s *SessionService) validateAndCompleteNoOp(ctx context.Context, projectID 
 	}
 	log.Printf("Session %s: %s %s (head=%s isClean=true)", sess.ID, logMsg, *sess.BaseCommit, noOp.HeadCommit)
 	return s.markCommitCompleted(ctx, projectID, sess)
+}
+
+func validateRequestedCommitHash(requestedShortHash, actualHead string) error {
+	requestedShortHash = strings.TrimSpace(requestedShortHash)
+	if requestedShortHash == "" {
+		return nil
+	}
+	actualHead = strings.TrimSpace(actualHead)
+	if actualHead == "" {
+		return fmt.Errorf("sandbox did not report a head commit while resolving requested commit %s", requestedShortHash)
+	}
+	if !strings.HasPrefix(actualHead, requestedShortHash) {
+		return fmt.Errorf("requested sandbox commit %s does not match sandbox head %s", requestedShortHash, actualHead)
+	}
+	return nil
+}
+
+func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, sessionID, threadID, questionID string, commitErr error) error {
+	if strings.TrimSpace(threadID) == "" || strings.TrimSpace(questionID) == "" {
+		return nil
+	}
+	if s.sandboxService == nil {
+		return fmt.Errorf("sandbox service not available")
+	}
+
+	answers := map[string]string{}
+	if commitErr != nil {
+		answers[requestCommitPullFailedKey] = "true"
+		answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot failed to pull the prepared sandbox commit into the host workspace: %v", commitErr)
+	} else {
+		sess, err := s.store.GetSessionByID(ctx, sessionID)
+		if err != nil {
+			return fmt.Errorf("load session after commit: %w", err)
+		}
+		switch sess.CommitStatus {
+		case model.CommitStatusCompleted:
+			answers[requestCommitPullSucceededKey] = "true"
+			if sess.AppliedCommit != nil && strings.TrimSpace(*sess.AppliedCommit) != "" {
+				answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot successfully pulled the prepared sandbox commit into the host workspace. Applied workspace commit: %s", strings.TrimSpace(*sess.AppliedCommit))
+			} else {
+				answers[requestCommitPullResultKey] = "Discobot completed the pull request, but there was no new workspace commit to apply."
+			}
+		case model.CommitStatusFailed:
+			answers[requestCommitPullFailedKey] = "true"
+			if sess.CommitError != nil && strings.TrimSpace(*sess.CommitError) != "" {
+				answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot failed to pull the prepared sandbox commit into the host workspace: %s", strings.TrimSpace(*sess.CommitError))
+			} else {
+				answers[requestCommitPullResultKey] = "Discobot failed to pull the prepared sandbox commit into the host workspace."
+			}
+		default:
+			answers[requestCommitPullFailedKey] = "true"
+			answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot finished the pull job in unexpected state %q.", sess.CommitStatus)
+		}
+	}
+
+	client, err := s.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("get sandbox client for approval answer: %w", err)
+	}
+	_, err = client.AnswerQuestion(ctx, threadID, &sandboxapi.AnswerQuestionRequest{
+		ToolUseID: questionID,
+		Answers:   answers,
+	})
+	if err != nil {
+		return fmt.Errorf("submit request commit pull approval answer: %w", err)
+	}
+	return nil
 }
 
 func (s *SessionService) markCommitCompleted(ctx context.Context, projectID string, sess *model.Session) error {

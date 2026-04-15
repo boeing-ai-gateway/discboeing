@@ -29,7 +29,7 @@ func TestCommitSession_Success(t *testing.T) {
 
 	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
 
-	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer)
+	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{})
 	if err != nil {
 		t.Fatalf("CommitSession failed: %v", err)
 	}
@@ -46,6 +46,52 @@ func TestCommitSession_Success(t *testing.T) {
 	}
 	if commitPayload.SessionID != session.ID {
 		t.Errorf("Expected session ID %s, got %s", session.ID, commitPayload.SessionID)
+	}
+}
+
+func TestCommitSession_PreservesApprovalContextInPayload(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+
+	var enqueuedJob jobs.JobPayload
+	mockEnqueuer := &mockJobEnqueuer{
+		enqueueFunc: func(_ context.Context, payload jobs.JobPayload) error {
+			enqueuedJob = payload
+			return nil
+		},
+	}
+
+	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
+
+	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{
+		RequestedDirectory:  "subdir",
+		RequestedCommitHash: "abc123def456",
+		ApprovalThreadID:    "thread-1",
+		ApprovalQuestionID:  "tool-1",
+	})
+	if err != nil {
+		t.Fatalf("CommitSession failed: %v", err)
+	}
+
+	commitPayload, ok := enqueuedJob.(jobs.SessionCommitPayload)
+	if !ok {
+		t.Fatalf("Expected SessionCommitPayload, got %T", enqueuedJob)
+	}
+	if commitPayload.ApprovalThreadID != "thread-1" {
+		t.Fatalf("ApprovalThreadID = %q", commitPayload.ApprovalThreadID)
+	}
+	if commitPayload.ApprovalQuestionID != "tool-1" {
+		t.Fatalf("ApprovalQuestionID = %q", commitPayload.ApprovalQuestionID)
+	}
+	if commitPayload.RequestedDirectory != "subdir" {
+		t.Fatalf("RequestedDirectory = %q", commitPayload.RequestedDirectory)
+	}
+	if commitPayload.RequestedCommitHash != "abc123def456" {
+		t.Fatalf("RequestedCommitHash = %q", commitPayload.RequestedCommitHash)
 	}
 }
 
@@ -66,7 +112,7 @@ func TestCommitSession_EnqueueFailure(t *testing.T) {
 
 	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
 
-	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer)
+	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{})
 	if err == nil {
 		t.Fatal("Expected CommitSession to fail when enqueue fails")
 	}
