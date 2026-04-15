@@ -248,25 +248,78 @@ func TestEdit_MultilineReplacement(t *testing.T) {
 	}
 }
 
-// TestEdit_WhitespaceSensitivity verifies that old_string must match exactly
-// including indentation.
-func TestEdit_WhitespaceSensitivity(t *testing.T) {
+// TestEdit_WhitespaceNormalizationFallback verifies that Edit falls back to
+// Apply Patch-style whitespace normalization when an exact match is not found.
+func TestEdit_WhitespaceNormalizationFallback(t *testing.T) {
 	cwd := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cwd, "file.txt"), []byte("\tfoo\n"), 0o644); err != nil {
+	filePath := filepath.Join(cwd, "file.txt")
+	if err := os.WriteFile(filePath, []byte("\tfoo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := New(cwd, t.TempDir(), t.Name())
+	primeRead(t, f, "file.txt")
+	out, ok := runEdit(t, f, map[string]any{
+		"file_path":  "file.txt",
+		"old_string": "    foo", // spaces, not a tab
+		"new_string": "bar",
+	})
+	if !ok {
+		t.Fatalf("unexpected error: %s", out)
+	}
+	data, _ := os.ReadFile(filePath)
+	if string(data) != "bar\n" {
+		t.Errorf("unexpected file content: %q", string(data))
+	}
+}
+
+// TestEdit_WhitespaceNormalizationAmbiguous verifies that lenient matching
+// still fails when normalization produces multiple matches without replace_all.
+func TestEdit_WhitespaceNormalizationAmbiguous(t *testing.T) {
+	cwd := t.TempDir()
+	filePath := filepath.Join(cwd, "file.txt")
+	if err := os.WriteFile(filePath, []byte("\tfoo\n    foo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	e := New(cwd, t.TempDir(), t.Name())
 	primeRead(t, e, "file.txt")
-	// Searching with spaces instead of a tab should fail.
 	out, ok := runEdit(t, e, map[string]any{
 		"file_path":  "file.txt",
-		"old_string": "    foo", // spaces, not a tab
+		"old_string": " foo ",
+		"new_string": "bar",
 	})
 	if ok {
-		t.Error("expected error for whitespace mismatch, got success")
+		t.Fatal("expected ambiguity error, got success")
 	}
-	if !strings.Contains(out, "old_string not found") {
-		t.Errorf("expected 'old_string not found' for whitespace mismatch, got: %q", out)
+	if !strings.Contains(out, "after whitespace normalization") {
+		t.Fatalf("expected normalization ambiguity message, got: %q", out)
+	}
+}
+
+// TestEdit_WhitespaceNormalizationReplaceAll verifies that replace_all updates
+// every leniently matched occurrence.
+func TestEdit_WhitespaceNormalizationReplaceAll(t *testing.T) {
+	cwd := t.TempDir()
+	filePath := filepath.Join(cwd, "file.txt")
+	if err := os.WriteFile(filePath, []byte("\tfoo\t\n  foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := New(cwd, t.TempDir(), t.Name())
+	primeRead(t, e, "file.txt")
+	out, ok := runEdit(t, e, map[string]any{
+		"file_path":   "file.txt",
+		"old_string":  " foo ",
+		"new_string":  "bar",
+		"replace_all": true,
+	})
+	if !ok {
+		t.Fatalf("unexpected error: %s", out)
+	}
+	if !strings.Contains(out, "2 occurrences") {
+		t.Fatalf("expected replace_all count, got: %q", out)
+	}
+	data, _ := os.ReadFile(filePath)
+	if string(data) != "bar\nbar\n" {
+		t.Errorf("unexpected file content: %q", string(data))
 	}
 }
 

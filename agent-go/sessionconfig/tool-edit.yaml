@@ -1,8 +1,8 @@
 name: Edit
 description: |-
-  Replace exact text in an existing file.
+  Replace text in an existing file.
 
-  Read the file first. Match text exactly, including indentation. If `old_string` is not unique, include more context or use `replace_all`.
+  Read the file first. Edit first looks for an exact match. If none is found, it falls back to a lenient line-based match, including whitespace normalization. If `old_string` is not unique, include more context or use `replace_all`.
 inputSchema:
   type: object
   additionalProperties: false
@@ -12,7 +12,7 @@ inputSchema:
       description: Absolute path to the file to edit.
     old_string:
       type: string
-      description: Exact text to replace.
+      description: Text to replace. Exact matches are preferred; a lenient fallback match is used only when needed.
     new_string:
       type: string
       description: Replacement text.
