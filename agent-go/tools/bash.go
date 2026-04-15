@@ -192,7 +192,22 @@ func resolveBashCommand() (string, error) {
 
 func resolveBashCommandForOS(goos string, pathDirs []string, pathExt string) (string, error) {
 	if goos != "windows" {
-		return "bash", nil
+		for _, dir := range pathDirs {
+			dir = strings.TrimSpace(strings.Trim(dir, `"`))
+			if dir == "" {
+				continue
+			}
+			candidate := filepath.Join(dir, "bash")
+			if isExecutableFile(candidate) {
+				return candidate, nil
+			}
+		}
+		for _, candidate := range []string{"/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash", "/opt/homebrew/bin/bash"} {
+			if isExecutableFile(candidate) {
+				return candidate, nil
+			}
+		}
+		return "", fmt.Errorf("bash is not available: no bash executable was found")
 	}
 
 	for _, dir := range pathDirs {
@@ -202,15 +217,18 @@ func resolveBashCommandForOS(goos string, pathDirs []string, pathExt string) (st
 		}
 		for _, ext := range windowsBashExtensions(pathExt) {
 			candidate := filepath.Join(dir, "bash"+ext)
-			info, err := os.Stat(candidate)
-			if err != nil || info.IsDir() {
-				continue
+			if isExecutableFile(candidate) {
+				return candidate, nil
 			}
-			return candidate, nil
 		}
 	}
 
 	return "", fmt.Errorf("bash is not available: no real Bash executable was found in PATH. Install a Bash executable such as bash.exe from Git Bash or another compatibility layer; bash.cmd and bash.bat are not supported")
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func windowsBashExtensions(pathExt string) []string {

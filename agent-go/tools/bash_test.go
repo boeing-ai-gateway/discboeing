@@ -684,12 +684,18 @@ func TestNormalizeBashWorkingDirForOS(t *testing.T) {
 }
 
 func TestResolveBashCommandForOS_NonWindows(t *testing.T) {
-	got, err := resolveBashCommandForOS("linux", nil, "")
+	dir := t.TempDir()
+	want := filepath.Join(dir, "bash")
+	if err := os.WriteFile(want, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("failed to create bash: %v", err)
+	}
+
+	got, err := resolveBashCommandForOS("linux", []string{dir}, "")
 	if err != nil {
 		t.Fatalf("resolveBashCommandForOS returned error: %v", err)
 	}
-	if got != "bash" {
-		t.Fatalf("resolveBashCommandForOS() = %q, want %q", got, "bash")
+	if got != want {
+		t.Fatalf("resolveBashCommandForOS() = %q, want %q", got, want)
 	}
 }
 

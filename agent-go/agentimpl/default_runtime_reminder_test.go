@@ -358,7 +358,11 @@ func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command(listThreadsScriptPath())
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not available")
+	}
+	cmd := exec.Command(bashPath, listThreadsScriptPath())
 	cmd.Env = append(os.Environ(),
 		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
 		"DISCOBOT_SESSION_ID=thread-current",
