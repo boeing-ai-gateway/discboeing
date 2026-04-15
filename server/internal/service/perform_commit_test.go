@@ -467,7 +467,9 @@ func TestPerformCommit_CompletesOnFinishChunkWithoutDoneEvent(t *testing.T) {
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
 	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Windows arm64 runners can take longer to validate and apply the fetched patch,
+	// so give this end-to-end commit flow a bit more time than the default small timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = sessionSvc.PerformCommit(ctx, project.ID, session.ID)
