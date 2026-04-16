@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CheckIcon from "@lucide/svelte/icons/check";
 	import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 	import {
 		ToolContent,
@@ -14,6 +13,7 @@
 	import { api } from "$lib/api-client";
 	import type {
 		CredentialInfo,
+		CredentialType,
 		GrantedCredential,
 		RequestedCredential,
 		SessionCredentialAssignment,
@@ -28,14 +28,20 @@
 		SelectTrigger,
 	} from "$lib/components/ui/select";
 	import {
+		buildCredentialUseExpiryFromPreset,
 		buildAssignmentUses,
 		buildGrantedCredentialPayload,
+		CUSTOM_CREDENTIAL_OPTION,
+		type CredentialValidityPreset,
+		type CredentialValidityUnit,
 		credentialBindingDescription,
 		credentialDisplayName,
 		defaultCredentialName,
-		findCredentialMatches,
+		findPreferredCredentialId,
 		formatApprovedUses,
 		listAnyCredentials,
+		listOAuthCredentialOptions,
+		parseOAuthCredentialOption,
 		preferredSourceEnvVar,
 	} from "./requestusercredential-helpers";
 	import type { ToolRendererComponentProps } from "./types";
@@ -70,18 +76,43 @@
 	>("idle");
 	let approvalError = $state<string | null>(null);
 	let projectCredentials = $state<CredentialInfo[]>([]);
+	let credentialTypes = $state<CredentialType[]>([]);
 	let sessionAssignments = $state<SessionCredentialAssignment[]>([]);
-	let selectedCredentialIdsByEnvVar = $state<Record<string, string>>({});
-	let selectedCredentialLabelsByEnvVar = $state<Record<string, string>>({});
-	let selectedAnyCredentialIdsByEnvVar = $state<Record<string, string>>({});
-	let selectedModeByEnvVar = $state<
-		Record<string, "existing" | "create" | "reject">
-	>({});
+	let selectedOptionByEnvVar = $state<Record<string, string>>({});
 	let createCredentialNamesByEnvVar = $state<Record<string, string>>({});
 	let createCredentialSecretsByEnvVar = $state<Record<string, string>>({});
+	let validityPresetByEnvVar = $state<Record<string, CredentialValidityPreset>>(
+		{},
+	);
+	let validityValueByEnvVar = $state<Record<string, string>>({});
+	let validityUnitByEnvVar = $state<
+		Record<string, "hours" | "days" | "weeks" | "never">
+	>({});
 	let localGrantedCredentials = $state<GrantedCredential[]>([]);
 	let rejectionReason = $state("");
-	let actionEnvVar = $state<string | null>(null);
+	let showRejectionForm = $state(false);
+	let isSubmittingApproval = $state(false);
+	let isSubmittingRejection = $state(false);
+
+	const validityPresets: Array<{
+		value: CredentialValidityPreset;
+		label: string;
+	}> = [
+		{ value: "15_minutes", label: "15 minutes" },
+		{ value: "1_hour", label: "1 hour" },
+		{ value: "1_day", label: "1 day" },
+		{ value: "1_week", label: "1 week" },
+		{ value: "custom", label: "Custom" },
+	];
+	const validityUnits: Array<{
+		value: CredentialValidityUnit;
+		label: string;
+	}> = [
+		{ value: "hours", label: "Hours" },
+		{ value: "days", label: "Days" },
+		{ value: "weeks", label: "Weeks" },
+		{ value: "never", label: "Never expires" },
+	];
 
 	function getApprovalId(): string | null {
 		const approval = toolPart.approval;
@@ -92,21 +123,37 @@
 	}
 
 	function initializeDrafts(credentials: RequestedCredential[]) {
-		selectedCredentialIdsByEnvVar = {};
-		selectedCredentialLabelsByEnvVar = {};
-		selectedAnyCredentialIdsByEnvVar = {};
-		selectedModeByEnvVar = Object.fromEntries(
-			credentials.map((credential) => [credential.envVar, "existing"]),
-		) as Record<string, "existing" | "create" | "reject">;
+		selectedOptionByEnvVar = Object.fromEntries(
+			credentials.map((credential) => [
+				credential.envVar,
+				findPreferredCredentialId(
+					credential.envVar,
+					projectCredentials,
+					sessionAssignments,
+				),
+			]),
+		);
 		createCredentialSecretsByEnvVar = {};
+		validityPresetByEnvVar = Object.fromEntries(
+			credentials.map((credential) => [credential.envVar, "1_hour"]),
+		) as Record<string, CredentialValidityPreset>;
 		localGrantedCredentials = [];
 		rejectionReason = "";
+		showRejectionForm = false;
 		createCredentialNamesByEnvVar = Object.fromEntries(
 			credentials.map((credential) => [
 				credential.envVar,
 				defaultCredentialName(credential),
 			]),
 		);
+		validityValueByEnvVar = Object.fromEntries(
+			credentials.map((credential) => [credential.envVar, "1"]),
+		);
+		validityUnitByEnvVar = Object.fromEntries(
+			credentials.map((credential) => [credential.envVar, "hours"]),
+		) as Record<string, "hours" | "days" | "weeks" | "never">;
+		isSubmittingApproval = false;
+		isSubmittingRejection = false;
 	}
 
 	async function fetchPendingQuestion(
@@ -124,13 +171,17 @@
 	async function loadCredentialContext() {
 		if (!sessionId) {
 			projectCredentials = [];
+			credentialTypes = [];
 			sessionAssignments = [];
 			return;
 		}
-		const [credentialsResponse, assignmentsResponse] = await Promise.all([
-			api.getCredentials(),
-			api.getSessionCredentials(sessionId),
-		]);
+		const [credentialTypesResponse, credentialsResponse, assignmentsResponse] =
+			await Promise.all([
+				api.getCredentialTypes(),
+				api.getCredentials(),
+				api.getSessionCredentials(sessionId),
+			]);
+		credentialTypes = credentialTypesResponse.credentialTypes;
 		projectCredentials = credentialsResponse.credentials;
 		sessionAssignments = assignmentsResponse.credentials;
 	}
@@ -200,16 +251,6 @@
 		return "";
 	});
 	const wasRejected = $derived.by(() => rejectionSummary !== null);
-	const allCredentialsResolved = $derived.by(() =>
-		summaryCredentials.length > 0
-			? summaryCredentials.every(
-					(credential) =>
-						(selectedCredentialIdsByEnvVar[credential.envVar]?.trim().length ??
-							0) > 0,
-				)
-			: false,
-	);
-
 	$effect(() => {
 		if (toolPart.state !== "approval-requested") {
 			approvalStatus = "idle";
@@ -217,13 +258,18 @@
 			pendingCredentialRequest = null;
 			sessionAssignments = [];
 			localGrantedCredentials = [];
+			credentialTypes = [];
 			rejectionReason = "";
-			actionEnvVar = null;
+			showRejectionForm = false;
+			isSubmittingApproval = false;
+			isSubmittingRejection = false;
 			return;
 		}
 
 		approvalError = null;
-		actionEnvVar = null;
+		showRejectionForm = false;
+		isSubmittingApproval = false;
+		isSubmittingRejection = false;
 
 		if (requestedCredentials.length > 0) {
 			const nextRequest = {
@@ -232,9 +278,9 @@
 			};
 			pendingCredentialRequest = nextRequest;
 			approvalStatus = "loading";
-			initializeDrafts(nextRequest.credentials);
 			void loadCredentialContext()
 				.then(() => {
+					initializeDrafts(nextRequest.credentials);
 					approvalStatus = "pending";
 				})
 				.catch((error) => {
@@ -268,9 +314,9 @@
 					result.question.credentials.length > 0
 				) {
 					pendingCredentialRequest = result.question;
-					initializeDrafts(result.question.credentials);
 					try {
 						await loadCredentialContext();
+						initializeDrafts(result.question.credentials);
 						if (!cancelled) {
 							approvalStatus = "pending";
 						}
@@ -308,6 +354,7 @@
 		request: RequestedCredential,
 		credential: CredentialInfo,
 		sourceEnvVar: string,
+		expiresAt?: string,
 	) {
 		if (!sessionId) {
 			throw new Error("Missing session context");
@@ -341,7 +388,10 @@
 				envVar: request.envVar,
 				sourceEnvVar,
 				agentVisible: true,
-				uses: [...(existing?.uses ?? []), ...buildAssignmentUses(request)],
+				uses: [
+					...(existing?.uses ?? []),
+					...buildAssignmentUses(request, expiresAt),
+				],
 			},
 		]);
 		sessionAssignments = response.credentials;
@@ -354,7 +404,9 @@
 		}
 	}
 
-	async function submitGrantedCredentials() {
+	async function submitGrantedCredentials(
+		selectedCredentialIds: Record<string, string>,
+	) {
 		approvalError = null;
 		if (!threadId || !pendingCredentialRequest || !sessionId) {
 			approvalStatus = "pending";
@@ -363,7 +415,7 @@
 		}
 		const payload = buildGrantedCredentialPayload(
 			pendingCredentialRequest.credentials,
-			selectedCredentialIdsByEnvVar,
+			selectedCredentialIds,
 			sessionAssignments,
 		);
 		localGrantedCredentials = payload.grantedCredentials;
@@ -391,17 +443,14 @@
 
 	async function submitCredentialRejection(reason: string) {
 		approvalError = null;
-		const trimmedReason = reason.trim();
-		if (!trimmedReason) {
-			approvalError = "Add a reason before rejecting the credential request.";
-			return;
-		}
+		const trimmedReason =
+			reason.trim() || "User denied the credential request.";
 		if (!threadId || !pendingCredentialRequest || !sessionId) {
 			approvalStatus = "pending";
 			approvalError = "Missing thread context";
 			return;
 		}
-		actionEnvVar = "__reject__";
+		isSubmittingRejection = true;
 		try {
 			await api.submitThreadChatAnswer(sessionId, threadId, {
 				toolUseID: pendingCredentialRequest.toolUseID,
@@ -416,6 +465,7 @@
 				reason: trimmedReason,
 			});
 			rejectionReason = trimmedReason;
+			showRejectionForm = false;
 			approvalStatus = "answered";
 			pendingCredentialRequest = null;
 		} catch (error) {
@@ -425,123 +475,95 @@
 					? error.message
 					: "Failed to reject credential request";
 		} finally {
-			actionEnvVar = null;
+			isSubmittingRejection = false;
 		}
 	}
 
-	async function finalizeCredentialSelection(
-		request: RequestedCredential,
-		credentialId: string,
-		label: string,
-	) {
-		selectedCredentialIdsByEnvVar = {
-			...selectedCredentialIdsByEnvVar,
-			[request.envVar]: credentialId,
-		};
-		selectedCredentialLabelsByEnvVar = {
-			...selectedCredentialLabelsByEnvVar,
-			[request.envVar]: label,
-		};
-		if (
-			summaryCredentials.length > 0 &&
-			summaryCredentials.every(
-				(credential) =>
-					(selectedCredentialIdsByEnvVar[credential.envVar]?.trim().length ??
-						0) > 0 || credential.envVar === request.envVar,
-			)
-		) {
-			await submitGrantedCredentials();
-		}
-	}
-
-	async function useExistingCredential(
-		request: RequestedCredential,
-		credentialId: string,
-		sourceEnvVar: string,
-	) {
-		actionEnvVar = request.envVar;
+	async function approveCredentialRequest() {
 		approvalError = null;
+		if (!pendingCredentialRequest) {
+			return;
+		}
+		isSubmittingApproval = true;
 		try {
-			const credential = projectCredentials.find(
-				(item) => item.id === credentialId,
-			);
-			if (!credential) {
-				throw new Error("Credential not found");
-			}
-			await assignCredentialToSession(request, credential, sourceEnvVar);
-			await finalizeCredentialSelection(
-				request,
-				credential.id,
-				credentialDisplayName(credential),
-			);
-		} catch (error) {
-			approvalError =
-				error instanceof Error ? error.message : "Failed to use credential";
-		} finally {
-			actionEnvVar = null;
-		}
-	}
-
-	async function useSelectedAnyCredential(request: RequestedCredential) {
-		const credentialId =
-			selectedAnyCredentialIdsByEnvVar[request.envVar]?.trim();
-		if (!credentialId) {
-			approvalError = "Choose an existing credential first.";
-			return;
-		}
-		const credential = projectCredentials.find(
-			(item) => item.id === credentialId,
-		);
-		if (!credential) {
-			approvalError = "Credential not found";
-			return;
-		}
-		const sourceEnvVar = preferredSourceEnvVar(request.envVar, credential);
-		if (!sourceEnvVar) {
-			approvalError =
-				"This credential has no usable environment variable binding.";
-			return;
-		}
-		await useExistingCredential(request, credentialId, sourceEnvVar);
-	}
-
-	async function createAndUseCredential(request: RequestedCredential) {
-		actionEnvVar = request.envVar;
-		approvalError = null;
-		try {
-			const name =
-				createCredentialNamesByEnvVar[request.envVar]?.trim() ||
-				defaultCredentialName(request);
-			const value =
-				createCredentialSecretsByEnvVar[request.envVar]?.trim() || "";
-			if (!value) {
-				throw new Error(
-					"Enter a credential value before creating a new credential.",
+			const resolvedCredentialIds: Record<string, string> = {};
+			for (const request of pendingCredentialRequest.credentials) {
+				const selectedOption =
+					selectedOptionByEnvVar[request.envVar]?.trim() ?? "";
+				if (!selectedOption) {
+					throw new Error(`Select a credential for ${request.envVar}.`);
+				}
+				const selectedOAuthType = parseOAuthCredentialOption(
+					selectedOption,
+					credentialTypes,
 				);
+				if (selectedOAuthType) {
+					throw new Error(
+						`${selectedOAuthType.name} OAuth isn't wired up here yet.`,
+					);
+				}
+				const expiresAt = buildCredentialUseExpiryFromPreset(
+					validityPresetByEnvVar[request.envVar] ?? "1_hour",
+					validityValueByEnvVar[request.envVar] ?? "1",
+					validityUnitByEnvVar[request.envVar] ?? "hours",
+				);
+				if (selectedOption === CUSTOM_CREDENTIAL_OPTION) {
+					const value =
+						createCredentialSecretsByEnvVar[request.envVar]?.trim() ?? "";
+					if (!value) {
+						throw new Error(`Enter a credential value for ${request.envVar}.`);
+					}
+					const credential = await api.createCredential({
+						name:
+							createCredentialNamesByEnvVar[request.envVar]?.trim() ||
+							defaultCredentialName(request),
+						description: request.justification.trim() || undefined,
+						authType: "api_key",
+						envVars: [{ key: request.envVar, value }],
+						agentVisible: false,
+					});
+					projectCredentials = [...projectCredentials, credential];
+					await assignCredentialToSession(
+						request,
+						credential,
+						request.envVar,
+						expiresAt,
+					);
+					createCredentialSecretsByEnvVar = {
+						...createCredentialSecretsByEnvVar,
+						[request.envVar]: "",
+					};
+					resolvedCredentialIds[request.envVar] = credential.id;
+					continue;
+				}
+				const credential = projectCredentials.find(
+					(item) => item.id === selectedOption,
+				);
+				if (!credential) {
+					throw new Error(`Credential for ${request.envVar} was not found.`);
+				}
+				const sourceEnvVar = preferredSourceEnvVar(request.envVar, credential);
+				if (!sourceEnvVar) {
+					throw new Error(
+						`Credential ${credentialDisplayName(credential)} has no usable environment variable binding.`,
+					);
+				}
+				await assignCredentialToSession(
+					request,
+					credential,
+					sourceEnvVar,
+					expiresAt,
+				);
+				resolvedCredentialIds[request.envVar] = credential.id;
 			}
-			const credential = await api.createCredential({
-				name,
-				description: request.justification.trim() || undefined,
-				authType: "api_key",
-				envVars: [{ key: request.envVar, value }],
-				agentVisible: false,
-			});
-			projectCredentials = [...projectCredentials, credential];
-			await assignCredentialToSession(request, credential, request.envVar);
-			createCredentialSecretsByEnvVar = {
-				...createCredentialSecretsByEnvVar,
-				[request.envVar]: "",
-			};
-			await finalizeCredentialSelection(
-				request,
-				credential.id,
-				credentialDisplayName(credential),
-			);
+			await submitGrantedCredentials(resolvedCredentialIds);
 		} catch (error) {
 			approvalError =
-				error instanceof Error ? error.message : "Failed to create credential";
+				error instanceof Error
+					? error.message
+					: "Failed to approve credential request";
 		} finally {
-			actionEnvVar = null;
+			isSubmittingApproval = false;
 		}
 	}
 </script>
@@ -606,316 +628,346 @@
 					</p>
 				{/if}
 			{:else if pendingCredentialRequest}
-				<div class="space-y-3 rounded-lg border bg-card p-4">
+				<div class="space-y-4 rounded-lg border bg-card p-4">
 					<div>
-						<h3 class="font-semibold text-base">Agent needs a credential</h3>
+						<h3 class="font-semibold text-base">Approve credential access</h3>
 						<p class="text-muted-foreground text-sm">
-							Choose an existing credential that matches the requested
-							environment variable or create a new one.
+							Review why the agent is asking, choose which credential to use,
+							and approve or deny the request.
 						</p>
 					</div>
 
 					{#each pendingCredentialRequest.credentials as request (request.envVar)}
-						{@const resolvedLabel =
-							selectedCredentialLabelsByEnvVar[request.envVar]}
-						{@const matches = findCredentialMatches(
+						{@const preferredId = findPreferredCredentialId(
 							request.envVar,
 							projectCredentials,
 							sessionAssignments,
 						)}
-						{@const exactMatchIds = new Set(
-							matches.map((match) => match.credential.id),
+						{@const selectedOption =
+							selectedOptionByEnvVar[request.envVar] ?? preferredId}
+						{@const selectedCredential = projectCredentials.find(
+							(item) => item.id === selectedOption,
 						)}
-						{@const anyCredentials = listAnyCredentials(
+						{@const selectedOAuthType = parseOAuthCredentialOption(
+							selectedOption,
+							credentialTypes,
+						)}
+						{@const oauthOptions = listOAuthCredentialOptions(
+							request.envVar,
+							credentialTypes,
 							projectCredentials,
-							sessionAssignments,
-						).filter((match) => !exactMatchIds.has(match.credential.id))}
+						)}
 						<div
-							class="space-y-3 rounded-md border border-border bg-background p-3"
+							class="space-y-4 rounded-md border border-border bg-background p-4"
 						>
-							<div class="space-y-1">
-								<div class="flex items-center justify-between gap-3">
-									<p class="font-medium text-sm">{request.name}</p>
-									{#if resolvedLabel}
-										<span
-											class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary text-xs"
-										>
-											<CheckIcon class="size-3" />
-											Assigned
-										</span>
-									{/if}
+							<div class="space-y-3">
+								<div class="space-y-1">
+									<p class="font-semibold text-sm">{request.name}</p>
+									<p class="font-mono text-xs text-muted-foreground">
+										{request.envVar}
+									</p>
 								</div>
-								<p class="text-muted-foreground text-sm">
-									{request.justification}
-								</p>
-								<p class="text-muted-foreground text-xs">
-									Env var: <span class="font-mono">{request.envVar}</span>
-								</p>
-								{#if formatApprovedUses(request).length > 0}
-									<ul
-										class="list-disc space-y-1 pl-5 text-muted-foreground text-sm"
+
+								<div class="space-y-2 rounded-md bg-muted/40 p-3">
+									<p
+										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
 									>
-										{#each formatApprovedUses(request) as futureUse}
-											<li>{futureUse}</li>
-										{/each}
-									</ul>
+										Why access is needed
+									</p>
+									<p class="text-sm">{request.justification}</p>
+								</div>
+
+								{#if formatApprovedUses(request).length > 0}
+									<div class="space-y-2 rounded-md bg-muted/40 p-3">
+										<p
+											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+										>
+											Allowed uses
+										</p>
+										<ul class="list-disc space-y-1 pl-5 text-sm">
+											{#each formatApprovedUses(request) as futureUse}
+												<li>{futureUse}</li>
+											{/each}
+										</ul>
+									</div>
 								{/if}
 							</div>
 
-							{#if resolvedLabel}
-								<p class="text-muted-foreground text-sm">
-									Using {resolvedLabel} in this session.
+							<div class="space-y-2">
+								<p
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+								>
+									Credential to use
 								</p>
-							{:else}
-								{@const selectedMode =
-									selectedModeByEnvVar[request.envVar] ?? "existing"}
-								{@const selectedAnyCredential = projectCredentials.find(
-									(item) =>
-										item.id ===
-										selectedAnyCredentialIdsByEnvVar[request.envVar],
-								)}
-								<div class="space-y-3">
+								<Select
+									type="single"
+									value={selectedOption}
+									onValueChange={(value) => {
+										selectedOptionByEnvVar = {
+											...selectedOptionByEnvVar,
+											[request.envVar]: value,
+										};
+									}}
+								>
+									<SelectTrigger class="w-full">
+										{selectedOption === CUSTOM_CREDENTIAL_OPTION
+											? "Custom credential"
+											: selectedOAuthType
+												? `New ${selectedOAuthType.name} OAuth`
+												: selectedCredential
+													? credentialDisplayName(selectedCredential)
+													: "Choose a credential"}
+									</SelectTrigger>
+									<SelectContent>
+										{#each listAnyCredentials(projectCredentials, sessionAssignments) as match (match.credential.id)}
+											<SelectItem value={match.credential.id}>
+												{credentialDisplayName(match.credential)}
+											</SelectItem>
+										{/each}
+										{#each oauthOptions as option (option.value)}
+											<SelectItem value={option.value}>
+												{option.label}
+											</SelectItem>
+										{/each}
+										<SelectItem value={CUSTOM_CREDENTIAL_OPTION}
+											>Custom credential</SelectItem
+										>
+									</SelectContent>
+								</Select>
+								{#if selectedCredential}
+									<p class="text-muted-foreground text-xs">
+										{credentialBindingDescription(
+											request.envVar,
+											selectedCredential,
+										)}
+									</p>
+								{:else if selectedOAuthType}
+									<div
+										class="space-y-2 rounded-md border border-dashed border-border p-3"
+									>
+										<p
+											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+										>
+											OAuth sign-in
+										</p>
+										<p class="text-sm">
+											We'll start the {selectedOAuthType.name} OAuth flow here next.
+										</p>
+									</div>
+								{/if}
+							</div>
+
+							<div class="space-y-2">
+								<p
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+								>
+									How long it is valid
+								</p>
+								<Select
+									type="single"
+									value={validityPresetByEnvVar[request.envVar] ?? "1_hour"}
+									onValueChange={(value) => {
+										validityPresetByEnvVar = {
+											...validityPresetByEnvVar,
+											[request.envVar]: value as CredentialValidityPreset,
+										};
+										if (value === "custom") {
+											validityValueByEnvVar = {
+												...validityValueByEnvVar,
+												[request.envVar]:
+													validityValueByEnvVar[request.envVar] ?? "1",
+											};
+											validityUnitByEnvVar = {
+												...validityUnitByEnvVar,
+												[request.envVar]:
+													validityUnitByEnvVar[request.envVar] ?? "hours",
+											};
+										}
+									}}
+								>
+									<SelectTrigger class="w-full">
+										{validityPresets.find(
+											(preset) =>
+												preset.value ===
+												(validityPresetByEnvVar[request.envVar] ?? "1_hour"),
+										)?.label ?? "1 hour"}
+									</SelectTrigger>
+									<SelectContent>
+										{#each validityPresets as preset (preset.value)}
+											<SelectItem value={preset.value}
+												>{preset.label}</SelectItem
+											>
+										{/each}
+									</SelectContent>
+								</Select>
+							</div>
+
+							{#if (validityPresetByEnvVar[request.envVar] ?? "1_hour") === "custom"}
+								<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+									<div class="space-y-2">
+										<label
+											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+											for={`validity-${request.envVar}`}
+										>
+											Custom duration
+										</label>
+										<Input
+											id={`validity-${request.envVar}`}
+											type="number"
+											min="1"
+											disabled={(validityUnitByEnvVar[request.envVar] ??
+												"hours") === "never"}
+											value={validityValueByEnvVar[request.envVar] ?? "1"}
+											oninput={(event) => {
+												validityValueByEnvVar = {
+													...validityValueByEnvVar,
+													[request.envVar]: (
+														event.currentTarget as HTMLInputElement
+													).value,
+												};
+											}}
+										/>
+									</div>
 									<div class="space-y-2">
 										<p
 											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
 										>
-											Choose how to continue
+											Unit
 										</p>
 										<Select
 											type="single"
-											value={selectedMode}
+											value={validityUnitByEnvVar[request.envVar] ?? "hours"}
 											onValueChange={(value) => {
-												selectedModeByEnvVar = {
-													...selectedModeByEnvVar,
-													[request.envVar]: value as
-														| "existing"
-														| "create"
-														| "reject",
+												validityUnitByEnvVar = {
+													...validityUnitByEnvVar,
+													[request.envVar]: value as CredentialValidityUnit,
 												};
 											}}
 										>
 											<SelectTrigger class="w-full">
-												{selectedMode === "create"
-													? "Enter new one"
-													: selectedMode === "reject"
-														? "Reject"
-														: "Select existing"}
+												{validityUnits.find(
+													(unit) =>
+														unit.value ===
+														(validityUnitByEnvVar[request.envVar] ?? "hours"),
+												)?.label ?? "Hours"}
 											</SelectTrigger>
 											<SelectContent>
-												<SelectItem value="existing">Select existing</SelectItem
-												>
-												<SelectItem value="create">Enter new one</SelectItem>
-												<SelectItem value="reject">Reject</SelectItem>
+												{#each validityUnits as unit (unit.value)}
+													<SelectItem value={unit.value}
+														>{unit.label}</SelectItem
+													>
+												{/each}
 											</SelectContent>
 										</Select>
 									</div>
+								</div>
+							{/if}
 
-									{#if selectedMode === "existing"}
-										<div class="space-y-2">
-											<p
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											>
-												Use existing matching credential
-											</p>
-											{#if matches.length === 0}
-												<p class="text-muted-foreground text-sm">
-													No existing credential exposes <span class="font-mono"
-														>{request.envVar}</span
-													>.
-												</p>
-											{:else}
-												<div class="space-y-2">
-													{#each matches as match (match.credential.id)}
-														<div
-															class="flex items-center justify-between gap-3 rounded-md border border-border p-2"
-														>
-															<div class="min-w-0 flex-1">
-																<p class="truncate font-medium text-sm">
-																	{credentialDisplayName(match.credential)}
-																</p>
-																<p
-																	class="truncate text-muted-foreground text-xs"
-																>
-																	{match.assigned
-																		? "Already assigned to this session"
-																		: "Exact env var match"}
-																</p>
-															</div>
-															<Button
-																variant="outline"
-																size="sm"
-																disabled={actionEnvVar === request.envVar}
-																onclick={() => {
-																	void useExistingCredential(
-																		request,
-																		match.credential.id,
-																		request.envVar,
-																	);
-																}}
-															>
-																Use matching credential
-															</Button>
-														</div>
-													{/each}
-												</div>
-											{/if}
-										</div>
-
-										<div class="space-y-2">
-											<p
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											>
-												Select any credential
-											</p>
-											{#if anyCredentials.length === 0}
-												<p class="text-muted-foreground text-sm">
-													No additional credentials available.
-												</p>
-											{:else}
-												<Select
-													type="single"
-													value={selectedAnyCredentialIdsByEnvVar[
-														request.envVar
-													] ?? ""}
-													onValueChange={(value) => {
-														selectedAnyCredentialIdsByEnvVar = {
-															...selectedAnyCredentialIdsByEnvVar,
-															[request.envVar]: value,
-														};
-													}}
-												>
-													<SelectTrigger class="w-full">
-														{selectedAnyCredential
-															? credentialDisplayName(selectedAnyCredential)
-															: "Choose any credential"}
-													</SelectTrigger>
-													<SelectContent>
-														{#each anyCredentials as match (match.credential.id)}
-															<SelectItem value={match.credential.id}>
-																{credentialDisplayName(match.credential)}
-															</SelectItem>
-														{/each}
-													</SelectContent>
-												</Select>
-												{#if selectedAnyCredential}
-													<p class="text-muted-foreground text-xs">
-														{credentialBindingDescription(
-															request.envVar,
-															selectedAnyCredential,
-														)}
-													</p>
-												{/if}
-												<div class="flex justify-end">
-													<Button
-														variant="outline"
-														size="sm"
-														disabled={actionEnvVar === request.envVar ||
-															!selectedAnyCredential}
-														onclick={() => {
-															void useSelectedAnyCredential(request);
-														}}
-													>
-														Use selected credential
-													</Button>
-												</div>
-											{/if}
-										</div>
-									{:else if selectedMode === "create"}
-										<div
-											class="space-y-2 rounded-md border border-dashed border-border p-3"
-										>
-											<p
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											>
-												Enter new one
-											</p>
-											<Input
-												value={createCredentialNamesByEnvVar[request.envVar] ??
-													defaultCredentialName(request)}
-												placeholder="Credential name"
-												oninput={(event) => {
-													createCredentialNamesByEnvVar = {
-														...createCredentialNamesByEnvVar,
-														[request.envVar]: (
-															event.currentTarget as HTMLInputElement
-														).value,
-													};
-												}}
-											/>
-											<Input
-												type="password"
-												value={createCredentialSecretsByEnvVar[
-													request.envVar
-												] ?? ""}
-												placeholder={`Enter ${request.envVar}`}
-												class="font-mono"
-												oninput={(event) => {
-													createCredentialSecretsByEnvVar = {
-														...createCredentialSecretsByEnvVar,
-														[request.envVar]: (
-															event.currentTarget as HTMLInputElement
-														).value,
-													};
-												}}
-											/>
-											<div class="flex justify-end">
-												<Button
-													size="sm"
-													disabled={actionEnvVar === request.envVar}
-													onclick={() => {
-														void createAndUseCredential(request);
-													}}
-												>
-													Create and use
-												</Button>
-											</div>
-										</div>
-									{:else}
-										<div
-											class="space-y-2 rounded-md border border-dashed border-border p-3"
-										>
-											<p
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											>
-												Reject request
-											</p>
-											<textarea
-												class="min-h-20 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
-												disabled={actionEnvVar === "__reject__"}
-												oninput={(event) => {
-													rejectionReason = (
-														event.currentTarget as HTMLTextAreaElement
-													).value;
-												}}
-												placeholder="Explain why you won't provide this credential..."
-												value={rejectionReason}
-											></textarea>
-											<div class="flex justify-end">
-												<Button
-													variant="outline"
-													disabled={actionEnvVar === "__reject__"}
-													onclick={() => {
-														void submitCredentialRejection(rejectionReason);
-													}}
-												>
-													{actionEnvVar === "__reject__"
-														? "Rejecting..."
-														: "Reject request"}
-												</Button>
-											</div>
-										</div>
-									{/if}
+							{#if selectedOption === CUSTOM_CREDENTIAL_OPTION}
+								<div
+									class="space-y-3 rounded-md border border-dashed border-border p-3"
+								>
+									<p
+										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+									>
+										Enter new credential
+									</p>
+									<Input
+										value={createCredentialNamesByEnvVar[request.envVar] ??
+											defaultCredentialName(request)}
+										placeholder="Credential name"
+										oninput={(event) => {
+											createCredentialNamesByEnvVar = {
+												...createCredentialNamesByEnvVar,
+												[request.envVar]: (
+													event.currentTarget as HTMLInputElement
+												).value,
+											};
+										}}
+									/>
+									<Input
+										type="password"
+										value={createCredentialSecretsByEnvVar[request.envVar] ??
+											""}
+										placeholder={`Enter ${request.envVar}`}
+										class="font-mono"
+										oninput={(event) => {
+											createCredentialSecretsByEnvVar = {
+												...createCredentialSecretsByEnvVar,
+												[request.envVar]: (
+													event.currentTarget as HTMLInputElement
+												).value,
+											};
+										}}
+									/>
 								</div>
 							{/if}
 						</div>
 					{/each}
 
-					{#if allCredentialsResolved}
-						<p class="text-muted-foreground text-sm">
-							All requested credentials have been assigned to this session.
-							Continuing…
-						</p>
-					{/if}
+					<div class="flex flex-wrap justify-end gap-2">
+						{#if showRejectionForm}
+							<div
+								class="w-full space-y-2 rounded-md border border-dashed border-border p-3"
+							>
+								<p
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+								>
+									Why are you denying this request?
+								</p>
+								<textarea
+									class="min-h-20 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+									disabled={isSubmittingRejection || isSubmittingApproval}
+									oninput={(event) => {
+										rejectionReason = (
+											event.currentTarget as HTMLTextAreaElement
+										).value;
+									}}
+									placeholder="Optional: explain why you are denying this request"
+									value={rejectionReason}
+								></textarea>
+								<div class="flex flex-wrap justify-end gap-2">
+									<Button
+										variant="ghost"
+										disabled={isSubmittingApproval || isSubmittingRejection}
+										onclick={() => {
+											showRejectionForm = false;
+										}}
+									>
+										Cancel
+									</Button>
+									<Button
+										variant="outline"
+										disabled={isSubmittingApproval || isSubmittingRejection}
+										onclick={() => {
+											void submitCredentialRejection(rejectionReason);
+										}}
+									>
+										{isSubmittingRejection ? "Denying..." : "Confirm deny"}
+									</Button>
+								</div>
+							</div>
+						{:else}
+							<Button
+								variant="outline"
+								disabled={isSubmittingApproval || isSubmittingRejection}
+								onclick={() => {
+									approvalError = null;
+									showRejectionForm = true;
+								}}
+							>
+								Deny
+							</Button>
+							<Button
+								disabled={isSubmittingApproval || isSubmittingRejection}
+								onclick={() => {
+									void approveCredentialRequest();
+								}}
+							>
+								{isSubmittingApproval ? "Approving..." : "Approve"}
+							</Button>
+						{/if}
+					</div>
 				</div>
 			{:else}
 				<p class="text-muted-foreground text-sm">

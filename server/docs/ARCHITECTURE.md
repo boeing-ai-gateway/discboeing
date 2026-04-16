@@ -400,12 +400,20 @@ Key environment variables:
 | `SANDBOX_IMAGE` | Default sandbox image |
 | `AUTH_ENABLED` | Enable authentication |
 | `ENCRYPTION_KEY` | AES-256 key for credentials |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth client ID for GitHub git credentials |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth client secret for GitHub git credentials |
 
 If `HTTPS_PORT` is configured, the server runs a second TLS listener alongside the existing HTTP listener. TLS can be backed by an ephemeral self-signed certificate, a configured static cert/key pair, or ACME/autocert. ACME cache entries are persisted in the database and encrypted with the server encryption key. For trusted HTTPS modes (`static` and `acme`), the HTTP listener redirects regular traffic to HTTPS while still allowing ACME HTTP challenge handling.
 
 CORS defaults are derived from the configured API listener ports instead of hardcoding `:3001`. Custom `CORS_ORIGINS` values can include `{HTTP_PORT}` and `{HTTPS_PORT}` placeholders so callers do not need to duplicate the actual bound ports in multiple settings.
 
 During process startup, the server probes each configured listener port before doing the rest of initialization. It retries the bind check every 10 seconds for up to 2 minutes, closes the temporary listener as soon as the port becomes available, and then proceeds with normal startup.
+
+OAuth credential flows that use the authorization-code redirect path share a
+localhost callback server on `127.0.0.1:1455`. The server tries to capture the
+browser redirect automatically and exposes callback-status polling endpoints so
+the UI can fall back to manual code or redirect-URL paste when the loopback
+listener is unavailable.
 
 ## Testing
 

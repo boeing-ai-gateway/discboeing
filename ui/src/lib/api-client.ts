@@ -55,6 +55,10 @@ import type {
 	CreateWorkspaceRequest,
 	CredentialInfo,
 	CredentialType,
+	GitHubAuthorizeRequest,
+	GitHubAuthorizeResponse,
+	GitHubCallbackStatusRequest,
+	GitHubCallbackStatusResponse,
 	DeleteQueuedPromptResponse,
 	DeleteSessionFileRequest,
 	DeleteSessionFileResponse,
@@ -65,6 +69,8 @@ import type {
 	GitHubCopilotPollResponse,
 	GitHubDeviceCodeRequest,
 	GitHubDeviceCodeResponse,
+	GitHubExchangeRequest,
+	GitHubExchangeResponse,
 	GitHubPollRequest,
 	GitHubPollResponse,
 	HookOutputResponse,
@@ -808,7 +814,19 @@ class ApiClient {
 		);
 	}
 
-	// GitHub OAuth (git operations: repo scope, device flow)
+	// GitHub OAuth (git operations: repo scope)
+	async githubAuthorize(
+		data: GitHubAuthorizeRequest = {},
+	): Promise<GitHubAuthorizeResponse> {
+		return this.fetch<GitHubAuthorizeResponse>(
+			"/credentials/github-git/authorize",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
+	}
+
 	async githubDeviceCode(
 		data: GitHubDeviceCodeRequest = {},
 	): Promise<GitHubDeviceCodeResponse> {
@@ -826,6 +844,30 @@ class ApiClient {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
+	}
+
+	async githubExchange(
+		data: GitHubExchangeRequest,
+	): Promise<GitHubExchangeResponse> {
+		return this.fetch<GitHubExchangeResponse>(
+			"/credentials/github-git/exchange",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
+	}
+
+	async githubCallbackStatus(
+		data: GitHubCallbackStatusRequest,
+	): Promise<GitHubCallbackStatusResponse> {
+		return this.fetch<GitHubCallbackStatusResponse>(
+			"/credentials/github-git/callback-status",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
 	async codexAuthorize(): Promise<CodexAuthorizeResponse> {

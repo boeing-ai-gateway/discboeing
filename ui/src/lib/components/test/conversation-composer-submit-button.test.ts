@@ -92,3 +92,27 @@ test("session credentials control only shows a numeric badge when multiple crede
 	assert.match(source, /\{visibleCount\}/);
 	assert.doesNotMatch(source, /visibleCount\/\{availableCredentials\.length\}/);
 });
+
+test("session credential use deletion removes the binding when the last use is deleted", () => {
+	const source = readConversationCredentialsControlSource();
+
+	assert.match(
+		source,
+		/const remainingUses = \(assignment\.uses \?\? \[\]\)\.filter\(/,
+	);
+	assert.match(
+		source,
+		/if \(remainingUses\.length === 0\) \{\s*return \[\];\s*\}/,
+	);
+});
+
+test("opening global credential management closes the session credentials menu", () => {
+	const source = readConversationCredentialsControlSource();
+
+	assert.match(source, /let dropdownOpen = \$state\(false\);/);
+	assert.match(source, /<DropdownMenu bind:open=\{dropdownOpen\}>/);
+	assert.match(
+		source,
+		/closeGlobalVisibilityDialog\(\);\s*dropdownOpen = false;\s*if \(!credentialId\)/,
+	);
+});

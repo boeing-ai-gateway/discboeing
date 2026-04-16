@@ -122,6 +122,8 @@ type Config struct {
 	// GitHub OAuth for git operations (device flow, repo scope)
 	// Client ID is compiled in at build time via ldflags and can be overridden at runtime.
 	GitHubOAuthClientID string
+	// Client secret is required for the web redirect flow.
+	GitHubOAuthClientSecret string
 
 	// Debug settings
 	DebugDocker     bool // Expose Docker API proxy for VZ VMs (default: false)
@@ -264,6 +266,7 @@ func Load() (*Config, error) {
 	cfg.GitHubCopilotClientID = getEnv("GITHUB_COPILOT_CLIENT_ID", "Iv1.b507a08c87ecfe98")
 	cfg.CodexClientID = getEnv("GITHUB_CODEX_CLIENT_ID", "app_EMoamEEZ73f0CkXaXp7hrann")
 	cfg.GitHubOAuthClientID = getEnv("GITHUB_OAUTH_CLIENT_ID", GitHubOAuthClientID)
+	cfg.GitHubOAuthClientSecret = getEnv("GITHUB_OAUTH_CLIENT_SECRET", "")
 
 	// Debug settings
 	cfg.DebugDocker = getEnvBool("DEBUG_DOCKER", false)

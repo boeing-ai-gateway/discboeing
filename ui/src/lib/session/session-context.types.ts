@@ -3,6 +3,7 @@ import type {
 	AgentCommandCredentialRequest,
 	ChatMessage,
 	CredentialInfo,
+	CredentialType,
 	FileStatus,
 	HooksStatusResponse,
 	QueuedPrompt,
@@ -136,10 +137,32 @@ export type SessionCommandCredentialDialogState = {
 	command: AgentCommand | null;
 	requests: AgentCommandCredentialRequest[];
 	projectCredentials: CredentialInfo[];
+	credentialTypes: CredentialType[];
 	sessionAssignments: SessionCredentialAssignment[];
-	selectedCredentialIdsByEnvVar: Record<string, string>;
+	selectedOptionByEnvVar: Record<string, string>;
+	createCredentialNamesByEnvVar: Record<string, string>;
+	createCredentialSecretsByEnvVar: Record<string, string>;
+	validityPresetByEnvVar: Record<
+		string,
+		"15_minutes" | "1_hour" | "1_day" | "1_week" | "custom"
+	>;
+	validityValueByEnvVar: Record<string, string>;
+	validityUnitByEnvVar: Record<string, "hours" | "days" | "weeks" | "never">;
 	error: string | null;
-	selectCredential: (envVar: string, credentialId: string) => void;
+	selectOption: (envVar: string, value: string) => void;
+	setCreateCredentialName: (envVar: string, value: string) => void;
+	setCreateCredentialSecret: (envVar: string, value: string) => void;
+	setValidityPreset: (
+		envVar: string,
+		value: "15_minutes" | "1_hour" | "1_day" | "1_week" | "custom",
+	) => void;
+	setValidityValue: (envVar: string, value: string) => void;
+	setValidityUnit: (
+		envVar: string,
+		value: "hours" | "days" | "weeks" | "never",
+	) => void;
+	launchOAuthWizard: (envVar: string) => Promise<void>;
+	refreshAvailableCredentials: () => Promise<void>;
 	close: () => void;
 	confirm: () => Promise<void>;
 };

@@ -41,6 +41,7 @@
 	let assignments = $state<SessionCredentialAssignment[]>([]);
 	let loading = $state(false);
 	let loadedSessionId = $state<string | null>(null);
+	let dropdownOpen = $state(false);
 	let globalVisibilityDialogOpen = $state(false);
 	let globalVisibilityDialogAssignment =
 		$state<SessionCredentialAssignment | null>(null);
@@ -207,14 +208,22 @@
 		useId: string,
 	) {
 		const key = assignmentKey(targetAssignment);
-		const nextAssignments = assignments.map((assignment) => {
+		const nextAssignments = assignments.flatMap((assignment) => {
 			if (assignmentKey(assignment) !== key) {
-				return assignment;
+				return [assignment];
 			}
-			return {
-				...assignment,
-				uses: (assignment.uses ?? []).filter((use) => use.id !== useId),
-			};
+			const remainingUses = (assignment.uses ?? []).filter(
+				(use) => use.id !== useId,
+			);
+			if (remainingUses.length === 0) {
+				return [];
+			}
+			return [
+				{
+					...assignment,
+					uses: remainingUses,
+				},
+			];
 		});
 		await saveAssignments(nextAssignments);
 	}
@@ -314,6 +323,7 @@
 	function openCredentialForGlobalVisibilityEdit() {
 		const credentialId = globalVisibilityDialogAssignment?.credential.id;
 		closeGlobalVisibilityDialog();
+		dropdownOpen = false;
 		if (!credentialId) {
 			return;
 		}
@@ -488,7 +498,7 @@
 	});
 </script>
 
-<DropdownMenu>
+<DropdownMenu bind:open={dropdownOpen}>
 	<DropdownMenuTrigger class="tauri-no-drag">
 		<Button
 			variant="ghost"

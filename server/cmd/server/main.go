@@ -1539,6 +1539,28 @@ func main() {
 
 				// GitHub OAuth (git operations: repo scope)
 				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/github-git/authorize",
+					Handler: h.GitHubAuthorize,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "GitHub authorization-code auth (git operations)",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"redirectUri": "http://127.0.0.1:1455/auth/callback", "scopes": []string{"repo", "read:user", "user:email"}},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/github-git/exchange",
+					Handler: h.GitHubExchange,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "GitHub authorization-code exchange (git operations)",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"code": "", "redirectUri": "http://127.0.0.1:1455/auth/callback", "verifier": ""},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
 					Method: "POST", Pattern: "/github-git/device-code",
 					Handler: h.GitHubDeviceCode,
 					Meta: routes.Meta{
@@ -1556,6 +1578,17 @@ func main() {
 						Description: "GitHub poll (git operations)",
 						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
 						Body:        map[string]any{"device_code": ""},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
+					Method: "POST", Pattern: "/github-git/callback-status",
+					Handler: h.GitHubCallbackStatus,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "GitHub localhost callback status (git operations)",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"state": ""},
 					},
 				})
 

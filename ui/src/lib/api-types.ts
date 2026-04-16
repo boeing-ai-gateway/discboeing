@@ -551,7 +551,26 @@ export interface GitHubCopilotPollResponse {
 	error?: string;
 }
 
-// GitHub OAuth types (git operations: repo scope, device flow)
+// GitHub OAuth types (git operations: repo scope)
+export interface GitHubAuthorizeRequest {
+	enterpriseUrl?: string;
+	redirectUri?: string;
+	scopes?: string[];
+	credentialId?: string;
+	name?: string;
+	description?: string;
+	visibility?: CredentialVisibility;
+	inactive?: boolean;
+}
+
+export interface GitHubAuthorizeResponse {
+	url: string;
+	verifier: string;
+	state: string;
+	redirectUri: string;
+	callbackListening: boolean;
+}
+
 export interface GitHubDeviceCodeRequest {
 	enterpriseUrl?: string;
 	scopes?: string[];
@@ -577,6 +596,32 @@ export interface GitHubPollRequest {
 }
 
 export interface GitHubPollResponse {
+	status: "pending" | "success" | "error";
+	error?: string;
+}
+
+export interface GitHubExchangeRequest {
+	code: string;
+	redirectUri?: string;
+	verifier: string;
+	enterpriseUrl?: string;
+	credentialId?: string;
+	name?: string;
+	description?: string;
+	visibility?: CredentialVisibility;
+	inactive?: boolean;
+}
+
+export interface GitHubExchangeResponse {
+	success: boolean;
+	error?: string;
+}
+
+export interface GitHubCallbackStatusRequest {
+	state: string;
+}
+
+export interface GitHubCallbackStatusResponse {
 	status: "pending" | "success" | "error";
 	error?: string;
 }

@@ -44,7 +44,7 @@ type Handler struct {
 	preferenceService   *service.PreferenceService
 	jobQueue            *jobs.Queue
 	eventBroker         *events.Broker
-	codexCallbackServer *CodexCallbackServer
+	oauthCallbackServer *OAuthCallbackServer
 	systemManager       *startup.SystemManager
 	terminalManager     *terminal.Manager
 	shutdownCtx         context.Context
@@ -124,8 +124,8 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 		shutdownCancel:    shutdownCancel,
 	}
 
-	// Create Codex callback server (will be started on first use)
-	h.codexCallbackServer = NewCodexCallbackServer(h)
+	// Create localhost OAuth callback server (will be started on first use)
+	h.oauthCallbackServer = NewOAuthCallbackServer(h)
 
 	return h
 }
@@ -189,8 +189,8 @@ func (h *Handler) EventBroker() *events.Broker {
 // Close cleans up handler resources
 func (h *Handler) Close() {
 	h.BeginShutdown()
-	if h.codexCallbackServer != nil {
-		h.codexCallbackServer.Stop()
+	if h.oauthCallbackServer != nil {
+		h.oauthCallbackServer.Stop()
 	}
 }
 

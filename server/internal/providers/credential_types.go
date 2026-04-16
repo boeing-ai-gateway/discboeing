@@ -133,10 +133,13 @@ var credentialTypeSpecs = []credentialTypeSpec{
 		GroupName:         "Git / Version Control",
 		AuthType:          "oauth",
 		OAuth: &OAuthConfig{
-			Provider:      "github-git",
-			Kind:          OAuthKindDeviceCode,
-			Description:   "Use GitHub device flow to connect GitHub for git operations.",
-			DefaultScopes: []string{"repo", "read:user", "user:email"},
+			Provider:         "github-git",
+			Kind:             OAuthKindAuthorizationCode,
+			SupportedKinds:   []OAuthKind{OAuthKindAuthorizationCode, OAuthKindDeviceCode},
+			Description:      "Use GitHub sign-in to connect GitHub for git operations.",
+			InputLabel:       "Authorization code or full redirect URL",
+			InputPlaceholder: "Paste the code or http://127.0.0.1:1455/auth/callback?...",
+			DefaultScopes:    []string{"repo", "read:user", "user:email"},
 			ScopeOptions: []OAuthScopeOption{
 				{Value: "repo", Label: "repo", Description: "Read and write private and public repositories, including pushes and pull requests.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Repositories", SimpleHelpText: "Clone, push branches, and open pull requests on private and public repos."},
 				{Value: "public_repo", Label: "public_repo", Description: "Read and write public repositories only.", Group: "Repositories", Access: "write", IncludeInSimple: true, SimpleLabel: "Public repositories only", SimpleHelpText: "Use GitHub on public repos without private repo access."},

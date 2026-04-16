@@ -12,8 +12,14 @@ import type {
 	CredentialAuthType,
 	CredentialVisibility,
 	CredentialInfo,
+	GitHubAuthorizeRequest,
+	GitHubAuthorizeResponse,
+	GitHubCallbackStatusRequest,
+	GitHubCallbackStatusResponse,
 	GitHubDeviceCodeRequest,
 	GitHubDeviceCodeResponse,
+	GitHubExchangeRequest,
+	GitHubExchangeResponse,
 	GitHubPollRequest,
 	OAuthAuthorizeResponse,
 	OAuthExchangeRequest,
@@ -81,6 +87,9 @@ export function createAppCredentialsDomain(
 			await refreshModels();
 			return response;
 		},
+		githubAuthorize: (
+			data?: GitHubAuthorizeRequest,
+		): Promise<GitHubAuthorizeResponse> => api.githubAuthorize(data),
 		githubDeviceCode: (
 			data?: GitHubDeviceCodeRequest,
 		): Promise<GitHubDeviceCodeResponse> => api.githubDeviceCode(data),
@@ -92,6 +101,19 @@ export function createAppCredentialsDomain(
 			}
 			return response;
 		},
+		githubExchange: async (
+			data: GitHubExchangeRequest,
+		): Promise<GitHubExchangeResponse> => {
+			const response = await api.githubExchange(data);
+			if (response.success) {
+				await store.fetch();
+				await refreshModels();
+			}
+			return response;
+		},
+		githubCallbackStatus: (
+			data: GitHubCallbackStatusRequest,
+		): Promise<GitHubCallbackStatusResponse> => api.githubCallbackStatus(data),
 		codexAuthorize: (): Promise<CodexAuthorizeResponse> => api.codexAuthorize(),
 		codexExchange: async (
 			data: CodexExchangeRequest,

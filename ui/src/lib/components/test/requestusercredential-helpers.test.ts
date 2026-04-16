@@ -3,18 +3,26 @@ import test from "node:test";
 
 import type {
 	CredentialInfo,
+	CredentialType,
 	RequestedCredential,
 	SessionCredentialAssignment,
 } from "../../api-types";
 import {
+	buildCredentialUseExpiry,
+	buildCredentialUseExpiryFromPreset,
 	buildAssignmentUses,
 	buildGrantedCredentialPayload,
 	credentialBindingDescription,
 	credentialDisplayName,
 	defaultCredentialName,
 	findCredentialMatches,
+	findPreferredCredentialId,
 	formatApprovedUses,
 	listAnyCredentials,
+	listOAuthCredentialOptions,
+	NEVER_EXPIRES_AT,
+	oauthCredentialOptionValue,
+	parseOAuthCredentialOption,
 	preferredSourceEnvVar,
 } from "../ai/tool-renderers/requestusercredential-helpers";
 
@@ -67,6 +75,52 @@ const assignment: SessionCredentialAssignment = {
 	credential: secondCredential,
 };
 
+const githubOAuthType: CredentialType = {
+	id: "github:oauth",
+	provider: "github",
+	backendProvider: "github-git",
+	name: "GitHub",
+	description: "GitHub OAuth",
+	group: "git-version-control",
+	groupName: "Git version control",
+	category: "vcs",
+	authType: "oauth",
+	env: ["GITHUB_TOKEN"],
+	oauth: {
+		provider: "github-git",
+		kind: "device_code",
+	},
+};
+
+const anthropicOAuthType: CredentialType = {
+	id: "anthropic:oauth",
+	provider: "anthropic",
+	backendProvider: "anthropic",
+	name: "Anthropic",
+	description: "Anthropic OAuth",
+	group: "model-providers",
+	groupName: "Model providers",
+	category: "llm",
+	authType: "oauth",
+	env: ["ANTHROPIC_API_KEY"],
+	oauth: {
+		provider: "anthropic",
+		kind: "authorization_code",
+	},
+};
+
+const existingGitHubOAuthCredential: CredentialInfo = {
+	id: "cred-oauth-1",
+	name: "GitHub OAuth",
+	provider: "github-git",
+	authType: "oauth",
+	isConfigured: true,
+	inactive: false,
+	agentVisible: false,
+	visibility: hiddenVisibility,
+	envKeys: ["GITHUB_TOKEN"],
+};
+
 const request: RequestedCredential = {
 	envVar: "GITHUB_TOKEN",
 	name: "GitHub access token",
@@ -77,7 +131,7 @@ const request: RequestedCredential = {
 	],
 };
 
-test("findCredentialMatches prefers credentials already assigned to the session", () => {
+test("findCredentialMatches sorts matching credentials by display name", () => {
 	const matches = findCredentialMatches(
 		"GITHUB_TOKEN",
 		[existingCredential, secondCredential],
@@ -86,12 +140,10 @@ test("findCredentialMatches prefers credentials already assigned to the session"
 
 	assert.equal(matches.length, 2);
 	assert.equal(matches[0]?.credential.id, "cred-2");
-	assert.equal(matches[0]?.assigned, true);
 	assert.equal(matches[1]?.credential.id, "cred-1");
-	assert.equal(matches[1]?.assigned, false);
 });
 
-test("listAnyCredentials includes non-matching credentials sorted after assigned ones", () => {
+test("listAnyCredentials includes non-matching credentials sorted by name", () => {
 	const unrelatedCredential: CredentialInfo = {
 		id: "cred-3",
 		name: "OpenAI Key",
@@ -112,6 +164,46 @@ test("listAnyCredentials includes non-matching credentials sorted after assigned
 	assert.equal(matches[0]?.credential.id, "cred-2");
 	assert.equal(matches[1]?.credential.id, "cred-1");
 	assert.equal(matches[2]?.credential.id, "cred-3");
+});
+
+test("listOAuthCredentialOptions offers matching OAuth types that are not yet configured", () => {
+	assert.deepEqual(
+		listOAuthCredentialOptions(
+			"GITHUB_TOKEN",
+			[anthropicOAuthType, githubOAuthType],
+			[existingCredential],
+		),
+		[
+			{
+				credentialType: githubOAuthType,
+				label: "New GitHub OAuth",
+				value: oauthCredentialOptionValue(githubOAuthType),
+			},
+		],
+	);
+	assert.deepEqual(
+		listOAuthCredentialOptions(
+			"GITHUB_TOKEN",
+			[githubOAuthType],
+			[existingCredential, existingGitHubOAuthCredential],
+		),
+		[],
+	);
+});
+
+test("parseOAuthCredentialOption resolves known OAuth options", () => {
+	assert.equal(
+		parseOAuthCredentialOption(oauthCredentialOptionValue(githubOAuthType), [
+			githubOAuthType,
+			anthropicOAuthType,
+		])?.id,
+		"github:oauth",
+	);
+	assert.equal(
+		parseOAuthCredentialOption("__oauth__:missing", [githubOAuthType]),
+		null,
+	);
+	assert.equal(parseOAuthCredentialOption("cred-1", [githubOAuthType]), null);
 });
 
 test("preferredSourceEnvVar uses exact match when available and first key otherwise", () => {
@@ -173,6 +265,78 @@ test("buildAssignmentUses returns request uses without ids", () => {
 		{ id: "", description: "create pull requests" },
 		{ id: "", description: "clone private repositories" },
 	]);
+});
+
+test("buildAssignmentUses applies the same expiration to each approved use", () => {
+	assert.deepEqual(buildAssignmentUses(request, "2026-04-16T00:00:00.000Z"), [
+		{
+			id: "",
+			description: "create pull requests",
+			expiresAt: "2026-04-16T00:00:00.000Z",
+		},
+		{
+			id: "",
+			description: "clone private repositories",
+			expiresAt: "2026-04-16T00:00:00.000Z",
+		},
+	]);
+});
+
+test("findPreferredCredentialId returns the first matching credential by name", () => {
+	assert.equal(
+		findPreferredCredentialId(
+			"GITHUB_TOKEN",
+			[existingCredential, secondCredential],
+			[assignment],
+		),
+		"cred-2",
+	);
+	assert.equal(
+		findPreferredCredentialId("MISSING", [existingCredential], [assignment]),
+		"",
+	);
+});
+
+test("buildCredentialUseExpiry converts duration fields into an expiration", () => {
+	assert.equal(
+		buildCredentialUseExpiry("2", "hours", Date.UTC(2026, 3, 15, 20, 0, 0)),
+		"2026-04-15T22:00:00.000Z",
+	);
+	assert.equal(buildCredentialUseExpiry("1", "never"), NEVER_EXPIRES_AT);
+	assert.throws(
+		() => buildCredentialUseExpiry("0", "days"),
+		/Enter a valid credential duration/,
+	);
+});
+
+test("buildCredentialUseExpiryFromPreset maps preset durations", () => {
+	assert.equal(
+		buildCredentialUseExpiryFromPreset(
+			"15_minutes",
+			"1",
+			"hours",
+			Date.UTC(2026, 3, 15, 20, 0, 0),
+		),
+		"2026-04-15T20:15:00.000Z",
+	);
+	assert.equal(
+		buildCredentialUseExpiryFromPreset(
+			"1_hour",
+			"1",
+			"days",
+			Date.UTC(2026, 3, 15, 20, 0, 0),
+		),
+		"2026-04-15T21:00:00.000Z",
+	);
+	assert.equal(
+		buildCredentialUseExpiryFromPreset(
+			"custom",
+			"2",
+			"days",
+			Date.UTC(2026, 3, 15, 20, 0, 0),
+		),
+		"2026-04-17T20:00:00.000Z",
+	);
 });
 
 test("buildGrantedCredentialPayload returns session-scoped ids and uses", () => {

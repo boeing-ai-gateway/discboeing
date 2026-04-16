@@ -89,8 +89,15 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			h.Error(w, http.StatusBadRequest, "Credential provider mismatch")
 			return
 		}
+		if req.AuthType != "" && req.AuthType != existingCredential.AuthType {
+			h.Error(w, http.StatusBadRequest, "Credential auth type mismatch")
+			return
+		}
 		if req.Provider == "" {
 			req.Provider = existingCredential.Provider
+		}
+		if req.AuthType == "" {
+			req.AuthType = existingCredential.AuthType
 		}
 		visibility = existingCredential.Visibility
 		inactive = existingCredential.Inactive
@@ -615,6 +622,25 @@ type GitHubDeviceCodeRequest struct {
 	Scopes        []string `json:"scopes,omitempty"`
 }
 
+type GitHubAuthorizeRequest struct {
+	EnterpriseURL string                        `json:"enterpriseUrl,omitempty"`
+	RedirectURI   string                        `json:"redirectUri,omitempty"`
+	Scopes        []string                      `json:"scopes,omitempty"`
+	CredentialID  string                        `json:"credentialId,omitempty"`
+	Name          string                        `json:"name,omitempty"`
+	Description   string                        `json:"description,omitempty"`
+	Visibility    *service.CredentialVisibility `json:"visibility,omitempty"`
+	Inactive      *bool                         `json:"inactive,omitempty"`
+}
+
+type GitHubAuthorizeResponse struct {
+	URL               string `json:"url"`
+	Verifier          string `json:"verifier"`
+	State             string `json:"state"`
+	RedirectURI       string `json:"redirectUri"`
+	CallbackListening bool   `json:"callbackListening"`
+}
+
 // GitHubPollRequest is the request for polling GitHub device authorization
 type GitHubPollRequest struct {
 	DeviceCode   string                        `json:"deviceCode"`
@@ -626,29 +652,55 @@ type GitHubPollRequest struct {
 	Inactive     *bool                         `json:"inactive,omitempty"`
 }
 
+type GitHubExchangeRequest struct {
+	Code          string                        `json:"code"`
+	RedirectURI   string                        `json:"redirectUri,omitempty"`
+	CodeVerifier  string                        `json:"verifier"`
+	EnterpriseURL string                        `json:"enterpriseUrl,omitempty"`
+	CredentialID  string                        `json:"credentialId,omitempty"`
+	Name          string                        `json:"name,omitempty"`
+	Description   string                        `json:"description,omitempty"`
+	Visibility    *service.CredentialVisibility `json:"visibility,omitempty"`
+	Inactive      *bool                         `json:"inactive,omitempty"`
+}
+
+type GitHubExchangeResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type GitHubCallbackStatusRequest struct {
+	State string `json:"state"`
+}
+
+func normalizeGitHubDomain(raw string) string {
+	domain := strings.TrimSpace(raw)
+	if domain == "" {
+		return oauth.DefaultGitHubDomain
+	}
+	if idx := strings.Index(domain, "://"); idx != -1 {
+		domain = domain[idx+3:]
+	}
+	if idx := strings.Index(domain, "/"); idx != -1 {
+		domain = domain[:idx]
+	}
+	return domain
+}
+
 // GitHubDeviceCode initiates device flow for GitHub git operations (repo scope)
 func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 	var req GitHubDeviceCodeRequest
 	// Allow empty body, default to github.com
 	_ = h.DecodeJSON(r, &req)
 
-	domain := oauth.DefaultGitHubDomain
-	if req.EnterpriseURL != "" {
-		domain = req.EnterpriseURL
-		if idx := strings.Index(domain, "://"); idx != -1 {
-			domain = domain[idx+3:]
-		}
-		if idx := strings.Index(domain, "/"); idx != -1 {
-			domain = domain[:idx]
-		}
-	}
+	domain := normalizeGitHubDomain(req.EnterpriseURL)
 
 	if h.cfg.GitHubOAuthClientID == "" {
 		h.Error(w, http.StatusServiceUnavailable, "GitHub OAuth not configured")
 		return
 	}
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain, req.Scopes)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, req.Scopes)
 	deviceResp, err := provider.RequestDeviceCode(r.Context())
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to request device code: "+err.Error())
@@ -662,6 +714,67 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn:       deviceResp.ExpiresIn,
 		Interval:        deviceResp.Interval,
 		Domain:          domain,
+	})
+}
+
+// GitHubAuthorize starts the standard authorization-code flow for GitHub OAuth.
+func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+	if h.cfg.GitHubOAuthClientID == "" || h.cfg.GitHubOAuthClientSecret == "" {
+		h.Error(w, http.StatusServiceUnavailable, "GitHub OAuth not configured")
+		return
+	}
+
+	var req GitHubAuthorizeRequest
+	_ = h.DecodeJSON(r, &req)
+
+	domain := normalizeGitHubDomain(req.EnterpriseURL)
+	redirectURI := strings.TrimSpace(req.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = "http://127.0.0.1:1455/auth/callback"
+	}
+
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, req.Scopes)
+	authResp, err := provider.Authorize(redirectURI)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to generate authorization URL")
+		return
+	}
+
+	visibility := service.CredentialVisibility{}
+	if req.Visibility != nil {
+		visibility = *req.Visibility
+	}
+	inactive := false
+	if req.Inactive != nil {
+		inactive = *req.Inactive
+	}
+
+	callbackListening := false
+	if h.oauthCallbackServer != nil {
+		callbackListening = h.oauthCallbackServer.Start()
+		if callbackListening {
+			h.oauthCallbackServer.RegisterPendingGitHub(
+				authResp.State,
+				authResp.Verifier,
+				projectID,
+				redirectURI,
+				domain,
+				req.CredentialID,
+				req.Name,
+				req.Description,
+				visibility,
+				inactive,
+			)
+		}
+	}
+
+	h.JSON(w, http.StatusOK, GitHubAuthorizeResponse{
+		URL:               authResp.URL,
+		Verifier:          authResp.Verifier,
+		State:             authResp.State,
+		RedirectURI:       redirectURI,
+		CallbackListening: callbackListening,
 	})
 }
 
@@ -680,12 +793,9 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domain := req.Domain
-	if domain == "" {
-		domain = oauth.DefaultGitHubDomain
-	}
+	domain := normalizeGitHubDomain(req.Domain)
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, domain, nil)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, nil)
 	pollResp, err := provider.PollForToken(r.Context(), req.DeviceCode)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Poll request failed: "+err.Error())
@@ -757,6 +867,103 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{
 		"status":     "success",
 		"credential": info,
+	})
+}
+
+// GitHubExchange exchanges a standard GitHub OAuth authorization code for tokens.
+func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+	if h.cfg.GitHubOAuthClientID == "" || h.cfg.GitHubOAuthClientSecret == "" {
+		h.Error(w, http.StatusServiceUnavailable, "GitHub OAuth not configured")
+		return
+	}
+
+	var req GitHubExchangeRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	req.Code = strings.TrimSpace(req.Code)
+	req.RedirectURI = strings.TrimSpace(req.RedirectURI)
+	req.CodeVerifier = strings.TrimSpace(req.CodeVerifier)
+	if req.Code == "" {
+		h.Error(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	if req.RedirectURI == "" {
+		req.RedirectURI = "http://127.0.0.1:1455/auth/callback"
+	}
+	if req.CodeVerifier == "" {
+		h.Error(w, http.StatusBadRequest, "verifier is required")
+		return
+	}
+
+	domain := normalizeGitHubDomain(req.EnterpriseURL)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, nil)
+	tokenResp, err := provider.Exchange(r.Context(), req.Code, req.RedirectURI, req.CodeVerifier)
+	if err != nil {
+		h.Error(w, http.StatusBadRequest, "Token exchange failed: "+err.Error())
+		return
+	}
+
+	visibility := service.CredentialVisibility{}
+	if req.Visibility != nil {
+		visibility = *req.Visibility
+	}
+	inactive := false
+	if req.Inactive != nil {
+		inactive = *req.Inactive
+	}
+
+	info, err := h.credentialService.SetOAuthTokensWithMetadata(
+		r.Context(),
+		projectID,
+		req.CredentialID,
+		service.ProviderGitHub,
+		req.Name,
+		req.Description,
+		visibility,
+		inactive,
+		&service.OAuthCredential{
+			AccessToken: tokenResp.AccessToken,
+			TokenType:   tokenResp.TokenType,
+			Scope:       tokenResp.Scope,
+		},
+	)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to store credential")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, map[string]any{
+		"success":    true,
+		"credential": info,
+	})
+}
+
+// GitHubCallbackStatus reports whether the localhost:1455 callback completed.
+func (h *Handler) GitHubCallbackStatus(w http.ResponseWriter, r *http.Request) {
+	var req GitHubCallbackStatusRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	req.State = strings.TrimSpace(req.State)
+	if req.State == "" {
+		h.Error(w, http.StatusBadRequest, "state is required")
+		return
+	}
+
+	status := "pending"
+	errMsg := ""
+	if h.oauthCallbackServer != nil {
+		status, errMsg = h.oauthCallbackServer.Status(req.State)
+	}
+
+	h.JSON(w, http.StatusOK, map[string]string{
+		"status": status,
+		"error":  errMsg,
 	})
 }
 
@@ -881,10 +1088,10 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	callbackListening := false
-	if h.codexCallbackServer != nil {
-		callbackListening = h.codexCallbackServer.Start()
+	if h.oauthCallbackServer != nil {
+		callbackListening = h.oauthCallbackServer.Start()
 		if callbackListening {
-			h.codexCallbackServer.RegisterPending(authResp.State, authResp.Verifier, projectID, redirectURI)
+			h.oauthCallbackServer.RegisterPendingCodex(authResp.State, authResp.Verifier, projectID, redirectURI)
 		}
 	}
 
@@ -1047,8 +1254,8 @@ func (h *Handler) CodexCallbackStatus(w http.ResponseWriter, r *http.Request) {
 
 	status := "pending"
 	errMsg := ""
-	if h.codexCallbackServer != nil {
-		status, errMsg = h.codexCallbackServer.Status(req.State)
+	if h.oauthCallbackServer != nil {
+		status, errMsg = h.oauthCallbackServer.Status(req.State)
 	}
 
 	h.JSON(w, http.StatusOK, map[string]string{

@@ -18,8 +18,14 @@ import type {
 	CreateWorkspaceRequest,
 	CredentialInfo,
 	CredentialType,
+	GitHubAuthorizeRequest,
+	GitHubAuthorizeResponse,
+	GitHubCallbackStatusRequest,
+	GitHubCallbackStatusResponse,
 	GitHubDeviceCodeRequest,
 	GitHubDeviceCodeResponse,
+	GitHubExchangeRequest,
+	GitHubExchangeResponse,
 	GitHubPollRequest,
 	GitHubPollResponse,
 	OAuthAuthorizeResponse,
@@ -76,7 +82,7 @@ export type AppContextBootstrap = {
 };
 
 export type AppUI = {
-	credentialFlowIntent: "github-git" | null;
+	credentialFlowIntent: "github-git" | "codex" | null;
 	credentialsDialogTargetId: string | null;
 	supportInfoDialogOpen: boolean;
 	visibleRecentThreads: RecentThreadSummary[];
@@ -232,10 +238,19 @@ export type AppCredentials = {
 	anthropicExchange: (
 		data: OAuthExchangeRequest,
 	) => Promise<OAuthExchangeResponse>;
+	githubAuthorize: (
+		data?: GitHubAuthorizeRequest,
+	) => Promise<GitHubAuthorizeResponse>;
 	githubDeviceCode: (
 		data?: GitHubDeviceCodeRequest,
 	) => Promise<GitHubDeviceCodeResponse>;
 	githubPoll: (data: GitHubPollRequest) => Promise<GitHubPollResponse>;
+	githubExchange: (
+		data: GitHubExchangeRequest,
+	) => Promise<GitHubExchangeResponse>;
+	githubCallbackStatus: (
+		data: GitHubCallbackStatusRequest,
+	) => Promise<GitHubCallbackStatusResponse>;
 	codexAuthorize: () => Promise<CodexAuthorizeResponse>;
 	codexExchange: (data: CodexExchangeRequest) => Promise<CodexExchangeResponse>;
 	codexDeviceCode: () => Promise<CodexDeviceCodeResponse>;

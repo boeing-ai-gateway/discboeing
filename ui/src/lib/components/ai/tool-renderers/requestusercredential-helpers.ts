@@ -1,5 +1,6 @@
 import type {
 	CredentialInfo,
+	CredentialType,
 	GrantedCredential,
 	RequestedCredential,
 	SessionCredentialAssignment,
@@ -8,8 +9,25 @@ import type {
 
 export type CredentialMatch = {
 	credential: CredentialInfo;
-	assigned: boolean;
 };
+
+export type OAuthCredentialOption = {
+	credentialType: CredentialType;
+	label: string;
+	value: string;
+};
+
+export const CUSTOM_CREDENTIAL_OPTION = "__custom__";
+export const OAUTH_CREDENTIAL_OPTION_PREFIX = "__oauth__:";
+export const NEVER_EXPIRES_AT = "9999-12-31T23:59:59.000Z";
+
+export type CredentialValidityUnit = "hours" | "days" | "weeks" | "never";
+export type CredentialValidityPreset =
+	| "15_minutes"
+	| "1_hour"
+	| "1_day"
+	| "1_week"
+	| "custom";
 
 export function credentialDisplayName(credential: CredentialInfo): string {
 	const trimmedName = credential.name.trim();
@@ -25,47 +43,85 @@ export function credentialDisplayName(credential: CredentialInfo): string {
 export function findCredentialMatches(
 	envVar: string,
 	credentials: CredentialInfo[],
-	assignments: SessionCredentialAssignment[],
+	_assignments: SessionCredentialAssignment[],
 ): CredentialMatch[] {
-	const assignedIds = new Set(
-		assignments.map((assignment) => assignment.credentialId),
-	);
 	return credentials
 		.filter((credential) => credential.envKeys?.includes(envVar))
-		.map((credential) => ({
-			credential,
-			assigned: assignedIds.has(credential.id),
-		}))
-		.sort((left, right) => {
-			if (left.assigned !== right.assigned) {
-				return left.assigned ? -1 : 1;
-			}
-			return credentialDisplayName(left.credential).localeCompare(
+		.map((credential) => ({ credential }))
+		.sort((left, right) =>
+			credentialDisplayName(left.credential).localeCompare(
 				credentialDisplayName(right.credential),
-			);
-		});
+			),
+		);
+}
+
+export function findPreferredCredentialId(
+	envVar: string,
+	credentials: CredentialInfo[],
+	assignments: SessionCredentialAssignment[],
+): string {
+	return (
+		findCredentialMatches(envVar, credentials, assignments)[0]?.credential.id ??
+		""
+	);
 }
 
 export function listAnyCredentials(
 	credentials: CredentialInfo[],
-	assignments: SessionCredentialAssignment[],
+	_assignments: SessionCredentialAssignment[],
 ): CredentialMatch[] {
-	const assignedIds = new Set(
-		assignments.map((assignment) => assignment.credentialId),
-	);
 	return [...credentials]
-		.map((credential) => ({
-			credential,
-			assigned: assignedIds.has(credential.id),
-		}))
-		.sort((left, right) => {
-			if (left.assigned !== right.assigned) {
-				return left.assigned ? -1 : 1;
-			}
-			return credentialDisplayName(left.credential).localeCompare(
+		.map((credential) => ({ credential }))
+		.sort((left, right) =>
+			credentialDisplayName(left.credential).localeCompare(
 				credentialDisplayName(right.credential),
-			);
-		});
+			),
+		);
+}
+
+export function oauthCredentialOptionValue(
+	credentialType: CredentialType,
+): string {
+	return `${OAUTH_CREDENTIAL_OPTION_PREFIX}${credentialType.id}`;
+}
+
+export function parseOAuthCredentialOption(
+	value: string,
+	credentialTypes: CredentialType[],
+): CredentialType | null {
+	if (!value.startsWith(OAUTH_CREDENTIAL_OPTION_PREFIX)) {
+		return null;
+	}
+	const credentialTypeId = value.slice(OAUTH_CREDENTIAL_OPTION_PREFIX.length);
+	return (
+		credentialTypes.find(
+			(type) => type.id === credentialTypeId && type.authType === "oauth",
+		) ?? null
+	);
+}
+
+export function listOAuthCredentialOptions(
+	envVar: string,
+	credentialTypes: CredentialType[],
+	credentials: CredentialInfo[],
+): OAuthCredentialOption[] {
+	return credentialTypes
+		.filter(
+			(type) =>
+				type.authType === "oauth" &&
+				type.env?.includes(envVar) &&
+				!credentials.some(
+					(credential) =>
+						credential.provider === type.backendProvider &&
+						credential.authType === type.authType,
+				),
+		)
+		.sort((left, right) => left.name.localeCompare(right.name))
+		.map((credentialType) => ({
+			credentialType,
+			label: `New ${credentialType.name} OAuth`,
+			value: oauthCredentialOptionValue(credentialType),
+		}));
 }
 
 export function preferredSourceEnvVar(
@@ -109,11 +165,54 @@ export function formatApprovedUses(request: RequestedCredential): string[] {
 
 export function buildAssignmentUses(
 	request: RequestedCredential,
+	expiresAt?: string,
 ): SessionCredentialUse[] {
 	return formatApprovedUses(request).map((description) => ({
 		description,
 		id: "",
+		...(expiresAt ? { expiresAt } : {}),
 	}));
+}
+
+export function buildCredentialUseExpiry(
+	value: string,
+	unit: CredentialValidityUnit,
+	now = Date.now(),
+): string | undefined {
+	if (unit === "never") {
+		return NEVER_EXPIRES_AT;
+	}
+	const amount = Number.parseInt(value.trim(), 10);
+	if (!Number.isFinite(amount) || amount <= 0) {
+		throw new Error("Enter a valid credential duration.");
+	}
+	const multiplier =
+		unit === "hours"
+			? 60 * 60 * 1000
+			: unit === "days"
+				? 24 * 60 * 60 * 1000
+				: 7 * 24 * 60 * 60 * 1000;
+	return new Date(now + amount * multiplier).toISOString();
+}
+
+export function buildCredentialUseExpiryFromPreset(
+	preset: CredentialValidityPreset,
+	customValue: string,
+	customUnit: CredentialValidityUnit,
+	now = Date.now(),
+): string | undefined {
+	switch (preset) {
+		case "15_minutes":
+			return new Date(now + 15 * 60 * 1000).toISOString();
+		case "1_hour":
+			return new Date(now + 60 * 60 * 1000).toISOString();
+		case "1_day":
+			return new Date(now + 24 * 60 * 60 * 1000).toISOString();
+		case "1_week":
+			return new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
+		case "custom":
+			return buildCredentialUseExpiry(customValue, customUnit, now);
+	}
 }
 
 function isActiveSessionCredentialUse(use: SessionCredentialUse): boolean {
