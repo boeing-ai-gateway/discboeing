@@ -2,16 +2,13 @@
 package gitops
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // FileDiffEntry represents a single changed file in the diff.
@@ -86,14 +83,6 @@ func gitCmd(dir string, args ...string) (string, error) {
 	return strings.TrimRight(string(out), "\r\n"), err
 }
 
-// gitCmdCtx runs a git command with a context.
-func gitCmdCtx(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	return strings.TrimRight(string(out), "\r\n"), err
-}
-
 func gitCmdCombined(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -115,13 +104,16 @@ func gitCmdCombinedEnv(dir string, env []string, args ...string) (string, error)
 	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
-// fetchOrigin fetches from origin with a timeout.
-func fetchOrigin(dir string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if _, err := gitCmdCtx(ctx, dir, "fetch", "origin"); err != nil {
-		log.Printf("Warning: failed to fetch from origin: %v", err)
+func defaultDiffTarget(workspaceRoot string) string {
+	upstream, err := gitCmd(workspaceRoot, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil || strings.TrimSpace(upstream) == "" {
+		return "HEAD"
 	}
+	mergeBase, err := gitCmd(workspaceRoot, "merge-base", "HEAD", strings.TrimSpace(upstream))
+	if err != nil || strings.TrimSpace(mergeBase) == "" {
+		return "HEAD"
+	}
+	return strings.TrimSpace(mergeBase)
 }
 
 // parseDiffOutput parses unified diff output into structured entries.
@@ -270,7 +262,9 @@ func getUntrackedFileDiff(dir, filePath string) FileDiffEntry {
 }
 
 // GetDiff returns the workspace diff relative to a target commit or ref.
-// When target is empty, HEAD is used. Untracked files are included separately.
+// When target is empty, the sandbox computes a local merge-base against the
+// tracked upstream when available and falls back to HEAD. Untracked files are
+// included separately.
 func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 	if !IsGitRepo(workspaceRoot) {
 		return DiffResult{
@@ -281,12 +275,8 @@ func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 
 	target = strings.TrimSpace(target)
 	if target == "" {
-		target = "HEAD"
+		target = defaultDiffTarget(workspaceRoot)
 	}
-
-	// Fetch from origin to update remote refs and make target commits reachable when
-	// the server resolved the target from the mounted workspace repository.
-	fetchOrigin(workspaceRoot)
 
 	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {
 		return DiffResult{}, fmt.Errorf("target %q does not exist in repository", target)

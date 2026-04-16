@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
@@ -548,32 +547,21 @@ func (c *ChatService) RenameFile(ctx context.Context, projectID, sessionID strin
 // If path is non-empty, returns a single file diff.
 // If format is "files", returns just file paths.
 // Otherwise returns full diff with patches.
-// Git-backed sessions diff against the current resolved session target.
+// Normal session diffs are resolved entirely inside the sandbox so they remain
+// anchored to sandbox-local git state.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, format string) (any, error) {
-	session, err := c.GetSession(ctx, projectID, sessionID)
-	if err != nil {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
 		return nil, err
 	}
 	if c.sandboxService == nil {
 		return nil, fmt.Errorf("sandbox provider not available")
 	}
-	targetCommit := ""
-	if c.gitService != nil {
-		resolvedTargetCommit, resolveErr := resolveSessionTargetCommit(ctx, c.gitService, session)
-		if resolveErr != nil {
-			if session.WorkspacePath == nil || strings.TrimSpace(*session.WorkspacePath) == "" {
-				return nil, fmt.Errorf("failed to resolve session target commit: %w", resolveErr)
-			}
-		} else {
-			targetCommit = resolvedTargetCommit
-		}
-	}
 	client, err := c.sandboxService.GetClient(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	return client.GetDiff(ctx, path, format, targetCommit)
+	return client.GetDiff(ctx, path, format, "")
 }
 
 // ============================================================================

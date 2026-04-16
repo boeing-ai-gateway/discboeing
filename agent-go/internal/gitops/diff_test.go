@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +60,58 @@ func TestGetDiff_InvalidTarget(t *testing.T) {
 	}
 }
 
+func TestGetDiff_DefaultTargetUsesLocalMergeBaseWithoutFetch(t *testing.T) {
+	originDir := filepath.Join(t.TempDir(), "origin.git")
+	runGit(t, "", "init", "--bare", originDir)
+
+	seedRepo := initDiffTestRepo(t)
+	writeRepoFile(t, seedRepo, "index.html", "base\n")
+	commitAll(t, seedRepo, "Initial")
+	runGit(t, seedRepo, "remote", "add", "origin", originDir)
+	runGit(t, seedRepo, "push", "-u", "origin", "main")
+
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+	runGit(t, "", "clone", "--branch", "main", originDir, cloneDir)
+
+	writeRepoFile(t, seedRepo, "index.html", "base\nremote\n")
+	commitAll(t, seedRepo, "Remote change")
+	runGit(t, seedRepo, "push", "origin", "main")
+
+	writeRepoFile(t, cloneDir, "index.html", "base\nlocal\n")
+
+	result, err := GetDiff(cloneDir, "index.html", "")
+	if err != nil {
+		t.Fatalf("GetDiff() error = %v", err)
+	}
+	if len(result.Files) != 1 {
+		t.Fatalf("expected 1 diff file, got %d", len(result.Files))
+	}
+	if got := result.Files[0].Patch; !containsLine(got, "+local") {
+		t.Fatalf("expected patch to include local change, got:\n%s", got)
+	}
+	if got := result.Files[0].Patch; containsLine(got, "-remote") {
+		t.Fatalf("expected patch to ignore unfetched remote change, got:\n%s", got)
+	}
+}
+
+func TestGetDiff_DefaultTargetFallsBackToHeadWithoutUpstream(t *testing.T) {
+	repo := initDiffTestRepo(t)
+	writeRepoFile(t, repo, "index.html", "base\n")
+	commitAll(t, repo, "Initial")
+	writeRepoFile(t, repo, "index.html", "base\nlocal\n")
+
+	result, err := GetDiff(repo, "index.html", "")
+	if err != nil {
+		t.Fatalf("GetDiff() error = %v", err)
+	}
+	if len(result.Files) != 1 {
+		t.Fatalf("expected 1 diff file, got %d", len(result.Files))
+	}
+	if got := result.Files[0].Patch; !containsLine(got, "+local") {
+		t.Fatalf("expected patch to include local change, got:\n%s", got)
+	}
+}
+
 func initDiffTestRepo(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
@@ -103,4 +157,8 @@ func runGit(t *testing.T, repo string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v error = %v\n%s", args, err, string(out))
 	}
+}
+
+func containsLine(text, line string) bool {
+	return slices.Contains(strings.Split(text, "\n"), line)
 }

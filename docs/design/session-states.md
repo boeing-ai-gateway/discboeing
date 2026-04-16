@@ -258,6 +258,15 @@ The sandbox repository is expected to track its origin branch so the command can
 fetch the tracked remote and rebase onto the configured upstream directly,
 without asking the user for a separate target commit.
 
+### Normal Session Diff
+
+The default session diff UI is also sandbox-local, but unlike rebase it does
+not fetch the remote. When the UI asks for the current diff, the sandbox uses
+its own local git state and computes the base from `merge-base(HEAD, @{upstream})`
+when an upstream is configured, falling back to `HEAD` when there is no tracked
+upstream. This keeps the visible diff stable even if the workspace or remote
+moves after the sandbox starts.
+
 ### 3. Agent-API Endpoint
 
 ```
