@@ -50,14 +50,11 @@ export function parseEnvVarAssignment(line: string): BulkEnvVarPaste | null {
 
 export function parseBulkEnvVarPaste(value: string): BulkEnvVarPaste[] {
 	const normalized = value.replace(/\r\n?/g, "\n");
-	if (!normalized.includes("\n")) {
-		return [];
-	}
 	const lines = normalized
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line.length > 0 && !line.startsWith("#"));
-	if (lines.length < 2) {
+	if (lines.length === 0) {
 		return [];
 	}
 	const entries = lines.map(parseEnvVarAssignment);

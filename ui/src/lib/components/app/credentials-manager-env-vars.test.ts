@@ -27,6 +27,15 @@ test("parseEnvVarAssignment trims export prefixes and validates keys", () => {
 	assert.equal(parseEnvVarAssignment("not an assignment"), null);
 });
 
+test("parseBulkEnvVarPaste parses single-line env assignments", () => {
+	assert.deepEqual(parseBulkEnvVarPaste("FOO=bar"), [
+		{ key: "FOO", value: "bar" },
+	]);
+	assert.deepEqual(parseBulkEnvVarPaste('export BAR="baz"'), [
+		{ key: "BAR", value: "baz" },
+	]);
+});
+
 test("parseBulkEnvVarPaste parses newline-separated env assignments", () => {
 	assert.deepEqual(
 		parseBulkEnvVarPaste("export FOO=bar\nBAR=\"baz\"\n# comment\nBAZ='qux'\n"),
@@ -39,7 +48,7 @@ test("parseBulkEnvVarPaste parses newline-separated env assignments", () => {
 });
 
 test("parseBulkEnvVarPaste returns empty when paste is not fully parseable", () => {
-	assert.deepEqual(parseBulkEnvVarPaste("FOO=bar"), []);
+	assert.deepEqual(parseBulkEnvVarPaste("not valid"), []);
 	assert.deepEqual(parseBulkEnvVarPaste("FOO=bar\nnot valid\nBAR=baz"), []);
 });
 
