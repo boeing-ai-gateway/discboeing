@@ -1145,6 +1145,166 @@ func TestPerformCommit_NoCommitsAfterPrompt_CleanTargetMatchCompletes(t *testing
 	}
 }
 
+func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+
+	const requestedCommit = "3b408234aefc"
+
+	var (
+		mu           sync.Mutex
+		chatRequests int
+		targets      []string
+	)
+
+	handler := &trackingHandler{
+		onChat: func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			chatRequests++
+			mu.Unlock()
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"pending_question_requires_answer"}`)
+		},
+		onCommits: func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			targets = append(targets, r.URL.Query().Get("target"))
+			mu.Unlock()
+
+			if got := r.URL.Query().Get("target"); got != "" {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
+					Error:   "invalid_target",
+					Message: "prepared commit pulls must not use a host-resolved target",
+				})
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
+				Patches:     addedFilePatch("Prepared sandbox work", "Agent", "agent@example.com", "prepared.txt", "prepared work\n"),
+				CommitCount: 1,
+				HeadCommit:  requestedCommit + "5c338c39d2b610fc45a207ca83dc",
+			})
+		},
+	}
+	env.mockSandbox.HTTPHandler = handler
+
+	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
+
+	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
+	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
+	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+
+	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
+		RequestedCommitHash: requestedCommit,
+	})
+	if err != nil {
+		t.Fatalf("PerformCommit failed: %v", err)
+	}
+
+	mu.Lock()
+	gotChatRequests := chatRequests
+	gotTargets := append([]string(nil), targets...)
+	mu.Unlock()
+
+	if gotChatRequests != 0 {
+		t.Fatalf("expected prepared commit pull to skip /discobot-commit prompt, got %d chat requests", gotChatRequests)
+	}
+	if len(gotTargets) != 1 || gotTargets[0] != "" {
+		t.Fatalf("expected exactly one empty-target commits request, got %#v", gotTargets)
+	}
+
+	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to get session: %v", err)
+	}
+	if updatedSession.CommitStatus != model.CommitStatusCompleted {
+		t.Fatalf("expected commit status %q, got %q (error: %v)", model.CommitStatusCompleted, updatedSession.CommitStatus, updatedSession.CommitError)
+	}
+}
+
+func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+
+	var (
+		mu           sync.Mutex
+		chatRequests int
+	)
+
+	handler := &trackingHandler{
+		onChat: func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			chatRequests++
+			mu.Unlock()
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"pending_question_requires_answer"}`)
+		},
+		onCommits: func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
+				Error:      "no_commits",
+				Message:    "No commits found",
+				IsClean:    true,
+				HeadCommit: initialCommit,
+			})
+		},
+	}
+	env.mockSandbox.HTTPHandler = handler
+
+	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
+
+	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
+	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
+	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+
+	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
+		RequestedCommitHash: "3b408234aefc",
+	})
+	if err != nil {
+		t.Fatalf("PerformCommit failed: %v", err)
+	}
+
+	mu.Lock()
+	gotChatRequests := chatRequests
+	mu.Unlock()
+	if gotChatRequests != 0 {
+		t.Fatalf("expected prepared commit pull failure to skip /discobot-commit prompt, got %d chat requests", gotChatRequests)
+	}
+
+	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to get session: %v", err)
+	}
+	if updatedSession.CommitStatus != model.CommitStatusFailed {
+		t.Fatalf("expected commit status %q, got %q", model.CommitStatusFailed, updatedSession.CommitStatus)
+	}
+	if updatedSession.CommitError == nil || !strings.Contains(*updatedSession.CommitError, "Failed to load prepared sandbox commits") {
+		t.Fatalf("expected prepared commit failure message, got %v", updatedSession.CommitError)
+	}
+}
+
 func TestPerformCommit_PromptErrorStillMarksFailed(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.cleanup()

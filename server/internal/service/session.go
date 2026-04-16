@@ -1036,7 +1036,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 	}
 
 	// Step 2: Send /discobot-commit to agent (if pending)
-	if sess.CommitStatus == model.CommitStatusPending {
+	if sess.CommitStatus == model.CommitStatusPending && !usesPreparedSandboxCommitPull(opts) {
 		if err := s.sendCommitPrompt(ctx, projectID, workspace, sess); err != nil {
 			return err
 		}
@@ -1076,25 +1076,43 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 		return nil
 	}
 
-	targetCommit, err := resolveSessionTargetCommit(ctx, s.gitService, sess)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
-		return nil
+	targetCommit := ""
+	var err error
+	if !usesPreparedSandboxCommitPull(opts) {
+		targetCommit, err = resolveSessionTargetCommit(ctx, s.gitService, sess)
+		if err != nil {
+			s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
+			return nil
+		}
+		log.Printf("Session %s: checking if agent has existing patches for target %s (%s)", sess.ID, sessionTargetRef(sess), targetCommit)
+	} else {
+		log.Printf("Session %s: checking if agent has prepared sandbox commits for requested head %s", sess.ID, opts.RequestedCommitHash)
 	}
-	log.Printf("Session %s: checking if agent has existing patches for target %s (%s)", sess.ID, sessionTargetRef(sess), targetCommit)
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
+		if usesPreparedSandboxCommitPull(opts) {
+			s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to load prepared sandbox commits: %v", err))
+			return nil
+		}
 		log.Printf("Session %s: no existing patches available (error: %v), continuing with prompt", sess.ID, err)
 		return nil
 	}
 
 	commitsResp, err := client.GetCommits(ctx, targetCommit)
 	if err != nil {
+		if usesPreparedSandboxCommitPull(opts) {
+			s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to load prepared sandbox commits: %v", err))
+			return nil
+		}
 		log.Printf("Session %s: no existing patches available (error: %v), continuing with prompt", sess.ID, err)
 		return nil
 	}
 	if commitsResp.CommitCount == 0 {
+		if usesPreparedSandboxCommitPull(opts) {
+			s.setCommitFailed(ctx, projectID, workspace, sess, "Prepared sandbox commits are no longer available to pull")
+			return nil
+		}
 		log.Printf("Session %s: no existing patches available (commit count: 0), continuing with prompt", sess.ID)
 		return nil
 	}
@@ -1231,12 +1249,18 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		return nil
 	}
 
-	targetCommit, err := resolveSessionTargetCommit(ctx, s.gitService, sess)
-	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
-		return nil
+	targetCommit := ""
+	var err error
+	if !usesPreparedSandboxCommitPull(opts) {
+		targetCommit, err = resolveSessionTargetCommit(ctx, s.gitService, sess)
+		if err != nil {
+			s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to resolve session target commit: %v", err))
+			return nil
+		}
+		log.Printf("Session %s: fetching commits from agent-api (target=%s resolvedTarget=%s dir=%s requestedCommit=%s)", sess.ID, sessionTargetRef(sess), targetCommit, opts.RequestedDirectory, opts.RequestedCommitHash)
+	} else {
+		log.Printf("Session %s: fetching prepared sandbox commits from agent-api (dir=%s requestedCommit=%s)", sess.ID, opts.RequestedDirectory, opts.RequestedCommitHash)
 	}
-	log.Printf("Session %s: fetching commits from agent-api (target=%s resolvedTarget=%s dir=%s requestedCommit=%s)", sess.ID, sessionTargetRef(sess), targetCommit, opts.RequestedDirectory, opts.RequestedCommitHash)
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
@@ -1248,6 +1272,11 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 	if err != nil {
 		var noOp *CommitsNoOpError
 		if errors.As(err, &noOp) {
+			if usesPreparedSandboxCommitPull(opts) {
+				s.setCommitFailed(ctx, projectID, workspace, sess,
+					fmt.Sprintf("Prepared sandbox commits are no longer available to pull (head=%s isClean=%v)", noOp.HeadCommit, noOp.IsClean))
+				return nil
+			}
 			if completeErr := s.validateAndCompleteNoOp(ctx, projectID, workspace, sess, noOp, targetCommit, "agent reported no changes relative to the current target"); completeErr != nil {
 				return completeErr
 			}
@@ -1259,6 +1288,10 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 	}
 
 	if commitsResp.CommitCount == 0 {
+		if usesPreparedSandboxCommitPull(opts) {
+			s.setCommitFailed(ctx, projectID, workspace, sess, "Prepared sandbox commits are no longer available to pull")
+			return nil
+		}
 		// Agent returned a success response with zero commits — treat as a dirty no-op and fail.
 		s.setCommitFailed(ctx, projectID, workspace, sess, "Agent returned zero commits in patch response without a clean working tree confirmation")
 		return nil
@@ -1367,6 +1400,10 @@ func validateRequestedCommitHash(requestedShortHash, actualHead string) error {
 		return fmt.Errorf("requested sandbox commit %s does not match sandbox head %s", requestedShortHash, actualHead)
 	}
 	return nil
+}
+
+func usesPreparedSandboxCommitPull(opts CommitSessionOptions) bool {
+	return strings.TrimSpace(opts.RequestedCommitHash) != ""
 }
 
 func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, sessionID, threadID, questionID string, commitErr error) error {
