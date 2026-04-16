@@ -331,12 +331,13 @@
 	}
 
 	async function setVisibility(
-		credentialId: string,
+		targetAssignment: SessionCredentialAssignment,
 		key: keyof CredentialVisibility,
 		value: boolean,
 	) {
+		const targetKey = assignmentKey(targetAssignment);
 		const nextAssignments = assignments.map((assignment) =>
-			assignment.credentialId === credentialId
+			assignmentKey(assignment) === targetKey
 				? assignment.credential.inactive
 					? assignment
 					: {
@@ -372,20 +373,17 @@
 			]);
 			return;
 		}
-		void setVisibility(
-			assignment.credential.id,
-			key,
-			!assignment.visibility[key],
-		);
+		void setVisibility(assignment, key, !assignment.visibility[key]);
 	}
 
 	async function setAllVisibility(
-		credentialId: string,
+		targetAssignment: SessionCredentialAssignment,
 		value: boolean,
 		preserveGlobalLocks = false,
 	) {
+		const targetKey = assignmentKey(targetAssignment);
 		const nextAssignments = assignments.map((assignment) =>
-			assignment.credentialId === credentialId
+			assignmentKey(assignment) === targetKey
 				? assignment.credential.inactive
 					? assignment
 					: {
@@ -426,10 +424,10 @@
 		}
 		const allState = allVisibilityCheckedState(effectiveVisibility(assignment));
 		if (allState.checked) {
-			void setAllVisibility(assignment.credential.id, false, true);
+			void setAllVisibility(assignment, false, true);
 			return;
 		}
-		void setAllVisibility(assignment.credential.id, true);
+		void setAllVisibility(assignment, true);
 	}
 
 	$effect(() => {
@@ -527,7 +525,7 @@
 			<div class="px-2 py-3 text-sm text-muted-foreground">No credentials</div>
 		{:else}
 			<div class="space-y-1.5 p-2">
-				{#each assignments as assignment (assignment.credentialId)}
+				{#each assignments as assignment (assignmentKey(assignment))}
 					{@const credential = assignment.credential}
 					{@const effective = effectiveVisibility(assignment)}
 					{@const allVisibilityState = allVisibilityCheckedState(effective)}
