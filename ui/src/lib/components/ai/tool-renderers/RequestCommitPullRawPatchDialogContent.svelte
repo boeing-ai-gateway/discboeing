@@ -1,12 +1,18 @@
 <script lang="ts">
-	import SvelteStreamdown from "$lib/components/ai/streamdown/SvelteStreamdown.svelte";
+	import {
+		CodeBlock,
+		CodeBlockActions,
+		CodeBlockCopyButton,
+		CodeBlockHeader,
+		CodeBlockTitle,
+	} from "$lib/components/ai/code-block";
 	import * as Dialog from "$lib/components/ui/dialog";
 
 	type Props = {
-		rawPatchMarkdown: string;
+		rawPatch: string;
 	};
 
-	let { rawPatchMarkdown }: Props = $props();
+	let { rawPatch }: Props = $props();
 </script>
 
 <Dialog.Header>
@@ -16,8 +22,23 @@
 	</Dialog.Description>
 </Dialog.Header>
 <div class="max-h-[68vh] overflow-auto">
-	{#if rawPatchMarkdown}
-		<SvelteStreamdown text={rawPatchMarkdown} mode="static" class="pr-1" />
+	{#if rawPatch.trim()}
+		<CodeBlock
+			code={rawPatch}
+			language="diff"
+			showLineNumbers={true}
+			class="pr-1"
+		>
+			<CodeBlockHeader>
+				<CodeBlockTitle>diff</CodeBlockTitle>
+				<CodeBlockActions>
+					<CodeBlockCopyButton
+						aria-label="Copy raw patch"
+						title="Copy raw patch"
+					/>
+				</CodeBlockActions>
+			</CodeBlockHeader>
+		</CodeBlock>
 	{:else}
 		<div class="text-muted-foreground text-sm">No raw patch is available.</div>
 	{/if}

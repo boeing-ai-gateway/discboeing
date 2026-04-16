@@ -133,13 +133,6 @@
 			params: buildPreviewDiffParams(file),
 		})),
 	);
-	const rawPatchMarkdown = $derived.by(() => {
-		const patch = preview?.rawPatch ?? "";
-		if (!patch.trim()) {
-			return "";
-		}
-		return `\`\`\`diff\n${patch}\n\`\`\``;
-	});
 	const outputText = $derived.by(() =>
 		typeof toolPart.output === "string" ? toolPart.output : null,
 	);
@@ -613,7 +606,9 @@
 			</Dialog.Root>
 			<Dialog.Root bind:open={rawPatchDialogOpen}>
 				<Dialog.Content class="max-h-[85vh] sm:max-w-5xl">
-					<RequestCommitPullRawPatchDialogContent {rawPatchMarkdown} />
+					<RequestCommitPullRawPatchDialogContent
+						rawPatch={preview?.rawPatch ?? ""}
+					/>
 				</Dialog.Content>
 			</Dialog.Root>
 			<Dialog.Root bind:open={rejectDialogOpen}>
