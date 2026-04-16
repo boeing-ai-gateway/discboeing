@@ -1,8 +1,15 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 )
 
 func TestParseCommitPullPreview(t *testing.T) {
@@ -88,4 +95,112 @@ rename to app/hello.txt
 	if second.Files[0].OldPath != "hello.txt" || second.Files[0].Path != "app/hello.txt" {
 		t.Fatalf("unexpected renamed paths: %+v", second.Files[0])
 	}
+}
+
+func TestGetRequestCommitPullPreview_UsesRequestedDirectoryBaseAndCommit(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+
+	const (
+		threadID         = "thread-1"
+		questionID       = "approval-1"
+		requestedDir     = "/tmp/discobot-commit-worktree"
+		requestedBase    = "3526056ae5f926d742c49a686531fb0a33315853"
+		requestedHead    = "5078ce9fa81e548c99f9682d26a66aff83876608"
+		requestedSubject = "fix(ui): avoid duplicate credential keys"
+	)
+
+	var gotQuery map[string]string
+	env.mockSandbox.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/chat/question/"+questionID) && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(&sandboxapi.PendingQuestionResponse{
+				Status: "pending",
+				Question: &sandboxapi.PendingQuestion{
+					Context: requestCommitPullPreviewContext,
+					Metadata: mustMarshalJSON(t, requestCommitPullQuestionMetadata{
+						Directory:  requestedDir,
+						BaseCommit: requestedBase,
+						CommitHash: requestedHead,
+					}),
+				},
+			})
+		case r.URL.Path == "/commits" && r.Method == http.MethodGet:
+			gotQuery = map[string]string{
+				"target": r.URL.Query().Get("target"),
+				"head":   r.URL.Query().Get("head"),
+				"cwd":    r.URL.Query().Get("cwd"),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(&sandboxapi.CommitsResponse{
+				Patches: strings.TrimSpace(`
+From 5078ce9fa81e548c99f9682d26a66aff83876608 Mon Sep 17 00:00:00 2001
+From: Example Author <author@example.com>
+Date: Wed, 8 Apr 2026 17:54:25 +0000
+Subject: [PATCH] fix(ui): avoid duplicate credential keys
+
+---
+ ui/src/lib/example.ts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ui/src/lib/example.ts b/ui/src/lib/example.ts
+index e69de29..587be6b 100644
+--- a/ui/src/lib/example.ts
++++ b/ui/src/lib/example.ts
+@@ -0,0 +1 @@
++export const ready = true;
+`),
+				CommitCount: 1,
+				HeadCommit:  requestedHead,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
+
+	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
+	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
+	chatSvc := &ChatService{
+		store:          env.store,
+		sandboxService: sandboxSvc,
+	}
+
+	preview, err := chatSvc.GetRequestCommitPullPreview(context.Background(), project.ID, session.ID, threadID, questionID)
+	if err != nil {
+		t.Fatalf("GetRequestCommitPullPreview returned error: %v", err)
+	}
+	if gotQuery["target"] != requestedBase || gotQuery["head"] != requestedHead || gotQuery["cwd"] != requestedDir {
+		t.Fatalf("unexpected commits query: %#v", gotQuery)
+	}
+	if preview.HeadCommit != requestedHead {
+		t.Fatalf("HeadCommit = %q, want %q", preview.HeadCommit, requestedHead)
+	}
+	if preview.CommitCount != 1 {
+		t.Fatalf("CommitCount = %d, want 1", preview.CommitCount)
+	}
+	if len(preview.Commits) != 1 || preview.Commits[0].Subject != requestedSubject {
+		t.Fatalf("unexpected preview commits: %#v", preview.Commits)
+	}
+}
+
+func mustMarshalJSON(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	return data
 }

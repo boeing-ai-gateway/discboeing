@@ -120,8 +120,9 @@ Internal session state stores only the operation state plus a stable merge targe
 
 No rolling base or ancestry watermark fields are stored on the session. The concrete
 target SHA is resolved fresh from the workspace whenever commit or rebase runs.
-Approval-time commit previews stay sandbox-local and derive their base from the
-sandbox repository's tracked upstream merge-base instead.
+Approval-time commit previews stay sandbox-local and request the exact prepared
+series by worktree directory, base commit, and tip commit so the preview remains
+stable even if the sandbox's main worktree is dirty or the host moves on.
 
 Successful commit pulls are also recorded in `session_commit_logs`, which stores the
 operation type, `targetRef`, the resolved `targetCommit`, the sandbox `headCommit`,
@@ -154,10 +155,11 @@ For git-URL workspaces cloned in the sandbox, `/discobot-commit` instead prepare
 The server-side session commit job is still used after a `RequestCommitPull` approval is accepted:
 
 - The agent-side `RequestCommitPull` tool emits a specialized approval request
+- That request identifies the prepared git worktree plus the exact base and tip commits
 - The UI presents approve/reject controls to the user
 - `POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/answer/{questionId}` submits the decision
 - When the server receives an approved `RequestCommitPull` answer, it enqueues the session commit job
-- `PerformCommit` still first checks for an existing replay bundle and applies it without re-sending `/discobot-commit` when commits are already present
+- `PerformCommit` requests that exact prepared series and applies it without re-sending `/discobot-commit` when commits are already present
 
 ### 2. Job Execution (PerformCommit)
 

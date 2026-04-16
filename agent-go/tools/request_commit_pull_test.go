@@ -51,6 +51,9 @@ func TestExecuteRequestCommitPull(t *testing.T) {
 	if metadata.CommitHash == "" {
 		t.Fatal("expected commit hash")
 	}
+	if metadata.BaseCommit == "" {
+		t.Fatal("expected base commit")
+	}
 	if metadata.CommitTitle != "initial" {
 		t.Fatalf("commit title = %q", metadata.CommitTitle)
 	}
@@ -60,6 +63,29 @@ func TestExecuteRequestCommitPull(t *testing.T) {
 	wantNotes := "ready to apply"
 	if questions[0].Notes != wantNotes {
 		t.Fatalf("notes = %q, want %q", questions[0].Notes, wantNotes)
+	}
+}
+
+func TestExecuteRequestCommitPull_UsesExplicitBaseCommit(t *testing.T) {
+	repo := initRequestCommitPullRepo(t)
+	e := New(repo, t.TempDir(), t.Name())
+
+	baseCommit := strings.TrimSpace(gitOutputForTest(t, repo, "rev-parse", "HEAD"))
+	result, err := e.executeRequestCommitPull(message.ToolCallPart{
+		ToolCallID: "tc1",
+		ToolName:   "RequestCommitPull",
+		Input:      `{"baseCommit":"` + baseCommit + `"}`,
+	})
+	if err != nil {
+		t.Fatalf("executeRequestCommitPull returned error: %v", err)
+	}
+
+	var metadata requestCommitPullMetadata
+	if err := json.Unmarshal(result.Approval.Metadata, &metadata); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if metadata.BaseCommit != baseCommit {
+		t.Fatalf("baseCommit = %q, want %q", metadata.BaseCommit, baseCommit)
 	}
 }
 
@@ -134,4 +160,15 @@ func runGit(t *testing.T, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(out))
 	}
+}
+
+func gitOutputForTest(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...) //nolint:gosec
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(out))
+	}
+	return string(out)
 }

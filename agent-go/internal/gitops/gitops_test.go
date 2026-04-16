@@ -101,6 +101,99 @@ func TestGetCommitPatches_DefaultTargetUsesLocalMergeBase(t *testing.T) {
 	}
 }
 
+func TestGetCommitPatchesAtHead_UsesExplicitBaseAndHead(t *testing.T) {
+	repoDir := t.TempDir()
+	runGitCommand(t, repoDir, "init", "-b", "main")
+	runGitCommand(t, repoDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, repoDir, "config", "user.name", "Test User")
+
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("write base file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	runGitCommand(t, repoDir, "commit", "-m", "Base")
+	baseCommit := strings.TrimSpace(runGitCommand(t, repoDir, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\none\n"), 0o644); err != nil {
+		t.Fatalf("write first file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	runGitCommand(t, repoDir, "commit", "-m", "Commit one")
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\none\ntwo\n"), 0o644); err != nil {
+		t.Fatalf("write second file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	runGitCommand(t, repoDir, "commit", "-m", "Commit two")
+	headCommit := strings.TrimSpace(runGitCommand(t, repoDir, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(repoDir, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+
+	result, commitsErr := GetCommitPatchesAtHead(repoDir, baseCommit, headCommit)
+	if commitsErr != nil {
+		t.Fatalf("GetCommitPatchesAtHead: %v", commitsErr)
+	}
+	if result.HeadCommit != headCommit {
+		t.Fatalf("HeadCommit = %q, want %q", result.HeadCommit, headCommit)
+	}
+	if result.CommitCount != 2 {
+		t.Fatalf("expected 2 commits, got %d", result.CommitCount)
+	}
+	if !strings.Contains(result.Patches, "Subject: [PATCH 1/2] Commit one") {
+		t.Fatalf("expected first commit in patch bundle, got %q", result.Patches)
+	}
+	if !strings.Contains(result.Patches, "Subject: [PATCH 2/2] Commit two") {
+		t.Fatalf("expected second commit in patch bundle, got %q", result.Patches)
+	}
+}
+
+func TestGetCommitPatchesAtHead_EmptyTargetDerivesBaseForDetachedWorktree(t *testing.T) {
+	originDir := filepath.Join(t.TempDir(), "origin.git")
+	runGitCommand(t, "", "init", "--bare", originDir)
+
+	seedRepo := filepath.Join(t.TempDir(), "seed")
+	runGitCommand(t, "", "init", "-b", "main", seedRepo)
+	runGitCommand(t, seedRepo, "config", "user.email", "test@example.com")
+	runGitCommand(t, seedRepo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(seedRepo, "file.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("write base file: %v", err)
+	}
+	runGitCommand(t, seedRepo, "add", "file.txt")
+	runGitCommand(t, seedRepo, "commit", "-m", "Base")
+	runGitCommand(t, seedRepo, "remote", "add", "origin", originDir)
+	runGitCommand(t, seedRepo, "push", "origin", "main")
+	baseCommit := strings.TrimSpace(runGitCommand(t, seedRepo, "rev-parse", "HEAD"))
+
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+	runGitCommand(t, "", "clone", "--branch", "main", originDir, cloneDir)
+	runGitCommand(t, cloneDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, cloneDir, "config", "user.name", "Test User")
+
+	worktreeDir := filepath.Join(t.TempDir(), "prepared-worktree")
+	runGitCommand(t, cloneDir, "worktree", "add", "--detach", worktreeDir, baseCommit)
+	if err := os.WriteFile(filepath.Join(worktreeDir, "file.txt"), []byte("base\nprepared\n"), 0o644); err != nil {
+		t.Fatalf("write prepared file: %v", err)
+	}
+	runGitCommand(t, worktreeDir, "add", "file.txt")
+	runGitCommand(t, worktreeDir, "commit", "-m", "Prepared change")
+	headCommit := strings.TrimSpace(runGitCommand(t, worktreeDir, "rev-parse", "HEAD"))
+
+	result, commitsErr := GetCommitPatchesAtHead(worktreeDir, "", headCommit)
+	if commitsErr != nil {
+		t.Fatalf("GetCommitPatchesAtHead: %v", commitsErr)
+	}
+	if result.HeadCommit != headCommit {
+		t.Fatalf("HeadCommit = %q, want %q", result.HeadCommit, headCommit)
+	}
+	if result.CommitCount != 1 {
+		t.Fatalf("expected 1 commit, got %d", result.CommitCount)
+	}
+	if !strings.Contains(result.Patches, "Subject: [PATCH] Prepared change") {
+		t.Fatalf("expected prepared commit in patch bundle, got %q", result.Patches)
+	}
+}
+
 func runGitCommand(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 

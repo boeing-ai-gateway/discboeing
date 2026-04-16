@@ -89,6 +89,7 @@ type SessionCommitPayload struct {
 	SessionID           string `json:"sessionId"`
 	WorkspaceID         string `json:"workspaceId"`
 	RequestedDirectory  string `json:"requestedDirectory,omitempty"`
+	RequestedBaseCommit string `json:"requestedBaseCommit,omitempty"`
 	RequestedCommitHash string `json:"requestedCommitHash,omitempty"`
 	ApprovalThreadID    string `json:"approvalThreadId,omitempty"`
 	ApprovalQuestionID  string `json:"approvalQuestionId,omitempty"`

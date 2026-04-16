@@ -255,9 +255,9 @@ func (c *SessionClient) GetDiff(ctx context.Context, path, format, targetCommit 
 }
 
 // GetCommits retrieves git format-patch output from the sandbox.
-func (c *SessionClient) GetCommits(ctx context.Context, targetCommit string) (*sandboxapi.CommitsResponse, error) {
+func (c *SessionClient) GetCommits(ctx context.Context, req GetCommitsRequest) (*sandboxapi.CommitsResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.CommitsResponse, error) {
-		return c.inner.GetCommits(ctx, c.sessionID, targetCommit)
+		return c.inner.GetCommits(ctx, c.sessionID, req)
 	})
 }
 

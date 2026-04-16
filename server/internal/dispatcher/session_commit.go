@@ -45,6 +45,7 @@ func (e *SessionCommitExecutor) Execute(ctx context.Context, job *model.Job) err
 
 	err := e.sessionService.PerformCommit(ctx, payload.ProjectID, payload.SessionID, service.CommitSessionOptions{
 		RequestedDirectory:  payload.RequestedDirectory,
+		RequestedBaseCommit: payload.RequestedBaseCommit,
 		RequestedCommitHash: payload.RequestedCommitHash,
 		ApprovalThreadID:    payload.ApprovalThreadID,
 		ApprovalQuestionID:  payload.ApprovalQuestionID,

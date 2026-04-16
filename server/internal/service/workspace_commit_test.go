@@ -69,6 +69,7 @@ func TestCommitSession_PreservesApprovalContextInPayload(t *testing.T) {
 
 	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{
 		RequestedDirectory:  "subdir",
+		RequestedBaseCommit: "base123456789",
 		RequestedCommitHash: "abc123def456",
 		ApprovalThreadID:    "thread-1",
 		ApprovalQuestionID:  "tool-1",
@@ -89,6 +90,9 @@ func TestCommitSession_PreservesApprovalContextInPayload(t *testing.T) {
 	}
 	if commitPayload.RequestedDirectory != "subdir" {
 		t.Fatalf("RequestedDirectory = %q", commitPayload.RequestedDirectory)
+	}
+	if commitPayload.RequestedBaseCommit != "base123456789" {
+		t.Fatalf("RequestedBaseCommit = %q", commitPayload.RequestedBaseCommit)
 	}
 	if commitPayload.RequestedCommitHash != "abc123def456" {
 		t.Fatalf("RequestedCommitHash = %q", commitPayload.RequestedCommitHash)

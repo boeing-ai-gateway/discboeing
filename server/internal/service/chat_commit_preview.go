@@ -51,6 +51,7 @@ type CommitPullPreviewFile struct {
 
 type requestCommitPullQuestionMetadata struct {
 	Directory  string `json:"directory"`
+	BaseCommit string `json:"baseCommit,omitempty"`
 	CommitHash string `json:"commitHash"`
 }
 
@@ -85,7 +86,11 @@ func (c *ChatService) GetRequestCommitPullPreview(ctx context.Context, projectID
 		return nil, fmt.Errorf("request commit pull preview is unavailable for this question")
 	}
 
-	commitsResp, err := client.GetCommits(ctx, "")
+	commitsResp, err := client.GetCommits(ctx, GetCommitsRequest{
+		TargetCommit: metadata.BaseCommit,
+		HeadCommit:   metadata.CommitHash,
+		Directory:    metadata.Directory,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get sandbox commits: %w", err)
 	}

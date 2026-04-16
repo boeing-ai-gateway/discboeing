@@ -10,3 +10,6 @@ inputSchema:
     notes:
       type: string
       description: Optional additional notes that may be important for the end user to know about the prepared sandbox changes.
+    baseCommit:
+      type: string
+      description: Optional base commit SHA for the prepared patch series. When set, Discobot uses this exact base when previewing and pulling the prepared commits.

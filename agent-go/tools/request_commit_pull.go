@@ -13,11 +13,13 @@ import (
 )
 
 type requestCommitPullInput struct {
-	Notes string `json:"notes"`
+	Notes      string `json:"notes"`
+	BaseCommit string `json:"baseCommit,omitempty"`
 }
 
 type requestCommitPullMetadata struct {
 	Directory   string `json:"directory"`
+	BaseCommit  string `json:"baseCommit,omitempty"`
 	CommitHash  string `json:"commitHash"`
 	CommitTitle string `json:"commitTitle,omitempty"`
 	CommitBody  string `json:"commitBody,omitempty"`
@@ -56,7 +58,7 @@ func (e *Executor) executeRequestCommitPull(call message.ToolCallPart) (thread.T
 			},
 		},
 	}
-	metadata, err := e.requestCommitPullMetadata()
+	metadata, err := e.requestCommitPullMetadata(input.BaseCommit)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
@@ -82,14 +84,18 @@ func (e *Executor) executeRequestCommitPull(call message.ToolCallPart) (thread.T
 	}, nil
 }
 
-func (e *Executor) requestCommitPullMetadata() (*requestCommitPullMetadata, error) {
+func (e *Executor) requestCommitPullMetadata(requestedBaseCommit string) (*requestCommitPullMetadata, error) {
 	cwd := e.getCwd()
 	if _, err := gitOutput(cwd, "rev-parse", "--show-toplevel"); err != nil {
 		return nil, fmt.Errorf("request commit pull requires a git repository: %w", err)
 	}
-	headCommit, err := gitOutput(cwd, "rev-parse", "--short=12", "HEAD")
+	headCommit, err := gitOutput(cwd, "rev-parse", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("request commit pull requires at least one git commit: %w", err)
+	}
+	baseCommit, err := resolveRequestCommitPullBaseCommit(cwd, strings.TrimSpace(headCommit), requestedBaseCommit)
+	if err != nil {
+		return nil, fmt.Errorf("resolve request commit pull base commit: %w", err)
 	}
 	commitTitle, err := gitOutput(cwd, "log", "-1", "--format=%s", "HEAD")
 	if err != nil {
@@ -106,10 +112,64 @@ func (e *Executor) requestCommitPullMetadata() (*requestCommitPullMetadata, erro
 	absDir = filepath.ToSlash(strings.TrimSpace(absDir))
 	return &requestCommitPullMetadata{
 		Directory:   absDir,
+		BaseCommit:  strings.TrimSpace(baseCommit),
 		CommitHash:  strings.TrimSpace(headCommit),
 		CommitTitle: strings.TrimSpace(commitTitle),
 		CommitBody:  strings.TrimSpace(commitBody),
 	}, nil
+}
+
+func resolveRequestCommitPullBaseCommit(cwd, headCommit, requestedBaseCommit string) (string, error) {
+	if strings.TrimSpace(requestedBaseCommit) != "" {
+		baseCommit, err := gitOutput(cwd, "rev-parse", strings.TrimSpace(requestedBaseCommit)+"^{commit}")
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(baseCommit), nil
+	}
+
+	candidates := []string{}
+	if upstream, err := gitOutput(cwd, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"); err == nil && strings.TrimSpace(upstream) != "" {
+		candidates = append(candidates, strings.TrimSpace(upstream))
+	}
+	if originHead, err := gitOutput(cwd, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"); err == nil && strings.TrimSpace(originHead) != "" {
+		candidates = append(candidates, strings.TrimSpace(originHead))
+	}
+	candidates = append(candidates,
+		"refs/remotes/origin/main",
+		"refs/remotes/origin/master",
+		"refs/heads/main",
+		"refs/heads/master",
+	)
+
+	seen := map[string]struct{}{}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		if _, err := gitOutput(cwd, "rev-parse", "--verify", candidate+"^{commit}"); err != nil {
+			continue
+		}
+		baseCommit, err := gitOutput(cwd, "merge-base", headCommit, candidate)
+		if err != nil || strings.TrimSpace(baseCommit) == "" {
+			continue
+		}
+		baseCommit = strings.TrimSpace(baseCommit)
+		if baseCommit != headCommit {
+			return baseCommit, nil
+		}
+	}
+
+	if parentCommit, err := gitOutput(cwd, "rev-parse", headCommit+"^"); err == nil && strings.TrimSpace(parentCommit) != "" {
+		return strings.TrimSpace(parentCommit), nil
+	}
+
+	return strings.TrimSpace(headCommit), nil
 }
 
 func gitOutput(dir string, args ...string) (string, error) {

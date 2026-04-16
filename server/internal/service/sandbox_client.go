@@ -237,6 +237,12 @@ type RequestOptions struct {
 	LastEventID string
 }
 
+type GetCommitsRequest struct {
+	TargetCommit string
+	HeadCommit   string
+	Directory    string
+}
+
 // applyRequestAuth sets Authorization and credentials headers on a request.
 // Credentials are automatically fetched unless SkipCredentials is set.
 func (c *SandboxChatClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
@@ -1511,18 +1517,32 @@ func (c *SandboxChatClient) GetDiff(ctx context.Context, sessionID, path, format
 }
 
 // GetCommits retrieves git format-patch output from the sandbox for changes
-// relative to a target commit.
+// relative to a target commit and optional explicit tip commit in an optional
+// git working directory.
 // Returns the patch string and commit count on success, or an error on failure.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetCommits(ctx context.Context, sessionID string, targetCommit string) (*sandboxapi.CommitsResponse, error) {
+func (c *SandboxChatClient) GetCommits(ctx context.Context, sessionID string, commitsReq GetCommitsRequest) (*sandboxapi.CommitsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		client, err := c.getHTTPClient(ctx, sessionID)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		// Build URL with query parameter
-		url := "http://sandbox/commits?target=" + targetCommit
+		values := url.Values{}
+		if strings.TrimSpace(commitsReq.TargetCommit) != "" {
+			values.Set("target", strings.TrimSpace(commitsReq.TargetCommit))
+		}
+		if strings.TrimSpace(commitsReq.HeadCommit) != "" {
+			values.Set("head", strings.TrimSpace(commitsReq.HeadCommit))
+		}
+		if strings.TrimSpace(commitsReq.Directory) != "" {
+			values.Set("cwd", strings.TrimSpace(commitsReq.Directory))
+		}
+
+		url := "http://sandbox/commits"
+		if encoded := values.Encode(); encoded != "" {
+			url += "?" + encoded
+		}
 
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {

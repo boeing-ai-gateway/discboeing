@@ -1154,11 +1154,17 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
 
 	const requestedCommit = "3b408234aefc"
+	const requestedBase = "3526056ae5f926d742c49a686531fb0a33315853"
+	const requestedDirectory = "/tmp/discobot-commit-worktree"
 
 	var (
 		mu           sync.Mutex
 		chatRequests int
-		targets      []string
+		requests     []struct {
+			target string
+			head   string
+			cwd    string
+		}
 	)
 
 	handler := &trackingHandler{
@@ -1171,14 +1177,38 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 		},
 		onCommits: func(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
-			targets = append(targets, r.URL.Query().Get("target"))
+			requests = append(requests, struct {
+				target string
+				head   string
+				cwd    string
+			}{
+				target: r.URL.Query().Get("target"),
+				head:   r.URL.Query().Get("head"),
+				cwd:    r.URL.Query().Get("cwd"),
+			})
 			mu.Unlock()
 
-			if got := r.URL.Query().Get("target"); got != "" {
+			if got := r.URL.Query().Get("target"); got != requestedBase {
 				w.WriteHeader(http.StatusBadRequest)
 				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
 					Error:   "invalid_target",
-					Message: "prepared commit pulls must not use a host-resolved target",
+					Message: "prepared commit pulls must use the requested base commit",
+				})
+				return
+			}
+			if got := r.URL.Query().Get("head"); got != requestedCommit {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
+					Error:   "invalid_target",
+					Message: "prepared commit pulls must use the requested head commit",
+				})
+				return
+			}
+			if got := r.URL.Query().Get("cwd"); got != requestedDirectory {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(sandboxapi.CommitsErrorResponse{
+					Error:   "invalid_target",
+					Message: "prepared commit pulls must use the requested directory",
 				})
 				return
 			}
@@ -1206,6 +1236,8 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
+		RequestedDirectory:  requestedDirectory,
+		RequestedBaseCommit: requestedBase,
 		RequestedCommitHash: requestedCommit,
 	})
 	if err != nil {
@@ -1214,14 +1246,21 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 
 	mu.Lock()
 	gotChatRequests := chatRequests
-	gotTargets := append([]string(nil), targets...)
+	gotRequests := append([]struct {
+		target string
+		head   string
+		cwd    string
+	}(nil), requests...)
 	mu.Unlock()
 
 	if gotChatRequests != 0 {
 		t.Fatalf("expected prepared commit pull to skip /discobot-commit prompt, got %d chat requests", gotChatRequests)
 	}
-	if len(gotTargets) != 1 || gotTargets[0] != "" {
-		t.Fatalf("expected exactly one empty-target commits request, got %#v", gotTargets)
+	if len(gotRequests) != 1 {
+		t.Fatalf("expected exactly one commits request, got %#v", gotRequests)
+	}
+	if gotRequests[0].target != requestedBase || gotRequests[0].head != requestedCommit || gotRequests[0].cwd != requestedDirectory {
+		t.Fatalf("unexpected commits request %#v", gotRequests[0])
 	}
 
 	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
@@ -1280,6 +1319,8 @@ func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t 
 	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
+		RequestedDirectory:  "/tmp/discobot-commit-worktree",
+		RequestedBaseCommit: "3526056ae5f926d742c49a686531fb0a33315853",
 		RequestedCommitHash: "3b408234aefc",
 	})
 	if err != nil {

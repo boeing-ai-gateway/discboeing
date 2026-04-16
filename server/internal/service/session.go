@@ -44,6 +44,7 @@ type CommitsNoOpError struct {
 
 type CommitSessionOptions struct {
 	RequestedDirectory  string
+	RequestedBaseCommit string
 	RequestedCommitHash string
 	ApprovalThreadID    string
 	ApprovalQuestionID  string
@@ -429,6 +430,7 @@ func (s *SessionService) CommitSession(ctx context.Context, projectID, sessionID
 		SessionID:           sessionID,
 		WorkspaceID:         sess.WorkspaceID,
 		RequestedDirectory:  opts.RequestedDirectory,
+		RequestedBaseCommit: opts.RequestedBaseCommit,
 		RequestedCommitHash: opts.RequestedCommitHash,
 		ApprovalThreadID:    opts.ApprovalThreadID,
 		ApprovalQuestionID:  opts.ApprovalQuestionID,
@@ -1099,7 +1101,11 @@ func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID 
 		return nil
 	}
 
-	commitsResp, err := client.GetCommits(ctx, targetCommit)
+	commitsResp, err := client.GetCommits(ctx, GetCommitsRequest{
+		TargetCommit: chooseRequestedBaseCommit(targetCommit, opts),
+		HeadCommit:   opts.RequestedCommitHash,
+		Directory:    opts.RequestedDirectory,
+	})
 	if err != nil {
 		if usesPreparedSandboxCommitPull(opts) {
 			s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to load prepared sandbox commits: %v", err))
@@ -1268,7 +1274,11 @@ func (s *SessionService) fetchAndApplyPatches(ctx context.Context, projectID str
 		return nil
 	}
 
-	commitsResp, err := client.GetCommits(ctx, targetCommit)
+	commitsResp, err := client.GetCommits(ctx, GetCommitsRequest{
+		TargetCommit: chooseRequestedBaseCommit(targetCommit, opts),
+		HeadCommit:   opts.RequestedCommitHash,
+		Directory:    opts.RequestedDirectory,
+	})
 	if err != nil {
 		var noOp *CommitsNoOpError
 		if errors.As(err, &noOp) {
@@ -1400,6 +1410,13 @@ func validateRequestedCommitHash(requestedShortHash, actualHead string) error {
 		return fmt.Errorf("requested sandbox commit %s does not match sandbox head %s", requestedShortHash, actualHead)
 	}
 	return nil
+}
+
+func chooseRequestedBaseCommit(resolvedTargetCommit string, opts CommitSessionOptions) string {
+	if strings.TrimSpace(opts.RequestedBaseCommit) != "" {
+		return strings.TrimSpace(opts.RequestedBaseCommit)
+	}
+	return strings.TrimSpace(resolvedTargetCommit)
 }
 
 func usesPreparedSandboxCommitPull(opts CommitSessionOptions) bool {

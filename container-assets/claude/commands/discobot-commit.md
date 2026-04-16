@@ -26,6 +26,8 @@ Commit the changes from this session back to the parent workspace.
 
 4. **Request the host pull:**
    - After the sandbox commits are ready, call `RequestCommitPull`
+   - Include the exact base commit SHA used for the prepared commit series in `baseCommit`
+   - Make sure the request identifies the exact prepared series: cwd, base commit, and tip commit
    - Include optional additional notes that may be important for the end user to know
    - Do not claim the work was pulled yet; the tool result is authoritative
 

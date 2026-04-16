@@ -24,6 +24,7 @@ const (
 
 type requestCommitPullMetadata struct {
 	Directory   string `json:"directory"`
+	BaseCommit  string `json:"baseCommit,omitempty"`
 	CommitHash  string `json:"commitHash"`
 	CommitTitle string `json:"commitTitle,omitempty"`
 	CommitBody  string `json:"commitBody,omitempty"`
@@ -391,6 +392,7 @@ func (h *Handler) ChatAnswer(w http.ResponseWriter, r *http.Request) {
 	if metadata, ok := approvedCommitPullMetadata(pendingQuestion, req.Answers); ok {
 		if err := h.sessionService.CommitSession(ctx, projectID, sessionID, h.jobQueue, service.CommitSessionOptions{
 			RequestedDirectory:  metadata.Directory,
+			RequestedBaseCommit: metadata.BaseCommit,
 			RequestedCommitHash: metadata.CommitHash,
 			ApprovalThreadID:    threadID,
 			ApprovalQuestionID:  questionID,
