@@ -299,7 +299,6 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     console-getty.service \
     getty@.service \
     serial-getty@.service \
-    systemd-logind.service \
     && systemctl disable docker.service containerd.service \
     && systemctl enable \
     discobot-setup.service \
