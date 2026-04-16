@@ -238,7 +238,8 @@ Handles initial home directory setup:
 - Copies /home/discobot template to /.data/discobot
 - Preserves file permissions and ownership
 - Recursive copy with symlink support
-- Only runs on first container start
+- Later starts only sync in missing image-provided files so persisted workspace data is preserved
+- Bundled files under `.discobot/commands/` are refreshed from the image explicitly
 
 ### Workspace Manager
 

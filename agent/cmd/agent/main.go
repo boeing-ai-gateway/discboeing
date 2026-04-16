@@ -55,6 +55,7 @@ const (
 
 	defaultCommitCommandRelPath = ".discobot/commands/discobot-commit.md"
 	remoteCommitCommandRelPath  = ".discobot/commands/discobot-commit-remote.md"
+	commandsDirRelPath          = ".discobot/commands"
 )
 
 func main() {
@@ -130,6 +131,9 @@ func runSetup() error {
 	stepStart = time.Now()
 	if err := setupBaseHome(userInfo); err != nil {
 		return fmt.Errorf("base home setup failed: %w", err)
+	}
+	if err := refreshBundledCommands(mountHome, baseHomeDir, userInfo); err != nil {
+		return fmt.Errorf("command refresh failed: %w", err)
 	}
 	if err := installCommitCommandVariant(baseHomeDir, isGitURL(workspaceSource), userInfo); err != nil {
 		return fmt.Errorf("commit command setup failed: %w", err)
@@ -538,15 +542,15 @@ func setupGitSafeDirectories(workspacePath string) error {
 	return nil
 }
 
-// setupBaseHome refreshes /.data/discobot from /home/discobot on every startup,
-// replacing any previously persisted contents so the base home matches the
-// current image exactly.
+// setupBaseHome copies /home/discobot to /.data/discobot if it doesn't exist,
+// or syncs new files if it already exists.
 func setupBaseHome(u *userInfo) error {
 	if _, err := os.Stat(baseHomeDir); err == nil {
-		fmt.Printf("discobot-agent: base home already exists at %s, replacing it from %s\n", baseHomeDir, mountHome)
-		if err := os.RemoveAll(baseHomeDir); err != nil {
-			return fmt.Errorf("failed to remove existing base home: %w", err)
+		fmt.Printf("discobot-agent: base home already exists at %s, syncing new files\n", baseHomeDir)
+		if err := syncNewFiles(mountHome, baseHomeDir, u); err != nil {
+			return fmt.Errorf("failed to sync new files: %w", err)
 		}
+		return nil
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to stat base home: %w", err)
 	}
@@ -570,6 +574,129 @@ func setupBaseHome(u *userInfo) error {
 
 	fmt.Printf("discobot-agent: base home created successfully\n")
 	return nil
+}
+
+// syncNewFiles copies files from src to dst that don't exist in dst.
+// It does not overwrite existing files so persisted workspace state survives
+// upgrades while new image-provided files still appear in the base home.
+func syncNewFiles(src, dst string, u *userInfo) error {
+	return filepath.Walk(src, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, srcPath)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+
+		_, dstErr := os.Lstat(dstPath)
+		if dstErr == nil {
+			return nil
+		}
+		if !os.IsNotExist(dstErr) {
+			return dstErr
+		}
+
+		if info.IsDir() {
+			fmt.Printf("discobot-agent: syncing new directory %s\n", relPath)
+			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
+				return err
+			}
+			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
+				return err
+			}
+		} else if info.Mode()&os.ModeSymlink != 0 {
+			link, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("discobot-agent: syncing new symlink %s\n", relPath)
+			if err := os.Symlink(link, dstPath); err != nil {
+				return err
+			}
+			if err := os.Lchown(dstPath, u.uid, u.gid); err != nil {
+				return err
+			}
+		} else if info.Mode().IsRegular() {
+			fmt.Printf("discobot-agent: syncing new file %s\n", relPath)
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+func refreshBundledCommands(srcHomeDir, dstHomeDir string, u *userInfo) error {
+	srcDir := filepath.Join(srcHomeDir, commandsDirRelPath)
+	dstDir := filepath.Join(dstHomeDir, commandsDirRelPath)
+
+	if _, err := os.Stat(srcDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat bundled commands dir: %w", err)
+	}
+
+	return filepath.Walk(srcDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(srcDir, srcPath)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dstDir, relPath)
+
+		if info.IsDir() {
+			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
+				return err
+			}
+			if u != nil {
+				if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		if err := os.RemoveAll(dstPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.Symlink(link, dstPath); err != nil {
+				return err
+			}
+			if u != nil {
+				if err := os.Lchown(dstPath, u.uid, u.gid); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		if err := copyFile(srcPath, dstPath); err != nil {
+			return err
+		}
+		if u != nil {
+			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func installCommitCommandVariant(homeDir string, useRemoteVariant bool, u *userInfo) error {

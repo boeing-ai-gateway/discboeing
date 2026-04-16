@@ -178,6 +178,110 @@ func TestPersistentCachePath(t *testing.T) {
 	}
 }
 
+func TestSyncNewFilesPreservesExistingWorkspaceAndAddsMissingFiles(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	workspaceSrc := filepath.Join(srcDir, "workspace")
+	workspaceDst := filepath.Join(dstDir, "workspace")
+	if err := os.MkdirAll(workspaceSrc, 0o755); err != nil {
+		t.Fatalf("mkdir workspace src: %v", err)
+	}
+	if err := os.MkdirAll(workspaceDst, 0o755); err != nil {
+		t.Fatalf("mkdir workspace dst: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(workspaceSrc, "README.md"), []byte("template\n"), 0o644); err != nil {
+		t.Fatalf("write workspace src README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceDst, "README.md"), []byte("persisted workspace\n"), 0o644); err != nil {
+		t.Fatalf("write workspace dst README: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(srcDir, ".bashrc"), []byte("template bashrc\n"), 0o644); err != nil {
+		t.Fatalf("write src bashrc: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".gitconfig"), []byte("[user]\n	name = Discobot\n"), 0o644); err != nil {
+		t.Fatalf("write src gitconfig: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstDir, ".bashrc"), []byte("custom bashrc\n"), 0o644); err != nil {
+		t.Fatalf("write dst bashrc: %v", err)
+	}
+
+	u := &userInfo{uid: os.Getuid(), gid: os.Getgid()}
+	if err := syncNewFiles(srcDir, dstDir, u); err != nil {
+		t.Fatalf("syncNewFiles failed: %v", err)
+	}
+
+	workspaceReadme, err := os.ReadFile(filepath.Join(workspaceDst, "README.md"))
+	if err != nil {
+		t.Fatalf("read workspace dst README: %v", err)
+	}
+	if string(workspaceReadme) != "persisted workspace\n" {
+		t.Fatalf("workspace README = %q, want persisted contents", string(workspaceReadme))
+	}
+
+	bashrc, err := os.ReadFile(filepath.Join(dstDir, ".bashrc"))
+	if err != nil {
+		t.Fatalf("read dst bashrc: %v", err)
+	}
+	if string(bashrc) != "custom bashrc\n" {
+		t.Fatalf("bashrc = %q, want existing contents preserved", string(bashrc))
+	}
+
+	gitconfig, err := os.ReadFile(filepath.Join(dstDir, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read dst gitconfig: %v", err)
+	}
+	if string(gitconfig) != "[user]\n	name = Discobot\n" {
+		t.Fatalf("gitconfig = %q, want new file copied from source", string(gitconfig))
+	}
+}
+
+func TestRefreshBundledCommandsOverwritesBundledFilesOnly(t *testing.T) {
+	srcHome := t.TempDir()
+	dstHome := t.TempDir()
+	srcCommands := filepath.Join(srcHome, ".discobot", "commands")
+	dstCommands := filepath.Join(dstHome, ".discobot", "commands")
+	if err := os.MkdirAll(srcCommands, 0o755); err != nil {
+		t.Fatalf("mkdir src commands: %v", err)
+	}
+	if err := os.MkdirAll(dstCommands, 0o755); err != nil {
+		t.Fatalf("mkdir dst commands: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(srcCommands, "discobot-commit.md"), []byte("new command\n"), 0o644); err != nil {
+		t.Fatalf("write src command: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstCommands, "discobot-commit.md"), []byte("old command\n"), 0o644); err != nil {
+		t.Fatalf("write dst command: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dstHome, ".bashrc"), []byte("custom bashrc\n"), 0o644); err != nil {
+		t.Fatalf("write dst bashrc: %v", err)
+	}
+
+	u := &userInfo{uid: os.Getuid(), gid: os.Getgid()}
+	if err := refreshBundledCommands(srcHome, dstHome, u); err != nil {
+		t.Fatalf("refreshBundledCommands failed: %v", err)
+	}
+
+	commandBody, err := os.ReadFile(filepath.Join(dstCommands, "discobot-commit.md"))
+	if err != nil {
+		t.Fatalf("read refreshed command: %v", err)
+	}
+	if string(commandBody) != "new command\n" {
+		t.Fatalf("command body = %q, want refreshed contents", string(commandBody))
+	}
+
+	bashrc, err := os.ReadFile(filepath.Join(dstHome, ".bashrc"))
+	if err != nil {
+		t.Fatalf("read dst bashrc: %v", err)
+	}
+	if string(bashrc) != "custom bashrc\n" {
+		t.Fatalf("bashrc = %q, want unrelated file unchanged", string(bashrc))
+	}
+}
+
 func TestInstallCommitCommandVariant(t *testing.T) {
 	homeDir := t.TempDir()
 	commandsDir := filepath.Join(homeDir, ".discobot", "commands")

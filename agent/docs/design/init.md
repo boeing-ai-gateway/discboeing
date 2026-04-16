@@ -37,28 +37,28 @@ A custom Go-based init process that combines:
 
 ### Home Directory Setup
 
-The home directory is copied from the container image template on first run:
+The home directory is copied from the container image template on first run,
+then later starts only fill in missing image-provided files:
 
 ```go
 func setupBaseHome(u *userInfo) error {
-    // Skip if already exists
     if _, err := os.Stat(baseHomeDir); err == nil {
-        return nil
+        return syncNewFiles(mountHome, baseHomeDir, u)
     }
 
-    // Copy /home/discobot to /.data/discobot recursively
     if err := copyDir(mountHome, baseHomeDir); err != nil {
         return err
     }
 
-    // Ensure ownership is correct
     return chownRecursive(baseHomeDir, u.uid, u.gid)
 }
 ```
 
 This ensures:
-- First container start creates persistent home directory
-- Subsequent starts reuse existing home directory
+- First container start creates the persistent home directory
+- Subsequent starts preserve persisted workspace and home state
+- New image-provided files are added without overwriting existing files
+- Bundled `.discobot/commands/` files can still be refreshed explicitly after setup
 - File permissions and ownership are preserved
 
 ### Workspace Cloning
