@@ -556,11 +556,31 @@ export function createSessionFilesDomain(
 			return;
 		}
 
-		const [diffResponse, searchResponse, rootResponse] = await Promise.all([
+		const [diffResult, searchResult, rootResult] = await Promise.allSettled([
 			api.getSessionDiff(args.sessionId, { format: "files" }),
 			api.searchSessionFiles(args.sessionId, "", 200),
 			api.listSessionFiles(args.sessionId, "."),
 		]);
+
+		if (searchResult.status === "rejected") {
+			throw searchResult.reason;
+		}
+		if (rootResult.status === "rejected") {
+			throw rootResult.reason;
+		}
+		if (diffResult.status === "rejected") {
+			console.warn(
+				"Failed to load session diff; continuing without diff state",
+				diffResult.reason,
+			);
+		}
+
+		const diffResponse =
+			diffResult.status === "fulfilled"
+				? diffResult.value
+				: { files: [], stats: EMPTY_DIFF_STATS };
+		const searchResponse = searchResult.value;
+		const rootResponse = rootResult.value;
 
 		const nextDiffData =
 			"files" in diffResponse && "stats" in diffResponse
