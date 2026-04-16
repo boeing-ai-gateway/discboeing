@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 )
 
@@ -64,8 +63,7 @@ var (
 )
 
 func (c *ChatService) GetRequestCommitPullPreview(ctx context.Context, projectID, sessionID, threadID, questionID string) (*CommitPullPreviewResponse, error) {
-	session, err := c.GetSession(ctx, projectID, sessionID)
-	if err != nil {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
 		return nil, err
 	}
 	if c.sandboxService == nil {
@@ -87,12 +85,7 @@ func (c *ChatService) GetRequestCommitPullPreview(ctx context.Context, projectID
 		return nil, fmt.Errorf("request commit pull preview is unavailable for this question")
 	}
 
-	targetCommit, err := c.resolveCommitPullPreviewTargetCommit(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-
-	commitsResp, err := client.GetCommits(ctx, targetCommit)
+	commitsResp, err := client.GetCommits(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("get sandbox commits: %w", err)
 	}
@@ -108,14 +101,6 @@ func (c *ChatService) GetRequestCommitPullPreview(ctx context.Context, projectID
 		preview.CommitCount = commitsResp.CommitCount
 	}
 	return preview, nil
-}
-
-func (c *ChatService) resolveCommitPullPreviewTargetCommit(ctx context.Context, session *model.Session) (string, error) {
-	targetCommit, err := resolveSessionTargetCommit(ctx, c.gitService, session)
-	if err != nil {
-		return "", fmt.Errorf("resolve session target commit for preview: %w", err)
-	}
-	return targetCommit, nil
 }
 
 func requestCommitPullPreviewMetadata(question *sandboxapi.PendingQuestionResponse) (requestCommitPullQuestionMetadata, bool) {

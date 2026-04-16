@@ -344,18 +344,32 @@ func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 	return trackedDiff, nil
 }
 
-// GetCommitPatches returns format-patch output for changes relative to a target
-// commit. If the target is an ancestor of HEAD, the existing commit series is
-// preserved. Otherwise a synthetic single-commit patch is generated from the
-// target tree to the current HEAD tree.
-func GetCommitPatches(workspaceRoot, target string) (*CommitsResult, *CommitsError) {
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return nil, &CommitsError{Code: "invalid_target", Message: "Target commit SHA is required"}
+func defaultCommitTarget(workspaceRoot string) string {
+	upstream, err := gitCmd(workspaceRoot, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil || strings.TrimSpace(upstream) == "" {
+		return "HEAD"
 	}
+	mergeBase, err := gitCmd(workspaceRoot, "merge-base", "HEAD", strings.TrimSpace(upstream))
+	if err != nil || strings.TrimSpace(mergeBase) == "" {
+		return "HEAD"
+	}
+	return strings.TrimSpace(mergeBase)
+}
 
+// GetCommitPatches returns format-patch output for changes relative to a target
+// commit. When target is empty, the sandbox computes a local merge-base against
+// the tracked upstream when available and falls back to HEAD. If the target is
+// an ancestor of HEAD, the existing commit series is preserved. Otherwise a
+// synthetic single-commit patch is generated from the target tree to the
+// current HEAD tree.
+func GetCommitPatches(workspaceRoot, target string) (*CommitsResult, *CommitsError) {
 	if !IsGitRepo(workspaceRoot) {
 		return nil, &CommitsError{Code: "not_git_repo", Message: "Workspace is not a git repository"}
+	}
+
+	target = strings.TrimSpace(target)
+	if target == "" {
+		target = defaultCommitTarget(workspaceRoot)
 	}
 
 	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {

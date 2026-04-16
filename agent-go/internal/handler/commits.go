@@ -10,17 +10,9 @@ import (
 // GetCommits handles GET /commits — returns format-patch output for changes
 // relative to a target commit.
 // Query params:
-//   - target: required, the target commit hash
+//   - target: optional, the target commit hash
 func (h *Handler) GetCommits(w http.ResponseWriter, r *http.Request) {
 	target := r.URL.Query().Get("target")
-	if target == "" {
-		h.JSON(w, http.StatusBadRequest, api.CommitsErrorResponse{
-			Error:   "invalid_target",
-			Message: "target query parameter is required",
-		})
-		return
-	}
-
 	result, commitsErr := gitops.GetCommitPatches(h.agentCwd, target)
 	if commitsErr != nil {
 		status := http.StatusInternalServerError

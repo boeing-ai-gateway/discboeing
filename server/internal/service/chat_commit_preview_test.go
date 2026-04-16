@@ -1,14 +1,8 @@
 package service
 
 import (
-	"context"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/model"
 )
 
 func TestParseCommitPullPreview(t *testing.T) {
@@ -94,71 +88,4 @@ rename to app/hello.txt
 	if second.Files[0].OldPath != "hello.txt" || second.Files[0].Path != "app/hello.txt" {
 		t.Fatalf("unexpected renamed paths: %+v", second.Files[0])
 	}
-}
-
-func TestResolveCommitPullPreviewTargetCommit(t *testing.T) {
-	ctx := context.Background()
-	repoDir := initPreviewTargetRepo(t)
-
-	provider, err := git.NewLocalProvider(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewLocalProvider: %v", err)
-	}
-	_, headCommit, err := provider.EnsureWorkspace(ctx, "project-1", "workspace-1", repoDir, "")
-	if err != nil {
-		t.Fatalf("EnsureWorkspace: %v", err)
-	}
-
-	chatService := &ChatService{gitService: NewGitService(nil, provider)}
-
-	t.Run("resolves default HEAD target ref", func(t *testing.T) {
-		got, err := chatService.resolveCommitPullPreviewTargetCommit(ctx, &model.Session{WorkspaceID: "workspace-1"})
-		if err != nil {
-			t.Fatalf("resolveCommitPullPreviewTargetCommit returned error: %v", err)
-		}
-		if got != headCommit {
-			t.Fatalf("expected target commit %q, got %q", headCommit, got)
-		}
-	})
-
-	t.Run("rejects unsupported target refs", func(t *testing.T) {
-		targetRef := "origin/main"
-		_, err := chatService.resolveCommitPullPreviewTargetCommit(ctx, &model.Session{
-			WorkspaceID: "workspace-1",
-			TargetRef:   &targetRef,
-		})
-		if err == nil {
-			t.Fatal("expected error for unsupported target ref")
-		}
-		if !strings.Contains(err.Error(), "unsupported target ref") {
-			t.Fatalf("expected unsupported target ref error, got %v", err)
-		}
-	})
-}
-
-func initPreviewTargetRepo(t *testing.T) string {
-	t.Helper()
-	repoDir := t.TempDir()
-
-	runGit := func(args ...string) string {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repoDir
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v failed: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-
-	runGit("init", "-b", "main")
-	runGit("config", "user.name", "Preview Tester")
-	runGit("config", "user.email", "preview@example.com")
-	if err := os.WriteFile(repoDir+"/hello.txt", []byte("hello\n"), 0600); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	runGit("add", "hello.txt")
-	runGit("commit", "-m", "initial commit")
-
-	return repoDir
 }

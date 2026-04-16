@@ -46,6 +46,61 @@ func TestGetCommitPatchesPreservesFileModes(t *testing.T) {
 	}
 }
 
+func TestGetCommitPatches_DefaultTargetUsesLocalMergeBase(t *testing.T) {
+	originDir := filepath.Join(t.TempDir(), "origin.git")
+	runGitCommand(t, "", "init", "--bare", originDir)
+
+	seedRepo := filepath.Join(t.TempDir(), "seed")
+	runGitCommand(t, "", "init", "-b", "main", seedRepo)
+	runGitCommand(t, seedRepo, "config", "user.email", "test@example.com")
+	runGitCommand(t, seedRepo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(seedRepo, "hello.txt"), []byte("base\n"), 0600); err != nil {
+		t.Fatalf("write base file: %v", err)
+	}
+	runGitCommand(t, seedRepo, "add", "hello.txt")
+	runGitCommand(t, seedRepo, "commit", "-m", "Initial")
+	runGitCommand(t, seedRepo, "remote", "add", "origin", originDir)
+	runGitCommand(t, seedRepo, "push", "-u", "origin", "main")
+
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+	runGitCommand(t, "", "clone", "--branch", "main", originDir, cloneDir)
+	runGitCommand(t, cloneDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, cloneDir, "config", "user.name", "Test User")
+
+	if err := os.WriteFile(filepath.Join(cloneDir, "hello.txt"), []byte("base\nlocal-1\n"), 0600); err != nil {
+		t.Fatalf("write local-1 file: %v", err)
+	}
+	runGitCommand(t, cloneDir, "add", "hello.txt")
+	runGitCommand(t, cloneDir, "commit", "-m", "Local one")
+	if err := os.WriteFile(filepath.Join(cloneDir, "hello.txt"), []byte("base\nlocal-1\nlocal-2\n"), 0600); err != nil {
+		t.Fatalf("write local-2 file: %v", err)
+	}
+	runGitCommand(t, cloneDir, "add", "hello.txt")
+	runGitCommand(t, cloneDir, "commit", "-m", "Local two")
+
+	if err := os.WriteFile(filepath.Join(seedRepo, "hello.txt"), []byte("base\nremote\n"), 0600); err != nil {
+		t.Fatalf("write remote file: %v", err)
+	}
+	runGitCommand(t, seedRepo, "add", "hello.txt")
+	runGitCommand(t, seedRepo, "commit", "-m", "Remote change")
+	runGitCommand(t, seedRepo, "push", "origin", "main")
+	runGitCommand(t, cloneDir, "fetch", "origin")
+
+	result, commitsErr := GetCommitPatches(cloneDir, "")
+	if commitsErr != nil {
+		t.Fatalf("GetCommitPatches: %v", commitsErr)
+	}
+	if result.CommitCount != 2 {
+		t.Fatalf("expected 2 commits, got %d", result.CommitCount)
+	}
+	if !strings.Contains(result.Patches, "Subject: [PATCH 1/2] Local one") {
+		t.Fatalf("expected first local commit in patch bundle, got %q", result.Patches)
+	}
+	if !strings.Contains(result.Patches, "Subject: [PATCH 2/2] Local two") {
+		t.Fatalf("expected second local commit in patch bundle, got %q", result.Patches)
+	}
+}
+
 func runGitCommand(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 

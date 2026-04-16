@@ -119,7 +119,9 @@ Internal session state stores only the operation state plus a stable merge targe
 | `appliedCommit` | string | Final commit SHA after patches apply to the workspace (commit flow only) |
 
 No rolling base or ancestry watermark fields are stored on the session. The concrete
-target SHA is resolved fresh from the workspace whenever preview, commit, or rebase runs.
+target SHA is resolved fresh from the workspace whenever commit or rebase runs.
+Approval-time commit previews stay sandbox-local and derive their base from the
+sandbox repository's tracked upstream merge-base instead.
 
 Successful commit pulls are also recorded in `session_commit_logs`, which stores the
 operation type, `targetRef`, the resolved `targetCommit`, the sandbox `headCommit`,
