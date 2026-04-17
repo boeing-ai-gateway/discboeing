@@ -63,7 +63,7 @@
 
 	const sessionLabel = $derived.by(() => {
 		if (!sessionId) return "No session";
-		return `Session: ${sessionId.slice(0, 8)}...`;
+		return `Session: ${sessionId}`;
 	});
 
 	const sshCommand = $derived.by(() => {
