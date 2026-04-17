@@ -1917,3 +1917,50 @@ func TestSherlockHolmes(t *testing.T) {
 		t.Fatalf("expected 2 lines matching 'Holmes', got %d", results.TotalCount)
 	}
 }
+
+// TestGrepHiddenDirAsRoot verifies that the pure-Go walker searches inside a
+// hidden directory when it is set as the explicit search path.
+// Regression: the walker was skipping any directory whose name starts with ".",
+// including the root itself, so Grep(path=".discobot") returned no matches.
+func TestGrepHiddenDirAsRoot(t *testing.T) {
+	dir := t.TempDir()
+	hiddenDir := filepath.Join(dir, ".discobot", "hooks")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, hiddenDir, "setup.sh", "# TODO: initialise environment\n")
+
+	results, err := Grep(context.Background(), GrepOptions{
+		Pattern: "TODO",
+		Path:    filepath.Join(dir, ".discobot"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results.TotalCount == 0 {
+		t.Fatal("expected a match inside .discobot, got none")
+	}
+}
+
+// TestGrepHiddenSubdirSkipped verifies that hidden subdirectories are still
+// skipped when the root is a normal (non-hidden) directory.
+func TestGrepHiddenSubdirSkipped(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "main.go", "// TODO: implement\n")
+	hiddenDir := filepath.Join(dir, ".cache")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, hiddenDir, "main.go", "// TODO: should not match\n")
+
+	results, err := Grep(context.Background(), GrepOptions{
+		Pattern: "TODO",
+		Path:    dir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results.TotalCount != 1 {
+		t.Fatalf("expected exactly 1 match (from main.go, not .cache), got %d", results.TotalCount)
+	}
+}
