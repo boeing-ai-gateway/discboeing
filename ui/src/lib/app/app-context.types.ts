@@ -78,6 +78,7 @@ export type AppCredential = CredentialInfo & {
 export type AppContextBootstrap = {
 	ideOptions: IdeOption[];
 	selectedSessionId?: string;
+	selectedThreadId?: string;
 	windowControls: string[];
 };
 

@@ -13,6 +13,7 @@ type CreateAppSessionsDomainArgs = {
 	store: SessionStore;
 	recentThreadStore: RecentThreadStore;
 	initialSelectedSessionId?: string;
+	initialSelectedThreadId?: string;
 };
 
 export function createAppSessionsDomain(
@@ -26,6 +27,13 @@ export function createAppSessionsDomain(
 	let awaitingInitialStatusId = $state<string | null>(null);
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
+
+	if (args.initialSelectedSessionId && args.initialSelectedThreadId) {
+		requestedThreadIdBySession.set(
+			args.initialSelectedSessionId,
+			args.initialSelectedThreadId,
+		);
+	}
 
 	const selectSession = (sessionId: string) => {
 		currentSelectedSessionId = sessionId;

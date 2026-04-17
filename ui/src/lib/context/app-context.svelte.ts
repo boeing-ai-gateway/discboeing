@@ -196,6 +196,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		store: stores.sessions,
 		recentThreadStore: stores.recentThreads,
 		initialSelectedSessionId: bootstrap.selectedSessionId,
+		initialSelectedThreadId: bootstrap.selectedThreadId,
 	});
 	const ui = createAppViewState({ sessions, preferences });
 

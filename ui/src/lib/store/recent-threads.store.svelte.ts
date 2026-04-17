@@ -129,6 +129,20 @@ function readEntries(): SavedRecentThreadEntry[] {
 	}
 }
 
+// Returns the most recently accessed session+thread without creating a store.
+// Used during app bootstrap to restore the last viewed session/thread on refresh.
+export function readInitialThreadSelection(): {
+	sessionId: string;
+	threadId: string;
+} | null {
+	const entries = readEntries();
+	const first = entries[0];
+	if (!first) {
+		return null;
+	}
+	return { sessionId: first.sessionId, threadId: first.threadId };
+}
+
 export class RecentThreadStore {
 	#entries = $state<SavedRecentThreadEntry[]>(readEntries());
 	#lastRecordedKey: string | null = null;
