@@ -69,9 +69,9 @@ func (cm *CompletionManager) Chat(threadID string, req PromptRequest) (string, e
 }
 
 // Resume starts a background completion that resumes an interrupted turn.
-func (cm *CompletionManager) Resume(threadID string) (string, error) {
+func (cm *CompletionManager) Resume(threadID string, req PromptRequest) (string, error) {
 	return cm.startCompletion(threadID, "", func(ctx context.Context) iter.Seq2[message.MessageChunk, error] {
-		return cm.agent.Resume(ctx, threadID)
+		return cm.agent.Resume(ctx, threadID, req)
 	})
 }
 
@@ -446,7 +446,7 @@ func (cm *CompletionManager) ResumeInterruptedTurns() error {
 		if !interrupted {
 			continue
 		}
-		if _, err := cm.Resume(threadID); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
+		if _, err := cm.Resume(threadID, PromptRequest{}); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
 			return err
 		}
 	}

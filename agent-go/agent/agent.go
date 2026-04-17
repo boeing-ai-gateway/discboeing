@@ -95,7 +95,9 @@ type Agent interface {
 	Prompt(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error]
 
 	// Resume continues or finalizes an interrupted turn from persisted disk state.
-	Resume(ctx context.Context, threadID string) iter.Seq2[message.MessageChunk, error]
+	// Request-scoped overrides such as model, reasoning, and mode may be applied
+	// before the turn resumes.
+	Resume(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error]
 
 	// Cancel cancels the active prompt for a thread.
 	// Implementations may also cancel a turn paused waiting for AskUserQuestion

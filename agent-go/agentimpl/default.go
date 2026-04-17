@@ -326,7 +326,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 }
 
 // Resume continues or finalizes an interrupted turn from persisted disk state.
-func (a *DefaultAgent) Resume(ctx context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 	return func(yield func(message.MessageChunk, error) bool) {
 		state, err := a.store.LoadTurnState(threadID)
 		if err != nil {
@@ -338,13 +338,21 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string) iter.Seq2[me
 			return
 		}
 
+		threadCfg, threadCfgErr := a.store.LoadConfig(threadID)
+		if threadCfgErr != nil {
+			log.Printf("agent: warning: thread config: %v", threadCfgErr)
+			threadCfg = thread.Config{}
+		}
+		useThreadConfig := threadCfgErr == nil
+
+		threadCfg, cfgUpdated, err := a.applyResumeOverrides(threadID, state, threadCfg, useThreadConfig, req)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
 		log.Printf("agent: resuming interrupted turn %s for thread %s (step %d, phase %s)",
 			state.ID, threadID, state.CurrentStep, state.Phase)
-
-		if ref, err := providers.ParseModelRef(state.Config.Model); err == nil {
-			state.Config.ProviderID = ref.ProviderID
-			state.Config.Model = ref.ModelID
-		}
 
 		provider, resolveErr := a.registry.Get(state.Config.ProviderID)
 		if resolveErr != nil {
@@ -386,6 +394,11 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string) iter.Seq2[me
 		a.cancels[threadID] = cancel
 		a.mu.Unlock()
 
+		if cfgUpdated {
+			if !yield(thread.UpdateChunkFromConfig(threadID, threadCfg), nil) {
+				return
+			}
+		}
 		if resumeMessageID != "" {
 			if !yield(message.ThreadResumeChunk{
 				Data: message.ThreadResumeData{ThreadID: threadID, MessageID: resumeMessageID},
@@ -404,6 +417,86 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string) iter.Seq2[me
 		}
 		a.persistActiveLeaf(threadID)
 	}
+}
+
+func (a *DefaultAgent) applyResumeOverrides(
+	threadID string,
+	state *thread.TurnState,
+	threadCfg thread.Config,
+	useThreadConfig bool,
+	req agent.PromptRequest,
+) (thread.Config, bool, error) {
+	if ref, err := providers.ParseModelRef(state.Config.Model); err == nil {
+		state.Config.ProviderID = ref.ProviderID
+		state.Config.Model = ref.ModelID
+	}
+
+	updated := false
+	currentProviderID := state.Config.ProviderID
+	if currentProviderID == "" {
+		currentProviderID = providers.CurrentProviderFromRef(threadCfg.Model)
+	}
+
+	if model := strings.TrimSpace(req.Model); model != "" {
+		ref, err := a.registry.ResolveModelInProvider(currentProviderID, model, providers.ModelTaskChat)
+		if err != nil {
+			return threadCfg, false, fmt.Errorf("invalid model: %w", err)
+		}
+		if state.Config.ProviderID != ref.ProviderID || state.Config.Model != ref.ModelID {
+			state.Config.ProviderID = ref.ProviderID
+			state.Config.Model = ref.ModelID
+			updated = true
+		}
+		if threadCfg.Model != ref.String() {
+			threadCfg.Model = ref.String()
+			updated = true
+		}
+	}
+
+	if reasoning := strings.TrimSpace(req.Reasoning); reasoning != "" {
+		resolved := providers.Reasoning(reasoning)
+		if state.Config.Reasoning != resolved {
+			state.Config.Reasoning = resolved
+			updated = true
+		}
+		if threadCfg.Reasoning != resolved {
+			threadCfg.Reasoning = resolved
+			updated = true
+		}
+	}
+
+	if mode := strings.TrimSpace(req.Mode); mode != "" {
+		planMode, userChangedMode := resolvePlanMode(mode, threadCfg, useThreadConfig)
+		if state.Config.PlanMode != planMode {
+			state.Config.PlanMode = planMode
+			updated = true
+		}
+		modeValue := "build"
+		if planMode {
+			modeValue = "plan"
+		}
+		setBy := threadCfg.Mode.SetBy
+		changedAt := threadCfg.Mode.ChangedAt
+		if userChangedMode || !useThreadConfig {
+			setBy = "user"
+			changedAt = time.Now().UTC()
+		}
+		if threadCfg.Mode.Value != modeValue || threadCfg.Mode.SetBy != setBy || !threadCfg.Mode.ChangedAt.Equal(changedAt) {
+			threadCfg.Mode = thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt}
+			updated = true
+		}
+	}
+
+	if !updated {
+		return threadCfg, false, nil
+	}
+	if err := a.store.SaveTurnState(threadID, *state); err != nil {
+		return threadCfg, false, fmt.Errorf("save turn state for resume: %w", err)
+	}
+	if err := a.store.SaveConfig(threadID, threadCfg); err != nil {
+		return threadCfg, false, fmt.Errorf("save thread config for resume: %w", err)
+	}
+	return threadCfg, true, nil
 }
 
 func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID string, req agent.PromptRequest) (*promptEnvironment, error) {

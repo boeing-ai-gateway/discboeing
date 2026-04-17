@@ -3,6 +3,7 @@ package agentimpl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"iter"
 	"os"
 	"path/filepath"
@@ -657,4 +658,123 @@ Use another provider.`), 0o644); err != nil {
 	if got := anthropicProvider.requests[0].Model.String(); got != "anthropic/claude-sonnet-4-6" {
 		t.Fatalf("unexpected cross-provider model ref %q", got)
 	}
+}
+
+func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-resume-overrides"
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:       "Pinned",
+		NameSource: thread.ThreadNameSourceUser,
+		Mode:       thread.ModeState{Value: "build", SetBy: "user", ChangedAt: time.Now().UTC()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := providers.NewProviderRegistry(nil)
+	provider := &resumeOverrideProvider{
+		id: "openai",
+		defaults: map[string]providers.ModelRef{
+			providers.ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	}
+	registry.Add(provider)
+
+	agentImpl := NewDefaultAgent(store, registry, nil, t.TempDir(), MCPConfig{})
+
+	var initialErr error
+	for _, err := range agentImpl.Prompt(context.Background(), threadID, agent.PromptRequest{
+		Model:     "openai/gpt-bad",
+		UserParts: []message.UIPart{message.UITextPart{Text: "hello", State: "done"}},
+	}) {
+		if err != nil {
+			initialErr = err
+		}
+	}
+	if initialErr == nil {
+		t.Fatal("expected initial invalid-model error")
+	}
+	state, err := store.LoadTurnState(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("expected interrupted turn state after initial provider error")
+	}
+
+	for _, err := range agentImpl.Resume(context.Background(), threadID, agent.PromptRequest{
+		Model:     "openai/gpt-5.4",
+		Reasoning: "high",
+		Mode:      "plan",
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(provider.requests) != 2 {
+		t.Fatalf("expected 2 provider calls, got %d", len(provider.requests))
+	}
+	if got := provider.requests[0].Model.String(); got != "openai/gpt-bad" {
+		t.Fatalf("expected first request to use invalid model, got %q", got)
+	}
+	if got := provider.requests[1].Model.String(); got != "openai/gpt-5.4" {
+		t.Fatalf("expected resumed request to use override model, got %q", got)
+	}
+	if got := string(provider.requests[1].Reasoning); got != "high" {
+		t.Fatalf("expected resumed request to use override reasoning, got %q", got)
+	}
+
+	cfg, err := store.LoadConfig(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Model != "openai/gpt-5.4" {
+		t.Fatalf("expected thread config model to be updated, got %q", cfg.Model)
+	}
+	if cfg.Reasoning != providers.Reasoning("high") {
+		t.Fatalf("expected thread config reasoning to be updated, got %q", cfg.Reasoning)
+	}
+	if cfg.Mode.Value != "plan" {
+		t.Fatalf("expected thread mode to be updated, got %q", cfg.Mode.Value)
+	}
+
+	state, err = store.LoadTurnState(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != nil {
+		t.Fatalf("expected resumed turn state to be cleaned up, got %#v", state)
+	}
+}
+
+type resumeOverrideProvider struct {
+	id       string
+	defaults map[string]providers.ModelRef
+	requests []providers.CompleteRequest
+}
+
+func (p *resumeOverrideProvider) ID() string { return p.id }
+
+func (p *resumeOverrideProvider) Complete(_ context.Context, req providers.CompleteRequest) iter.Seq2[message.ProviderMessageChunk, error] {
+	p.requests = append(p.requests, req)
+	return func(yield func(message.ProviderMessageChunk, error) bool) {
+		if req.Model.ModelID == "gpt-bad" {
+			yield(nil, fmt.Errorf("openai: api error 400: invalid_request_error: requested model %q does not exist", req.Model.ModelID))
+			return
+		}
+		yield(message.StreamStartChunk{}, nil)
+		yield(message.TextStartChunk{ID: "s1"}, nil)
+		yield(message.TextDeltaChunk{ID: "s1", Delta: "ok"}, nil)
+		yield(message.TextEndChunk{ID: "s1"}, nil)
+		yield(message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}}, nil)
+	}
+}
+
+func (p *resumeOverrideProvider) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
+	return nil, nil
+}
+
+func (p *resumeOverrideProvider) DefaultModels() map[string]providers.ModelRef {
+	return p.defaults
 }

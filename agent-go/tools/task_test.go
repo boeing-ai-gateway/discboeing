@@ -31,7 +31,7 @@ func (m *mockSubAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 	}
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
-func (m *mockSubAgent) Resume(_ context.Context, _ string) iter.Seq2[message.MessageChunk, error] {
+func (m *mockSubAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
 
@@ -186,7 +186,7 @@ func (a *recursiveTaskAgent) Prompt(ctx context.Context, threadID string, req ag
 		}
 	}
 }
-func (a *recursiveTaskAgent) Resume(_ context.Context, _ string) iter.Seq2[message.MessageChunk, error] {
+func (a *recursiveTaskAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
 

@@ -102,7 +102,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if interrupted {
-		completionID, resumeErr := h.completions.Resume(threadID)
+		completionID, resumeErr := h.completions.Resume(threadID, agent.PromptRequest{Model: req.Model, Reasoning: req.Reasoning, Mode: req.Mode})
 		if resumeErr != nil {
 			if existingID := completionIDFromInProgressError(resumeErr); existingID != "" {
 				h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
@@ -146,7 +146,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, agent.ErrInterruptedTurnRequiresResume) {
-			completionID, resumeErr := h.completions.Resume(threadID)
+			completionID, resumeErr := h.completions.Resume(threadID, promptReq)
 			if resumeErr != nil {
 				if existingID := completionIDFromInProgressError(resumeErr); existingID != "" {
 					h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
@@ -217,7 +217,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if interrupted {
-			if _, err := h.completions.Resume(threadID); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
+			if _, err := h.completions.Resume(threadID, agent.PromptRequest{}); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
 				h.Error(w, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -579,7 +579,7 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 	h.answeredMu.Unlock()
 
 	// Resume the interrupted turn.
-	completionID, chatErr := h.completions.Resume(threadID)
+	completionID, chatErr := h.completions.Resume(threadID, agent.PromptRequest{})
 	if chatErr != nil {
 		// Answer was saved but resume failed — log but still return success.
 		log.Printf("question: answer saved but failed to resume turn: %v", chatErr)

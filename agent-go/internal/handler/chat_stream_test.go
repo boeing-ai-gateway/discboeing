@@ -28,7 +28,7 @@ import (
 
 type streamTestAgent struct {
 	promptFn             func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
-	resumeFn             func(ctx context.Context, threadID string) iter.Seq2[message.MessageChunk, error]
+	resumeFn             func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
 	messagesFn           func(threadID, leafID string) ([]message.UIMessage, error)
 	pendingQuestionFn    func(threadID string) (*agent.PendingQuestion, error)
 	submitAnswerFn       func(threadID, approvalID string, req api.AnswerQuestionRequest) error
@@ -43,9 +43,9 @@ func (m *streamTestAgent) Prompt(ctx context.Context, threadID string, req agent
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
 
-func (m *streamTestAgent) Resume(ctx context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+func (m *streamTestAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 	if m.resumeFn != nil {
-		return m.resumeFn(ctx, threadID)
+		return m.resumeFn(ctx, threadID, req)
 	}
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
@@ -746,7 +746,11 @@ func TestPostChat_ReturnsPendingQuestionConflict(t *testing.T) {
 }
 
 func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
-	resumeCh := make(chan string, 1)
+	type resumeCall struct {
+		threadID string
+		req      agent.PromptRequest
+	}
+	resumeCh := make(chan resumeCall, 1)
 	ma := &streamTestAgent{
 		hasInterruptedTurnFn: func(threadID string) (bool, error) {
 			if threadID != "thread-1" {
@@ -754,8 +758,8 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 			}
 			return true, nil
 		},
-		resumeFn: func(_ context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
-			resumeCh <- threadID
+		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			resumeCh <- resumeCall{threadID: threadID, req: req}
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
@@ -768,7 +772,7 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 		ID:    "msg-1",
 		Role:  "user",
 		Parts: []message.UIPart{message.UITextPart{Text: "hi", State: "done"}},
-	}}})
+	}}, Model: "openai/gpt-5.4", Reasoning: "high", Mode: "plan"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -797,9 +801,18 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 		t.Fatalf("expected completionId, got %#v", got)
 	}
 	select {
-	case threadID := <-resumeCh:
-		if threadID != "thread-1" {
-			t.Fatalf("expected resume for thread-1, got %q", threadID)
+	case call := <-resumeCh:
+		if call.threadID != "thread-1" {
+			t.Fatalf("expected resume for thread-1, got %q", call.threadID)
+		}
+		if call.req.Model != "openai/gpt-5.4" {
+			t.Fatalf("expected resume model override, got %#v", call.req)
+		}
+		if call.req.Reasoning != "high" {
+			t.Fatalf("expected resume reasoning override, got %#v", call.req)
+		}
+		if call.req.Mode != "plan" {
+			t.Fatalf("expected resume mode override, got %#v", call.req)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for resume call")
@@ -1337,7 +1350,7 @@ func TestPostAnswer_UsesResumeWithoutCachedCompletion(t *testing.T) {
 			}
 			return nil
 		},
-		resumeFn: func(_ context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			resumeCh <- threadID
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
@@ -1383,7 +1396,7 @@ func TestPostAnswer_UsesResumeWhenOnlyDoneCachedCompletionExists(t *testing.T) {
 			promptCh <- req
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
-		resumeFn: func(_ context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			resumeCh <- threadID
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
@@ -1472,7 +1485,7 @@ func TestChatStream_PendingQuestionConnectionContinuesAfterAnswer(t *testing.T) 
 			answerSubmitted <- struct{}{}
 			return nil
 		},
-		resumeFn: func(_ context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			if threadID != "thread-approval" {
 				t.Fatalf("expected thread-approval, got %q", threadID)
 			}
@@ -1870,7 +1883,7 @@ func TestChatStream_FreshRequest_StartsInterruptedTurnRecovery(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{
-		resumeFn: func(ctx context.Context, threadID string) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(ctx context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			resumeCh <- threadID
 			return func(yield func(message.MessageChunk, error) bool) {
 				<-release

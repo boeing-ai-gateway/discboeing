@@ -96,7 +96,7 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 		watcher := startEscWatch(watchCtx, cancel)
 		var seq iter.Seq2[message.MessageChunk, error]
 		if resumeOnly {
-			seq = a.Resume(ctx, threadID)
+			seq = a.Resume(ctx, threadID, agent.PromptRequest{})
 		} else {
 			seq = a.Prompt(ctx, threadID, req)
 		}
