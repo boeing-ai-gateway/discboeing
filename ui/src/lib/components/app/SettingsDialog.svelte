@@ -38,12 +38,78 @@
 	import CredentialsManager from "$lib/components/app/CredentialsManager.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import type { ThemeColorScheme } from "$lib/api-types";
+	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
 
 	const app = useAppContext();
 	const models = app.models;
 	const preferences = app.preferences;
+
+	const dedupedModels = $derived.by(() => {
+		const modelByProviderAndName: Record<string, ModelInfo> = {};
+
+		for (const model of models.list) {
+			const cleanName = model.name.replace(/\s*\(latest\)\s*/gi, "").trim();
+			const isLatest = /\(latest\)/i.test(model.name);
+			const dedupeKey = `${model.provider || "Other"}::${cleanName}`;
+			const existing = modelByProviderAndName[dedupeKey];
+
+			if (!existing || isLatest) {
+				modelByProviderAndName[dedupeKey] = { ...model, name: cleanName };
+			}
+		}
+
+		const getBaseName = (name: string) =>
+			name
+				.replace(/\s*\(latest\)\s*/gi, "")
+				.replace(/\s+v\d+\s*/gi, "")
+				.replace(/\s+[\d.]+\s*$/, "")
+				.trim();
+
+		const extractVersion = (name: string) => {
+			const matches = name.match(/(\d+(?:\.\d+)?)/g);
+			return matches?.length
+				? Number.parseFloat(matches[matches.length - 1])
+				: 0;
+		};
+
+		return Object.values(modelByProviderAndName).sort((a, b) => {
+			const baseCompare = getBaseName(a.name).localeCompare(
+				getBaseName(b.name),
+			);
+			if (baseCompare !== 0) return baseCompare;
+			const versionDiff = extractVersion(b.name) - extractVersion(a.name);
+			if (versionDiff !== 0) return versionDiff;
+			return a.name.localeCompare(b.name);
+		});
+	});
+
+	const selectedDefaultModel = $derived.by(() =>
+		preferences.defaultModel
+			? (models.list.find((model) => model.id === preferences.defaultModel) ??
+				null)
+			: null,
+	);
+
+	const modelProviderEntries = $derived.by(() => {
+		const grouped: Record<string, ModelInfo[]> = {};
+		for (const model of dedupedModels) {
+			const provider = model.provider || "Other";
+			if (!grouped[provider]) grouped[provider] = [];
+			grouped[provider].push(model);
+		}
+
+		if (
+			selectedDefaultModel &&
+			!dedupedModels.some((model) => model.id === selectedDefaultModel.id)
+		) {
+			const provider = selectedDefaultModel.provider || "Other";
+			if (!grouped[provider]) grouped[provider] = [];
+			grouped[provider] = [selectedDefaultModel, ...grouped[provider]];
+		}
+
+		return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+	});
 	const ui = app.ui;
 	const updates = app.updates;
 	const environment = app.environment;
@@ -323,8 +389,12 @@
 											class="w-full"
 										>
 											<option value="__auto__">Auto-select</option>
-											{#each models.list as model (model.id)}
-												<option value={model.id}>{model.name}</option>
+											{#each modelProviderEntries as [provider, providerModels] (provider)}
+												<optgroup label={provider}>
+													{#each providerModels as model (model.id)}
+														<option value={model.id}>{model.name}</option>
+													{/each}
+												</optgroup>
 											{/each}
 										</NativeSelect>
 									</ItemActions>
