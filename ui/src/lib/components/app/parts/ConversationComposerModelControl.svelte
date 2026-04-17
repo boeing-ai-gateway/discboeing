@@ -21,15 +21,16 @@
 	let { value = null, onSelect = () => {}, models }: Props = $props();
 
 	const dedupedModels = $derived.by(() => {
-		const modelByName: Record<string, ModelInfo> = {};
+		const modelByProviderAndName: Record<string, ModelInfo> = {};
 
 		for (const model of models) {
 			const cleanName = model.name.replace(/\s*\(latest\)\s*/gi, "").trim();
 			const isLatest = /\(latest\)/i.test(model.name);
-			const existing = modelByName[cleanName];
+			const dedupeKey = `${model.provider || "Other"}::${cleanName}`;
+			const existing = modelByProviderAndName[dedupeKey];
 
 			if (!existing || isLatest) {
-				modelByName[cleanName] = {
+				modelByProviderAndName[dedupeKey] = {
 					...model,
 					name: cleanName,
 				};
@@ -51,7 +52,7 @@
 			return Number.parseFloat(matches[matches.length - 1]);
 		};
 
-		return Object.values(modelByName).sort((left, right) => {
+		return Object.values(modelByProviderAndName).sort((left, right) => {
 			const baseLeft = getBaseName(left.name);
 			const baseRight = getBaseName(right.name);
 			const baseCompare = baseLeft.localeCompare(baseRight);
