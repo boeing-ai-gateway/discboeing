@@ -103,6 +103,9 @@ export function createAppPreferencesDomain(
 		get sidebarAllGroupedByWorkspace() {
 			return uiStateStore.sidebarAllGroupedByWorkspace;
 		},
+		get showRefreshButton() {
+			return uiStateStore.showRefreshButton;
+		},
 		setTheme: (mode) => applyThemeState(mode),
 		setColorScheme: (scheme) => {
 			if (!availableThemes.some((t) => t.id === scheme)) return;
@@ -143,6 +146,9 @@ export function createAppPreferencesDomain(
 		},
 		setSidebarAllGroupedByWorkspace: (value) => {
 			uiStateStore.setSidebarAllGroupedByWorkspace(value);
+		},
+		setShowRefreshButton: (value) => {
+			uiStateStore.setShowRefreshButton(value);
 		},
 	};
 }

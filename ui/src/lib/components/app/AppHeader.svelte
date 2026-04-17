@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
+	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import AppMacWindowSpacer from "$lib/components/app/AppMacWindowSpacer.svelte";
 	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
@@ -24,6 +25,7 @@
 	const sessions = app.sessions;
 	const ui = app.ui;
 	const updates = app.updates;
+	const preferences = app.preferences;
 	const isMobile = new IsMobile(1024);
 
 	function showWindowsLinuxControls(): boolean {
@@ -86,6 +88,18 @@
 		</button>
 
 		<div class="flex min-w-0 items-center gap-1 pr-2">
+			{#if preferences.showRefreshButton}
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					onclick={() => location.reload()}
+					aria-label="Refresh"
+					title="Refresh"
+					class="tauri-no-drag"
+				>
+					<RefreshCwIcon class="size-4" />
+				</Button>
+			{/if}
 			<Button
 				variant="ghost"
 				size="icon-sm"

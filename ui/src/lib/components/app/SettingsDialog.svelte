@@ -257,6 +257,24 @@
 										</ToggleGroup>
 									</ItemActions>
 								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Show refresh button</ItemTitle>
+										<ItemDescription>
+											Display a refresh button in the header bar.
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Switch
+											id="settings-show-refresh-button"
+											checked={preferences.showRefreshButton}
+											onCheckedChange={(checked) => {
+												preferences.setShowRefreshButton(checked === true);
+											}}
+										/>
+									</ItemActions>
+								</Item>
 							</ItemGroup>
 						</CardContent>
 					</Card>

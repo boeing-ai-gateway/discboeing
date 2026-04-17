@@ -115,6 +115,7 @@ export type AppPreferences = {
 	sidebarRecentOpen: boolean;
 	sidebarAllOpen: boolean;
 	sidebarAllGroupedByWorkspace: boolean;
+	showRefreshButton: boolean;
 	setTheme: (theme: ThemeMode) => void;
 	setColorScheme: (scheme: ThemeColorScheme) => void;
 	toggleTheme: () => void;
@@ -130,6 +131,7 @@ export type AppPreferences = {
 	setSidebarRecentOpen: (value: boolean) => void;
 	setSidebarAllOpen: (value: boolean) => void;
 	setSidebarAllGroupedByWorkspace: (value: boolean) => void;
+	setShowRefreshButton: (value: boolean) => void;
 };
 
 export type AppEnvironment = {
