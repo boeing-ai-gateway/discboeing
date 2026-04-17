@@ -3,8 +3,6 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/providers"
 	"github.com/obot-platform/discobot/server/internal/service"
@@ -54,24 +52,6 @@ func (h *Handler) GetProjectModels(w http.ResponseWriter, r *http.Request) {
 	models, err := h.modelsService.GetModelsForProject(r.Context(), projectID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to get models for project")
-		return
-	}
-
-	h.JSON(w, http.StatusOK, ModelsResponse{Models: toModelInfos(models)})
-}
-
-// GetSessionModels returns available models for a session based on its credentials
-func (h *Handler) GetSessionModels(w http.ResponseWriter, r *http.Request) {
-	sessionID := chi.URLParam(r, "sessionId")
-
-	if sessionID == "" {
-		h.Error(w, http.StatusBadRequest, "Session ID is required")
-		return
-	}
-
-	models, err := h.modelsService.GetModelsForSession(r.Context(), sessionID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, "Failed to get models for session")
 		return
 	}
 

@@ -38,6 +38,12 @@ var baseJSON []byte
 //go:embed model-overlay.json
 var overlayJSON []byte
 
+// ModelCapabilities holds typed, model-specific feature flags for optional
+// request fields whose support varies across models.
+type ModelCapabilities struct {
+	ReasoningSummary *bool // nil = enabled by default for reasoning models
+}
+
 // ModelCost holds the per-token cost for a model.
 type ModelCost struct {
 	Input  float64
@@ -58,6 +64,7 @@ type ModelInfo struct {
 	OutputModalities   []string
 	ToolCall           bool // whether this model supports tool/function calling
 	CustomTools        bool // whether this model supports provider-specific custom grammar tools
+	Capabilities       ModelCapabilities
 	Cost               ModelCost
 }
 
@@ -85,18 +92,23 @@ type providerEntry struct {
 	Models map[string]modelMetadata `json:"models"`
 }
 
+type modelCapabilities struct {
+	ReasoningSummary *bool `json:"reasoningSummary"`
+}
+
 type modelMetadata struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name"`
-	Family             string          `json:"family"`
-	Reasoning          bool            `json:"reasoning"`
-	ReasoningLevels    []string        `json:"reasoningLevels"`
-	DefaultReasonLevel string          `json:"defaultReasonLevel"`
-	ToolCall           bool            `json:"tool_call"`
-	CustomTools        bool            `json:"customTools"`
-	Cost               modelCost       `json:"cost"`
-	Limit              modelLimit      `json:"limit"`
-	Modalities         modelModalities `json:"modalities"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Family             string            `json:"family"`
+	Reasoning          bool              `json:"reasoning"`
+	ReasoningLevels    []string          `json:"reasoningLevels"`
+	DefaultReasonLevel string            `json:"defaultReasonLevel"`
+	ToolCall           bool              `json:"tool_call"`
+	CustomTools        bool              `json:"customTools"`
+	Capabilities       modelCapabilities `json:"capabilities"`
+	Cost               modelCost         `json:"cost"`
+	Limit              modelLimit        `json:"limit"`
+	Modalities         modelModalities   `json:"modalities"`
 }
 
 type modelCost struct {
@@ -116,12 +128,13 @@ type modelLimit struct {
 
 type overlayEntry struct {
 	// Fields applied to both new and existing models.
-	ReasoningLevels    []string `json:"reasoningLevels"`
-	DefaultReasonLevel string   `json:"defaultReasonLevel"`
-	ContextWindow      int      `json:"contextWindow"`
-	MaxOutputTokens    int      `json:"maxOutputTokens"`
-	InputModalities    []string `json:"inputModalities"`
-	OutputModalities   []string `json:"outputModalities"`
+	ReasoningLevels    []string           `json:"reasoningLevels"`
+	DefaultReasonLevel string             `json:"defaultReasonLevel"`
+	ContextWindow      int                `json:"contextWindow"`
+	MaxOutputTokens    int                `json:"maxOutputTokens"`
+	InputModalities    []string           `json:"inputModalities"`
+	OutputModalities   []string           `json:"outputModalities"`
+	Capabilities       *modelCapabilities `json:"capabilities"`
 	// Fields only meaningful when creating a new model (not present in base data).
 	Name        string `json:"name"`
 	Family      string `json:"family"`
@@ -231,6 +244,11 @@ func applyOverlay() {
 			}
 			if ov.CustomTools != nil {
 				m.CustomTools = *ov.CustomTools
+			}
+			if ov.Capabilities != nil {
+				if ov.Capabilities.ReasoningSummary != nil {
+					m.Capabilities.ReasoningSummary = ov.Capabilities.ReasoningSummary
+				}
 			}
 			if len(ov.ReasoningLevels) > 0 {
 				m.ReasoningLevels = append([]string(nil), ov.ReasoningLevels...)
@@ -376,6 +394,18 @@ func (m *ModelInfo) SupportsInputModality(modality string) bool {
 	return false
 }
 
+// SupportsReasoningSummary reports whether the model accepts the optional
+// reasoning.summary request field.
+func (m *ModelInfo) SupportsReasoningSummary() bool {
+	if m == nil {
+		return false
+	}
+	if m.Capabilities.ReasoningSummary != nil {
+		return *m.Capabilities.ReasoningSummary
+	}
+	return m.Reasoning
+}
+
 func toModelInfo(m modelMetadata) *ModelInfo {
 	return &ModelInfo{
 		ID:                 m.ID,
@@ -390,6 +420,9 @@ func toModelInfo(m modelMetadata) *ModelInfo {
 		OutputModalities:   append([]string(nil), m.Modalities.Output...),
 		ToolCall:           m.ToolCall,
 		CustomTools:        m.CustomTools,
-		Cost:               ModelCost{Input: m.Cost.Input, Output: m.Cost.Output},
+		Capabilities: ModelCapabilities{
+			ReasoningSummary: m.Capabilities.ReasoningSummary,
+		},
+		Cost: ModelCost{Input: m.Cost.Input, Output: m.Cost.Output},
 	}
 }

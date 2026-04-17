@@ -28,7 +28,6 @@ type Provider struct { /* apiKey, baseURL, client */ }
 func New(cfg providers.Config) (providers.Provider, error) { ... }
 func (p *Provider) ID() string { return providerID }
 func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) iter.Seq2[message.ProviderMessageChunk, error] { ... }
-func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) { ... }
 ```
 
 ## Step 2: Factory Registration
@@ -201,32 +200,26 @@ Disable provider-side data retention. Most providers store request/response data
 | `req.Reasoning` | If `"enabled"`, activate provider's extended thinking/reasoning mode |
 | `req.ProviderOptions` | Opaque JSON — merge into request body if non-nil |
 
-## Step 9: `ListModels()`
+## Step 9: Models metadata
 
-Return `[]providers.ModelInfo` for known models. Preferred approach: query the provider's models endpoint for live IDs, then enrich with metadata from the `modelsdev` package.
+Discobot does not query provider model-listing endpoints at runtime. Model
+availability comes from the embedded `modelsdev` dataset plus Discobot's
+overlay metadata.
 
 ```go
 import "github.com/obot-platform/discobot/agent-go/providers/modelsdev"
 
-// 1. Fetch live model IDs from provider API (e.g., GET /v1/models)
-// 2. Enrich each model with metadata from models.dev:
-for _, m := range apiModels {
-    info := providers.ModelInfo{ID: m.ID, DisplayName: m.ID}
-    if md := modelsdev.Lookup(providerID, m.ID); md != nil {
-        info.DisplayName     = md.Name
-        info.Reasoning       = md.Reasoning
-        info.ContextWindow   = md.ContextWindow
-        info.MaxOutputTokens = md.MaxOutputTokens
+for _, md := range modelsdev.AllForProvider(providerID) {
+    if md.ToolCall {
+        // Use embedded metadata when you need model capabilities,
+        // defaults, or limits in provider-specific logic.
     }
-    models = append(models, info)
 }
 ```
 
 The `modelsdev` package embeds `models-dev-api.json` and provides:
 - `Lookup(providerID, modelID) *ModelInfo` — single model metadata
-- `AllForProvider(providerID) []ModelInfo` — all models for a provider (fallback if no live API)
-
-Do NOT set `ProviderID` — `ProviderRegistry` sets it automatically.
+- `AllForProvider(providerID) []ModelInfo` — all models for a provider
 
 ## Step 10: Tests
 
@@ -284,10 +277,6 @@ Use `httptest.NewServer`. One subtest per behavioral variant:
 - Tools: verify tool schema is serialised in the correct wire format; verify optional parameters (`max_tokens`, `temperature`) are sent when set
 - Reasoning enabled: verify the provider-specific reasoning config field is sent (e.g., `reasoning_effort`, `thinking`, `include`)
 - API error (non-200): error is returned without panicking
-
-#### `TestListModels`
-- Models are fetched from the provider API and enriched with `modelsdev` metadata
-- API error is returned cleanly
 
 #### `TestFactoryRegistration`
 - `providers.Has("<id>")` returns true after the package is imported

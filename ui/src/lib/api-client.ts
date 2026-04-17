@@ -662,10 +662,6 @@ class ApiClient {
 		return this.fetch<ModelsResponse>("/models");
 	}
 
-	async getSessionModels(sessionId: string): Promise<ModelsResponse> {
-		return this.fetch<ModelsResponse>(`/sessions/${sessionId}/models`);
-	}
-
 	async getAuthProviders(): Promise<{ authProviders: AuthProvider[] }> {
 		return this.fetch("/auth-providers");
 	}

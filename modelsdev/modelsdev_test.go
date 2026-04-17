@@ -58,6 +58,53 @@ func TestLookup(t *testing.T) {
 		}
 	})
 
+	t.Run("codex spark overlay copies important openai metadata", func(t *testing.T) {
+		m := Lookup("codex", "gpt-5.3-codex-spark")
+		if m == nil {
+			t.Fatal("expected gpt-5.3-codex-spark to be found")
+		}
+		if m.Name != "GPT-5.3 Codex Spark" {
+			t.Fatalf("expected display name from overlay, got %q", m.Name)
+		}
+		if m.Family != "gpt-codex-spark" {
+			t.Fatalf("expected family gpt-codex-spark, got %q", m.Family)
+		}
+		if m.ContextWindow != 128000 {
+			t.Fatalf("expected context window 128000, got %d", m.ContextWindow)
+		}
+		if m.MaxOutputTokens != 32000 {
+			t.Fatalf("expected max output tokens 32000, got %d", m.MaxOutputTokens)
+		}
+		if !m.SupportsInputModality("pdf") {
+			t.Error("expected codex spark to support pdf input modality")
+		}
+		if !m.CustomTools {
+			t.Error("expected codex spark to support custom tools")
+		}
+		if m.Capabilities.ReasoningSummary == nil {
+			t.Fatal("expected codex spark reasoning summary capability to be set")
+		}
+		if *m.Capabilities.ReasoningSummary {
+			t.Error("expected codex spark reasoning summary capability to be false")
+		}
+		if m.SupportsReasoningSummary() {
+			t.Error("expected codex spark to omit reasoning summaries")
+		}
+	})
+
+	t.Run("reasoning summary defaults to reasoning support when unset", func(t *testing.T) {
+		m := Lookup("openai", "o3")
+		if m == nil {
+			t.Fatal("expected o3 to be found")
+		}
+		if m.Capabilities.ReasoningSummary != nil {
+			t.Error("expected explicit reasoning summary capability to remain unset")
+		}
+		if !m.SupportsReasoningSummary() {
+			t.Error("expected reasoning models to allow reasoning summaries by default")
+		}
+	})
+
 	t.Run("custom tools default false", func(t *testing.T) {
 		m := Lookup("openai", "gpt-4o")
 		if m == nil {

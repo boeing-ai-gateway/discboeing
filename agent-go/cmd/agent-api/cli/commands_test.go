@@ -18,18 +18,13 @@ import (
 )
 
 type testModelListProvider struct {
-	id     string
-	models []providers.ModelInfo
+	id string
 }
 
 func (p *testModelListProvider) ID() string { return p.id }
 
 func (p *testModelListProvider) Complete(_ context.Context, _ providers.CompleteRequest) iter.Seq2[message.ProviderMessageChunk, error] {
 	return func(func(message.ProviderMessageChunk, error) bool) {}
-}
-
-func (p *testModelListProvider) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
-	return p.models, nil
 }
 
 func (p *testModelListProvider) DefaultModels() map[string]providers.ModelRef { return nil }
@@ -178,17 +173,9 @@ func TestHandleModelsCommand_SortsModelList(t *testing.T) {
 	reg := providers.NewProviderRegistry(nil)
 	reg.Add(&testModelListProvider{
 		id: "openai",
-		models: []providers.ModelInfo{
-			{ID: "gpt-4o", DisplayName: "GPT-4o"},
-			{ID: "gpt-4.1", DisplayName: "GPT-4.1"},
-		},
 	})
 	reg.Add(&testModelListProvider{
 		id: "anthropic",
-		models: []providers.ModelInfo{
-			{ID: "claude-sonnet-4", DisplayName: "Claude Sonnet 4"},
-			{ID: "claude-opus-4", DisplayName: "Claude Opus 4"},
-		},
 	})
 
 	stdinReader, stdinWriter, err := os.Pipe()
@@ -233,10 +220,10 @@ func TestHandleModelsCommand_SortsModelList(t *testing.T) {
 	}
 
 	lines := []string{
-		"1. anthropic/claude-opus-4 — Claude Opus 4",
-		"2. anthropic/claude-sonnet-4 — Claude Sonnet 4",
-		"3. openai/gpt-4.1 — GPT-4.1",
-		"4. openai/gpt-4o — GPT-4o",
+		"anthropic/claude-opus-4-20250514 — Claude Opus 4",
+		"anthropic/claude-sonnet-4-20250514 — Claude Sonnet 4",
+		"openai/gpt-4.1 — GPT-4.1",
+		"openai/gpt-4o — GPT-4o",
 	}
 	lastIndex := -1
 	for _, line := range lines {

@@ -1367,6 +1367,58 @@ func TestComplete(t *testing.T) {
 		}
 	})
 
+	t.Run("omits reasoning summary when model capability disables it", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body map[string]any
+			json.NewDecoder(r.Body).Decode(&body)
+
+			reasoning, ok := body["reasoning"].(map[string]any)
+			if !ok {
+				t.Fatal("expected reasoning in request body")
+			}
+			if reasoning["effort"] != "high" {
+				t.Errorf("expected effort 'high', got %v", reasoning["effort"])
+			}
+			if _, ok := reasoning["summary"]; ok {
+				t.Fatalf("expected reasoning summary to be omitted, got %v", reasoning["summary"])
+			}
+
+			include, ok := body["include"].([]any)
+			if !ok {
+				t.Fatal("expected include array in request body")
+			}
+			found := false
+			for _, v := range include {
+				if v == "reasoning.encrypted_content" {
+					found = true
+				}
+			}
+			if !found {
+				t.Error("expected 'reasoning.encrypted_content' in include array")
+			}
+
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, buildSSE(
+				"response.created", `{"response":{"id":"r","model":"gpt-5.3-codex-spark"}}`,
+				"response.completed", `{"response":{"status":"completed","output":[],"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+			))
+		}))
+		defer server.Close()
+
+		p := &Provider{apiKey: "k", baseURL: server.URL, client: server.Client()}
+		req := providers.CompleteRequest{
+			Model:     providers.ModelRef{ProviderID: "openai", ModelID: "gpt-5.3-codex-spark"},
+			Messages:  []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "x"}}}},
+			Reasoning: "enabled",
+		}
+
+		for _, err := range p.Complete(context.Background(), req) {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+
 	t.Run("handles API error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(429)
@@ -1391,144 +1443,6 @@ func TestComplete(t *testing.T) {
 		}
 		if !strings.Contains(gotErr.Error(), "429") {
 			t.Errorf("error should contain status code, got: %v", gotErr)
-		}
-	})
-}
-
-func TestListModels(t *testing.T) {
-	t.Run("fetches from API and enriches with modelsdev", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/models" {
-				t.Errorf("expected /models, got %s", r.URL.Path)
-			}
-			if r.Header.Get("Authorization") != "Bearer test-key" {
-				t.Errorf("expected Bearer test-key, got %s", r.Header.Get("Authorization"))
-			}
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"data":[{"id":"gpt-4o","object":"model"},{"id":"o3","object":"model"},{"id":"ft:custom-2024","object":"model"}]}`)
-		}))
-		defer server.Close()
-
-		p := &Provider{apiKey: "test-key", baseURL: server.URL, client: server.Client()}
-		models, err := p.ListModels(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(models) != 3 {
-			t.Fatalf("expected 3 models, got %d", len(models))
-		}
-
-		// Known model: enriched from modelsdev.
-		var gpt4o *providers.ModelInfo
-		var o3model *providers.ModelInfo
-		var custom *providers.ModelInfo
-		for i := range models {
-			switch models[i].ID {
-			case "gpt-4o":
-				gpt4o = &models[i]
-			case "o3":
-				o3model = &models[i]
-			case "ft:custom-2024":
-				custom = &models[i]
-			}
-		}
-
-		if gpt4o == nil {
-			t.Fatal("expected gpt-4o in results")
-		}
-		if gpt4o.ContextWindow == 0 {
-			t.Error("expected non-zero context window for gpt-4o")
-		}
-		if gpt4o.DisplayName == "gpt-4o" {
-			t.Error("expected modelsdev to provide a display name for gpt-4o")
-		}
-
-		if o3model == nil {
-			t.Fatal("expected o3 in results")
-		}
-		if !o3model.Reasoning {
-			t.Error("expected o3 to have Reasoning=true")
-		}
-
-		// Unknown model: falls back to ID as display name.
-		if custom == nil {
-			t.Fatal("expected ft:custom-2024 in results")
-		}
-		if custom.DisplayName != "ft:custom-2024" {
-			t.Errorf("expected unknown model to use ID as display name, got %q", custom.DisplayName)
-		}
-	})
-
-	t.Run("fetches codex models from API and enriches with codex overlay", func(t *testing.T) {
-		var gotAccountID string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/backend-api/codex/models" {
-				t.Errorf("expected /backend-api/codex/models, got %s", r.URL.Path)
-			}
-			if r.Header.Get("Authorization") != "Bearer codex-key" {
-				t.Errorf("expected Bearer codex-key, got %s", r.Header.Get("Authorization"))
-			}
-			gotAccountID = r.Header.Get("ChatGPT-Account-Id")
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"data":[{"id":"gpt-5.1-codex-mini","object":"model"},{"id":"gpt-5.4","object":"model"}]}`)
-		}))
-		defer server.Close()
-
-		p := &Provider{apiKey: "codex-key", baseURL: server.URL + "/backend-api/codex", client: server.Client(), accountID: "acct_123", isCodex: true}
-		models, err := p.ListModels(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(models) != 2 {
-			t.Fatalf("expected 2 models, got %d", len(models))
-		}
-		if gotAccountID != "acct_123" {
-			t.Fatalf("expected ChatGPT-Account-Id acct_123, got %q", gotAccountID)
-		}
-
-		var codexMini *providers.ModelInfo
-		var gpt54 *providers.ModelInfo
-		for i := range models {
-			switch models[i].ID {
-			case "gpt-5.1-codex-mini":
-				codexMini = &models[i]
-			case "gpt-5.4":
-				gpt54 = &models[i]
-			}
-		}
-
-		if codexMini == nil {
-			t.Fatal("expected gpt-5.1-codex-mini in results")
-		}
-		if codexMini.DisplayName != "GPT-5.1 Codex Mini" {
-			t.Fatalf("expected codex overlay display name, got %q", codexMini.DisplayName)
-		}
-		if codexMini.ContextWindow != 272000 {
-			t.Fatalf("expected context window 272000, got %d", codexMini.ContextWindow)
-		}
-		if got := codexMini.ReasoningLevels; len(got) != 2 || got[0] != providers.ReasoningMedium || got[1] != providers.ReasoningHigh {
-			t.Fatalf("expected reasoning levels [medium high], got %v", got)
-		}
-
-		if gpt54 == nil {
-			t.Fatal("expected gpt-5.4 in results")
-		}
-		if gpt54.DisplayName != "GPT-5.4" {
-			t.Fatalf("expected codex overlay display name for gpt-5.4, got %q", gpt54.DisplayName)
-		}
-	})
-
-	t.Run("handles API error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(401)
-			fmt.Fprint(w, `{"error":"unauthorized"}`)
-		}))
-		defer server.Close()
-
-		p := &Provider{apiKey: "bad", baseURL: server.URL, client: server.Client()}
-		_, err := p.ListModels(context.Background())
-		if err == nil {
-			t.Fatal("expected error")
 		}
 	})
 }

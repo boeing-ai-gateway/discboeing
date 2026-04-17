@@ -153,10 +153,12 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 		// Resolve the effective reasoning level and map to an OpenAI effort parameter.
 		// Returns "" if reasoning should be omitted.
 		if effort := resolveOpenAIEffort(req.Reasoning, req.Model.ModelID); effort != "" {
-			body["reasoning"] = map[string]any{
-				"effort":  effort,
-				"summary": "detailed",
+			modelInfo := modelsdev.Lookup(req.Model.ProviderID, req.Model.ModelID)
+			reasoning := map[string]any{"effort": effort}
+			if modelInfo == nil || modelInfo.SupportsReasoningSummary() {
+				reasoning["summary"] = "detailed"
 			}
+			body["reasoning"] = reasoning
 			body["include"] = []string{"reasoning.encrypted_content"}
 		}
 
@@ -239,61 +241,6 @@ func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 		providers.ModelTaskChat:                {ProviderID: providerID, ModelID: "gpt-5.4"},
 		providers.ModelTaskThreadSummarization: {ProviderID: providerID, ModelID: "gpt-5.4-mini"},
 	}
-}
-
-func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	// Fetch live model IDs from the provider's /models endpoint.
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("openai: create models request: %w", err)
-	}
-	p.setAuthHeaders(httpReq)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("openai: models request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("openai: models API error %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("openai: decode models response: %w", err)
-	}
-
-	// Enrich each model with metadata from models.dev (context window,
-	// max output tokens, reasoning, display name).
-	metadataProviderID := providerID
-	if p.isCodex {
-		metadataProviderID = codexProviderID
-	}
-	var models []providers.ModelInfo
-	for _, m := range result.Data {
-		info := providers.ModelInfo{ID: m.ID, DisplayName: m.ID}
-		if md := modelsdev.Lookup(metadataProviderID, m.ID); md != nil {
-			info.DisplayName = md.Name
-			info.Reasoning = md.Reasoning
-			info.ReasoningLevels = toReasoningSlice(md.ReasoningLevels)
-			info.DefaultReasoning = providers.Reasoning(md.DefaultReasonLevel)
-			info.ContextWindow = md.ContextWindow
-			info.MaxOutputTokens = md.MaxOutputTokens
-		} else if isReasoningModelID(m.ID) {
-			// Unknown model that looks like a reasoning model: use safe defaults.
-			info.Reasoning = true
-			info.ReasoningLevels = []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh}
-			info.DefaultReasoning = providers.ReasoningMedium
-		}
-		models = append(models, info)
-	}
-	return models, nil
 }
 
 // --- Message conversion ---
@@ -1322,29 +1269,6 @@ func openAIEffort(r providers.Reasoning) string {
 	default:
 		return "high"
 	}
-}
-
-// toReasoningSlice converts a []string from models.dev into []providers.Reasoning.
-func toReasoningSlice(ss []string) []providers.Reasoning {
-	if len(ss) == 0 {
-		return nil
-	}
-	out := make([]providers.Reasoning, len(ss))
-	for i, s := range ss {
-		out[i] = providers.Reasoning(s)
-	}
-	return out
-}
-
-// isReasoningModelID returns true for model IDs that are known OpenAI
-// reasoning model families (o1, o3, o4, gpt-5, codex variants).
-func isReasoningModelID(id string) bool {
-	for _, prefix := range []string{"o1", "o3", "o4", "gpt-5", "codex"} {
-		if id == prefix || strings.HasPrefix(id, prefix+"-") {
-			return true
-		}
-	}
-	return false
 }
 
 // parseError converts a non-200 OpenAI API response into a descriptive error.

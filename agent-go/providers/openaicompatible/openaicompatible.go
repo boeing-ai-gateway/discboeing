@@ -161,57 +161,6 @@ func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 	return map[string]providers.ModelRef{}
 }
 
-// ListModels fetches available models from GET /models and enriches them with
-// metadata from models.dev (context window, max output tokens, reasoning support).
-func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("%s: create models request: %w", p.id, err)
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%s: models request failed: %w", p.id, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s: models API error %d: %s", p.id, resp.StatusCode, string(bodyBytes))
-	}
-
-	var result struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("%s: decode models response: %w", p.id, err)
-	}
-
-	var models []providers.ModelInfo
-	for _, m := range result.Data {
-		info := providers.ModelInfo{ID: m.ID, DisplayName: m.ID}
-		if md := modelsdev.Lookup(p.id, m.ID); md != nil {
-			info.DisplayName = md.Name
-			info.Reasoning = md.Reasoning
-			info.ReasoningLevels = toReasoningSlice(md.ReasoningLevels)
-			info.DefaultReasoning = providers.Reasoning(md.DefaultReasonLevel)
-			info.ContextWindow = md.ContextWindow
-			info.MaxOutputTokens = md.MaxOutputTokens
-			// If the model is known to support reasoning but no levels are specified,
-			// apply safe defaults so callers can present a choice.
-			if md.Reasoning && len(info.ReasoningLevels) == 0 {
-				info.ReasoningLevels = []providers.Reasoning{providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh}
-				info.DefaultReasoning = providers.ReasoningMedium
-			}
-		}
-		models = append(models, info)
-	}
-	return models, nil
-}
-
 // --- Message conversion ---
 
 // convertMessages converts internal messages to the Chat Completions messages
@@ -801,16 +750,4 @@ func reasoningEffortString(r providers.Reasoning) string {
 	default:
 		return "high"
 	}
-}
-
-// toReasoningSlice converts a []string from models.dev into []providers.Reasoning.
-func toReasoningSlice(ss []string) []providers.Reasoning {
-	if len(ss) == 0 {
-		return nil
-	}
-	out := make([]providers.Reasoning, len(ss))
-	for i, s := range ss {
-		out[i] = providers.Reasoning(s)
-	}
-	return out
 }

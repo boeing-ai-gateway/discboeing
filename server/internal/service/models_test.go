@@ -18,7 +18,7 @@ func TestGetModelsForProject_SkipsInactiveCredentials(t *testing.T) {
 		t.Fatalf("Failed to create credential service: %v", err)
 	}
 
-	modelsSvc := NewModelsService(st, credSvc, nil)
+	modelsSvc := NewModelsService(credSvc)
 	ctx := context.Background()
 	projectID := "test-project"
 

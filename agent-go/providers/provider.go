@@ -59,10 +59,6 @@ type Provider interface {
 	// further chunks are produced.
 	Complete(ctx context.Context, req CompleteRequest) iter.Seq2[message.ProviderMessageChunk, error]
 
-	// ListModels returns the models available from this provider
-	// with the current configuration/credentials.
-	ListModels(ctx context.Context) ([]ModelInfo, error)
-
 	// DefaultModels returns the provider's recommended models keyed by task type.
 	// Returns nil if the provider has no defaults.
 	DefaultModels() map[string]ModelRef

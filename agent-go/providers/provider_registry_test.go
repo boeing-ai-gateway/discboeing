@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"iter"
+	"slices"
 	"testing"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -11,7 +12,6 @@ import (
 // testProvider is a minimal Provider implementation for registry tests.
 type testProvider struct {
 	id       string
-	models   []ModelInfo
 	defaults map[string]ModelRef
 }
 
@@ -20,9 +20,6 @@ func (p *testProvider) Complete(_ context.Context, _ CompleteRequest) iter.Seq2[
 	return func(_ func(message.ProviderMessageChunk, error) bool) {}
 }
 func (p *testProvider) DefaultModels() map[string]ModelRef { return p.defaults }
-func (p *testProvider) ListModels(_ context.Context) ([]ModelInfo, error) {
-	return p.models, nil
-}
 
 func TestProviderRegistry_Add_Get(t *testing.T) {
 	r := NewProviderRegistry(nil)
@@ -92,45 +89,31 @@ func TestProviderRegistry_Resolve_InvalidRef(t *testing.T) {
 
 func TestProviderRegistry_ListModels(t *testing.T) {
 	r := NewProviderRegistry(nil)
-	r.Add(&testProvider{
-		id: "anthropic",
-		models: []ModelInfo{
-			{ID: "claude-sonnet-4", DisplayName: "Claude Sonnet 4"},
-			{ID: "claude-opus-4", DisplayName: "Claude Opus 4", Reasoning: true},
-		},
-	})
-	r.Add(&testProvider{
-		id: "openai",
-		models: []ModelInfo{
-			{ID: "gpt-4o", DisplayName: "GPT-4o"},
-		},
-	})
+	r.Add(&testProvider{id: "anthropic"})
+	r.Add(&testProvider{id: "openai"})
 
 	models, err := r.ListModels(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(models) != 3 {
-		t.Fatalf("expected 3 models, got %d", len(models))
+	if len(models) == 0 {
+		t.Fatal("expected models")
 	}
 
-	// Results should be sorted by provider ID (anthropic before openai).
-	expected := []struct {
-		id         string
-		providerID string
-	}{
-		{"anthropic/claude-sonnet-4", "anthropic"},
-		{"anthropic/claude-opus-4", "anthropic"},
-		{"openai/gpt-4o", "openai"},
+	found := map[string]string{}
+	for _, model := range models {
+		found[model.ID] = model.ProviderID
 	}
 
-	for i, e := range expected {
-		if models[i].ID != e.id {
-			t.Errorf("model[%d]: expected ID %q, got %q", i, e.id, models[i].ID)
-		}
-		if models[i].ProviderID != e.providerID {
-			t.Errorf("model[%d]: expected ProviderID %q, got %q", i, e.providerID, models[i].ProviderID)
+	expected := map[string]string{
+		"anthropic/claude-sonnet-4-20250514": "anthropic",
+		"anthropic/claude-opus-4-20250514":   "anthropic",
+		"openai/gpt-4o":                      "openai",
+	}
+	for id, providerID := range expected {
+		if got := found[id]; got != providerID {
+			t.Errorf("expected model %q with ProviderID %q, got %q", id, providerID, got)
 		}
 	}
 }
@@ -141,12 +124,11 @@ func TestProviderRegistry_IDs(t *testing.T) {
 	r.Add(&testProvider{id: "anthropic"})
 
 	ids := r.IDs()
-	if len(ids) != 2 {
-		t.Fatalf("expected 2 IDs, got %d", len(ids))
+	if len(ids) < 2 {
+		t.Fatalf("expected at least 2 IDs, got %d", len(ids))
 	}
-	// Should be sorted.
-	if ids[0] != "anthropic" || ids[1] != "openai" {
-		t.Errorf("expected [anthropic, openai], got %v", ids)
+	if !slices.Contains(ids, "anthropic") || !slices.Contains(ids, "openai") {
+		t.Errorf("expected IDs to include anthropic and openai, got %v", ids)
 	}
 }
 

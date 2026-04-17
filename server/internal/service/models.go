@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/obot-platform/discobot/server/internal/providers"
-	"github.com/obot-platform/discobot/server/internal/store"
 )
 
 // Model represents a model available for selection (for API responses)
@@ -22,17 +21,13 @@ type Model struct {
 
 // ModelsService handles model listing operations
 type ModelsService struct {
-	store             *store.Store
 	credentialService *CredentialService
-	sandboxService    *SandboxService
 }
 
 // NewModelsService creates a new models service
-func NewModelsService(s *store.Store, credSvc *CredentialService, sandboxSvc *SandboxService) *ModelsService {
+func NewModelsService(credSvc *CredentialService) *ModelsService {
 	return &ModelsService{
-		store:             s,
 		credentialService: credSvc,
-		sandboxService:    sandboxSvc,
 	}
 }
 
@@ -81,49 +76,6 @@ func (s *ModelsService) GetModelsForProject(ctx context.Context, projectID strin
 			ReasoningLevels:  pm.ReasoningLevels,
 			DefaultReasoning: pm.DefaultReasonLevel,
 		}
-	}
-
-	return models, nil
-}
-
-// GetModelsForSession returns available models for a session.
-// It attempts to query the live Claude API via the sandbox, but falls back to models.dev
-// data if that fails (e.g., OAuth tokens can't query the models API as of Jan 2026).
-func (s *ModelsService) GetModelsForSession(ctx context.Context, sessionID string) ([]Model, error) {
-	// Get the session
-	session, err := s.store.GetSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get session: %w", err)
-	}
-
-	// Get the session client to communicate with the sandbox
-	client, err := s.sandboxService.GetClient(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get session client: %w", err)
-	}
-
-	// Try to call the sandbox's /models endpoint which queries the Claude API
-	modelsResp, err := client.GetModels(ctx)
-	if err != nil {
-		// Fallback to project credentials if sandbox call fails
-		return s.GetModelsForProject(ctx, session.ProjectID)
-	}
-
-	// Convert to service Model type and keep only tool-capable models.
-	models := make([]Model, 0, len(modelsResp.Models))
-	for _, m := range modelsResp.Models {
-		if !providers.IsProviderModelToolCallable(m.Provider, m.ID) {
-			continue
-		}
-		models = append(models, Model{
-			ID:               m.ID,
-			Name:             m.DisplayName,
-			Provider:         m.Provider,
-			Description:      "",          // Claude API doesn't provide description
-			Reasoning:        m.Reasoning, // Extended thinking support
-			ReasoningLevels:  m.ReasoningLevels,
-			DefaultReasoning: m.DefaultReasoning,
-		})
 	}
 
 	return models, nil

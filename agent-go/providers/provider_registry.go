@@ -282,10 +282,9 @@ func (r *ProviderRegistry) ResolveSupportingModel(main ModelRef, overrides Suppo
 	return main, nil
 }
 
-// ListModels queries all providers that are currently configured (have
-// credentials available or were pinned via Add) and returns their
-// models with IDs prefixed as "providerId/modelId".
-func (r *ProviderRegistry) ListModels(ctx context.Context) ([]ModelInfo, error) {
+// ListModels returns models.dev-backed models for all providers that are
+// currently configured or pinned, with IDs prefixed as "providerId/modelId".
+func (r *ProviderRegistry) ListModels(_ context.Context) ([]ModelInfo, error) {
 	// Collect the union of pinned IDs and registered factory IDs.
 	seen := make(map[string]struct{})
 
@@ -307,22 +306,46 @@ func (r *ProviderRegistry) ListModels(ctx context.Context) ([]ModelInfo, error) 
 
 	var all []ModelInfo
 	for _, id := range ids {
-		p, err := r.Get(id)
-		if err != nil {
-			// Provider not configured — skip silently.
-			continue
+		if len(r.configForProvider(id)) == 0 {
+			r.mu.RLock()
+			_, pinned := r.pinned[id]
+			r.mu.RUnlock()
+			if !pinned {
+				continue
+			}
 		}
-		models, err := p.ListModels(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("list models from %s: %w", id, err)
-		}
-		for _, m := range models {
-			m.ID = id + "/" + m.ID
-			m.ProviderID = id
-			all = append(all, m)
+
+		for _, md := range modelsdev.AllForProvider(id) {
+			if !md.ToolCall {
+				continue
+			}
+			if md.ID == "" {
+				continue
+			}
+			all = append(all, ModelInfo{
+				ID:               id + "/" + md.ID,
+				ProviderID:       id,
+				DisplayName:      md.Name,
+				Reasoning:        md.Reasoning,
+				ReasoningLevels:  reasoningLevelsFromStrings(md.ReasoningLevels),
+				DefaultReasoning: Reasoning(md.DefaultReasonLevel),
+				ContextWindow:    md.ContextWindow,
+				MaxOutputTokens:  md.MaxOutputTokens,
+			})
 		}
 	}
 	return all, nil
+}
+
+func reasoningLevelsFromStrings(levels []string) []Reasoning {
+	if len(levels) == 0 {
+		return nil
+	}
+	result := make([]Reasoning, len(levels))
+	for i, level := range levels {
+		result[i] = Reasoning(level)
+	}
+	return result
 }
 
 // IDs returns the sorted list of provider IDs that are currently available

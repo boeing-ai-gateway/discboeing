@@ -1350,50 +1350,6 @@ func (c *SandboxChatClient) GetUserInfo(ctx context.Context, sessionID string) (
 	return &result, nil
 }
 
-// GetModels retrieves available models from the Claude API via the sandbox.
-// This calls the actual Anthropic API through the Agent API to get current model availability.
-// Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetModels(ctx context.Context, sessionID string) (*sandboxapi.ModelsResponse, error) {
-	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
-		client, err := c.getHTTPClient(ctx, sessionID)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", c.threadURL(sessionID, "/models"), nil)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
-			return nil, 0, err
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		return resp, resp.StatusCode, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get models: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result sandboxapi.ModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
 // ListCommands retrieves available slash commands from the sandbox.
 func (c *SandboxChatClient) ListCommands(ctx context.Context, sessionID string) (*sandboxapi.ListCommandsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {

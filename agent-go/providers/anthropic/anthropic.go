@@ -222,60 +222,6 @@ func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 	}
 }
 
-func (p *Provider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.baseURL+"/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: create models request: %w", err)
-	}
-	p.setAuthHeader(httpReq)
-	httpReq.Header.Set("anthropic-version", apiVersion)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: models request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("anthropic: models API error %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("anthropic: decode models response: %w", err)
-	}
-
-	var models []providers.ModelInfo
-	for _, m := range result.Data {
-		info := providers.ModelInfo{ID: m.ID, DisplayName: m.ID}
-		if md := modelsdev.Lookup(providerID, m.ID); md != nil {
-			info.DisplayName = md.Name
-			info.Reasoning = md.Reasoning
-			info.ReasoningLevels = toReasoningSlice(md.ReasoningLevels)
-			info.DefaultReasoning = providers.Reasoning(md.DefaultReasonLevel)
-			info.ContextWindow = md.ContextWindow
-			info.MaxOutputTokens = md.MaxOutputTokens
-		} else if supportsAdaptiveThinking(m.ID) {
-			// Unknown model with adaptive thinking (≥4.6): only auto/none.
-			info.Reasoning = true
-			info.ReasoningLevels = []providers.Reasoning{providers.ReasoningAuto, providers.ReasoningNone}
-			info.DefaultReasoning = providers.ReasoningAuto
-		} else if strings.Contains(m.ID, "3-7") || strings.Contains(m.ID, "claude-4") || strings.Contains(m.ID, "opus") || strings.Contains(m.ID, "sonnet") || strings.Contains(m.ID, "haiku") {
-			// Unknown Claude model that likely supports budget thinking: full range.
-			info.Reasoning = true
-			info.ReasoningLevels = []providers.Reasoning{providers.ReasoningAuto, providers.ReasoningLow, providers.ReasoningMedium, providers.ReasoningHigh, providers.ReasoningXHigh, providers.ReasoningNone}
-			info.DefaultReasoning = providers.ReasoningAuto
-		}
-		models = append(models, info)
-	}
-	return models, nil
-}
-
 // --- Message conversion ---
 
 // convertMessages extracts the system prompt and converts messages to the
@@ -998,17 +944,4 @@ func reasoningBudgetForLevel(r providers.Reasoning) int {
 	default: // high, auto, enabled, and anything else
 		return reasoningBudgetHigh
 	}
-}
-
-// toReasoningSlice converts a slice of strings from models.dev into a slice of
-// providers.Reasoning values.
-func toReasoningSlice(ss []string) []providers.Reasoning {
-	if len(ss) == 0 {
-		return nil
-	}
-	out := make([]providers.Reasoning, len(ss))
-	for i, s := range ss {
-		out[i] = providers.Reasoning(s)
-	}
-	return out
 }

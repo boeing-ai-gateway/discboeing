@@ -21,9 +21,6 @@ func (p *mockProvider) Complete(_ context.Context, _ CompleteRequest) iter.Seq2[
 }
 
 func (p *mockProvider) DefaultModels() map[string]ModelRef { return nil }
-func (p *mockProvider) ListModels(_ context.Context) ([]ModelInfo, error) {
-	return nil, nil
-}
 
 func TestRegisterAndNew(t *testing.T) {
 	// Use a unique ID to avoid conflicts with other tests.

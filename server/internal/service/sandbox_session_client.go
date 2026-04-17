@@ -268,13 +268,6 @@ func (c *SessionClient) GetUserInfo(ctx context.Context) (*sandboxapi.UserRespon
 	})
 }
 
-// GetModels retrieves available models from the Claude API via the sandbox.
-func (c *SessionClient) GetModels(ctx context.Context) (*sandboxapi.ModelsResponse, error) {
-	return withReconciliation(ctx, c, func() (*sandboxapi.ModelsResponse, error) {
-		return c.inner.GetModels(ctx, c.sessionID)
-	})
-}
-
 // GetHooksStatus retrieves hook evaluation status from the sandbox.
 func (c *SessionClient) GetHooksStatus(ctx context.Context) (*sandboxapi.HooksStatusResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.HooksStatusResponse, error) {

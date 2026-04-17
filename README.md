@@ -10,7 +10,7 @@ Discobot is a coding agent session manager. It runs Discobot's built-in coding a
 
 - **Built-in Coding Agent** — Discobot ships with its own coding agent instead of depending on third-party coding CLIs
 - **Anthropic + OpenAI Support** — Run Discobot sessions with Anthropic and OpenAI models today, with more model providers coming soon
-- **Session-Based Model Selection** — Choose which model to use for each session
+- **Thread-Level Model Selection** — Choose which model to use for each conversation thread
 - **Isolated Sandboxed Sessions** — Run parallel sessions in secure containers with full app debugging capabilities
 - **Use Your Own IDE** — Launch remote IDE sessions directly into each sandbox
 - **SSH into Sandboxes** — Direct SSH access to every sandbox environment

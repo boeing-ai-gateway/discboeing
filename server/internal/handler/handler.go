@@ -98,7 +98,7 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 	projectSvc := service.NewProjectService(s, sandboxProvider)
 	preferenceSvc := service.NewPreferenceService(s)
 
-	modelsSvc := service.NewModelsService(s, credSvc, sandboxSvc)
+	modelsSvc := service.NewModelsService(credSvc)
 
 	h := &Handler{
 		store:             s,

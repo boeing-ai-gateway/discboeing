@@ -14,6 +14,7 @@ func TestGetModelsForProvidersUsesProviderSpecificModels(t *testing.T) {
 		t.Fatal("expected codex models")
 	}
 
+	foundSpark := false
 	for _, model := range models {
 		if !strings.HasPrefix(model.ID, "codex/") {
 			t.Fatalf("expected codex-qualified model ID, got %q", model.ID)
@@ -21,12 +22,21 @@ func TestGetModelsForProvidersUsesProviderSpecificModels(t *testing.T) {
 		if model.Provider != "ChatGPT Codex" {
 			t.Fatalf("expected codex provider display name, got %q", model.Provider)
 		}
+		if model.ID == "codex/gpt-5.3-codex-spark" {
+			foundSpark = true
+		}
+	}
+	if !foundSpark {
+		t.Fatal("expected codex/gpt-5.3-codex-spark to be listed")
 	}
 }
 
 func TestIsProviderModelToolCallableUsesProviderSpecificMetadata(t *testing.T) {
 	if !IsProviderModelToolCallable("codex", "codex/gpt-5.4") {
 		t.Fatal("expected codex/gpt-5.4 to be tool callable")
+	}
+	if !IsProviderModelToolCallable("codex", "codex/gpt-5.3-codex-spark") {
+		t.Fatal("expected codex/gpt-5.3-codex-spark to be tool callable")
 	}
 
 	if IsProviderModelToolCallable("codex", "openai/gpt-4o") {
