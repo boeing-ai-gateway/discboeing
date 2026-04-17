@@ -111,9 +111,16 @@ export function createAppCredentialsDomain(
 			}
 			return response;
 		},
-		githubCallbackStatus: (
+		githubCallbackStatus: async (
 			data: GitHubCallbackStatusRequest,
-		): Promise<GitHubCallbackStatusResponse> => api.githubCallbackStatus(data),
+		): Promise<GitHubCallbackStatusResponse> => {
+			const response = await api.githubCallbackStatus(data);
+			if (response.status === "success") {
+				await store.fetch();
+				await refreshModels();
+			}
+			return response;
+		},
 		codexAuthorize: (): Promise<CodexAuthorizeResponse> => api.codexAuthorize(),
 		codexExchange: async (
 			data: CodexExchangeRequest,
@@ -135,8 +142,15 @@ export function createAppCredentialsDomain(
 			}
 			return response;
 		},
-		codexCallbackStatus: (
+		codexCallbackStatus: async (
 			data: CodexCallbackStatusRequest,
-		): Promise<CodexCallbackStatusResponse> => api.codexCallbackStatus(data),
+		): Promise<CodexCallbackStatusResponse> => {
+			const response = await api.codexCallbackStatus(data);
+			if (response.status === "success") {
+				await store.fetch();
+				await refreshModels();
+			}
+			return response;
+		},
 	};
 }
