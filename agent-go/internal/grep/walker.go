@@ -95,6 +95,13 @@ func walk(ctx context.Context, opts GrepOptions, s *searcher) (*Results, error) 
 
 		if d.IsDir() {
 			name := d.Name()
+			// Never skip the root itself, even if it is a hidden directory.
+			if path == opts.Path {
+				if gi != nil {
+					gi.LoadDir(path)
+				}
+				return nil
+			}
 			// Always skip .git directory
 			if name == ".git" {
 				return filepath.SkipDir
