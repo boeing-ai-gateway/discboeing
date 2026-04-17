@@ -138,7 +138,16 @@
 				<TabsTrigger value="appearance">Appearance</TabsTrigger>
 				<TabsTrigger value="chat">Chat</TabsTrigger>
 				{#if showUpdateTab}
-					<TabsTrigger value="update">Update</TabsTrigger>
+					<TabsTrigger value="update">
+						<span class="relative inline-flex items-center px-2">
+							Update
+							{#if updates.showBadge}
+								<span
+									class="absolute -right-1 top-0 h-2 w-2 rounded-full bg-blue-500"
+								></span>
+							{/if}
+						</span>
+					</TabsTrigger>
 				{/if}
 				<TabsTrigger value="credentials">Credentials</TabsTrigger>
 			</TabsList>
