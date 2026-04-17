@@ -33,6 +33,13 @@ type UserInfoFetcher interface {
 	GetUserInfo(ctx context.Context, sessionID string) (username string, uid, gid int, err error)
 }
 
+// SandboxEnsurer ensures a sandbox is running before an SSH connection is
+// established. It is called in handleConnection before any channels are opened.
+// If nil, sandboxes that are not running will cause the connection to be rejected.
+type SandboxEnsurer interface {
+	EnsureSandboxReady(ctx context.Context, sessionID string) error
+}
+
 // EnvVarFetcher fetches environment variables for a session from runtime-managed
 // sources like visible credentials.
 type EnvVarFetcher interface {
@@ -61,6 +68,11 @@ type Config struct {
 	// SandboxProvider is used to route connections to containers.
 	SandboxProvider sandbox.Provider
 
+	// SandboxEnsurer is called on each incoming connection to ensure the sandbox
+	// is started before channels are opened. If nil, connections to non-running
+	// sandboxes are rejected.
+	SandboxEnsurer SandboxEnsurer
+
 	// UserInfoFetcher is used to get the default user for sandbox sessions.
 	// If nil, commands run as root.
 	UserInfoFetcher UserInfoFetcher
@@ -78,6 +90,7 @@ type Config struct {
 type Server struct {
 	config            *ssh.ServerConfig
 	provider          sandbox.Provider
+	sandboxEnsurer    SandboxEnsurer
 	userInfoFetcher   UserInfoFetcher
 	envVarFetcher     EnvVarFetcher
 	connectionTracker ConnectionTracker
@@ -119,6 +132,7 @@ func New(cfg *Config) (*Server, error) {
 	return &Server{
 		config:            sshConfig,
 		provider:          cfg.SandboxProvider,
+		sandboxEnsurer:    cfg.SandboxEnsurer,
 		userInfoFetcher:   cfg.UserInfoFetcher,
 		envVarFetcher:     cfg.EnvVarFetcher,
 		connectionTracker: cfg.ConnectionTracker,
@@ -180,6 +194,16 @@ func (s *Server) Addr() string {
 	return s.addr
 }
 
+// SetSandboxEnsurer sets the SandboxEnsurer used to start stopped sandboxes on
+// incoming SSH connections. It may be called after New to break initialization
+// ordering cycles (e.g. when the ensurer depends on the dispatcher which is
+// created after the SSH server).
+func (s *Server) SetSandboxEnsurer(e SandboxEnsurer) {
+	s.mu.Lock()
+	s.sandboxEnsurer = e
+	s.mu.Unlock()
+}
+
 func (s *Server) handleConnection(netConn net.Conn) {
 	// Perform SSH handshake
 	sshConn, chans, reqs, err := ssh.NewServerConn(netConn, s.config)
@@ -193,18 +217,33 @@ func (s *Server) handleConnection(netConn net.Conn) {
 	sessionID := sshConn.User()
 	log.Printf("SSH connection from %s for session %s", sshConn.RemoteAddr(), sessionID)
 
-	// Verify sandbox exists and is running
 	ctx := context.Background()
-	sb, err := s.provider.Get(ctx, sessionID)
-	if err != nil {
-		log.Printf("SSH session %s: sandbox not found: %v", sessionID, err)
-		sshConn.Close()
-		return
-	}
-	if sb.Status != sandbox.StatusRunning {
-		log.Printf("SSH session %s: sandbox not running (status=%s)", sessionID, sb.Status)
-		sshConn.Close()
-		return
+
+	// Ensure the sandbox is running. If a SandboxEnsurer is configured it will
+	// start a stopped sandbox; otherwise we just verify it is already running.
+	s.mu.Lock()
+	ensurer := s.sandboxEnsurer
+	s.mu.Unlock()
+
+	if ensurer != nil {
+		if err := ensurer.EnsureSandboxReady(ctx, sessionID); err != nil {
+			log.Printf("SSH session %s: failed to start sandbox: %v", sessionID, err)
+			sshConn.Close()
+			return
+		}
+	} else {
+		// No ensurer — require the sandbox to already be running.
+		sb, err := s.provider.Get(ctx, sessionID)
+		if err != nil {
+			log.Printf("SSH session %s: sandbox not found: %v", sessionID, err)
+			sshConn.Close()
+			return
+		}
+		if sb.Status != sandbox.StatusRunning {
+			log.Printf("SSH session %s: sandbox not running (status=%s)", sessionID, sb.Status)
+			sshConn.Close()
+			return
+		}
 	}
 
 	// Create session handler

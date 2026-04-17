@@ -147,6 +147,76 @@ func TestSSHServer_Integration_RejectStoppedSandbox(t *testing.T) {
 	}
 }
 
+func TestSSHServer_Integration_AutoStartStoppedSandbox(t *testing.T) {
+	SkipIfShort(t) // SSH integration test
+	provider := mock.NewProvider()
+	ctx := context.Background()
+
+	// Create sandbox but don't start it
+	sessionID := "autostart-ssh-session"
+	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+
+	// Ensurer that starts the sandbox when called
+	ensurer := &mockSandboxEnsurer{provider: provider}
+
+	sshServer, err := ssh.New(&ssh.Config{
+		Address:         "127.0.0.1:0",
+		SandboxProvider: provider,
+		SandboxEnsurer:  ensurer,
+	})
+	if err != nil {
+		t.Fatalf("failed to create SSH server: %v", err)
+	}
+
+	go sshServer.Start()
+	defer sshServer.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	config := &gossh.ClientConfig{
+		User:            sessionID,
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
+		Timeout:         5 * time.Second,
+	}
+
+	// Connection should succeed because the ensurer starts the sandbox
+	client, err := gossh.Dial("tcp", sshServer.Addr(), config)
+	if err != nil {
+		t.Fatalf("expected SSH connection to succeed after auto-start: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatalf("failed to create SSH session: %v", err)
+	}
+	session.Close()
+
+	if !ensurer.called {
+		t.Error("expected SandboxEnsurer to be called")
+	}
+}
+
+// mockSandboxEnsurer implements ssh.SandboxEnsurer and starts the sandbox via provider.
+type mockSandboxEnsurer struct {
+	provider *mock.Provider
+	called   bool
+}
+
+func (m *mockSandboxEnsurer) EnsureSandboxReady(ctx context.Context, sessionID string) error {
+	m.called = true
+	sb, err := m.provider.Get(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sb.Status != sandbox.StatusRunning {
+		return m.provider.Start(ctx, sessionID)
+	}
+	return nil
+}
+
 func TestSSHServer_Integration_MultipleConnections(t *testing.T) {
 	SkipIfShort(t) // SSH integration test
 	provider := mock.NewProvider()

@@ -300,6 +300,12 @@ func main() {
 		disp.Start(context.Background())
 		log.Printf("Job dispatcher started (server ID: %s)", disp.ServerID())
 
+		// Wire the full sandbox service into the SSH server so it can auto-start
+		// stopped sandboxes when a client connects via SSH.
+		if sshServer != nil && dispSandboxSvc != nil {
+			sshServer.SetSandboxEnsurer(dispSandboxSvc)
+		}
+
 		// Start sandbox idle monitor to auto-stop idle sessions
 		if sandboxProvider != nil && sessionSvc != nil && cfg.SandboxIdleTimeout > 0 {
 			sandboxIdleMonitor = service.NewSandboxIdleMonitor(

@@ -118,6 +118,13 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 	}, nil
 }
 
+// EnsureSandboxReady checks the session state from the database and ensures
+// the sandbox is ready. For states like "stopped" or "error", it triggers reconciliation.
+// For "initializing" states, it waits briefly then reconciles if still not ready.
+func (s *SandboxService) EnsureSandboxReady(ctx context.Context, sessionID string) error {
+	return s.ensureSandboxReady(ctx, sessionID)
+}
+
 // ensureSandboxReady checks the session state from the database and ensures
 // the sandbox is ready. For states like "stopped" or "error", it triggers reconciliation.
 // For "initializing" states, it waits briefly then reconciles if still not ready.
