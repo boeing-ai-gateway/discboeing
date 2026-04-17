@@ -755,7 +755,7 @@
 								onload={handleIframeLoad}
 								onerror={handleIframeError}
 								title={`Service: ${service.id}`}
-								sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+								sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals"
 							></iframe>
 						{/key}
 					</div>
