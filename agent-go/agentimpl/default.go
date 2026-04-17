@@ -100,7 +100,7 @@ func NewDefaultAgent(
 		mcpCfg:   mcpCfg,
 		cancels:  make(map[string]context.CancelFunc),
 	}
-	go agent.ensureHelperScripts()
+	agent.ensureHelperScripts()
 	return agent
 }
 
