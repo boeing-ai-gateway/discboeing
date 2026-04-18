@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -196,7 +197,11 @@ func TestSandboxClonesGitWorkspace(t *testing.T) {
 		t.Fatal("mock sandbox should support sandbox-owned git clones")
 	}
 
-	localProvider, err := local.NewProvider(&config.Config{LocalAgentBinary: "/bin/true"})
+	localAgentBinary, err := os.Executable()
+	if err != nil {
+		t.Fatalf("failed to resolve test binary path: %v", err)
+	}
+	localProvider, err := local.NewProvider(&config.Config{LocalAgentBinary: localAgentBinary})
 	if err != nil {
 		t.Fatalf("failed to create local provider: %v", err)
 	}
