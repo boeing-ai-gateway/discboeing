@@ -172,7 +172,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		},
 	}
 
-	expandedUserParts, originalText, activeCommand := expandLegacyCommand(a.cwd, req.UserParts)
+	resolvedUserParts, originalText, activeCommand := resolveSlashCommand(a.cwd, req.UserParts)
 
 	cfg := thread.TurnConfig{
 		ProviderID:       env.modelRef.ProviderID,
@@ -181,7 +181,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		Reasoning:        providers.Reasoning(req.Reasoning),
 		PlanMode:         env.planMode,
 		Metadata:         req.Metadata,
-		UserParts:        message.UIPartsToParts(expandedUserParts),
+		UserParts:        message.UIPartsToParts(resolvedUserParts),
 		OriginalUserText: originalText,
 		Tools:            env.tools,
 		MaxSteps:         env.maxSteps,
@@ -1472,19 +1472,17 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 	return commands, nil
 }
 
-// expandLegacyCommand checks whether the user parts contain a single text
-// message starting with "/command-name [args]" that maps to a legacy command
-// (i.e. a file in .claude/commands/ or .discobot/commands/).
+// resolveSlashCommand checks whether the user parts contain a single text
+// message starting with "/command-name [args]".
 //
-// If found, the text part is replaced with the expanded command body so that
-// the LLM receives the instructions directly — matching how the real Claude
-// CLI handles slash commands programmatically rather than via the Skill tool.
-// The returned original text preserves the raw slash command for message-level
-// UI metadata.
+// Skills (.claude/skills/ or .discobot/skills/) take precedence. When found,
+// the original text is passed through unchanged so the model can decide whether
+// to invoke the Skill tool, but discobot metadata is attached for UI/state.
 //
-// Skills (.claude/skills/) are intentionally excluded: they are invoked by the
-// LLM through the Skill tool, not expanded here.
-func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string) {
+// Legacy commands (.claude/commands/ or .discobot/commands/) are expanded
+// programmatically to match Claude Code behavior. The returned original text
+// preserves the raw slash command for message-level UI metadata.
+func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string) {
 	if len(parts) == 0 {
 		return parts, "", ""
 	}
@@ -1511,15 +1509,30 @@ func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 	}
 
 	projectRoot := sessionconfig.FindProjectRoot(cwd)
+	if _, found, err := sessionconfig.LookupSkill(projectRoot, cmdName); err == nil && found {
+		annotated := make([]message.UIPart, len(parts))
+		copy(annotated, parts)
+		annotated[0] = message.UITextPart{
+			Text:  first.Text,
+			State: first.State,
+			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				OriginalCommand: text,
+				CommandKind:     string(agent.CommandKindSkill),
+			}),
+		}
+		return annotated, "", strings.TrimSpace(cmdName)
+	}
+
 	cmd, found, err := sessionconfig.LookupCommand(projectRoot, cmdName)
 	if err != nil || !found {
-		return parts, "", "" // not a known command — pass through unchanged
+		return parts, "", "" // not a known slash command — pass through unchanged
 	}
 
 	// Encode the original slash command into ProviderMetadata so the UI can
 	// display "/commit fix the bug" while the LLM receives the expanded body.
 	meta := message.MarshalProviderMetadata(message.DiscobotPartMetadata{
 		OriginalCommand: text,
+		CommandKind:     string(agent.CommandKindCommand),
 	})
 
 	expanded := make([]message.UIPart, len(parts))

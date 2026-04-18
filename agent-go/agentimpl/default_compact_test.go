@@ -253,11 +253,130 @@ func TestPromptLegacyCommand_PreservesOriginalTextInUserMessageMetadata(t *testi
 	if !ok {
 		t.Fatalf("expected first user part to be UITextPart, got %T", userChunk.Data.Message.Parts[0])
 	}
+	meta, ok := message.UnmarshalProviderMetadata(textPart.ProviderMetadata)
+	if !ok {
+		t.Fatal("expected provider metadata on expanded legacy command")
+	}
+	if meta.OriginalCommand != "/commit fix the bug" {
+		t.Fatalf("originalCommand = %q", meta.OriginalCommand)
+	}
+	if meta.CommandKind != string(agent.CommandKindCommand) {
+		t.Fatalf("commandKind = %q", meta.CommandKind)
+	}
 	if !strings.HasPrefix(textPart.Text, "Expanded command body.") {
 		t.Fatalf("expanded text = %q", textPart.Text)
 	}
 	if !strings.Contains(textPart.Text, "ARGUMENTS: fix the bug") {
 		t.Fatalf("expanded text missing arguments: %q", textPart.Text)
+	}
+}
+
+func TestPrompt_SkillSlashCommandPassesThroughToModel(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".claude", "skills", "commit"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, ".claude", "skills", "commit", "SKILL.md"),
+		[]byte("---\ndescription: Commit pending changes\n---\n# Commit\n"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	store := thread.NewStore(t.TempDir())
+	registry := providers.NewProviderRegistry(nil)
+	mockProvider := &compactCommandMockProvider{responses: []string{"Done."}}
+	registry.Add(mockProvider)
+	agentImpl := NewDefaultAgent(store, registry, nil, root, MCPConfig{})
+
+	var userChunk message.UserMessageChunk
+	foundUserChunk := false
+	sawActiveCommand := false
+	sawClearedActiveCommand := false
+	for chunk, err := range agentImpl.Prompt(context.Background(), "thread-skill-command", agent.PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{Text: "/commit fix the bug", State: "done"}},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if typed, ok := chunk.(message.ThreadUpdateChunk); ok {
+			if typed.Data.Thread.ActiveCommand == "commit" {
+				sawActiveCommand = true
+			}
+			if sawActiveCommand && typed.Data.Thread.ActiveCommand == "" {
+				sawClearedActiveCommand = true
+			}
+		}
+		if typed, ok := chunk.(message.UserMessageChunk); ok {
+			userChunk = typed
+			foundUserChunk = true
+		}
+	}
+	if !foundUserChunk {
+		t.Fatal("expected user message chunk")
+	}
+	if !sawActiveCommand {
+		t.Fatal("expected thread update with active command")
+	}
+	if !sawClearedActiveCommand {
+		t.Fatal("expected thread update clearing active command")
+	}
+	if len(userChunk.Data.Message.Metadata) != 0 {
+		t.Fatalf("expected no originalText metadata for skill slash command, got %s", userChunk.Data.Message.Metadata)
+	}
+	textPart, ok := userChunk.Data.Message.Parts[0].(message.UITextPart)
+	if !ok {
+		t.Fatalf("expected first user part to be UITextPart, got %T", userChunk.Data.Message.Parts[0])
+	}
+	if textPart.Text != "/commit fix the bug" {
+		t.Fatalf("user text = %q", textPart.Text)
+	}
+	meta, ok := message.UnmarshalProviderMetadata(textPart.ProviderMetadata)
+	if !ok {
+		t.Fatal("expected provider metadata on skill slash command")
+	}
+	if meta.OriginalCommand != "/commit fix the bug" {
+		t.Fatalf("originalCommand = %q", meta.OriginalCommand)
+	}
+	if meta.CommandKind != string(agent.CommandKindSkill) {
+		t.Fatalf("commandKind = %q", meta.CommandKind)
+	}
+
+	mockProvider.mu.Lock()
+	defer mockProvider.mu.Unlock()
+	if len(mockProvider.requests) == 0 {
+		t.Fatal("expected provider request")
+	}
+	var providerText string
+	for _, req := range mockProvider.requests {
+		if isThreadNameRequest(req) {
+			continue
+		}
+		for _, msg := range req.Messages {
+			if msg.Role != "user" {
+				continue
+			}
+			for _, rawPart := range msg.Parts {
+				part, ok := rawPart.(message.TextPart)
+				if !ok {
+					continue
+				}
+				if strings.TrimSpace(part.Text) == "/commit fix the bug" {
+					providerText = part.Text
+					break
+				}
+			}
+			if providerText != "" {
+				break
+			}
+		}
+		if providerText != "" {
+			break
+		}
+	}
+	if providerText != "/commit fix the bug" {
+		t.Fatalf("provider saw %q", providerText)
 	}
 }
 

@@ -17,8 +17,11 @@ type Part interface {
 // AI SDK ProviderMetadata shape (Record<providerNamespace, JSONObject>).
 type DiscobotPartMetadata struct {
 	// OriginalCommand is the raw slash-command string the user typed (e.g.
-	// "/commit fix the bug") before it was expanded into the message text.
+	// "/commit fix the bug").
 	OriginalCommand string `json:"originalCommand,omitempty"`
+	// CommandKind records whether the slash command resolved to a skill or a
+	// legacy command.
+	CommandKind string `json:"commandKind,omitempty"`
 	// ReminderKind classifies framework-injected reminder parts.
 	ReminderKind string `json:"reminderKind,omitempty"`
 	// Mode records the current execution mode for mode-reminder parts.
