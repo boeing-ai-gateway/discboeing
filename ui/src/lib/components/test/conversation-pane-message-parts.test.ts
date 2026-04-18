@@ -7,6 +7,7 @@ import {
 	getAssistantMessagePartGroups,
 	getHookFailureMessageMetadata,
 	getHookPathDisplayLabel,
+	getUserMessageSlashCommandMetadata,
 	isAssistantToolPartQueued,
 	getUserMessageOriginalCommandDisplay,
 	getUserMessageOriginalText,
@@ -253,9 +254,11 @@ test("getUserMessageOriginalCommandDisplay parses slash commands into command an
 			parts: [{ type: "text", text: "Expanded command body." }],
 		}),
 		{
+			kind: "command",
 			command: "foo",
 			args: "bar baz",
 			rawText: "/foo bar baz",
+			text: null,
 		},
 	);
 });
@@ -269,9 +272,59 @@ test("getUserMessageOriginalCommandDisplay parses slash commands without args", 
 			parts: [{ type: "text", text: "Expanded command body." }],
 		}),
 		{
+			kind: "command",
 			command: "foo",
 			args: null,
 			rawText: "/foo",
+			text: null,
+		},
+	);
+});
+
+test("getUserMessageSlashCommandMetadata returns the slash command metadata for user messages", () => {
+	assert.deepEqual(
+		getUserMessageSlashCommandMetadata({
+			id: "user-skill-1",
+			role: "user",
+			metadata: {
+				originalText: "/commit fix the bug",
+				slashCommand: {
+					name: "commit",
+					kind: "skill",
+					text: "# Commit",
+				},
+			},
+			parts: [{ type: "text", text: "/commit fix the bug" }],
+		}),
+		{
+			name: "commit",
+			kind: "skill",
+			text: "# Commit",
+		},
+	);
+});
+
+test("getUserMessageOriginalCommandDisplay includes skill kind and text", () => {
+	assert.deepEqual(
+		getUserMessageOriginalCommandDisplay({
+			id: "user-skill-2",
+			role: "user",
+			metadata: {
+				originalText: "/commit fix the bug",
+				slashCommand: {
+					name: "commit",
+					kind: "skill",
+					text: "# Commit",
+				},
+			},
+			parts: [{ type: "text", text: "/commit fix the bug" }],
+		}),
+		{
+			kind: "skill",
+			command: "commit",
+			args: "fix the bug",
+			rawText: "/commit fix the bug",
+			text: "# Commit",
 		},
 	);
 });

@@ -242,12 +242,26 @@ func TestPromptLegacyCommand_PreservesOriginalTextInUserMessageMetadata(t *testi
 
 	var metadata struct {
 		OriginalText string `json:"originalText"`
+		SlashCommand struct {
+			Name string `json:"name"`
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		} `json:"slashCommand"`
 	}
 	if err := json.Unmarshal(userChunk.Data.Message.Metadata, &metadata); err != nil {
 		t.Fatalf("unmarshal metadata: %v", err)
 	}
 	if metadata.OriginalText != "/commit fix the bug" {
 		t.Fatalf("originalText = %q", metadata.OriginalText)
+	}
+	if metadata.SlashCommand.Name != "commit" {
+		t.Fatalf("slashCommand.name = %q", metadata.SlashCommand.Name)
+	}
+	if metadata.SlashCommand.Kind != string(agent.CommandKindCommand) {
+		t.Fatalf("slashCommand.kind = %q", metadata.SlashCommand.Kind)
+	}
+	if metadata.SlashCommand.Text != "" {
+		t.Fatalf("slashCommand.text = %q", metadata.SlashCommand.Text)
 	}
 	textPart, ok := userChunk.Data.Message.Parts[0].(message.UITextPart)
 	if !ok {
@@ -322,8 +336,28 @@ func TestPrompt_SkillSlashCommandPassesThroughToModel(t *testing.T) {
 	if !sawClearedActiveCommand {
 		t.Fatal("expected thread update clearing active command")
 	}
-	if len(userChunk.Data.Message.Metadata) != 0 {
-		t.Fatalf("expected no originalText metadata for skill slash command, got %s", userChunk.Data.Message.Metadata)
+	var metadata struct {
+		OriginalText string `json:"originalText"`
+		SlashCommand struct {
+			Name string `json:"name"`
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		} `json:"slashCommand"`
+	}
+	if err := json.Unmarshal(userChunk.Data.Message.Metadata, &metadata); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if metadata.OriginalText != "/commit fix the bug" {
+		t.Fatalf("originalText = %q", metadata.OriginalText)
+	}
+	if metadata.SlashCommand.Name != "commit" {
+		t.Fatalf("slashCommand.name = %q", metadata.SlashCommand.Name)
+	}
+	if metadata.SlashCommand.Kind != string(agent.CommandKindSkill) {
+		t.Fatalf("slashCommand.kind = %q", metadata.SlashCommand.Kind)
+	}
+	if metadata.SlashCommand.Text != "# Commit" {
+		t.Fatalf("slashCommand.text = %q", metadata.SlashCommand.Text)
 	}
 	textPart, ok := userChunk.Data.Message.Parts[0].(message.UITextPart)
 	if !ok {

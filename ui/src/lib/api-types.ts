@@ -50,10 +50,17 @@ export interface QueuedPrompt {
 	mode?: string;
 }
 
+export type ChatSlashCommandMetadata = {
+	name?: string;
+	kind?: "skill" | "command";
+	text?: string;
+};
+
 export type ChatMessageMetadata = {
 	model?: string;
 	reasoning?: string;
 	originalText?: string;
+	slashCommand?: ChatSlashCommandMetadata;
 } & Record<string, unknown>;
 
 export type ChatMessageDataTypes = {

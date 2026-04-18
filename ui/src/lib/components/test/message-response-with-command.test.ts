@@ -16,7 +16,7 @@ function readComponentSource(filePath: string) {
 	return readFileSync(filePath, "utf-8");
 }
 
-test("message response with command component renders command and generated text controls", () => {
+test("message response with command component renders command and skill sections", () => {
 	const source = readComponentSource(MESSAGE_RESPONSE_WITH_COMMAND_COMPONENT);
 
 	assert.match(
@@ -25,9 +25,14 @@ test("message response with command component renders command and generated text
 	);
 	assert.match(source, /getUserMessageOriginalCommandDisplay/);
 	assert.match(source, /getUserMessageOriginalText/);
-	assert.match(source, /Command: \{originalCommand\.command\}/);
-	assert.match(source, /Generated text/);
-	assert.match(source, /Show generated text/);
+	assert.match(
+		source,
+		/originalCommand\.kind === "skill" \? "Skill" : "Command"/,
+	);
+	assert.match(source, /"Skill text"/);
+	assert.match(source, /"Generated text"/);
+	assert.match(source, /"skill text"/);
+	assert.match(source, /"generated text"/);
 });
 
 test("conversation pane delegates user text rendering to MessageResponseWithCommand", () => {

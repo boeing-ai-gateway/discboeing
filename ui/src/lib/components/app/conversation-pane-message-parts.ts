@@ -1,4 +1,4 @@
-import type { ChatMessage } from "$lib/api-types";
+import type { ChatMessage, ChatSlashCommandMetadata } from "$lib/api-types";
 import { isToolRunningState } from "../ai/tool/tool-status";
 
 export type ConversationPaneMessagePart = ChatMessage["parts"][number];
@@ -12,9 +12,11 @@ export type UserConversationPaneRenderablePart = Extract<
 >;
 
 export type UserOriginalCommandDisplay = {
+	kind: "command" | "skill";
 	command: string;
 	args: string | null;
 	rawText: string;
+	text: string | null;
 };
 
 export type AssistantMessagePartGroups = {
@@ -89,6 +91,19 @@ export function getUserMessageOriginalText(
 	return originalText ? originalText : null;
 }
 
+export function getUserMessageSlashCommandMetadata(
+	message: ChatMessage,
+): ChatSlashCommandMetadata | null {
+	if (message.role !== "user") {
+		return null;
+	}
+	const slashCommand = message.metadata?.slashCommand;
+	if (!slashCommand || typeof slashCommand !== "object") {
+		return null;
+	}
+	return slashCommand;
+}
+
 export function getUserMessageOriginalCommandDisplay(
 	message: ChatMessage,
 ): UserOriginalCommandDisplay | null {
@@ -96,6 +111,7 @@ export function getUserMessageOriginalCommandDisplay(
 	if (!originalText) {
 		return null;
 	}
+	const slashCommand = getUserMessageSlashCommandMetadata(message);
 
 	const trimmed = originalText.trim();
 	if (!trimmed.startsWith("/")) {
@@ -110,18 +126,22 @@ export function getUserMessageOriginalCommandDisplay(
 	const firstWhitespaceIndex = withoutSlash.search(/\s/);
 	if (firstWhitespaceIndex === -1) {
 		return {
+			kind: slashCommand?.kind === "skill" ? "skill" : "command",
 			command: withoutSlash,
 			args: null,
 			rawText: originalText,
+			text: typeof slashCommand?.text === "string" ? slashCommand.text : null,
 		};
 	}
 
 	const command = withoutSlash.slice(0, firstWhitespaceIndex);
 	const args = withoutSlash.slice(firstWhitespaceIndex).trim();
 	return {
+		kind: slashCommand?.kind === "skill" ? "skill" : "command",
 		command,
 		args: args.length > 0 ? args : null,
 		rawText: originalText,
+		text: typeof slashCommand?.text === "string" ? slashCommand.text : null,
 	};
 }
 

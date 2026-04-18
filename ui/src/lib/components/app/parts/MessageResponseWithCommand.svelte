@@ -34,6 +34,12 @@
 	const originalCommand = $derived(
 		getUserMessageOriginalCommandDisplay(message),
 	);
+	const expandedSectionLabel = $derived(
+		originalCommand?.kind === "skill" ? "Skill text" : "Generated text",
+	);
+	const expandedToggleLabel = $derived(
+		`${isGeneratedTextExpanded ? "Hide" : "Show"} ${originalCommand?.kind === "skill" ? "skill text" : "generated text"}`,
+	);
 </script>
 
 {#if originalCommand}
@@ -43,13 +49,13 @@
 	>
 		<div class="group space-y-2">
 			<CollapsibleTrigger
-				aria-label={`${isGeneratedTextExpanded ? "Hide" : "Show"} generated text`}
+				aria-label={expandedToggleLabel}
 				class="flex w-full items-center gap-2 rounded-sm text-left text-muted-foreground transition hover:text-foreground"
 				type="button"
 			>
 				<ChevronRightIcon class="size-3.5 shrink-0" />
 				<p class="text-[11px] uppercase tracking-[0.14em]">
-					Command: {originalCommand.command}
+					{originalCommand.kind === "skill" ? "Skill" : "Command"}: {originalCommand.command}
 				</p>
 				<ChevronDownIcon
 					class={`size-3 transition-all group-hover:opacity-100 ${isGeneratedTextExpanded ? "rotate-180 opacity-100" : "opacity-0"}`}
@@ -63,11 +69,15 @@
 					class="w-full space-y-2 rounded-md border border-border/60 bg-muted/30 p-3"
 				>
 					<p class="text-muted-foreground text-xs uppercase tracking-[0.14em]">
-						Generated text
+						{expandedSectionLabel}
 					</p>
-					{#each textParts as part, index (`${message.id}-${part.type}-${index}`)}
-						<MessageResponse text={part.text} />
-					{/each}
+					{#if originalCommand.kind === "skill" && originalCommand.text}
+						<MessageResponse text={originalCommand.text} />
+					{:else}
+						{#each textParts as part, index (`${message.id}-${part.type}-${index}`)}
+							<MessageResponse text={part.text} />
+						{/each}
+					{/if}
 				</div>
 			</CollapsibleContent>
 		</div>

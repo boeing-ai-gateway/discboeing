@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
@@ -17,6 +18,14 @@ import (
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/modelsdev"
 )
+
+// UserSlashCommandMetadata stores UI-only metadata about a slash command that
+// initiated the user message.
+type UserSlashCommandMetadata struct {
+	Name string            `json:"name,omitempty"`
+	Kind agent.CommandKind `json:"kind,omitempty"`
+	Text string            `json:"text,omitempty"`
+}
 
 // TurnConfig holds the parameters for a single turn of the agent loop.
 // It is persisted to disk as part of TurnState for crash recovery.
@@ -29,6 +38,7 @@ type TurnConfig struct {
 	UserMessage      message.Message            `json:"userMessage"` // serializable form of UserParts
 	Metadata         json.RawMessage            `json:"metadata,omitempty"`
 	OriginalUserText string                     `json:"originalUserText,omitempty"`
+	SlashCommand     *UserSlashCommandMetadata  `json:"slashCommand,omitempty"`
 	Tools            []providers.ToolDefinition `json:"tools,omitempty"`
 	MaxTokens        *int                       `json:"maxTokens,omitempty"`
 	Temperature      *float64                   `json:"temperature,omitempty"`
@@ -66,7 +76,7 @@ func RunTurn(
 		cfg.UserMessage = message.Message{
 			Role:      "user",
 			Parts:     cfg.UserParts,
-			Metadata:  buildUserMessageMetadata(cfg.Metadata, cfg.OriginalUserText),
+			Metadata:  buildUserMessageMetadata(cfg.Metadata, cfg.OriginalUserText, cfg.SlashCommand),
 			CreatedAt: &startedAt,
 		}
 
@@ -1679,7 +1689,7 @@ func formatRetryMessage(event transport.RetryEvent) string {
 
 // buildUserMessageMetadata returns a JSON-encoded metadata object for UI-only
 // user message fields that should not be sent back to providers.
-func buildUserMessageMetadata(metadata json.RawMessage, originalText string) json.RawMessage {
+func buildUserMessageMetadata(metadata json.RawMessage, originalText string, slashCommand *UserSlashCommandMetadata) json.RawMessage {
 	payload := map[string]any{}
 	if len(metadata) > 0 {
 		if err := json.Unmarshal(metadata, &payload); err != nil {
@@ -1688,6 +1698,9 @@ func buildUserMessageMetadata(metadata json.RawMessage, originalText string) jso
 	}
 	if originalText != "" {
 		payload["originalText"] = originalText
+	}
+	if slashCommand != nil {
+		payload["slashCommand"] = slashCommand
 	}
 	if len(payload) == 0 {
 		return nil

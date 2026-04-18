@@ -172,7 +172,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		},
 	}
 
-	resolvedUserParts, originalText, activeCommand := resolveSlashCommand(a.cwd, req.UserParts)
+	resolvedUserParts, originalText, activeCommand, slashCommand := resolveSlashCommand(a.cwd, req.UserParts)
 
 	cfg := thread.TurnConfig{
 		ProviderID:       env.modelRef.ProviderID,
@@ -183,6 +183,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		Metadata:         req.Metadata,
 		UserParts:        message.UIPartsToParts(resolvedUserParts),
 		OriginalUserText: originalText,
+		SlashCommand:     slashCommand,
 		Tools:            env.tools,
 		MaxSteps:         env.maxSteps,
 	}
@@ -1482,17 +1483,17 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 // Legacy commands (.claude/commands/ or .discobot/commands/) are expanded
 // programmatically to match Claude Code behavior. The returned original text
 // preserves the raw slash command for message-level UI metadata.
-func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string) {
+func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string, *thread.UserSlashCommandMetadata) {
 	if len(parts) == 0 {
-		return parts, "", ""
+		return parts, "", "", nil
 	}
 	first, ok := parts[0].(message.UITextPart)
 	if !ok {
-		return parts, "", ""
+		return parts, "", "", nil
 	}
 	text := strings.TrimLeft(first.Text, " \t")
 	if !strings.HasPrefix(text, "/") {
-		return parts, "", ""
+		return parts, "", "", nil
 	}
 
 	// Parse "/command-name [args...]"
@@ -1505,11 +1506,11 @@ func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 		cmdName = rest
 	}
 	if cmdName == "" {
-		return parts, "", ""
+		return parts, "", "", nil
 	}
 
 	projectRoot := sessionconfig.FindProjectRoot(cwd)
-	if _, found, err := sessionconfig.LookupSkill(projectRoot, cmdName); err == nil && found {
+	if skill, found, err := sessionconfig.LookupSkill(projectRoot, cmdName); err == nil && found {
 		annotated := make([]message.UIPart, len(parts))
 		copy(annotated, parts)
 		annotated[0] = message.UITextPart{
@@ -1520,12 +1521,16 @@ func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 				CommandKind:     string(agent.CommandKindSkill),
 			}),
 		}
-		return annotated, "", strings.TrimSpace(cmdName)
+		return annotated, text, strings.TrimSpace(cmdName), &thread.UserSlashCommandMetadata{
+			Name: strings.TrimSpace(cmdName),
+			Kind: agent.CommandKindSkill,
+			Text: skill.Body,
+		}
 	}
 
 	cmd, found, err := sessionconfig.LookupCommand(projectRoot, cmdName)
 	if err != nil || !found {
-		return parts, "", "" // not a known slash command — pass through unchanged
+		return parts, "", "", nil // not a known slash command — pass through unchanged
 	}
 
 	// Encode the original slash command into ProviderMetadata so the UI can
@@ -1538,7 +1543,10 @@ func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 	expanded := make([]message.UIPart, len(parts))
 	copy(expanded, parts)
 	expanded[0] = message.UITextPart{Text: cmd.Expand(args), State: first.State, ProviderMetadata: meta}
-	return expanded, text, strings.TrimSpace(cmdName)
+	return expanded, text, strings.TrimSpace(cmdName), &thread.UserSlashCommandMetadata{
+		Name: strings.TrimSpace(cmdName),
+		Kind: agent.CommandKindCommand,
+	}
 }
 
 // ListThreads returns all thread IDs.
