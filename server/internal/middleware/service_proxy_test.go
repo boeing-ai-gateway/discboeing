@@ -188,8 +188,8 @@ func (m *mockSandboxProvider) ExecStream(_ context.Context, _ string, _ []string
 	return nil, nil
 }
 
-func (m *mockSandboxProvider) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
-	return m.client, nil
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }
 
 func (m *mockSandboxProvider) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {

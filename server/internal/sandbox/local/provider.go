@@ -33,6 +33,8 @@ type Provider struct {
 	processes   map[string]*processInfo
 	processesMu sync.RWMutex
 
+	httpClients *sandbox.HTTPClientCache
+
 	// eventCh broadcasts state change events
 	eventCh   chan sandbox.StateEvent
 	eventSubs []chan sandbox.StateEvent
@@ -71,10 +73,11 @@ func NewProvider(cfg *config.Config) (*Provider, error) {
 	log.Printf("Local provider using agent API binary: %s", resolvedPath)
 
 	p := &Provider{
-		cfg:        cfg,
-		binaryPath: resolvedPath,
-		processes:  make(map[string]*processInfo),
-		eventCh:    make(chan sandbox.StateEvent, 100),
+		cfg:         cfg,
+		binaryPath:  resolvedPath,
+		processes:   make(map[string]*processInfo),
+		httpClients: sandbox.NewHTTPClientCache(),
+		eventCh:     make(chan sandbox.StateEvent, 100),
 	}
 
 	return p, nil
@@ -325,8 +328,11 @@ func (p *Provider) Stop(_ context.Context, sessionID string, timeout time.Durati
 	}
 
 	if info.status != sandbox.StatusRunning || info.cmd == nil {
+		p.httpClients.Remove(sessionID)
 		return nil // Already stopped
 	}
+
+	p.httpClients.Remove(sessionID)
 
 	// Send SIGTERM for graceful shutdown
 	if err := info.cmd.Process.Signal(syscall.SIGTERM); err != nil {
@@ -386,6 +392,7 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, _ ...sandbox.Re
 
 	// Remove from map
 	delete(p.processes, sessionID)
+	p.httpClients.Remove(sessionID)
 
 	// Broadcast removed event
 	p.broadcastEvent(sandbox.StateEvent{
@@ -561,35 +568,42 @@ func (p *Provider) ExecStream(_ context.Context, sessionID string, _ []string, _
 	}, nil
 }
 
-// HTTPClient returns an HTTP client configured to communicate with the sandbox.
-func (p *Provider) HTTPClient(_ context.Context, sessionID string) (*http.Client, error) {
+// AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
+func (p *Provider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	p.processesMu.RLock()
 	info, exists := p.processes[sessionID]
 	p.processesMu.RUnlock()
 
 	if !exists {
+		p.httpClients.Remove(sessionID)
 		return nil, sandbox.ErrNotFound
 	}
 
 	if info.port == 0 {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("sandbox not started yet")
 	}
 
-	// Create HTTP client that connects to localhost:port
-	client := &http.Client{
-		Transport: &http.Transport{
-			DisableKeepAlives: true,
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", info.port))
+	addr := fmt.Sprintf("127.0.0.1:%d", info.port)
+	return p.httpClients.Acquire(sessionID, addr, func() (*http.Client, error) {
+		return &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{
+						Timeout:   30 * time.Second,
+						KeepAlive: 30 * time.Second,
+					}).DialContext(ctx, "tcp", addr)
+				},
 			},
-		},
-		Timeout: 60 * time.Second,
-	}
-
-	return client, nil
+			Timeout: 60 * time.Second,
+		}, nil
+	})
 }
 
 // Watch returns a channel that receives sandbox state change events.

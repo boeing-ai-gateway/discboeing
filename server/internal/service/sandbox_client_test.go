@@ -18,7 +18,7 @@ import (
 )
 
 // mockSandboxProvider implements sandbox.Provider for testing SandboxChatClient.
-// Only Get, GetSecret, and HTTPClient are used by SandboxChatClient.
+// Only Get, GetSecret, and AcquireHTTPClient are used by SandboxChatClient.
 type mockSandboxProvider struct {
 	secret  string
 	client  *http.Client
@@ -79,14 +79,14 @@ func (m *mockSandboxProvider) GetSecret(_ context.Context, _ string) (string, er
 	return m.secret, nil
 }
 
-func (m *mockSandboxProvider) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
 	if m.client != nil {
-		return m.client, nil
+		return &sandbox.HTTPClientLease{Client: m.client}, nil
 	}
 	if m.handler != nil {
-		return &http.Client{Transport: &testRoundTripper{handler: m.handler}}, nil
+		return &sandbox.HTTPClientLease{Client: &http.Client{Transport: &testRoundTripper{handler: m.handler}}}, nil
 	}
-	return &http.Client{}, nil
+	return &sandbox.HTTPClientLease{Client: &http.Client{}}, nil
 }
 
 // testRoundTripper implements http.RoundTripper for testing.
@@ -930,8 +930,8 @@ func (m *mockSandboxProviderWithTransport) List(_ context.Context) ([]*sandbox.S
 func (m *mockSandboxProviderWithTransport) GetSecret(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
-func (m *mockSandboxProviderWithTransport) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
-	return &http.Client{Transport: m.transport}, nil
+func (m *mockSandboxProviderWithTransport) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+	return &sandbox.HTTPClientLease{Client: &http.Client{Transport: m.transport}}, nil
 }
 func (m *mockSandboxProviderWithTransport) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {
 	ch := make(chan sandbox.StateEvent)

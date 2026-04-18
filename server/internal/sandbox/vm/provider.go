@@ -74,6 +74,8 @@ type Provider struct {
 
 	// stopCh signals background goroutines to stop.
 	stopCh chan struct{}
+
+	httpClients *sandbox.HTTPClientCache
 }
 
 // Option configures a Provider.
@@ -103,6 +105,7 @@ func NewProvider(cfg *config.Config, vmManager ProjectVMManager, resolver Sessio
 		cfg:                    cfg,
 		vmManager:              vmManager,
 		dockerProviders:        make(map[string]*docker.Provider),
+		httpClients:            sandbox.NewHTTPClientCache(),
 		sessionProjectResolver: resolver,
 		systemManager:          systemManager,
 		idleSince:              make(map[string]time.Time),
@@ -188,6 +191,7 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 
 // Stop stops a sandbox.
 func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+	p.httpClients.Remove(sessionID)
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
 		return err
@@ -197,11 +201,16 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 
 // Remove removes a sandbox.
 func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+	p.httpClients.Remove(sessionID)
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
-	return dockerProv.Remove(ctx, sessionID, opts...)
+	if err := dockerProv.Remove(ctx, sessionID, opts...); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Get returns sandbox info.
@@ -270,22 +279,25 @@ func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []strin
 	return dockerProv.ExecStream(ctx, sessionID, cmd, opts)
 }
 
-// HTTPClient returns an HTTP client that connects to the sandbox's published port
+// AcquireHTTPClient returns a leased HTTP client that connects to the sandbox's published port
 // via the VM's port dialer.
-func (p *Provider) HTTPClient(ctx context.Context, sessionID string) (*http.Client, error) {
+func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	projectID, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
+		p.httpClients.Remove(sessionID)
 		return nil, err
 	}
 
 	pvm, ok := p.GetVMForProject(projectID)
 	if !ok {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("no VM found for project %q", projectID)
 	}
 
 	// Get the sandbox to find its published port
 	sb, err := dockerProv.Get(ctx, sessionID)
 	if err != nil {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("failed to get sandbox info: %w", err)
 	}
 
@@ -298,16 +310,25 @@ func (p *Provider) HTTPClient(ctx context.Context, sessionID string) (*http.Clie
 		}
 	}
 	if hostPort == 0 {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("no published port found for sandbox %s", sessionID)
 	}
 
-	return &http.Client{
-		Transport: &http.Transport{
-			DisableKeepAlives: true,
-			DialContext:       pvm.PortDialer(hostPort),
-		},
-		Timeout: 60 * time.Second,
-	}, nil
+	target := fmt.Sprintf("%p:%d", pvm, hostPort)
+	return p.httpClients.Acquire(sessionID, target, func() (*http.Client, error) {
+		return &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				DialContext:           pvm.PortDialer(hostPort),
+			},
+			Timeout: 60 * time.Second,
+		}, nil
+	})
 }
 
 // Watch merges state events from all Docker providers.

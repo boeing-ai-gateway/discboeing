@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"runtime"
 	"time"
 )
@@ -330,8 +329,8 @@ func (p *ProviderProxy) ExecStream(ctx context.Context, sessionID string, cmd []
 	return provider.ExecStream(ctx, sessionID, cmd, opts)
 }
 
-// HTTPClient returns an HTTP client using the provider determined by providerGetter.
-func (p *ProviderProxy) HTTPClient(ctx context.Context, sessionID string) (*http.Client, error) {
+// AcquireHTTPClient returns a leased HTTP client using the provider determined by providerGetter.
+func (p *ProviderProxy) AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error) {
 	providerName, err := p.providerGetter(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider for session: %w", err)
@@ -342,7 +341,7 @@ func (p *ProviderProxy) HTTPClient(ctx context.Context, sessionID string) (*http
 		return nil, err
 	}
 
-	return provider.HTTPClient(ctx, sessionID)
+	return AcquireHTTPClient(ctx, provider, sessionID)
 }
 
 // Watch watches all providers and merges events.

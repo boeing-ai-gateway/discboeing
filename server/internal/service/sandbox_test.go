@@ -232,8 +232,8 @@ func (p *imageIDAwareReconcileProvider) ExecStream(_ context.Context, _ string, 
 	return nil, errors.New("not implemented")
 }
 
-func (p *imageIDAwareReconcileProvider) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
-	return &http.Client{}, nil
+func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+	return &sandbox.HTTPClientLease{Client: &http.Client{}}, nil
 }
 
 func (p *imageIDAwareReconcileProvider) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {
@@ -288,8 +288,8 @@ func (p *healthAwareProvider) nextHealthStatus() int {
 	return statusCode
 }
 
-func (p *healthAwareProvider) HTTPClient(_ context.Context, _ string) (*http.Client, error) {
-	return &http.Client{
+func (p *healthAwareProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+	return &sandbox.HTTPClientLease{Client: &http.Client{
 		Transport: healthRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			rec := newResponseRecorder()
 			switch req.URL.Path {
@@ -300,7 +300,7 @@ func (p *healthAwareProvider) HTTPClient(_ context.Context, _ string) (*http.Cli
 			}
 			return rec.Result(), nil
 		}),
-	}, nil
+	}}, nil
 }
 
 type healthRoundTripFunc func(*http.Request) (*http.Response, error)

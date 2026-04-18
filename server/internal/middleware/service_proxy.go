@@ -115,7 +115,7 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 			}
 
 			// Get HTTP client for the sandbox (handles transport-level routing)
-			client, err := provider.HTTPClient(ctx, sessionID)
+			clientLease, err := sandbox.AcquireHTTPClient(ctx, provider, sessionID)
 			if err != nil {
 				writeJSONError(w, http.StatusBadGateway, "Failed to connect to sandbox", map[string]string{
 					"sessionId": sessionID,
@@ -124,6 +124,7 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 				})
 				return
 			}
+			defer clientLease.Release()
 
 			// Target URL for the agent-api
 			// The agent-api expects: /services/:id/http/*
@@ -162,7 +163,7 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 						req.Header.Set("X-Forwarded-For", clientIP)
 					}
 				},
-				Transport: client.Transport,
+				Transport: clientLease.Client.Transport,
 				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 					log.Printf("[ServiceProxy] Error proxying request to %s: %v", r.URL.String(), err)
 					writeJSONError(w, http.StatusBadGateway, "Service unavailable", map[string]string{

@@ -86,6 +86,8 @@ type Provider struct {
 	containerIDs   map[string]string
 	containerIDsMu sync.RWMutex
 
+	httpClients *sandbox.HTTPClientCache
+
 	// vsockDialer is an optional custom dialer for VSOCK connections
 	vsockDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
@@ -141,6 +143,7 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 	p := &Provider{
 		cfg:                    cfg,
 		containerIDs:           make(map[string]string),
+		httpClients:            sandbox.NewHTTPClientCache(),
 		sessionProjectResolver: sessionProjectResolver,
 	}
 
@@ -880,6 +883,8 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 
 // Stop stops a running sandbox gracefully.
 func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+	p.httpClients.Remove(sessionID)
+
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		return err
@@ -927,6 +932,8 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 		delete(p.containerIDs, sessionID)
 		p.containerIDsMu.Unlock()
 	}
+
+	p.httpClients.Remove(sessionID)
 
 	// Explicitly remove the named data volume if requested
 	if cfg.RemoveVolumes {
@@ -1616,15 +1623,16 @@ func (s *dockerStream) Wait(ctx context.Context) (int, error) {
 	return inspect.ExitCode, nil
 }
 
-// HTTPClient returns an HTTP client configured to communicate with the sandbox.
-// For Docker, this creates a client that connects to the mapped TCP port.
-func (p *Provider) HTTPClient(ctx context.Context, sessionID string) (*http.Client, error) {
+// AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
+func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	sb, err := p.Get(ctx, sessionID)
 	if err != nil {
+		p.httpClients.Remove(sessionID)
 		return nil, err
 	}
 
 	if sb.Status != sandbox.StatusRunning {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("sandbox is not running: %s", sb.Status)
 	}
 
@@ -1637,6 +1645,7 @@ func (p *Provider) HTTPClient(ctx context.Context, sessionID string) (*http.Clie
 		}
 	}
 	if httpPort == nil {
+		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("sandbox does not expose port %d", containerPort)
 	}
 
@@ -1647,19 +1656,24 @@ func (p *Provider) HTTPClient(ctx context.Context, sessionID string) (*http.Clie
 
 	// Create a custom transport that always dials to the sandbox's mapped port
 	baseURL := fmt.Sprintf("%s:%d", hostIP, httpPort.HostPort)
-	transport := &http.Transport{
-		DisableKeepAlives: true,
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			// Always connect to the sandbox's mapped port, ignoring the addr from the URL
-			var d net.Dialer
-			return d.DialContext(ctx, "tcp", baseURL)
-		},
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   60 * time.Second,
-	}, nil
+	return p.httpClients.Acquire(sessionID, baseURL, func() (*http.Client, error) {
+		return &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					// Always connect to the sandbox's mapped port, ignoring the addr from the URL.
+					var d net.Dialer
+					return d.DialContext(ctx, "tcp", baseURL)
+				},
+			},
+			Timeout: 60 * time.Second,
+		}, nil
+	})
 }
 
 // Watch returns a channel that receives sandbox state change events.

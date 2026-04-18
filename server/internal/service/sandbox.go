@@ -459,17 +459,18 @@ func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID str
 }
 
 func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID string) (int, error) {
-	httpClient, err := s.provider.HTTPClient(ctx, sessionID)
+	httpClientLease, err := sandbox.AcquireHTTPClient(ctx, s.provider, sessionID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get HTTP client: %w", err)
 	}
+	defer httpClientLease.Release()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/health", nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClientLease.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}

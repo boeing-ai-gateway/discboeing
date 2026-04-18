@@ -63,10 +63,9 @@ type Provider interface {
 	// This is used for SFTP and port forwarding.
 	ExecStream(ctx context.Context, sessionID string, cmd []string, opts ExecStreamOptions) (Stream, error)
 
-	// HTTPClient returns an HTTP client configured to communicate with the sandbox.
-	// The client handles the transport layer (TCP for Docker, vsock for vz, etc.).
-	// The returned client connects to the sandbox's HTTP server (port 3002).
-	HTTPClient(ctx context.Context, sessionID string) (*http.Client, error)
+	// AcquireHTTPClient returns a leased HTTP client configured to communicate with
+	// the sandbox. Callers must release the lease after use.
+	AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error)
 
 	// Watch returns a channel that receives sandbox state change events.
 	// On subscription, it replays the current state of all existing sandboxes,

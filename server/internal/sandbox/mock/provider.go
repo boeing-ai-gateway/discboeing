@@ -357,10 +357,9 @@ func (p *Provider) List(_ context.Context) ([]*sandbox.Sandbox, error) {
 	return result, nil
 }
 
-// HTTPClient returns an HTTP client configured to communicate with the sandbox.
-// For mock provider, this returns a client that uses the configured HTTPHandler
-// without making real network connections.
-func (p *Provider) HTTPClient(_ context.Context, sessionID string) (*http.Client, error) {
+// AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
+// For mock provider, this uses the configured HTTPHandler without making real network connections.
+func (p *Provider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -382,9 +381,9 @@ func (p *Provider) HTTPClient(_ context.Context, sessionID string) (*http.Client
 		handler = p.defaultHTTPHandler
 	}
 
-	return &http.Client{
+	return &sandbox.HTTPClientLease{Client: &http.Client{
 		Transport: &mockRoundTripper{handler: handler},
-	}, nil
+	}}, nil
 }
 
 // GetSandboxes returns all sandboxes (for test assertions).
