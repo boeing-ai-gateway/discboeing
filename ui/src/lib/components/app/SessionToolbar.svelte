@@ -1,15 +1,20 @@
 <script lang="ts">
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-	import { untrack } from "svelte";
-	import ClockIcon from "@lucide/svelte/icons/clock";
 	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
+	import { untrack } from "svelte";
+	import ClockIcon from "@lucide/svelte/icons/clock";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
+	import PlayIcon from "@lucide/svelte/icons/play";
+	import type { Component } from "svelte";
+	import { SvelteSet } from "svelte/reactivity";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
+		DropdownMenuGroup,
 		DropdownMenuItem,
 		DropdownMenuLabel,
+		DropdownMenuSeparator,
 		DropdownMenuSub,
 		DropdownMenuSubContent,
 		DropdownMenuSubTrigger,
@@ -34,12 +39,24 @@
 		sessionId: string;
 	};
 
+	type LucideIcon = Component<{ class?: string }>;
+	type LucideIconModule = { default: LucideIcon };
+
 	let { sessionId }: Props = $props();
 	const app = useAppContext();
 	const isMobile = new IsMobile(1024);
+	const lucideIconModules = import.meta.glob<LucideIconModule>(
+		"../../../../node_modules/@lucide/svelte/dist/icons/*.js",
+	);
+	const staticCommandIcons: Record<string, LucideIcon> = {
+		"git-branch": GitBranchIcon,
+		"git-commit": GitCommitIcon,
+	};
+	const attemptedCommandIcons = new SvelteSet<string>();
 	const preferences = app.preferences;
 	const session = useSessionContext(untrack(() => sessionId));
 	const sessionView = session.ui;
+	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	const sessionServices = $derived.by(() =>
 		session.services.list.filter(
 			(service) => service.id !== DESKTOP_SERVICE_ID,
@@ -190,47 +207,131 @@
 	const uiCommands = $derived.by(() => session.commands.uiVisible);
 	const primaryCommand = $derived.by(() => uiCommands[0] ?? null);
 	const secondaryCommands = $derived.by(() => uiCommands.slice(1));
+	const commandGroups = $derived.by(() => {
+		const groups: Array<{
+			key: string;
+			label: string | null;
+			commands: AgentCommand[];
+		}> = [];
+		for (const command of uiCommands) {
+			const label = command.discobot?.group?.trim() || null;
+			const key = label ?? "__ungrouped__";
+			const existing = groups.find((group) => group.key === key);
+			if (existing) {
+				existing.commands.push(command);
+				continue;
+			}
+			groups.push({ key, label, commands: [command] });
+		}
+		return groups;
+	});
+	const groupedSecondaryCommands = $derived.by(() =>
+		commandGroups
+			.map((group) => ({
+				...group,
+				commands: group.commands.filter(
+					(command) => command !== primaryCommand,
+				),
+			}))
+			.filter((group) => group.commands.length > 0),
+	);
+
+	$effect(() => {
+		for (const iconName of uiCommands
+			.map((command) => normalizeLucideIconName(command.discobot?.icon))
+			.filter((iconName): iconName is string => iconName !== null)) {
+			if (attemptedCommandIcons.has(iconName)) {
+				continue;
+			}
+			attemptedCommandIcons.add(iconName);
+			if (staticCommandIcons[iconName]) {
+				continue;
+			}
+			const loader =
+				lucideIconModules[
+					`../../../../node_modules/@lucide/svelte/dist/icons/${iconName}.js`
+				];
+			if (!loader) {
+				continue;
+			}
+			void loader().then((module) => {
+				loadedCommandIcons = {
+					...loadedCommandIcons,
+					[iconName]: module.default,
+				};
+			});
+		}
+	});
 	const operationState = $derived.by(() => {
 		const isPending = session.current?.status === "pending";
-		const isCommitting = session.current?.status === "committing";
-		const showBusy =
-			session.commands.startingName !== null ||
-			session.commands.credentialDialog.open ||
-			isPending ||
-			isCommitting;
-		const startingCommand =
-			uiCommands.find(
-				(command) =>
-					command.name ===
-					(session.commands.startingName ??
-						session.commands.credentialDialog.command?.name),
-			) ?? null;
+		const activeCommandName = normalizeActiveCommandName(
+			session.threads.selected?.activeCommand,
+		);
+		const showBusy = activeCommandName !== null || isPending;
+		const activeCommand =
+			uiCommands.find((command) => command.name === activeCommandName) ?? null;
 		const primaryLabel =
 			primaryCommand?.discobot?.label || primaryCommand?.name || "Run";
-		const busyLabel = startingCommand
-			? `${startingCommand.discobot?.label || startingCommand.name}...`
-			: "Working...";
 		return {
+			activeCommandName,
 			showSplitButton: secondaryCommands.length > 0,
 			showPending: isPending,
 			showBusy,
 			buttonLabel: isPending
 				? "Pending..."
-				: showBusy
-					? busyLabel
-					: primaryLabel,
+				: activeCommand
+					? activeCommand.discobot?.activeLabel?.trim() ||
+						`${activeCommand.discobot?.label || activeCommand.name}...`
+					: activeCommandName
+						? `${activeCommandName}...`
+						: primaryLabel,
 		};
 	});
 	const operationDisabled = $derived.by(
-		() => !session.current || !primaryCommand || operationState.showBusy,
+		() =>
+			!session.current ||
+			!primaryCommand ||
+			operationState.showBusy ||
+			session.commands.isSubmitting ||
+			session.commands.credentialDialog.open,
 	);
 
 	function commandLabel(command: AgentCommand): string {
 		return command.discobot?.label?.trim() || command.name;
 	}
 
-	function commandIcon(command: AgentCommand) {
-		return command.name.includes("rebase") ? GitBranchIcon : GitCommitIcon;
+	function normalizeLucideIconName(
+		name: string | null | undefined,
+	): string | null {
+		const trimmed = name?.trim() ?? "";
+		if (trimmed.length === 0) {
+			return null;
+		}
+		return trimmed
+			.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+			.replace(/[\s_]+/g, "-")
+			.toLowerCase();
+	}
+
+	function commandIcon(command: AgentCommand): LucideIcon {
+		const iconName = normalizeLucideIconName(command.discobot?.icon);
+		if (!iconName) {
+			return PlayIcon;
+		}
+		return (
+			staticCommandIcons[iconName] ?? loadedCommandIcons[iconName] ?? PlayIcon
+		);
+	}
+
+	function normalizeActiveCommandName(
+		name: string | null | undefined,
+	): string | null {
+		const trimmed = name?.trim() ?? "";
+		return trimmed.length > 0 ? trimmed : null;
+	}
+
+	function commandBusy(command: AgentCommand) {
+		return operationState.activeCommandName === command.name;
 	}
 
 	function handlePrimaryCommand() {
@@ -358,8 +459,8 @@
 								size="xs"
 								disabled={operationDisabled}
 								class="rounded-r-[calc(var(--radius)-1px)] rounded-l-none border-0 border-l border-border bg-transparent px-2 shadow-none dark:bg-transparent"
-								aria-label="More git actions"
-								title="More git actions"
+								aria-label="More actions"
+								title="More actions"
 							>
 								<ChevronDownIcon class="size-3.5" />
 							</Button>
@@ -367,20 +468,33 @@
 					</DropdownMenuTrigger>
 				</div>
 				<DropdownMenuContent align="end" sideOffset={8} class="min-w-[8rem]">
-					<DropdownMenuLabel
-						class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
-					>
-						Git actions
-					</DropdownMenuLabel>
-					{#each secondaryCommands as command}
-						<DropdownMenuItem
-							onclick={() => handleCommand(command)}
-							class="gap-2"
-						>
-							{@const Icon = commandIcon(command)}
-							<Icon class="size-3.5" />
-							{commandLabel(command)}
-						</DropdownMenuItem>
+					{#each groupedSecondaryCommands as group, index}
+						{#if index > 0}
+							<DropdownMenuSeparator />
+						{/if}
+						<DropdownMenuGroup>
+							{#if group.label}
+								<DropdownMenuLabel
+									class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
+								>
+									{group.label}
+								</DropdownMenuLabel>
+							{/if}
+							{#each group.commands as command}
+								<DropdownMenuItem
+									onclick={() => handleCommand(command)}
+									class="gap-2"
+								>
+									{#if commandBusy(command)}
+										<Loader2Icon class="size-3.5 animate-spin" />
+									{:else}
+										{@const Icon = commandIcon(command)}
+										<Icon class="size-3.5" />
+									{/if}
+									{commandLabel(command)}
+								</DropdownMenuItem>
+							{/each}
+						</DropdownMenuGroup>
 					{/each}
 				</DropdownMenuContent>
 			</DropdownMenu>

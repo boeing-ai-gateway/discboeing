@@ -52,18 +52,18 @@ This separation allows a session to be `ready` and `committing` at the same time
 
 ### Status Values
 
-| Status | Description |
-|--------|-------------|
-| `initializing` | Session just created, starting setup process |
-| `reinitializing` | Recreating sandbox after it was deleted |
-| `cloning` | Cloning git repository for the workspace |
-| `pulling_image` | Pulling the runtime image |
-| `creating_sandbox` | Creating the sandbox container environment |
-| `ready` | Session is ready for use. Sandbox is running. |
-| `stopped` | Sandbox is stopped. Will restart on demand. |
-| `error` | Something failed during setup. Check `errorMessage`. |
-| `removing` | Session is being deleted asynchronously |
-| `removed` | Session has been deleted. |
+| Status             | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `initializing`     | Session just created, starting setup process         |
+| `reinitializing`   | Recreating sandbox after it was deleted              |
+| `cloning`          | Cloning git repository for the workspace             |
+| `pulling_image`    | Pulling the runtime image                            |
+| `creating_sandbox` | Creating the sandbox container environment           |
+| `ready`            | Session is ready for use. Sandbox is running.        |
+| `stopped`          | Sandbox is stopped. Will restart on demand.          |
+| `error`            | Something failed during setup. Check `errorMessage`. |
+| `removing`         | Session is being deleted asynchronously              |
+| `removed`          | Session has been deleted.                            |
 
 ### Prompt Submission Durability
 
@@ -93,30 +93,37 @@ The persisted prompt payload is encrypted at rest while the submission is pendin
 
 ### Status Values
 
-| Status | Description |
-|--------|-------------|
-| `""` (empty) | No commit in progress (default state) |
-| `pending` | Commit requested, job enqueued, waiting to send to agent |
+| Status       | Description                                                               |
+| ------------ | ------------------------------------------------------------------------- |
+| `""` (empty) | No commit in progress (default state)                                     |
+| `pending`    | Commit requested, job enqueued, waiting to send to agent                  |
 | `committing` | Operation command (`/discobot-commit`) sent to agent, waiting for patches |
-| `completed` | Commit completed successfully |
-| `failed` | Commit failed. Check `commitError` for details. |
+| `completed`  | Commit completed successfully                                             |
+| `failed`     | Commit failed. Check `commitError` for details.                           |
 
-The commit and rebase toolbar actions are discovered from agent command metadata.
-Discobot command frontmatter marks UI-visible commands with `discobot-ui: true`,
-so the toolbar follows whatever command variant the sandbox installs for the
-current workspace.
+Toolbar command actions are discovered from agent command metadata. Discobot
+command frontmatter marks UI-visible commands with `discobot-ui: true`, and can
+also provide `discobot-label`, `discobot-active-label`, `discobot-icon`,
+`discobot-order`, and `discobot-group` metadata to drive button labels,
+running-state labels, toolbar icons (using Lucide icon names), ordering, and
+dropdown grouping. The running indicator itself is driven by the selected
+thread's `activeCommand`; empty or omitted values mean no command is running.
+The toolbar may briefly disable actions while a command request is being
+submitted, but it does not maintain a separate local running-state model. That
+keeps the toolbar aligned with whatever command set the sandbox installs for
+the current workspace.
 
 ### Session Commit Fields
 
 Internal session state stores only the operation state plus a stable merge target:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `commitStatus` | string | Current commit state |
-| `commitOperation` | string | Active operation (`commit`) |
-| `commitError` | string | Error message if `commitStatus = "failed"` |
-| `targetRef` | string | Merge target ref resolved at operation time. Defaults to `HEAD`. |
-| `appliedCommit` | string | Final commit SHA after patches apply to the workspace (commit flow only) |
+| Field             | Type   | Description                                                              |
+| ----------------- | ------ | ------------------------------------------------------------------------ |
+| `commitStatus`    | string | Current commit state                                                     |
+| `commitOperation` | string | Active operation (`commit`)                                              |
+| `commitError`     | string | Error message if `commitStatus = "failed"`                               |
+| `targetRef`       | string | Merge target ref resolved at operation time. Defaults to `HEAD`.         |
+| `appliedCommit`   | string | Final commit SHA after patches apply to the workspace (commit flow only) |
 
 No rolling base or ancestry watermark fields are stored on the session. The concrete
 target SHA is resolved fresh from the workspace whenever commit or rebase runs.
@@ -134,13 +141,13 @@ bundle for audit/debugging.
 The REST API does not expose `commitStatus` or `commitError` directly on session responses.
 Instead it flattens commit state into the existing session fields:
 
-| Internal state | REST `status` | REST `errorMessage` |
-|---|---|---|
-| `commitStatus = "pending"` | `pending` | omitted |
-| `commitStatus = "committing"` | `committing` | omitted |
-| `commitStatus = "completed"` + `commitOperation = "commit"` | `committed` | omitted |
-| `commitStatus = "failed"` | `error` | `commitError` |
-| no commit in progress | session lifecycle `status` | session `errorMessage` when applicable |
+| Internal state                                              | REST `status`              | REST `errorMessage`                    |
+| ----------------------------------------------------------- | -------------------------- | -------------------------------------- |
+| `commitStatus = "pending"`                                  | `pending`                  | omitted                                |
+| `commitStatus = "committing"`                               | `committing`               | omitted                                |
+| `commitStatus = "completed"` + `commitOperation = "commit"` | `committed`                | omitted                                |
+| `commitStatus = "failed"`                                   | `error`                    | `commitError`                          |
+| no commit in progress                                       | session lifecycle `status` | session `errorMessage` when applicable |
 
 ---
 
@@ -276,15 +283,17 @@ GET /commits?target={resolvedTargetCommit}
 ```
 
 **Response (success)**:
+
 ```json
 {
-    "patches": "<git format-patch output>",
-    "commitCount": 2,
-    "headCommit": "<sandbox head sha>"
+  "patches": "<git format-patch output>",
+  "commitCount": 2,
+  "headCommit": "<sandbox head sha>"
 }
 ```
 
 **Response (error)**:
+
 ```json
 {
     "error": "invalid_target" | "no_commits" | "not_git_repo"
@@ -313,15 +322,16 @@ git am --keep-cr < patches.patch
 
 The job is designed to handle server restarts safely:
 
-| Job restarts when... | State | Action |
-|---------------------|-------|--------|
-| Before sending to agent | `pending`, `appliedCommit=""` | Resolve current `targetRef`, try existing patches, send `/discobot-commit` if needed |
-| After sending, before apply | `committing`, `appliedCommit=""` | Resolve current `targetRef`, fetch patches, apply |
-| After apply, before complete | `committing`, `appliedCommit` set | Verify commit exists, mark `completed` |
-| Already done | `completed` | No-op |
-| Target moved before fetch | `pending`/`committing`, `appliedCommit=""` | Re-resolve the target commit and request a fresh bundle |
+| Job restarts when...         | State                                      | Action                                                                               |
+| ---------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Before sending to agent      | `pending`, `appliedCommit=""`              | Resolve current `targetRef`, try existing patches, send `/discobot-commit` if needed |
+| After sending, before apply  | `committing`, `appliedCommit=""`           | Resolve current `targetRef`, fetch patches, apply                                    |
+| After apply, before complete | `committing`, `appliedCommit` set          | Verify commit exists, mark `completed`                                               |
+| Already done                 | `completed`                                | No-op                                                                                |
+| Target moved before fetch    | `pending`/`committing`, `appliedCommit=""` | Re-resolve the target commit and request a fresh bundle                              |
 
 **Key idempotency checks**:
+
 1. Always resolve `targetRef` to a concrete workspace commit immediately before preview, apply, or validation
 2. `appliedCommit` being set indicates patches were applied
 3. Agent patch generation is idempotent: repeated fetches return changes relative to the current target
@@ -330,23 +340,25 @@ The job is designed to handle server restarts safely:
 
 ## Error Handling
 
-| Error | Result | User Action |
-|-------|--------|-------------|
-| Sandbox not running | Auto-reconcile (start sandbox), retry operation | None - handled automatically |
-| Agent-api returns `no_commits` with a dirty working tree | `failed` + error message | Finish or discard sandbox changes, then retry |
-| Agent-api returns `invalid_target` or `not_git_repo` | `failed` + error message | Reconcile the session, then retry |
-| Patch application fails | `failed` + error message | Click Commit to retry |
-| Verification fails | `failed` + error message | Click Commit to retry |
+| Error                                                    | Result                                          | User Action                                   |
+| -------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------- |
+| Sandbox not running                                      | Auto-reconcile (start sandbox), retry operation | None - handled automatically                  |
+| Agent-api returns `no_commits` with a dirty working tree | `failed` + error message                        | Finish or discard sandbox changes, then retry |
+| Agent-api returns `invalid_target` or `not_git_repo`     | `failed` + error message                        | Reconcile the session, then retry             |
+| Patch application fails                                  | `failed` + error message                        | Click Commit to retry                         |
+| Verification fails                                       | `failed` + error message                        | Click Commit to retry                         |
 
 ### Sandbox Reconciliation
 
 If the sandbox is not running when a commit operation is attempted, the system automatically:
+
 1. Detects sandbox unavailability errors (`ErrNotRunning`, `ErrNotFound`, or "sandbox not running" messages)
 2. Updates session status to `reinitializing`
 3. Starts the sandbox via `Initialize()`
 4. Retries the original operation
 
 This reconciliation happens transparently at three points in the commit flow:
+
 - **Optimistic patch check** (`tryApplyExistingPatches`)
 - **Sending commit prompt** (`sendCommitPrompt`)
 - **Fetching patches** (`fetchAndApplyPatches`)
@@ -360,13 +372,13 @@ current `targetRef`.
 
 ## Chat Behavior
 
-| Session Status | Commit Status | Chat Allowed |
-|---------------|---------------|--------------|
-| Any | `pending` | **No** - Input disabled |
-| Any | `committing` | **No** - Input disabled |
-| `ready` | `""` / `completed` / `failed` | Yes |
-| `stopped` | `""` / `completed` / `failed` | Yes (restarts sandbox) |
-| `error` | Any | No |
+| Session Status | Commit Status                 | Chat Allowed            |
+| -------------- | ----------------------------- | ----------------------- |
+| Any            | `pending`                     | **No** - Input disabled |
+| Any            | `committing`                  | **No** - Input disabled |
+| `ready`        | `""` / `completed` / `failed` | Yes                     |
+| `stopped`      | `""` / `completed` / `failed` | Yes (restarts sandbox)  |
+| `error`        | Any                           | No                      |
 
 ---
 
@@ -376,11 +388,11 @@ All `commitStatus` changes fire `session_updated` SSE event:
 
 ```json
 {
-    "type": "session_updated",
-    "data": {
-        "sessionId": "abc123",
-        "status": ""
-    }
+  "type": "session_updated",
+  "data": {
+    "sessionId": "abc123",
+    "status": ""
+  }
 }
 ```
 
@@ -392,28 +404,28 @@ Client re-fetches session to get updated public `status`, `errorMessage`, and `a
 
 ### Backend
 
-| Component | File | Changes |
-|-----------|------|---------|
-| Model | `server/internal/model/model.go` | Add `CommitError`, `TargetRef`, `AppliedCommit` fields and target-aware commit logs |
-| Service | `server/internal/service/session.go` | Update `CommitSession()`, `PerformCommit()`, and runtime target resolution |
-| Job | `server/internal/jobs/session_commit.go` | Already exists, update executor |
-| Git | `server/internal/service/git.go` | Add `ApplyPatches()` method and target commit helpers |
-| Handler | `server/internal/handler/chat.go` | Approval answer handling, preview, and chat blocking during commit |
+| Component | File                                     | Changes                                                                             |
+| --------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| Model     | `server/internal/model/model.go`         | Add `CommitError`, `TargetRef`, `AppliedCommit` fields and target-aware commit logs |
+| Service   | `server/internal/service/session.go`     | Update `CommitSession()`, `PerformCommit()`, and runtime target resolution          |
+| Job       | `server/internal/jobs/session_commit.go` | Already exists, update executor                                                     |
+| Git       | `server/internal/service/git.go`         | Add `ApplyPatches()` method and target commit helpers                               |
+| Handler   | `server/internal/handler/chat.go`        | Approval answer handling, preview, and chat blocking during commit                  |
 
 ### Agent-API
 
-| Component | File | Changes |
-|-----------|------|---------|
-| Handler | `agent-go/internal/handler/commits.go` | `GET /commits?target=...` endpoint |
-| Git | `agent-go/internal/gitops/gitops.go` | Target-based `git format-patch` execution and synthetic bundle generation |
+| Component | File                                   | Changes                                                                   |
+| --------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| Handler   | `agent-go/internal/handler/commits.go` | `GET /commits?target=...` endpoint                                        |
+| Git       | `agent-go/internal/gitops/gitops.go`   | Target-based `git format-patch` execution and synthetic bundle generation |
 
 ### Frontend
 
-| Component | File | Changes |
-|-----------|------|---------|
-| Types | `ui/src/lib/api-types.ts` | Add `targetRef` and `appliedCommit` session fields |
-| Tool renderer | `ui/src/lib/components/ai/tool-renderers/` | Show approval-time commit preview and raw patch/diff views |
-| Session UI | `ui/src/lib/components/app/` | Surface public status/error states and commit action wiring |
+| Component     | File                                       | Changes                                                     |
+| ------------- | ------------------------------------------ | ----------------------------------------------------------- |
+| Types         | `ui/src/lib/api-types.ts`                  | Add `targetRef` and `appliedCommit` session fields          |
+| Tool renderer | `ui/src/lib/components/ai/tool-renderers/` | Show approval-time commit preview and raw patch/diff views  |
+| Session UI    | `ui/src/lib/components/app/`               | Surface public status/error states and commit action wiring |
 
 ---
 

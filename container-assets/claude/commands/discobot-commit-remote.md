@@ -3,6 +3,8 @@ name: discobot-commit
 description: Commit session changes by pushing a branch and opening a pull request upstream
 discobot-ui: true
 discobot-label: Commit
+discobot-icon: git-commit
+discobot-group: Git
 discobot-order: 10
 discobot-credential-request:
   - env-var: GH_TOKEN

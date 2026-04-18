@@ -3,6 +3,8 @@ name: discobot-rebase
 description: Rebase session changes onto the tracked upstream branch
 discobot-ui: true
 discobot-label: Rebase
+discobot-icon: git-branch
+discobot-group: Git
 discobot-order: 20
 ---
 

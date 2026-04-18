@@ -23,8 +23,7 @@ export function getSessionToolbarOperationState(args: {
 	const primaryAction = "commit";
 	const primaryLabel = "Commit";
 	const isPending = args.session?.status === SessionStatus.PENDING;
-	const isCommitting = args.session?.status === SessionStatus.COMMITTING;
-	const showBusy = args.startingOperation !== null || isPending || isCommitting;
+	const showBusy = args.startingOperation !== null || isPending;
 	const activeOperation = args.startingOperation ?? primaryAction;
 	const progressLabel =
 		args.startingOperation === "rebase"
@@ -45,7 +44,7 @@ export function getSessionToolbarOperationState(args: {
 		showBusy,
 		buttonLabel: isPending
 			? "Pending..."
-			: showBusy
+			: args.startingOperation !== null
 				? progressLabel
 				: primaryLabel,
 	};

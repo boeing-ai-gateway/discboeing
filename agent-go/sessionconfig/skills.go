@@ -35,6 +35,9 @@ type SkillConfig struct {
 type DiscobotCommandMetadata struct {
 	UI                bool
 	Label             string
+	ActiveLabel       string
+	Icon              string
+	Group             string
 	Order             int
 	CredentialRequest []DiscobotCredentialRequest
 }
@@ -430,6 +433,15 @@ func parseDiscobotMetadata(fm map[string]any) DiscobotCommandMetadata {
 	if value, ok := stringFrontmatterValue(fm, "discobot-label", "Discobot Label"); ok {
 		meta.Label = value
 	}
+	if value, ok := stringFrontmatterValue(fm, "discobot-active-label", "Discobot Active Label"); ok {
+		meta.ActiveLabel = value
+	}
+	if value, ok := stringFrontmatterValue(fm, "discobot-icon", "Discobot Icon"); ok {
+		meta.Icon = value
+	}
+	if value, ok := stringFrontmatterValue(fm, "discobot-group", "Discobot Group"); ok {
+		meta.Group = value
+	}
 	if value, ok := intFrontmatterValue(fm, "discobot-order", "Discobot Order"); ok {
 		meta.Order = value
 	}
@@ -446,6 +458,21 @@ func parseDiscobotMetadata(fm map[string]any) DiscobotCommandMetadata {
 		if meta.Label == "" {
 			if value, ok := stringFrontmatterValue(nested, "label"); ok {
 				meta.Label = value
+			}
+		}
+		if meta.ActiveLabel == "" {
+			if value, ok := stringFrontmatterValue(nested, "active-label", "activeLabel"); ok {
+				meta.ActiveLabel = value
+			}
+		}
+		if meta.Icon == "" {
+			if value, ok := stringFrontmatterValue(nested, "icon"); ok {
+				meta.Icon = value
+			}
+		}
+		if meta.Group == "" {
+			if value, ok := stringFrontmatterValue(nested, "group"); ok {
+				meta.Group = value
 			}
 		}
 		if meta.Order == 0 {

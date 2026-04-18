@@ -17,6 +17,7 @@ export interface Thread {
 	reasoning?: string;
 	mode: string;
 	state?: ThreadState;
+	activeCommand?: string; // empty or omitted when no command is running
 	pending?: boolean;
 	promptQueue?: QueuedPrompt[];
 }
@@ -271,6 +272,9 @@ export interface AgentCommandCredentialRequest {
 export interface AgentCommandDiscobotMetadata {
 	ui?: boolean;
 	label?: string;
+	activeLabel?: string;
+	icon?: string;
+	group?: string;
 	order?: number;
 	credentialRequest?: AgentCommandCredentialRequest[];
 }

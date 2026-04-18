@@ -76,7 +76,7 @@ test("shows pending state from the public session status", () => {
 	assert.equal(state.buttonLabel, "Pending...");
 });
 
-test("uses a generic busy label for server-driven progress without an operation hint", () => {
+test("does not show command progress for committing status without an active operation hint", () => {
 	const state = getSessionToolbarOperationState({
 		filesChanged: 1,
 		session: makeSession({
@@ -86,6 +86,6 @@ test("uses a generic busy label for server-driven progress without an operation 
 	});
 
 	assert.equal(state.showPending, false);
-	assert.equal(state.showBusy, true);
-	assert.equal(state.buttonLabel, "Working...");
+	assert.equal(state.showBusy, false);
+	assert.equal(state.buttonLabel, "Commit");
 });

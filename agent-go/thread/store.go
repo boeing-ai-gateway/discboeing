@@ -674,6 +674,10 @@ type Config struct {
 	LastTurnState State `json:"lastTurnState,omitempty"`
 	// ActiveLeafID tracks the currently selected branch head for this thread.
 	ActiveLeafID string `json:"activeLeafId,omitempty"`
+	// ActiveCommand is the slash-command name currently driving thread work.
+	// It is cleared when the thread is no longer actively processing that
+	// command, including when a turn pauses for user input.
+	ActiveCommand string `json:"activeCommand,omitempty"`
 	// CommunicatedCredentials tracks which session-scoped credential and use IDs
 	// have already been reported to the LLM for this thread.
 	CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials,omitempty"`
@@ -942,6 +946,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Mode                    ModeState                       `json:"mode"`
 		LastTurnState           State                           `json:"lastTurnState"`
 		ActiveLeafID            string                          `json:"activeLeafId"`
+		ActiveCommand           string                          `json:"activeCommand"`
 		CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials"`
 		PromptQueue             []QueuedPrompt                  `json:"promptQueue"`
 	}
@@ -969,6 +974,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Mode:                    mode,
 		LastTurnState:           raw.LastTurnState,
 		ActiveLeafID:            raw.ActiveLeafID,
+		ActiveCommand:           strings.TrimSpace(raw.ActiveCommand),
 		CommunicatedCredentials: NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
 		PromptQueue:             raw.PromptQueue,
 	}, nil

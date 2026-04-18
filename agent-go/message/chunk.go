@@ -332,16 +332,17 @@ func (DataChunk) providerChunk()      {}
 
 // ThreadUpdateInfo mirrors the thread summary shape exposed by the agent API.
 type ThreadUpdateInfo struct {
-	ID           string                   `json:"id"`
-	Name         string                   `json:"name"`
-	LastMessage  string                   `json:"lastMessage,omitempty"`
-	ErrorMessage string                   `json:"errorMessage,omitempty"`
-	Model        string                   `json:"model,omitempty"`
-	Reasoning    string                   `json:"reasoning,omitempty"`
-	Mode         string                   `json:"mode"`
-	State        string                   `json:"state,omitempty"`
-	Pending      *bool                    `json:"pending,omitempty"`
-	PromptQueue  []ThreadQueuedPromptInfo `json:"promptQueue,omitempty"`
+	ID            string                   `json:"id"`
+	Name          string                   `json:"name"`
+	LastMessage   string                   `json:"lastMessage,omitempty"`
+	ErrorMessage  string                   `json:"errorMessage,omitempty"`
+	Model         string                   `json:"model,omitempty"`
+	Reasoning     string                   `json:"reasoning,omitempty"`
+	Mode          string                   `json:"mode"`
+	State         string                   `json:"state,omitempty"`
+	ActiveCommand string                   `json:"activeCommand,omitempty"`
+	Pending       *bool                    `json:"pending,omitempty"`
+	PromptQueue   []ThreadQueuedPromptInfo `json:"promptQueue,omitempty"`
 }
 
 // ThreadQueuedPromptInfo summarizes one queued prompt for thread chrome.

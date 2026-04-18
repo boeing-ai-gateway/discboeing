@@ -3,6 +3,8 @@ name: discobot-commit
 description: Commit session changes back to the parent workspace
 discobot-ui: true
 discobot-label: Commit
+discobot-icon: git-commit
+discobot-group: Git
 discobot-order: 10
 ---
 

@@ -131,6 +131,7 @@ export type ThreadSummary = {
 	errorMessage?: string;
 	mode: string;
 	state?: ThreadState;
+	activeCommand?: string; // empty or omitted when no command is running
 	promptQueue?: QueuedPrompt[];
 };
 

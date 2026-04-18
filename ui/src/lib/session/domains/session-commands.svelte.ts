@@ -32,7 +32,7 @@ export function createSessionCommandsDomain(
 	args: CreateSessionCommandsDomainArgs,
 ): SessionCommandsDomain {
 	let list = $state<AgentCommand[]>([]);
-	let startingName = $state<string | null>(null);
+	let isSubmitting = $state(false);
 	let credentialDialogOpen = $state(false);
 	let credentialDialogCommand = $state<AgentCommand | null>(null);
 	let credentialDialogRequests = $state<AgentCommandCredentialRequest[]>([]);
@@ -78,11 +78,12 @@ export function createSessionCommandsDomain(
 	}
 
 	async function sendMessages(
+		threadId: string,
 		messages: ReturnType<typeof createUserMessage>[],
 	) {
 		await args.app.chat({
 			sessionId: args.sessionId,
-			threadId: args.getSelectedThreadId(),
+			threadId,
 			messages,
 		});
 	}
@@ -373,11 +374,12 @@ export function createSessionCommandsDomain(
 	}
 
 	async function executeCommand(command: AgentCommand) {
-		startingName = command.name;
+		const threadId = args.getSelectedThreadId();
+		isSubmitting = true;
 		try {
-			await sendMessages([createUserMessage(`/${command.name}`)]);
+			await sendMessages(threadId, [createUserMessage(`/${command.name}`)]);
 		} finally {
-			startingName = null;
+			isSubmitting = false;
 		}
 	}
 
@@ -417,7 +419,7 @@ export function createSessionCommandsDomain(
 	}
 
 	async function run(command: AgentCommand) {
-		if (!args.hasSession() || startingName || credentialDialogOpen) {
+		if (!args.hasSession() || isSubmitting || credentialDialogOpen) {
 			return;
 		}
 
@@ -437,8 +439,8 @@ export function createSessionCommandsDomain(
 		get uiVisible() {
 			return uiVisible;
 		},
-		get startingName() {
-			return startingName;
+		get isSubmitting() {
+			return isSubmitting;
 		},
 		get credentialDialog() {
 			return {

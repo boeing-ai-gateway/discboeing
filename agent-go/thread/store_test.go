@@ -620,6 +620,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		CWD:           "/tmp/project",
 		Mode:          ModeState{Value: "plan"},
 		ActiveLeafID:  "msg-active",
+		ActiveCommand: "discobot-commit",
 		PromptQueue: []QueuedPrompt{{
 			ID:        "queue-1",
 			CreatedAt: time.Date(2026, time.March, 31, 1, 0, 0, 0, time.UTC),
@@ -668,6 +669,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.ActiveLeafID != cfg.ActiveLeafID {
 		t.Errorf("expected activeLeafId=%q, got %q", cfg.ActiveLeafID, loaded.ActiveLeafID)
+	}
+	if loaded.ActiveCommand != cfg.ActiveCommand {
+		t.Errorf("expected activeCommand=%q, got %q", cfg.ActiveCommand, loaded.ActiveCommand)
 	}
 	if len(loaded.PromptQueue) != 1 {
 		t.Fatalf("expected 1 queued prompt, got %d", len(loaded.PromptQueue))

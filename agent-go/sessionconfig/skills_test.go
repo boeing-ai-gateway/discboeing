@@ -223,6 +223,9 @@ func TestParseSkill_DiscobotMetadata(t *testing.T) {
 description: Commit changes.
 discobot-ui: true
 discobot-label: Commit
+discobot-active-label: Committing
+discobot-icon: git-commit
+discobot-group: Git
 discobot-order: 10
 discobot-credential-request:
   - env-var: GH_TOKEN
@@ -241,6 +244,15 @@ Body`)
 	}
 	if skill.Discobot.Label != "Commit" {
 		t.Fatalf("label = %q", skill.Discobot.Label)
+	}
+	if skill.Discobot.ActiveLabel != "Committing" {
+		t.Fatalf("activeLabel = %q", skill.Discobot.ActiveLabel)
+	}
+	if skill.Discobot.Icon != "git-commit" {
+		t.Fatalf("icon = %q", skill.Discobot.Icon)
+	}
+	if skill.Discobot.Group != "Git" {
+		t.Fatalf("group = %q", skill.Discobot.Group)
 	}
 	if skill.Discobot.Order != 10 {
 		t.Fatalf("order = %d", skill.Discobot.Order)

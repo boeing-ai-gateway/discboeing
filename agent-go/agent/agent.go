@@ -50,6 +50,9 @@ type Command struct {
 type DiscobotCommandMetadata struct {
 	UI                bool
 	Label             string
+	ActiveLabel       string
+	Icon              string
+	Group             string
 	Order             int
 	CredentialRequest []DiscobotCredentialRequest
 }

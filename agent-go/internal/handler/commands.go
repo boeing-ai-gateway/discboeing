@@ -22,9 +22,12 @@ func (h *Handler) ListCommands(w http.ResponseWriter, _ *http.Request) {
 			Description: command.Description,
 			Kind:        string(command.Kind),
 			Discobot: api.CommandDiscobotMetadata{
-				UI:    command.Discobot.UI,
-				Label: command.Discobot.Label,
-				Order: command.Discobot.Order,
+				UI:          command.Discobot.UI,
+				Label:       command.Discobot.Label,
+				ActiveLabel: command.Discobot.ActiveLabel,
+				Icon:        command.Discobot.Icon,
+				Group:       command.Discobot.Group,
+				Order:       command.Discobot.Order,
 			},
 		}
 		if len(command.Discobot.CredentialRequest) > 0 {

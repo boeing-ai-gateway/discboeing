@@ -209,20 +209,35 @@ func TestPromptLegacyCommand_PreservesOriginalTextInUserMessageMetadata(t *testi
 
 	var userChunk message.UserMessageChunk
 	foundUserChunk := false
+	sawActiveCommand := false
+	sawClearedActiveCommand := false
 	for chunk, err := range agentImpl.Prompt(context.Background(), "thread-legacy-command", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "/commit fix the bug", State: "done"}},
 	}) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if typed, ok := chunk.(message.ThreadUpdateChunk); ok {
+			if typed.Data.Thread.ActiveCommand == "commit" {
+				sawActiveCommand = true
+			}
+			if sawActiveCommand && typed.Data.Thread.ActiveCommand == "" {
+				sawClearedActiveCommand = true
+			}
+		}
 		if typed, ok := chunk.(message.UserMessageChunk); ok {
 			userChunk = typed
 			foundUserChunk = true
-			break
 		}
 	}
 	if !foundUserChunk {
 		t.Fatal("expected user message chunk")
+	}
+	if !sawActiveCommand {
+		t.Fatal("expected thread update with active command")
+	}
+	if !sawClearedActiveCommand {
+		t.Fatal("expected thread update clearing active command")
 	}
 
 	var metadata struct {

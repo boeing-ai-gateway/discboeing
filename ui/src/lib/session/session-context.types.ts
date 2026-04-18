@@ -170,7 +170,7 @@ export type SessionCommandCredentialDialogState = {
 export type SessionCommandsDomain = {
 	list: AgentCommand[];
 	uiVisible: AgentCommand[];
-	startingName: string | null;
+	isSubmitting: boolean;
 	credentialDialog: SessionCommandCredentialDialogState;
 	refresh: () => Promise<void>;
 	run: (command: AgentCommand) => Promise<void>;

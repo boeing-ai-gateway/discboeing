@@ -36,15 +36,16 @@ func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread 
 	}
 
 	return api.Thread{
-		ID:           threadID,
-		Name:         name,
-		LastMessage:  strings.TrimSpace(cfg.LastMessage),
-		ErrorMessage: strings.TrimSpace(cfg.ErrorMessage),
-		Model:        cfg.Model,
-		Reasoning:    string(cfg.Reasoning),
-		Mode:         mode,
-		State:        state,
-		PromptQueue:  queuedPromptResponse(cfg.PromptQueue),
+		ID:            threadID,
+		Name:          name,
+		LastMessage:   strings.TrimSpace(cfg.LastMessage),
+		ErrorMessage:  strings.TrimSpace(cfg.ErrorMessage),
+		Model:         cfg.Model,
+		Reasoning:     string(cfg.Reasoning),
+		Mode:          mode,
+		State:         state,
+		ActiveCommand: strings.TrimSpace(cfg.ActiveCommand),
+		PromptQueue:   queuedPromptResponse(cfg.PromptQueue),
 	}
 }
 

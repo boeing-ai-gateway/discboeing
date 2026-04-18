@@ -172,7 +172,7 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		},
 	}
 
-	expandedUserParts, originalText := expandLegacyCommand(a.cwd, req.UserParts)
+	expandedUserParts, originalText, activeCommand := expandLegacyCommand(a.cwd, req.UserParts)
 
 	cfg := thread.TurnConfig{
 		ProviderID:       env.modelRef.ProviderID,
@@ -273,13 +273,14 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 			Mode:                    thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
 			LastTurnState:           "",
 			ActiveLeafID:            effectiveLeafID,
+			ActiveCommand:           activeCommand,
 			CommunicatedCredentials: currentCommunicatedCredentials,
 		}
 		if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
 			yield(nil, fmt.Errorf("save thread config: %w", err))
 			return
 		}
-		if userChangedMode {
+		if userChangedMode || activeCommand != "" {
 			if !yield(thread.UpdateChunkFromConfig(threadID, cfgToSave), nil) {
 				return
 			}
@@ -317,6 +318,9 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 		}
 		if promptCtx.Err() != nil {
 			a.persistLastTurnState(threadID, thread.StateCancelled)
+		}
+		if !a.clearActiveCommand(threadID, yield) {
+			return
 		}
 		a.persistActiveLeaf(threadID)
 		if !threadNameBg.flush(true, yield) {
@@ -414,6 +418,9 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		}
 		if promptCtx.Err() != nil {
 			a.persistLastTurnState(threadID, thread.StateCancelled)
+		}
+		if !a.clearActiveCommand(threadID, yield) {
+			return
 		}
 		a.persistActiveLeaf(threadID)
 	}
@@ -1385,6 +1392,24 @@ func (a *DefaultAgent) persistLastTurnState(threadID string, state thread.State)
 	_ = a.store.SaveConfig(threadID, cfg)
 }
 
+func (a *DefaultAgent) clearActiveCommand(
+	threadID string,
+	yield func(message.MessageChunk, error) bool,
+) bool {
+	cfg, err := a.store.LoadConfig(threadID)
+	if err != nil {
+		return yield(nil, fmt.Errorf("load thread config: %w", err))
+	}
+	if strings.TrimSpace(cfg.ActiveCommand) == "" {
+		return true
+	}
+	cfg.ActiveCommand = ""
+	if err := a.store.SaveConfig(threadID, cfg); err != nil {
+		return yield(nil, fmt.Errorf("save thread config: %w", err))
+	}
+	return yield(thread.UpdateChunkFromConfig(threadID, cfg), nil)
+}
+
 // ListModels returns available models from all registered providers.
 // Model IDs are prefixed with "providerId/".
 func (a *DefaultAgent) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
@@ -1414,9 +1439,12 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 			Description: s.Description,
 			Kind:        agent.CommandKind(s.Kind),
 			Discobot: agent.DiscobotCommandMetadata{
-				UI:    s.Discobot.UI,
-				Label: s.Discobot.Label,
-				Order: s.Discobot.Order,
+				UI:          s.Discobot.UI,
+				Label:       s.Discobot.Label,
+				ActiveLabel: s.Discobot.ActiveLabel,
+				Icon:        s.Discobot.Icon,
+				Group:       s.Discobot.Group,
+				Order:       s.Discobot.Order,
 			},
 		}
 		if len(s.Discobot.CredentialRequest) > 0 {
@@ -1456,17 +1484,17 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 //
 // Skills (.claude/skills/) are intentionally excluded: they are invoked by the
 // LLM through the Skill tool, not expanded here.
-func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string) {
+func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string) {
 	if len(parts) == 0 {
-		return parts, ""
+		return parts, "", ""
 	}
 	first, ok := parts[0].(message.UITextPart)
 	if !ok {
-		return parts, ""
+		return parts, "", ""
 	}
 	text := strings.TrimLeft(first.Text, " \t")
 	if !strings.HasPrefix(text, "/") {
-		return parts, ""
+		return parts, "", ""
 	}
 
 	// Parse "/command-name [args...]"
@@ -1479,13 +1507,13 @@ func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 		cmdName = rest
 	}
 	if cmdName == "" {
-		return parts, ""
+		return parts, "", ""
 	}
 
 	projectRoot := sessionconfig.FindProjectRoot(cwd)
 	cmd, found, err := sessionconfig.LookupCommand(projectRoot, cmdName)
 	if err != nil || !found {
-		return parts, "" // not a known command — pass through unchanged
+		return parts, "", "" // not a known command — pass through unchanged
 	}
 
 	// Encode the original slash command into ProviderMetadata so the UI can
@@ -1497,7 +1525,7 @@ func expandLegacyCommand(cwd string, parts []message.UIPart) ([]message.UIPart, 
 	expanded := make([]message.UIPart, len(parts))
 	copy(expanded, parts)
 	expanded[0] = message.UITextPart{Text: cmd.Expand(args), State: first.State, ProviderMetadata: meta}
-	return expanded, text
+	return expanded, text, strings.TrimSpace(cmdName)
 }
 
 // ListThreads returns all thread IDs.
