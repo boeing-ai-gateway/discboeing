@@ -57,21 +57,27 @@ test("session toolbar keeps command progress bound to the active command", () =>
 	assert.doesNotMatch(source, /session\.commands\.runningName/);
 });
 
-test("session toolbar resolves command icons from command metadata", () => {
+test("session toolbar only renders command icons when command metadata specifies one", () => {
 	const source = readSessionToolbarSource();
 
-	assert.match(source, /command\.discobot\?\.icon/);
-	assert.match(source, /function commandIcon\(command: AgentCommand\)/);
-	assert.match(source, /normalizeLucideIconName\(command\.discobot\?\.icon\)/);
 	assert.match(
 		source,
-		/import GitBranchIcon from "@lucide\/svelte\/icons\/git-branch"/,
+		/function commandIcon\(command: AgentCommand\): LucideIcon \| null/,
+	);
+	assert.match(source, /if \(!iconName\) \{\s*return null;\s*\}/);
+	assert.match(
+		source,
+		/staticCommandIcons\[iconName\] \?\? loadedCommandIcons\[iconName\] \?\? null/,
 	);
 	assert.match(
 		source,
-		/import GitCommitIcon from "@lucide\/svelte\/icons\/git-commit"/,
+		/\{#if PrimaryIcon\}[\s\S]*<PrimaryIcon class="size-3\.5" \/>[\s\S]*\{\/if\}/,
 	);
-	assert.match(source, /const staticCommandIcons: Record<string, LucideIcon>/);
+	assert.match(
+		source,
+		/\{#if Icon\}[\s\S]*<Icon class="size-3\.5" \/>[\s\S]*\{\/if\}/,
+	);
+	assert.doesNotMatch(source, /PlayIcon/);
 });
 
 test("session toolbar groups dropdown commands from command metadata", () => {

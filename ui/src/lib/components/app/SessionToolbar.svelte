@@ -5,7 +5,6 @@
 	import { untrack } from "svelte";
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
-	import PlayIcon from "@lucide/svelte/icons/play";
 	import type { Component } from "svelte";
 	import { SvelteSet } from "svelte/reactivity";
 	import {
@@ -313,14 +312,12 @@
 			.toLowerCase();
 	}
 
-	function commandIcon(command: AgentCommand): LucideIcon {
+	function commandIcon(command: AgentCommand): LucideIcon | null {
 		const iconName = normalizeLucideIconName(command.discobot?.icon);
 		if (!iconName) {
-			return PlayIcon;
+			return null;
 		}
-		return (
-			staticCommandIcons[iconName] ?? loadedCommandIcons[iconName] ?? PlayIcon
-		);
+		return staticCommandIcons[iconName] ?? loadedCommandIcons[iconName] ?? null;
 	}
 
 	function normalizeActiveCommandName(
@@ -447,7 +444,9 @@
 							<Loader2Icon class="size-3.5 animate-spin" />
 						{:else}
 							{@const PrimaryIcon = commandIcon(primaryCommand)}
-							<PrimaryIcon class="size-3.5" />
+							{#if PrimaryIcon}
+								<PrimaryIcon class="size-3.5" />
+							{/if}
 						{/if}
 						{operationState.buttonLabel}
 					</Button>
@@ -489,7 +488,9 @@
 										<Loader2Icon class="size-3.5 animate-spin" />
 									{:else}
 										{@const Icon = commandIcon(command)}
-										<Icon class="size-3.5" />
+										{#if Icon}
+											<Icon class="size-3.5" />
+										{/if}
 									{/if}
 									{commandLabel(command)}
 								</DropdownMenuItem>
