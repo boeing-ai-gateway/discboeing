@@ -132,7 +132,8 @@ If proxy startup succeeded, sets proxy environment variables in multiple locatio
 - `ALL_PROXY=http://localhost:17080` (for SOCKS5)
 - `NO_PROXY=localhost,127.0.0.1,::1` (bypass proxy for localhost)
 - `NODE_EXTRA_CA_CERTS=/.data/proxy/certs/ca.crt` (Node.js: trust proxy CA)
-- Lowercase variants also set for all variables (except NODE_EXTRA_CA_CERTS)
+- `UV_SYSTEM_CERTS=1` (uv: use the system trust store, which includes the proxy CA)
+- Lowercase variants also set for all variables (except NODE_EXTRA_CA_CERTS and UV_SYSTEM_CERTS)
 
 **B. System Profile** (`/etc/profile.d/discobot-proxy.sh`):
 - Same environment variables written to profile script
@@ -144,6 +145,7 @@ This ensures:
 - ✅ Agent-api HTTP requests use the proxy cache
 - ✅ Interactive shells (ssh, docker exec) automatically use the proxy
 - ✅ Node.js processes trust the proxy CA for HTTPS
+- ✅ uv trusts the proxy CA via the system certificate store
 - ✅ All processes spawned from login shells inherit proxy settings
 
 ## Shutdown Flow

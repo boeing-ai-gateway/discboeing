@@ -199,7 +199,8 @@ The `discobot-agent` binary serves as the container's PID 1 process, providing:
 │  • Fork child process                                       │
 │  • Switch to discobot user (setuid/setgid)                   │
 │  • Set HOME, USER, LOGNAME environment                      │
-│  • Set proxy environment (HTTP_PROXY, NODE_EXTRA_CA_CERTS)  │
+│  • Set proxy environment (HTTP_PROXY, NODE_EXTRA_CA_CERTS,  │
+│    UV_SYSTEM_CERTS)                                         │
 │  • Set working directory to /home/discobot/workspace         │
 │  • Configure pdeathsig for cleanup                          │
 │  • Enter event loop for signal handling                     │
@@ -269,7 +270,7 @@ Manages the HTTP/HTTPS/SOCKS5 proxy with Docker registry caching:
 - Starts proxy daemon on port 17080 (proxy) and 17081 (API)
 - Waits for health check before proceeding
 - Writes proxy environment variables to `/etc/profile.d/discobot-proxy.sh`
-- Sets `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, and `NODE_EXTRA_CA_CERTS`
+- Sets `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, and `UV_SYSTEM_CERTS`
 - Tracks proxy process for cleanup on shutdown
 - Enables Docker registry caching (5-10x faster repeated pulls)
 - **Cache location**: `/.data/cache/proxy/` (project-scoped, shared across sessions)

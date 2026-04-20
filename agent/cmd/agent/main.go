@@ -1193,6 +1193,7 @@ func getProxyEnvVars() []string {
 		"NO_PROXY=" + noProxy,
 		"no_proxy=" + noProxy,
 		"NODE_EXTRA_CA_CERTS=" + caCertPath,
+		"UV_SYSTEM_CERTS=1",
 	}
 }
 
@@ -1229,6 +1230,9 @@ export no_proxy=localhost,127.0.0.1,::1
 
 # Node.js: Trust the proxy's CA certificate
 export NODE_EXTRA_CA_CERTS=%s
+
+# uv: Use the system trust store so the proxy CA is trusted
+export UV_SYSTEM_CERTS=1
 `, proxyURL, proxyURL, proxyURL, proxyURL, proxyURL, proxyURL, caCertPath)
 
 	if err := os.WriteFile(profilePath, []byte(content), 0644); err != nil {
@@ -1263,6 +1267,7 @@ export all_proxy=%s
 export NO_PROXY=localhost,127.0.0.1,::1
 export no_proxy=localhost,127.0.0.1,::1
 export NODE_EXTRA_CA_CERTS=%s
+export UV_SYSTEM_CERTS=1
 `, proxyURL, proxyURL, proxyURL, proxyURL, proxyURL, proxyURL, caCertPath)
 
 	// Append to /etc/profile
@@ -1622,7 +1627,11 @@ func lookupUser(username string) (*userInfo, error) {
 func buildChildEnv(u *userInfo, proxyEnabled bool) []string {
 	// Start with parent environment
 	parentEnv := os.Environ()
-	env := make([]string, 0, len(parentEnv)+12) // +3 for user vars, +9 for proxy vars (including NO_PROXY and NODE_EXTRA_CA_CERTS)
+	extraEnv := 4 // HOME, USER, LOGNAME, and DISCOBOT_HOOKS_ENABLED
+	if proxyEnabled {
+		extraEnv += len(getProxyEnvVars())
+	}
+	env := make([]string, 0, len(parentEnv)+extraEnv)
 
 	// Copy parent env, excluding user-specific vars we'll override
 	skipVars := map[string]bool{
