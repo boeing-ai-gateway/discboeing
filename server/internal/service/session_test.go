@@ -20,6 +20,7 @@ import (
 
 type imageIDAwareSessionProvider struct {
 	*mocksandbox.Provider
+	base           *mocksandbox.Provider
 	currentImageID string
 	ops            []string
 }
@@ -30,27 +31,27 @@ func (p *imageIDAwareSessionProvider) CurrentImageID(context.Context) (string, e
 
 func (p *imageIDAwareSessionProvider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
 	p.ops = append(p.ops, "create")
-	return p.Provider.Create(ctx, sessionID, opts)
+	return p.base.Create(ctx, sessionID, opts)
 }
 
 func (p *imageIDAwareSessionProvider) Start(ctx context.Context, sessionID string) error {
-	sbx, err := p.Provider.Get(ctx, sessionID)
+	sbx, err := p.base.Get(ctx, sessionID)
 	if err != nil {
 		p.ops = append(p.ops, "start:<missing>")
 	} else {
 		p.ops = append(p.ops, "start:"+sbx.ID)
 	}
-	return p.Provider.Start(ctx, sessionID)
+	return p.base.Start(ctx, sessionID)
 }
 
 func (p *imageIDAwareSessionProvider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
-	sbx, err := p.Provider.Get(ctx, sessionID)
+	sbx, err := p.base.Get(ctx, sessionID)
 	if err != nil {
 		p.ops = append(p.ops, "remove:<missing>")
 	} else {
 		p.ops = append(p.ops, "remove:"+sbx.ID)
 	}
-	return p.Provider.Remove(ctx, sessionID, opts...)
+	return p.base.Remove(ctx, sessionID, opts...)
 }
 
 func TestValidateSessionID(t *testing.T) {
@@ -233,6 +234,7 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 	baseProvider := mocksandbox.NewProviderWithImage("ghcr.io/obot-platform/discobot:alpha90")
 	provider := &imageIDAwareSessionProvider{
 		Provider:       baseProvider,
+		base:           baseProvider,
 		currentImageID: "sha256:new",
 	}
 	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
@@ -264,7 +266,7 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	oldSandbox, err := provider.Provider.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret"})
+	oldSandbox, err := provider.base.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret"})
 	if err != nil {
 		t.Fatalf("failed to create stale sandbox: %v", err)
 	}
