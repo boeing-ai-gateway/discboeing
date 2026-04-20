@@ -39,7 +39,7 @@ func TestVZProvider_InitWithoutPaths(t *testing.T) {
 		return "test-project", nil
 	}
 
-	provider, err := NewProvider(cfg, &vmConfig, resolver, nil)
+	provider, err := NewProvider(cfg, &vmConfig, resolver, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestVZProvider_InitWithPaths(t *testing.T) {
 
 	// This will fail to create VM manager (needs actual macOS VZ framework),
 	// but we can verify it tried to initialize immediately vs async download
-	provider, err := NewProvider(cfg, &vmConfig, resolver, nil)
+	provider, err := NewProvider(cfg, &vmConfig, resolver, nil, nil)
 	if provider != nil {
 		defer provider.Close()
 	}
@@ -140,7 +140,7 @@ func TestVZProvider_StatusWithDownloader(t *testing.T) {
 		return "test-project", nil
 	}
 
-	provider, err := NewProvider(cfg, &vmConfig, resolver, nil)
+	provider, err := NewProvider(cfg, &vmConfig, resolver, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestVZProvider_CreateBeforeReady(t *testing.T) {
 		return "test-project", nil
 	}
 
-	provider, err := NewProvider(cfg, &vmConfig, resolver, nil)
+	provider, err := NewProvider(cfg, &vmConfig, resolver, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
