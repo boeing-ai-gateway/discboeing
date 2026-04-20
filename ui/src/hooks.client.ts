@@ -1,6 +1,11 @@
 import * as Sentry from "@sentry/sveltekit";
 
 export const init = () => {
+	const envSummary = Object.fromEntries(
+		Object.entries(import.meta.env).sort(([left], [right]) =>
+			left.localeCompare(right),
+		),
+	);
 	const dsn = import.meta.env.PUBLIC_SENTRY_DSN;
 	const release = import.meta.env.PUBLIC_SENTRY_RELEASE;
 	const dist = import.meta.env.PUBLIC_SENTRY_DIST;
@@ -26,6 +31,7 @@ export const init = () => {
 		},
 	});
 
+	console.info("[env] import.meta.env", envSummary);
 	console.info("[sentry] initialized", {
 		enabled: sentryEnabled,
 		environment: import.meta.env.MODE,
