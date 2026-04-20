@@ -746,19 +746,7 @@
 			]
 		},
 		"gpt-5.3-codex-spark": {
-			"capabilities": {
-				"reasoningSummary": false
-			},
-			"customTools": true,
-			"defaultReasonLevel": "medium",
-			"reasoning": true,
-			"reasoningLevels": [
-				"none",
-				"low",
-				"medium",
-				"high",
-				"xhigh"
-			]
+			"remove": true
 		},
 		"gpt-5.4": {
 			"customTools": true,

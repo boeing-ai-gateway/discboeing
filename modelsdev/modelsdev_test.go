@@ -58,6 +58,12 @@ func TestLookup(t *testing.T) {
 		}
 	})
 
+	t.Run("codex spark is not exposed under openai", func(t *testing.T) {
+		if m := Lookup("openai", "gpt-5.3-codex-spark"); m != nil {
+			t.Fatalf("expected gpt-5.3-codex-spark to be absent from openai, got %+v", *m)
+		}
+	})
+
 	t.Run("codex spark overlay copies important openai metadata", func(t *testing.T) {
 		m := Lookup("codex", "gpt-5.3-codex-spark")
 		if m == nil {

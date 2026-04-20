@@ -128,6 +128,7 @@ type modelLimit struct {
 
 type overlayEntry struct {
 	// Fields applied to both new and existing models.
+	Remove             *bool              `json:"remove"`
 	ReasoningLevels    []string           `json:"reasoningLevels"`
 	DefaultReasonLevel string             `json:"defaultReasonLevel"`
 	ContextWindow      int                `json:"contextWindow"`
@@ -166,7 +167,8 @@ func load() {
 //
 // For existing providers and models the overlay can update ReasoningLevels,
 // DefaultReasonLevel, context/modality limits, and optionally
-// Name/Family/Reasoning/ToolCall/CustomTools.
+// Name/Family/Reasoning/ToolCall/CustomTools. An overlay entry can also remove
+// an existing model by setting {"remove": true}.
 //
 // The overlay also supports adding entirely new providers and models that are
 // not present in the base models.dev snapshot:
@@ -223,6 +225,10 @@ func applyOverlay() {
 			var ov overlayEntry
 			if err := json.Unmarshal(rawModel, &ov); err != nil {
 				log.Printf("modelsdev: failed to parse overlay for %q/%q: %v", providerID, modelID, err)
+				continue
+			}
+			if ov.Remove != nil && *ov.Remove {
+				delete(provider.Models, modelID)
 				continue
 			}
 			m, ok := provider.Models[modelID]
