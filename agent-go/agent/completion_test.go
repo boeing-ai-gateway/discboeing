@@ -18,7 +18,7 @@ import (
 
 type mockAgent struct {
 	promptFn   func(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error]
-	resumeFn   func(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error]
+	resumeFn   func(ctx context.Context, threadID string, req PromptRequest) (ResumeResult, error)
 	messagesFn func(threadID, leafID string) ([]message.UIMessage, error)
 	cancelFn   func(threadID string) bool
 
@@ -34,11 +34,11 @@ func (m *mockAgent) Prompt(ctx context.Context, threadID string, req PromptReque
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
 
-func (m *mockAgent) Resume(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error] {
+func (m *mockAgent) Resume(ctx context.Context, threadID string, req PromptRequest) (ResumeResult, error) {
 	if m.resumeFn != nil {
 		return m.resumeFn(ctx, threadID, req)
 	}
-	return func(_ func(message.MessageChunk, error) bool) {}
+	return ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 }
 
 func (m *mockAgent) Cancel(threadID string) bool {
@@ -765,11 +765,11 @@ func TestCompletionManager_ResumeInterruptedTurns(t *testing.T) {
 	agent := &mockAgent{
 		threads:            []string{"thread-a", "thread-b"},
 		interruptedThreads: []string{"thread-b"},
-		resumeFn: func(_ context.Context, threadID string, _ PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ PromptRequest) (ResumeResult, error) {
 			if threadID == "thread-b" {
 				resumeCh <- threadID
 			}
-			return func(_ func(message.MessageChunk, error) bool) {}
+			return ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
 	cm := NewCompletionManager(agent)

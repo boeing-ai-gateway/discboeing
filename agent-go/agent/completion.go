@@ -63,49 +63,76 @@ func NewCompletionManager(agent Agent) *CompletionManager {
 // or an error if a completion is already running for this thread.
 // The turn runs in a background goroutine; chunks are cached for SSE replay.
 func (cm *CompletionManager) Chat(threadID string, req PromptRequest) (string, error) {
-	return cm.startCompletion(threadID, req.LeafID, func(ctx context.Context) iter.Seq2[message.MessageChunk, error] {
-		return cm.agent.Prompt(ctx, threadID, req)
+	return cm.startCompletion(threadID, func(ctx context.Context) (string, iter.Seq2[message.MessageChunk, error], error) {
+		return req.LeafID, cm.agent.Prompt(ctx, threadID, req), nil
 	})
 }
 
 // Resume starts a background completion that resumes an interrupted turn.
 func (cm *CompletionManager) Resume(threadID string, req PromptRequest) (string, error) {
-	return cm.startCompletion(threadID, "", func(ctx context.Context) iter.Seq2[message.MessageChunk, error] {
-		return cm.agent.Resume(ctx, threadID, req)
+	return cm.startCompletion(threadID, func(ctx context.Context) (string, iter.Seq2[message.MessageChunk, error], error) {
+		result, err := cm.agent.Resume(ctx, threadID, req)
+		if err != nil {
+			return "", nil, err
+		}
+		return result.ReplayLeafID, result.Stream, nil
 	})
 }
 
-func (cm *CompletionManager) startCompletion(threadID, leafID string, seqFn func(context.Context) iter.Seq2[message.MessageChunk, error]) (string, error) {
+func (cm *CompletionManager) startCompletion(
+	threadID string,
+	prepare func(context.Context) (string, iter.Seq2[message.MessageChunk, error], error),
+) (string, error) {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
 	if existing, ok := cm.active[threadID]; ok {
 		existing.mu.Lock()
 		done := existing.done
 		existing.mu.Unlock()
 		if !done {
+			cm.mu.Unlock()
 			return "", fmt.Errorf("completion_in_progress:%s", existing.id)
 		}
 	}
 
 	completionID := generateID()
 	ctx, cancel := context.WithCancel(context.Background())
-	comp := &activeCompletion{id: completionID, threadID: threadID, cancel: cancel, leafMsg: leafID}
+	comp := &activeCompletion{id: completionID, threadID: threadID, cancel: cancel}
 	comp.cond = sync.NewCond(&comp.mu)
 	cm.active[threadID] = comp
+	cm.mu.Unlock()
+
+	leafID, seq, err := prepare(ctx)
+	if err != nil {
+		cancel()
+		cm.mu.Lock()
+		if current, ok := cm.active[threadID]; ok && current == comp {
+			delete(cm.active, threadID)
+			cm.cond.Broadcast()
+		}
+		cm.mu.Unlock()
+		return "", err
+	}
+
+	comp.mu.Lock()
+	comp.leafMsg = leafID
+	comp.mu.Unlock()
+
+	cm.mu.Lock()
 	cm.cond.Broadcast()
 	listeners := append([]CompletionListener(nil), cm.listeners...)
+	cm.mu.Unlock()
 	for _, listener := range listeners {
 		listener.OnTurnStart(threadID)
 	}
-	go cm.runCompletion(ctx, comp, threadID, seqFn)
+
+	go cm.runCompletion(ctx, comp, threadID, seq)
 	return completionID, nil
 }
 
 // runCompletion drives a completion iterator in a goroutine, caching chunks.
-func (cm *CompletionManager) runCompletion(ctx context.Context, comp *activeCompletion, threadID string, seqFn func(context.Context) iter.Seq2[message.MessageChunk, error]) {
+func (cm *CompletionManager) runCompletion(ctx context.Context, comp *activeCompletion, threadID string, seq iter.Seq2[message.MessageChunk, error]) {
 	sawStart := false
-	for chunk, err := range seqFn(ctx) {
+	for chunk, err := range seq {
 		comp.mu.Lock()
 		if err != nil {
 			comp.err = err

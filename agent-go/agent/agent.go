@@ -100,7 +100,12 @@ type Agent interface {
 	// Resume continues or finalizes an interrupted turn from persisted disk state.
 	// Request-scoped overrides such as model, reasoning, and mode may be applied
 	// before the turn resumes.
-	Resume(ctx context.Context, threadID string, req PromptRequest) iter.Seq2[message.MessageChunk, error]
+	//
+	// When req.UserParts is non-empty, Resume abandons the interrupted turn and
+	// starts a fresh completion for the new prompt instead. ReplayLeafID reports
+	// the highest persisted message that should be replayed before the returned
+	// live stream starts emitting chunks.
+	Resume(ctx context.Context, threadID string, req PromptRequest) (ResumeResult, error)
 
 	// Cancel cancels the active prompt for a thread.
 	// Implementations may also cancel a turn paused waiting for AskUserQuestion
@@ -138,6 +143,16 @@ type Agent interface {
 	// ListCommands returns all slash commands available to the user, including
 	// user-defined skills, legacy commands, and built-in commands.
 	ListCommands() ([]Command, error)
+}
+
+// ResumeResult describes a prepared resumed completion.
+type ResumeResult struct {
+	// ReplayLeafID is the highest persisted message that should be replayed as
+	// history before Stream is consumed live.
+	ReplayLeafID string
+
+	// Stream yields the resumed completion chunks.
+	Stream iter.Seq2[message.MessageChunk, error]
 }
 
 // PromptRequest holds the parameters for a Prompt call.

@@ -28,7 +28,7 @@ import (
 
 type streamTestAgent struct {
 	promptFn             func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
-	resumeFn             func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
+	resumeFn             func(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error)
 	messagesFn           func(threadID, leafID string) ([]message.UIMessage, error)
 	pendingQuestionFn    func(threadID string) (*agent.PendingQuestion, error)
 	submitAnswerFn       func(threadID, approvalID string, req api.AnswerQuestionRequest) error
@@ -43,11 +43,11 @@ func (m *streamTestAgent) Prompt(ctx context.Context, threadID string, req agent
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
 
-func (m *streamTestAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+func (m *streamTestAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
 	if m.resumeFn != nil {
 		return m.resumeFn(ctx, threadID, req)
 	}
-	return func(_ func(message.MessageChunk, error) bool) {}
+	return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 }
 
 func (m *streamTestAgent) Cancel(_ string) bool { return false }
@@ -86,6 +86,44 @@ func (m *streamTestAgent) SubmitAnswer(threadID, approvalID string, req api.Answ
 }
 func (m *streamTestAgent) FinalResponse(_ string) (string, error) { return "", nil }
 func (m *streamTestAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
+
+type interruptedPromptProvider struct {
+	mu       sync.Mutex
+	requests []providers.CompleteRequest
+}
+
+func (p *interruptedPromptProvider) ID() string { return "mock" }
+
+func (p *interruptedPromptProvider) Complete(ctx context.Context, req providers.CompleteRequest) iter.Seq2[message.ProviderMessageChunk, error] {
+	p.mu.Lock()
+	p.requests = append(p.requests, req)
+	p.mu.Unlock()
+	return func(yield func(message.ProviderMessageChunk, error) bool) {
+		if ctx.Err() != nil {
+			yield(nil, ctx.Err())
+			return
+		}
+		if !yield(message.StreamStartChunk{}, nil) {
+			return
+		}
+		if !yield(message.TextStartChunk{ID: "text-1"}, nil) {
+			return
+		}
+		if !yield(message.TextDeltaChunk{ID: "text-1", Delta: "done"}, nil) {
+			return
+		}
+		if !yield(message.TextEndChunk{ID: "text-1"}, nil) {
+			return
+		}
+		yield(message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}}, nil)
+	}
+}
+
+func (p *interruptedPromptProvider) DefaultModels() map[string]providers.ModelRef {
+	return map[string]providers.ModelRef{
+		providers.ModelTaskChat: {ProviderID: "mock", ModelID: "test-model"},
+	}
+}
 
 type sseFrame struct {
 	ID    string
@@ -745,7 +783,7 @@ func TestPostChat_ReturnsPendingQuestionConflict(t *testing.T) {
 	}
 }
 
-func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
+func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 	type resumeCall struct {
 		threadID string
 		req      agent.PromptRequest
@@ -758,9 +796,9 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 			}
 			return true, nil
 		},
-		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
 			resumeCh <- resumeCall{threadID: threadID, req: req}
-			return func(_ func(message.MessageChunk, error) bool) {}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
@@ -783,22 +821,16 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("expected status 409, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d", resp.StatusCode)
 	}
 
-	var got api.ChatTurnStateConflictResponse
+	var got api.ChatStartedResponse
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Error != "interrupted_turn_requires_resume" {
-		t.Fatalf("expected interrupted turn error, got %#v", got)
-	}
-	if got.QuestionID != "" {
-		t.Fatalf("expected empty questionId, got %#v", got)
-	}
-	if got.CompletionID == "" {
-		t.Fatalf("expected completionId, got %#v", got)
+	if got.Status != "started" || got.CompletionID == "" {
+		t.Fatalf("expected started response with completionId, got %#v", got)
 	}
 	select {
 	case call := <-resumeCh:
@@ -816,6 +848,146 @@ func TestPostChat_ReturnsInterruptedTurnConflict(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for resume call")
+	}
+}
+
+func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	provider := &interruptedPromptProvider{}
+	registry := providers.NewProviderRegistry(nil)
+	registry.Add(provider)
+
+	agentImpl := agentimpl.NewDefaultAgent(store, registry, nil, t.TempDir(), agentimpl.MCPConfig{})
+	cm := agent.NewCompletionManager(agentImpl)
+	h := New("", cm, nil, nil, agentImpl)
+	ts := newChatTestServer(t, h)
+	defer ts.Close()
+
+	const threadID = "thread-1"
+	if err := store.CreateThread(threadID); err != nil {
+		t.Fatal(err)
+	}
+	createdAt := time.Now().UTC()
+	if err := store.SaveMessage(threadID, thread.StoredMessage{
+		ID: "user-initial",
+		Message: message.Message{
+			Role:      "user",
+			Parts:     []message.Part{message.TextPart{Text: "original prompt"}},
+			CreatedAt: &createdAt,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:         "Thread 1",
+		NameSource:   thread.ThreadNameSourceUser,
+		Model:        "mock/test-model",
+		ActiveLeafID: "user-initial",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Now().UTC()
+	if err := store.SaveTurnState(threadID, thread.TurnState{
+		ID:        "turn-interrupted",
+		ThreadID:  threadID,
+		LeafMsgID: "user-initial",
+		Config: thread.TurnConfig{
+			ProviderID: "mock",
+			Model:      "test-model",
+			UserMessage: message.Message{
+				Role:  "user",
+				Parts: []message.Part{message.TextPart{Text: "abandoned prompt"}},
+			},
+		},
+		CurrentStep:    0,
+		Phase:          thread.PhaseStreaming,
+		AssistantMsgID: "assistant-interrupted",
+		StartedAt:      &startedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := json.Marshal(api.ChatRequest{Messages: []message.UIMessage{
+		{
+			ID:    "user-initial",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "original prompt", State: "done"}},
+		},
+		{
+			ID:    "user-continue",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "continue", State: "done"}},
+		},
+	}, Model: "mock/test-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := ts.Client().Post(ts.URL+"/threads/"+threadID+"/chat", "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected status 202, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	var started api.ChatStartedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&started); err != nil {
+		t.Fatal(err)
+	}
+	if started.Status != "started" || started.CompletionID == "" {
+		t.Fatalf("unexpected chat started response: %#v", started)
+	}
+
+	waitForCompletionDone(t, cm, threadID)
+
+	if state, err := store.LoadTurnState(threadID); err != nil {
+		t.Fatal(err)
+	} else if state != nil {
+		t.Fatalf("expected interrupted turn to be closed, got %#v", state)
+	}
+
+	messages, err := agentImpl.Messages(threadID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) < 3 {
+		t.Fatalf("expected persisted history after resumed prompt, got %#v", messages)
+	}
+	foundContinue := false
+	foundAssistant := false
+	for _, msg := range messages {
+		if msg.Role == "user" && len(msg.Parts) > 0 {
+			if part, ok := msg.Parts[0].(message.UITextPart); ok && part.Text == "continue" {
+				foundContinue = true
+			}
+		}
+		if msg.Role == "assistant" {
+			foundAssistant = true
+		}
+	}
+	if !foundContinue || !foundAssistant {
+		t.Fatalf("expected continued user prompt and assistant response in history, got %#v", messages)
+	}
+
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if len(provider.requests) != 2 {
+		t.Fatalf("expected close+prompt provider requests, got %d", len(provider.requests))
+	}
+	lastReq := provider.requests[len(provider.requests)-1]
+	if len(lastReq.Messages) == 0 {
+		t.Fatalf("expected resumed prompt request messages, got %#v", lastReq)
+	}
+	lastMsg := lastReq.Messages[len(lastReq.Messages)-1]
+	if lastMsg.Role != "user" {
+		t.Fatalf("expected last resumed request message to be user, got %#v", lastMsg)
+	}
+	lastPart, ok := lastMsg.Parts[0].(message.TextPart)
+	if !ok || lastPart.Text != "continue" {
+		t.Fatalf("expected last resumed request message text %q, got %#v", "continue", lastMsg.Parts)
 	}
 }
 
@@ -1350,9 +1522,9 @@ func TestPostAnswer_UsesResumeWithoutCachedCompletion(t *testing.T) {
 			}
 			return nil
 		},
-		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) (agent.ResumeResult, error) {
 			resumeCh <- threadID
-			return func(_ func(message.MessageChunk, error) bool) {}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
@@ -1396,9 +1568,9 @@ func TestPostAnswer_UsesResumeWhenOnlyDoneCachedCompletionExists(t *testing.T) {
 			promptCh <- req
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
-		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) (agent.ResumeResult, error) {
 			resumeCh <- threadID
-			return func(_ func(message.MessageChunk, error) bool) {}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
@@ -1485,11 +1657,11 @@ func TestChatStream_PendingQuestionConnectionContinuesAfterAnswer(t *testing.T) 
 			answerSubmitted <- struct{}{}
 			return nil
 		},
-		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(_ context.Context, threadID string, _ agent.PromptRequest) (agent.ResumeResult, error) {
 			if threadID != "thread-approval" {
 				t.Fatalf("expected thread-approval, got %q", threadID)
 			}
-			return func(yield func(message.MessageChunk, error) bool) {
+			return agent.ResumeResult{Stream: func(yield func(message.MessageChunk, error) bool) {
 				select {
 				case <-answerSubmitted:
 				case <-time.After(2 * time.Second):
@@ -1513,7 +1685,7 @@ func TestChatStream_PendingQuestionConnectionContinuesAfterAnswer(t *testing.T) 
 					return
 				}
 				yield(message.TextDeltaChunk{ID: "delta-approval", Delta: "resumed"}, nil) //nolint:errcheck
-			}
+			}}, nil
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
@@ -1883,15 +2055,15 @@ func TestChatStream_FreshRequest_StartsInterruptedTurnRecovery(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{
-		resumeFn: func(ctx context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+		resumeFn: func(ctx context.Context, threadID string, _ agent.PromptRequest) (agent.ResumeResult, error) {
 			resumeCh <- threadID
-			return func(yield func(message.MessageChunk, error) bool) {
+			return agent.ResumeResult{Stream: func(yield func(message.MessageChunk, error) bool) {
 				<-release
 				if !yield(liveChunk, nil) {
 					return
 				}
 				<-ctx.Done()
-			}
+			}}, nil
 		},
 		messagesFn: func(_, _ string) ([]message.UIMessage, error) {
 			return nil, nil

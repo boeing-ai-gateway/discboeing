@@ -870,14 +870,42 @@ func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
 		t.Fatal("expected interrupted turn state after initial provider error")
 	}
 
-	for _, err := range agentImpl.Resume(context.Background(), threadID, agent.PromptRequest{
+	var resumedChunks []message.MessageChunk
+	resumed, err := agentImpl.Resume(context.Background(), threadID, agent.PromptRequest{
 		Model:     "openai/gpt-5.4",
 		Reasoning: "high",
 		Mode:      "plan",
-	}) {
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for chunk, err := range resumed.Stream {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if chunk != nil {
+			resumedChunks = append(resumedChunks, chunk)
+		}
+	}
+	if len(resumedChunks) == 0 {
+		t.Fatal("expected resumed chunks")
+	}
+	startIndex := -1
+	for i, chunk := range resumedChunks {
+		if _, ok := chunk.(message.StartChunk); ok {
+			startIndex = i
+			break
+		}
+	}
+	if startIndex == -1 {
+		t.Fatalf("expected resumed chunks to include StartChunk, got %#v", resumedChunks)
+	}
+	start, ok := resumedChunks[startIndex].(message.StartChunk)
+	if !ok {
+		t.Fatalf("expected resumed chunk %d to be StartChunk, got %T", startIndex, resumedChunks[startIndex])
+	}
+	if start.MessageID != state.AssistantMsgID {
+		t.Fatalf("expected resumed start message id %q, got %q", state.AssistantMsgID, start.MessageID)
 	}
 
 	if len(provider.requests) != 2 {

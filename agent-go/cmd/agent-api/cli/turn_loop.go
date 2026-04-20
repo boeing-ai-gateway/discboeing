@@ -96,7 +96,16 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 		watcher := startEscWatch(watchCtx, cancel)
 		var seq iter.Seq2[message.MessageChunk, error]
 		if resumeOnly {
-			seq = a.Resume(ctx, threadID, agent.PromptRequest{})
+			resumed, err := a.Resume(ctx, threadID, agent.PromptRequest{})
+			if err != nil {
+				stopEscWatch()
+				watcher.Wait()
+				md.Finish()
+				spin.Stop()
+				fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
+				return
+			}
+			seq = resumed.Stream
 		} else {
 			seq = a.Prompt(ctx, threadID, req)
 		}

@@ -6,6 +6,7 @@ package agentimpl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"log"
@@ -152,6 +153,15 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 	if err != nil {
 		return errorIter(err)
 	}
+	return a.promptStream(ctx, threadID, req, env)
+}
+
+func (a *DefaultAgent) promptStream(
+	ctx context.Context,
+	threadID string,
+	req agent.PromptRequest,
+	env *promptEnvironment,
+) iter.Seq2[message.MessageChunk, error] {
 	toolCtx := &thread.ToolContext{
 		ThreadID:         threadID,
 		PlanMode:         env.planMode,
@@ -331,100 +341,236 @@ func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 }
 
 // Resume continues or finalizes an interrupted turn from persisted disk state.
-func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
-	return func(yield func(message.MessageChunk, error) bool) {
-		state, err := a.store.LoadTurnState(threadID)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-		if state == nil {
-			yield(nil, agent.ErrInterruptedTurnRequiresResume)
-			return
-		}
-
-		threadCfg, threadCfgErr := a.store.LoadConfig(threadID)
-		if threadCfgErr != nil {
-			log.Printf("agent: warning: thread config: %v", threadCfgErr)
-			threadCfg = thread.Config{}
-		}
-		useThreadConfig := threadCfgErr == nil
-
-		threadCfg, cfgUpdated, err := a.applyResumeOverrides(threadID, state, threadCfg, useThreadConfig, req)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-
-		log.Printf("agent: resuming interrupted turn %s for thread %s (step %d, phase %s)",
-			state.ID, threadID, state.CurrentStep, state.Phase)
-
-		provider, resolveErr := a.registry.Get(state.Config.ProviderID)
-		if resolveErr != nil {
-			yield(nil, fmt.Errorf("resolve provider for resume: %w", resolveErr))
-			return
-		}
-
-		sessionCfg, err := sessionconfig.Load(a.cwd)
-		if err != nil {
-			log.Printf("agent: warning: session config: %v", err)
-			sessionCfg = &sessionconfig.SessionConfig{MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth}
-		}
-
-		toolCtx := &thread.ToolContext{
-			ThreadID:         threadID,
-			PlanMode:         state.Config.PlanMode,
-			MaxSubagentDepth: sessionCfg.MaxSubagentDepth,
-			ProviderResolver: a.registry,
-			Agent:            a,
-			ProviderID:       state.Config.ProviderID,
-			ModelID:          state.Config.Model,
-		}
-		resumeMessageID := a.resolveResumeMessageID(threadID, state)
-
-		executor := thread.ToolExecutor(a.executor)
-		if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {
-			executor = mcp.NewExecutor(a.executor, a.MCPManager)
-		}
-
-		promptCtx, cancel := context.WithCancel(ctx)
-		defer func() {
-			a.mu.Lock()
-			delete(a.cancels, threadID)
-			a.mu.Unlock()
-			cancel()
-		}()
-
-		a.mu.Lock()
-		a.cancels[threadID] = cancel
-		a.mu.Unlock()
-
-		if cfgUpdated {
-			if !yield(thread.UpdateChunkFromConfig(threadID, threadCfg), nil) {
-				return
-			}
-		}
-		if resumeMessageID != "" {
-			if !yield(message.ThreadResumeChunk{
-				Data: message.ThreadResumeData{ThreadID: threadID, MessageID: resumeMessageID},
-			}, nil) {
-				return
-			}
-		}
-
-		for chunk, chunkErr := range thread.ResumeTurn(promptCtx, provider, executor, a.store, state, toolCtx) {
-			if !yield(chunk, chunkErr) {
-				return
-			}
-		}
-		if promptCtx.Err() != nil {
-			a.persistLastTurnState(threadID, thread.StateCancelled)
-		}
-		if !a.clearActiveCommand(threadID, yield) {
-			return
-		}
-		a.persistActiveLeaf(threadID)
+func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
+	state, err := a.store.LoadTurnState(threadID)
+	if err != nil {
+		return agent.ResumeResult{}, fmt.Errorf("load turn state: %w", err)
 	}
+	if state == nil {
+		return agent.ResumeResult{}, agent.ErrInterruptedTurnRequiresResume
+	}
+	if state.Phase == thread.PhaseWaitingForAnswer {
+		return agent.ResumeResult{}, agent.ErrPendingQuestionRequiresAnswer
+	}
+	if len(req.UserParts) > 0 {
+		var env *promptEnvironment
+		if !isCompactCommand(req.UserParts) {
+			env, err = a.resolvePromptEnvironment(ctx, threadID, req)
+			if err != nil {
+				return agent.ResumeResult{}, err
+			}
+		}
+		replayLeafID, err := a.closeInterruptedTurnForPrompt(ctx, threadID)
+		if err != nil {
+			return agent.ResumeResult{}, err
+		}
+		req.LeafID = replayLeafID
+		if isCompactCommand(req.UserParts) {
+			return agent.ResumeResult{
+				ReplayLeafID: replayLeafID,
+				Stream:       a.handleCompactCommand(ctx, threadID, req),
+			}, nil
+		}
+		return agent.ResumeResult{
+			ReplayLeafID: replayLeafID,
+			Stream:       a.promptStream(ctx, threadID, req, env),
+		}, nil
+	}
+
+	threadCfg, threadCfgErr := a.store.LoadConfig(threadID)
+	if threadCfgErr != nil {
+		log.Printf("agent: warning: thread config: %v", threadCfgErr)
+		threadCfg = thread.Config{}
+	}
+	useThreadConfig := threadCfgErr == nil
+
+	threadCfg, cfgUpdated, err := a.applyResumeOverrides(threadID, state, threadCfg, useThreadConfig, req)
+	if err != nil {
+		return agent.ResumeResult{}, err
+	}
+
+	replayLeafID := resumeReplayLeafID(threadID, state, threadCfg, a.store)
+	if a.registry == nil {
+		return agent.ResumeResult{}, fmt.Errorf("provider registry unavailable for resume")
+	}
+
+	provider, err := a.registry.Get(state.Config.ProviderID)
+	if err != nil {
+		return agent.ResumeResult{}, fmt.Errorf("resolve provider for resume: %w", err)
+	}
+
+	sessionCfg, err := sessionconfig.Load(a.cwd)
+	if err != nil {
+		log.Printf("agent: warning: session config: %v", err)
+		sessionCfg = &sessionconfig.SessionConfig{
+			MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth,
+		}
+	}
+
+	toolCtx := &thread.ToolContext{
+		ThreadID:         threadID,
+		PlanMode:         state.Config.PlanMode,
+		MaxSubagentDepth: sessionCfg.MaxSubagentDepth,
+		ProviderResolver: a.registry,
+		Agent:            a,
+		ProviderID:       state.Config.ProviderID,
+		ModelID:          state.Config.Model,
+	}
+	resumeMessageID := a.resolveResumeMessageID(threadID, state)
+
+	executor := thread.ToolExecutor(a.executor)
+	if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {
+		executor = mcp.NewExecutor(a.executor, a.MCPManager)
+	}
+
+	return agent.ResumeResult{
+		ReplayLeafID: replayLeafID,
+		Stream: func(yield func(message.MessageChunk, error) bool) {
+			log.Printf("agent: resuming interrupted turn %s for thread %s (step %d, phase %s)",
+				state.ID, threadID, state.CurrentStep, state.Phase)
+
+			promptCtx, cancel := context.WithCancel(ctx)
+			defer func() {
+				a.mu.Lock()
+				delete(a.cancels, threadID)
+				a.mu.Unlock()
+				cancel()
+			}()
+
+			a.mu.Lock()
+			a.cancels[threadID] = cancel
+			a.mu.Unlock()
+
+			if cfgUpdated {
+				if !yield(thread.UpdateChunkFromConfig(threadID, threadCfg), nil) {
+					return
+				}
+			}
+			if resumeMessageID != "" {
+				if !yield(message.ThreadResumeChunk{
+					Data: message.ThreadResumeData{ThreadID: threadID, MessageID: resumeMessageID},
+				}, nil) {
+					return
+				}
+			} else if state.AssistantMsgID != "" {
+				if !yield(message.StartChunk{
+					MessageID:       state.AssistantMsgID,
+					MessageMetadata: resumeStartMessageMetadata(state),
+				}, nil) {
+					return
+				}
+			}
+
+			for chunk, chunkErr := range thread.ResumeTurn(promptCtx, provider, executor, a.store, state, toolCtx) {
+				if !yield(chunk, chunkErr) {
+					return
+				}
+			}
+			if promptCtx.Err() != nil {
+				a.persistLastTurnState(threadID, thread.StateCancelled)
+			}
+			if !a.clearActiveCommand(threadID, yield) {
+				return
+			}
+			a.persistActiveLeaf(threadID)
+		},
+	}, nil
+}
+
+func (a *DefaultAgent) closeInterruptedTurnForPrompt(ctx context.Context, threadID string) (string, error) {
+	state, err := a.store.LoadTurnState(threadID)
+	if err != nil {
+		return "", fmt.Errorf("load turn state: %w", err)
+	}
+	if state == nil {
+		return a.resolveCurrentLeaf(threadID)
+	}
+	if state.Phase == thread.PhaseWaitingForAnswer {
+		return "", agent.ErrPendingQuestionRequiresAnswer
+	}
+	if a.registry == nil {
+		return "", fmt.Errorf("provider registry unavailable for interrupted turn close")
+	}
+
+	provider, err := a.registry.Get(state.Config.ProviderID)
+	if err != nil {
+		return "", fmt.Errorf("resolve provider for interrupted turn close: %w", err)
+	}
+
+	sessionCfg, err := sessionconfig.Load(a.cwd)
+	if err != nil {
+		log.Printf("agent: warning: session config: %v", err)
+		sessionCfg = &sessionconfig.SessionConfig{
+			MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth,
+		}
+	}
+
+	toolCtx := &thread.ToolContext{
+		ThreadID:         threadID,
+		PlanMode:         state.Config.PlanMode,
+		MaxSubagentDepth: sessionCfg.MaxSubagentDepth,
+		ProviderResolver: a.registry,
+		Agent:            a,
+		ProviderID:       state.Config.ProviderID,
+		ModelID:          state.Config.Model,
+	}
+
+	executor := thread.ToolExecutor(a.executor)
+	if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {
+		executor = mcp.NewExecutor(a.executor, a.MCPManager)
+	}
+
+	abortCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	for _, chunkErr := range thread.ResumeTurn(abortCtx, provider, executor, a.store, state, toolCtx) {
+		if chunkErr == nil || errors.Is(chunkErr, context.Canceled) || errors.Is(chunkErr, context.DeadlineExceeded) {
+			continue
+		}
+		return "", chunkErr
+	}
+
+	a.persistLastTurnState(threadID, thread.StateCancelled)
+	_ = a.clearActiveCommand(threadID, func(message.MessageChunk, error) bool { return true })
+	a.persistActiveLeaf(threadID)
+	return a.resolveCurrentLeaf(threadID)
+}
+
+func resumeReplayLeafID(threadID string, state *thread.TurnState, cfg thread.Config, store *thread.Store) string {
+	if state != nil {
+		if leafID := strings.TrimSpace(state.LeafMsgID); leafID != "" {
+			return leafID
+		}
+	}
+	if leafID := strings.TrimSpace(cfg.ActiveLeafID); leafID != "" {
+		return leafID
+	}
+	leafID, err := store.FindLeaf(threadID)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(leafID)
+}
+
+func resumeStartMessageMetadata(state *thread.TurnState) json.RawMessage {
+	if state == nil {
+		return nil
+	}
+	payload := map[string]any{}
+	if state.Config.ProviderID != "" && state.Config.Model != "" {
+		payload["model"] = state.Config.ProviderID + "/" + state.Config.Model
+		payload["reasoning"] = string(state.Config.Reasoning)
+	}
+	if state.StartedAt != nil {
+		payload["startedAt"] = state.StartedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 func (a *DefaultAgent) applyResumeOverrides(
