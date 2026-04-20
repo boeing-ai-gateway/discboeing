@@ -840,13 +840,18 @@ func convertTools(tools []providers.ToolDefinition, customToolNames map[string]s
 // We track the item_id → call_id mapping here so delta/done handlers can
 // resolve the correct call_id.
 type streamState struct {
-	itemCallIDs map[string]string // item_id → call_id for function_call items
+	itemCallIDs            map[string]string // item_id → call_id for function_call items
+	functionCallArgsStream map[string]bool   // call_id → whether any argument delta was emitted
+	sawToolCall            bool
 }
 
 // parseSSEStream reads Server-Sent Events from the response body and
 // dispatches each event to handleSSEEvent.
 func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, error) bool) {
-	state := &streamState{itemCallIDs: make(map[string]string)}
+	state := &streamState{
+		itemCallIDs:            make(map[string]string),
+		functionCallArgsStream: make(map[string]bool),
+	}
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
@@ -882,7 +887,7 @@ func (s *streamState) handleSSEEvent(eventType string, data []byte, yield func(m
 	case "response.output_item.added":
 		return s.handleOutputItemAdded(data, yield)
 	case "response.output_item.done":
-		return handleOutputItemDone(data, yield)
+		return s.handleOutputItemDone(data, yield)
 	case "response.content_part.added":
 		return handleContentPartAdded(data, yield)
 	case "response.output_text.delta":
@@ -896,7 +901,7 @@ func (s *streamState) handleSSEEvent(eventType string, data []byte, yield func(m
 	case "response.reasoning_summary_text.delta":
 		return handleReasoningDelta(data, yield)
 	case "response.completed":
-		return handleResponseCompleted(data, yield)
+		return s.handleResponseCompleted(data, yield)
 	case "response.incomplete":
 		return handleResponseIncomplete(data, yield)
 	case "response.failed":
@@ -946,6 +951,7 @@ func (s *streamState) handleOutputItemAdded(data []byte, yield func(message.Prov
 	}
 	switch event.Item.Type {
 	case "function_call":
+		s.sawToolCall = true
 		// Store item_id → call_id so delta/done events can resolve call_id
 		// (the real API emits empty call_id in those events, only item_id).
 		s.itemCallIDs[event.Item.ID] = event.Item.CallID
@@ -953,6 +959,9 @@ func (s *streamState) handleOutputItemAdded(data []byte, yield func(message.Prov
 			ToolCallID: event.Item.CallID,
 			ToolName:   event.Item.Name,
 		}, nil)
+	case "custom_tool_call":
+		s.sawToolCall = true
+		return true
 	case "reasoning":
 		return yield(message.ReasoningStartChunk{ID: event.Item.ID}, nil)
 	}
@@ -961,7 +970,7 @@ func (s *streamState) handleOutputItemAdded(data []byte, yield func(message.Prov
 
 // handleOutputItemDone emits ReasoningEndChunk when a reasoning output item
 // completes and ToolCallChunk for completed custom tool calls.
-func handleOutputItemDone(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
+func (s *streamState) handleOutputItemDone(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
 	var event struct {
 		Item json.RawMessage `json:"item"`
 	}
@@ -990,6 +999,7 @@ func handleOutputItemDone(data []byte, yield func(message.ProviderMessageChunk, 
 			ProviderMetadata: wrapped,
 		}, nil)
 	case "custom_tool_call":
+		s.sawToolCall = true
 		var item struct {
 			CallID string `json:"call_id"`
 			Name   string `json:"name"`
@@ -1058,6 +1068,9 @@ func (s *streamState) handleFunctionCallDelta(data []byte, yield func(message.Pr
 	if callID == "" {
 		callID = s.itemCallIDs[event.ItemID]
 	}
+	if callID != "" {
+		s.functionCallArgsStream[callID] = true
+	}
 	return yield(message.ToolInputDeltaChunk{
 		ToolCallID:     callID,
 		InputTextDelta: event.Delta,
@@ -1066,8 +1079,9 @@ func (s *streamState) handleFunctionCallDelta(data []byte, yield func(message.Pr
 
 func (s *streamState) handleFunctionCallDone(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
 	var event struct {
-		ItemID string `json:"item_id"`
-		CallID string `json:"call_id"`
+		ItemID    string `json:"item_id"`
+		CallID    string `json:"call_id"`
+		Arguments string `json:"arguments"`
 	}
 	if err := json.Unmarshal(data, &event); err != nil {
 		return yield(nil, fmt.Errorf("openai: parse function_call_arguments.done: %w", err))
@@ -1075,6 +1089,11 @@ func (s *streamState) handleFunctionCallDone(data []byte, yield func(message.Pro
 	callID := event.CallID
 	if callID == "" {
 		callID = s.itemCallIDs[event.ItemID]
+	}
+	if strings.TrimSpace(event.Arguments) != "" && !s.functionCallArgsStream[callID] {
+		if !yield(message.ToolInputDeltaChunk{ToolCallID: callID, InputTextDelta: event.Arguments}, nil) {
+			return false
+		}
 	}
 	return yield(message.ToolInputEndChunk{ToolCallID: callID}, nil)
 }
@@ -1090,7 +1109,7 @@ func handleReasoningDelta(data []byte, yield func(message.ProviderMessageChunk, 
 	return yield(message.ReasoningDeltaChunk{ID: event.ItemID, Delta: event.Delta}, nil)
 }
 
-func handleResponseCompleted(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
+func (s *streamState) handleResponseCompleted(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
 	var event struct {
 		Response struct {
 			Status string `json:"status"`
@@ -1104,11 +1123,13 @@ func handleResponseCompleted(data []byte, yield func(message.ProviderMessageChun
 		return yield(nil, fmt.Errorf("openai: parse response.completed: %w", err))
 	}
 
-	hasToolCalls := false
-	for _, item := range event.Response.Output {
-		if item.Type == "function_call" || item.Type == "custom_tool_call" {
-			hasToolCalls = true
-			break
+	hasToolCalls := s.sawToolCall
+	if !hasToolCalls {
+		for _, item := range event.Response.Output {
+			if item.Type == "function_call" || item.Type == "custom_tool_call" {
+				hasToolCalls = true
+				break
+			}
 		}
 	}
 

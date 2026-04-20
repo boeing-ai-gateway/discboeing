@@ -441,7 +441,10 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 // Returns the response ID captured from the response.created event (empty if
 // not received) and clean=true when the stream ended with a terminal event.
 func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(message.ProviderMessageChunk, error) bool) (responseID string, clean bool) {
-	state := &streamState{itemCallIDs: make(map[string]string)}
+	state := &streamState{
+		itemCallIDs:            make(map[string]string),
+		functionCallArgsStream: make(map[string]bool),
+	}
 
 	for {
 		_, msgBytes, err := conn.Read(ctx)

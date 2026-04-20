@@ -894,11 +894,45 @@ func TestParseSSEStream(t *testing.T) {
 		}
 	})
 
+	t.Run("tool call response with arguments only in done and empty completed output", func(t *testing.T) {
+		sse := buildSSE(
+			"response.created", `{"response":{"id":"resp_done_only","model":"gpt-5.3-codex-spark"}}`,
+			"response.output_item.added", `{"item":{"id":"fc_done_1","type":"function_call","call_id":"call_done_1","name":"get_weather"}}`,
+			"response.function_call_arguments.done", `{"item_id":"fc_done_1","call_id":"","arguments":"{\"location\":\"Paris\"}"}`,
+			"response.output_item.done", `{"item":{"id":"fc_done_1","type":"function_call"}}`,
+			"response.completed", `{"response":{"status":"completed","output":[],"usage":{"input_tokens":20,"input_tokens_details":{"cached_tokens":0},"output_tokens":15,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+		)
+
+		chunks := collectChunks(t, sse)
+		assertChunkTypes(t, chunks,
+			"stream-start",
+			"response-metadata",
+			"tool-input-start",
+			"tool-input-delta",
+			"tool-input-end",
+			"finish",
+		)
+
+		delta := chunks[3].(message.ToolInputDeltaChunk)
+		if delta.ToolCallID != "call_done_1" {
+			t.Fatalf("expected delta ToolCallID 'call_done_1', got %q", delta.ToolCallID)
+		}
+		if delta.InputTextDelta != `{"location":"Paris"}` {
+			t.Fatalf("expected synthetic delta with done arguments, got %q", delta.InputTextDelta)
+		}
+
+		finish := chunks[5].(message.FinishChunk)
+		if finish.FinishReason.Unified != "tool-calls" {
+			t.Fatalf("expected finish reason 'tool-calls', got %q", finish.FinishReason.Unified)
+		}
+	})
+
 	t.Run("custom tool call from output_item.done", func(t *testing.T) {
 		sse := buildSSE(
 			"response.created", `{"response":{"id":"resp_custom","model":"gpt-5"}}`,
+			"response.output_item.added", `{"item":{"id":"ct_1","type":"custom_tool_call","call_id":"call_patch_1","name":"apply_patch"}}`,
 			"response.output_item.done", `{"item":{"id":"ct_1","type":"custom_tool_call","call_id":"call_patch_1","name":"apply_patch","input":"*** Begin Patch\n*** End Patch"}}`,
-			"response.completed", `{"response":{"status":"completed","output":[{"type":"custom_tool_call"}],"usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+			"response.completed", `{"response":{"status":"completed","output":[],"usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":0}}}}`,
 		)
 
 		chunks := collectChunks(t, sse)
@@ -1367,7 +1401,7 @@ func TestComplete(t *testing.T) {
 		}
 	})
 
-	t.Run("omits reasoning summary when model capability disables it", func(t *testing.T) {
+	t.Run("omits reasoning summary when codex model capability disables it", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
@@ -1407,7 +1441,7 @@ func TestComplete(t *testing.T) {
 
 		p := &Provider{apiKey: "k", baseURL: server.URL, client: server.Client()}
 		req := providers.CompleteRequest{
-			Model:     providers.ModelRef{ProviderID: "openai", ModelID: "gpt-5.3-codex-spark"},
+			Model:     providers.ModelRef{ProviderID: codexProviderID, ModelID: "gpt-5.3-codex-spark"},
 			Messages:  []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "x"}}}},
 			Reasoning: "enabled",
 		}

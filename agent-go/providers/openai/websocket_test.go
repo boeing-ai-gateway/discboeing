@@ -311,6 +311,139 @@ func TestParseWebSocketStream(t *testing.T) {
 			t.Errorf("expected finish reason %q, got %q", "tool-calls", finish.FinishReason.Unified)
 		}
 	})
+
+	t.Run("tool call stream with arguments only in done and empty completed output", func(t *testing.T) {
+		events := []map[string]any{
+			{"type": "response.created", "response": map[string]any{"id": "resp_tc_done", "model": "gpt-5.3-codex-spark"}},
+			{"type": "response.output_item.added", "item": map[string]any{
+				"id": "fc_done_1", "type": "function_call", "name": "get_weather", "call_id": "call_done_1",
+			}},
+			{"type": "response.function_call_arguments.done", "item_id": "fc_done_1", "arguments": `{"location":"Paris"}`},
+			{"type": "response.output_item.done", "item": map[string]any{"id": "fc_done_1", "type": "function_call"}},
+			{"type": "response.completed", "response": map[string]any{
+				"status": "completed",
+				"output": []map[string]any{},
+				"usage": map[string]any{
+					"input_tokens":          3,
+					"input_tokens_details":  map[string]any{"cached_tokens": 0},
+					"output_tokens":         5,
+					"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+				},
+			}},
+		}
+
+		ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
+			sendWSEvents(r.Context(), t, conn, events)
+		})
+		defer ts.Close()
+
+		wsURL := strings.Replace(ts.URL, "http://", "ws://", 1) + "/responses"
+		conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer conn.CloseNow()
+
+		var chunks []message.ProviderMessageChunk
+		_, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return false
+			}
+			if chunk != nil {
+				chunks = append(chunks, chunk)
+			}
+			return true
+		})
+
+		if !clean {
+			t.Error("expected clean=true")
+		}
+		assertChunkTypes(t, chunks,
+			"stream-start", "response-metadata",
+			"tool-input-start", "tool-input-delta", "tool-input-end",
+			"finish",
+		)
+		delta := chunks[3].(message.ToolInputDeltaChunk)
+		if delta.ToolCallID != "call_done_1" {
+			t.Fatalf("expected ToolCallID %q, got %q", "call_done_1", delta.ToolCallID)
+		}
+		if delta.InputTextDelta != `{"location":"Paris"}` {
+			t.Fatalf("expected synthetic delta, got %q", delta.InputTextDelta)
+		}
+		finish := chunks[len(chunks)-1].(message.FinishChunk)
+		if finish.FinishReason.Unified != "tool-calls" {
+			t.Errorf("expected finish reason %q, got %q", "tool-calls", finish.FinishReason.Unified)
+		}
+	})
+
+	t.Run("custom tool stream with empty completed output", func(t *testing.T) {
+		events := []map[string]any{
+			{"type": "response.created", "response": map[string]any{"id": "resp_ct", "model": "gpt-5.3-codex-spark"}},
+			{"type": "response.output_item.added", "item": map[string]any{
+				"id": "ct_1", "type": "custom_tool_call", "name": "apply_patch", "call_id": "call_patch_1",
+			}},
+			{"type": "response.output_item.done", "item": map[string]any{
+				"id": "ct_1", "type": "custom_tool_call", "name": "apply_patch", "call_id": "call_patch_1", "input": "*** Begin Patch\n*** End Patch",
+			}},
+			{"type": "response.completed", "response": map[string]any{
+				"status": "completed",
+				"output": []map[string]any{},
+				"usage": map[string]any{
+					"input_tokens":          3,
+					"input_tokens_details":  map[string]any{"cached_tokens": 0},
+					"output_tokens":         5,
+					"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+				},
+			}},
+		}
+
+		ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
+			sendWSEvents(r.Context(), t, conn, events)
+		})
+		defer ts.Close()
+
+		wsURL := strings.Replace(ts.URL, "http://", "ws://", 1) + "/responses"
+		conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer conn.CloseNow()
+
+		var chunks []message.ProviderMessageChunk
+		_, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return false
+			}
+			if chunk != nil {
+				chunks = append(chunks, chunk)
+			}
+			return true
+		})
+
+		if !clean {
+			t.Error("expected clean=true")
+		}
+		assertChunkTypes(t, chunks,
+			"stream-start", "response-metadata",
+			"tool-call", "finish",
+		)
+		call := chunks[2].(message.ToolCallChunk)
+		if call.ToolCallID != "call_patch_1" {
+			t.Fatalf("expected ToolCallID %q, got %q", "call_patch_1", call.ToolCallID)
+		}
+		if call.ToolName != "apply_patch" {
+			t.Fatalf("expected ToolName %q, got %q", "apply_patch", call.ToolName)
+		}
+		if call.Input != "*** Begin Patch\n*** End Patch" {
+			t.Fatalf("unexpected tool input %q", call.Input)
+		}
+		finish := chunks[len(chunks)-1].(message.FinishChunk)
+		if finish.FinishReason.Unified != "tool-calls" {
+			t.Errorf("expected finish reason %q, got %q", "tool-calls", finish.FinishReason.Unified)
+		}
+	})
 }
 
 func TestCompleteViaWebSocket_StreamsText(t *testing.T) {

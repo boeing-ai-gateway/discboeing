@@ -14,6 +14,16 @@ import (
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
+// readCodexToken reads the Codex token from CODEX_TOKEN.
+func readCodexToken(t *testing.T) string {
+	t.Helper()
+	if token := strings.TrimSpace(os.Getenv("CODEX_TOKEN")); token != "" {
+		return token
+	}
+	t.Skip("CODEX_TOKEN not set")
+	return ""
+}
+
 // readAPIKey reads the OpenAI API key from OPENAI_API_KEY env var or key.txt.
 func readAPIKey(t *testing.T) string {
 	t.Helper()
@@ -41,26 +51,41 @@ func readAPIKey(t *testing.T) string {
 }
 
 // readCodexWebSocketConfig returns config for real Codex websocket integration
-// tests and skips when required environment is not available.
+// tests and skips when the required token is not available.
 func readCodexWebSocketConfig(t *testing.T) providers.Config {
 	t.Helper()
 
-	apiKey := readAPIKey(t)
-	baseURL := strings.TrimSpace(os.Getenv("OPENAI_API_BASE"))
-	if baseURL == "" || !strings.Contains(baseURL, "chatgpt.com") {
-		t.Skip("OPENAI_API_BASE must point to chatgpt.com Codex backend for this integration test")
-	}
-	accountID := strings.TrimSpace(os.Getenv("CHATGPT_ACCOUNT_ID"))
-	if accountID == "" {
-		t.Skip("CHATGPT_ACCOUNT_ID is required for Codex websocket integration tests")
-	}
-
 	return providers.Config{
-		"api_key":          apiKey,
-		"base_url":         baseURL,
+		"auth_token":       readCodexToken(t),
 		configUseWebSocket: "true",
-		"account_id":       accountID,
 	}
+}
+
+func codexWebSocketProvider(t *testing.T) providers.Provider {
+	t.Helper()
+	p, err := providers.New(codexProviderID, readCodexWebSocketConfig(t))
+	if err != nil {
+		t.Fatalf("create codex provider: %v", err)
+	}
+	return p
+}
+
+// readCodexSSEConfig returns config for real Codex SSE integration tests.
+func readCodexSSEConfig(t *testing.T) providers.Config {
+	t.Helper()
+	return providers.Config{
+		"auth_token": readCodexToken(t),
+		"base_url":   strings.Replace(codexDefaultBaseURL, "wss://", "https://", 1),
+	}
+}
+
+func codexSSEProvider(t *testing.T) providers.Provider {
+	t.Helper()
+	p, err := providers.New(codexProviderID, readCodexSSEConfig(t))
+	if err != nil {
+		t.Fatalf("create codex sse provider: %v", err)
+	}
+	return p
 }
 
 func completeAndCaptureResponseID(ctx context.Context, p providers.Provider, req providers.CompleteRequest) (string, error) {
@@ -88,6 +113,332 @@ func completeExpectError(ctx context.Context, p providers.Provider, req provider
 	return nil
 }
 
+func TestCodexWebSocket_GPT53CodexSparkToolCall(t *testing.T) {
+	p := codexWebSocketProvider(t)
+
+	req := providers.CompleteRequest{
+		Model: providers.ModelRef{ProviderID: codexProviderID, ModelID: "gpt-5.3-codex-spark"},
+		Messages: []message.Message{
+			{Role: "system", Parts: []message.Part{
+				message.TextPart{Text: "You are testing tool calling. You must call the get_weather tool exactly once. Do not answer in plain text."},
+			}},
+			{Role: "user", Parts: []message.Part{
+				message.TextPart{Text: "What is the weather in Paris? Use the tool."},
+			}},
+		},
+		Tools: []providers.ToolDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Get the current weather for a location.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"location":{"type":"string"}},"required":["location"],"additionalProperties":false}`),
+			},
+		},
+	}
+
+	acc := message.NewChunkAccumulator()
+	var (
+		responseID   string
+		finishReason string
+		sawToolCall  bool
+		toolCallID   string
+		toolName     string
+		toolInput    string
+	)
+	for chunk, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			t.Fatalf("codex spark completion failed: %v", err)
+		}
+		if chunk != nil {
+			acc.Push(chunk)
+		}
+		switch c := chunk.(type) {
+		case message.ResponseMetadataChunk:
+			responseID = c.ID
+		case message.ToolCallChunk:
+			sawToolCall = true
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+			toolInput = c.Input
+		case message.ToolInputStartChunk:
+			sawToolCall = true
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+		case message.ToolInputDeltaChunk:
+			toolInput += c.InputTextDelta
+		case message.FinishChunk:
+			finishReason = c.FinishReason.Unified
+		}
+	}
+	acc.Close()
+
+	if responseID == "" {
+		t.Fatal("expected non-empty response ID")
+	}
+	if finishReason != "tool-calls" {
+		t.Fatalf("expected finish reason 'tool-calls', got %q", finishReason)
+	}
+	if !sawToolCall {
+		assistantMsg := acc.Message()
+		for _, part := range assistantMsg.Parts {
+			if tc, ok := part.(message.ToolCallPart); ok {
+				sawToolCall = true
+				toolCallID = tc.ToolCallID
+				toolName = tc.ToolName
+				toolInput = tc.Input
+				break
+			}
+		}
+		if !sawToolCall {
+			t.Fatal("expected at least one tool call")
+		}
+	}
+	if toolCallID == "" {
+		t.Fatal("expected non-empty tool call ID")
+	}
+	if toolName != "get_weather" {
+		t.Fatalf("expected tool name 'get_weather', got %q", toolName)
+	}
+	if strings.TrimSpace(toolInput) == "" {
+		t.Fatal("expected non-empty tool input")
+	}
+}
+
+func TestCodexSSE_GPT53CodexSparkToolCall(t *testing.T) {
+	p := codexSSEProvider(t)
+
+	req := providers.CompleteRequest{
+		Model: providers.ModelRef{ProviderID: codexProviderID, ModelID: "gpt-5.3-codex-spark"},
+		Messages: []message.Message{
+			{Role: "system", Parts: []message.Part{
+				message.TextPart{Text: "You are testing tool calling. You must call the get_weather tool exactly once. Do not answer in plain text."},
+			}},
+			{Role: "user", Parts: []message.Part{
+				message.TextPart{Text: "What is the weather in Paris? Use the tool."},
+			}},
+		},
+		Tools: []providers.ToolDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Get the current weather for a location.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"location":{"type":"string"}},"required":["location"],"additionalProperties":false}`),
+			},
+		},
+	}
+
+	acc := message.NewChunkAccumulator()
+	var (
+		responseID   string
+		finishReason string
+		sawToolCall  bool
+		toolCallID   string
+		toolName     string
+		toolInput    string
+	)
+	for chunk, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			t.Fatalf("codex spark sse completion failed: %v", err)
+		}
+		if chunk != nil {
+			acc.Push(chunk)
+		}
+		switch c := chunk.(type) {
+		case message.ResponseMetadataChunk:
+			responseID = c.ID
+		case message.ToolCallChunk:
+			sawToolCall = true
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+			toolInput = c.Input
+		case message.ToolInputStartChunk:
+			sawToolCall = true
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+		case message.ToolInputDeltaChunk:
+			toolInput += c.InputTextDelta
+		case message.FinishChunk:
+			finishReason = c.FinishReason.Unified
+		}
+	}
+	acc.Close()
+
+	if responseID == "" {
+		t.Fatal("expected non-empty response ID")
+	}
+	if finishReason != "tool-calls" {
+		t.Fatalf("expected finish reason 'tool-calls', got %q", finishReason)
+	}
+	if !sawToolCall {
+		assistantMsg := acc.Message()
+		for _, part := range assistantMsg.Parts {
+			if tc, ok := part.(message.ToolCallPart); ok {
+				sawToolCall = true
+				toolCallID = tc.ToolCallID
+				toolName = tc.ToolName
+				toolInput = tc.Input
+				break
+			}
+		}
+		if !sawToolCall {
+			t.Fatal("expected at least one tool call")
+		}
+	}
+	if toolCallID == "" {
+		t.Fatal("expected non-empty tool call ID")
+	}
+	if toolName != "get_weather" {
+		t.Fatalf("expected tool name 'get_weather', got %q", toolName)
+	}
+	if strings.TrimSpace(toolInput) == "" {
+		t.Fatal("expected non-empty tool input")
+	}
+}
+
+func TestCodexWebSocket_GPT53CodexSparkCustomToolCall(t *testing.T) {
+	p := codexWebSocketProvider(t)
+
+	req := providers.CompleteRequest{
+		Model: providers.ModelRef{ProviderID: codexProviderID, ModelID: "gpt-5.3-codex-spark"},
+		Messages: []message.Message{
+			{Role: "system", Parts: []message.Part{
+				message.TextPart{Text: "You are testing tool calling. You must call the apply_patch tool exactly once. Do not answer in plain text."},
+			}},
+			{Role: "user", Parts: []message.Part{
+				message.TextPart{Text: "Call apply_patch to add a file named codex-tool-test.txt with the contents 'codex spark tool test'."},
+			}},
+		},
+		Tools: []providers.ToolDefinition{
+			{
+				Type:        "custom",
+				Name:        "apply_patch",
+				Description: "Apply a structured patch to one or more files.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"input":{"type":"string"}},"required":["input"],"additionalProperties":false}`),
+				Format: &providers.ToolFormat{
+					Type:       "grammar",
+					Syntax:     "lark",
+					Definition: "start: /[\\s\\S]+/",
+				},
+			},
+		},
+	}
+
+	acc := message.NewChunkAccumulator()
+	var (
+		responseID   string
+		finishReason string
+		toolCallID   string
+		toolName     string
+		toolInput    string
+	)
+	for chunk, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			t.Fatalf("codex spark websocket custom-tool completion failed: %v", err)
+		}
+		if chunk != nil {
+			acc.Push(chunk)
+		}
+		switch c := chunk.(type) {
+		case message.ResponseMetadataChunk:
+			responseID = c.ID
+		case message.ToolCallChunk:
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+			toolInput = c.Input
+		case message.FinishChunk:
+			finishReason = c.FinishReason.Unified
+		}
+	}
+	acc.Close()
+
+	if responseID == "" {
+		t.Fatal("expected non-empty response ID")
+	}
+	if finishReason != "tool-calls" {
+		t.Fatalf("expected finish reason 'tool-calls', got %q", finishReason)
+	}
+	if toolCallID == "" {
+		t.Fatal("expected non-empty tool call ID")
+	}
+	if toolName != "apply_patch" {
+		t.Fatalf("expected tool name 'apply_patch', got %q", toolName)
+	}
+	if strings.TrimSpace(toolInput) == "" {
+		t.Fatal("expected non-empty tool input")
+	}
+}
+
+func TestCodexSSE_GPT53CodexSparkCustomToolCall(t *testing.T) {
+	p := codexSSEProvider(t)
+
+	req := providers.CompleteRequest{
+		Model: providers.ModelRef{ProviderID: codexProviderID, ModelID: "gpt-5.3-codex-spark"},
+		Messages: []message.Message{
+			{Role: "system", Parts: []message.Part{
+				message.TextPart{Text: "You are testing tool calling. You must call the apply_patch tool exactly once. Do not answer in plain text."},
+			}},
+			{Role: "user", Parts: []message.Part{
+				message.TextPart{Text: "Call apply_patch to add a file named codex-tool-test.txt with the contents 'codex spark tool test'."},
+			}},
+		},
+		Tools: []providers.ToolDefinition{
+			{
+				Type:        "custom",
+				Name:        "apply_patch",
+				Description: "Apply a structured patch to one or more files.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"input":{"type":"string"}},"required":["input"],"additionalProperties":false}`),
+				Format: &providers.ToolFormat{
+					Type:       "grammar",
+					Syntax:     "lark",
+					Definition: "start: /[\\s\\S]+/",
+				},
+			},
+		},
+	}
+
+	acc := message.NewChunkAccumulator()
+	var (
+		responseID   string
+		finishReason string
+		toolCallID   string
+		toolName     string
+		toolInput    string
+	)
+	for chunk, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			t.Fatalf("codex spark sse custom-tool completion failed: %v", err)
+		}
+		if chunk != nil {
+			acc.Push(chunk)
+		}
+		switch c := chunk.(type) {
+		case message.ResponseMetadataChunk:
+			responseID = c.ID
+		case message.ToolCallChunk:
+			toolCallID = c.ToolCallID
+			toolName = c.ToolName
+			toolInput = c.Input
+		case message.FinishChunk:
+			finishReason = c.FinishReason.Unified
+		}
+	}
+	acc.Close()
+
+	if responseID == "" {
+		t.Fatal("expected non-empty response ID")
+	}
+	if finishReason != "tool-calls" {
+		t.Fatalf("expected finish reason 'tool-calls', got %q", finishReason)
+	}
+	if toolCallID == "" {
+		t.Fatal("expected non-empty tool call ID")
+	}
+	if toolName != "apply_patch" {
+		t.Fatalf("expected tool name 'apply_patch', got %q", toolName)
+	}
+	if strings.TrimSpace(toolInput) == "" {
+		t.Fatal("expected non-empty tool input")
+	}
+}
+
 // TestCodexWebSocket_ContinuationInstructionsDependOnConnection validates the
 // real Codex websocket behavior across a provider restart:
 // 1) a reused websocket continuation succeeds without top-level instructions,
@@ -95,16 +446,11 @@ func completeExpectError(ctx context.Context, p providers.Provider, req provider
 // 3) resending instructions on that fresh socket succeeds.
 //
 // Run with:
-// OPENAI_API_BASE=<chatgpt codex base> CHATGPT_ACCOUNT_ID=<id> OPENAI_API_KEY=<key> \
-// go test -tags integration -run TestCodexWebSocket_ContinuationInstructionsDependOnConnection ./providers/openai/
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_ContinuationInstructionsDependOnConnection ./providers/openai/
 func TestCodexWebSocket_ContinuationInstructionsDependOnConnection(t *testing.T) {
-	cfg := readCodexWebSocketConfig(t)
 	ctx := context.Background()
 
-	p, err := New(cfg)
-	if err != nil {
-		t.Fatalf("create initial provider: %v", err)
-	}
+	p := codexWebSocketProvider(t)
 
 	turn1 := providers.CompleteRequest{
 		Model: providers.ModelRef{ProviderID: "openai", ModelID: "gpt-5.4"},
@@ -133,10 +479,7 @@ func TestCodexWebSocket_ContinuationInstructionsDependOnConnection(t *testing.T)
 	}
 
 	// Simulate agent-go restart: new provider, empty websocket pool.
-	restartedProvider, err := New(cfg)
-	if err != nil {
-		t.Fatalf("create restarted provider: %v", err)
-	}
+	restartedProvider := codexWebSocketProvider(t)
 
 	// Fresh websocket continuation WITHOUT system instructions should fail.
 	restartNoInstructions := providers.CompleteRequest{
