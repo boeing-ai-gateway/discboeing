@@ -17,6 +17,7 @@ func registerPrimarySandboxProvider(
 	cfg *config.Config,
 	sandboxManager *sandbox.Manager,
 	sessionProjectResolver func(context.Context, string) (string, error),
+	projectResourceResolver vm.ProjectResourceResolver,
 	systemManager *startup.SystemManager,
 ) {
 	vzCfg := &vm.Config{
@@ -32,7 +33,7 @@ func registerPrimarySandboxProvider(
 		DataDiskGB:    cfg.VZDataDiskGB,
 	}
 
-	vmProvider, err := vz.NewProvider(cfg, vzCfg, sessionProjectResolver, systemManager)
+	vmProvider, err := vz.NewProvider(cfg, vzCfg, sessionProjectResolver, projectResourceResolver, systemManager)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize VZ sandbox provider: %v", err)
 		return

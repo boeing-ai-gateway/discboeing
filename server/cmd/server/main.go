@@ -31,6 +31,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/routes"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/local"
+	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/ssh"
 	"github.com/obot-platform/discobot/server/internal/startup"
@@ -153,7 +154,24 @@ func main() {
 		return session.ProjectID, nil
 	}
 
-	registerPrimarySandboxProvider(cfg, sandboxManager, sessionProjectResolver, systemManager)
+	projectResourceResolver := func(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
+		project, err := s.GetProjectByID(ctx, projectID)
+		if err != nil {
+			return vm.ProjectResourceConfig{}, err
+		}
+
+		resources := vm.ProjectResourceConfig{}
+		if project.VZMemoryMB != nil {
+			resources.MemoryMB = *project.VZMemoryMB
+		}
+		if project.VZDataDiskGB != nil {
+			resources.DataDiskGB = *project.VZDataDiskGB
+		}
+
+		return resources, nil
+	}
+
+	registerPrimarySandboxProvider(cfg, sandboxManager, sessionProjectResolver, projectResourceResolver, systemManager)
 	//
 	// Initialize local provider (only if enabled via config)
 	if cfg.LocalProviderEnabled {
@@ -700,6 +718,47 @@ func main() {
 				Meta: routes.Meta{
 					Group:       "Cache",
 					Description: "Delete cache volume for project (clears all caches)",
+					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+				},
+			})
+
+			projReg.Register(r, routes.Route{
+				Method: "GET", Pattern: "/resources",
+				Handler: h.GetProjectResources,
+				Meta: routes.Meta{
+					Group:       "Resources",
+					Description: "Get project VM resources",
+					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+				},
+			})
+
+			projReg.Register(r, routes.Route{
+				Method: "POST", Pattern: "/resources",
+				Handler: h.UpdateProjectResources,
+				Meta: routes.Meta{
+					Group:       "Resources",
+					Description: "Update project VM resources",
+					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+					Body:        map[string]any{"memoryMB": 8192, "dataDiskGB": 200},
+				},
+			})
+
+			projReg.Register(r, routes.Route{
+				Method: "GET", Pattern: "/inspection",
+				Handler: h.GetProjectInspection,
+				Meta: routes.Meta{
+					Group:       "Resources",
+					Description: "Get project inspection container info",
+					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+				},
+			})
+
+			projReg.Register(r, routes.Route{
+				Method: "GET", Pattern: "/inspection/terminal/ws",
+				Handler: h.ProjectInspectionTerminalWebSocket,
+				Meta: routes.Meta{
+					Group:       "Terminal",
+					Description: "Inspection container terminal websocket",
 					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
 				},
 			})

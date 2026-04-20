@@ -220,7 +220,7 @@ Each project VM uses a **dual-disk setup**:
 
 2. **Data Disk** (`/dev/vdb`) - Read-write
    - Persistent storage for Docker volumes, containers, etc.
-   - Created once per project (20GB default)
+   - Created once per project (100GB default)
    - Survives VM restarts
    - Path: `{DataDir}/project-{projectID}-data.img`
 
@@ -228,6 +228,29 @@ Each project VM uses a **dual-disk setup**:
 - Base image remains pristine (can be updated/replaced)
 - All persistent data goes to data disk
 - Fast VM creation (base disk is never modified)
+
+### Project Resource Updates
+
+Discobot exposes a project-scoped resources API for the VZ provider:
+
+- `GET /api/projects/{projectId}/resources`
+- `POST /api/projects/{projectId}/resources`
+
+The API currently supports:
+
+- `memoryMB`: project VM memory, applied on the next VM boot
+- `dataDiskGB`: project data disk size, increase-only
+
+Resource changes are persisted on the project and applied by removing the
+project VM so the next session start recreates it with the updated settings.
+Disk growth resizes the sparse host disk image before the next boot.
+
+### Host Inspection Container
+
+Each project VM also starts a Docker-managed troubleshooting container named
+`discobot-host-inspect` from the sandbox image. It runs privileged with host
+PID, network, IPC, UTS, and cgroup namespaces inside the VM and blocks until
+Docker stops it, trapping `SIGTERM`, `SIGINT`, and `SIGQUIT` for a clean exit.
 
 ## Console Logging
 
@@ -294,6 +317,11 @@ fi
 
 mkdir -p /var/lib/docker
 mount /dev/vdb /var/lib/docker
+
+# Grow the filesystem after the host expands the sparse disk image.
+# The block device can get larger across restarts when the project data
+# disk is increased via the project resources API.
+resize2fs /dev/vdb || true
 
 # Start Docker daemon (data goes to /var/lib/docker on data disk)
 dockerd --data-root=/var/lib/docker &

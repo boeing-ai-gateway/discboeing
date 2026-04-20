@@ -404,3 +404,63 @@ func (p *ProviderProxy) RemoveProject(ctx context.Context, projectID string) err
 	}
 	return nil
 }
+
+// GetProjectResourceInfo delegates to the default provider when supported.
+func (p *ProviderProxy) GetProjectResourceInfo(ctx context.Context, projectID string) (*ProjectResourceInfo, error) {
+	provider := p.manager.GetDefault()
+	if provider == nil {
+		return nil, fmt.Errorf("no sandbox provider available")
+	}
+
+	resourceManager, ok := provider.(ProjectResourceManager)
+	if !ok {
+		return nil, ErrProjectResourcesUnsupported
+	}
+
+	return resourceManager.GetProjectResourceInfo(ctx, projectID)
+}
+
+// ApplyProjectResourceUpdate delegates to the default provider when supported.
+func (p *ProviderProxy) ApplyProjectResourceUpdate(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) error {
+	provider := p.manager.GetDefault()
+	if provider == nil {
+		return fmt.Errorf("no sandbox provider available")
+	}
+
+	resourceManager, ok := provider.(ProjectResourceManager)
+	if !ok {
+		return ErrProjectResourcesUnsupported
+	}
+
+	return resourceManager.ApplyProjectResourceUpdate(ctx, projectID, req)
+}
+
+// GetProjectInspectionInfo delegates to the default provider when supported.
+func (p *ProviderProxy) GetProjectInspectionInfo(ctx context.Context, projectID string) (*ProjectInspectionInfo, error) {
+	provider := p.manager.GetDefault()
+	if provider == nil {
+		return nil, fmt.Errorf("no sandbox provider available")
+	}
+
+	inspectionManager, ok := provider.(ProjectInspectionManager)
+	if !ok {
+		return nil, ErrProjectInspectionUnsupported
+	}
+
+	return inspectionManager.GetProjectInspectionInfo(ctx, projectID)
+}
+
+// AttachProjectInspection delegates to the default provider when supported.
+func (p *ProviderProxy) AttachProjectInspection(ctx context.Context, projectID string, opts AttachOptions) (PTY, error) {
+	provider := p.manager.GetDefault()
+	if provider == nil {
+		return nil, fmt.Errorf("no sandbox provider available")
+	}
+
+	inspectionManager, ok := provider.(ProjectInspectionManager)
+	if !ok {
+		return nil, ErrProjectInspectionUnsupported
+	}
+
+	return inspectionManager.AttachProjectInspection(ctx, projectID, opts)
+}

@@ -122,3 +122,6 @@ The desktop update settings live in the `AppUpdates` domain and bridge to Rust T
 ## Module Documentation
 
 - `docs/ui/design/` — UI module design docs
+
+The app settings dialog also hosts project-scoped sandbox controls, including
+resource management and inspection-shell access for the current project.

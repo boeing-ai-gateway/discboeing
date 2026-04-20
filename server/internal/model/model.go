@@ -53,11 +53,13 @@ func (s *UserSession) BeforeCreate(_ *gorm.DB) error {
 
 // Project represents a multi-tenant container.
 type Project struct {
-	ID        string    `gorm:"primaryKey;type:text" json:"id"`
-	Name      string    `gorm:"not null;type:text" json:"name"`
-	Slug      string    `gorm:"uniqueIndex;not null;type:text" json:"slug"`
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID           string    `gorm:"primaryKey;type:text" json:"id"`
+	Name         string    `gorm:"not null;type:text" json:"name"`
+	Slug         string    `gorm:"uniqueIndex;not null;type:text" json:"slug"`
+	VZMemoryMB   *int      `gorm:"column:vz_memory_mb" json:"vz_memory_mb,omitempty"`
+	VZDataDiskGB *int      `gorm:"column:vz_data_disk_gb" json:"vz_data_disk_gb,omitempty"`
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
 	Members    []ProjectMember `gorm:"foreignKey:ProjectID" json:"-"`
 	Workspaces []Workspace     `gorm:"foreignKey:ProjectID" json:"-"`

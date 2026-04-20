@@ -44,12 +44,18 @@ type Provider struct {
 	// vmManager manages project-level VMs (abstraction).
 	vmManager ProjectVMManager
 
+	// providerName is reported through optional provider capabilities.
+	providerName string
+
 	// dockerProviders maps projectID -> Docker provider (with VM transport).
 	dockerProviders   map[string]*docker.Provider
 	dockerProvidersMu sync.RWMutex
 
 	// sessionProjectResolver looks up session -> project mapping from the database.
 	sessionProjectResolver SessionProjectResolver
+
+	// projectResourceResolver returns the effective VM resources for a project.
+	projectResourceResolver ProjectResourceResolver
 
 	// hostDockerClient connects to the host's Docker daemon (for image transfer to VMs).
 	hostDockerClient     *dockerclient.Client
@@ -97,6 +103,20 @@ func WithIdleTimeout(d time.Duration) Option {
 	}
 }
 
+// WithProjectResourceResolver sets the resolver used for effective project VM resources.
+func WithProjectResourceResolver(resolver ProjectResourceResolver) Option {
+	return func(p *Provider) {
+		p.projectResourceResolver = resolver
+	}
+}
+
+// WithProviderName sets the provider name reported by optional capabilities.
+func WithProviderName(name string) Option {
+	return func(p *Provider) {
+		p.providerName = name
+	}
+}
+
 // NewProvider creates a new VM+Docker hybrid provider.
 // The vmManager provides VMs with Docker daemons; the provider creates Docker
 // containers inside those VMs for session isolation.
@@ -104,6 +124,7 @@ func NewProvider(cfg *config.Config, vmManager ProjectVMManager, resolver Sessio
 	p := &Provider{
 		cfg:                    cfg,
 		vmManager:              vmManager,
+		providerName:           "vm",
 		dockerProviders:        make(map[string]*docker.Provider),
 		httpClients:            sandbox.NewHTTPClientCache(),
 		sessionProjectResolver: resolver,
@@ -163,6 +184,79 @@ func (p *Provider) ImageExists(ctx context.Context) bool {
 // Image returns the sandbox image name.
 func (p *Provider) Image() string {
 	return p.cfg.SandboxImage
+}
+
+// GetProjectResourceInfo reports the effective VM resources for a project.
+func (p *Provider) GetProjectResourceInfo(ctx context.Context, projectID string) (*sandbox.ProjectResourceInfo, error) {
+	var (
+		resources ProjectResourceConfig
+		err       error
+	)
+
+	if resourceManager, ok := p.vmManager.(ProjectResourceManager); ok {
+		resources, err = resourceManager.ProjectResources(ctx, projectID)
+	} else {
+		if p.projectResourceResolver == nil {
+			return nil, fmt.Errorf("project resources not supported")
+		}
+		resources, err = p.projectResourceResolver(ctx, projectID)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &sandbox.ProjectResourceInfo{
+		Provider:   p.providerName,
+		CPUCount:   resources.CPUCount,
+		MemoryMB:   resources.MemoryMB,
+		DataDiskGB: resources.DataDiskGB,
+	}, nil
+}
+
+// ApplyProjectResourceUpdate applies project-scoped VM resource changes.
+func (p *Provider) ApplyProjectResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProjectResourcesRequest) error {
+	if err := p.vmManager.RemoveVM(projectID); err != nil {
+		return err
+	}
+
+	p.dockerProvidersMu.Lock()
+	delete(p.dockerProviders, projectID)
+	p.dockerProvidersMu.Unlock()
+
+	p.idleSinceMu.Lock()
+	delete(p.idleSince, projectID)
+	p.idleSinceMu.Unlock()
+
+	if req.DataDiskGB != nil {
+		diskResizer, ok := p.vmManager.(DiskResizer)
+		if !ok {
+			return fmt.Errorf("data disk resize not supported")
+		}
+		if err := diskResizer.ResizeDataDisk(ctx, projectID, *req.DataDiskGB); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetProjectInspectionInfo reports inspection-container availability for a project VM.
+func (p *Provider) GetProjectInspectionInfo(_ context.Context, _ string) (*sandbox.ProjectInspectionInfo, error) {
+	return &sandbox.ProjectInspectionInfo{
+		Provider:      p.providerName,
+		Available:     true,
+		ContainerName: "discobot-host-inspect",
+		Scope:         "project_vm",
+	}, nil
+}
+
+// AttachProjectInspection attaches to the inspection container shell in a project VM.
+func (p *Provider) AttachProjectInspection(ctx context.Context, projectID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	dockerProv, err := p.getOrCreateDockerProvider(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get docker provider: %w", err)
+	}
+	return dockerProv.AttachProjectInspection(ctx, projectID, opts)
 }
 
 // Create creates a sandbox in the project's VM.
@@ -663,6 +757,10 @@ func (p *Provider) getOrCreateDockerProvider(ctx context.Context, projectID stri
 	// Load sandbox image into VM if it's a local image
 	if err := p.ensureImageInVM(ctx, dockerProv); err != nil {
 		return nil, fmt.Errorf("failed to load sandbox image into VM: %w", err)
+	}
+
+	if err := dockerProv.EnsureInspectionContainer(ctx); err != nil {
+		return nil, fmt.Errorf("failed to start inspection container in project %s: %w", projectID, err)
 	}
 
 	// Run post-VM setup hook (e.g., VZ starts VSOCK proxy container here)

@@ -85,6 +85,9 @@ import type {
 	OAuthExchangeResponse,
 	OAuthRefreshResponse,
 	PendingQuestionResponse,
+	ProjectInspectionInfo,
+	ProjectResources,
+	ProjectResourcesUpdateResult,
 	ProviderStatus,
 	ProvidersResponse,
 	ReadSessionFileResponse,
@@ -108,6 +111,7 @@ import type {
 	SystemStatusResponse,
 	TerminalExecuteResponse,
 	UpdateThreadRequest,
+	UpdateProjectResourcesRequest,
 	UpdateSessionRequest,
 	UserPreference,
 	WorkspaceValidationResult,
@@ -257,6 +261,23 @@ class ApiClient {
 
 	async getProvider(name: string): Promise<ProviderStatus> {
 		return this.fetch<ProviderStatus>(`/workspaces/providers/${name}`);
+	}
+
+	async getProjectResources(): Promise<ProjectResources> {
+		return this.fetch<ProjectResources>("/resources");
+	}
+
+	async updateProjectResources(
+		data: UpdateProjectResourcesRequest,
+	): Promise<ProjectResourcesUpdateResult> {
+		return this.fetch<ProjectResourcesUpdateResult>("/resources", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	}
+
+	async getProjectInspection(): Promise<ProjectInspectionInfo> {
+		return this.fetch<ProjectInspectionInfo>("/inspection");
 	}
 
 	// Workspaces

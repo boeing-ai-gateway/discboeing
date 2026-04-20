@@ -108,6 +108,71 @@ func TestWrapCommandWithSessionEnvWithoutOverrides(t *testing.T) {
 	}
 }
 
+func TestInspectionContainerConfig(t *testing.T) {
+	containerConfig, hostConfig := inspectionContainerConfig("ghcr.io/obot-platform/discobot:test")
+
+	if containerConfig.Image != "ghcr.io/obot-platform/discobot:test" {
+		t.Fatalf("image = %q", containerConfig.Image)
+	}
+	if got := containerConfig.Labels["discobot.host.inspect"]; got != "true" {
+		t.Fatalf("discobot.host.inspect label = %q, want true", got)
+	}
+	if got := strings.Join(containerConfig.Cmd, " "); !strings.Contains(got, "trap 'exit 0' TERM INT QUIT") {
+		t.Fatalf("inspection command missing signal trap: %q", got)
+	}
+	if !hostConfig.Privileged {
+		t.Fatal("inspection container should be privileged")
+	}
+	if hostConfig.NetworkMode != "host" {
+		t.Fatalf("network mode = %q, want host", hostConfig.NetworkMode)
+	}
+	if hostConfig.PidMode != "host" {
+		t.Fatalf("pid mode = %q, want host", hostConfig.PidMode)
+	}
+	if hostConfig.IpcMode != "host" {
+		t.Fatalf("ipc mode = %q, want host", hostConfig.IpcMode)
+	}
+	if hostConfig.UTSMode != "host" {
+		t.Fatalf("uts mode = %q, want host", hostConfig.UTSMode)
+	}
+	if hostConfig.CgroupnsMode != containerTypes.CgroupnsModeHost {
+		t.Fatalf("cgroupns mode = %q, want %q", hostConfig.CgroupnsMode, containerTypes.CgroupnsModeHost)
+	}
+	if len(hostConfig.Binds) != 1 || hostConfig.Binds[0] != "/var/run/docker.sock:/var/run/docker.sock" {
+		t.Fatalf("binds = %#v", hostConfig.Binds)
+	}
+	if hostConfig.RestartPolicy.Name != containerTypes.RestartPolicyAlways {
+		t.Fatalf("restart policy = %q, want %q", hostConfig.RestartPolicy.Name, containerTypes.RestartPolicyAlways)
+	}
+}
+
+func TestInspectionContainerNeedsRecreate(t *testing.T) {
+	existing := containerTypes.InspectResponse{
+		ContainerJSONBase: &containerTypes.ContainerJSONBase{
+			HostConfig: &containerTypes.HostConfig{
+				Privileged:   true,
+				NetworkMode:  "host",
+				PidMode:      "host",
+				IpcMode:      "host",
+				UTSMode:      "host",
+				CgroupnsMode: containerTypes.CgroupnsModeHost,
+			},
+		},
+		Config: &containerTypes.Config{
+			Image: "ghcr.io/obot-platform/discobot:test",
+		},
+	}
+
+	if inspectionContainerNeedsRecreate(existing, "ghcr.io/obot-platform/discobot:test") {
+		t.Fatal("matching inspection container should not need recreate")
+	}
+
+	existing.HostConfig.PidMode = ""
+	if !inspectionContainerNeedsRecreate(existing, "ghcr.io/obot-platform/discobot:test") {
+		t.Fatal("missing host pid mode should require recreate")
+	}
+}
+
 func TestBuildSSHKeyArchive(t *testing.T) {
 	archive, err := buildSSHKeyArchive(&sandbox.SSHKeyProvision{
 		Filename:   "discobot_sandbox",

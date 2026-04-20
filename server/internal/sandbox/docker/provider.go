@@ -56,8 +56,9 @@ const (
 	// dataVolumePrefix is the prefix for data volume names.
 	dataVolumePrefix = "discobot-data-"
 
-	sandboxSSHKeyStagingDir = "/.discobot-secrets/ssh"
-	sessionEnvWrapperCmd    = "discobot-session-env"
+	sandboxSSHKeyStagingDir  = "/.discobot-secrets/ssh"
+	sessionEnvWrapperCmd     = "discobot-session-env"
+	hostInspectContainerName = "discobot-host-inspect"
 )
 
 // DetectDockerHost resolves the Docker host from the current Docker context.
@@ -206,7 +207,15 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 	// Kick off image pull in the background (non-blocking).
 	// EnsureImage is synchronized: the first caller triggers the pull, all others wait.
 	go func() {
-		_ = p.EnsureImage(context.Background())
+		ctx := context.Background()
+		if err := p.EnsureImage(ctx); err != nil {
+			log.Printf("Docker provider background image initialization failed: %v", err)
+			return
+		}
+		if err := p.EnsureInspectionContainer(ctx); err != nil {
+			log.Printf("Docker provider background inspection container initialization failed: %v", err)
+			return
+		}
 
 		log.Printf("Docker provider background initialization complete")
 	}()
@@ -223,6 +232,170 @@ func containerName(sessionID string) string {
 // volumeName returns the Docker volume name for a session's data volume.
 func volumeName(sessionID string) string {
 	return fmt.Sprintf("%s%s", dataVolumePrefix, sessionID)
+}
+
+func inspectionContainerCommand() []string {
+	return []string{
+		"/bin/sh",
+		"-c",
+		`trap 'exit 0' TERM INT QUIT; while :; do sleep 2147483647 & wait $!; done`,
+	}
+}
+
+func inspectionContainerConfig(image string) (*containerTypes.Config, *containerTypes.HostConfig) {
+	containerConfig := &containerTypes.Config{
+		Image:  image,
+		Cmd:    inspectionContainerCommand(),
+		Tty:    true,
+		Labels: map[string]string{"discobot.host.inspect": "true", "discobot.managed": "true"},
+	}
+
+	hostConfig := &containerTypes.HostConfig{
+		Privileged:   true,
+		NetworkMode:  "host",
+		PidMode:      "host",
+		IpcMode:      "host",
+		UTSMode:      "host",
+		CgroupnsMode: containerTypes.CgroupnsModeHost,
+		Binds:        []string{"/var/run/docker.sock:/var/run/docker.sock"},
+		RestartPolicy: containerTypes.RestartPolicy{
+			Name: containerTypes.RestartPolicyAlways,
+		},
+	}
+	hostConfig.Ulimits = []*containerTypes.Ulimit{{
+		Name: "nofile",
+		Soft: 1048576,
+		Hard: 1048576,
+	}}
+
+	return containerConfig, hostConfig
+}
+
+func inspectionContainerNeedsRecreate(existing containerTypes.InspectResponse, image string) bool {
+	return existing.Config == nil ||
+		existing.HostConfig == nil ||
+		existing.Config.Image != image ||
+		!existing.HostConfig.Privileged ||
+		existing.HostConfig.NetworkMode != "host" ||
+		existing.HostConfig.PidMode != "host" ||
+		existing.HostConfig.IpcMode != "host" ||
+		existing.HostConfig.UTSMode != "host" ||
+		existing.HostConfig.CgroupnsMode != containerTypes.CgroupnsModeHost
+}
+
+func (p *Provider) attachToContainer(ctx context.Context, containerID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	cmd := opts.Cmd
+	if len(cmd) == 0 {
+		cmd = p.detectShell(ctx, containerID)
+	}
+	wrappedCmd := wrapCommandWithSessionEnv(cmd, opts.Env)
+
+	env := make([]string, 0, len(opts.Env))
+	for k, v := range opts.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	execConfig := containerTypes.ExecOptions{
+		Cmd:          wrappedCmd,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+		Env:          env,
+		User:         opts.User,
+		WorkingDir:   opts.WorkDir,
+	}
+
+	execCreate, err := p.client.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+	}
+
+	resp, err := p.client.ContainerExecAttach(ctx, execCreate.ID, containerTypes.ExecStartOptions{
+		Tty: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+	}
+
+	if opts.Rows > 0 && opts.Cols > 0 {
+		_ = p.client.ContainerExecResize(ctx, execCreate.ID, containerTypes.ResizeOptions{
+			Height: uint(opts.Rows),
+			Width:  uint(opts.Cols),
+		})
+	}
+
+	return &dockerPTY{
+		client:   p.client,
+		execID:   execCreate.ID,
+		hijacked: resp,
+		done:     make(chan struct{}),
+	}, nil
+}
+
+// EnsureInspectionContainer makes sure the host-inspection container is running.
+func (p *Provider) EnsureInspectionContainer(ctx context.Context) error {
+	if err := p.EnsureImage(ctx); err != nil {
+		return fmt.Errorf("failed to ensure sandbox image for inspection container: %w", err)
+	}
+
+	existing, err := p.client.ContainerInspect(ctx, hostInspectContainerName)
+	if err == nil {
+		if inspectionContainerNeedsRecreate(existing, p.cfg.SandboxImage) {
+			log.Printf("Inspection container %s has stale config, recreating", hostInspectContainerName)
+			timeout := 10
+			_ = p.client.ContainerStop(ctx, existing.ID, containerTypes.StopOptions{Timeout: &timeout})
+			if err := p.client.ContainerRemove(ctx, existing.ID, containerTypes.RemoveOptions{Force: true}); err != nil {
+				return fmt.Errorf("failed to remove stale inspection container: %w", err)
+			}
+		} else if existing.State != nil && existing.State.Running {
+			return nil
+		} else {
+			if err := p.client.ContainerStart(ctx, existing.ID, containerTypes.StartOptions{}); err != nil {
+				return fmt.Errorf("failed to start inspection container: %w", err)
+			}
+			log.Printf("Started inspection container %s (%s)", hostInspectContainerName, existing.ID[:12])
+			return nil
+		}
+	} else if !cerrdefs.IsNotFound(err) {
+		return fmt.Errorf("failed to inspect inspection container: %w", err)
+	}
+
+	containerConfig, hostConfig := inspectionContainerConfig(p.cfg.SandboxImage)
+	resp, err := p.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, hostInspectContainerName)
+	if err != nil {
+		return fmt.Errorf("failed to create inspection container: %w", err)
+	}
+	if err := p.client.ContainerStart(ctx, resp.ID, containerTypes.StartOptions{}); err != nil {
+		return fmt.Errorf("failed to start inspection container: %w", err)
+	}
+
+	log.Printf("Started inspection container %s (%s)", hostInspectContainerName, resp.ID[:12])
+	return nil
+}
+
+// GetProjectInspectionInfo reports inspection-container availability.
+func (p *Provider) GetProjectInspectionInfo(_ context.Context, _ string) (*sandbox.ProjectInspectionInfo, error) {
+	return &sandbox.ProjectInspectionInfo{
+		Provider:      "docker",
+		Available:     true,
+		ContainerName: hostInspectContainerName,
+		Scope:         "host",
+	}, nil
+}
+
+// AttachProjectInspection attaches to the host inspection container shell.
+func (p *Provider) AttachProjectInspection(ctx context.Context, _ string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	if err := p.EnsureInspectionContainer(ctx); err != nil {
+		return nil, err
+	}
+
+	info, err := p.client.ContainerInspect(ctx, hostInspectContainerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect inspection container: %w", err)
+	}
+
+	return p.attachToContainer(ctx, info.ID, opts)
 }
 
 func (p *Provider) provisionSSHKey(ctx context.Context, containerID string, key *sandbox.SSHKeyProvision) error {
@@ -1247,55 +1420,7 @@ func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.At
 		return nil, err
 	}
 
-	// Determine shell to use
-	cmd := opts.Cmd
-	if len(cmd) == 0 {
-		cmd = p.detectShell(ctx, containerID)
-	}
-	wrappedCmd := wrapCommandWithSessionEnv(cmd, opts.Env)
-
-	// Convert environment to slice
-	env := make([]string, 0, len(opts.Env))
-	for k, v := range opts.Env {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	execConfig := containerTypes.ExecOptions{
-		Cmd:          wrappedCmd,
-		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		Tty:          true,
-		Env:          env,
-		User:         opts.User,
-	}
-
-	execCreate, err := p.client.ContainerExecCreate(ctx, containerID, execConfig)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
-	}
-
-	resp, err := p.client.ContainerExecAttach(ctx, execCreate.ID, containerTypes.ExecStartOptions{
-		Tty: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
-	}
-
-	// Resize PTY if dimensions provided
-	if opts.Rows > 0 && opts.Cols > 0 {
-		_ = p.client.ContainerExecResize(ctx, execCreate.ID, containerTypes.ResizeOptions{
-			Height: uint(opts.Rows),
-			Width:  uint(opts.Cols),
-		})
-	}
-
-	return &dockerPTY{
-		client:   p.client,
-		execID:   execCreate.ID,
-		hijacked: resp,
-		done:     make(chan struct{}),
-	}, nil
+	return p.attachToContainer(ctx, containerID, opts)
 }
 
 // ExecStream runs a command with bidirectional streaming I/O (no TTY).

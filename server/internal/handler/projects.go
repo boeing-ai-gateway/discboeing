@@ -2,11 +2,15 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
+	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/service"
 )
 
 // ListProjects returns all projects for the current user
@@ -115,6 +119,138 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// GetProjectResources returns project-scoped VM resources.
+func (h *Handler) GetProjectResources(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+
+	resources, err := h.projectService.GetProjectResources(r.Context(), projectID)
+	if err != nil {
+		if errors.Is(err, sandbox.ErrProjectResourcesUnsupported) {
+			h.Error(w, http.StatusNotImplemented, err.Error())
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, "Failed to get project resources")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, resources)
+}
+
+// UpdateProjectResources updates project-scoped VM resources.
+func (h *Handler) UpdateProjectResources(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+
+	userID := middleware.GetUserID(r.Context())
+	role, err := h.projectService.GetMemberRole(r.Context(), projectID, userID)
+	if err != nil || (role != "owner" && role != "admin") {
+		h.Error(w, http.StatusForbidden, "Admin access required")
+		return
+	}
+
+	var req service.UpdateProjectResourcesRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	result, err := h.projectService.UpdateProjectResources(r.Context(), projectID, req)
+	if err != nil {
+		var validationErr *service.RequestValidationError
+		switch {
+		case errors.As(err, &validationErr):
+			h.Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, sandbox.ErrProjectResourcesUnsupported):
+			h.Error(w, http.StatusNotImplemented, err.Error())
+		default:
+			h.Error(w, http.StatusInternalServerError, "Failed to update project resources")
+		}
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
+// GetProjectInspection returns project inspection-container details.
+func (h *Handler) GetProjectInspection(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+
+	info, err := h.projectService.GetProjectInspection(r.Context(), projectID)
+	if err != nil {
+		if errors.Is(err, sandbox.ErrProjectInspectionUnsupported) {
+			h.Error(w, http.StatusNotImplemented, err.Error())
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, "Failed to get project inspection info")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, info)
+}
+
+// ProjectInspectionTerminalWebSocket attaches to the project inspection shell.
+func (h *Handler) ProjectInspectionTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+	if projectID == "" {
+		h.Error(w, http.StatusBadRequest, "project ID is required")
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	role, err := h.projectService.GetMemberRole(r.Context(), projectID, userID)
+	if err != nil || (role != "owner" && role != "admin") {
+		h.Error(w, http.StatusForbidden, "Admin access required")
+		return
+	}
+
+	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
+	if rows < minTermRows {
+		rows = minTermRows
+	}
+	if cols < minTermCols {
+		cols = minTermCols
+	}
+
+	termUserID := userID
+	if termUserID == "" {
+		termUserID = "anonymous"
+	}
+
+	ctx := r.Context()
+	termKey := "project-inspection:" + projectID + ":" + termUserID
+	termSession, err := h.terminalManager.GetOrCreate(ctx, termKey, func(ctx context.Context) (sandbox.PTY, error) {
+		return h.projectService.AttachProjectInspection(ctx, projectID, sandbox.AttachOptions{
+			Cmd:  []string{"nsenter", "-m", "-t", "1", "--", "/bin/bash", "-lc", "cd /root && exec /bin/bash -l"},
+			Rows: rows,
+			Cols: cols,
+			User: "root",
+		})
+	})
+	if err != nil {
+		if errors.Is(err, sandbox.ErrProjectInspectionUnsupported) {
+			h.Error(w, http.StatusNotImplemented, err.Error())
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, "failed to attach to inspection terminal")
+		return
+	}
+
+	if err := termSession.Resize(ctx, rows, cols); err != nil {
+		return
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer func() { _ = conn.Close() }()
+
+	sub := termSession.Subscribe()
+	defer termSession.Unsubscribe(sub)
+
+	handlePersistentTerminalSession(ctx, termSession, sub, conn)
 }
 
 // ListProjectMembers returns project members

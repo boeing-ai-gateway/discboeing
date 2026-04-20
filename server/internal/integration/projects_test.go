@@ -148,6 +148,111 @@ func TestDeleteProject(t *testing.T) {
 	AssertStatus(t, resp, http.StatusForbidden) // No longer a member since project is deleted
 }
 
+func TestGetProjectResources(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	client := ts.AuthenticatedClient(user)
+
+	resp := client.Get("/api/projects/" + project.ID + "/resources")
+	defer resp.Body.Close()
+
+	AssertStatus(t, resp, http.StatusOK)
+
+	var result map[string]any
+	ParseJSON(t, resp, &result)
+
+	if result["provider"] != "mock" {
+		t.Errorf("Expected provider 'mock', got '%v'", result["provider"])
+	}
+
+	vm, ok := result["vm"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected vm object, got %#v", result["vm"])
+	}
+	if vm["memoryMB"] != float64(4096) {
+		t.Errorf("Expected memoryMB 4096, got %v", vm["memoryMB"])
+	}
+	if vm["dataDiskGB"] != float64(100) {
+		t.Errorf("Expected dataDiskGB 100, got %v", vm["dataDiskGB"])
+	}
+}
+
+func TestUpdateProjectResources(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	client := ts.AuthenticatedClient(user)
+
+	resp := client.Post("/api/projects/"+project.ID+"/resources", map[string]any{
+		"memoryMB":   8192,
+		"dataDiskGB": 200,
+	})
+	defer resp.Body.Close()
+
+	AssertStatus(t, resp, http.StatusOK)
+
+	var result map[string]any
+	ParseJSON(t, resp, &result)
+
+	current, ok := result["current"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected current object, got %#v", result["current"])
+	}
+	if current["memoryMB"] != float64(8192) {
+		t.Errorf("Expected memoryMB 8192, got %v", current["memoryMB"])
+	}
+	if current["dataDiskGB"] != float64(200) {
+		t.Errorf("Expected dataDiskGB 200, got %v", current["dataDiskGB"])
+	}
+	if result["restartRequired"] != true {
+		t.Errorf("Expected restartRequired true, got %v", result["restartRequired"])
+	}
+
+	storedProject, err := ts.Store.GetProjectByID(t.Context(), project.ID)
+	if err != nil {
+		t.Fatalf("Failed to load project: %v", err)
+	}
+	if storedProject.VZMemoryMB == nil || *storedProject.VZMemoryMB != 8192 {
+		t.Fatalf("Expected stored VZ memory override 8192, got %#v", storedProject.VZMemoryMB)
+	}
+	if storedProject.VZDataDiskGB == nil || *storedProject.VZDataDiskGB != 200 {
+		t.Fatalf("Expected stored VZ disk override 200, got %#v", storedProject.VZDataDiskGB)
+	}
+}
+
+func TestUpdateProjectResources_DiskCannotDecrease(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	client := ts.AuthenticatedClient(user)
+
+	resp := client.Post("/api/projects/"+project.ID+"/resources", map[string]any{
+		"dataDiskGB": 50,
+	})
+	defer resp.Body.Close()
+
+	AssertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestUpdateProjectResources_MemoryMustBeWholeGiB(t *testing.T) {
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("test@example.com")
+	project := ts.CreateTestProject(user, "Test Project")
+	client := ts.AuthenticatedClient(user)
+
+	resp := client.Post("/api/projects/"+project.ID+"/resources", map[string]any{
+		"memoryMB": 2500,
+	})
+	defer resp.Body.Close()
+
+	AssertStatus(t, resp, http.StatusBadRequest)
+}
+
 func TestListProjectMembers(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)

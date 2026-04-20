@@ -90,7 +90,7 @@ func main() {
 
 	// Create VM manager
 	log.Printf("Creating VM manager...")
-	vmManager, err := vz.NewVMManager(vmConfig, nil)
+	vmManager, err := vz.NewVMManager(vmConfig, nil, nil)
 	if err != nil {
 		log.Fatalf("Failed to create VM manager: %v", err)
 	}

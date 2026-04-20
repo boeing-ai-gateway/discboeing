@@ -192,6 +192,41 @@ export interface Workspace {
 	workDir?: string;
 }
 
+export interface ProjectVMResources {
+	cpuCount: number;
+	memoryMB: number;
+	dataDiskGB: number;
+	canIncreaseDisk: boolean;
+	canDecreaseDisk: boolean;
+	canChangeMemory: boolean;
+	restartRequiredForDisk: boolean;
+	restartRequiredForMemory: boolean;
+}
+
+export interface ProjectResources {
+	provider: string;
+	vm: ProjectVMResources;
+}
+
+export interface UpdateProjectResourcesRequest {
+	memoryMB?: number;
+	dataDiskGB?: number;
+}
+
+export interface ProjectResourcesUpdateResult {
+	provider: string;
+	previous: ProjectVMResources;
+	current: ProjectVMResources;
+	restartRequired: boolean;
+}
+
+export interface ProjectInspectionInfo {
+	provider: string;
+	available: boolean;
+	containerName: string;
+	scope: "host" | "project_vm" | string;
+}
+
 export interface Badge {
 	label: string;
 	className: string;

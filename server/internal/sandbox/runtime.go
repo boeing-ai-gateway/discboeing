@@ -107,6 +107,42 @@ type CleanupUnusedImagesProvider interface {
 	CleanupUnusedImages(ctx context.Context) error
 }
 
+// ProjectResourceInfo describes the effective VM resources for a project.
+type ProjectResourceInfo struct {
+	Provider   string `json:"provider"`
+	CPUCount   int    `json:"cpuCount"`
+	MemoryMB   int    `json:"memoryMB"`
+	DataDiskGB int    `json:"dataDiskGB"`
+}
+
+// UpdateProjectResourcesRequest describes project-scoped VM resource changes.
+type UpdateProjectResourcesRequest struct {
+	MemoryMB   *int `json:"memoryMB,omitempty"`
+	DataDiskGB *int `json:"dataDiskGB,omitempty"`
+}
+
+// ProjectResourceManager is an optional provider capability for managing
+// project-scoped VM resources such as memory and data disk size.
+type ProjectResourceManager interface {
+	GetProjectResourceInfo(ctx context.Context, projectID string) (*ProjectResourceInfo, error)
+	ApplyProjectResourceUpdate(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) error
+}
+
+// ProjectInspectionInfo describes host-inspection container access for a project.
+type ProjectInspectionInfo struct {
+	Provider      string `json:"provider"`
+	Available     bool   `json:"available"`
+	ContainerName string `json:"containerName"`
+	Scope         string `json:"scope"`
+}
+
+// ProjectInspectionManager is an optional provider capability for exposing the
+// troubleshooting inspection container for a project.
+type ProjectInspectionManager interface {
+	GetProjectInspectionInfo(ctx context.Context, projectID string) (*ProjectInspectionInfo, error)
+	AttachProjectInspection(ctx context.Context, projectID string, opts AttachOptions) (PTY, error)
+}
+
 // DockerProxyProvider is an optional interface that sandbox providers can implement
 // to expose the Docker daemon for debugging. This is used by the debug Docker proxy
 // to forward Docker API requests to the sandbox runtime (e.g., inside a VZ VM).
@@ -297,11 +333,12 @@ type ExecResult struct {
 
 // AttachOptions configures interactive PTY session creation.
 type AttachOptions struct {
-	Cmd  []string          // Command to run (empty = default shell)
-	Rows int               // Terminal rows
-	Cols int               // Terminal columns
-	Env  map[string]string // Additional environment variables
-	User string            // User to run as (empty = default sandbox user)
+	Cmd     []string          // Command to run (empty = default shell)
+	Rows    int               // Terminal rows
+	Cols    int               // Terminal columns
+	WorkDir string            // Working directory for command
+	Env     map[string]string // Additional environment variables
+	User    string            // User to run as (empty = default sandbox user)
 }
 
 // PTY represents an interactive terminal session to a sandbox.

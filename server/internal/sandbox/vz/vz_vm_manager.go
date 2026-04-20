@@ -48,6 +48,61 @@ func getDefaultMemoryBytes() uint64 {
 	return roundedMemory
 }
 
+func (m *VMManager) defaultCPUCount() int {
+	if m.config.CPUCount > 0 {
+		return m.config.CPUCount
+	}
+	return runtime.NumCPU()
+}
+
+func (m *VMManager) defaultMemoryMB() int {
+	if m.config.MemoryMB > 0 {
+		return m.config.MemoryMB
+	}
+	return int(getDefaultMemoryBytes() / (1024 * 1024))
+}
+
+func (m *VMManager) defaultDataDiskGB() int {
+	if m.config.DataDiskGB > 0 {
+		return m.config.DataDiskGB
+	}
+	return defaultDataDiskGB
+}
+
+func (m *VMManager) projectResources(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
+	resources := vm.ProjectResourceConfig{
+		CPUCount:   m.defaultCPUCount(),
+		MemoryMB:   m.defaultMemoryMB(),
+		DataDiskGB: m.defaultDataDiskGB(),
+	}
+
+	if m.projectResourceResolver == nil {
+		return resources, nil
+	}
+
+	resolved, err := m.projectResourceResolver(ctx, projectID)
+	if err != nil {
+		return vm.ProjectResourceConfig{}, err
+	}
+
+	if resolved.CPUCount > 0 {
+		resources.CPUCount = resolved.CPUCount
+	}
+	if resolved.MemoryMB > 0 {
+		resources.MemoryMB = resolved.MemoryMB
+	}
+	if resolved.DataDiskGB > 0 {
+		resources.DataDiskGB = resolved.DataDiskGB
+	}
+
+	return resources, nil
+}
+
+// ProjectResources returns the effective project VM resources, including defaults.
+func (m *VMManager) ProjectResources(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
+	return m.projectResources(ctx, projectID)
+}
+
 // vzProjectVM implements vm.ProjectVM for Apple Virtualization framework.
 type vzProjectVM struct {
 	projectID    string
@@ -134,6 +189,8 @@ func (pvm *vzProjectVM) Shutdown() error {
 type VMManager struct {
 	config vm.Config
 
+	projectResourceResolver vm.ProjectResourceResolver
+
 	// projectVMs maps projectID -> vzProjectVM
 	projectVMs  map[string]*vzProjectVM
 	projectVMMu sync.RWMutex
@@ -184,18 +241,9 @@ func (m *VMManager) Status() sandbox.ProviderStatus {
 		case DownloadStateReady:
 			status.State = "ready"
 			if kernelPath, baseDiskPath, ok := m.imageDownloader.GetPaths(); ok {
-				memoryMB := int(getDefaultMemoryBytes() / (1024 * 1024))
-				if m.config.MemoryMB > 0 {
-					memoryMB = m.config.MemoryMB
-				}
-				cpuCount := runtime.NumCPU()
-				if m.config.CPUCount > 0 {
-					cpuCount = m.config.CPUCount
-				}
-				dataDiskGB := defaultDataDiskGB
-				if m.config.DataDiskGB > 0 {
-					dataDiskGB = m.config.DataDiskGB
-				}
+				memoryMB := m.defaultMemoryMB()
+				cpuCount := m.defaultCPUCount()
+				dataDiskGB := m.defaultDataDiskGB()
 				details.Config = &ProviderConfigInfo{
 					KernelPath:   kernelPath,
 					BaseDiskPath: baseDiskPath,
@@ -237,13 +285,14 @@ func (m *VMManager) Status() sandbox.ProviderStatus {
 // NewVMManager creates a new VZ VM manager.
 // If the config has KernelPath and BaseDiskPath set, the manager is ready immediately.
 // Otherwise, it starts an async download and the manager becomes ready when the download completes.
-func NewVMManager(cfg vm.Config, systemManager vm.SystemManager) (*VMManager, error) {
+func NewVMManager(cfg vm.Config, systemManager vm.SystemManager, resolver vm.ProjectResourceResolver) (*VMManager, error) {
 	mgr := &VMManager{
-		config:        cfg,
-		projectVMs:    make(map[string]*vzProjectVM),
-		ready:         make(chan struct{}),
-		systemManager: systemManager,
-		stopCh:        make(chan struct{}),
+		config:                  cfg,
+		projectResourceResolver: resolver,
+		projectVMs:              make(map[string]*vzProjectVM),
+		ready:                   make(chan struct{}),
+		systemManager:           systemManager,
+		stopCh:                  make(chan struct{}),
 	}
 
 	needsDownload := cfg.KernelPath == "" || cfg.BaseDiskPath == ""
@@ -446,6 +495,32 @@ func (m *VMManager) RemoveVM(projectID string) error {
 	return nil
 }
 
+// ResizeDataDisk grows the project's data disk image to the requested size.
+func (m *VMManager) ResizeDataDisk(_ context.Context, projectID string, sizeGB int) error {
+	dataDiskPath := filepath.Join(m.config.DataDir, fmt.Sprintf("project-%s-data.img", projectID))
+	info, err := os.Stat(dataDiskPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat data disk: %w", err)
+	}
+
+	targetSize := int64(sizeGB) * 1024 * 1024 * 1024
+	if info.Size() > targetSize {
+		return fmt.Errorf("cannot shrink data disk from %d GB to %d GB", info.Size()/(1024*1024*1024), sizeGB)
+	}
+	if info.Size() == targetSize {
+		return nil
+	}
+	if err := os.Truncate(dataDiskPath, targetSize); err != nil {
+		return fmt.Errorf("failed to resize data disk: %w", err)
+	}
+
+	log.Printf("Resized data disk %s to %d GB", dataDiskPath, sizeGB)
+	return nil
+}
+
 // Shutdown stops all project VMs and shuts down the manager.
 func (m *VMManager) Shutdown() {
 	close(m.stopCh)
@@ -464,6 +539,11 @@ func (m *VMManager) Shutdown() {
 
 // createProjectVM creates and starts a new VM for a project.
 func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzProjectVM, error) {
+	resources, err := m.projectResources(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve project resources: %w", err)
+	}
+
 	// Ensure data directory exists
 	if err := os.MkdirAll(m.config.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
@@ -477,11 +557,7 @@ func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzP
 
 	// Create data disk if it doesn't exist
 	if _, err := os.Stat(dataDiskPath); os.IsNotExist(err) {
-		diskGB := defaultDataDiskGB
-		if m.config.DataDiskGB > 0 {
-			diskGB = m.config.DataDiskGB
-		}
-		dataDiskSize := int64(diskGB) * 1024 * 1024 * 1024
+		dataDiskSize := int64(resources.DataDiskGB) * 1024 * 1024 * 1024
 		if err := vz.CreateDiskImage(dataDiskPath, dataDiskSize); err != nil {
 			return nil, fmt.Errorf("failed to create data disk: %w", err)
 		}
@@ -502,7 +578,7 @@ func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzP
 	log.Printf("Console log: %s", consoleLogPath)
 
 	// Build and start VM
-	vzVM, socketDevice, consoleRead, consoleWrite, err := m.buildAndStartVM(rootDiskPath, dataDiskPath, projectID)
+	vzVM, socketDevice, consoleRead, consoleWrite, err := m.buildAndStartVM(rootDiskPath, dataDiskPath, projectID, resources)
 	if err != nil {
 		consoleLog.Close()
 		return nil, fmt.Errorf("failed to build and start VM: %w", err)
@@ -553,7 +629,7 @@ func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzP
 
 // buildAndStartVM creates and starts a VM with the given disk images.
 // rootDiskPath is mounted read-only as /dev/vda, dataDiskPath is mounted read-write as /dev/vdb.
-func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string) (*vz.VirtualMachine, *vz.VirtioSocketDevice, *os.File, *os.File, error) {
+func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string, resources vm.ProjectResourceConfig) (*vz.VirtualMachine, *vz.VirtioSocketDevice, *os.File, *os.File, error) {
 	// Build kernel command line
 	// Root disk is read-only, data disk (/dev/vdb) is where writable data goes
 	cmdLine := []string{
@@ -581,16 +657,9 @@ func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string) (*vz.V
 		return nil, nil, nil, nil, fmt.Errorf("failed to create boot loader: %w", err)
 	}
 
-	// Determine CPU and memory (default to all host CPUs)
-	cpuCount := uint(runtime.NumCPU())
-	if m.config.CPUCount > 0 {
-		cpuCount = uint(m.config.CPUCount)
-	}
-
-	memorySize := getDefaultMemoryBytes()
-	if m.config.MemoryMB > 0 {
-		memorySize = uint64(m.config.MemoryMB) * 1024 * 1024
-	}
+	// Determine CPU and memory
+	cpuCount := uint(resources.CPUCount)
+	memorySize := uint64(resources.MemoryMB) * 1024 * 1024
 
 	// Create VM configuration
 	vmConfig, err := vz.NewVirtualMachineConfiguration(bootLoader, cpuCount, memorySize)

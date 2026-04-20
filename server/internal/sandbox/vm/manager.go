@@ -64,6 +64,27 @@ type StatusReporter interface {
 	Status() sandbox.ProviderStatus
 }
 
+// ProjectResourceConfig contains effective per-project VM resource settings.
+type ProjectResourceConfig struct {
+	CPUCount   int
+	MemoryMB   int
+	DataDiskGB int
+}
+
+// ProjectResourceResolver resolves effective resource settings for a project.
+type ProjectResourceResolver func(ctx context.Context, projectID string) (ProjectResourceConfig, error)
+
+// ProjectResourceManager is an optional VM manager capability for resolving
+// effective project VM resources, including provider defaults.
+type ProjectResourceManager interface {
+	ProjectResources(ctx context.Context, projectID string) (ProjectResourceConfig, error)
+}
+
+// DiskResizer is an optional VM manager capability for growing project data disks.
+type DiskResizer interface {
+	ResizeDataDisk(ctx context.Context, projectID string, sizeGB int) error
+}
+
 // Config contains common configuration for VM managers.
 type Config struct {
 	// DataDir is where VM disk images and state are stored.

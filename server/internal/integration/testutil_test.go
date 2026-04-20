@@ -269,6 +269,10 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 			r.Get("/", h.GetProject)
 			r.Put("/", h.UpdateProject)
 			r.Delete("/", h.DeleteProject)
+			r.Get("/resources", h.GetProjectResources)
+			r.Post("/resources", h.UpdateProjectResources)
+			r.Get("/inspection", h.GetProjectInspection)
+			r.Get("/inspection/terminal/ws", h.ProjectInspectionTerminalWebSocket)
 
 			r.Get("/members", h.ListProjectMembers)
 			r.Delete("/members/{userId}", h.RemoveProjectMember)

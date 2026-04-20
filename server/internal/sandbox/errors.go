@@ -33,4 +33,12 @@ var (
 
 	// ErrResourceLimit indicates a resource limit was exceeded.
 	ErrResourceLimit = errors.New("resource limit exceeded")
+
+	// ErrProjectResourcesUnsupported indicates the provider does not support
+	// project-scoped resource inspection or updates.
+	ErrProjectResourcesUnsupported = errors.New("project resources not supported by provider")
+
+	// ErrProjectInspectionUnsupported indicates the provider does not support
+	// project inspection shell access.
+	ErrProjectInspectionUnsupported = errors.New("project inspection not supported by provider")
 )

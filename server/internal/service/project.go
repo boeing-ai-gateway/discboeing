@@ -54,6 +54,60 @@ type ProjectInvitation struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ProjectResources describes project-scoped VM resource settings.
+type ProjectResources struct {
+	Provider string             `json:"provider"`
+	VM       ProjectVMResources `json:"vm"`
+}
+
+// ProjectVMResources contains the effective VM resources and supported changes.
+type ProjectVMResources struct {
+	CPUCount                 int  `json:"cpuCount"`
+	MemoryMB                 int  `json:"memoryMB"`
+	DataDiskGB               int  `json:"dataDiskGB"`
+	CanIncreaseDisk          bool `json:"canIncreaseDisk"`
+	CanDecreaseDisk          bool `json:"canDecreaseDisk"`
+	CanChangeMemory          bool `json:"canChangeMemory"`
+	RestartRequiredForDisk   bool `json:"restartRequiredForDisk"`
+	RestartRequiredForMemory bool `json:"restartRequiredForMemory"`
+}
+
+// UpdateProjectResourcesRequest contains project VM resource changes.
+type UpdateProjectResourcesRequest struct {
+	MemoryMB   *int `json:"memoryMB,omitempty"`
+	DataDiskGB *int `json:"dataDiskGB,omitempty"`
+}
+
+// ProjectResourcesUpdateResult describes a project resource update.
+type ProjectResourcesUpdateResult struct {
+	Provider        string             `json:"provider"`
+	Previous        ProjectVMResources `json:"previous"`
+	Current         ProjectVMResources `json:"current"`
+	RestartRequired bool               `json:"restartRequired"`
+}
+
+// ProjectInspection describes inspection-container access for a project.
+type ProjectInspection struct {
+	Provider      string `json:"provider"`
+	Available     bool   `json:"available"`
+	ContainerName string `json:"containerName"`
+	Scope         string `json:"scope"`
+}
+
+// RequestValidationError indicates a request validation failure that should be
+// returned to the client as a bad request.
+type RequestValidationError struct {
+	message string
+}
+
+func (e *RequestValidationError) Error() string {
+	return e.message
+}
+
+func newValidationError(message string) error {
+	return &RequestValidationError{message: message}
+}
+
 // NewProjectService creates a new project service
 func NewProjectService(s *store.Store, p sandbox.Provider) *ProjectService {
 	return &ProjectService{
@@ -149,6 +203,148 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID, name stri
 		CreatedAt: project.CreatedAt,
 		UpdatedAt: project.UpdatedAt,
 	}, nil
+}
+
+// GetProjectResources returns project-scoped VM resources when supported.
+func (s *ProjectService) GetProjectResources(ctx context.Context, projectID string) (*ProjectResources, error) {
+	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	resourceManager, ok := s.provider.(sandbox.ProjectResourceManager)
+	if !ok {
+		return nil, sandbox.ErrProjectResourcesUnsupported
+	}
+
+	info, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProjectResources{
+		Provider: info.Provider,
+		VM:       projectVMResourcesFromInfo(info),
+	}, nil
+}
+
+// UpdateProjectResources updates project-scoped VM resources when supported.
+func (s *ProjectService) UpdateProjectResources(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
+	if req.MemoryMB == nil && req.DataDiskGB == nil {
+		return nil, newValidationError("at least one resource must be provided")
+	}
+
+	project, err := s.store.GetProjectByID(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceManager, ok := s.provider.(sandbox.ProjectResourceManager)
+	if !ok {
+		return nil, sandbox.ErrProjectResourcesUnsupported
+	}
+
+	currentInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.MemoryMB != nil {
+		if *req.MemoryMB <= 0 {
+			return nil, newValidationError("memoryMB must be greater than 0")
+		}
+		if *req.MemoryMB%1024 != 0 {
+			return nil, newValidationError("memoryMB must be a whole GiB multiple")
+		}
+	}
+	if req.DataDiskGB != nil && *req.DataDiskGB <= 0 {
+		return nil, newValidationError("dataDiskGB must be greater than 0")
+	}
+	if req.DataDiskGB != nil && *req.DataDiskGB < currentInfo.DataDiskGB {
+		return nil, newValidationError("data disk size can only increase")
+	}
+
+	previousMemory := project.VZMemoryMB
+	previousDisk := project.VZDataDiskGB
+	if req.MemoryMB != nil {
+		memoryMB := *req.MemoryMB
+		project.VZMemoryMB = &memoryMB
+	}
+	if req.DataDiskGB != nil {
+		dataDiskGB := *req.DataDiskGB
+		project.VZDataDiskGB = &dataDiskGB
+	}
+
+	if err := s.store.UpdateProject(ctx, project); err != nil {
+		return nil, err
+	}
+
+	rollback := func() {
+		project.VZMemoryMB = previousMemory
+		project.VZDataDiskGB = previousDisk
+		if updateErr := s.store.UpdateProject(context.Background(), project); updateErr != nil {
+			log.Printf("Warning: failed to roll back project resources for %s: %v", projectID, updateErr)
+		}
+	}
+
+	sandboxReq := sandbox.UpdateProjectResourcesRequest{
+		MemoryMB:   req.MemoryMB,
+		DataDiskGB: req.DataDiskGB,
+	}
+	if err := resourceManager.ApplyProjectResourceUpdate(ctx, projectID, sandboxReq); err != nil {
+		rollback()
+		return nil, err
+	}
+
+	updatedInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	if err != nil {
+		rollback()
+		return nil, err
+	}
+
+	return &ProjectResourcesUpdateResult{
+		Provider:        updatedInfo.Provider,
+		Previous:        projectVMResourcesFromInfo(currentInfo),
+		Current:         projectVMResourcesFromInfo(updatedInfo),
+		RestartRequired: true,
+	}, nil
+}
+
+// GetProjectInspection returns inspection-container access details when supported.
+func (s *ProjectService) GetProjectInspection(ctx context.Context, projectID string) (*ProjectInspection, error) {
+	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	inspectionManager, ok := s.provider.(sandbox.ProjectInspectionManager)
+	if !ok {
+		return nil, sandbox.ErrProjectInspectionUnsupported
+	}
+
+	info, err := inspectionManager.GetProjectInspectionInfo(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProjectInspection{
+		Provider:      info.Provider,
+		Available:     info.Available,
+		ContainerName: info.ContainerName,
+		Scope:         info.Scope,
+	}, nil
+}
+
+// AttachProjectInspection attaches to the project's inspection container shell.
+func (s *ProjectService) AttachProjectInspection(ctx context.Context, projectID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	inspectionManager, ok := s.provider.(sandbox.ProjectInspectionManager)
+	if !ok {
+		return nil, sandbox.ErrProjectInspectionUnsupported
+	}
+
+	return inspectionManager.AttachProjectInspection(ctx, projectID, opts)
 }
 
 // DeleteProject deletes a project and cleans up associated resources
@@ -285,4 +481,21 @@ func generateSlug(name string) string {
 	suffix := make([]byte, 4)
 	_, _ = rand.Read(suffix)
 	return fmt.Sprintf("%s-%s", slug, hex.EncodeToString(suffix))
+}
+
+func projectVMResourcesFromInfo(info *sandbox.ProjectResourceInfo) ProjectVMResources {
+	if info == nil {
+		return ProjectVMResources{}
+	}
+
+	return ProjectVMResources{
+		CPUCount:                 info.CPUCount,
+		MemoryMB:                 info.MemoryMB,
+		DataDiskGB:               info.DataDiskGB,
+		CanIncreaseDisk:          true,
+		CanDecreaseDisk:          false,
+		CanChangeMemory:          true,
+		RestartRequiredForDisk:   true,
+		RestartRequiredForMemory: true,
+	}
 }

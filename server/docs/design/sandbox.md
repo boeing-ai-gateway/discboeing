@@ -63,6 +63,8 @@ This module provides the sandbox runtime abstraction for managing execution envi
    - Direct connection to Docker daemon
    - One container per session
    - Fast startup, good for Linux/Windows
+   - Starts a daemon-scoped privileged `discobot-host-inspect` container
+     from the sandbox image for host troubleshooting
 
 2. **VZ+Docker Provider**: VM isolation with container efficiency (macOS only)
    - One VM per project (shared across sessions)
@@ -70,6 +72,8 @@ This module provides the sandbox runtime abstraction for managing execution envi
    - VSOCK communication for Docker API access
    - Automatic VM lifecycle management with idle timeout
    - Best resource efficiency on macOS
+   - Starts the same privileged inspection container inside each project VM's
+     Docker daemon after the sandbox image is available
 
 3. **VM Abstraction Layer**: Platform-agnostic VM management
    - Interface-based design supporting multiple hypervisors
