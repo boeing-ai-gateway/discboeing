@@ -1,4 +1,5 @@
 import type { DynamicToolPart } from "$lib/components/ai/types";
+import type { PlanEntry } from "$lib/shell-types";
 import type { ResolvedTheme } from "$lib/theme";
 
 export type ToolRendererComponentProps = {
@@ -7,6 +8,7 @@ export type ToolRendererComponentProps = {
 	sessionId?: string | null;
 	threadId?: string | null;
 	resolvedTheme?: ResolvedTheme;
+	previousTodoEntries?: PlanEntry[];
 	onToolApprovalResponse?: (payload: {
 		id: string;
 		approved: boolean;

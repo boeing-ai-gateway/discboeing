@@ -11,6 +11,7 @@ import {
 	getLatestPlanState,
 	getPendingQuestionApprovalId,
 	getPlanEntries,
+	getPreviousTodoWriteEntries,
 	hasUserMessageContent,
 	sortServiceItems,
 	toServiceItem,
@@ -494,6 +495,63 @@ test("getPlanEntries returns the last TodoWrite update across messages", () => {
 			content: "Latest todo update",
 			activeForm: "Using the latest todo update",
 			status: "in_progress",
+		},
+	]);
+});
+
+test("getPreviousTodoWriteEntries returns the prior TodoWrite update", () => {
+	const messages: ChatMessage[] = [
+		{
+			id: "assistant-1",
+			role: "assistant",
+			parts: [
+				{
+					type: "dynamic-tool",
+					toolCallId: "todo-1",
+					toolName: "TodoWrite",
+					state: "output-available",
+					input: {
+						todos: [
+							{
+								content: "Finish audit",
+								activeForm: "Finishing audit",
+								status: "completed",
+							},
+						],
+					},
+					output: {},
+				},
+			],
+		},
+		{
+			id: "assistant-2",
+			role: "assistant",
+			parts: [
+				{
+					type: "dynamic-tool",
+					toolCallId: "todo-2",
+					toolName: "TodoWrite",
+					state: "output-available",
+					input: {
+						todos: [
+							{
+								content: "Ship UI polish",
+								activeForm: "Shipping UI polish",
+								status: "in_progress",
+							},
+						],
+					},
+					output: {},
+				},
+			],
+		},
+	];
+
+	assert.deepEqual(getPreviousTodoWriteEntries(messages, "todo-2"), [
+		{
+			content: "Finish audit",
+			activeForm: "Finishing audit",
+			status: "completed",
 		},
 	]);
 });

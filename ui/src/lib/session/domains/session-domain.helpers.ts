@@ -402,6 +402,76 @@ export function getLatestPlanState(
 	return null;
 }
 
+export function getTodoWriteEntries(input: unknown): PlanEntry[] | null {
+	if (!input || typeof input !== "object") {
+		return null;
+	}
+
+	const todos = (input as { todos?: unknown }).todos;
+	if (!Array.isArray(todos)) {
+		return [];
+	}
+
+	return todos.flatMap((todo) => {
+		if (!todo || typeof todo !== "object") {
+			return [];
+		}
+
+		const candidate = todo as {
+			content?: unknown;
+			activeForm?: unknown;
+			status?: unknown;
+		};
+		if (
+			typeof candidate.content !== "string" ||
+			typeof candidate.activeForm !== "string" ||
+			(candidate.status !== "pending" &&
+				candidate.status !== "in_progress" &&
+				candidate.status !== "completed")
+		) {
+			return [];
+		}
+
+		return [
+			{
+				content: candidate.content,
+				activeForm: candidate.activeForm,
+				status: candidate.status,
+			},
+		];
+	});
+}
+
+export function getPreviousTodoWriteEntries(
+	messages: ChatMessage[],
+	currentToolCallId: string,
+): PlanEntry[] {
+	let previousEntries: PlanEntry[] = [];
+
+	for (const message of messages) {
+		for (const part of getDynamicToolParts(message)) {
+			if (part.toolName !== "TodoWrite") {
+				continue;
+			}
+
+			if (part.toolCallId === currentToolCallId) {
+				return previousEntries;
+			}
+
+			if (part.state !== "output-available") {
+				continue;
+			}
+
+			const entries = getTodoWriteEntries(part.input);
+			if (entries) {
+				previousEntries = entries;
+			}
+		}
+	}
+
+	return previousEntries;
+}
+
 export function getPlanEntries(messages: ChatMessage[]): PlanEntry[] {
 	for (
 		let messageIndex = messages.length - 1;
@@ -419,46 +489,17 @@ export function getPlanEntries(messages: ChatMessage[]): PlanEntry[] {
 			if (
 				part.type !== "dynamic-tool" ||
 				part.toolName !== "TodoWrite" ||
-				part.state !== "output-available" ||
-				!part.input ||
-				typeof part.input !== "object"
+				part.state !== "output-available"
 			) {
 				continue;
 			}
 
-			const todos = (part.input as { todos?: unknown }).todos;
-			if (!Array.isArray(todos)) {
-				return [];
+			const entries = getTodoWriteEntries(part.input);
+			if (entries) {
+				return entries;
 			}
 
-			return todos.flatMap((todo) => {
-				if (!todo || typeof todo !== "object") {
-					return [];
-				}
-
-				const candidate = todo as {
-					content?: unknown;
-					activeForm?: unknown;
-					status?: unknown;
-				};
-				if (
-					typeof candidate.content !== "string" ||
-					typeof candidate.activeForm !== "string" ||
-					(candidate.status !== "pending" &&
-						candidate.status !== "in_progress" &&
-						candidate.status !== "completed")
-				) {
-					return [];
-				}
-
-				return [
-					{
-						content: candidate.content,
-						activeForm: candidate.activeForm,
-						status: candidate.status,
-					},
-				];
-			});
+			return [];
 		}
 	}
 

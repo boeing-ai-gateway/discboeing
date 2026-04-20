@@ -56,6 +56,7 @@
 	import { getSessionContextIfPresent } from "$lib/context/session-context.svelte";
 	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
 	import type { ThreadContextValue } from "$lib/session/session-context.types";
+	import { getTodoWriteEntries } from "$lib/session/domains/session-domain.helpers";
 
 	type ConversationPaneStatus = ThreadContextValue["status"];
 	type ConversationPaneErrorBannerKey = "session" | "thread";
@@ -101,6 +102,35 @@
 	const conversationTurns = $derived.by(() =>
 		groupMessagesIntoTurns(conversationMessages),
 	);
+	const previousTodoEntriesByToolCallId = $derived.by(() => {
+		const entriesByToolCallId: Record<
+			string,
+			NonNullable<ReturnType<typeof getTodoWriteEntries>>
+		> = {};
+		let previousEntries: NonNullable<ReturnType<typeof getTodoWriteEntries>> =
+			[];
+
+		for (const message of conversationMessages) {
+			for (const part of message.parts) {
+				if (part.type !== "dynamic-tool" || part.toolName !== "TodoWrite") {
+					continue;
+				}
+
+				entriesByToolCallId[part.toolCallId] = previousEntries;
+
+				if (part.state !== "output-available") {
+					continue;
+				}
+
+				const entries = getTodoWriteEntries(part.input);
+				if (entries) {
+					previousEntries = entries;
+				}
+			}
+		}
+
+		return entriesByToolCallId;
+	});
 	const activeTurnId = $derived.by(() => conversationTurns.at(-1)?.id ?? null);
 	const effectiveChatWidthMode = $derived.by(
 		() => chatWidthMode ?? app?.preferences.chatWidthMode ?? "full",
@@ -659,6 +689,9 @@
 				sessionId={activeSessionId}
 				threadId={activeThreadId}
 				resolvedTheme={app?.preferences.resolvedTheme ?? "light"}
+				previousTodoEntries={part.toolName === "TodoWrite"
+					? (previousTodoEntriesByToolCallId[part.toolCallId] ?? [])
+					: undefined}
 				onToolApprovalResponse={thread?.addToolApprovalResponse}
 				defaultOpen={toolDefaultOpen}
 			/>
