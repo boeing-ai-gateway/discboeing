@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -944,6 +945,166 @@ func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
 	}
 }
 
+func TestResume_ContinuesAnsweredPendingQuestion(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-resume-answer"
+	turnID := "turn-answer"
+	approvalID := "approval-1"
+	assistantMsgID := "msg-asst"
+	userMsgID := "msg-user"
+
+	if err := store.SaveMessage(threadID, thread.StoredMessage{
+		ID: userMsgID,
+		Message: message.Message{
+			Role:  "user",
+			Parts: []message.Part{message.TextPart{Text: "delete it"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveMessage(threadID, thread.StoredMessage{
+		ID:       assistantMsgID,
+		ParentID: userMsgID,
+		Message: message.Message{
+			Role: "assistant",
+			Parts: []message.Part{
+				message.ToolCallPart{ToolCallID: "tc1", ToolName: "dangerous_tool", Input: `{"action":"delete"}`},
+				message.ToolApprovalRequest{ApprovalID: approvalID, ToolCallID: "tc1"},
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sf, err := store.CreateStepFile(threadID, turnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sf.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult(threadID, turnID, 0, thread.StepResult{
+		AssistantMessage: message.Message{
+			Role: "assistant",
+			Parts: []message.Part{
+				message.ToolCallPart{ToolCallID: "tc1", ToolName: "dangerous_tool", Input: `{"action":"delete"}`},
+			},
+		},
+		ToolCalls: []thread.ToolCallInfo{
+			{ToolCallID: "tc1", ToolName: "dangerous_tool", Input: `{"action":"delete"}`},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveQuestion(threadID, turnID, thread.PendingQuestionState{
+		ApprovalID:  approvalID,
+		ToolCallID:  "tc1",
+		StepIndex:   0,
+		ResumePhase: thread.PhaseTools,
+		Questions:   json.RawMessage(`[{"question":"Are you sure?"}]`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveTurnState(threadID, thread.TurnState{
+		ID:                turnID,
+		ThreadID:          threadID,
+		CurrentStep:       0,
+		Phase:             thread.PhaseWaitingForAnswer,
+		LeafMsgID:         assistantMsgID,
+		AssistantMsgID:    assistantMsgID,
+		PendingApprovalID: approvalID,
+		Config: thread.TurnConfig{
+			ProviderID: "openai",
+			Model:      "gpt-5.4",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := providers.NewProviderRegistry(nil)
+	provider := &resumeOverrideProvider{
+		id: "openai",
+		defaults: map[string]providers.ModelRef{
+			providers.ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	}
+	registry.Add(provider)
+
+	executor := &answeredPendingQuestionExecutor{}
+	agentImpl := NewDefaultAgent(store, registry, executor, t.TempDir(), MCPConfig{})
+
+	if err := agentImpl.SubmitAnswer(threadID, approvalID, api.AnswerQuestionRequest{
+		Answers: map[string]string{"q1": "yes"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	resumed, err := agentImpl.Resume(context.Background(), threadID, agent.PromptRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resumedChunks []message.MessageChunk
+	for chunk, err := range resumed.Stream {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if chunk != nil {
+			resumedChunks = append(resumedChunks, chunk)
+		}
+	}
+
+	if len(provider.requests) != 1 {
+		t.Fatalf("expected provider to receive 1 request, got %d", len(provider.requests))
+	}
+	if executor.answerReq == nil {
+		t.Fatal("expected executor to receive saved answer during resume")
+	}
+	if got := executor.answerReq.Answers["q1"]; got != "yes" {
+		t.Fatalf("expected resumed answer q1=yes, got %#v", executor.answerReq.Answers)
+	}
+
+	var hasAnchor bool
+	var hasToolOutput bool
+	var hasFinalText bool
+	for _, chunk := range resumedChunks {
+		switch value := chunk.(type) {
+		case message.ThreadResumeChunk:
+			if value.Data.MessageID == assistantMsgID {
+				hasAnchor = true
+			}
+		case message.StartChunk:
+			if value.MessageID == assistantMsgID {
+				hasAnchor = true
+			}
+		case message.ToolOutputAvailableChunk:
+			if value.ToolCallID == "tc1" {
+				hasToolOutput = true
+			}
+		case message.TextDeltaChunk:
+			if value.Delta == "ok" {
+				hasFinalText = true
+			}
+		}
+	}
+	if !hasAnchor {
+		t.Fatalf("expected resumed stream to anchor to assistant message %q, got %#v", assistantMsgID, resumedChunks)
+	}
+	if !hasToolOutput {
+		t.Fatalf("expected resumed stream to emit tool output, got %#v", resumedChunks)
+	}
+	if !hasFinalText {
+		t.Fatalf("expected resumed stream to continue with assistant text, got %#v", resumedChunks)
+	}
+
+	state, err := store.LoadTurnState(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != nil {
+		t.Fatalf("expected resumed turn state to be cleaned up, got %#v", state)
+	}
+}
+
 type resumeOverrideProvider struct {
 	id       string
 	defaults map[string]providers.ModelRef
@@ -973,4 +1134,23 @@ func (p *resumeOverrideProvider) ListModels(_ context.Context) ([]providers.Mode
 
 func (p *resumeOverrideProvider) DefaultModels() map[string]providers.ModelRef {
 	return p.defaults
+}
+
+type answeredPendingQuestionExecutor struct {
+	answerReq *api.AnswerQuestionRequest
+}
+
+func (e *answeredPendingQuestionExecutor) Execute(context.Context, *thread.ToolContext, message.ToolCallPart) (thread.ToolExecuteResult, error) {
+	return thread.ToolExecuteResult{}, fmt.Errorf("unexpected Execute call")
+}
+
+func (e *answeredPendingQuestionExecutor) Continue(_ context.Context, _ *thread.ToolContext, call message.ToolCallPart, _ json.RawMessage, req *api.AnswerQuestionRequest) (thread.ToolExecuteResult, error) {
+	e.answerReq = req
+	return thread.ToolExecuteResult{
+		Result: message.ToolResultPart{
+			ToolCallID: call.ToolCallID,
+			ToolName:   call.ToolName,
+			Output:     message.TextOutput{Value: "item deleted"},
+		},
+	}, nil
 }

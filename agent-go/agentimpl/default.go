@@ -350,7 +350,13 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		return agent.ResumeResult{}, agent.ErrInterruptedTurnRequiresResume
 	}
 	if state.Phase == thread.PhaseWaitingForAnswer {
-		return agent.ResumeResult{}, agent.ErrPendingQuestionRequiresAnswer
+		answer, err := a.store.LoadAnswer(threadID, state.ID, state.PendingApprovalID)
+		if err != nil {
+			return agent.ResumeResult{}, fmt.Errorf("load answer: %w", err)
+		}
+		if answer == nil {
+			return agent.ResumeResult{}, agent.ErrPendingQuestionRequiresAnswer
+		}
 	}
 	if len(req.UserParts) > 0 {
 		var env *promptEnvironment
