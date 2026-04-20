@@ -635,8 +635,19 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 
 func refreshBundledCommands(srcHomeDir, dstHomeDir string, u *userInfo) error {
 	srcDir := filepath.Join(srcHomeDir, commandsDirRelPath)
-	dstDir := filepath.Join(dstHomeDir, commandsDirRelPath)
+	if err := refreshBundledCommandsDir(srcDir, filepath.Join(dstHomeDir, commandsDirRelPath), u); err != nil {
+		return err
+	}
 
+	legacyDir := filepath.Join(dstHomeDir, ".claude", "commands")
+	if err := os.RemoveAll(legacyDir); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove legacy commands dir: %w", err)
+	}
+
+	return nil
+}
+
+func refreshBundledCommandsDir(srcDir, dstDir string, u *userInfo) error {
 	if _, err := os.Stat(srcDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
