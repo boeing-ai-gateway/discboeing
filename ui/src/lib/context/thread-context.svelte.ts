@@ -18,6 +18,7 @@ import type {
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
 import type { ThreadSummary } from "$lib/shell-types";
+import { createBestEffortLoader } from "./create-best-effort-loader.svelte";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
@@ -151,6 +152,10 @@ function createThreadContext(
 ): ThreadContextValue {
 	const app = useAppContext();
 	const hasSession = $derived.by(() => session.current !== null);
+	const bestEffortLoader = createBestEffortLoader({
+		owner: "ThreadContext",
+		isActive: () => hasSession,
+	});
 	const shouldIgnoreClosedStreamError = () => {
 		switch (session.current?.status) {
 			case SessionStatus.INITIALIZING:
@@ -166,11 +171,13 @@ function createThreadContext(
 	};
 	const refreshSessionState = async () => {
 		await Promise.all([
-			session.files.refresh(),
-			session.services.refresh(),
-			session.hooks.refresh(),
+			bestEffortLoader.run("files", () => session.files.refresh()),
+			bestEffortLoader.run("services", () => session.services.refresh()),
+			bestEffortLoader.run("hooks", () => session.hooks.refresh()),
+			bestEffortLoader.run("session", () =>
+				app.sessions.reloadSession(session.sessionId),
+			),
 		]);
-		await app.sessions.reloadSession(session.sessionId);
 	};
 
 	const conversation = createConversationDomain({
@@ -424,6 +431,7 @@ function createThreadContext(
 			await session.threads.refreshThread(threadId);
 		},
 		dispose: () => {
+			bestEffortLoader.dispose();
 			if (composerDraftPersistTimer !== null) {
 				clearTimeout(composerDraftPersistTimer);
 				composerDraftPersistTimer = null;

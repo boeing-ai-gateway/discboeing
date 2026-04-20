@@ -50,7 +50,7 @@ export function createSessionHooksDomain(
 			return;
 		}
 
-		const outputs = await Promise.all(
+		const outputs = await Promise.allSettled(
 			Object.keys(nextStatus.hooks).map(async (hookId) => {
 				const response = await api.getHookOutput(args.sessionId, hookId);
 				return [hookId, response] as const;
@@ -58,7 +58,15 @@ export function createSessionHooksDomain(
 		);
 
 		outputById = outputs.reduce<Record<string, HookOutputState>>(
-			(nextOutputById, [hookId, response]) => {
+			(nextOutputById, result) => {
+				if (result.status === "rejected") {
+					console.warn(
+						"Failed to load hook output; continuing without it",
+						result.reason,
+					);
+					return nextOutputById;
+				}
+				const [hookId, response] = result.value;
 				return mergeHookOutput(nextOutputById, hookId, response);
 			},
 			{},
