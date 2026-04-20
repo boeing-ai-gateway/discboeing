@@ -381,6 +381,7 @@ func TestPostChat_AcceptsSingleUserMessage(t *testing.T) {
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
+	cleanupCompletion(t, cm, "thread-1")
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -492,6 +493,7 @@ func TestPostChat_QueuesPromptWhileCompletionIsActive(t *testing.T) {
 		promptFn: yieldChunksAndBlock(message.StartChunk{MessageID: "assistant-1"}),
 	}
 	cm := agent.NewCompletionManager(ma)
+	cleanupCompletion(t, cm, "thread-1")
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
