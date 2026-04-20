@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	_ "embed"
@@ -1308,18 +1309,17 @@ func setupProxyCertificate(u *userInfo) error {
 		return fmt.Errorf("failed to create cert dir: %w", err)
 	}
 
-	// Check if certificate already exists
-	if _, err := os.Stat(certPath); err == nil {
+	usable, err := hasUsableProxyCertificate(certPath, keyPath)
+	if err != nil {
+		return err
+	}
+	if usable {
 		fmt.Printf("discobot-agent: proxy CA certificate already exists at %s\n", certPath)
 		// Certificate exists, ensure it's installed in browser and system trust stores
 		return installCertificateTrust(certPath, u)
 	}
 
 	fmt.Printf("discobot-agent: generating proxy CA certificate...\n")
-
-	// Generate CA certificate using the proxy's cert package
-	// We'll call the proxy binary with a special flag to generate the cert
-	// Since we don't want to import the proxy code, we'll generate it inline
 	if err := generateCACertificate(certPath, keyPath); err != nil {
 		return fmt.Errorf("failed to generate CA certificate: %w", err)
 	}
@@ -1328,6 +1328,30 @@ func setupProxyCertificate(u *userInfo) error {
 
 	// Install certificate in browser and system trust stores
 	return installCertificateTrust(certPath, u)
+}
+
+func hasUsableProxyCertificate(certPath, keyPath string) (bool, error) {
+	if _, err := os.Stat(certPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to stat proxy CA certificate: %w", err)
+	}
+
+	if _, err := os.Stat(keyPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("discobot-agent: proxy CA key missing at %s; regenerating certificate\n", keyPath)
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to stat proxy CA key: %w", err)
+	}
+
+	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
+		fmt.Printf("discobot-agent: proxy CA certificate/key are unusable; regenerating certificate: %v\n", err)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // generateCACertificate creates a CA certificate and private key using Go crypto libraries.

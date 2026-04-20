@@ -206,7 +206,7 @@ Step 8: Start agent-api (with proxy env vars)
 ### Certificate Trust Scope
 - **Container only**: Trust is limited to the container's system trust store
 - **Host unaffected**: Host system trust store is not modified
-- **Volume persistence**: If `/.data` is a volume, same CA reused across restarts
+- **Volume persistence**: If `/.data` is a volume, the same CA is reused across restarts as long as both `/.data/proxy/certs/ca.crt` and `ca.key` remain present and loadable as a pair
 
 ### Certificate Rotation
 - **10-year validity**: Long enough to avoid frequent rotation

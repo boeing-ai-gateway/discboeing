@@ -8,6 +8,45 @@ import (
 	"testing"
 )
 
+func TestHasUsableProxyCertificateReturnsTrueForValidPair(t *testing.T) {
+	certDir := t.TempDir()
+	certPath := filepath.Join(certDir, "ca.crt")
+	keyPath := filepath.Join(certDir, "ca.key")
+
+	if err := generateCACertificate(certPath, keyPath); err != nil {
+		t.Fatalf("generateCACertificate failed: %v", err)
+	}
+
+	usable, err := hasUsableProxyCertificate(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("hasUsableProxyCertificate returned error: %v", err)
+	}
+	if !usable {
+		t.Fatal("hasUsableProxyCertificate = false, want true")
+	}
+}
+
+func TestHasUsableProxyCertificateReturnsFalseWhenKeyMissing(t *testing.T) {
+	certDir := t.TempDir()
+	certPath := filepath.Join(certDir, "ca.crt")
+	keyPath := filepath.Join(certDir, "ca.key")
+
+	if err := generateCACertificate(certPath, keyPath); err != nil {
+		t.Fatalf("generateCACertificate failed: %v", err)
+	}
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("failed to remove key: %v", err)
+	}
+
+	usable, err := hasUsableProxyCertificate(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("hasUsableProxyCertificate returned error: %v", err)
+	}
+	if usable {
+		t.Fatal("hasUsableProxyCertificate = true, want false")
+	}
+}
+
 func TestInstallSandboxSSHKeyFiles(t *testing.T) {
 	srcDir := t.TempDir()
 	homeDir := t.TempDir()
