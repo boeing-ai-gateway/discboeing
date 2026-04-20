@@ -18,6 +18,41 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
+type imageIDAwareSessionProvider struct {
+	*mocksandbox.Provider
+	currentImageID string
+	ops            []string
+}
+
+func (p *imageIDAwareSessionProvider) CurrentImageID(context.Context) (string, error) {
+	return p.currentImageID, nil
+}
+
+func (p *imageIDAwareSessionProvider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+	p.ops = append(p.ops, "create")
+	return p.Provider.Create(ctx, sessionID, opts)
+}
+
+func (p *imageIDAwareSessionProvider) Start(ctx context.Context, sessionID string) error {
+	sbx, err := p.Provider.Get(ctx, sessionID)
+	if err != nil {
+		p.ops = append(p.ops, "start:<missing>")
+	} else {
+		p.ops = append(p.ops, "start:"+sbx.ID)
+	}
+	return p.Provider.Start(ctx, sessionID)
+}
+
+func (p *imageIDAwareSessionProvider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+	sbx, err := p.Provider.Get(ctx, sessionID)
+	if err != nil {
+		p.ops = append(p.ops, "remove:<missing>")
+	} else {
+		p.ops = append(p.ops, "remove:"+sbx.ID)
+	}
+	return p.Provider.Remove(ctx, sessionID, opts...)
+}
+
 func TestValidateSessionID(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -189,6 +224,74 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	}
 	if stored.WorkspacePath != nil && *stored.WorkspacePath != "" {
 		t.Fatalf("stored workspace path = %q, want empty", *stored.WorkspacePath)
+	}
+}
+
+func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	baseProvider := mocksandbox.NewProviderWithImage("ghcr.io/obot-platform/discobot:alpha90")
+	provider := &imageIDAwareSessionProvider{
+		Provider:       baseProvider,
+		currentImageID: "sha256:new",
+	}
+	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+
+	project := &model.Project{ID: "project-stale", Name: "stale project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+
+	workspace := &model.Workspace{
+		ID:         "workspace-stale",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	dbSession := &model.Session{
+		ID:          "session-stale",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Stale Session",
+		Status:      model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	oldSandbox, err := provider.Provider.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret"})
+	if err != nil {
+		t.Fatalf("failed to create stale sandbox: %v", err)
+	}
+	oldSandbox.ID = "old-stopped-sandbox"
+	oldSandbox.Status = sandbox.StatusStopped
+	oldSandbox.Image = provider.Image()
+	oldSandbox.Metadata = map[string]string{
+		sandbox.MetadataImageID: "sha256:old",
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	if got, want := provider.ops, []string{"remove:old-stopped-sandbox", "create", "start:mock-session-stale"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("operation order = %v, want %v", got, want)
+	}
+
+	sbx, err := provider.Get(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to get recreated sandbox: %v", err)
+	}
+	if sbx.ID == "old-stopped-sandbox" {
+		t.Fatalf("expected stopped stale sandbox to be recreated")
+	}
+	if sbx.Status != sandbox.StatusRunning {
+		t.Fatalf("sandbox status = %s, want %s", sbx.Status, sandbox.StatusRunning)
 	}
 }
 

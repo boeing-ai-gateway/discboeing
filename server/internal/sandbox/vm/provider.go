@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -186,6 +187,50 @@ func (p *Provider) Image() string {
 	return p.cfg.SandboxImage
 }
 
+// CurrentImageID returns the immutable image ID for the configured sandbox image.
+func (p *Provider) CurrentImageID(ctx context.Context) (string, error) {
+	providers, err := p.ensureDockerProviders(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, dockerProv := range providers {
+		imageID, err := dockerProv.CurrentImageID(ctx)
+		if err == nil {
+			return imageID, nil
+		}
+		log.Printf("Warning: Failed to resolve current sandbox image ID from project VM: %v", err)
+	}
+
+	hostClient, err := p.getHostDockerClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to get host docker client: %w", err)
+	}
+	inspect, err := hostClient.ImageInspect(ctx, p.cfg.SandboxImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect current sandbox image %s on host docker: %w", p.cfg.SandboxImage, err)
+	}
+	return inspect.ID, nil
+}
+
+// CleanupUnusedImages delegates labeled sandbox image cleanup to each project VM Docker daemon.
+func (p *Provider) CleanupUnusedImages(ctx context.Context) error {
+	providers, err := p.ensureDockerProviders(ctx)
+	if err != nil {
+		return err
+	}
+
+	var firstErr error
+	for _, dockerProv := range providers {
+		if err := dockerProv.CleanupUnusedImages(ctx); err != nil {
+			log.Printf("Warning: Failed to clean up sandbox images in project VM: %v", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
 // GetProjectResourceInfo reports the effective VM resources for a project.
 func (p *Provider) GetProjectResourceInfo(ctx context.Context, projectID string) (*sandbox.ProjectResourceInfo, error) {
 	var (
@@ -325,14 +370,47 @@ func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, err
 	return dockerProv.GetSecret(ctx, sessionID)
 }
 
-// List returns all sandboxes across all project VMs.
-func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
+func (p *Provider) ensureDockerProviders(ctx context.Context) ([]*docker.Provider, error) {
+	if err := p.WaitForReady(ctx); err != nil {
+		return nil, err
+	}
+
+	projectIDSet := make(map[string]struct{})
+
 	p.dockerProvidersMu.RLock()
-	providers := make([]*docker.Provider, 0, len(p.dockerProviders))
-	for _, prov := range p.dockerProviders {
-		providers = append(providers, prov)
+	for projectID := range p.dockerProviders {
+		projectIDSet[projectID] = struct{}{}
 	}
 	p.dockerProvidersMu.RUnlock()
+
+	for _, projectID := range p.vmManager.ListProjectIDs() {
+		projectIDSet[projectID] = struct{}{}
+	}
+
+	projectIDs := make([]string, 0, len(projectIDSet))
+	for projectID := range projectIDSet {
+		projectIDs = append(projectIDs, projectID)
+	}
+	sort.Strings(projectIDs)
+
+	providers := make([]*docker.Provider, 0, len(projectIDs))
+	for _, projectID := range projectIDs {
+		dockerProv, err := p.getOrCreateDockerProvider(ctx, projectID)
+		if err != nil {
+			log.Printf("Warning: Failed to prepare Docker provider for project %s: %v", projectID, err)
+			continue
+		}
+		providers = append(providers, dockerProv)
+	}
+	return providers, nil
+}
+
+// List returns all sandboxes across all project VMs.
+func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
+	providers, err := p.ensureDockerProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var allSandboxes []*sandbox.Sandbox
 	for _, dockerProv := range providers {
@@ -488,12 +566,10 @@ func (p *Provider) Close() error {
 
 // Reconcile delegates to all per-project Docker providers to reconcile.
 func (p *Provider) Reconcile(ctx context.Context) error {
-	p.dockerProvidersMu.RLock()
-	providers := make([]*docker.Provider, 0, len(p.dockerProviders))
-	for _, prov := range p.dockerProviders {
-		providers = append(providers, prov)
+	providers, err := p.ensureDockerProviders(ctx)
+	if err != nil {
+		return err
 	}
-	p.dockerProvidersMu.RUnlock()
 
 	for _, dockerProv := range providers {
 		if err := dockerProv.Reconcile(ctx); err != nil {

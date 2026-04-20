@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -465,16 +466,37 @@ func (m *VMManager) GetVM(projectID string) (vm.ProjectVM, bool) {
 	return pvm, true
 }
 
-// ListProjectIDs returns the IDs of all projects that currently have a VM.
+// ListProjectIDs returns the IDs of all projects that currently have a VM
+// or persisted VM data that can be resumed.
 func (m *VMManager) ListProjectIDs() []string {
 	m.projectVMMu.RLock()
-	defer m.projectVMMu.RUnlock()
-
-	ids := make([]string, 0, len(m.projectVMs))
+	ids := make(map[string]struct{}, len(m.projectVMs))
 	for id := range m.projectVMs {
-		ids = append(ids, id)
+		ids[id] = struct{}{}
 	}
-	return ids
+	dataDir := m.config.DataDir
+	m.projectVMMu.RUnlock()
+
+	if dataDir != "" {
+		matches, err := filepath.Glob(filepath.Join(dataDir, "project-*-data.img"))
+		if err != nil {
+			log.Printf("Warning: Failed to glob persisted VZ data disks in %s: %v", dataDir, err)
+		} else {
+			for _, match := range matches {
+				projectID := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(match), "project-"), "-data.img")
+				if projectID != "" {
+					ids[projectID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	projectIDs := make([]string, 0, len(ids))
+	for id := range ids {
+		projectIDs = append(projectIDs, id)
+	}
+	sort.Strings(projectIDs)
+	return projectIDs
 }
 
 // RemoveVM shuts down and removes the VM for the given project.

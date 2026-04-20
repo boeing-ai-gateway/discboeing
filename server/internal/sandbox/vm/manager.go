@@ -38,7 +38,8 @@ type ProjectVMManager interface {
 	// GetVM returns the VM for the given project, if it exists.
 	GetVM(projectID string) (ProjectVM, bool)
 
-	// ListProjectIDs returns the IDs of all projects that currently have a VM.
+	// ListProjectIDs returns the IDs of all projects that currently have an
+	// active VM or persisted VM data that can be resumed.
 	ListProjectIDs() []string
 
 	// RemoveVM shuts down and removes the VM for the given project.

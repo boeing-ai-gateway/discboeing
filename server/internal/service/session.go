@@ -852,6 +852,33 @@ func (s *SessionService) initializeSync(
 			needsCreation = false
 
 		case sandbox.StatusCreated, sandbox.StatusStopped:
+			imageProvider := providerForSandboxImageOps(s.sandboxProvider)
+			if err := waitForSandboxImageOpsReady(ctx, imageProvider); err != nil {
+				log.Printf("Warning: failed to wait for sandbox image provider readiness for session %s: %v", sessionID, err)
+			}
+
+			expectedImageID := ""
+			if imageIDProvider, ok := imageProvider.(sandbox.CurrentImageIDProvider); ok {
+				imageID, err := imageIDProvider.CurrentImageID(ctx)
+				if err != nil {
+					log.Printf("Warning: failed to resolve current sandbox image ID for session %s: %v", sessionID, err)
+				} else {
+					expectedImageID = imageID
+				}
+			}
+
+			if !sandboxUsesExpectedImage(existingSandbox, s.sandboxProvider.Image(), expectedImageID) {
+				log.Printf("Sandbox for session %s is inactive but uses outdated image %s (expected %s), recreating instead of restarting",
+					sessionID, existingSandbox.Image, s.sandboxProvider.Image())
+				if err := s.sandboxProvider.Remove(ctx, sessionID); err != nil {
+					log.Printf("Failed to remove outdated sandbox for session %s: %v", sessionID, err)
+					s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to remove outdated sandbox: "+err.Error()))
+					return fmt.Errorf("failed to remove outdated sandbox: %w", err)
+				}
+				needsCreation = true
+				break
+			}
+
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
 			if err := s.sandboxProvider.Start(ctx, sessionID); err != nil {
 				if !errors.Is(err, sandbox.ErrAlreadyRunning) {

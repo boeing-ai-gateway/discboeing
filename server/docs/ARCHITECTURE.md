@@ -350,6 +350,12 @@ Chat Message → Update session status to "running"
             → Update session status to "ready"
 ```
 
+On startup, sandbox reconciliation waits for VM-backed providers to finish
+initializing, boots any persisted project VMs that still have data disks, and
+then compares each sandbox's image ID against the configured runtime image.
+Stopped sandboxes with an outdated image are removed so the next session open
+recreates them instead of restarting stale containers.
+
 ### Sandbox Configuration
 
 ```go

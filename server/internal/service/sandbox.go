@@ -501,6 +501,39 @@ func (s *SandboxService) Provider() sandbox.Provider {
 	return s.provider
 }
 
+type sandboxImageOpsReadyWaiter interface {
+	WaitForReady(ctx context.Context) error
+}
+
+func providerForSandboxImageOps(provider sandbox.Provider) sandbox.Provider {
+	if defaultProviderGetter, ok := provider.(interface{ DefaultProvider() sandbox.Provider }); ok {
+		if defaultProvider := defaultProviderGetter.DefaultProvider(); defaultProvider != nil {
+			return defaultProvider
+		}
+	}
+	return provider
+}
+
+func waitForSandboxImageOpsReady(ctx context.Context, provider sandbox.Provider) error {
+	waiter, ok := provider.(sandboxImageOpsReadyWaiter)
+	if !ok {
+		return nil
+	}
+	return waiter.WaitForReady(ctx)
+}
+
+func sandboxUsesExpectedImage(sb *sandbox.Sandbox, expectedImage, expectedImageID string) bool {
+	if sb == nil {
+		return false
+	}
+	if expectedImageID != "" {
+		if sandboxImageID := sb.Metadata[sandbox.MetadataImageID]; sandboxImageID != "" {
+			return sandboxImageID == expectedImageID
+		}
+	}
+	return sb.Image == expectedImage
+}
+
 // ReconcileSandboxes checks all existing sandboxes and recreates any that
 // are using an outdated image. This should be called on server startup.
 func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
@@ -510,12 +543,17 @@ func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
 		return nil
 	}
 
-	providerForImageOps := s.provider
-	if defaultProviderGetter, ok := s.provider.(interface{ DefaultProvider() sandbox.Provider }); ok {
-		if defaultProvider := defaultProviderGetter.DefaultProvider(); defaultProvider != nil {
-			providerForImageOps = defaultProvider
-		}
+	providerForImageOps := providerForSandboxImageOps(s.provider)
+	if err := waitForSandboxImageOpsReady(ctx, providerForImageOps); err != nil {
+		return fmt.Errorf("failed to wait for sandbox provider readiness: %w", err)
 	}
+
+	sandboxes, err := s.provider.List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list sandboxes: %w", err)
+	}
+
+	log.Printf("Reconciling %d sandboxes (expected image: %s)", len(sandboxes), expectedImage)
 
 	expectedImageID := ""
 	if imageIDProvider, ok := providerForImageOps.(sandbox.CurrentImageIDProvider); ok {
@@ -527,24 +565,11 @@ func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
 		}
 	}
 
-	sandboxes, err := s.provider.List(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list sandboxes: %w", err)
-	}
-
-	log.Printf("Reconciling %d sandboxes (expected image: %s)", len(sandboxes), expectedImage)
-
 	for _, sb := range sandboxes {
-		usesExpectedImage := sb.Image == expectedImage
-		if expectedImageID != "" {
-			if sandboxImageID := sb.Metadata[sandbox.MetadataImageID]; sandboxImageID != "" {
-				usesExpectedImage = sandboxImageID == expectedImageID
-			} else {
-				log.Printf("Sandbox for session %s is missing image ID metadata, falling back to image reference comparison", sb.SessionID)
-			}
+		if expectedImageID != "" && sb.Metadata[sandbox.MetadataImageID] == "" {
+			log.Printf("Sandbox for session %s is missing image ID metadata, falling back to image reference comparison", sb.SessionID)
 		}
-
-		if usesExpectedImage {
+		if sandboxUsesExpectedImage(sb, expectedImage, expectedImageID) {
 			log.Printf("Sandbox for session %s uses correct image", sb.SessionID)
 			continue
 		}

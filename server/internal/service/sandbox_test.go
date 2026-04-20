@@ -250,6 +250,67 @@ func (p *imageIDAwareReconcileProvider) RemoveProject(_ context.Context, _ strin
 	return nil
 }
 
+func TestSandboxUsesExpectedImage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		sb              *sandbox.Sandbox
+		expectedImage   string
+		expectedImageID string
+		want            bool
+	}{
+		{
+			name: "matches by image id",
+			sb: &sandbox.Sandbox{
+				Image: "ghcr.io/obot-platform/discobot:alpha86",
+				Metadata: map[string]string{
+					sandbox.MetadataImageID: "sha256:match",
+				},
+			},
+			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImageID: "sha256:match",
+			want:            true,
+		},
+		{
+			name: "mismatches by image id",
+			sb: &sandbox.Sandbox{
+				Image: "ghcr.io/obot-platform/discobot:alpha86",
+				Metadata: map[string]string{
+					sandbox.MetadataImageID: "sha256:old",
+				},
+			},
+			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImageID: "sha256:new",
+			want:            false,
+		},
+		{
+			name: "falls back to image reference when metadata missing",
+			sb: &sandbox.Sandbox{
+				Image:    "ghcr.io/obot-platform/discobot:alpha90",
+				Metadata: map[string]string{},
+			},
+			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImageID: "sha256:new",
+			want:            true,
+		},
+		{
+			name:          "nil sandbox never matches",
+			sb:            nil,
+			expectedImage: "ghcr.io/obot-platform/discobot:alpha90",
+			want:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sandboxUsesExpectedImage(tt.sb, tt.expectedImage, tt.expectedImageID); got != tt.want {
+				t.Fatalf("sandboxUsesExpectedImage() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 type healthAwareProvider struct {
 	*mock.Provider
 	mu               sync.Mutex

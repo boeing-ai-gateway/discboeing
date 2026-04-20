@@ -87,6 +87,11 @@ The `ready` ⇄ `running` transition happens automatically:
 - When a chat request starts, status moves to `running`
 - When the chat completes, status returns to `ready`
 - On server startup, sessions in `running` state are reconciled with the agent API
+- On server startup, VM-backed sandboxes are re-enumerated from persisted
+  project disks before image reconciliation runs, so stale containers are
+  still visible after a restart
+- If a stopped sandbox was built from an older runtime image, Discobot removes
+  it and recreates it on demand instead of restarting the stale container
 
 ### Agent
 
