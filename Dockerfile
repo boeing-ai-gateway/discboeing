@@ -165,15 +165,17 @@ RUN su - discobot -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs 
 
 # Configure npm global directory in /home/discobot/.npm-global
 # This allows npm install -g to work without root for the discobot user
+# Also add ~/.local/bin so uv-installed Python executables are on PATH by default
 # Environment is set system-wide via /etc/profile.d so both root and discobot can use it
-RUN mkdir -p /home/discobot/.npm-global/bin \
-    && chown -R discobot:discobot /home/discobot/.npm-global \
+RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
+    && chown -R discobot:discobot /home/discobot/.npm-global /home/discobot/.local \
     && printf '%s\n' \
-    '# npm global packages directory' \
+    '# User-local executables and npm global packages' \
     'export NPM_CONFIG_PREFIX="/home/discobot/.npm-global"' \
-    'export PATH="/home/discobot/.npm-global/bin:$PATH"' \
+    'export PATH="/home/discobot/.local/bin:/home/discobot/.npm-global/bin:$PATH"' \
     > /etc/profile.d/npm-global.sh \
     && chmod 644 /etc/profile.d/npm-global.sh
+
 
 # Create directory structure per filesystem design
 # /.data      - persistent storage (Docker volume or VZ disk)
@@ -182,14 +184,14 @@ RUN mkdir -p /home/discobot/.npm-global/bin \
 RUN mkdir -p /.data /.workspace /opt/discobot/bin \
     && chown discobot:discobot /.data
 
-# Add discobot binaries and npm global bin to PATH
+# Add discobot binaries, user-local bin, and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
 # Set PNPM_HOME to use persistent storage for pnpm cache/store
 # Add Rust cargo bin for rustc and cargo
 # Claude CLI is installed to /usr/local/bin (already in default PATH)
 ENV NPM_CONFIG_PREFIX="/home/discobot/.npm-global"
 ENV PNPM_HOME="/.data/pnpm"
-ENV PATH="/home/discobot/.cargo/bin:/usr/local/go/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
+ENV PATH="/home/discobot/.cargo/bin:/usr/local/go/bin:/home/discobot/.local/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
 ENV WORKSPACE_PATH=/home/discobot/workspace
 
 WORKDIR /workspace
