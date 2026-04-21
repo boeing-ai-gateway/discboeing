@@ -738,6 +738,8 @@ func TestOnTurnComplete_StartsNextQueuedPromptAfterError(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for queued prompt to start after error")
 	}
+
+	waitForCompletionDone(t, cm, "thread-1")
 }
 
 func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
