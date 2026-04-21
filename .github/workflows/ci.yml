@@ -20,7 +20,7 @@ jobs:
             name: Linux arm64
           - runner: depot-macos-latest
             name: macOS arm64
-          - runner: depot-windows-latest
+          - runner: depot-windows-2025-16
             name: Windows amd64
           - runner: windows-11-arm
             name: Windows arm64
