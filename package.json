@@ -56,7 +56,7 @@
     "refresh-models": "./scripts/refresh-models-data.sh"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.0",
+    "@tauri-apps/cli": "^2.10.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "shellcheck": "^4.1.0",
