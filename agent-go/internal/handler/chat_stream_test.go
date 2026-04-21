@@ -740,6 +740,82 @@ func TestOnTurnComplete_StartsNextQueuedPromptAfterError(t *testing.T) {
 	}
 }
 
+func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
+	type resumeCall struct {
+		threadID string
+		req      agent.PromptRequest
+	}
+
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{
+		Name:         "Thread 1",
+		NameSource:   thread.ThreadNameSourceUser,
+		ActiveLeafID: "leaf-active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+		Message: message.UIMessage{
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "queued follow-up"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	resumeCh := make(chan resumeCall, 1)
+	ma := &streamTestAgent{
+		hasInterruptedTurnFn: func(threadID string) (bool, error) {
+			if threadID != "thread-1" {
+				t.Fatalf("expected thread-1, got %s", threadID)
+			}
+			return true, nil
+		},
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			t.Fatal("startNextQueuedPrompt should resume interrupted turns")
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
+			resumeCh <- resumeCall{threadID: threadID, req: req}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+
+	h.startNextQueuedPrompt("thread-1")
+
+	select {
+	case call := <-resumeCh:
+		if call.threadID != "thread-1" {
+			t.Fatalf("expected resume for thread-1, got %q", call.threadID)
+		}
+		if call.req.LeafID != "leaf-active" {
+			t.Fatalf("expected queued prompt leaf %q, got %#v", "leaf-active", call.req)
+		}
+		part, ok := call.req.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "queued follow-up" {
+			t.Fatalf("expected queued prompt text %q, got %#v", "queued follow-up", call.req.UserParts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for queued prompt resume")
+	}
+
+	cfg, err := store.LoadConfig("thread-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.PromptQueue) != 0 {
+		t.Fatalf("expected empty prompt queue after resume, got %#v", cfg.PromptQueue)
+	}
+
+	waitForCompletionDone(t, cm, "thread-1")
+}
+
 func TestPostChat_ReturnsPendingQuestionConflict(t *testing.T) {
 	ma := &streamTestAgent{
 		pendingQuestionFn: func(threadID string) (*agent.PendingQuestion, error) {
@@ -908,6 +984,22 @@ func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	stepFile, err := store.CreateStepFile(threadID, "turn-interrupted", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, chunk := range []message.ProviderMessageChunk{
+		message.StreamStartChunk{},
+		message.TextStartChunk{ID: "text-interrupted"},
+		message.TextDeltaChunk{ID: "text-interrupted", Delta: "partial"},
+	} {
+		if err := store.AppendChunk(stepFile, chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := stepFile.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	body, err := json.Marshal(api.ChatRequest{Messages: []message.UIMessage{
 		{
@@ -958,9 +1050,26 @@ func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
 	if len(messages) < 3 {
 		t.Fatalf("expected persisted history after resumed prompt, got %#v", messages)
 	}
+	foundPartial := false
 	foundContinue := false
 	foundAssistant := false
-	for _, msg := range messages {
+	for i, msg := range messages {
+		if msg.Role == "assistant" && len(msg.Parts) > 0 {
+			if part, ok := msg.Parts[0].(message.UITextPart); ok && part.Text == "partial" {
+				foundPartial = true
+				if i+1 >= len(messages) {
+					t.Fatalf("expected follow-up user message after partial assistant, got %#v", messages)
+				}
+				next := messages[i+1]
+				if next.Role != "user" {
+					t.Fatalf("expected partial assistant to be followed by user message, got %#v", messages)
+				}
+				nextPart, ok := next.Parts[0].(message.UITextPart)
+				if !ok || nextPart.Text != "continue" {
+					t.Fatalf("expected partial assistant to be followed by continue user message, got %#v", messages)
+				}
+			}
+		}
 		if msg.Role == "user" && len(msg.Parts) > 0 {
 			if part, ok := msg.Parts[0].(message.UITextPart); ok && part.Text == "continue" {
 				foundContinue = true
@@ -970,16 +1079,16 @@ func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
 			foundAssistant = true
 		}
 	}
-	if !foundContinue || !foundAssistant {
-		t.Fatalf("expected continued user prompt and assistant response in history, got %#v", messages)
+	if !foundPartial || !foundContinue || !foundAssistant {
+		t.Fatalf("expected partial assistant, continued user prompt, and assistant response in history, got %#v", messages)
 	}
 
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
-	if len(provider.requests) != 2 {
-		t.Fatalf("expected close+prompt provider requests, got %d", len(provider.requests))
+	if len(provider.requests) != 1 {
+		t.Fatalf("expected only the new prompt provider request after local partial recovery, got %d", len(provider.requests))
 	}
-	lastReq := provider.requests[len(provider.requests)-1]
+	lastReq := provider.requests[0]
 	if len(lastReq.Messages) == 0 {
 		t.Fatalf("expected resumed prompt request messages, got %#v", lastReq)
 	}

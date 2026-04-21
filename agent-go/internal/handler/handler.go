@@ -169,7 +169,7 @@ func (h *Handler) startNextQueuedPrompt(threadID string) {
 		Reasoning: queuedPrompt.Reasoning,
 		Mode:      queuedPrompt.Mode,
 	}
-	if _, err := h.completions.Chat(threadID, req); err != nil {
+	if _, err := h.startPromptRequest(threadID, req); err != nil {
 		if _, restoreErr := store.PrependQueuedPrompt(threadID, *queuedPrompt); restoreErr != nil {
 			log.Printf("queue: failed to restore queued prompt for %s: %v", threadID, restoreErr)
 		}
@@ -199,10 +199,21 @@ func hookFailurePromptRequest(result hooks.FileHookEvalResult) agent.PromptReque
 	}
 }
 
+func (h *Handler) startPromptRequest(threadID string, req agent.PromptRequest) (string, error) {
+	interrupted, err := h.completions.HasInterruptedTurn(threadID)
+	if err != nil {
+		return "", err
+	}
+	if interrupted {
+		return h.completions.Resume(threadID, req)
+	}
+	return h.completions.Chat(threadID, req)
+}
+
 // startHookFailureReprompt sends a hook-failure follow-up message to the LLM.
 func (h *Handler) startHookFailureReprompt(threadID string, result hooks.FileHookEvalResult) error {
 	req := hookFailurePromptRequest(result)
-	_, err := h.completions.Chat(threadID, req)
+	_, err := h.startPromptRequest(threadID, req)
 	return err
 }
 

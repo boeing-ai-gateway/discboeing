@@ -218,7 +218,28 @@ func ResumeTurn(
 			if existingResult == nil {
 				streamComplete, recovered := recoverStreamingStep(store, threadID, turnID, turnState)
 				if recovered && !streamComplete {
-					if err := finalizeTurnState(store, threadID, turnState); err != nil {
+					stepResult, err := store.LoadStepResult(threadID, turnID, turnState.CurrentStep)
+					if err != nil {
+						yield(nil, fmt.Errorf("load recovered step result: %w", err))
+						return
+					}
+					if stepResult == nil {
+						yield(nil, fmt.Errorf("load recovered step result: step result missing"))
+						return
+					}
+					if _, err := saveAssistantStepMessage(
+						store,
+						threadID,
+						turnID,
+						turnState,
+						turnState.Config,
+						turnState.CurrentStep,
+						stepResult,
+					); err != nil {
+						yield(nil, err)
+						return
+					}
+					if err := completeTurn(store, threadID, turnState); err != nil {
 						yield(nil, fmt.Errorf("save finished turn state: %w", err))
 						return
 					}
@@ -226,7 +247,6 @@ func ResumeTurn(
 						FinishReason:    "stop",
 						MessageMetadata: buildMessageMetadata(turnState.Config, turnState.StartedAt, turnState.FinishedAt),
 					}, nil)
-					_ = store.DeleteTurnState(threadID)
 					return
 				}
 			}
@@ -1219,6 +1239,9 @@ func saveAssistantStepMessage(
 		return message.Message{}, fmt.Errorf("save assistant message: %w", err)
 	}
 	turnState.LeafMsgID = assistantMsgID
+	if stepIndex == 0 && turnState.AssistantMsgID == "" {
+		turnState.AssistantMsgID = assistantMsgID
+	}
 	stepResult.AssistantMessageID = assistantMsgID
 	if err := store.SaveStepResult(threadID, turnID, stepIndex, *stepResult); err != nil {
 		return message.Message{}, fmt.Errorf("save step result assistant message id: %w", err)

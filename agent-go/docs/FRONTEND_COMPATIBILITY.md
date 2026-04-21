@@ -24,7 +24,7 @@ The agent-go API uses different route naming than the original TypeScript agent-
 3. **History replay happens on the SSE endpoint** — `GET /chat/stream` replays persisted messages and then continues with live deltas
 4. **Chat SSE is long-lived** — `GET /chat/stream` no longer closes after a single completion; it stays connected and emits `ping` events while idle, without a terminal `done` event
 5. **Sessions stay `ready` while chat streams** — completion activity is no longer reflected as a session-level `running` state
-6. **Interrupted-turn recovery is stream-anchored** — resume streams now always start with either `start` or `data-thread-resume`, and a new user prompt abandons the interrupted turn before starting a fresh completion
+6. **Interrupted-turn recovery is stream-anchored** — resume streams now always start with either `start` or `data-thread-resume`, a new user prompt closes the interrupted turn before starting a fresh completion, preserves any recoverable partial assistant content in history, and queued follow-ups such as hook-failure re-prompts resume interrupted turns instead of surfacing a raw `interrupted turn requires resume` error
 
 ## Server Changes Needed
 

@@ -75,6 +75,73 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 	}
 }
 
+func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
+	type resumeCall struct {
+		threadID string
+		req      agent.PromptRequest
+	}
+
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+
+	resumeCh := make(chan resumeCall, 1)
+	ma := &streamTestAgent{
+		hasInterruptedTurnFn: func(threadID string) (bool, error) {
+			if threadID != "thread-1" {
+				t.Fatalf("threadID = %q, want %q", threadID, "thread-1")
+			}
+			return true, nil
+		},
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			t.Fatal("startHookFailureReprompt should resume interrupted turns")
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
+			resumeCh <- resumeCall{threadID: threadID, req: req}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	h := New("", cm, nil, nil, defaultAgent)
+
+	err := h.startHookFailureReprompt("thread-1", hooks.FileHookEvalResult{
+		ShouldReprompt: true,
+		LLMMessage:     "### Hook failed: Go Check",
+		HookFailure: &hooks.HookFailureMessageMetadata{
+			Kind:     "hook-failure",
+			HookName: "Go Check",
+			ExitCode: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("startHookFailureReprompt() failed: %v", err)
+	}
+
+	select {
+	case call := <-resumeCh:
+		if call.threadID != "thread-1" {
+			t.Fatalf("threadID = %q, want %q", call.threadID, "thread-1")
+		}
+		if len(call.req.UserParts) != 1 {
+			t.Fatalf("expected 1 user part, got %d", len(call.req.UserParts))
+		}
+		part, ok := call.req.UserParts[0].(message.UITextPart)
+		if !ok {
+			t.Fatalf("expected UITextPart, got %T", call.req.UserParts[0])
+		}
+		if part.Text != "### Hook failed: Go Check" {
+			t.Fatalf("part text = %q, want %q", part.Text, "### Hook failed: Go Check")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected hook failure resume request")
+	}
+
+	waitForCompletionDone(t, cm, "thread-1")
+}
+
 func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	if err := store.CreateThread("thread-1"); err != nil {

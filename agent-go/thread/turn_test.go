@@ -1033,6 +1033,28 @@ func TestResumeTurn_CrashedAfterStreamingNoTools(t *testing.T) {
 	if state != nil {
 		t.Error("turn.json should be deleted after resumed turn completes")
 	}
+
+	leafID, err := store.FindLeaf(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.BuildHistory(threadID, leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("expected user and recovered assistant messages, got %#v", history)
+	}
+	if history[0].Role != "user" {
+		t.Fatalf("expected first message to be user, got %#v", history)
+	}
+	if history[1].Role != "assistant" {
+		t.Fatalf("expected second message to be assistant, got %#v", history)
+	}
+	part, ok := history[1].Parts[0].(message.TextPart)
+	if !ok || part.Text != "hello!" {
+		t.Fatalf("expected recovered assistant text %q, got %#v", "hello!", history[1].Parts)
+	}
 }
 
 // TestResumeTurn_CrashedAfterCompletionBeforeToolExecution tests scenario #2:
