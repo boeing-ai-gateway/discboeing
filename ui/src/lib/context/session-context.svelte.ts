@@ -25,8 +25,8 @@ function createSessionContext(
 	sessionId: string,
 ): SessionContextValue {
 	let loaded = $state(false);
-	const initialSelectedThreadId = app.sessions.takeRequestedThreadId(sessionId);
-	let selectedThreadId = $state<string | null>(initialSelectedThreadId);
+	let requestedThreadId = app.sessions.takeRequestedThreadId(sessionId);
+	let selectedThreadId = $state<string | null>(null);
 
 	const current = $derived.by(() => {
 		return app.sessions.peek(sessionId);
@@ -99,6 +99,10 @@ function createSessionContext(
 		}
 		if (!loaded) {
 			await bestEffortLoader.run("threads", () => threads.load());
+			if (requestedThreadId !== null) {
+				threads.select(requestedThreadId);
+				requestedThreadId = null;
+			}
 			await Promise.all([
 				bestEffortLoader.run("files", () => filesDomain.refresh()),
 				bestEffortLoader.run("services", () => services.refresh()),

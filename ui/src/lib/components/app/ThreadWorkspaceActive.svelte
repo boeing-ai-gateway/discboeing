@@ -24,6 +24,9 @@
 	onMount(() => {
 		void thread.load();
 		return () => {
+			if (session.threadContexts.get(thread.threadId) === thread) {
+				session.threadContexts.delete(thread.threadId);
+			}
 			thread.dispose();
 		};
 	});
