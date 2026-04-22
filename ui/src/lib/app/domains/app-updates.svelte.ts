@@ -1,10 +1,11 @@
 import type { AppUpdates, UpdateStatus } from "$lib/app/app-context.types";
 import { isTauriShell } from "$lib/environment";
 import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
+import { env as publicEnv } from "$env/dynamic/public";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const GITHUB_RELEASES_API_URL =
-	import.meta.env.PUBLIC_DISCOBOT_RELEASES_API_URL ?? "";
+	publicEnv.PUBLIC_DISCOBOT_RELEASES_API_URL ?? "";
 
 type DownloadEvent =
 	| {

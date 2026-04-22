@@ -1,17 +1,18 @@
 import * as Sentry from "@sentry/sveltekit";
+import { env as publicEnv } from "$env/dynamic/public";
 
 export const init = () => {
 	const envSummary = Object.fromEntries(
-		Object.entries(import.meta.env).sort(([left], [right]) =>
+		Object.entries(publicEnv).sort(([left], [right]) =>
 			left.localeCompare(right),
 		),
 	);
-	const dsn = import.meta.env.PUBLIC_SENTRY_DSN;
-	const release = import.meta.env.PUBLIC_SENTRY_RELEASE;
-	const dist = import.meta.env.PUBLIC_SENTRY_DIST;
-	const gitCommit = import.meta.env.PUBLIC_SENTRY_GIT_COMMIT;
-	const gitTag = import.meta.env.PUBLIC_SENTRY_GIT_TAG;
-	const appVersion = import.meta.env.PUBLIC_SENTRY_APP_VERSION;
+	const dsn = publicEnv.PUBLIC_SENTRY_DSN;
+	const release = publicEnv.PUBLIC_SENTRY_RELEASE;
+	const dist = publicEnv.PUBLIC_SENTRY_DIST;
+	const gitCommit = publicEnv.PUBLIC_SENTRY_GIT_COMMIT;
+	const gitTag = publicEnv.PUBLIC_SENTRY_GIT_TAG;
+	const appVersion = publicEnv.PUBLIC_SENTRY_APP_VERSION;
 	const sentryEnabled = Boolean(dsn);
 
 	const tags = {
