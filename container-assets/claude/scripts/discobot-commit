@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#---
+# name: discobot-commit
+# description: Commit session changes back to the parent workspace
+# discobot-ui: true
+# discobot-label: Commit
+# discobot-icon: git-commit
+# discobot-group: Git
+# discobot-order: 10
+#---
+set -euo pipefail
+
+cd /home/discobot/workspace
+
+print_section() {
+	local title=$1
+	shift
+	echo "## ${title}"
+	echo '```text'
+	if "$@"; then
+		:
+	else
+		local status=$?
+		echo "(command exited with status ${status})"
+	fi
+	echo '```'
+	echo
+}
+
+head_sha=$(git rev-parse HEAD)
+merge_base=$(git merge-base HEAD '@{upstream}' 2>/dev/null || printf '%s' "$head_sha")
+branch_name=$(git branch --show-current 2>/dev/null || true)
+
+cat <<EOF
+Discobot commit context
+
+This slash command already inspected the current sandbox repository for you.
+Your job now is to prepare the commit series that should be pulled back into the
+parent workspace, then call RequestCommitPull.
+
+Use the information below instead of re-running the same initial inspection
+commands unless something changes while you work.
+
+Current branch: ${branch_name:-detached HEAD}
+Current HEAD: ${head_sha}
+Suggested current series base: ${merge_base}
+
+If you create new commit(s) directly on top of the current HEAD, the most likely
+baseCommit for RequestCommitPull is ${head_sha}. If you keep or amend existing
+local commits, verify the true base commit of the prepared series before calling
+RequestCommitPull.
+
+After your commit series is ready:
+- ensure the worktree is in the state you intend to transfer
+- call RequestCommitPull with the exact base commit for the prepared series
+- include any important notes for the user in the tool call
+
+EOF
+
+print_section "git status --short --branch" git status --short --branch
+print_section "git log --oneline -5" git log --oneline -5
+print_section "git diff --stat" git diff --stat
+print_section "git diff --cached --stat" git diff --cached --stat

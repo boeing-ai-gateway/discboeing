@@ -58,7 +58,7 @@ This ensures:
 - First container start creates the persistent home directory
 - Subsequent starts preserve persisted workspace and home state
 - New image-provided files are added without overwriting existing files
-- Bundled `.discobot/commands/` files can still be refreshed explicitly after setup
+- Bundled `.discobot/scripts/` files can still be refreshed explicitly after setup, and migrated legacy bundled command files are removed
 - File permissions and ownership are preserved
 
 ### Workspace Cloning

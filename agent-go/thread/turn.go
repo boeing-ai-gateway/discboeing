@@ -19,12 +19,24 @@ import (
 	"github.com/obot-platform/discobot/modelsdev"
 )
 
+// ScriptExecutionMetadata stores execution details for a slash-command script.
+type ScriptExecutionMetadata struct {
+	ScriptName    string `json:"scriptName,omitempty"`
+	ScriptPath    string `json:"scriptPath,omitempty"`
+	ExitCode      int    `json:"exitCode,omitempty"`
+	Success       bool   `json:"success,omitempty"`
+	Stdout        string `json:"stdout,omitempty"`
+	Stderr        string `json:"stderr,omitempty"`
+	SuppressedLLM bool   `json:"suppressedLlm,omitempty"`
+}
+
 // UserSlashCommandMetadata stores UI-only metadata about a slash command that
 // initiated the user message.
 type UserSlashCommandMetadata struct {
-	Name string            `json:"name,omitempty"`
-	Kind agent.CommandKind `json:"kind,omitempty"`
-	Text string            `json:"text,omitempty"`
+	Name   string                   `json:"name,omitempty"`
+	Kind   agent.CommandKind        `json:"kind,omitempty"`
+	Text   string                   `json:"text,omitempty"`
+	Script *ScriptExecutionMetadata `json:"script,omitempty"`
 }
 
 // TurnConfig holds the parameters for a single turn of the agent loop.

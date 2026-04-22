@@ -52,8 +52,17 @@ export interface QueuedPrompt {
 
 export type ChatSlashCommandMetadata = {
 	name?: string;
-	kind?: "skill" | "command";
+	kind?: "skill" | "command" | "script";
 	text?: string;
+	script?: {
+		scriptName?: string;
+		scriptPath?: string;
+		exitCode?: number;
+		success?: boolean;
+		stdout?: string;
+		stderr?: string;
+		suppressedLlm?: boolean;
+	};
 };
 
 export type ChatMessageMetadata = {

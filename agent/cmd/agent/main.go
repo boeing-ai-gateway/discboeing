@@ -54,9 +54,9 @@ const (
 	mountHome    = "/home/discobot" // Where overlayfs mounts
 	symlinkPath  = "/workspace"     // Symlink to /home/discobot/workspace
 
-	defaultCommitCommandRelPath = ".discobot/commands/discobot-commit.md"
-	remoteCommitCommandRelPath  = ".discobot/commands/discobot-commit-remote.md"
-	commandsDirRelPath          = ".discobot/commands"
+	defaultCommitScriptRelPath = ".discobot/scripts/discobot-commit"
+	remoteCommitScriptRelPath  = ".discobot/scripts/discobot-commit-remote"
+	scriptsDirRelPath          = ".discobot/scripts"
 )
 
 func main() {
@@ -133,11 +133,14 @@ func runSetup() error {
 	if err := setupBaseHome(userInfo); err != nil {
 		return fmt.Errorf("base home setup failed: %w", err)
 	}
-	if err := refreshBundledCommands(mountHome, baseHomeDir, userInfo); err != nil {
-		return fmt.Errorf("command refresh failed: %w", err)
+	if err := refreshBundledScripts(mountHome, baseHomeDir, userInfo); err != nil {
+		return fmt.Errorf("script refresh failed: %w", err)
+	}
+	if err := removeLegacyBundledCommands(baseHomeDir); err != nil {
+		return fmt.Errorf("legacy command cleanup failed: %w", err)
 	}
 	if err := installCommitCommandVariant(baseHomeDir, isGitURL(workspaceSource), userInfo); err != nil {
-		return fmt.Errorf("commit command setup failed: %w", err)
+		return fmt.Errorf("commit script setup failed: %w", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
 
@@ -634,9 +637,9 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 	})
 }
 
-func refreshBundledCommands(srcHomeDir, dstHomeDir string, u *userInfo) error {
-	srcDir := filepath.Join(srcHomeDir, commandsDirRelPath)
-	if err := refreshBundledCommandsDir(srcDir, filepath.Join(dstHomeDir, commandsDirRelPath), u); err != nil {
+func refreshBundledScripts(srcHomeDir, dstHomeDir string, u *userInfo) error {
+	srcDir := filepath.Join(srcHomeDir, scriptsDirRelPath)
+	if err := refreshBundledScriptsDir(srcDir, filepath.Join(dstHomeDir, scriptsDirRelPath), u); err != nil {
 		return err
 	}
 
@@ -648,12 +651,12 @@ func refreshBundledCommands(srcHomeDir, dstHomeDir string, u *userInfo) error {
 	return nil
 }
 
-func refreshBundledCommandsDir(srcDir, dstDir string, u *userInfo) error {
+func refreshBundledScriptsDir(srcDir, dstDir string, u *userInfo) error {
 	if _, err := os.Stat(srcDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("stat bundled commands dir: %w", err)
+		return fmt.Errorf("stat bundled scripts dir: %w", err)
 	}
 
 	return filepath.Walk(srcDir, func(srcPath string, info os.FileInfo, err error) error {
@@ -711,27 +714,45 @@ func refreshBundledCommandsDir(srcDir, dstDir string, u *userInfo) error {
 	})
 }
 
+func removeLegacyBundledCommands(homeDir string) error {
+	for _, relPath := range []string{
+		".discobot/commands/discobot-commit.md",
+		".discobot/commands/discobot-commit-remote.md",
+		".discobot/commands/discobot-rebase.md",
+	} {
+		if err := os.Remove(filepath.Join(homeDir, relPath)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 func installCommitCommandVariant(homeDir string, useRemoteVariant bool, u *userInfo) error {
-	commandPath := filepath.Join(homeDir, defaultCommitCommandRelPath)
-	sourcePath := commandPath
+	scriptPath := filepath.Join(homeDir, defaultCommitScriptRelPath)
+	remoteVariantPath := filepath.Join(homeDir, remoteCommitScriptRelPath)
+	sourcePath := scriptPath
 	if useRemoteVariant {
-		sourcePath = filepath.Join(homeDir, remoteCommitCommandRelPath)
+		sourcePath = remoteVariantPath
 	}
 
 	if _, err := os.Stat(sourcePath); err != nil {
-		return fmt.Errorf("commit command variant %s not found: %w", sourcePath, err)
+		return fmt.Errorf("commit script variant %s not found: %w", sourcePath, err)
 	}
 
-	if sourcePath != commandPath {
-		if err := copyFile(sourcePath, commandPath); err != nil {
-			return fmt.Errorf("copy commit command variant: %w", err)
+	if sourcePath != scriptPath {
+		if err := copyFile(sourcePath, scriptPath); err != nil {
+			return fmt.Errorf("copy commit script variant: %w", err)
 		}
 	}
 
 	if u != nil {
-		if err := os.Chown(commandPath, u.uid, u.gid); err != nil {
-			return fmt.Errorf("chown commit command variant: %w", err)
+		if err := os.Chown(scriptPath, u.uid, u.gid); err != nil {
+			return fmt.Errorf("chown commit script variant: %w", err)
 		}
+	}
+
+	if err := os.Remove(remoteVariantPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove remote commit script variant: %w", err)
 	}
 
 	return nil

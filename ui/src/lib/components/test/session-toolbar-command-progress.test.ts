@@ -19,15 +19,15 @@ const SESSION_CONTEXT = path.resolve(
 );
 const COMMIT_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/commands/discobot-commit.md",
+	"../../../../../container-assets/claude/scripts/discobot-commit",
 );
 const COMMIT_REMOTE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/commands/discobot-commit-remote.md",
+	"../../../../../container-assets/claude/scripts/discobot-commit-remote",
 );
 const REBASE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/commands/discobot-rebase.md",
+	"../../../../../container-assets/claude/scripts/discobot-rebase",
 );
 
 function readSessionToolbarSource() {
@@ -99,7 +99,7 @@ test("session toolbar normalizes empty activeCommand to no running command", () 
 	assert.match(source, /return trimmed\.length > 0 \? trimmed : null;/);
 });
 
-test("commit and rebase command markdown specifies the expected lucide icons and Git group", () => {
+test("commit and rebase bundled scripts specify the expected lucide icons and Git group", () => {
 	const commit = readCommandSource(COMMIT_COMMAND);
 	const commitRemote = readCommandSource(COMMIT_REMOTE_COMMAND);
 	const rebase = readCommandSource(REBASE_COMMAND);

@@ -81,7 +81,8 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 
 	addFrom := func(list []SkillConfig, listWarnings []string, err error) error {
 		if err != nil {
-			return err
+			warnings = append(warnings, err.Error())
+			return nil
 		}
 		warnings = append(warnings, listWarnings...)
 		for _, s := range list {
@@ -618,7 +619,45 @@ func FormatSkillsReminder(skills []SkillConfig) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\nWhen users reference a \"slash command\" or \"/<something>\" (e.g., \"/commit\", \"/review-pr\"), they are referring to a skill. Use the Skill tool to invoke it.")
+	b.WriteString("\nWhen users reference a slash command or `/<something>`, it may refer to one of these skills or commands. Use the Skill tool for the entries listed here.")
+	b.WriteString("\n</system-reminder>")
+	return b.String()
+}
+
+// FormatSkillLikeReminder formats the skill-like commands available through the
+// Skill tool. This intentionally presents markdown skills, legacy commands, and
+// visible executable scripts as one unified capability set to the model.
+func FormatSkillLikeReminder(skills []SkillConfig, scripts []ScriptConfig) string {
+	type item struct {
+		name        string
+		description string
+	}
+
+	items := make([]item, 0, len(skills)+len(scripts))
+	for _, skill := range skills {
+		items = append(items, item{name: skill.Name, description: skill.Description})
+	}
+	for _, script := range scripts {
+		if !script.Visible {
+			continue
+		}
+		items = append(items, item{name: script.Name, description: script.Description})
+	}
+	if len(items) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("<system-reminder>\n")
+	b.WriteString("The following skills are available for use with the Skill tool:\n\n")
+	for _, item := range items {
+		fmt.Fprintf(&b, "- %s", item.name)
+		if item.description != "" {
+			fmt.Fprintf(&b, ": %s", item.description)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\nWhen users reference a slash command or `/<something>`, it may refer to one of these skills or commands. Use the Skill tool for the entries listed here.")
 	b.WriteString("\n</system-reminder>")
 	return b.String()
 }
@@ -633,6 +672,27 @@ func FormatSkillDiscoveryWarningsReminder(warnings []string) string {
 	var b strings.Builder
 	b.WriteString("<system-reminder>\n")
 	b.WriteString("Some skills or slash commands could not be loaded. Do not try to use them. Tell the user that these skill files need to be fixed:\n\n")
+	for _, warning := range warnings {
+		fmt.Fprintf(&b, "- %s\n", warning)
+	}
+	b.WriteString("\nIf the user asks about one of these skills, explain that it is malformed and include the error above.\n")
+	b.WriteString("</system-reminder>")
+	return b.String()
+}
+
+// FormatSkillLikeDiscoveryWarningsReminder formats non-fatal loading warnings
+// for any skill-like slash command source surfaced through the Skill tool.
+func FormatSkillLikeDiscoveryWarningsReminder(skillWarnings, scriptWarnings []string) string {
+	warnings := make([]string, 0, len(skillWarnings)+len(scriptWarnings))
+	warnings = append(warnings, skillWarnings...)
+	warnings = append(warnings, scriptWarnings...)
+	if len(warnings) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("<system-reminder>\n")
+	b.WriteString("Some skills or slash commands could not be loaded. Do not try to use them. Tell the user that these files need to be fixed:\n\n")
 	for _, warning := range warnings {
 		fmt.Fprintf(&b, "- %s\n", warning)
 	}

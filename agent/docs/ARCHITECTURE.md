@@ -240,7 +240,7 @@ Handles initial home directory setup:
 - Preserves file permissions and ownership
 - Recursive copy with symlink support
 - Later starts only sync in missing image-provided files so persisted workspace data is preserved
-- Bundled files under `.discobot/commands/` are refreshed from the image explicitly
+- Bundled files under `.discobot/scripts/` are refreshed from the image explicitly, and migrated legacy bundled command files are removed
 
 ### Workspace Manager
 

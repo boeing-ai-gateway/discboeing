@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#---
+# name: discobot-commit
+# description: Commit session changes by pushing a branch and opening a pull request upstream
+# discobot-ui: true
+# discobot-label: Commit
+# discobot-icon: git-commit
+# discobot-group: Git
+# discobot-order: 10
+# discobot-credential-request:
+#   - env-var: GH_TOKEN
+#     name: GitHub credential
+#     justification: Authenticate git push and pull request commands for this commit flow when needed.
+#     approved-uses:
+#       - description: authenticate GitHub CLI for git push and pull request operations
+#---
+set -euo pipefail
+
+cd /home/discobot/workspace
+
+print_section() {
+	local title=$1
+	shift
+	echo "## ${title}"
+	echo '```text'
+	if "$@"; then
+		:
+	else
+		local status=$?
+		echo "(command exited with status ${status})"
+	fi
+	echo '```'
+	echo
+}
+
+branch_name=$(git branch --show-current 2>/dev/null || true)
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+default_remote=$(git remote 2>/dev/null | head -n 1 || true)
+remote_url=$(git remote get-url "${default_remote}" 2>/dev/null || true)
+provider="other"
+if [[ "$remote_url" == *github.com* ]]; then
+	provider="github"
+fi
+
+gh_status="gh not found"
+if command -v gh >/dev/null 2>&1; then
+	gh_status=$(gh --version 2>/dev/null | head -n 1 || printf 'gh installed')
+fi
+
+cat <<EOF
+Discobot remote commit context
+
+This slash command already inspected the sandbox repository and remote setup for
+you. Your job now is to prepare the commit series that should go upstream,
+push an appropriate branch, and open or update a pull request.
+
+Use the information below instead of re-running the same initial inspection
+commands unless the repo state changes while you work.
+
+Current branch: ${branch_name:-detached HEAD}
+Tracked upstream: ${upstream:-none}
+Primary remote: ${default_remote:-none}
+Primary remote URL: ${remote_url:-unknown}
+Detected provider: ${provider}
+GitHub CLI: ${gh_status}
+
+Guidance:
+- do not push directly to the default branch unless the user explicitly asked
+- if this repository is on GitHub, prefer gh for auth checks, push setup, and
+  pull request creation
+- only request credentials when the next concrete git or gh command requires
+  them
+- do not use RequestCommitPull for this remote flow
+
+EOF
+
+print_section "git status --short --branch" git status --short --branch
+print_section "git remote -v" git remote -v
+print_section "git log --oneline -5" git log --oneline -5
+print_section "git diff --stat" git diff --stat
+print_section "git diff --cached --stat" git diff --cached --stat

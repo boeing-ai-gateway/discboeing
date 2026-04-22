@@ -184,20 +184,6 @@ func (a *DefaultAgent) promptStream(
 
 	resolvedUserParts, originalText, activeCommand, slashCommand := resolveSlashCommand(a.cwd, req.UserParts)
 
-	cfg := thread.TurnConfig{
-		ProviderID:       env.modelRef.ProviderID,
-		Model:            env.modelRef.ModelID,
-		SupportingModels: compactSupportingModels(env.modelRef, map[providers.SupportingModelType]providers.ModelRef{providers.SupportingModelThreadSummarization: env.threadSummaryRef}),
-		Reasoning:        providers.Reasoning(req.Reasoning),
-		PlanMode:         env.planMode,
-		Metadata:         req.Metadata,
-		UserParts:        message.UIPartsToParts(resolvedUserParts),
-		OriginalUserText: originalText,
-		SlashCommand:     slashCommand,
-		Tools:            env.tools,
-		MaxSteps:         env.maxSteps,
-	}
-
 	return func(yield func(message.MessageChunk, error) bool) {
 		effectiveLeafID, err := a.resolveEffectiveLeafID(threadID, req.LeafID, req.FreshContext, env.systemPrompt, env.displayName, env.sessionCfg, env.subAgentCfg)
 		if err != nil {
@@ -235,6 +221,28 @@ func (a *DefaultAgent) promptStream(
 		}
 
 		threadNameBg := a.startBackgroundThreadName(promptCtx, threadID, env.threadCfg, req.UserParts, env.threadSummaryRef)
+
+		actualSlashCommand := slashCommand
+		actualUserParts, updatedSlashCommand, execErr := a.executeScriptSlashCommand(promptCtx, resolvedUserParts, originalText, actualSlashCommand)
+		if execErr != nil {
+			yield(nil, execErr)
+			return
+		}
+		actualSlashCommand = updatedSlashCommand
+
+		cfg := thread.TurnConfig{
+			ProviderID:       env.modelRef.ProviderID,
+			Model:            env.modelRef.ModelID,
+			SupportingModels: compactSupportingModels(env.modelRef, map[providers.SupportingModelType]providers.ModelRef{providers.SupportingModelThreadSummarization: env.threadSummaryRef}),
+			Reasoning:        providers.Reasoning(req.Reasoning),
+			PlanMode:         env.planMode,
+			Metadata:         req.Metadata,
+			UserParts:        message.UIPartsToParts(actualUserParts),
+			OriginalUserText: originalText,
+			SlashCommand:     actualSlashCommand,
+			Tools:            env.tools,
+			MaxSteps:         env.maxSteps,
+		}
 
 		// Compute if the user explicitly requested a mode change in this PromptRequest.
 		prevMode := strings.TrimSpace(env.threadCfg.Mode.Value)
@@ -295,6 +303,23 @@ func (a *DefaultAgent) promptStream(
 			if !yield(thread.UpdateChunkFromConfig(threadID, cfgToSave), nil) {
 				return
 			}
+		}
+
+		// Some script slash commands intentionally return no LLM-visible text on
+		// success. In that case we still persist the user message and slash-command
+		// metadata, but we skip starting a model turn entirely because there is no
+		// prompt content for the provider to respond to.
+		if actualSlashCommand != nil &&
+			actualSlashCommand.Kind == agent.CommandKindScript &&
+			actualSlashCommand.Script != nil &&
+			actualSlashCommand.Script.SuppressedLLM {
+			if !a.persistUserOnlyTurn(threadID, effectiveLeafID, cfg, cfgToSave, yield) {
+				return
+			}
+			if !a.clearActiveCommand(threadID, yield) {
+				return
+			}
+			return
 		}
 
 		// Start new turn.
@@ -1385,10 +1410,10 @@ func hasStartupBootstrapContent(
 		return true
 	}
 	if hasNamedTool(sessionCfg.Tools, "Skill") {
-		if sessionconfig.FormatSkillDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings) != "" {
+		if sessionconfig.FormatSkillLikeDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings, sessionCfg.ScriptDiscoveryWarnings) != "" {
 			return true
 		}
-		return sessionconfig.FormatSkillsReminder(sessionCfg.Skills) != ""
+		return sessionconfig.FormatSkillLikeReminder(sessionCfg.Skills, sessionCfg.Scripts) != ""
 	}
 	return false
 }
@@ -1453,14 +1478,14 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 	}
 
 	if hasNamedTool(sessionCfg.Tools, "Skill") {
-		skillWarningsReminder := sessionconfig.FormatSkillDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings)
+		skillWarningsReminder := sessionconfig.FormatSkillLikeDiscoveryWarningsReminder(sessionCfg.SkillDiscoveryWarnings, sessionCfg.ScriptDiscoveryWarnings)
 		if err := appendMessage("skill-warnings-"+agent.GenerateID(), "user", skillWarningsReminder); err != nil {
-			return "", fmt.Errorf("save skill discovery warnings reminder: %w", err)
+			return "", fmt.Errorf("save skill-like discovery warnings reminder: %w", err)
 		}
 
-		skillsReminder := sessionconfig.FormatSkillsReminder(sessionCfg.Skills)
+		skillsReminder := sessionconfig.FormatSkillLikeReminder(sessionCfg.Skills, sessionCfg.Scripts)
 		if err := appendMessage("skills-"+agent.GenerateID(), "user", skillsReminder); err != nil {
-			return "", fmt.Errorf("save skills reminder: %w", err)
+			return "", fmt.Errorf("save skill-like reminder: %w", err)
 		}
 	}
 
@@ -1585,41 +1610,25 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 		return builtinCommands, nil //nolint:nilerr
 	}
 
-	commands := make([]agent.Command, 0, len(sessionCfg.Skills)+len(builtinCommands))
+	commands := make([]agent.Command, 0, len(sessionCfg.Skills)+len(sessionCfg.Scripts)+len(builtinCommands))
 	for _, s := range sessionCfg.Skills {
-		command := agent.Command{
+		commands = append(commands, agent.Command{
 			Name:        s.Name,
 			Description: s.Description,
 			Kind:        agent.CommandKind(s.Kind),
-			Discobot: agent.DiscobotCommandMetadata{
-				UI:          s.Discobot.UI,
-				Label:       s.Discobot.Label,
-				ActiveLabel: s.Discobot.ActiveLabel,
-				Icon:        s.Discobot.Icon,
-				Group:       s.Discobot.Group,
-				Order:       s.Discobot.Order,
-			},
+			Discobot:    discobotCommandMetadata(s.Discobot),
+		})
+	}
+	for _, script := range sessionCfg.Scripts {
+		if !script.Visible {
+			continue
 		}
-		if len(s.Discobot.CredentialRequest) > 0 {
-			command.Discobot.CredentialRequest = make([]agent.DiscobotCredentialRequest, 0, len(s.Discobot.CredentialRequest))
-			for _, request := range s.Discobot.CredentialRequest {
-				converted := agent.DiscobotCredentialRequest{
-					EnvVar:        request.EnvVar,
-					Name:          request.Name,
-					Justification: request.Justification,
-				}
-				if len(request.ApprovedUses) > 0 {
-					converted.ApprovedUses = make([]agent.DiscobotCredentialApprovedUse, 0, len(request.ApprovedUses))
-					for _, use := range request.ApprovedUses {
-						converted.ApprovedUses = append(converted.ApprovedUses, agent.DiscobotCredentialApprovedUse{
-							Description: use.Description,
-						})
-					}
-				}
-				command.Discobot.CredentialRequest = append(command.Discobot.CredentialRequest, converted)
-			}
-		}
-		commands = append(commands, command)
+		commands = append(commands, agent.Command{
+			Name:        script.Name,
+			Description: script.Description,
+			Kind:        agent.CommandKindScript,
+			Discobot:    discobotCommandMetadata(script.Discobot),
+		})
 	}
 	commands = append(commands, builtinCommands...)
 	return commands, nil
@@ -1636,69 +1645,117 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 // programmatically to match Claude Code behavior. The returned original text
 // preserves the raw slash command for message-level UI metadata.
 func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string, *thread.UserSlashCommandMetadata) {
-	if len(parts) == 0 {
-		return parts, "", "", nil
-	}
-	first, ok := parts[0].(message.UITextPart)
+	first, parsed, ok := parseSlashCommand(parts)
 	if !ok {
-		return parts, "", "", nil
-	}
-	text := strings.TrimLeft(first.Text, " \t")
-	if !strings.HasPrefix(text, "/") {
-		return parts, "", "", nil
-	}
-
-	// Parse "/command-name [args...]"
-	rest := text[1:]
-	var cmdName, args string
-	if idx := strings.IndexAny(rest, " \t\n"); idx >= 0 {
-		cmdName = rest[:idx]
-		args = strings.TrimLeft(rest[idx:], " \t")
-	} else {
-		cmdName = rest
-	}
-	if cmdName == "" {
 		return parts, "", "", nil
 	}
 
 	projectRoot := sessionconfig.FindProjectRoot(cwd)
-	if skill, found, err := sessionconfig.LookupSkill(projectRoot, cmdName); err == nil && found {
-		annotated := make([]message.UIPart, len(parts))
-		copy(annotated, parts)
-		annotated[0] = message.UITextPart{
-			Text:  first.Text,
-			State: first.State,
-			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
-				OriginalCommand: text,
-				CommandKind:     string(agent.CommandKindSkill),
-			}),
-		}
-		return annotated, text, strings.TrimSpace(cmdName), &thread.UserSlashCommandMetadata{
-			Name: strings.TrimSpace(cmdName),
-			Kind: agent.CommandKindSkill,
-			Text: skill.Body,
-		}
-	}
-
-	cmd, found, err := sessionconfig.LookupCommand(projectRoot, cmdName)
+	cfg, found, err := resolveSlashCommandMatch(projectRoot, parsed)
 	if err != nil || !found {
 		return parts, "", "", nil // not a known slash command — pass through unchanged
 	}
 
-	// Encode the original slash command into ProviderMetadata so the UI can
-	// display "/commit fix the bug" while the LLM receives the expanded body.
-	meta := message.MarshalProviderMetadata(message.DiscobotPartMetadata{
-		OriginalCommand: text,
-		CommandKind:     string(agent.CommandKindCommand),
-	})
-
-	expanded := make([]message.UIPart, len(parts))
-	copy(expanded, parts)
-	expanded[0] = message.UITextPart{Text: cmd.Expand(args), State: first.State, ProviderMetadata: meta}
-	return expanded, text, strings.TrimSpace(cmdName), &thread.UserSlashCommandMetadata{
-		Name: strings.TrimSpace(cmdName),
-		Kind: agent.CommandKindCommand,
+	kind := skillLikeKindToCommandKind(cfg.Kind)
+	if kind == "" {
+		return parts, "", "", nil
 	}
+
+	replacement := first.Text
+	if kind == agent.CommandKindCommand {
+		expanded, err := cfg.Expand(parsed.args)
+		if err != nil {
+			return parts, "", "", nil
+		}
+		replacement = expanded
+	}
+
+	annotated := annotateSlashCommandParts(parts, first, parsed.original, kind, replacement)
+	return annotated, parsed.original, parsed.name, slashCommandMetadata(parsed, kind, cfg)
+}
+
+func scriptCommandArgs(originalText string) string {
+	_, parsed, ok := parseSlashCommand([]message.UIPart{message.UITextPart{Text: originalText}})
+	if !ok {
+		return ""
+	}
+	return parsed.args
+}
+
+func firstUserText(parts []message.UIPart) string {
+	for _, part := range parts {
+		if textPart, ok := part.(message.UITextPart); ok {
+			return textPart.Text
+		}
+	}
+	return ""
+}
+
+func buildStandaloneUserMessageMetadata(metadata json.RawMessage, originalText string, slashCommand *thread.UserSlashCommandMetadata) json.RawMessage {
+	payload := map[string]any{}
+	if len(metadata) > 0 {
+		if err := json.Unmarshal(metadata, &payload); err != nil {
+			return metadata
+		}
+	}
+	if originalText != "" {
+		payload["originalText"] = originalText
+	}
+	if slashCommand != nil {
+		payload["slashCommand"] = slashCommand
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// persistUserOnlyTurn handles the special case where a slash-command script
+// completes without producing any LLM-visible prompt content. In the normal
+// path, thread.RunTurn persists the user message and advances the thread state.
+// Here we skip RunTurn entirely, so agentimpl must persist the user message,
+// update the active leaf, and emit the user chunk directly.
+func (a *DefaultAgent) persistUserOnlyTurn(
+	threadID, parentID string,
+	cfg thread.TurnConfig,
+	cfgToSave thread.Config,
+	yield func(message.MessageChunk, error) bool,
+) bool {
+	startedAt := time.Now().UTC()
+	userMessage := message.Message{
+		ID:        "user-" + agent.GenerateID(),
+		Role:      "user",
+		Parts:     cfg.UserParts,
+		Metadata:  buildStandaloneUserMessageMetadata(cfg.Metadata, cfg.OriginalUserText, cfg.SlashCommand),
+		CreatedAt: &startedAt,
+	}
+	if err := a.store.SaveMessage(threadID, thread.StoredMessage{
+		ID:       userMessage.ID,
+		ParentID: parentID,
+		Message:  userMessage,
+	}); err != nil {
+		return yield(nil, fmt.Errorf("save user message: %w", err))
+	}
+	cfgToSave.ActiveLeafID = userMessage.ID
+	if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
+		return yield(nil, fmt.Errorf("save thread config: %w", err))
+	}
+	uiMessages, err := message.ProjectUIMessages([]message.Message{userMessage})
+	if err != nil {
+		return yield(nil, fmt.Errorf("project user message for stream: %w", err))
+	}
+	if len(uiMessages) != 1 {
+		return yield(nil, fmt.Errorf("project user message for stream: expected 1 UI message, got %d", len(uiMessages)))
+	}
+	if !yield(message.UserMessageChunk{Data: message.UserMessageData{Message: uiMessages[0]}}, nil) {
+		return false
+	}
+	a.persistActiveLeaf(threadID)
+	return true
 }
 
 // ListThreads returns all thread IDs.

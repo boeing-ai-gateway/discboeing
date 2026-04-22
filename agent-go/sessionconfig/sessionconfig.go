@@ -54,6 +54,15 @@ type SessionConfig struct {
 	// malformed frontmatter in SKILL.md files. These are surfaced to the model in
 	// a system reminder so it can tell the user to fix them.
 	SkillDiscoveryWarnings []string
+
+	// Scripts are discovered executable slash-command scripts from .discobot/
+	// scripts and supported user-level script directories. Visible scripts are
+	// listed in the system reminders so the model knows which executable slash
+	// commands are available.
+	Scripts []ScriptConfig
+
+	// ScriptDiscoveryWarnings are non-fatal script loading issues.
+	ScriptDiscoveryWarnings []string
 }
 
 // Load discovers and loads session configuration from the given working directory.
@@ -110,6 +119,19 @@ func Load(cwd string) (*SessionConfig, error) {
 		cfg.SkillDiscoveryWarnings = warnings
 		for _, warning := range warnings {
 			log.Printf("sessionconfig: warning: skill discovery: %s", warning)
+		}
+	}
+
+	// 6. Discover scripts.
+	scripts, warnings, err := discoverScripts(projectRoot)
+	if err != nil {
+		log.Printf("sessionconfig: warning: script discovery: %v", err)
+		// Non-fatal — continue without scripts.
+	} else {
+		cfg.Scripts = scripts
+		cfg.ScriptDiscoveryWarnings = warnings
+		for _, warning := range warnings {
+			log.Printf("sessionconfig: warning: script discovery: %s", warning)
 		}
 	}
 

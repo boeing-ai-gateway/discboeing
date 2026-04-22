@@ -1,16 +1,20 @@
 # Workspace Customization
 
-Discobot supports per-workspace customization through the `.discobot/` directory at the root of your workspace. Three workspace-level customizations are available:
+Discobot supports per-workspace customization through the `.discobot/` directory at the root of your workspace. Four workspace-level customizations are available:
 
 - **Environment file** (`.discobot/env`) — Environment variables loaded into tools, console sessions, hooks, and services
+- **Scripts** (`.discobot/scripts/`) — User-facing executable slash commands exposed to the agent through the Skill tool
 - **Hooks** (`.discobot/hooks/`) — Automation scripts that run at specific lifecycle points
 - **Services** (`.discobot/services/`) — Background processes and HTTP endpoints
 
-Both use the same file format: executable scripts with YAML front matter.
+Scripts, hooks, and executable services use the same file format: executable scripts with YAML front matter.
 
 ```
 .discobot/
 ├── env
+├── scripts/
+│   ├── summarize-diff.sh
+│   └── deploy-preview
 ├── hooks/
 │   ├── install-deps.sh
 │   ├── lint.sh
@@ -68,6 +72,88 @@ Changes are picked up for new tool executions, hook runs, service launches, and 
 Each non-empty line must be a `KEY=VALUE` assignment. Leading whitespace is ignored, lines starting with `#` are treated as comments, and `export KEY=VALUE` is also supported. Quoted values are allowed and are treated literally.
 
 Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
+
+---
+
+## Scripts
+
+Scripts are executable files in `.discobot/scripts/` that behave like
+user-facing slash commands. They are discovered from the workspace and from
+supported user-level script directories, but when Discobot tells the LLM about
+them, they are presented through the same `Skill` tool as markdown skills.
+
+That means:
+
+- users can invoke them with `/name ...args`
+- the agent can invoke them through the `Skill` tool
+- hidden scripts are omitted from the agent-visible reminder text
+- the LLM does not need to know whether an entry came from markdown or an
+  executable script
+
+### Common Fields
+
+| Field           | Type    | Required | Description                                                |
+| --------------- | ------- | -------- | ---------------------------------------------------------- |
+| `name`          | string  | No       | Slash-command name (defaults to the normalized filename)   |
+| `description`   | string  | No       | Human-readable description shown in reminders and UI        |
+| `visible`       | boolean | No       | Whether the script is exposed to the agent (default: true) |
+| `argument-hint` | string  | No       | Optional guidance for expected arguments                   |
+
+`argumentHint` is also accepted as an alternative key spelling.
+
+### File Requirements
+
+Script files must:
+
+- be in `.discobot/scripts/`
+- be executable (`chmod +x`)
+- have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
+- include valid front matter
+
+On Windows, Discobot uses the script's shebang to choose an interpreter, so
+Bash-based scripts require `bash` to be available on `PATH`.
+
+### Execution Semantics
+
+When a script is run:
+
+- Discobot executes the file directly with the parsed slash-command arguments
+- the working directory is `/home/discobot/workspace`
+- the session environment, including `.discobot/env`, is available
+- on success, only trimmed `stdout` is forwarded to the LLM
+- on failure, Discobot forwards formatted execution metadata plus trimmed
+  `stdout` and `stderr`
+- if successful output is empty after trimming, Discobot records the execution
+  in message metadata and UI, but avoids starting a no-op model response
+
+Hidden scripts (`visible: false`) can still exist in the repository for
+internal workflows, but they are not surfaced in reminders and are not
+available to the LLM through the `Skill` tool.
+
+### Example — Visible script
+
+```bash
+#!/bin/bash
+#---
+# name: summarize-diff
+# description: Summarize the current git diff for the user
+# visible: true
+# argument-hint: Optional pathspec
+#---
+git diff --stat -- ${1+"$@"}
+```
+
+### Example — Hidden script
+
+```bash
+#!/bin/bash
+#---
+# name: internal-refresh
+# description: Refresh generated assets without advertising the command
+# visible: false
+#---
+pnpm run generate
+```
 
 ---
 

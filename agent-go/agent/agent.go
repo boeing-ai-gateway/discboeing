@@ -28,6 +28,10 @@ const (
 	// directory, expanded programmatically when the user types /name.
 	CommandKindCommand CommandKind = "command"
 
+	// CommandKindScript is an executable user-defined slash command from a
+	// scripts/ directory.
+	CommandKindScript CommandKind = "script"
+
 	// CommandKindBuiltin is a command handled natively by the agent (e.g. /clear).
 	CommandKindBuiltin CommandKind = "built-in"
 )

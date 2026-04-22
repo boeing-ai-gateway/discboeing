@@ -34,12 +34,31 @@
 	const originalCommand = $derived(
 		getUserMessageOriginalCommandDisplay(message),
 	);
-	const expandedSectionLabel = $derived(
-		originalCommand?.kind === "skill" ? "Skill text" : "Generated text",
-	);
-	const expandedToggleLabel = $derived(
-		`${isGeneratedTextExpanded ? "Hide" : "Show"} ${originalCommand?.kind === "skill" ? "skill text" : "generated text"}`,
-	);
+	const expandedSectionLabel = $derived.by(() => {
+		switch (originalCommand?.kind) {
+			case "skill":
+				return "Skill text";
+			default:
+				return "Generated text";
+		}
+	});
+	const expandedToggleLabel = $derived.by(() => {
+		switch (originalCommand?.kind) {
+			case "skill":
+				return `${isGeneratedTextExpanded ? "Hide" : "Show"} skill text`;
+			default:
+				return `${isGeneratedTextExpanded ? "Hide" : "Show"} generated text`;
+		}
+	});
+	const shouldShowGeneratedText = $derived.by(() => {
+		if (!originalCommand) {
+			return false;
+		}
+		if (originalCommand.kind === "skill" || originalCommand.kind === "script") {
+			return Boolean(originalCommand.text);
+		}
+		return textParts.length > 0;
+	});
 </script>
 
 {#if originalCommand}
@@ -55,7 +74,11 @@
 			>
 				<ChevronRightIcon class="size-3.5 shrink-0" />
 				<p class="text-[11px] uppercase tracking-[0.14em]">
-					{originalCommand.kind === "skill" ? "Skill" : "Command"}: {originalCommand.command}
+					{originalCommand.kind === "skill"
+						? "Skill"
+						: originalCommand.kind === "script"
+							? "Script"
+							: "Command"}: {originalCommand.command}
 				</p>
 				<ChevronDownIcon
 					class={`size-3 transition-all group-hover:opacity-100 ${isGeneratedTextExpanded ? "rotate-180 opacity-100" : "opacity-0"}`}
@@ -64,22 +87,33 @@
 			{#if originalCommand.args}
 				<MessageResponse text={originalCommand.args} />
 			{/if}
-			<CollapsibleContent>
+			{#if originalCommand.kind === "script" && originalCommand.script?.suppressedLlm}
 				<div
-					class="w-full space-y-2 rounded-md border border-border/60 bg-muted/30 p-3"
+					class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm"
 				>
-					<p class="text-muted-foreground text-xs uppercase tracking-[0.14em]">
-						{expandedSectionLabel}
-					</p>
-					{#if originalCommand.kind === "skill" && originalCommand.text}
-						<MessageResponse text={originalCommand.text} />
-					{:else}
-						{#each textParts as part, index (`${message.id}-${part.type}-${index}`)}
-							<MessageResponse text={part.text} />
-						{/each}
-					{/if}
+					The script completed without output, so no model response was started.
 				</div>
-			</CollapsibleContent>
+			{/if}
+			{#if shouldShowGeneratedText}
+				<CollapsibleContent>
+					<div
+						class="w-full space-y-2 rounded-md border border-border/60 bg-muted/30 p-3"
+					>
+						<p
+							class="text-muted-foreground text-xs uppercase tracking-[0.14em]"
+						>
+							{expandedSectionLabel}
+						</p>
+						{#if (originalCommand.kind === "skill" || originalCommand.kind === "script") && originalCommand.text}
+							<MessageResponse text={originalCommand.text} />
+						{:else}
+							{#each textParts as part, index (`${message.id}-${part.type}-${index}`)}
+								<MessageResponse text={part.text} />
+							{/each}
+						{/if}
+					</div>
+				</CollapsibleContent>
+			{/if}
 		</div>
 	</Collapsible>
 {:else if originalText}

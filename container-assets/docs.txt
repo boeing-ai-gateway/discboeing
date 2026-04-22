@@ -15,6 +15,44 @@ Format:
 
 Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
 
+## .discobot/scripts/
+
+User-facing executable slash commands.
+
+Requirements:
+- executable bit
+- shebang line
+- valid front matter
+- file lives under `.discobot/scripts/`
+
+Common front matter fields:
+- `name`: slash-command name (defaults to normalized filename)
+- `description`: human-readable description
+- `visible`: whether the command is exposed to the agent; default `true`
+- `argument-hint` / `argumentHint`: optional argument guidance
+
+Behavior:
+- users invoke them with `/name ...args`
+- the agent invokes them through the `Skill` tool
+- visible scripts are presented to the model the same way as skills
+- hidden scripts are omitted from reminders and cannot be invoked by the model
+- working directory is the project root (`/home/discobot/workspace`)
+- success forwards trimmed `stdout`
+- failure forwards execution metadata plus trimmed `stdout` and `stderr`
+- empty successful output does not trigger a no-op model response
+
+Example:
+
+```bash
+#!/bin/bash
+#---
+# name: summarize-diff
+# description: Summarize the current git diff
+# visible: true
+#---
+git diff --stat -- ${1+"$@"}
+```
+
 ## .discobot/hooks/
 
 Executable scripts with YAML front matter that run at lifecycle points.

@@ -16,7 +16,7 @@ function readComponentSource(filePath: string) {
 	return readFileSync(filePath, "utf-8");
 }
 
-test("message response with command component renders command and skill sections", () => {
+test("message response with command component renders command, skill, and script sections", () => {
 	const source = readComponentSource(MESSAGE_RESPONSE_WITH_COMMAND_COMPONENT);
 
 	assert.match(
@@ -25,14 +25,22 @@ test("message response with command component renders command and skill sections
 	);
 	assert.match(source, /getUserMessageOriginalCommandDisplay/);
 	assert.match(source, /getUserMessageOriginalText/);
-	assert.match(
-		source,
-		/originalCommand\.kind === "skill" \? "Skill" : "Command"/,
-	);
+	assert.match(source, /originalCommand\.kind === "script"/);
 	assert.match(source, /"Skill text"/);
 	assert.match(source, /"Generated text"/);
-	assert.match(source, /"skill text"/);
-	assert.match(source, /"generated text"/);
+	assert.match(
+		source,
+		/originalCommand\.kind === "skill" \|\| originalCommand\.kind === "script"/,
+	);
+	assert.match(source, /\? "Script"/);
+	assert.match(
+		source,
+		/The script completed without output, so no model response was/,
+	);
+	assert.doesNotMatch(source, /"Generated text sent to LLM"/);
+	assert.doesNotMatch(source, /"Script execution failed"/);
+	assert.doesNotMatch(source, />\s*Stdout\s*</);
+	assert.doesNotMatch(source, />\s*Stderr\s*</);
 });
 
 test("conversation pane delegates user text rendering to MessageResponseWithCommand", () => {

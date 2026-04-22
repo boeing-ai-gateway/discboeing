@@ -595,6 +595,34 @@ func TestFormatSkillsReminder_WithSkills(t *testing.T) {
 	}
 }
 
+func TestFormatSkillLikeReminder_WithSkillsAndScripts(t *testing.T) {
+	got := FormatSkillLikeReminder(
+		[]SkillConfig{
+			{Name: "commit", Description: "Create commits."},
+		},
+		[]ScriptConfig{
+			{Name: "summarize-diff", Description: "Summarize the current diff.", Visible: true},
+			{Name: "hidden-script", Description: "Should be hidden.", Visible: false},
+		},
+	)
+
+	if !strings.Contains(got, "The following skills are available for use with the Skill tool:") {
+		t.Fatal("missing unified reminder header")
+	}
+	if !strings.Contains(got, "commit: Create commits.") {
+		t.Error("missing skill entry")
+	}
+	if !strings.Contains(got, "summarize-diff: Summarize the current diff.") {
+		t.Error("missing visible script entry")
+	}
+	if strings.Contains(got, "hidden-script") {
+		t.Error("hidden script should not be listed")
+	}
+	if strings.Contains(strings.ToLower(got), "executable scripts are available") {
+		t.Error("reminder should not distinguish scripts from skills")
+	}
+}
+
 func TestFormatSkillDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
 	got := FormatSkillDiscoveryWarningsReminder([]string{
 		"parse skill /tmp/release/SKILL.md: parse frontmatter: yaml: line 2: mapping values are not allowed in this context",
@@ -614,6 +642,23 @@ func TestFormatSkillDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
 	}
 	if !strings.Contains(got, "</system-reminder>") {
 		t.Error("missing </system-reminder> tag")
+	}
+}
+
+func TestFormatSkillLikeDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
+	got := FormatSkillLikeDiscoveryWarningsReminder(
+		[]string{"parse skill /tmp/release/SKILL.md: broken"},
+		[]string{"load script /tmp/.discobot/scripts/release.sh: missing front matter"},
+	)
+
+	if !strings.Contains(got, "Some skills or slash commands could not be loaded") {
+		t.Fatal("missing unified warning header")
+	}
+	if !strings.Contains(got, "parse skill /tmp/release/SKILL.md: broken") {
+		t.Error("missing skill warning")
+	}
+	if !strings.Contains(got, "load script /tmp/.discobot/scripts/release.sh: missing front matter") {
+		t.Error("missing script warning")
 	}
 }
 
