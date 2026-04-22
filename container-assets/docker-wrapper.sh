@@ -40,6 +40,7 @@ has_cache_flag() {
 
 if is_build_command "$@"; then
     extra=()
+    injected_cache=0
 
     # Inject local cache import/export. mode=max exports all intermediate
     # layers for maximum cache reuse on subsequent builds.
@@ -50,16 +51,18 @@ if is_build_command "$@"; then
             extra+=(--cache-from "type=local,src=$CACHE_DIR")
         fi
         extra+=(--cache-to "type=local,dest=$CACHE_DIR,mode=max")
+        injected_cache=1
     fi
 
     if [ "${1:-}" = "build" ]; then
         # Rewrite "docker build ..." as "docker buildx build ..."
         # (type=local cache requires the BuildKit frontend, only available via buildx)
         shift
-        build_cmd=("$REAL_DOCKER" buildx build "$@" "${extra[@]}")
+        build_prefix=("$REAL_DOCKER" buildx build "$@")
     else
-        build_cmd=("$REAL_DOCKER" "$@" "${extra[@]}")
+        build_prefix=("$REAL_DOCKER" "$@")
     fi
+    build_cmd=("${build_prefix[@]}" "${extra[@]}")
 
     # Run the build, streaming output to the user while also capturing it so
     # we can detect BuildKit cache-corruption errors and auto-recover.
@@ -83,6 +86,20 @@ if is_build_command "$@"; then
         "$REAL_DOCKER" builder prune -f >&2
         rm -f "$tmpout"
         exec "${build_cmd[@]}"
+    fi
+
+    # If the auto-injected local cache export runs out of disk, retry once
+    # without --cache-to so the build itself can still complete.
+    if [ "$injected_cache" -eq 1 ] && grep -qE \
+        "exporting cache to client directory|buildkit/ingest/.*no space left on device|error writing layer blob: .*no space left on device" \
+        "$tmpout"; then
+        echo "⚠️  Local BuildKit cache export ran out of disk space. Retrying without --cache-to..." >&2
+        rm -f "$tmpout"
+        retry_cmd=("${build_prefix[@]}")
+        if [ -f "$CACHE_DIR/index.json" ]; then
+            retry_cmd+=(--cache-from "type=local,src=$CACHE_DIR")
+        fi
+        exec "${retry_cmd[@]}"
     fi
 
     rm -f "$tmpout"
