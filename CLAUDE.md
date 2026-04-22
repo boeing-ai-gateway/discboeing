@@ -21,15 +21,15 @@ pnpm dev:server         # Go backend with hot-reload via air (port 3001)
 ### Build
 
 ```bash
-pnpm build              # Build server + active frontend + Tauri app
-pnpm build:server       # Build Go server binary
+pnpm build              # Build the Tauri app (runs server + frontend builds first)
+pnpm build:server       # Build the Go server binary
 ```
 
 ### Lint & Format
 
 ```bash
-pnpm check              # Run active frontend checks, backend checks, and shellcheck
-pnpm check:fix          # Run UI Prettier + ESLint fixes, backend autofixes, and shellcheck
+pnpm check              # Run frontend, package.json, workflow, backend, and shell checks
+pnpm check:fix          # Run frontend fixes, package.json/workflow formatting, backend autofixes, and shellcheck
 pnpm check:frontend     # Delegate to the Svelte UI's Prettier + ESLint + typecheck flow
 pnpm check:backend      # golangci-lint (server + proxy + agent-go + authservice)
 pnpm format             # Run the Svelte UI Prettier formatter
@@ -40,14 +40,19 @@ pnpm format             # Run the Svelte UI Prettier formatter
 ```bash
 pnpm test               # All unit + integration tests
 pnpm test:unit          # All unit tests (server, proxy, agent-go, watcher, ui)
+pnpm test:integration   # All integration tests (server + proxy)
 pnpm test:ui            # Svelte UI tests only
+pnpm test:watcher       # Agent watcher tests only
 
 # Go tests
 pnpm test:server        # All server tests
 pnpm test:server:unit   # Server unit tests (excludes integration/)
 pnpm test:server:integration  # Server integration tests
 pnpm test:proxy         # All proxy tests
+pnpm test:proxy:unit    # Proxy unit tests
+pnpm test:proxy:integration  # Proxy integration tests
 pnpm test:agent-go      # Agent Go tests
+pnpm test:agent-go:unit # Agent Go unit tests
 
 # Single Go test
 cd server && go test -v -run TestName ./internal/path/...
@@ -169,7 +174,7 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 - **Go**: gofmt + goimports with local prefix `github.com/obot-platform/discobot`
 - **Go version**: 1.26 — use `new(value)` to create a pointer to a value (e.g. `new(true)` for `*bool`); avoid `boolPtr`/`intPtr` helper functions
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
-- **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible, followed by a blank line and a wrapped body with lines of 72 characters or fewer when a body is needed
+- **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible. Always include a commit body after a blank line, even for small changes, and use it to explain the nature of the change, the key decisions, and any important context. Wrap body lines to 72 characters or fewer
 - **Code style**:
   - Prefer straightforward, compact code over excessive abstraction
   - Do not introduce helper functions, layers, or temporary variables unless they clearly improve readability
@@ -185,11 +190,11 @@ When making changes, update the relevant docs:
 
 - `docs/ARCHITECTURE.md` — System-wide architecture
 - `docs/ui/ARCHITECTURE.md` — Frontend patterns
-- `docs/ui/design/` — UI module design docs
+- `docs/design/` — Cross-cutting design docs
 - `server/docs/` — Server architecture and design docs
 - `agent/docs/` — Agent init process docs
 - `agent-go/docs/` — Agent API docs
-- `server/README.md`, `agent/README.md`, `agent-go/README.md`, `proxy/README.md` — Component READMEs
+- `server/README.md`, `agent/README.md`, `proxy/README.md` — Component READMEs
 
 ## Known Quirks
 
