@@ -48,7 +48,9 @@ func TestWaitForTCPBindRetriesUntilPortIsReleased(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	if err := waitForTCPBind(ctx, addr, 300*time.Millisecond, 10*time.Millisecond); err != nil {
+	// Windows can keep a just-closed TCP listener unavailable for a short time,
+	// so give the retry loop enough time to observe the release.
+	if err := waitForTCPBind(ctx, addr, 2*time.Second, 10*time.Millisecond); err != nil {
 		t.Fatalf("waitForTCPBind: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed < 30*time.Millisecond {
