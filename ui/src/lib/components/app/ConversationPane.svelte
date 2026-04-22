@@ -709,11 +709,15 @@
 	<Alert variant="destructive">
 		<AlertDescription class="min-w-0">
 			<div class="flex min-w-0 flex-col items-start gap-2">
-				<p
-					class={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${shouldCollapse && !isExpanded ? "line-clamp-3" : ""}`}
+				<div
+					class={`min-w-0 self-stretch ${shouldCollapse && isExpanded ? "max-h-64 overflow-auto pr-2" : ""}`}
 				>
-					{errorText}
-				</p>
+					<p
+						class={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${shouldCollapse && !isExpanded ? "line-clamp-3" : ""}`}
+					>
+						{errorText}
+					</p>
+				</div>
 				<div class="flex flex-wrap items-center gap-3">
 					{#if action}
 						<Button
