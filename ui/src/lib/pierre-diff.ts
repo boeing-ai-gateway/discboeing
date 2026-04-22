@@ -16,6 +16,18 @@ export const DIFF_THEME = {
 	light: "github-light",
 	dark: "github-dark",
 } as const;
+const DIFF_GUTTER_UTILITY_CSS = `
+	[data-gutter-utility-slot] {
+		left: 0;
+		right: auto;
+		justify-content: flex-start;
+	}
+
+	[data-utility-button] {
+		margin-left: 0.5ch;
+		margin-right: 0;
+	}
+`;
 
 export type DiffStyle = "split" | "unified";
 
@@ -49,6 +61,7 @@ export function getDiffRendererOptions(
 		expansionLineCount: 20,
 		lineDiffType: DIFF_LINE_DIFF_TYPE,
 		overflow: "scroll",
+		unsafeCSS: DIFF_GUTTER_UTILITY_CSS,
 	};
 }
 

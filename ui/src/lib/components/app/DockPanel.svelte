@@ -4,8 +4,10 @@
 	import FilesPanel from "$lib/components/app/parts/FilesPanel.svelte";
 	import ServicePanel from "$lib/components/app/parts/ServicePanel.svelte";
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
+	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
 	import { DESKTOP_SERVICE_ID } from "$lib/shell-types";
 
@@ -13,6 +15,7 @@
 
 	const app = useAppContext();
 	const session = useSessionContext();
+	const thread = useThreadContext();
 	const sessionView = session.ui;
 	const visibleServices = $derived.by(() =>
 		session.services.list.filter(
@@ -39,6 +42,37 @@
 
 		mountedDockPanelKinds = [...mountedDockPanelKinds, activeKind];
 	});
+
+	function buildDiffSelectionPrompt({
+		path,
+		selectedText,
+		comment,
+	}: {
+		path: string;
+		selectedText: string;
+		comment: string;
+	}) {
+		return `Please help with this selected diff excerpt from \`${path}\`.
+
+Comment:
+${comment}
+
+Selected diff text:
+\`\`\`diff
+${selectedText}
+\`\`\``;
+	}
+
+	async function handleSubmitDiffSelectionComment(payload: {
+		path: string;
+		selectedText: string;
+		comment: string;
+	}) {
+		const prompt = buildDiffSelectionPrompt(payload);
+		await thread.submit({
+			parts: buildUserMessageParts(prompt, []),
+		});
+	}
 </script>
 
 <div class="h-full overflow-auto bg-background px-3 pb-3 pt-0">
@@ -95,6 +129,7 @@
 				onClose={sessionView.openChat}
 				onOpenFile={(path) => session.files.open(path)}
 				onRefresh={() => session.files.refresh()}
+				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				sessionId={session.sessionId}
 				diff={sessionFileDiff}

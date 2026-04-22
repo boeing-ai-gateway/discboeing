@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FileContents } from "@pierre/diffs";
+	import type { FileContents, SelectedLineRange } from "@pierre/diffs";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -17,6 +17,7 @@
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Textarea } from "$lib/components/ui/textarea";
 	import {
 		buildDiffFileContents,
 		DIFF_HARD_LIMIT,
@@ -47,6 +48,11 @@
 		onClose: () => void;
 		onOpenFile: (path: string) => Promise<void> | void;
 		onRefresh: () => Promise<void> | void;
+		onSubmitSelectionComment: (payload: {
+			path: string;
+			selectedText: string;
+			comment: string;
+		}) => Promise<void> | void;
 		onToggleDockMaximized: () => void;
 		sessionId: string;
 		diff: SessionDiffFileEntry[];
@@ -73,6 +79,11 @@
 		newFile?: FileContents;
 	};
 
+	type DiffSelectionState = {
+		range: SelectedLineRange;
+		text: string;
+	};
+
 	type LoadedDiffState =
 		| {
 				status: "idle";
@@ -94,6 +105,7 @@
 		onClose,
 		onOpenFile,
 		onRefresh,
+		onSubmitSelectionComment,
 		onToggleDockMaximized,
 		sessionId,
 		diff,
@@ -113,6 +125,12 @@
 	let ignoreWhitespaceByPath = $state<Record<string, boolean>>({});
 	let resolvedApprovalCount = $state(0);
 	let approvedCount = $state(0);
+	let selectedDiffTextByPath = $state<
+		Record<string, DiffSelectionState | null>
+	>({});
+	let commentDraftByPath = $state<Record<string, string>>({});
+	let submittingCommentByPath = $state<Record<string, boolean>>({});
+	let commentErrorByPath = $state<Record<string, string | null>>({});
 
 	const diffCount = $derived.by(() => diff.length);
 	const sortedDiff = $derived.by(() =>
@@ -243,6 +261,10 @@
 		diffStates.clear();
 		resolvedApprovalCount = 0;
 		approvedCount = 0;
+		selectedDiffTextByPath = {};
+		commentDraftByPath = {};
+		submittingCommentByPath = {};
+		commentErrorByPath = {};
 	}
 
 	function getDiffState(path: string): LoadedDiffState | undefined {
@@ -630,6 +652,210 @@
 		);
 	}
 
+	function getSelectedDiffText(path: string): string {
+		return selectedDiffTextByPath[path]?.text ?? "";
+	}
+
+	function getSelectedLines(path: string): SelectedLineRange | null {
+		return selectedDiffTextByPath[path]?.range ?? null;
+	}
+
+	function getCommentDraft(path: string): string {
+		return commentDraftByPath[path] ?? "";
+	}
+
+	function getCommentError(path: string): string | null {
+		return commentErrorByPath[path] ?? null;
+	}
+
+	function normalizeSelectedLineRange(
+		range: SelectedLineRange,
+	): SelectedLineRange {
+		return {
+			...range,
+			start: Math.min(range.start, range.end),
+			end: Math.max(range.start, range.end),
+		};
+	}
+
+	function getSelectedSideText(
+		state: ReadyDiffState,
+		side: "deletions" | "additions",
+		start: number,
+		end: number,
+	): string {
+		if (state.snapshotStatus !== "ready" || !state.snapshot) {
+			return "";
+		}
+		const source =
+			side === "deletions"
+				? state.snapshot.originalContent
+				: state.snapshot.modifiedContent;
+		const lines = source.split("\n");
+		return lines
+			.slice(Math.max(start - 1, 0), Math.max(end, 0))
+			.join("\n")
+			.trim();
+	}
+
+	function formatSelectedSideLabel(
+		side: "deletions" | "additions",
+		start: number,
+		end: number,
+	): string {
+		return `${side === "deletions" ? "Deletion" : "Addition"} lines ${start}-${end}`;
+	}
+
+	function buildSelectedDiffText(
+		state: ReadyDiffState,
+		range: SelectedLineRange,
+	): string {
+		const normalizedRange = normalizeSelectedLineRange(range);
+		const startSide =
+			normalizedRange.side ?? normalizedRange.endSide ?? "additions";
+		const endSide =
+			normalizedRange.endSide ?? normalizedRange.side ?? startSide;
+
+		if (startSide === endSide) {
+			const excerpt = getSelectedSideText(
+				state,
+				startSide,
+				normalizedRange.start,
+				normalizedRange.end,
+			);
+			if (!excerpt) {
+				return "";
+			}
+			return `${formatSelectedSideLabel(
+				startSide,
+				normalizedRange.start,
+				normalizedRange.end,
+			)}:\n${excerpt}`;
+		}
+
+		const startExcerpt = getSelectedSideText(
+			state,
+			startSide,
+			normalizedRange.start,
+			normalizedRange.start,
+		);
+		const endExcerpt = getSelectedSideText(
+			state,
+			endSide,
+			normalizedRange.end,
+			normalizedRange.end,
+		);
+		return [
+			startExcerpt
+				? `${formatSelectedSideLabel(
+						startSide,
+						normalizedRange.start,
+						normalizedRange.start,
+					)}:\n${startExcerpt}`
+				: "",
+			endExcerpt
+				? `${formatSelectedSideLabel(
+						endSide,
+						normalizedRange.end,
+						normalizedRange.end,
+					)}:\n${endExcerpt}`
+				: "",
+		]
+			.filter(Boolean)
+			.join("\n\n");
+	}
+
+	function handleLineSelection(
+		path: string,
+		state: ReadyDiffState,
+		range: SelectedLineRange | null,
+	) {
+		const normalizedRange = range ? normalizeSelectedLineRange(range) : null;
+		const nextSelection = normalizedRange
+			? buildSelectedDiffText(state, normalizedRange)
+			: "";
+		selectedDiffTextByPath = {
+			...selectedDiffTextByPath,
+			[path]:
+				normalizedRange && nextSelection
+					? {
+							range: normalizedRange,
+							text: nextSelection,
+						}
+					: null,
+		};
+		commentErrorByPath = {
+			...commentErrorByPath,
+			[path]: null,
+		};
+		if (nextSelection.length === 0) {
+			commentDraftByPath = {
+				...commentDraftByPath,
+				[path]: "",
+			};
+		}
+	}
+
+	function updateCommentDraft(path: string, value: string) {
+		commentDraftByPath = {
+			...commentDraftByPath,
+			[path]: value,
+		};
+	}
+
+	function resetSelectionComment(path: string) {
+		selectedDiffTextByPath = {
+			...selectedDiffTextByPath,
+			[path]: null,
+		};
+		commentDraftByPath = {
+			...commentDraftByPath,
+			[path]: "",
+		};
+		commentErrorByPath = {
+			...commentErrorByPath,
+			[path]: null,
+		};
+	}
+
+	async function submitSelectionComment(path: string) {
+		const selectedText = getSelectedDiffText(path).trim();
+		const comment = getCommentDraft(path).trim();
+		if (!selectedText || !comment) {
+			commentErrorByPath = {
+				...commentErrorByPath,
+				[path]: "Select diff text and add a comment before sending.",
+			};
+			return;
+		}
+
+		submittingCommentByPath = {
+			...submittingCommentByPath,
+			[path]: true,
+		};
+		commentErrorByPath = {
+			...commentErrorByPath,
+			[path]: null,
+		};
+		try {
+			await onSubmitSelectionComment({ path, selectedText, comment });
+			resetSelectionComment(path);
+		} catch (error) {
+			commentErrorByPath = {
+				...commentErrorByPath,
+				[path]:
+					error instanceof Error
+						? error.message
+						: "Failed to send diff comment",
+			};
+		} finally {
+			submittingCommentByPath = {
+				...submittingCommentByPath,
+				[path]: false,
+			};
+		}
+	}
+
 	function getRendererParams(
 		path: string,
 		state: ReadyDiffState,
@@ -1011,10 +1237,67 @@
 												state,
 											)}
 											{#if rendererParams}
+												{#if getSelectedDiffText(file.path)}
+													<div
+														class="rounded-md border border-border bg-background p-3"
+													>
+														<p
+															class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
+														>
+															Selected diff text
+														</p>
+														<pre
+															class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 font-mono text-xs text-foreground">{getSelectedDiffText(
+																file.path,
+															)}</pre>
+														<Textarea
+															class="mt-3 min-h-24"
+															placeholder="Add a comment for the assistant"
+															value={getCommentDraft(file.path)}
+															oninput={(event) =>
+																updateCommentDraft(
+																	file.path,
+																	event.currentTarget.value,
+																)}
+														/>
+														{#if getCommentError(file.path)}
+															<p class="mt-2 text-xs text-destructive">
+																{getCommentError(file.path)}
+															</p>
+														{/if}
+														<div class="mt-3 flex flex-wrap items-center gap-2">
+															<Button
+																size="sm"
+																onclick={() =>
+																	void submitSelectionComment(file.path)}
+																disabled={submittingCommentByPath[file.path] ===
+																	true}
+															>
+																{submittingCommentByPath[file.path] === true
+																	? "Sending…"
+																	: "Send to thread"}
+															</Button>
+															<Button
+																variant="ghost"
+																size="sm"
+																onclick={() => resetSelectionComment(file.path)}
+																disabled={submittingCommentByPath[file.path] ===
+																	true}
+															>
+																Clear selection
+															</Button>
+														</div>
+													</div>
+												{/if}
 												<div
 													class="overflow-hidden rounded-md border border-border bg-background"
 												>
-													<DiffReviewFileRenderer params={rendererParams} />
+													<DiffReviewFileRenderer
+														params={rendererParams}
+														selectedLines={getSelectedLines(file.path)}
+														onLineSelected={(range) =>
+															handleLineSelection(file.path, state, range)}
+													/>
 												</div>
 											{/if}
 										{/if}

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import {
 		FileDiff as PierreFileDiff,
+		type FileDiffOptions,
+		type SelectedLineRange,
 		VirtualizedFileDiff,
 		Virtualizer,
 		type FileDiff as PierreFileDiffInstance,
@@ -22,9 +24,16 @@
 	type Props = {
 		params: DiffRendererParams;
 		onRenderStateChange?: (rendering: boolean) => void;
+		onLineSelected?: (range: SelectedLineRange | null) => void;
+		selectedLines?: SelectedLineRange | null;
 	};
 
-	let { params, onRenderStateChange }: Props = $props();
+	let {
+		params,
+		onRenderStateChange,
+		onLineSelected,
+		selectedLines = null,
+	}: Props = $props();
 
 	let standardHost = $state<HTMLDivElement | null>(null);
 	let virtualScrollRoot = $state<HTMLDivElement | null>(null);
@@ -62,6 +71,18 @@
 		].join("|");
 	}
 
+	function getRendererOptions(
+		nextParams: DiffRendererParams,
+	): FileDiffOptions<undefined> {
+		return {
+			...getDiffRendererOptions(nextParams.diffStyle, nextParams.resolvedTheme),
+			enableGutterUtility: true,
+			enableLineSelection: true,
+			lineHoverHighlight: "number",
+			onLineSelected,
+		};
+	}
+
 	function createRenderer(nextParams: DiffRendererParams) {
 		const workerPool = getDiffWorkerPool();
 		if (nextParams.virtualized) {
@@ -73,7 +94,7 @@
 			virtualizer = nextVirtualizer;
 			usingVirtualizedRenderer = true;
 			return new VirtualizedFileDiff(
-				getDiffRendererOptions(nextParams.diffStyle, nextParams.resolvedTheme),
+				getRendererOptions(nextParams),
 				nextVirtualizer,
 				undefined,
 				workerPool,
@@ -81,10 +102,7 @@
 		}
 
 		usingVirtualizedRenderer = false;
-		return new PierreFileDiff(
-			getDiffRendererOptions(nextParams.diffStyle, nextParams.resolvedTheme),
-			workerPool,
-		);
+		return new PierreFileDiff(getRendererOptions(nextParams), workerPool);
 	}
 
 	function getContainerWrapper(nextParams: DiffRendererParams) {
@@ -167,14 +185,26 @@
 			return;
 		}
 
-		currentInstance.setOptions(
-			getDiffRendererOptions(nextParams.diffStyle, nextParams.resolvedTheme),
-		);
+		currentInstance.setOptions(getRendererOptions(nextParams));
 		const requestId = ++renderRequestId;
 		void renderDiff(currentInstance, nextParams, requestId);
 	});
 
-	onMount(() => cleanupRenderer);
+	$effect(() => {
+		const currentInstance = instance;
+		const currentSelectedLines = selectedLines;
+		if (!currentInstance) {
+			return;
+		}
+		currentInstance.setSelectedLines(currentSelectedLines ?? null);
+	});
+
+	onMount(() => {
+		return () => {
+			onLineSelected?.(null);
+			cleanupRenderer();
+		};
+	});
 </script>
 
 {#if params.virtualized}
