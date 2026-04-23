@@ -2,7 +2,6 @@ import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
 import type { AppContext } from "$lib/context/app-context.svelte";
-import { createBestEffortLoader } from "$lib/context/create-best-effort-loader.svelte";
 import { useAppContext } from "$lib/context/app-context.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
@@ -24,8 +23,6 @@ function createSessionContext(
 	app: AppContext,
 	sessionId: string,
 ): SessionContextValue {
-	let loaded = $state(false);
-	let requestedThreadId = app.sessions.takeRequestedThreadId(sessionId);
 	let selectedThreadId = $state<string | null>(null);
 
 	const current = $derived.by(() => {
@@ -34,10 +31,6 @@ function createSessionContext(
 
 	const hasSession = $derived.by(() => current !== null);
 	const isPending = $derived.by(() => !hasSession);
-	const bestEffortLoader = createBestEffortLoader({
-		owner: "SessionContext",
-		isActive: () => hasSession,
-	});
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -67,6 +60,7 @@ function createSessionContext(
 		setSelectedId: (threadId) => {
 			selectedThreadId = threadId;
 		},
+		takeRequestedId: () => app.sessions.takeRequestedThreadId(sessionId),
 	});
 
 	const hooks = createSessionHooksDomain({
@@ -91,35 +85,7 @@ function createSessionContext(
 	const threadContexts = new SvelteMap<string, ThreadContextValue>();
 	const conversationScrollTopByThreadId = new SvelteMap<string, number>();
 
-	async function load() {
-		if (!hasSession) {
-			loaded = false;
-			bestEffortLoader.dispose();
-			return;
-		}
-		if (!loaded) {
-			await bestEffortLoader.run("threads", () => threads.load());
-			if (requestedThreadId !== null) {
-				threads.select(requestedThreadId);
-				requestedThreadId = null;
-			}
-			await Promise.all([
-				bestEffortLoader.run("files", () => filesDomain.refresh()),
-				bestEffortLoader.run("services", () => services.refresh()),
-				bestEffortLoader.run("hooks", () => hooks.refresh()),
-				bestEffortLoader.run("commands", () => commands.refresh()),
-			]);
-			loaded = true;
-		}
-
-		const activeThreadId = threads.selectedId ?? sessionId;
-		await bestEffortLoader.run(`thread:${activeThreadId}`, async () => {
-			await threadContexts.get(activeThreadId)?.load();
-		});
-	}
-
 	function dispose() {
-		bestEffortLoader.dispose();
 		filesDomain.dispose();
 		for (const context of threadContexts.values()) {
 			context.dispose();
@@ -137,7 +103,6 @@ function createSessionContext(
 		get current() {
 			return current;
 		},
-		load,
 		dispose,
 		stores,
 		ui,

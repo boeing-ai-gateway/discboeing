@@ -19,6 +19,7 @@ import {
 	preferredSourceEnvVar,
 } from "$lib/components/ai/tool-renderers/requestusercredential-helpers";
 import { createUserMessage } from "$lib/session/domains/session-domain.helpers";
+import { createResource } from "$lib/resource/create-resource.svelte";
 import type { SessionCommandsDomain } from "$lib/session/session-context.types";
 
 type CreateSessionCommandsDomainArgs = {
@@ -31,7 +32,15 @@ type CreateSessionCommandsDomainArgs = {
 export function createSessionCommandsDomain(
 	args: CreateSessionCommandsDomainArgs,
 ): SessionCommandsDomain {
-	let list = $state<AgentCommand[]>([]);
+	const resource = createResource<AgentCommand[]>({
+		owner: "SessionCommands",
+		enabled: () => args.hasSession(),
+		createEmptyValue: () => [],
+		load: async () => {
+			const response = await api.getSessionCommands(args.sessionId);
+			return response.commands;
+		},
+	});
 	let isSubmitting = $state(false);
 	let credentialDialogOpen = $state(false);
 	let credentialDialogCommand = $state<AgentCommand | null>(null);
@@ -56,7 +65,7 @@ export function createSessionCommandsDomain(
 	let credentialDialogError = $state<string | null>(null);
 
 	const uiVisible = $derived.by(() =>
-		[...list]
+		[...resource.data]
 			.filter((command) => command.discobot?.ui)
 			.sort((left, right) => {
 				const leftOrder = left.discobot?.order ?? 0;
@@ -67,15 +76,6 @@ export function createSessionCommandsDomain(
 				return left.name.localeCompare(right.name);
 			}),
 	);
-
-	async function refresh() {
-		if (!args.hasSession()) {
-			list = [];
-			return;
-		}
-		const response = await api.getSessionCommands(args.sessionId);
-		list = response.commands;
-	}
 
 	async function sendMessages(
 		threadId: string,
@@ -434,10 +434,25 @@ export function createSessionCommandsDomain(
 
 	return {
 		get list() {
-			return list;
+			return resource.data;
 		},
 		get uiVisible() {
 			return uiVisible;
+		},
+		get status() {
+			return resource.status;
+		},
+		get error() {
+			return resource.error;
+		},
+		get isRefreshing() {
+			return resource.isRefreshing;
+		},
+		get isStale() {
+			return resource.isStale;
+		},
+		get fetchedAt() {
+			return resource.fetchedAt;
 		},
 		get isSubmitting() {
 			return isSubmitting;
@@ -515,7 +530,10 @@ export function createSessionCommandsDomain(
 				confirm: confirmCredentialDialog,
 			};
 		},
-		refresh,
+		refresh: async () => {
+			await resource.refresh();
+		},
+		invalidate: resource.invalidate,
 		run,
 	};
 }

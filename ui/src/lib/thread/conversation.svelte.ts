@@ -357,6 +357,11 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		return beginLoadPromise();
 	}
 
+	function disconnect() {
+		void dismissRetryToast(args.threadId);
+		disconnectStream();
+	}
+
 	async function load() {
 		if (!args.hasSession()) {
 			loadStatus = "idle";
@@ -408,6 +413,8 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		get pendingQuestionId() {
 			return pendingQuestionState.pendingQuestionId;
 		},
+		connect: load,
+		disconnect,
 		load,
 		submit: async ({
 			parts,

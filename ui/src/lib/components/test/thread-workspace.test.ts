@@ -12,7 +12,7 @@ function readThreadWorkspaceSource() {
 	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("thread workspace delegates threaded content and supports no-selection state", () => {
+test("thread workspace keeps pending sessions on the active conversation view and shows loading only for unresolved ready sessions", () => {
 	const source = readThreadWorkspaceSource();
 
 	assert.doesNotMatch(source, /let sessionsMenuOpen = \$state\(false\)/);
@@ -23,9 +23,25 @@ test("thread workspace delegates threaded content and supports no-selection stat
 	assert.match(source, /sidebarOpen\?: boolean;/);
 	assert.match(source, /<ThreadWorkspaceActive/);
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
+	assert.match(
+		source,
+		/session\.isPending \|\| session\.threads\.selectedId !== null/,
+	);
 	assert.match(source, /const sandboxReady = \$derived\.by/);
+	assert.match(source, /const isLoadingThread = \$derived\.by/);
+	assert.match(
+		source,
+		/\(\) => !session\.isPending && !hasSelectedThread && !sandboxReady/,
+	);
 	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
 	assert.match(source, /<ConversationComposerSessionSetupStatus/);
-	assert.match(source, /title="No thread selected"/);
+	assert.match(
+		source,
+		/title=\{isLoadingThread \? "Loading thread" : "No thread selected"\}/,
+	);
+	assert.match(
+		source,
+		/Loading the selected thread while the session starts\./,
+	);
 	assert.match(source, /Select a thread to continue\./);
 });

@@ -1,5 +1,6 @@
 import { api } from "$lib/api-client";
 import type { HooksStatusResponse } from "$lib/api-types";
+import { createResource } from "$lib/resource/create-resource.svelte";
 import {
 	mergeHookOutput,
 	toHooksStatus,
@@ -16,13 +17,35 @@ type CreateSessionHooksDomainArgs = {
 
 export function createSessionHooksDomain(
 	args: CreateSessionHooksDomainArgs,
-): SessionHooksService & { refresh: () => Promise<void> } {
+): SessionHooksService {
 	let outputById = $state<Record<string, HookOutputState>>({});
-	let hooksData = $state<HooksStatusResponse | null>(null);
 	let rerunningHookIds = $state<string[]>([]);
+	let streamedStatus = $state<HooksStatusResponse | null>(null);
+	const resource = createResource<HooksStatusResponse | null>({
+		owner: "SessionHooks",
+		enabled: () => args.hasSession(),
+		createEmptyValue: () => null,
+		load: async () => {
+			const nextStatus = await api.getHooksStatus(args.sessionId);
+			await loadOutputs(nextStatus);
+			streamedStatus = null;
+			return nextStatus;
+		},
+	});
+
+	const resolvedHooksData = $derived.by(() => streamedStatus ?? resource.data);
+
+	$effect(() => {
+		if (args.hasSession()) {
+			return;
+		}
+		streamedStatus = null;
+		outputById = {};
+		rerunningHookIds = [];
+	});
 
 	const status = $derived.by(() => {
-		const baseStatus = toHooksStatus(hooksData);
+		const baseStatus = toHooksStatus(resolvedHooksData);
 		if (rerunningHookIds.length === 0) {
 			return baseStatus;
 		}
@@ -74,23 +97,16 @@ export function createSessionHooksDomain(
 	}
 
 	async function refresh() {
-		if (!args.hasSession()) {
-			hooksData = null;
-			outputById = {};
-			rerunningHookIds = [];
-			return;
-		}
-		const nextStatus = await api.getHooksStatus(args.sessionId);
-		hooksData = nextStatus;
-		await loadOutputs(nextStatus);
+		await resource.refresh();
 	}
 
 	async function applyStatusUpdate(nextStatus: HooksStatusResponse) {
 		if (!args.hasSession()) {
 			return;
 		}
-		hooksData = nextStatus;
+		streamedStatus = nextStatus;
 		await loadOutputs(nextStatus);
+		resource.invalidate();
 	}
 
 	return {
@@ -98,7 +114,23 @@ export function createSessionHooksDomain(
 			return status;
 		},
 		get outputById() {
+			void resource.data;
 			return outputById;
+		},
+		get resourceStatus() {
+			return resource.status;
+		},
+		get error() {
+			return resource.error;
+		},
+		get isRefreshing() {
+			return resource.isRefreshing;
+		},
+		get isStale() {
+			return resource.isStale;
+		},
+		get fetchedAt() {
+			return resource.fetchedAt;
 		},
 		rerun: (hookId: string) => {
 			if (!args.hasSession() || rerunningHookIds.includes(hookId)) {
@@ -115,6 +147,7 @@ export function createSessionHooksDomain(
 			})();
 		},
 		refresh,
+		invalidate: resource.invalidate,
 		applyStatusUpdate,
 	};
 }

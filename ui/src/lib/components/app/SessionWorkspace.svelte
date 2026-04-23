@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, untrack } from "svelte";
+	import { untrack } from "svelte";
 	import ThreadWorkspace from "$lib/components/app/ThreadWorkspace.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 
@@ -15,10 +15,6 @@
 	const threadId = $derived.by(
 		() => session.threads.selectedId ?? session.sessionId,
 	);
-
-	onMount(() => {
-		void session.load();
-	});
 </script>
 
 <div class={visible ? "contents" : "hidden"}>

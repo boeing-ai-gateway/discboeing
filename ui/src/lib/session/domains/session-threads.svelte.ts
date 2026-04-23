@@ -15,6 +15,7 @@ type CreateSessionThreadsDomainArgs = {
 	getSession: () => Session | null;
 	getSelectedId: () => string | null;
 	setSelectedId: (threadId: string | null) => void;
+	takeRequestedId?: () => string | null;
 	onThreadUpdated?: (thread: Thread) => void;
 	onThreadRenamed?: (thread: Thread) => void;
 	onThreadRemoved?: (threadId: string) => void;
@@ -26,9 +27,22 @@ export function createSessionThreadsDomain(
 	const { store } = args;
 
 	function currentList() {
+		if (!args.hasSession()) {
+			return buildImplicitThread(args.getSession());
+		}
 		return store.list.length > 0
 			? store.list
 			: buildImplicitThread(args.getSession());
+	}
+
+	function applyRequestedThreadSelection(nextList = currentList()) {
+		const requestedId = args.takeRequestedId?.();
+		if (!requestedId) {
+			return;
+		}
+		if (nextList.some((thread) => thread.id === requestedId)) {
+			args.setSelectedId(requestedId);
+		}
 	}
 
 	function syncSelectedThread(nextList = currentList()) {
@@ -56,50 +70,72 @@ export function createSessionThreadsDomain(
 		}
 	}
 
+	let loadScheduled = false;
+
+	function scheduleEnsureLoaded() {
+		if (
+			loadScheduled ||
+			!args.hasSession() ||
+			store.status === "loading" ||
+			store.status === "ready"
+		) {
+			return;
+		}
+		loadScheduled = true;
+		queueMicrotask(() => {
+			loadScheduled = false;
+			void ensureLoaded();
+		});
+	}
+
+	async function ensureLoaded() {
+		if (!args.hasSession()) {
+			store.reset();
+			applyRequestedThreadSelection([]);
+			syncSelectedThread([]);
+			return;
+		}
+		if (store.status === "loading" || store.status === "ready") {
+			const nextList = currentList();
+			applyRequestedThreadSelection(nextList);
+			syncSelectedThread(nextList);
+			return;
+		}
+		await store.fetch(args.sessionId);
+		const nextList = currentList();
+		applyRequestedThreadSelection(nextList);
+		syncSelectedThread(nextList);
+		notifyThreadsUpdated(nextList);
+	}
+
 	const list = $derived.by(() => currentList());
 
 	return {
 		get list() {
+			scheduleEnsureLoaded();
 			return list;
 		},
 		get status() {
-			return store.status;
+			return args.hasSession() ? store.status : "idle";
 		},
 		get selectedId() {
+			scheduleEnsureLoaded();
 			return args.getSelectedId();
 		},
 		get selected() {
+			scheduleEnsureLoaded();
 			return list.find((thread) => thread.id === args.getSelectedId()) ?? null;
-		},
-		load: async () => {
-			if (store.status === "loading" || store.status === "ready") {
-				syncSelectedThread();
-				return;
-			}
-			if (!args.hasSession()) {
-				store.reset();
-				syncSelectedThread([]);
-				return;
-			}
-			await store.fetch(args.sessionId);
-			const nextList =
-				store.list.length > 0
-					? store.list
-					: buildImplicitThread(args.getSession());
-			syncSelectedThread(nextList);
-			notifyThreadsUpdated(nextList);
 		},
 		refresh: async () => {
 			if (!args.hasSession()) {
 				store.reset();
+				applyRequestedThreadSelection([]);
 				syncSelectedThread([]);
 				return;
 			}
 			await store.fetch(args.sessionId);
-			const nextList =
-				store.list.length > 0
-					? store.list
-					: buildImplicitThread(args.getSession());
+			const nextList = currentList();
+			applyRequestedThreadSelection(nextList);
 			syncSelectedThread(nextList);
 			notifyThreadsUpdated(nextList);
 		},

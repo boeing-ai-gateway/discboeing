@@ -6,6 +6,7 @@ import type {
 	SessionDiffStats,
 	SessionFileEntry,
 } from "$lib/api-types";
+import { createResource } from "$lib/resource/create-resource.svelte";
 import type {
 	SessionFileBufferState,
 	SessionFileRecord,
@@ -20,6 +21,17 @@ const EMPTY_DIFF_STATS: SessionDiffStats = {
 };
 
 type DiffState = { files: SessionDiffFileEntry[]; stats: SessionDiffStats };
+type FilesMetadata = {
+	diff: DiffState;
+	searchable: string[];
+	rootNodes: SessionFileTreeNode[];
+};
+
+const EMPTY_FILES_METADATA: FilesMetadata = {
+	diff: { files: [], stats: EMPTY_DIFF_STATS },
+	searchable: [],
+	rootNodes: [],
+};
 
 type EditorRuntimeState = {
 	model: unknown | null;
@@ -372,22 +384,76 @@ export function createSessionFilesDomain(
 	let openPaths = $state<string[]>([]);
 	let fileRecords = $state<Record<string, SessionFileRecord>>({});
 	let buffers = $state<Record<string, SessionFileBufferState>>({});
-	let diffData = $state<DiffState>({ files: [], stats: EMPTY_DIFF_STATS });
-	let searchable = $state<string[]>([]);
-	let rootNodes = $state<SessionFileTreeNode[]>([]);
 	const childrenCache = new SvelteMap<string, SessionFileTreeNode[]>();
 	let expandedPaths = $state<string[]>(["."]);
 	let loadingPaths = $state<string[]>([]);
 	let showChangedOnly = $state(false);
 	let expandAllController = $state<AbortController | null>(null);
+	let refreshPromise = $state<Promise<void> | null>(null);
+	let loadScheduled = false;
+
+	const metadataResource = createResource<FilesMetadata>({
+		owner: "SessionFiles",
+		enabled: () => args.hasSession(),
+		createEmptyValue: () => EMPTY_FILES_METADATA,
+		retry: { mode: "background" },
+		load: async () => {
+			const [diffResult, searchResult, rootResult] = await Promise.allSettled([
+				api.getSessionDiff(args.sessionId, { format: "files" }),
+				api.searchSessionFiles(args.sessionId, "", 200),
+				api.listSessionFiles(args.sessionId, "."),
+			]);
+
+			if (searchResult.status === "rejected") {
+				throw searchResult.reason;
+			}
+			if (rootResult.status === "rejected") {
+				throw rootResult.reason;
+			}
+			if (diffResult.status === "rejected") {
+				console.warn(
+					"Failed to load session diff; continuing without diff state",
+					diffResult.reason,
+				);
+			}
+
+			const diffResponse =
+				diffResult.status === "fulfilled"
+					? diffResult.value
+					: { files: [], stats: EMPTY_DIFF_STATS };
+			const nextDiff =
+				"files" in diffResponse && "stats" in diffResponse
+					? (diffResponse as DiffState)
+					: { files: [], stats: EMPTY_DIFF_STATS };
+			const searchable = searchResult.value.results
+				.filter((entry) => entry.type === "file")
+				.map((entry) => entry.path);
+			const diffEntriesMap = new SvelteMap(
+				nextDiff.files.map((entry) => [entry.path, entry] as const),
+			);
+
+			return {
+				diff: nextDiff,
+				searchable,
+				rootNodes: entriesToNodes(
+					rootResult.value.entries,
+					".",
+					diffEntriesMap,
+				),
+			};
+		},
+	});
 
 	const editorRuntime = new SvelteMap<string, EditorRuntimeState>();
 
-	const diff = $derived(diffData.files);
-	const diffStats = $derived(diffData.stats);
+	const metadata = $derived.by(() => metadataResource.data);
+	const diff = $derived.by(() => metadata.diff.files);
+	const diffStats = $derived.by(() => metadata.diff.stats);
 	const diffEntriesMap = $derived.by(
 		() => new SvelteMap(diff.map((entry) => [entry.path, entry] as const)),
 	);
+	const searchable = $derived.by(() => metadata.searchable);
+	const rootNodes = $derived.by(() => metadata.rootNodes);
 	const tree = $derived.by(() =>
 		showChangedOnly
 			? buildTreeFromChangedFiles(diff)
@@ -407,6 +473,76 @@ export function createSessionFilesDomain(
 		}
 		return next;
 	});
+
+	function clearLoadedState() {
+		refreshPromise = null;
+		openPaths = [];
+		fileRecords = {};
+		buffers = {};
+		childrenCache.clear();
+		expandedPaths = ["."];
+		loadingPaths = [];
+		syncSelectedFile([], []);
+		metadataResource.reset();
+	}
+
+	function scheduleEnsureLoaded() {
+		if (
+			loadScheduled ||
+			!args.hasSession() ||
+			refreshPromise !== null ||
+			(metadataResource.fetchedAt !== null && !metadataResource.isStale)
+		) {
+			return;
+		}
+		loadScheduled = true;
+		queueMicrotask(() => {
+			loadScheduled = false;
+			void ensureLoaded();
+		});
+	}
+
+	function ensureLoaded(force = false) {
+		if (!args.hasSession()) {
+			clearLoadedState();
+			return refreshPromise;
+		}
+		if (refreshPromise) {
+			return refreshPromise;
+		}
+		if (
+			!force &&
+			metadataResource.fetchedAt !== null &&
+			!metadataResource.isStale
+		) {
+			syncSelectedFile(list, searchable);
+			return null;
+		}
+		const promise = (
+			force ? metadataResource.refresh() : metadataResource.ensure()
+		)
+			.then(async (nextMetadata) => {
+				childrenCache.clear();
+				for (const path of expandedPaths.filter((entry) => entry !== ".")) {
+					await loadDirectory(path, { force: true });
+				}
+				syncSelectedFile(
+					uniquePaths([
+						...openPaths,
+						...nextMetadata.diff.files.map((file) => file.path),
+						...nextMetadata.searchable.slice(0, 20),
+					]),
+					nextMetadata.searchable,
+				);
+			})
+			.finally(() => {
+				if (refreshPromise === promise) {
+					refreshPromise = null;
+				}
+			});
+		refreshPromise = promise;
+		return promise;
+	}
 
 	function syncSelectedFile(nextList = list, nextSearchable = searchable) {
 		const selectedFile = args.getSelectedFile();
@@ -543,72 +679,10 @@ export function createSessionFilesDomain(
 	async function refresh() {
 		cancelExpandAll();
 		if (!args.hasSession()) {
-			openPaths = [];
-			fileRecords = {};
-			buffers = {};
-			diffData = { files: [], stats: EMPTY_DIFF_STATS };
-			searchable = [];
-			rootNodes = [];
-			childrenCache.clear();
-			expandedPaths = ["."];
-			loadingPaths = [];
-			syncSelectedFile([], []);
+			clearLoadedState();
 			return;
 		}
-
-		const [diffResult, searchResult, rootResult] = await Promise.allSettled([
-			api.getSessionDiff(args.sessionId, { format: "files" }),
-			api.searchSessionFiles(args.sessionId, "", 200),
-			api.listSessionFiles(args.sessionId, "."),
-		]);
-
-		if (searchResult.status === "rejected") {
-			throw searchResult.reason;
-		}
-		if (rootResult.status === "rejected") {
-			throw rootResult.reason;
-		}
-		if (diffResult.status === "rejected") {
-			console.warn(
-				"Failed to load session diff; continuing without diff state",
-				diffResult.reason,
-			);
-		}
-
-		const diffResponse =
-			diffResult.status === "fulfilled"
-				? diffResult.value
-				: { files: [], stats: EMPTY_DIFF_STATS };
-		const searchResponse = searchResult.value;
-		const rootResponse = rootResult.value;
-
-		const nextDiffData =
-			"files" in diffResponse && "stats" in diffResponse
-				? (diffResponse as DiffState)
-				: { files: [], stats: EMPTY_DIFF_STATS };
-		const nextDiffEntriesMap = new SvelteMap(
-			nextDiffData.files.map((entry) => [entry.path, entry] as const),
-		);
-
-		diffData = nextDiffData;
-		searchable = searchResponse.results
-			.filter((entry) => entry.type === "file")
-			.map((entry) => entry.path);
-		rootNodes = entriesToNodes(rootResponse.entries, ".", nextDiffEntriesMap);
-		childrenCache.clear();
-
-		for (const path of expandedPaths.filter((entry) => entry !== ".")) {
-			await loadDirectory(path, { force: true });
-		}
-
-		syncSelectedFile(
-			uniquePaths([
-				...openPaths,
-				...nextDiffData.files.map((file) => file.path),
-				...searchable.slice(0, 20),
-			]),
-			searchable,
-		);
+		await ensureLoaded(true);
 	}
 
 	function discard(path: string) {
@@ -795,18 +869,23 @@ export function createSessionFilesDomain(
 
 	return {
 		get list() {
+			scheduleEnsureLoaded();
 			return list;
 		},
 		get searchable() {
+			scheduleEnsureLoaded();
 			return searchable;
 		},
 		get diff() {
+			scheduleEnsureLoaded();
 			return diff;
 		},
 		get diffStats() {
+			scheduleEnsureLoaded();
 			return diffStats;
 		},
 		get contents() {
+			scheduleEnsureLoaded();
 			return contents;
 		},
 		get selected() {
@@ -819,6 +898,7 @@ export function createSessionFilesDomain(
 			return openPaths;
 		},
 		get tree() {
+			scheduleEnsureLoaded();
 			return tree;
 		},
 		get showChangedOnly() {

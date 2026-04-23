@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onDestroy, untrack } from "svelte";
 	import ConversationPane from "$lib/components/app/ConversationPane.svelte";
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
@@ -21,14 +21,26 @@
 		session.threads.selectedId ?? session.sessionId,
 	);
 
-	onMount(() => {
-		void thread.load();
+	$effect(() => {
+		const currentThread = thread;
+		if (!props.visible) {
+			untrack(() => currentThread.disconnect());
+			return;
+		}
+
+		untrack(() => {
+			void currentThread.connect();
+		});
 		return () => {
-			if (session.threadContexts.get(thread.threadId) === thread) {
-				session.threadContexts.delete(thread.threadId);
-			}
-			thread.dispose();
+			untrack(() => currentThread.disconnect());
 		};
+	});
+
+	onDestroy(() => {
+		if (session.threadContexts.get(thread.threadId) === thread) {
+			session.threadContexts.delete(thread.threadId);
+		}
+		thread.dispose();
 	});
 
 	const showDock = $derived(

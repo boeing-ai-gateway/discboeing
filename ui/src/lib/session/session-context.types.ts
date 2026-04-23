@@ -37,8 +37,14 @@ export type HookOutputState = {
 export type SessionHooksService = {
 	status: HooksStatus;
 	outputById: Record<string, HookOutputState>;
+	resourceStatus: AsyncStatus;
+	error: string | null;
+	isRefreshing: boolean;
+	isStale: boolean;
+	fetchedAt: number | null;
 	rerun: (hookId: string) => void;
 	refresh: () => Promise<void>;
+	invalidate: () => void;
 	applyStatusUpdate: (status: HooksStatusResponse) => Promise<void>;
 };
 
@@ -47,7 +53,6 @@ export type SessionThreadsService = {
 	status: AsyncStatus;
 	selectedId: string | null;
 	selected: Thread | null;
-	load: () => Promise<void>;
 	refresh: () => Promise<void>;
 	select: (threadId: string | null) => void;
 	create: (name?: string) => void;
@@ -126,10 +131,16 @@ export type SessionFilesDomain = {
 export type SessionServicesDomain = {
 	list: ServiceItem[];
 	active: ServiceItem | null;
+	status: AsyncStatus;
+	error: string | null;
+	isRefreshing: boolean;
+	isStale: boolean;
+	fetchedAt: number | null;
 	open: (serviceId: string) => void;
 	start: (serviceId: string) => Promise<void>;
 	stop: (serviceId: string) => Promise<void>;
 	refresh: () => Promise<void>;
+	invalidate: () => void;
 };
 
 export type SessionCommandCredentialDialogState = {
@@ -170,9 +181,15 @@ export type SessionCommandCredentialDialogState = {
 export type SessionCommandsDomain = {
 	list: AgentCommand[];
 	uiVisible: AgentCommand[];
+	status: AsyncStatus;
+	error: string | null;
+	isRefreshing: boolean;
+	isStale: boolean;
+	fetchedAt: number | null;
 	isSubmitting: boolean;
 	credentialDialog: SessionCommandCredentialDialogState;
 	refresh: () => Promise<void>;
+	invalidate: () => void;
 	run: (command: AgentCommand) => Promise<void>;
 };
 
@@ -222,7 +239,8 @@ export type ThreadContextValue = {
 		allowEmptyPendingMessage?: boolean;
 	}) => Promise<ThreadSubmitResult | void>;
 	cancel: () => Promise<void>;
-	load: () => Promise<void>;
+	connect: () => Promise<void>;
+	disconnect: () => void;
 	refresh: () => Promise<void>;
 	addToolApprovalResponse: (payload: {
 		id: string;
@@ -239,7 +257,6 @@ export type SessionContextValue = {
 	sessionId: string;
 	isPending: boolean;
 	current: Session | null;
-	load: () => Promise<void>;
 	dispose: () => void;
 	stores: SessionStores;
 	ui: SessionViewState;

@@ -21,6 +21,9 @@
 	const sandboxReady = $derived.by(
 		() => !session.isPending && session.current?.status === "ready",
 	);
+	const isLoadingThread = $derived.by(
+		() => !session.isPending && !hasSelectedThread && !sandboxReady,
+	);
 	const showThreadSelectionPrompt = $derived.by(
 		() => !hasSelectedThread && sandboxReady,
 	);
@@ -36,7 +39,7 @@
 	{:else}
 		<ThreadWorkspaceHeader
 			reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-			title="No thread selected"
+			title={isLoadingThread ? "Loading thread" : "No thread selected"}
 		/>
 		{#if showThreadSelectionPrompt}
 			<div class="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
@@ -46,8 +49,13 @@
 			</div>
 		{:else}
 			<div class="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
-				<div class="w-full max-w-sm">
+				<div class="w-full max-w-sm space-y-3">
 					<ConversationComposerSessionSetupStatus />
+					{#if isLoadingThread}
+						<p class="px-1 text-sm text-muted-foreground">
+							Loading the selected thread while the session starts.
+						</p>
+					{/if}
 				</div>
 			</div>
 		{/if}

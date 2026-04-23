@@ -13,12 +13,12 @@ import { useAppContext } from "$lib/context/app-context.svelte";
 import { useSessionContext } from "$lib/context/session-context.svelte";
 import { createConversationDomain } from "$lib/thread/conversation.svelte";
 import { getPlanEntries } from "$lib/session/domains/session-domain.helpers";
+import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
 import type {
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
 import type { ThreadSummary } from "$lib/shell-types";
-import { createBestEffortLoader } from "./create-best-effort-loader.svelte";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
@@ -152,9 +152,10 @@ function createThreadContext(
 ): ThreadContextValue {
 	const app = useAppContext();
 	const hasSession = $derived.by(() => session.current !== null);
-	const bestEffortLoader = createBestEffortLoader({
+	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",
-		isActive: () => hasSession,
+		enabled: () => hasSession,
+		retry: { mode: "background" },
 	});
 	const shouldIgnoreClosedStreamError = () => {
 		switch (session.current?.status) {
@@ -170,11 +171,11 @@ function createThreadContext(
 		}
 	};
 	const refreshSessionState = async () => {
+		session.services.invalidate();
+		session.hooks.invalidate();
 		await Promise.all([
-			bestEffortLoader.run("files", () => session.files.refresh()),
-			bestEffortLoader.run("services", () => session.services.refresh()),
-			bestEffortLoader.run("hooks", () => session.hooks.refresh()),
-			bestEffortLoader.run("session", () =>
+			retryScheduler.run("files", () => session.files.refresh()),
+			retryScheduler.run("session", () =>
 				app.sessions.reloadSession(session.sessionId),
 			),
 		]);
@@ -224,6 +225,7 @@ function createThreadContext(
 			await refreshSessionState();
 		},
 	});
+
 	const threadSummary = $derived.by(
 		() => session.threads.list.find((t) => t.id === threadId) ?? null,
 	);
@@ -423,7 +425,8 @@ function createThreadContext(
 		clearComposerDraft: clearStoredComposerDraft,
 		submit,
 		cancel: conversation.cancel,
-		load: conversation.load,
+		connect: conversation.connect,
+		disconnect: conversation.disconnect,
 		refresh: conversation.refresh,
 		addToolApprovalResponse: conversation.addToolApprovalResponse,
 		deleteQueuedPrompt: async (queueId) => {
@@ -431,7 +434,7 @@ function createThreadContext(
 			await session.threads.refreshThread(threadId);
 		},
 		dispose: () => {
-			bestEffortLoader.dispose();
+			retryScheduler.dispose();
 			if (composerDraftPersistTimer !== null) {
 				clearTimeout(composerDraftPersistTimer);
 				composerDraftPersistTimer = null;

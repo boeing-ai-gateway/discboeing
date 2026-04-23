@@ -1,5 +1,6 @@
 import { api } from "$lib/api-client";
 import type { Service } from "$lib/api-types";
+import { createResource } from "$lib/resource/create-resource.svelte";
 import {
 	sortServiceItems,
 	toServiceItem,
@@ -16,12 +17,20 @@ type CreateSessionServicesDomainArgs = {
 export function createSessionServicesDomain(
 	args: CreateSessionServicesDomainArgs,
 ): SessionServicesDomain {
-	let rawServices = $state<Service[]>([]);
+	const resource = createResource<Service[]>({
+		owner: "SessionServices",
+		enabled: () => args.hasSession(),
+		createEmptyValue: () => [],
+		load: async () => {
+			const { services } = await api.getServices(args.sessionId);
+			return services;
+		},
+	});
 
 	$effect(() => {
 		if (
 			typeof window === "undefined" ||
-			!rawServices.some(
+			!resource.data.some(
 				(service) =>
 					service.status === "starting" || service.status === "stopping",
 			)
@@ -30,7 +39,7 @@ export function createSessionServicesDomain(
 		}
 
 		const timeout = window.setTimeout(() => {
-			void refresh();
+			void resource.refresh();
 		}, 5000);
 
 		return () => {
@@ -38,16 +47,7 @@ export function createSessionServicesDomain(
 		};
 	});
 
-	async function refresh() {
-		if (!args.hasSession()) {
-			rawServices = [];
-			return;
-		}
-		const { services } = await api.getServices(args.sessionId);
-		rawServices = services;
-	}
-
-	const list = $derived(sortServiceItems(rawServices.map(toServiceItem)));
+	const list = $derived(sortServiceItems(resource.data.map(toServiceItem)));
 	const active = $derived(
 		list.find((service) => service.id === args.getActiveServiceId()) ?? null,
 	);
@@ -59,13 +59,28 @@ export function createSessionServicesDomain(
 		get active() {
 			return active;
 		},
+		get status() {
+			return resource.status;
+		},
+		get error() {
+			return resource.error;
+		},
+		get isRefreshing() {
+			return resource.isRefreshing;
+		},
+		get isStale() {
+			return resource.isStale;
+		},
+		get fetchedAt() {
+			return resource.fetchedAt;
+		},
 		open: args.openService,
 		start: async (serviceId: string) => {
 			if (!args.hasSession()) {
 				return;
 			}
 			await api.startService(args.sessionId, serviceId);
-			await refresh();
+			await resource.refresh();
 		},
 		stop: async (serviceId: string) => {
 			if (!args.hasSession()) {
@@ -74,9 +89,12 @@ export function createSessionServicesDomain(
 			try {
 				await api.stopService(args.sessionId, serviceId);
 			} finally {
-				await refresh();
+				await resource.refresh();
 			}
 		},
-		refresh,
+		refresh: async () => {
+			await resource.refresh();
+		},
+		invalidate: resource.invalidate,
 	};
 }

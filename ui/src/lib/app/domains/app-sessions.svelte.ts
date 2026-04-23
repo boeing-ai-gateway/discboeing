@@ -172,9 +172,6 @@ export function createAppSessionsDomain(
 
 	const refresh = async () => {
 		await store.fetch();
-		for (const session of store.list) {
-			void sessionContexts.get(session.id)?.load();
-		}
 	};
 
 	const reloadSession = async (sessionId: string) => {
@@ -185,7 +182,6 @@ export function createAppSessionsDomain(
 				awaitingInitialStatusId = null;
 			}
 		}
-		void sessionContexts.get(sessionId)?.load();
 	};
 
 	return {
