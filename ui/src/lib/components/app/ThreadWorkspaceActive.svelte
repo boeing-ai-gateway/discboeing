@@ -21,19 +21,8 @@
 		session.threads.selectedId ?? session.sessionId,
 	);
 
-	$effect(() => {
-		const currentThread = thread;
-		if (!props.visible) {
-			untrack(() => currentThread.disconnect());
-			return;
-		}
-
-		untrack(() => {
-			void currentThread.connect();
-		});
-		return () => {
-			untrack(() => currentThread.disconnect());
-		};
+	untrack(() => {
+		void thread.connect();
 	});
 
 	onDestroy(() => {

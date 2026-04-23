@@ -173,6 +173,10 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				return args.afterTurn?.();
 			}
 		},
+		onFinish: () => {
+			completionRunning = false;
+			void dismissRetryToast(args.threadId);
+		},
 		onHistoryReplayEnd: () => {
 			fatalStreamError = false;
 			historyReplayVersion += 1;
@@ -358,6 +362,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	}
 
 	function disconnect() {
+		completionRunning = false;
 		void dismissRetryToast(args.threadId);
 		disconnectStream();
 	}

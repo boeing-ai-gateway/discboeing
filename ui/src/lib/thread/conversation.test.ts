@@ -196,12 +196,21 @@ test("conversation loader keeps closed-stream recovery at the websocket layer", 
 	);
 });
 
-test("conversation loader only clears stream errors when a completion starts", () => {
+test("conversation loader falls back to stream finish when completion status never clears", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(
 		source,
-		/onCompletionStatus: \(\{ isRunning \}\) => \{[\s\S]*if \(isRunning\) \{[\s\S]*streamError = null;[\s\S]*\}[\s\S]*completionRunning = isRunning;/,
+		/onFinish: \(\) => \{[\s\S]*completionRunning = false;[\s\S]*dismissRetryToast\(args\.threadId\);/,
+	);
+});
+
+test("conversation loader clears the running flag when the thread disconnects", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(
+		source,
+		/function disconnect\(\) \{[\s\S]*completionRunning = false;[\s\S]*disconnectStream\(\);/,
 	);
 });
 
