@@ -4,6 +4,7 @@ package vz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -197,7 +198,8 @@ type VMManager struct {
 	projectVMMu sync.RWMutex
 
 	// ready is closed when the manager is ready to create VMs.
-	ready chan struct{}
+	ready     chan struct{}
+	readyOnce sync.Once
 
 	// initErr is set if initialization failed (only valid after ready is closed).
 	initErr error
@@ -209,7 +211,8 @@ type VMManager struct {
 	systemManager vm.SystemManager
 
 	// Shutdown signal
-	stopCh chan struct{}
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // Ready returns a channel that is closed when the manager is ready to create VMs.
@@ -220,6 +223,12 @@ func (m *VMManager) Ready() <-chan struct{} {
 // Err returns any error that occurred during initialization.
 func (m *VMManager) Err() error {
 	return m.initErr
+}
+
+func (m *VMManager) closeReady() {
+	m.readyOnce.Do(func() {
+		close(m.ready)
+	})
 }
 
 // Status returns the current status of the VZ VM manager.
@@ -323,7 +332,7 @@ func NewVMManager(cfg vm.Config, systemManager vm.SystemManager, resolver vm.Pro
 		log.Printf("VZ VM manager created, images downloading in background")
 	} else {
 		// Ready immediately
-		close(mgr.ready)
+		mgr.closeReady()
 		log.Printf("VZ VM manager initialized with manual configuration")
 	}
 
@@ -337,6 +346,16 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 	const baseDelay = 5 * time.Second
 
 	downloader := m.imageDownloader
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		select {
+		case <-m.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 
 	// Poll download progress and update system manager
 	if m.systemManager != nil {
@@ -344,40 +363,55 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 			ticker := time.NewTicker(500 * time.Millisecond)
 			defer ticker.Stop()
 
-			for range ticker.C {
-				progress := downloader.Status()
-
-				// Update system manager with progress
-				if progress.TotalBytes > 0 {
-					m.systemManager.UpdateTaskBytes("vz-download", progress.BytesDownloaded, progress.TotalBytes)
-				}
-				if progress.CurrentLayer != "" {
-					m.systemManager.UpdateTaskProgress("vz-download", 0, progress.CurrentLayer)
-				}
-
-				// Check if complete or failed
-				switch progress.State {
-				case DownloadStateReady:
-					m.systemManager.CompleteTask("vz-download")
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				case DownloadStateFailed:
-					m.systemManager.FailTask("vz-download", fmt.Errorf("%s", progress.Error))
-					return
+				case <-ticker.C:
+					progress := downloader.Status()
+
+					// Update system manager with progress
+					if progress.TotalBytes > 0 {
+						m.systemManager.UpdateTaskBytes("vz-download", progress.BytesDownloaded, progress.TotalBytes)
+					}
+					if progress.CurrentLayer != "" {
+						m.systemManager.UpdateTaskProgress("vz-download", 0, progress.CurrentLayer)
+					}
+
+					// Check if complete or failed
+					switch progress.State {
+					case DownloadStateReady:
+						m.systemManager.CompleteTask("vz-download")
+						return
+					case DownloadStateFailed:
+						m.systemManager.FailTask("vz-download", fmt.Errorf("%s", progress.Error))
+						return
+					}
 				}
 			}
 		}()
 	}
 
-	ctx := context.Background()
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Attempt download
 		if err := downloader.Start(ctx); err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				m.initErr = context.Canceled
+				downloader.RecordError(m.initErr)
+				m.closeReady()
+				return
+			}
 			log.Printf("VZ image download failed (attempt %d/%d): %v", attempt, maxRetries, err)
 
 			if attempt < maxRetries {
 				delay := min(baseDelay*time.Duration(1<<uint(attempt-1)), 5*time.Minute)
 				log.Printf("Retrying in %v...", delay)
-				time.Sleep(delay)
+				if err := waitForRetry(ctx, delay); err != nil {
+					m.initErr = context.Canceled
+					downloader.RecordError(m.initErr)
+					m.closeReady()
+					return
+				}
 
 				// Reset downloader for retry
 				downloader = NewImageDownloader(DownloadConfig{
@@ -392,7 +426,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 			m.initErr = fmt.Errorf("download failed after %d attempts: %w", maxRetries, err)
 			downloader.RecordError(m.initErr)
 			log.Printf("VZ image download failed permanently after %d attempts", maxRetries)
-			close(m.ready)
+			m.closeReady()
 			return
 		}
 
@@ -405,7 +439,12 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 			if attempt < maxRetries {
 				delay := min(baseDelay*time.Duration(1<<uint(attempt-1)), 5*time.Minute)
 				log.Printf("Retrying in %v...", delay)
-				time.Sleep(delay)
+				if err := waitForRetry(ctx, delay); err != nil {
+					m.initErr = context.Canceled
+					downloader.RecordError(m.initErr)
+					m.closeReady()
+					return
+				}
 
 				downloader = NewImageDownloader(DownloadConfig{
 					ImageRef: imageRef,
@@ -417,7 +456,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 
 			m.initErr = err
 			downloader.RecordError(err)
-			close(m.ready)
+			m.closeReady()
 			return
 		}
 
@@ -427,7 +466,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 
 		log.Printf("VZ VM manager initialized after image download")
 
-		close(m.ready)
+		m.closeReady()
 		return
 	}
 }
@@ -545,7 +584,9 @@ func (m *VMManager) ResizeDataDisk(_ context.Context, projectID string, sizeGB i
 
 // Shutdown stops all project VMs and shuts down the manager.
 func (m *VMManager) Shutdown() {
-	close(m.stopCh)
+	m.stopOnce.Do(func() {
+		close(m.stopCh)
+	})
 
 	// Stop all VMs
 	m.projectVMMu.Lock()
