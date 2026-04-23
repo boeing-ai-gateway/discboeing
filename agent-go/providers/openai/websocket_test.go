@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1274,6 +1275,117 @@ func TestCompleteViaWebSocket_RetriesAfterImmediateContinuationFallbackFails(t *
 	}
 	if finalReqInputLen != 3 {
 		t.Errorf("delayed retry should preserve full non-system input history (3 items), got %d", finalReqInputLen)
+	}
+}
+
+func TestCompleteViaWebSocket_RetriesAfterResponseCreatedWithoutVisibleOutput(t *testing.T) {
+	var (
+		mu             sync.Mutex
+		connCount      int
+		requestCount   int
+		chunkTypeNames []string
+	)
+
+	ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
+		mu.Lock()
+		connCount++
+		currentConn := connCount
+		mu.Unlock()
+
+		if _, _, err := conn.Read(r.Context()); err != nil {
+			t.Errorf("conn %d read: %v", currentConn, err)
+			return
+		}
+		mu.Lock()
+		requestCount++
+		mu.Unlock()
+
+		switch currentConn {
+		case 1:
+			sendWSEvents(r.Context(), t, conn, []map[string]any{{
+				"type":     "response.created",
+				"response": map[string]any{"id": "resp_partial", "model": "gpt-4o"},
+			}})
+			if err := conn.Close(websocket.StatusInternalError, "reader vanished"); err != nil {
+				t.Errorf("conn 1 close: %v", err)
+			}
+		case 2:
+			sendWSEvents(r.Context(), t, conn, []map[string]any{
+				{"type": "response.created", "response": map[string]any{"id": "resp_retry_ok", "model": "gpt-4o"}},
+				{"type": "response.output_item.added", "item": map[string]any{"id": "msg_1", "type": "message"}},
+				{"type": "response.content_part.added", "part": map[string]any{"type": "output_text"}, "item_id": "msg_1"},
+				{"type": "response.output_text.delta", "item_id": "msg_1", "delta": "Hello"},
+				{"type": "response.output_text.done", "item_id": "msg_1"},
+				{"type": "response.output_item.done", "item": map[string]any{"id": "msg_1", "type": "message"}},
+				{"type": "response.completed", "response": map[string]any{
+					"status": "completed",
+					"output": []map[string]any{{"type": "message"}},
+					"usage": map[string]any{
+						"input_tokens":          1,
+						"input_tokens_details":  map[string]any{"cached_tokens": 0},
+						"output_tokens":         1,
+						"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+					},
+				}},
+			})
+		default:
+			t.Errorf("unexpected connection %d", currentConn)
+		}
+	})
+	defer ts.Close()
+
+	p := &Provider{
+		apiKey:  "test-key",
+		baseURL: ts.URL,
+		client:  ts.Client(),
+		ws:      newWSPool("test-key", ts.URL),
+	}
+
+	req := providers.CompleteRequest{
+		Model:    providers.ModelRef{ProviderID: "openai", ModelID: "gpt-4o"},
+		Messages: []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "Hello"}}}},
+	}
+
+	var gotErr error
+	for chunk, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			gotErr = err
+			continue
+		}
+		if chunk == nil {
+			continue
+		}
+		chunkTypeNames = append(chunkTypeNames, fmt.Sprintf("%T", chunk))
+	}
+
+	if gotErr != nil {
+		t.Fatalf("expected metadata-only websocket failure to retry, got %v", gotErr)
+	}
+	if connCount != 2 {
+		t.Fatalf("expected 2 websocket connections (metadata-only failure + retry), got %d", connCount)
+	}
+	if requestCount != 2 {
+		t.Fatalf("expected 2 websocket requests, got %d", requestCount)
+	}
+	streamStartCount := 0
+	responseMetadataCount := 0
+	for _, name := range chunkTypeNames {
+		switch name {
+		case "message.StreamStartChunk":
+			streamStartCount++
+		case "message.ResponseMetadataChunk":
+			responseMetadataCount++
+		}
+	}
+	if streamStartCount != 2 {
+		t.Fatalf("expected to surface both stream starts across the retried attempts, got %v", chunkTypeNames)
+	}
+	if responseMetadataCount != 2 {
+		t.Fatalf("expected to surface both response metadata chunks across the retried attempts, got %v", chunkTypeNames)
+	}
+	foundTextDelta := slices.Contains(chunkTypeNames, "message.TextDeltaChunk")
+	if !foundTextDelta {
+		t.Fatalf("expected retry to reach text output, got %v", chunkTypeNames)
 	}
 }
 

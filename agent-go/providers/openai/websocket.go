@@ -73,10 +73,10 @@ type pooledConn struct {
 }
 
 type webSocketAttemptResult struct {
-	responseID string
-	clean      bool
-	emitted    bool
-	err        error
+	responseID  string
+	clean       bool
+	retryUnsafe bool
+	err         error
 }
 
 type openAIStreamError struct {
@@ -321,8 +321,9 @@ func (p *Provider) completeViaWebSocket(ctx context.Context, fullBody map[string
 		if result.err == nil {
 			return
 		}
-		if result.emitted {
-			// Error was already surfaced via stream callback after some output.
+		if result.retryUnsafe {
+			// Error was already surfaced via stream callback after user-visible
+			// output (or other replay-unsafe chunks) started flowing.
 			return
 		}
 		if len(attempts) > 0 {
@@ -417,19 +418,28 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 	respID, clean := parseWebSocketStream(ctx, pc.conn, func(chunk message.ProviderMessageChunk, err error) bool {
 		if err != nil {
 			result.err = err
-			if result.emitted {
+			if result.retryUnsafe {
 				return yield(nil, err)
 			}
 			return false
 		}
-		if chunk != nil {
-			result.emitted = true
+		if chunk != nil && isWebSocketRetryUnsafeChunk(chunk) {
+			result.retryUnsafe = true
 		}
 		return yield(chunk, nil)
 	})
 	result.responseID = respID
 	result.clean = clean
 	return result
+}
+
+func isWebSocketRetryUnsafeChunk(chunk message.ProviderMessageChunk) bool {
+	switch chunk.(type) {
+	case message.StreamStartChunk, message.ResponseMetadataChunk:
+		return false
+	default:
+		return chunk != nil
+	}
 }
 
 // parseWebSocketStream reads JSON events from conn until a terminal event or
