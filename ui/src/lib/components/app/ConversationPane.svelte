@@ -164,6 +164,7 @@
 	});
 
 	let viewport = $state<HTMLDivElement | null>(null);
+	let composerContainer = $state<HTMLDivElement | null>(null);
 	let hasInitialBottomScroll = $state(false);
 	let isNearBottom = $state(true);
 	let expandedAssistantStepMessages = $state<Record<string, boolean>>({});
@@ -388,6 +389,10 @@
 		});
 	}
 
+	function refreshReservedTurnHeight(turnId: string) {
+		reservedTurnMinHeight = captureReservedTurnHeight(turnId);
+	}
+
 	function getTurnStyle(isLastTurn: boolean) {
 		if (!isLastTurn || reservedTurnMinHeight <= 0) {
 			return undefined;
@@ -485,6 +490,38 @@
 	});
 
 	$effect(() => {
+		const element = viewport;
+		const composerElement = composerContainer;
+		const turnId = activeTurnId;
+		const latestMessage = conversationMessages.at(-1);
+		if (!element || !turnId || !isProvisionalUserMessage(latestMessage)) {
+			return;
+		}
+
+		const observer = new ResizeObserver(() => {
+			refreshReservedTurnHeight(turnId);
+			scrollToBottom("auto");
+		});
+
+		observer.observe(element);
+		if (composerElement) {
+			observer.observe(composerElement);
+		}
+
+		void tick().then(() => {
+			if (activeTurnId !== turnId) {
+				return;
+			}
+			refreshReservedTurnHeight(turnId);
+			scrollToBottom("auto");
+		});
+
+		return () => {
+			observer.disconnect();
+		};
+	});
+
+	$effect(() => {
 		const latestMessage = conversationMessages.at(-1);
 		const turnId = activeTurnId;
 		if (!viewport || !turnId || !isProvisionalUserMessage(latestMessage)) {
@@ -497,7 +534,7 @@
 		lastReservedSubmitMessageId = latestMessage.id;
 		void tick()
 			.then(() => {
-				reservedTurnMinHeight = captureReservedTurnHeight(turnId);
+				refreshReservedTurnHeight(turnId);
 				return tick();
 			})
 			.then(() => {
@@ -958,7 +995,9 @@
 		</Dialog.Root>
 
 		{#if canShowComposer}
-			<ConversationComposer />
+			<ConversationComposer
+				onContainerChange={(element) => (composerContainer = element)}
+			/>
 		{/if}
 	</div>
 </div>

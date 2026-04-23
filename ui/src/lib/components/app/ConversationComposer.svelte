@@ -43,6 +43,12 @@
 		getLatestPlanState,
 	} from "$lib/session/domains/session-domain.helpers";
 
+	type Props = {
+		onContainerChange?: (element: HTMLDivElement | null) => void;
+	};
+
+	let { onContainerChange }: Props = $props();
+
 	const app = useAppContext();
 	const models = app.models;
 	const preferences = app.preferences;
@@ -54,6 +60,7 @@
 	const sessionHooks = session.hooks;
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
+	let composerContainer = $state<HTMLDivElement | null>(null);
 	let composerTextareaRef = $state<ConversationComposerTextareaHandle | null>(
 		null,
 	);
@@ -291,7 +298,12 @@
 		void focusComposerTextarea();
 	});
 
+	$effect(() => {
+		onContainerChange?.(composerContainer);
+	});
+
 	onDestroy(() => {
+		onContainerChange?.(null);
 		mounted = false;
 	});
 
@@ -466,7 +478,7 @@
 	}
 </script>
 
-<div class="shrink-0 bg-background p-0 md:p-3">
+<div bind:this={composerContainer} class="shrink-0 bg-background p-0 md:p-3">
 	<div
 		class={`w-full ${preferences.chatWidthMode === "constrained" ? "md:mx-auto md:max-w-3xl" : ""}`}
 	>
