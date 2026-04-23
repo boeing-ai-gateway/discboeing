@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
 )
 
 type CredentialReminderUse struct {
@@ -127,20 +129,16 @@ func loadSystemConfig(projectRoot string) (systemConfig, error) {
 }
 
 func parseSystemConfig(content, source string) (systemConfig, error) {
-	fm, body, err := parseFrontmatter(content)
+	doc, err := fmparser.ParseMarkdown[systemPromptFrontmatter](content)
 	if err != nil {
 		return systemConfig{}, fmt.Errorf("parse frontmatter in %s: %w", source, err)
 	}
-
-	allowedTools, err := frontmatterStringList(fm, "allowedTools")
-	if err != nil {
-		return systemConfig{}, fmt.Errorf("%s: %w", source, err)
-	}
+	allowedTools := doc.Metadata.AllowedTools
 	if len(allowedTools) == 0 {
 		return systemConfig{}, fmt.Errorf("%s: allowedTools is required", source)
 	}
 
-	promptBody := strings.TrimSpace(body)
+	promptBody := strings.TrimSpace(doc.Body)
 	if promptBody == "" {
 		return systemConfig{}, fmt.Errorf("%s: system prompt body is empty", source)
 	}
@@ -149,31 +147,4 @@ func parseSystemConfig(content, source string) (systemConfig, error) {
 		PromptBody:   promptBody,
 		AllowedTools: allowedTools,
 	}, nil
-}
-
-func frontmatterStringList(fm map[string]any, key string) ([]string, error) {
-	if fm == nil {
-		return nil, nil
-	}
-	raw, ok := fm[key]
-	if !ok {
-		return nil, nil
-	}
-	items, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%s must be a list of strings", key)
-	}
-	result := make([]string, 0, len(items))
-	for _, item := range items {
-		value, ok := item.(string)
-		if !ok {
-			return nil, fmt.Errorf("%s must be a list of strings", key)
-		}
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return nil, fmt.Errorf("%s cannot contain empty strings", key)
-		}
-		result = append(result, value)
-	}
-	return result, nil
 }

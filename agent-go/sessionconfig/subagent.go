@@ -7,8 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
+	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
@@ -129,74 +128,23 @@ func mergeSubAgents(projectAgents, builtinAgents []SubAgentConfig) []SubAgentCon
 // parseSubAgent parses a single sub-agent markdown file.
 // The file may have YAML frontmatter followed by the agent's prompt.
 func parseSubAgent(filename, content string) (SubAgentConfig, error) {
-	fm, body, err := parseFrontmatter(content)
+	doc, err := fmparser.ParseMarkdown[subAgentFrontmatter](content)
 	if err != nil {
 		return SubAgentConfig{}, fmt.Errorf("parse frontmatter: %w", err)
 	}
 
-	var agent SubAgentConfig
-
-	if fm != nil {
-		if err := normalizeSupportingModelsFrontmatter(fm); err != nil {
-			return SubAgentConfig{}, err
-		}
-
-		yamlBytes, err := yaml.Marshal(fm)
-		if err != nil {
-			return SubAgentConfig{}, fmt.Errorf("re-marshal frontmatter: %w", err)
-		}
-		if err := yaml.Unmarshal(yamlBytes, &agent); err != nil {
-			return SubAgentConfig{}, fmt.Errorf("unmarshal frontmatter: %w", err)
-		}
+	agent := SubAgentConfig{
+		Name:             doc.Metadata.Name,
+		Description:      doc.Metadata.Description,
+		Model:            doc.Metadata.Model,
+		SupportingModels: doc.Metadata.SupportingModels,
+		AllowedTools:     doc.Metadata.AllowedTools,
+		DisallowedTools:  doc.Metadata.DisallowedTools,
+		MaxTurns:         doc.Metadata.MaxTurns,
+		Prompt:           strings.TrimSpace(doc.Body),
 	}
-
 	if agent.Name == "" {
 		agent.Name = strings.TrimSuffix(filename, ".md")
 	}
-
-	agent.Prompt = strings.TrimSpace(body)
-
 	return agent, nil
-}
-
-func normalizeSupportingModelsFrontmatter(fm map[string]any) error {
-	raw, ok := fm["supportingModels"]
-	if !ok {
-		return nil
-	}
-
-	value, ok := raw.(string)
-	if !ok {
-		return nil
-	}
-
-	value = strings.TrimSpace(value)
-	if value == "" {
-		delete(fm, "supportingModels")
-		return nil
-	}
-
-	models := make(providers.SupportingModels)
-	for item := range strings.SplitSeq(value, ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-
-		key, model, ok := strings.Cut(item, "=")
-		if !ok {
-			return fmt.Errorf("parse supportingModels: expected key=value, got %q", item)
-		}
-
-		key = strings.TrimSpace(key)
-		model = strings.TrimSpace(model)
-		if key == "" || model == "" {
-			return fmt.Errorf("parse supportingModels: expected non-empty key=value, got %q", item)
-		}
-
-		models[providers.SupportingModelType(key)] = model
-	}
-
-	fm["supportingModels"] = models
-	return nil
 }

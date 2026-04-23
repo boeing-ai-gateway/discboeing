@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
 )
 
 // ScriptConfig represents a discovered executable slash-command script.
@@ -171,37 +171,37 @@ func loadScriptFile(path, defaultName string) (ScriptConfig, bool, error) {
 		return ScriptConfig{}, false, nil
 	}
 
-	fm, err := parseScriptFrontMatter(content)
+	doc, err := fmparser.ParseScript[scriptFrontmatter](content)
 	if err != nil {
 		return ScriptConfig{}, false, err
 	}
-	if fm == nil {
+	if !doc.HasMetadata {
 		return ScriptConfig{}, false, nil
 	}
 
 	name := normalizeScriptName(defaultName)
-	if value, ok := stringFrontmatterValue(fm, "name"); ok && value != "" {
-		name = strings.TrimSpace(value)
+	if doc.Metadata.Name != "" {
+		name = doc.Metadata.Name
 	}
 	if name == "" {
 		return ScriptConfig{}, false, fmt.Errorf("missing script name")
 	}
 
 	cfg := ScriptConfig{
-		Name:    name,
-		Path:    path,
-		Visible: true,
+		Name:     name,
+		Path:     path,
+		Visible:  true,
+		Discobot: doc.Metadata.discobotMetadata(),
 	}
-	if value, ok := stringFrontmatterValue(fm, "description"); ok {
-		cfg.Description = value
+	if doc.Metadata.Description != "" {
+		cfg.Description = doc.Metadata.Description
 	}
-	if value, ok := boolFrontmatterValue(fm, "visible"); ok {
-		cfg.Visible = value
+	if doc.Metadata.Visible != nil {
+		cfg.Visible = *doc.Metadata.Visible
 	}
-	if value, ok := stringFrontmatterValue(fm, "argument-hint", "argumentHint"); ok {
-		cfg.ArgumentHint = value
+	if doc.Metadata.ArgumentHint != "" {
+		cfg.ArgumentHint = doc.Metadata.ArgumentHint
 	}
-	cfg.Discobot = parseDiscobotMetadata(fm)
 
 	return cfg, true, nil
 }
@@ -221,87 +221,6 @@ func normalizeScriptName(name string) string {
 		name = strings.TrimSuffix(name, filepath.Ext(name))
 	}
 	return strings.TrimSpace(name)
-}
-
-func parseScriptFrontMatter(content string) (map[string]any, error) {
-	lines := strings.Split(content, "\n")
-	if len(lines) < 2 {
-		return nil, nil
-	}
-
-	startLine := 0
-	if strings.HasPrefix(lines[0], "#!") {
-		startLine = 1
-	}
-	if len(lines) <= startLine {
-		return nil, nil
-	}
-
-	delim := detectScriptDelimiter(lines[startLine])
-	if delim == nil {
-		return nil, nil
-	}
-
-	var yamlLines []string
-	found := false
-	for i := startLine + 1; i < len(lines); i++ {
-		if matchesScriptDelimiter(lines[i], delim.delimiter) {
-			found = true
-			break
-		}
-		yamlLines = append(yamlLines, stripScriptFrontMatterPrefix(lines[i], delim.prefix))
-	}
-	if !found {
-		return nil, nil
-	}
-
-	frontmatter := make(map[string]any)
-	yamlContent := strings.Join(yamlLines, "\n")
-	if err := yaml.Unmarshal([]byte(yamlContent), &frontmatter); err != nil {
-		return nil, fmt.Errorf("parse script front matter: %w", err)
-	}
-	return frontmatter, nil
-}
-
-type scriptDelimiter struct {
-	prefix    string
-	delimiter string
-}
-
-func detectScriptDelimiter(line string) *scriptDelimiter {
-	switch strings.TrimSpace(line) {
-	case "---":
-		return &scriptDelimiter{delimiter: "---"}
-	case "#---":
-		return &scriptDelimiter{prefix: "#", delimiter: "#---"}
-	case "//---":
-		return &scriptDelimiter{prefix: "//", delimiter: "//---"}
-	default:
-		return nil
-	}
-}
-
-func matchesScriptDelimiter(line, delimiter string) bool {
-	return strings.TrimSpace(line) == delimiter
-}
-
-func stripScriptFrontMatterPrefix(line, prefix string) string {
-	if prefix == "" {
-		return line
-	}
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, prefix) {
-		return line
-	}
-	_, after, ok := strings.Cut(line, prefix)
-	if !ok {
-		return line
-	}
-	content := after
-	if len(content) > 0 && (content[0] == ' ' || content[0] == '\t') {
-		content = content[1:]
-	}
-	return content
 }
 
 // FormatScriptsReminder formats visible scripts as skill-like executable slash
