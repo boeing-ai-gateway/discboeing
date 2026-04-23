@@ -132,3 +132,69 @@ func TestMarkdownRenderer_NonFormatModePassThrough(t *testing.T) {
 		t.Fatalf("unexpected ANSI escapes in non-format mode: %q", got)
 	}
 }
+
+func TestMarkdownRenderer_RendersMarkdownTable(t *testing.T) {
+	var out bytes.Buffer
+	r := newMarkdownRenderer(&out, true, false)
+
+	r.WriteText("| Name | Count |\n")
+	if got := out.String(); got != "" {
+		t.Fatalf("expected header row to buffer until table is confirmed, got %q", got)
+	}
+
+	r.WriteText("| :--- | ----: |\n")
+	r.WriteText("| apples | 12 |\n")
+	if got := out.String(); got != "" {
+		t.Fatalf("expected confirmed table to buffer until block ends, got %q", got)
+	}
+
+	r.WriteText("after\n")
+
+	want := strings.Join([]string{
+		"| Name   | Count |",
+		"| ------ | ----: |",
+		"| apples |    12 |",
+		"after",
+		"",
+	}, "\n")
+	if got := out.String(); got != want {
+		t.Fatalf("table output mismatch\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+func TestMarkdownRenderer_FinishFlushesTrailingTable(t *testing.T) {
+	var out bytes.Buffer
+	r := newMarkdownRenderer(&out, true, false)
+
+	r.WriteText("metric | value\n")
+	r.WriteText("------ | -----\n")
+	r.WriteText("latency | 42ms\n")
+	r.Finish()
+
+	want := strings.Join([]string{
+		"| metric  | value |",
+		"| ------- | ----- |",
+		"| latency | 42ms  |",
+		"",
+	}, "\n")
+	if got := out.String(); got != want {
+		t.Fatalf("expected finish to flush trailing table\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+func TestMarkdownRenderer_NonTablePipeLineFallsBackToNormalText(t *testing.T) {
+	var out bytes.Buffer
+	r := newMarkdownRenderer(&out, true, false)
+
+	r.WriteText("a | b\n")
+	if got := out.String(); got != "" {
+		t.Fatalf("expected possible table header to stay buffered, got %q", got)
+	}
+
+	r.WriteText("next line\n")
+
+	want := "a | b\nnext line\n"
+	if got := out.String(); got != want {
+		t.Fatalf("expected non-table pipe line to fall back to normal text\nwant: %q\n got: %q", want, got)
+	}
+}
