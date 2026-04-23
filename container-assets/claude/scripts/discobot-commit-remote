@@ -38,6 +38,7 @@ upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/
 default_remote=$(git remote 2>/dev/null | head -n 1 || true)
 remote_url=$(git remote get-url "${default_remote}" 2>/dev/null || true)
 provider="other"
+user_instructions=${1-}
 if [[ "$remote_url" == *github.com* ]]; then
 	provider="github"
 fi
@@ -63,6 +64,17 @@ Primary remote: ${default_remote:-none}
 Primary remote URL: ${remote_url:-unknown}
 Detected provider: ${provider}
 GitHub CLI: ${gh_status}
+EOF
+
+if [[ -n "$user_instructions" ]]; then
+	cat <<EOF
+
+Additional user instructions:
+${user_instructions}
+EOF
+fi
+
+cat <<EOF
 
 Guidance:
 - do not push directly to the default branch unless the user explicitly asked
@@ -70,6 +82,7 @@ Guidance:
   pull request creation
 - only request credentials when the next concrete git or gh command requires
   them
+- follow any additional user instructions above while preparing the commit series
 - do not use RequestCommitPull for this remote flow
 
 EOF

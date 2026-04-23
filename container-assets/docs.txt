@@ -37,6 +37,7 @@ Behavior:
 - visible scripts are presented to the model the same way as skills
 - hidden scripts are omitted from reminders and cannot be invoked by the model
 - working directory is the project root (`/home/discobot/workspace`)
+- Discobot passes everything after `/name` as a single raw string in `$1`
 - success forwards trimmed `stdout`
 - failure forwards execution metadata plus trimmed `stdout` and `stderr`
 - empty successful output does not trigger a no-op model response
@@ -50,7 +51,7 @@ Example:
 # description: Summarize the current git diff
 # visible: true
 #---
-git diff --stat -- ${1+"$@"}
+git diff --stat -- "$1"
 ```
 
 ## .discobot/hooks/

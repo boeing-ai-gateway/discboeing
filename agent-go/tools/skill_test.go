@@ -20,16 +20,16 @@ func TestRunSkillExecutesVisibleScript(t *testing.T) {
 	}
 
 	scriptPath := filepath.Join(cwd, ".discobot", "scripts", "hello.sh")
-	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\n#---\n# description: greet\n#---\nprintf 'hello %s\\n' \"$1\"\n"), 0o755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\n#---\n# description: greet\n#---\nprintf 'argc=%s\\narg1=%s\\n' \"$#\" \"$1\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := runSkill(context.Background(), cwd, nil, "hello", "world")
+	result, err := runSkill(context.Background(), cwd, nil, "hello", `world "quoted" tail`)
 	if err != nil {
 		t.Fatalf("runSkill returned error: %v", err)
 	}
-	if result != "hello world" {
-		t.Fatalf("runSkill = %q, want %q", result, "hello world")
+	if result != "argc=1\narg1=world \"quoted\" tail" {
+		t.Fatalf("runSkill = %q, want %q", result, "argc=1\narg1=world \"quoted\" tail")
 	}
 }
 

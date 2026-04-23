@@ -117,7 +117,8 @@ Bash-based scripts require `bash` to be available on `PATH`.
 
 When a script is run:
 
-- Discobot executes the file directly with the parsed slash-command arguments
+- Discobot executes the file directly and passes everything after `/name` as one
+  raw string in `$1`
 - the working directory is `/home/discobot/workspace`
 - the session environment, including `.discobot/env`, is available
 - on success, only trimmed `stdout` is forwarded to the LLM
@@ -140,7 +141,7 @@ available to the LLM through the `Skill` tool.
 # visible: true
 # argument-hint: Optional pathspec
 #---
-git diff --stat -- ${1+"$@"}
+git diff --stat -- "$1"
 ```
 
 ### Example — Hidden script

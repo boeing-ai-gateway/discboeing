@@ -30,6 +30,7 @@ print_section() {
 head_sha=$(git rev-parse HEAD)
 merge_base=$(git merge-base HEAD '@{upstream}' 2>/dev/null || printf '%s' "$head_sha")
 branch_name=$(git branch --show-current 2>/dev/null || true)
+user_instructions=${1-}
 
 cat <<EOF
 Discobot commit context
@@ -44,6 +45,17 @@ commands unless something changes while you work.
 Current branch: ${branch_name:-detached HEAD}
 Current HEAD: ${head_sha}
 Suggested current series base: ${merge_base}
+EOF
+
+if [[ -n "$user_instructions" ]]; then
+	cat <<EOF
+
+Additional user instructions:
+${user_instructions}
+EOF
+fi
+
+cat <<EOF
 
 If you create new commit(s) directly on top of the current HEAD, the most likely
 baseCommit for RequestCommitPull is ${head_sha}. If you keep or amend existing
@@ -52,6 +64,7 @@ RequestCommitPull.
 
 After your commit series is ready:
 - ensure the worktree is in the state you intend to transfer
+- follow any additional user instructions above while preparing the commit series
 - call RequestCommitPull with the exact base commit for the prepared series
 - include any important notes for the user in the tool call
 

@@ -63,9 +63,9 @@ func RunNamed(ctx context.Context, projectRoot, workDir string, env []string, sc
 }
 
 func RunDiscovered(ctx context.Context, script sessionconfig.ScriptConfig, workDir string, env []string, rawArgs string) (Execution, error) {
-	args, err := sessionconfig.SplitScriptArgs(rawArgs)
-	if err != nil {
-		return Execution{}, err
+	var args []string
+	if rawArgs != "" {
+		args = []string{rawArgs}
 	}
 
 	cmd := exec.CommandContext(ctx, script.Path, args...)

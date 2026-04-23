@@ -28,6 +28,7 @@ print_section() {
 }
 
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+user_instructions=${1-}
 if [[ -z "$upstream" ]]; then
 	echo "Discobot rebase could not start because no upstream branch is configured for the current branch." >&2
 	echo >&2
@@ -59,8 +60,20 @@ Discobot rebase completed successfully.
 
 This slash command already fetched ${remote_name}, rebased the current branch
 onto ${upstream}, and gathered the post-rebase git state for you.
+EOF
+
+if [[ -n "$user_instructions" ]]; then
+	cat <<EOF
+
+Additional user instructions:
+${user_instructions}
+EOF
+fi
+
+cat <<EOF
 
 Summarize the result for the user and mention any important follow-up if needed.
+Follow any additional user instructions above when you prepare that response.
 
 EOF
 
