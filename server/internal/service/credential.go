@@ -589,7 +589,8 @@ func (s *CredentialService) SetSessionAssignments(ctx context.Context, projectID
 	if err := s.store.DeleteSessionCredentialAssignments(ctx, sessionID); err != nil {
 		return nil, err
 	}
-	for _, assignment := range assignments {
+	baseTime := time.Now().UTC()
+	for i, assignment := range assignments {
 		cred, err := s.store.GetCredentialByIDForProject(ctx, projectID, assignment.CredentialID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
@@ -617,6 +618,11 @@ func (s *CredentialService) SetSessionAssignments(ctx context.Context, projectID
 		if existing != nil {
 			existingUses = parseSessionCredentialUses(existing.UsesJSON)
 		}
+		timestamp := baseTime.Add(time.Duration(i) * time.Nanosecond)
+		createdAt := timestamp
+		if existing != nil && !existing.CreatedAt.IsZero() {
+			createdAt = existing.CreatedAt
+		}
 		uses := normalizeSessionCredentialUses(existingUses, assignment.Uses)
 		usesJSON, err := json.Marshal(uses)
 		if err != nil {
@@ -633,6 +639,8 @@ func (s *CredentialService) SetSessionAssignments(ctx context.Context, projectID
 			ServiceVisible:      assignment.Visibility.Services,
 			HookVisible:         assignment.Visibility.Hooks,
 			UsesJSON:            usesJSON,
+			CreatedAt:           createdAt,
+			UpdatedAt:           timestamp,
 		}); err != nil {
 			return nil, err
 		}

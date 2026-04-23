@@ -1,11 +1,16 @@
 package scriptexec
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
@@ -68,7 +73,10 @@ func RunDiscovered(ctx context.Context, script sessionconfig.ScriptConfig, workD
 		args = []string{rawArgs}
 	}
 
-	cmd := exec.CommandContext(ctx, script.Path, args...)
+	cmd, err := commandForScript(ctx, script.Path, args)
+	if err != nil {
+		return Execution{}, fmt.Errorf("run script %s: %w", script.Name, err)
+	}
 	if strings.TrimSpace(workDir) != "" {
 		cmd.Dir = workDir
 	}
@@ -99,4 +107,62 @@ func RunDiscovered(ctx context.Context, script sessionconfig.ScriptConfig, workD
 		return result, nil
 	}
 	return Execution{}, fmt.Errorf("run script %s: %w", script.Name, execErr)
+}
+
+func commandForScript(ctx context.Context, scriptPath string, args []string) (*exec.Cmd, error) {
+	if runtime.GOOS != "windows" {
+		return exec.CommandContext(ctx, scriptPath, args...), nil
+	}
+
+	switch strings.ToLower(filepath.Ext(scriptPath)) {
+	case ".bat", ".cmd", ".com", ".exe":
+		return exec.CommandContext(ctx, scriptPath, args...), nil
+	case ".ps1":
+		return exec.CommandContext(ctx, "powershell", append([]string{"-File", scriptPath}, args...)...), nil
+	}
+
+	interpreter, interpreterArgs, err := interpreterForScript(scriptPath)
+	if err != nil {
+		return nil, err
+	}
+	if interpreter == "" {
+		return exec.CommandContext(ctx, scriptPath, args...), nil
+	}
+
+	return exec.CommandContext(
+		ctx,
+		interpreter,
+		append(append(interpreterArgs, scriptPath), args...)...,
+	), nil
+}
+
+func interpreterForScript(scriptPath string) (string, []string, error) {
+	file, err := os.Open(scriptPath)
+	if err != nil {
+		return "", nil, err
+	}
+	defer file.Close()
+
+	line, err := bufio.NewReader(file).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", nil, err
+	}
+	if !strings.HasPrefix(line, "#!") {
+		return "", nil, nil
+	}
+
+	fields := strings.Fields(strings.TrimSpace(strings.TrimPrefix(line, "#!")))
+	if len(fields) == 0 {
+		return "", nil, nil
+	}
+	if filepath.Base(fields[0]) == "env" {
+		if len(fields) == 1 {
+			return "", nil, nil
+		}
+		return fields[1], fields[2:], nil
+	}
+	if strings.HasPrefix(fields[0], "/") {
+		fields[0] = filepath.Base(fields[0])
+	}
+	return fields[0], fields[1:], nil
 }

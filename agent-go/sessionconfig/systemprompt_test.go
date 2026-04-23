@@ -101,7 +101,7 @@ func TestDefaultSystemPrompt_Content(t *testing.T) {
 		"## Runtime rules",
 		"## Working rules",
 		"## Tool use",
-		"## Style",
+		"## Communication style",
 		"/discobot/docs.txt",
 		"/usr/bin/agent-browser",
 	} {
