@@ -636,7 +636,10 @@ func (s *Store) DeleteCredential(ctx context.Context, projectID, provider string
 
 func (s *Store) ListSessionCredentialAssignments(ctx context.Context, sessionID string) ([]*model.SessionCredentialAssignment, error) {
 	var assignments []*model.SessionCredentialAssignment
-	err := s.readDB.WithContext(ctx).Where("session_id = ?", sessionID).Order("created_at ASC").Find(&assignments).Error
+	err := s.readDB.WithContext(ctx).
+		Where("session_id = ?", sessionID).
+		Order("updated_at ASC, created_at ASC, id ASC").
+		Find(&assignments).Error
 	return assignments, err
 }
 

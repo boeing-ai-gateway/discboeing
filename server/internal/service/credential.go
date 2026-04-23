@@ -228,7 +228,8 @@ func sessionCredentialAssignmentBindingKey(credentialID, envVar string) string {
 
 func normalizeSessionCredentialUses(existing []SessionCredentialUse, requested []SessionCredentialUse) []SessionCredentialUse {
 	now := time.Now().UTC()
-	byDescription := make(map[string]SessionCredentialUse, len(existing))
+	existingByID := make(map[string]SessionCredentialUse, len(existing))
+	existingByDescription := make(map[string]SessionCredentialUse, len(existing))
 	for _, use := range existing {
 		key := strings.TrimSpace(strings.ToLower(use.Description))
 		if key == "" {
@@ -243,46 +244,57 @@ func normalizeSessionCredentialUses(existing []SessionCredentialUse, requested [
 		if use.ExpiresAt.IsZero() {
 			use.ExpiresAt = use.CreatedAt.Add(sessionCredentialUseDuration)
 		}
-		byDescription[key] = use
+		existingByID[use.ID] = use
+		existingByDescription[key] = use
 	}
+
+	resultByDescription := make(map[string]SessionCredentialUse, len(requested))
 	for _, use := range requested {
 		desc := strings.TrimSpace(use.Description)
 		if desc == "" {
 			continue
 		}
 		key := strings.ToLower(desc)
-		existingUse, ok := byDescription[key]
-		if ok {
-			if !use.ExpiresAt.IsZero() {
-				existingUse.ExpiresAt = use.ExpiresAt.UTC()
-			} else if existingUse.ExpiresAt.IsZero() {
-				existingUse.ExpiresAt = existingUse.CreatedAt.Add(sessionCredentialUseDuration)
-			}
-			if use.LastUsedAt.After(existingUse.LastUsedAt) {
-				existingUse.LastUsedAt = use.LastUsedAt
-			}
-			if strings.TrimSpace(use.LastUsedToolCallID) != "" {
-				existingUse.LastUsedToolCallID = strings.TrimSpace(use.LastUsedToolCallID)
-			}
-			byDescription[key] = existingUse
-			continue
+		base, ok := existingByID[strings.TrimSpace(use.ID)]
+		if !ok {
+			base, ok = existingByDescription[key]
 		}
-		if use.ID == "" {
-			use.ID = generateSessionScopedID("use_s_")
-		}
+
 		use.Description = desc
+		if strings.TrimSpace(use.ID) == "" {
+			if ok && base.ID != "" {
+				use.ID = base.ID
+			} else {
+				use.ID = generateSessionScopedID("use_s_")
+			}
+		}
 		if use.CreatedAt.IsZero() {
-			use.CreatedAt = now
+			if ok && !base.CreatedAt.IsZero() {
+				use.CreatedAt = base.CreatedAt
+			} else {
+				use.CreatedAt = now
+			}
 		}
 		if use.ExpiresAt.IsZero() {
-			use.ExpiresAt = use.CreatedAt.Add(sessionCredentialUseDuration)
+			if ok && !base.ExpiresAt.IsZero() {
+				use.ExpiresAt = base.ExpiresAt
+			} else {
+				use.ExpiresAt = use.CreatedAt.Add(sessionCredentialUseDuration)
+			}
 		} else {
 			use.ExpiresAt = use.ExpiresAt.UTC()
 		}
-		byDescription[key] = use
+		if ok && base.LastUsedAt.After(use.LastUsedAt) {
+			use.LastUsedAt = base.LastUsedAt
+		}
+		if strings.TrimSpace(use.LastUsedToolCallID) == "" && ok {
+			use.LastUsedToolCallID = strings.TrimSpace(base.LastUsedToolCallID)
+		}
+		resultByDescription[key] = use
 	}
-	result := make([]SessionCredentialUse, 0, len(byDescription))
-	for _, use := range byDescription {
+
+	result := make([]SessionCredentialUse, 0, len(resultByDescription))
+	for _, use := range resultByDescription {
 		result = append(result, use)
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -1039,6 +1051,8 @@ type CredentialEnvVar struct {
 	ServiceVisible      bool                   `json:"serviceVisible"`
 	HookVisible         bool                   `json:"hookVisible"`
 	ExpiresAt           int64                  `json:"expiresAt,omitempty"` // OAuth only (unix timestamp)
+	CreatedAt           time.Time              `json:"-"`
+	UpdatedAt           time.Time              `json:"-"`
 }
 
 // GetAllDecrypted returns all configured credentials for a project as environment variable mappings.
@@ -1087,6 +1101,25 @@ func (s *CredentialService) GetVisibleEnvVarsForSession(ctx context.Context, ses
 	if err != nil {
 		return nil, err
 	}
+	sort.SliceStable(envVars, func(i, j int) bool {
+		leftUpdatedAt := envVars[i].UpdatedAt
+		if leftUpdatedAt.IsZero() {
+			leftUpdatedAt = envVars[i].CreatedAt
+		}
+		rightUpdatedAt := envVars[j].UpdatedAt
+		if rightUpdatedAt.IsZero() {
+			rightUpdatedAt = envVars[j].CreatedAt
+		}
+		if !leftUpdatedAt.Equal(rightUpdatedAt) {
+			return leftUpdatedAt.Before(rightUpdatedAt)
+		}
+		leftCreatedAt := envVars[i].CreatedAt
+		rightCreatedAt := envVars[j].CreatedAt
+		if !leftCreatedAt.Equal(rightCreatedAt) {
+			return leftCreatedAt.Before(rightCreatedAt)
+		}
+		return envVars[i].EnvVar < envVars[j].EnvVar
+	})
 	result := make(map[string]string, len(envVars))
 	for _, envVar := range envVars {
 		visible := false
@@ -1146,12 +1179,16 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 			envVar := ""
 			sourceEnvVar := ""
 			var uses []SessionCredentialUse
+			createdAt := c.CreatedAt
+			updatedAt := c.UpdatedAt
 			if assignment != nil {
 				sessionVisibility := credentialVisibilityForAssignment(assignment)
 				visibility = effectiveCredentialVisibility(globalVisibility, sessionVisibility)
 				sessionCredentialID = assignment.SessionCredentialID
 				envVar = assignment.EnvVar
 				sourceEnvVar = assignment.SourceEnvVar
+				createdAt = assignment.CreatedAt
+				updatedAt = assignment.UpdatedAt
 				parsedUses := parseSessionCredentialUses(assignment.UsesJSON)
 				uses = activeSessionCredentialUses(parsedUses, time.Now().UTC())
 				if len(parsedUses) > 0 && len(uses) == 0 {
@@ -1186,6 +1223,8 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 							ConsoleVisible:      visibility.Console,
 							ServiceVisible:      visibility.Services,
 							HookVisible:         visibility.Hooks,
+							CreatedAt:           createdAt,
+							UpdatedAt:           updatedAt,
 						})
 						break
 					}
@@ -1204,6 +1243,8 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 						ConsoleVisible:      visibility.Console,
 						ServiceVisible:      visibility.Services,
 						HookVisible:         visibility.Hooks,
+						CreatedAt:           createdAt,
+						UpdatedAt:           updatedAt,
 					})
 				}
 			case AuthTypeOAuth:
@@ -1236,6 +1277,8 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 						ServiceVisible:      visibility.Services,
 						HookVisible:         visibility.Hooks,
 						ExpiresAt:           tokens.ExpiresAt.Unix(),
+						CreatedAt:           createdAt,
+						UpdatedAt:           updatedAt,
 					})
 				}
 			}

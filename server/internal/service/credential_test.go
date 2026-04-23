@@ -1288,3 +1288,185 @@ func TestCredentialService_SetSessionAssignments_AllowsMultipleEnvVarBindingsFor
 		t.Fatalf("expected both GH_TOKEN and GITHUB_TOKEN bindings, got %#v", envVars)
 	}
 }
+
+func TestCredentialService_SetSessionAssignments_RemovesDeletedUse(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	project := &model.Project{ID: "test-project", Name: "Test Project", Slug: "test-project"}
+	if err := st.CreateProject(ctx, project); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "test-workspace",
+		ProjectID:  project.ID,
+		Path:       "/tmp/test-workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Test Session",
+		Status:      model.SessionStatusReady,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	cred, err := credSvc.SetOAuthTokensWithMetadata(
+		ctx,
+		project.ID,
+		"",
+		ProviderGitHub,
+		"GitHub",
+		"",
+		CredentialVisibility{Tools: true},
+		false,
+		&OAuthCredential{AccessToken: "gho_test_token"},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential: %v", err)
+	}
+
+	assignments, err := credSvc.SetSessionAssignments(ctx, project.ID, session.ID, []SessionCredentialAssignmentInfo{{
+		CredentialID:        cred.ID,
+		SessionCredentialID: "cred_s_shared",
+		EnvVar:              "GITHUB_TOKEN",
+		Visibility:          CredentialVisibility{Tools: true},
+		Uses: []SessionCredentialUse{
+			{ID: "use_s_keep", Description: "authenticate git"},
+			{ID: "use_s_drop", Description: "create pull requests"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+	if len(assignments) != 1 {
+		t.Fatalf("expected 1 assignment, got %d", len(assignments))
+	}
+
+	assignments, err = credSvc.SetSessionAssignments(ctx, project.ID, session.ID, []SessionCredentialAssignmentInfo{{
+		CredentialID:        cred.ID,
+		SessionCredentialID: assignments[0].SessionCredentialID,
+		EnvVar:              "GITHUB_TOKEN",
+		Visibility:          CredentialVisibility{Tools: true},
+		Uses: []SessionCredentialUse{
+			assignments[0].Uses[0],
+		},
+	}})
+	if err != nil {
+		t.Fatalf("Failed to update session assignments: %v", err)
+	}
+	if len(assignments) != 1 {
+		t.Fatalf("expected 1 assignment after update, got %d", len(assignments))
+	}
+	if len(assignments[0].Uses) != 1 {
+		t.Fatalf("expected 1 remaining use, got %#v", assignments[0].Uses)
+	}
+	if assignments[0].Uses[0].ID != "use_s_keep" {
+		t.Fatalf("expected kept use to remain, got %#v", assignments[0].Uses)
+	}
+}
+
+func TestCredentialService_GetVisibleEnvVarsForSession_LatestBindingWins(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	project := &model.Project{ID: "test-project", Name: "Test Project", Slug: "test-project"}
+	if err := st.CreateProject(ctx, project); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "test-workspace",
+		ProjectID:  project.ID,
+		Path:       "/tmp/test-workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Test Session",
+		Status:      model.SessionStatusReady,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	oldCred, err := credSvc.SetCustomCredential(
+		ctx,
+		project.ID,
+		"",
+		"Old token",
+		"",
+		[]SecretEnvVar{{Key: "TOKEN_A", Value: "old-value"}},
+		CredentialVisibility{Console: true},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create old credential: %v", err)
+	}
+	newCred, err := credSvc.SetCustomCredential(
+		ctx,
+		project.ID,
+		"",
+		"New token",
+		"",
+		[]SecretEnvVar{{Key: "TOKEN_B", Value: "new-value"}},
+		CredentialVisibility{Console: true},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create new credential: %v", err)
+	}
+
+	if _, err := credSvc.SetSessionAssignments(ctx, project.ID, session.ID, []SessionCredentialAssignmentInfo{
+		{
+			CredentialID: oldCred.ID,
+			EnvVar:       "SHARED_TOKEN",
+			SourceEnvVar: "TOKEN_A",
+			Visibility:   CredentialVisibility{Console: true},
+		},
+		{
+			CredentialID: newCred.ID,
+			EnvVar:       "SHARED_TOKEN",
+			SourceEnvVar: "TOKEN_B",
+			Visibility:   CredentialVisibility{Console: true},
+		},
+	}); err != nil {
+		t.Fatalf("Failed to set session assignments: %v", err)
+	}
+
+	envVars, err := credSvc.GetVisibleEnvVarsForSession(ctx, session.ID, CredentialVisibilityContextConsole)
+	if err != nil {
+		t.Fatalf("GetVisibleEnvVarsForSession(console) failed: %v", err)
+	}
+	if envVars["SHARED_TOKEN"] != "new-value" {
+		t.Fatalf("expected latest binding to win, got %#v", envVars)
+	}
+}
