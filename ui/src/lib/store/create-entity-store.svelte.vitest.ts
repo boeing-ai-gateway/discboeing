@@ -1,7 +1,25 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { flushSync } from "svelte";
-import { describe, expect, it } from "vitest";
 
 import { createEntityStore } from "./create-entity-store.svelte";
+
+function expect<T>(actual: T) {
+	return {
+		toEqual(expected: unknown) {
+			assert.deepEqual(actual, expected);
+		},
+		toBe(expected: unknown) {
+			assert.equal(actual, expected);
+		},
+		not: {
+			toThrow() {
+				assert.doesNotThrow(actual as () => unknown);
+			},
+		},
+	};
+}
 
 type Deferred<T> = {
 	promise: Promise<T>;
