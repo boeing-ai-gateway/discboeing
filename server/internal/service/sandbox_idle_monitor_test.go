@@ -20,6 +20,27 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
+func idleMonitorAgentHandler(statusByThread map[string]bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/threads" {
+			w.Header().Set("Content-Type", "application/json")
+			threads := make([]string, 0, len(statusByThread))
+			for threadID := range statusByThread {
+				threads = append(threads, fmt.Sprintf(`{"id":%q,"name":%q}`, threadID, threadID))
+			}
+			fmt.Fprintf(w, `{"threads":[%s]}`, strings.Join(threads, ","))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/chat/status") {
+			threadID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/threads/"), "/chat/status")
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"isRunning":%t}`, statusByThread[threadID])
+			return
+		}
+		http.NotFound(w, r)
+	}
+}
+
 // setupTestStoreForIdleMonitor creates an in-memory SQLite database for testing
 func setupTestStoreForIdleMonitor(t *testing.T) *store.Store {
 	t.Helper()
@@ -50,14 +71,7 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 	var stopCalled atomic.Bool
 
 	// Create mock agent API that reports no active chat via /chat/status.
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat/status") {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"isRunning":false}`)
-			return
-		}
-		http.NotFound(w, r)
-	})
+	handler := idleMonitorAgentHandler(map[string]bool{"test-session": false})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -149,14 +163,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 	var stopCalled atomic.Bool
 
 	// Create mock agent API that returns running completion
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat/status") {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"isRunning":true}`)
-			return
-		}
-		http.NotFound(w, r)
-	})
+	handler := idleMonitorAgentHandler(map[string]bool{"test-session": true})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -237,6 +244,87 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 	}
 }
 
+// TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread verifies
+// that the monitor checks every thread in the session before stopping it.
+func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStoreForIdleMonitor(t)
+	logger := slog.Default()
+
+	var stopCalled atomic.Bool
+
+	handler := idleMonitorAgentHandler(map[string]bool{
+		"test-session":     false,
+		"secondary-thread": true,
+	})
+
+	mockProvider := &mockSandboxProvider{
+		secret:  "test-secret",
+		handler: handler,
+		onStop:  func(string) { stopCalled.Store(true) },
+	}
+
+	cfg := &config.Config{}
+	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+
+	monitor := NewSandboxIdleMonitor(
+		testStore,
+		sandboxSvc,
+		sessionSvc,
+		nil,
+		logger,
+		1*time.Second,
+		100*time.Millisecond,
+	)
+
+	project := &model.Project{ID: "test-project", Name: "Test"}
+	workspace := &model.Workspace{
+		ID:          "test-ws",
+		ProjectID:   project.ID,
+		Path:        "/test",
+		SourceType:  "local",
+		DisplayName: func() *string { s := "Test WS"; return &s }(),
+	}
+
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatal(err)
+	}
+
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusReady,
+		UpdatedAt:   time.Now().Add(-2 * time.Second),
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := monitor.checkIdleSessions(ctx); err != nil {
+		t.Fatalf("checkIdleSessions failed: %v", err)
+	}
+
+	if stopCalled.Load() {
+		t.Error("Expected sandbox NOT to be stopped when a secondary thread is running")
+	}
+
+	updatedSession, err := testStore.GetSessionByID(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedSession.Status != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	}
+}
+
 // TestSandboxIdleMonitor_ActivityResetsTimer verifies that recent activity
 // prevents a session from being stopped.
 func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
@@ -247,14 +335,7 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 	// Track stop calls
 	var stopCalled atomic.Bool
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat/status") {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"isRunning":false}`)
-			return
-		}
-		http.NotFound(w, r)
-	})
+	handler := idleMonitorAgentHandler(map[string]bool{"test-session": false})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -471,13 +552,10 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 	// Track stops per session
 	var stopCount atomic.Int32
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat/status") {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"isRunning":false}`)
-			return
-		}
-		http.NotFound(w, r)
+	handler := idleMonitorAgentHandler(map[string]bool{
+		"idle-session-1": false,
+		"idle-session-2": false,
+		"idle-session-3": false,
 	})
 
 	mockProvider := &mockSandboxProvider{

@@ -169,10 +169,10 @@ func (c *SessionClient) DeleteThread(ctx context.Context, threadID string) (*san
 	})
 }
 
-// GetChatStatus retrieves the completion status from the sandbox.
-func (c *SessionClient) GetChatStatus(ctx context.Context) (*sandboxapi.ChatStatusResponse, error) {
+// GetChatStatus retrieves the completion status for a thread from the sandbox.
+func (c *SessionClient) GetChatStatus(ctx context.Context, threadID string) (*sandboxapi.ChatStatusResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.ChatStatusResponse, error) {
-		return c.inner.GetChatStatus(ctx, c.sessionID)
+		return c.inner.GetChatStatus(ctx, c.sessionID, threadID)
 	})
 }
 

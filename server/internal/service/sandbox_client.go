@@ -850,9 +850,9 @@ func (c *SandboxChatClient) DeleteThread(ctx context.Context, sessionID, threadI
 	return &result, nil
 }
 
-// GetChatStatus retrieves the completion status from the sandbox.
+// GetChatStatus retrieves the completion status for a thread from the sandbox.
 // Calls GET /threads/{id}/chat/status which returns {"isRunning": bool}.
-func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID string) (*sandboxapi.ChatStatusResponse, error) {
+func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID, threadID string) (*sandboxapi.ChatStatusResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -861,7 +861,7 @@ func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID string)
 		defer lease.Release()
 		client := lease.Client
 
-		req, err := http.NewRequestWithContext(ctx, "GET", c.threadURL(sessionID, "/chat/status"), nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", c.threadURL(threadID, "/chat/status"), nil)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}

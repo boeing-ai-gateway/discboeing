@@ -182,17 +182,25 @@ func (m *SandboxIdleMonitor) shouldStopSession(ctx context.Context, session *mod
 		return false
 	}
 
-	chatStatus, err := client.GetChatStatus(ctx)
+	threads, err := client.ListThreads(ctx)
 	if err != nil {
-		logger.Warn("failed to get chat status for idle check", "error", err)
+		logger.Warn("failed to list threads for idle check", "error", err)
 		return false
 	}
 
-	if chatStatus.IsRunning {
-		logger.Debug("session idle but completion in progress, skipping stop",
-			"completion_id", chatStatus.CompletionID,
-			"idle_duration", time.Since(lastActivity))
-		return false
+	for _, thread := range threads.Threads {
+		chatStatus, err := client.GetChatStatus(ctx, thread.ID)
+		if err != nil {
+			logger.Warn("failed to get chat status for idle check", "thread_id", thread.ID, "error", err)
+			return false
+		}
+		if chatStatus.IsRunning {
+			logger.Debug("session idle but completion in progress, skipping stop",
+				"thread_id", thread.ID,
+				"completion_id", chatStatus.CompletionID,
+				"idle_duration", time.Since(lastActivity))
+			return false
+		}
 	}
 
 	// Stop the sandbox
