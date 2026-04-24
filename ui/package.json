@@ -12,7 +12,9 @@
 		"lint:fix": "eslint . --fix",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck",
 		"check:fix": "pnpm format && pnpm lint:fix && pnpm typecheck",
-		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test:vitest": "vitest run",
+		"test:vitest:watch": "vitest"
 	},
 	"dependencies": {
 		"@fontsource/geist-sans": "^5.2.5",
@@ -70,6 +72,7 @@
 		"eslint-plugin-svelte": "latest",
 		"formsnap": "^2.0.1",
 		"globals": "latest",
+		"jsdom": "^29.0.2",
 		"layerchart": "2.0.0-next.43",
 		"mode-watcher": "^1.1.0",
 		"paneforge": "^1.0.2",
@@ -84,6 +87,7 @@
 		"typescript-eslint": "latest",
 		"vaul-svelte": "1.0.0-next.7",
 		"vite": "latest",
-		"vite-plugin-devtools-json": "^1.0.0"
+		"vite-plugin-devtools-json": "^1.0.0",
+		"vitest": "^4.1.5"
 	}
 }

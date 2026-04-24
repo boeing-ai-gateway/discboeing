@@ -8,31 +8,65 @@ import type {
 } from "$lib/api-types";
 import type { AsyncStatus } from "$lib/shell-types";
 
+import {
+	createEntityStore,
+	type CreateEntityStoreArgs,
+} from "./create-entity-store.svelte";
 import { RequestCoalescer } from "./request-coalescer";
 
+const workspaceStoreResourceArgs = {
+	owner: "WorkspaceStore",
+	list: {
+		load: async () => {
+			const { workspaces } = await api.getWorkspaces();
+			return workspaces;
+		},
+	},
+	indexed: {
+		getKey: (workspace: Workspace) => workspace.id,
+		load: (id: string) => api.getWorkspace(id),
+	},
+	create: {
+		run: (data: CreateWorkspaceRequest) => api.createWorkspace(data),
+		after: "merge",
+	},
+	update: {
+		run: (id: string, data: { path?: string; displayName?: string | null }) =>
+			api.updateWorkspace(id, data),
+		after: "merge",
+	},
+} satisfies CreateEntityStoreArgs<
+	Workspace,
+	string,
+	CreateWorkspaceRequest,
+	{ path?: string; displayName?: string | null }
+>;
+
 export class WorkspaceStore {
-	#items = $state<Workspace[]>([]);
-	#status = $state<AsyncStatus>("idle");
+	#resource = createEntityStore<
+		Workspace,
+		string,
+		typeof workspaceStoreResourceArgs
+	>(workspaceStoreResourceArgs);
 	#inflight = new SvelteSet<string>();
-	#fetchRequests = new RequestCoalescer<"list">();
-	#fetchOneRequests = new RequestCoalescer<string>();
+	#fetchOneRequests = new RequestCoalescer<string, Workspace | null>();
 
 	get list(): Workspace[] {
-		return this.#items;
+		return this.#resource.all().list;
 	}
 
 	get status(): AsyncStatus {
-		return this.#status;
+		return this.#resource.all().status;
 	}
 
 	/** Returns the cached workspace without side effects. */
 	peek(id: string): Workspace | null {
-		return this.#items.find((w) => w.id === id) ?? null;
+		return this.#resource.peek(id);
 	}
 
 	/** Returns the cached workspace and triggers a background fetchOne on cache miss. */
 	ensure(id: string): Workspace | null {
-		const cached = this.peek(id);
+		const cached = this.#resource.peek(id);
 		if (cached === null && !this.#inflight.has(id)) {
 			this.#inflight.add(id);
 			void this.fetchOne(id).finally(() => this.#inflight.delete(id));
@@ -41,33 +75,22 @@ export class WorkspaceStore {
 	}
 
 	async fetch(): Promise<void> {
-		return this.#fetchRequests.run("list", async () => {
-			this.#status = "loading";
-			try {
-				const { workspaces } = await api.getWorkspaces();
-				this.#items = workspaces;
-				this.#status = "ready";
-			} catch {
-				this.#status = "error";
-			}
-		});
+		await this.#resource.all().ensure();
+	}
+
+	invalidate(): void {
+		this.#resource.invalidateAll();
 	}
 
 	async fetchOne(id: string): Promise<void> {
-		return this.#fetchOneRequests.run(id, async () => {
+		await this.#fetchOneRequests.run(id, async () => {
 			try {
 				const workspace = await api.getWorkspace(id);
-				const idx = this.#items.findIndex((w) => w.id === id);
-				if (idx === -1) {
-					this.#items.push(workspace);
-				} else {
-					this.#items[idx] = workspace;
-				}
-				if (this.#status !== "ready") {
-					this.#status = "ready";
-				}
+				this.#resource.upsert(workspace);
+				return workspace;
 			} catch (error) {
 				console.error("[WorkspaceStore] Failed to fetch workspace:", id, error);
+				return null;
 			}
 		});
 	}
@@ -79,28 +102,19 @@ export class WorkspaceStore {
 		return api.validateWorkspace({ path, sourceType });
 	}
 
-	async create(data: CreateWorkspaceRequest): Promise<Workspace> {
-		const created = await api.createWorkspace(data);
-		await this.fetchOne(created.id);
-		return this.#items.find((w) => w.id === created.id)!;
+	create(data: CreateWorkspaceRequest): Promise<Workspace> {
+		return this.#resource.create(data);
 	}
 
-	async update(
+	update(
 		id: string,
 		data: { path?: string; displayName?: string | null },
 	): Promise<Workspace> {
-		const updated = await api.updateWorkspace(id, data);
-		const idx = this.#items.findIndex((workspace) => workspace.id === id);
-		if (idx === -1) {
-			this.#items.push(updated);
-		} else {
-			this.#items[idx] = updated;
-		}
-		return updated;
+		return this.#resource.update(id, data);
 	}
 
 	async remove(id: string, deleteFiles = false): Promise<void> {
 		await api.deleteWorkspace(id, deleteFiles);
-		this.#items = this.#items.filter((workspace) => workspace.id !== id);
+		this.#resource.evict(id);
 	}
 }

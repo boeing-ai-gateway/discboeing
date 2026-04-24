@@ -91,18 +91,8 @@ function startProjectEventsSubscription(app: AppContext) {
 
 	const handleConnected = () => {
 		console.debug("[WS] Connected to project events stream");
-		void app.sessions.refresh().catch((error) => {
-			console.error(
-				"[WS] Failed to refresh sessions after connecting to project events stream:",
-				error,
-			);
-		});
-		void app.startup.refresh().catch((error) => {
-			console.error(
-				"[WS] Failed to refresh startup tasks after connecting to project events stream:",
-				error,
-			);
-		});
+		app.stores.sessions.invalidate();
+		app.stores.startup.invalidate();
 	};
 
 	const handleWorkspaceUpdated = (event: MessageEvent<string>) => {
@@ -127,7 +117,7 @@ function startProjectEventsSubscription(app: AppContext) {
 				return;
 			}
 
-			void app.stores.startup.fetch();
+			app.stores.startup.invalidate();
 		} catch (error) {
 			console.error("[WS] Failed to parse startup_task_updated event:", error);
 		}

@@ -74,6 +74,10 @@ export default defineConfig(() => ({
 		tailwindcss(),
 		devtoolsJson(),
 	],
+	test: {
+		environment: "jsdom",
+		include: ["src/lib/**/*.vitest.ts"],
+	},
 	server: { port: 3100, strictPort: true },
 	preview: { port: 3100, strictPort: true },
 	worker: {

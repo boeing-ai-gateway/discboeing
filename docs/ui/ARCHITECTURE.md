@@ -77,7 +77,7 @@ The application uses SvelteKit's adapter-static for a fully client-side SPA. Pan
 
 ### 2. Data Fetching and Realtime Streams
 
-All server data is fetched via `ui/src/lib/api-client.ts`. App-level project events, multiplexed chat streams, and service log streams now share one project-scoped WebSocket (`/api/projects/{projectId}/ws`). The app uses targeted reloads for affected sessions and workspaces, with full refreshes on reconnect. The store layer coalesces concurrent reloads into at most one active request plus one queued follow-up per resource key to avoid duplicate fetches during reconnect bursts.
+All server data is fetched via `ui/src/lib/api-client.ts`. App-level project events, multiplexed chat streams, and service log streams now share one project-scoped WebSocket (`/api/projects/{projectId}/ws`). The app uses targeted reloads for affected sessions and workspaces, with full refreshes on reconnect. The store layer coalesces concurrent reloads into at most one active request plus one queued follow-up per resource key to avoid duplicate fetches during reconnect bursts. Shared SWR-style store primitives now live under `ui/src/lib/resource/` and `ui/src/lib/store/`: `createResource(...)` models one async resource, `createIndexedResource(...)` wraps keyed list/item caching, and `createEntityStore(...)` adds a conditional CRUD-oriented store surface with collection state, optional indexed item state, and cache reconciliation policies for create/update/remove operations. UI testing now uses Vitest for Svelte component tests and rune-backed `.svelte.ts` runtime tests, while plain source-shape and helper tests can stay on `node:test`.
 
 ### 3. API Configuration
 

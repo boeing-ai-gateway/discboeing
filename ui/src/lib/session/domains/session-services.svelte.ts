@@ -1,11 +1,11 @@
 import { api } from "$lib/api-client";
 import type { Service } from "$lib/api-types";
-import { createResource } from "$lib/resource/create-resource.svelte";
 import {
 	sortServiceItems,
 	toServiceItem,
 } from "$lib/session/domains/session-domain.helpers";
 import type { SessionServicesDomain } from "$lib/session/session-context.types";
+import { createEntityStore } from "$lib/store/create-entity-store.svelte";
 
 type CreateSessionServicesDomainArgs = {
 	sessionId: string;
@@ -17,20 +17,25 @@ type CreateSessionServicesDomainArgs = {
 export function createSessionServicesDomain(
 	args: CreateSessionServicesDomainArgs,
 ): SessionServicesDomain {
-	const resource = createResource<Service[]>({
-		owner: "SessionServices",
+	const store = createEntityStore<Service, string>({
+		owner: `SessionServices:${args.sessionId}`,
 		enabled: () => args.hasSession(),
-		createEmptyValue: () => [],
-		load: async () => {
-			const { services } = await api.getServices(args.sessionId);
-			return services;
+		list: {
+			load: async () => {
+				const { services } = await api.getServices(args.sessionId);
+				return services;
+			},
+		},
+		indexed: {
+			getKey: (service) => service.id,
 		},
 	});
+	const resource = store.all();
 
 	$effect(() => {
 		if (
 			typeof window === "undefined" ||
-			!resource.data.some(
+			!resource.list.some(
 				(service) =>
 					service.status === "starting" || service.status === "stopping",
 			)
@@ -47,7 +52,7 @@ export function createSessionServicesDomain(
 		};
 	});
 
-	const list = $derived(sortServiceItems(resource.data.map(toServiceItem)));
+	const list = $derived(sortServiceItems(resource.list.map(toServiceItem)));
 	const active = $derived(
 		list.find((service) => service.id === args.getActiveServiceId()) ?? null,
 	);

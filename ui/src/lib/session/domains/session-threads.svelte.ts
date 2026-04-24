@@ -101,7 +101,7 @@ export function createSessionThreadsDomain(
 			syncSelectedThread(nextList);
 			return;
 		}
-		await store.fetch(args.sessionId);
+		await store.fetch();
 		const nextList = currentList();
 		applyRequestedThreadSelection(nextList);
 		syncSelectedThread(nextList);
@@ -133,7 +133,7 @@ export function createSessionThreadsDomain(
 				syncSelectedThread([]);
 				return;
 			}
-			await store.fetch(args.sessionId);
+			await store.fetch();
 			const nextList = currentList();
 			applyRequestedThreadSelection(nextList);
 			syncSelectedThread(nextList);
@@ -158,7 +158,7 @@ export function createSessionThreadsDomain(
 				const trimmedName = name?.trim();
 				const threadId =
 					store.list.length === 0 ? args.sessionId : generateId();
-				const created = await store.create(args.sessionId, {
+				const created = await store.create({
 					id: threadId,
 					name: trimmedName && trimmedName.length > 0 ? trimmedName : undefined,
 				});
@@ -175,7 +175,7 @@ export function createSessionThreadsDomain(
 			}
 
 			if (store.list.length === 0 && threadId === args.sessionId) {
-				const created = await store.create(args.sessionId, {
+				const created = await store.create({
 					id: threadId,
 					name: trimmedName,
 				});
@@ -183,7 +183,7 @@ export function createSessionThreadsDomain(
 				return true;
 			}
 
-			const updated = await store.update(args.sessionId, threadId, {
+			const updated = await store.update(threadId, {
 				name: trimmedName,
 			});
 			args.onThreadRenamed?.(updated);
@@ -199,7 +199,7 @@ export function createSessionThreadsDomain(
 			if (!store.list.some((thread) => thread.id === threadId)) {
 				return false;
 			}
-			await store.remove(args.sessionId, threadId);
+			await store.remove(threadId);
 			args.onThreadRemoved?.(threadId);
 			args.setSelectedId(
 				getNextSelectedThreadId(currentList(), threadId, args.getSelectedId()),
@@ -211,7 +211,7 @@ export function createSessionThreadsDomain(
 			if (!args.hasSession()) {
 				return;
 			}
-			await store.fetchOne(args.sessionId, threadId);
+			await store.fetchOne(threadId);
 			const updatedThread = currentList().find(
 				(thread) => thread.id === threadId,
 			);

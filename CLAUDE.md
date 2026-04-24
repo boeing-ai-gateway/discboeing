@@ -57,8 +57,11 @@ pnpm test:agent-go:unit # Agent Go unit tests
 # Single Go test
 cd server && go test -v -run TestName ./internal/path/...
 
-# Single Svelte UI test
+# Single Svelte UI source-level or helper test
 node --import tsx --test ui/src/lib/components/test/<test-file>.test.ts
+
+# Single Svelte UI Vitest runtime test
+cd ui && pnpm vitest run src/lib/<path>/<test-file>.vitest.ts
 ```
 
 ### CI
@@ -163,7 +166,9 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 
 ## Testing
 
-**Svelte UI tests use Node's built-in `node:test`** — NOT vitest or jest.
+**Svelte UI tests use both runners, depending on the test type:**
+- Use **Vitest** for Svelte component tests and runtime tests that import rune-backed `.svelte.ts` modules.
+- Use **Node's built-in `node:test`** for plain TypeScript helper tests and source-level assertion tests that do not rely on Svelte/Vite transforms.
 
 **Go tests** use standard `go test`. Integration tests are under `*/internal/integration/`.
 

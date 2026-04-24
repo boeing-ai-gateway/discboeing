@@ -1,11 +1,14 @@
-import { SvelteSet } from "svelte/reactivity";
-
 import { generateId } from "ai";
+import { SvelteSet } from "svelte/reactivity";
 
 import { api, ApiError } from "$lib/api-client";
 import type { Session, UpdateSessionRequest } from "$lib/api-types";
 import type { AsyncStatus } from "$lib/shell-types";
 
+import {
+	createEntityStore,
+	type CreateEntityStoreArgs,
+} from "./create-entity-store.svelte";
 import { RequestCoalescer } from "./request-coalescer";
 
 export type CreateSessionData = {
@@ -14,95 +17,121 @@ export type CreateSessionData = {
 	reasoning?: string;
 };
 
+const sessionStoreResourceArgs = {
+	owner: "SessionStore",
+	list: {
+		load: async () => {
+			const { sessions } = await api.getSessions();
+			return sessions;
+		},
+	},
+	indexed: {
+		getKey: (session: Session) => session.id,
+		load: (id: string) => api.getSession(id),
+		isNotFoundError: (error: unknown) =>
+			error instanceof ApiError && error.status === 404,
+		notFound: "evict",
+	},
+	create: {
+		run: async (data: CreateSessionData) => {
+			const { id } = await api.createSession({ id: generateId(), ...data });
+			return api.getSession(id);
+		},
+		after: "merge",
+	},
+	update: {
+		run: async (id: string, data: UpdateSessionRequest) => {
+			await api.updateSession(id, data);
+			return api.getSession(id);
+		},
+		after: "merge",
+	},
+	remove: {
+		run: (id: string) => api.deleteSession(id),
+		after: "evict",
+	},
+} satisfies CreateEntityStoreArgs<
+	Session,
+	string,
+	CreateSessionData,
+	UpdateSessionRequest
+>;
+
 export class SessionStore {
-	#items = $state<Session[]>([]);
-	#status = $state<AsyncStatus>("idle");
-	#inflight = new SvelteSet<string>();
-	#fetchRequests = new RequestCoalescer<"list">();
-	#fetchOneRequests = new RequestCoalescer<string>();
+	#resource = createEntityStore<
+		Session,
+		string,
+		typeof sessionStoreResourceArgs
+	>(sessionStoreResourceArgs);
+	#fetchOneRequests = new RequestCoalescer<string, Session | null>();
+	#backgroundFetches = new SvelteSet<string>();
 
 	get list(): Session[] {
-		return this.#items;
+		return this.#resource.all().list;
 	}
 
 	get status(): AsyncStatus {
-		return this.#status;
+		return this.#resource.all().status;
 	}
 
 	/** Returns the cached session without side effects. */
 	peek(id: string): Session | null {
-		return this.#items.find((s) => s.id === id) ?? null;
+		return this.#resource.peek(id);
 	}
 
 	/** Returns the cached session and triggers a background fetchOne on cache miss. */
 	ensure(id: string): Session | null {
-		const cached = this.peek(id);
-		if (cached === null && !this.#inflight.has(id)) {
-			this.#inflight.add(id);
-			void this.fetchOne(id).finally(() => this.#inflight.delete(id));
+		const cached = this.#resource.peek(id);
+		if (cached === null && !this.#backgroundFetches.has(id)) {
+			this.#backgroundFetches.add(id);
+			void this.fetchOne(id).finally(() => this.#backgroundFetches.delete(id));
 		}
 		return cached;
 	}
 
 	/** Removes an item from the local cache without an API call (e.g. server-pushed removal). */
 	evict(id: string): void {
-		this.#items = this.#items.filter((s) => s.id !== id);
+		this.#resource.evict(id);
 	}
 
 	upsert(session: Session): void {
-		const idx = this.#items.findIndex((s) => s.id === session.id);
-		if (idx === -1) {
-			this.#items.push(session);
-		} else {
-			this.#items[idx] = session;
-		}
-		if (this.#status !== "ready") {
-			this.#status = "ready";
-		}
+		this.#resource.upsert(session);
 	}
 
 	async fetch(): Promise<void> {
-		return this.#fetchRequests.run("list", async () => {
-			this.#status = "loading";
-			try {
-				const { sessions } = await api.getSessions();
-				this.#items = sessions;
-				this.#status = "ready";
-			} catch {
-				this.#status = "error";
-			}
-		});
+		await this.#resource.all().ensure();
+	}
+
+	invalidate(): void {
+		this.#resource.invalidateAll();
 	}
 
 	async fetchOne(id: string): Promise<void> {
-		return this.#fetchOneRequests.run(id, async () => {
+		await this.#fetchOneRequests.run(id, async () => {
 			try {
 				const session = await api.getSession(id);
-				this.upsert(session);
+				this.#resource.upsert(session);
+				return session;
 			} catch (error) {
 				if (error instanceof ApiError && error.status === 404) {
-					this.evict(id);
-					return;
+					this.#resource.evict(id);
+					return null;
 				}
 				console.error("[SessionStore] Failed to fetch session:", id, error);
+				return null;
 			}
 		});
 	}
 
-	async create(data: CreateSessionData = {}): Promise<Session> {
-		const { id } = await api.createSession({ id: generateId(), ...data });
-		await this.fetchOne(id);
-		return this.#items.find((s) => s.id === id)!;
+	create(data: CreateSessionData = {}): Promise<Session> {
+		return this.#resource.create(data);
 	}
 
-	async update(id: string, data: UpdateSessionRequest): Promise<Session> {
-		await api.updateSession(id, data);
-		await this.fetchOne(id);
-		return this.#items.find((s) => s.id === id)!;
+	update(id: string, data: UpdateSessionRequest): Promise<Session> {
+		return this.#resource.update(id, data);
 	}
 
-	async remove(id: string): Promise<void> {
-		await api.deleteSession(id);
-		this.#items = this.#items.filter((s) => s.id !== id);
+	remove(id: string): Promise<void> {
+		return this.#resource.remove(id);
 	}
 }
