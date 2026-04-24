@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from "svelte";
 	import type { PaneAPI } from "paneforge";
 	import AppHeader from "$lib/components/app/AppHeader.svelte";
 	import AppKeyboardShortcuts from "$lib/components/app/AppKeyboardShortcuts.svelte";
@@ -8,7 +7,6 @@
 	import StartupTasksBanner from "$lib/components/app/parts/StartupTasksBanner.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
 	import * as Sheet from "$lib/components/ui/sheet";
-	import { ensureSessionContext } from "$lib/context/session-context.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
@@ -21,65 +19,42 @@
 	let desktopSidebarMinSize = $state(SIDEBAR_MIN_SIZE_FALLBACK);
 	let desktopSidebarPane = $state<PaneAPI | null>(null);
 	let desktopSidebarInitialized = $state(false);
-	let managedSessionIds: string[] = [];
-	let visitedSessionIds = $state<string[]>([]);
 	const currentSelectedSessionId = $derived.by(
 		() => app.sessions.selectedId ?? app.sessions.pendingId,
 	);
-	let selectedSession = $state(
-		ensureSessionContext(
-			app,
-			app.sessions.selectedId ?? app.sessions.pendingId,
-		),
-	);
-	const sessionView = $derived.by(() => selectedSession.ui);
-	const selectedSessionId = $derived.by(() => selectedSession.sessionId);
-	const showSessionToolbar = $derived.by(() => !selectedSession.isPending);
+	const showSessionToolbar = $derived.by(() => !!currentSelectedSessionId);
 	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
-	const preloadSessionIds = $derived.by(() =>
-		mountedSessionIds.filter(
-			(sessionId) =>
-				sessionId === app.sessions.selectedId ||
-				visitedSessionIds.includes(sessionId),
-		),
-	);
-	const renderedSessionIds = $derived.by(() => {
-		const sessionIds = selectedSession.isPending
-			? preloadSessionIds
-			: [selectedSessionId, ...preloadSessionIds];
-		return Array.from(new Set(sessionIds));
-	});
 
 	function sidebarOpen() {
 		return isMobile.current
-			? sessionView.mobileSidebarOpen
-			: sessionView.desktopSidebarOpen;
+			? app.ui.mobileSidebarOpen
+			: app.ui.desktopSidebarOpen;
 	}
 
 	function toggleSidebar() {
 		if (isMobile.current) {
-			sessionView.mobileSidebarOpen = !sessionView.mobileSidebarOpen;
+			app.ui.setMobileSidebarOpen(!app.ui.mobileSidebarOpen);
 			return;
 		}
 
 		if (!desktopSidebarPane) {
-			sessionView.desktopSidebarOpen = !sessionView.desktopSidebarOpen;
+			app.ui.setDesktopSidebarOpen(!app.ui.desktopSidebarOpen);
 			return;
 		}
 
 		if (desktopSidebarPane.isCollapsed()) {
 			desktopSidebarPane.expand();
-			sessionView.desktopSidebarOpen = true;
+			app.ui.setDesktopSidebarOpen(true);
 			return;
 		}
 
 		desktopSidebarPane.collapse();
-		sessionView.desktopSidebarOpen = false;
+		app.ui.setDesktopSidebarOpen(false);
 	}
 
 	function handleSessionSelect() {
 		if (isMobile.current) {
-			sessionView.mobileSidebarOpen = false;
+			app.ui.setMobileSidebarOpen(false);
 		}
 	}
 
@@ -99,36 +74,6 @@
 			Math.max(SIDEBAR_MIN_SIZE_FALLBACK, (SIDEBAR_MIN_WIDTH_PX / width) * 100),
 		);
 	}
-
-	$effect(() => {
-		const selectedSessionId = app.sessions.selectedId;
-		if (!selectedSessionId || visitedSessionIds.includes(selectedSessionId)) {
-			return;
-		}
-		visitedSessionIds = [...visitedSessionIds, selectedSessionId];
-	});
-
-	$effect(() => {
-		const nextManagedIds = Array.from(
-			new Set([
-				currentSelectedSessionId,
-				...preloadSessionIds,
-				...managedSessionIds,
-			]),
-		).slice(0, mountedSessionIds.length || 1);
-		selectedSession = ensureSessionContext(app, currentSelectedSessionId);
-		for (const sessionId of nextManagedIds) {
-			ensureSessionContext(app, sessionId);
-		}
-		for (const sessionId of managedSessionIds) {
-			if (nextManagedIds.includes(sessionId)) {
-				continue;
-			}
-			app.sessions.sessionContexts.get(sessionId)?.dispose();
-			app.sessions.sessionContexts.delete(sessionId);
-		}
-		managedSessionIds = nextManagedIds;
-	});
 
 	$effect(() => {
 		if (isMobile.current || !desktopPaneGroupElement) {
@@ -155,7 +100,7 @@
 			return;
 		}
 
-		selectedSession.ui.desktopSidebarOpen = !desktopSidebarPane.isCollapsed();
+		app.ui.setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 	});
 
 	$effect(() => {
@@ -166,12 +111,12 @@
 		desktopSidebarInitialized = true;
 
 		if (hasSavedSidebarLayout()) {
-			sessionView.desktopSidebarOpen = !desktopSidebarPane.isCollapsed();
+			app.ui.setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 			return;
 		}
 
 		desktopSidebarPane.expand();
-		sessionView.desktopSidebarOpen = true;
+		app.ui.setDesktopSidebarOpen(true);
 	});
 
 	$effect(() => {
@@ -180,37 +125,22 @@
 		}
 
 		const paneCollapsed = desktopSidebarPane.isCollapsed();
-		if (sessionView.desktopSidebarOpen && paneCollapsed) {
+		if (app.ui.desktopSidebarOpen && paneCollapsed) {
 			desktopSidebarPane.expand();
 			return;
 		}
 
-		if (!sessionView.desktopSidebarOpen && !paneCollapsed) {
+		if (!app.ui.desktopSidebarOpen && !paneCollapsed) {
 			desktopSidebarPane.collapse();
-		}
-	});
-
-	onDestroy(() => {
-		for (const sessionId of managedSessionIds) {
-			app.sessions.sessionContexts.get(sessionId)?.dispose();
-			app.sessions.sessionContexts.delete(sessionId);
 		}
 	});
 </script>
 
 {#snippet mountedSessions(mainClass: string)}
-	{#if selectedSession.isPending}
-		<SessionWorkspace
-			sessionId={selectedSessionId}
-			visible={true}
-			{mainClass}
-			reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
-		/>
-	{/if}
-	{#each renderedSessionIds as sessionId (sessionId)}
+	{#each mountedSessionIds as sessionId (sessionId)}
 		<SessionWorkspace
 			{sessionId}
-			visible={sessionId === selectedSessionId}
+			visible={sessionId === currentSelectedSessionId}
 			{mainClass}
 			reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
 		/>
@@ -224,7 +154,7 @@
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
 		{#if isMobile.current}
-			<Sheet.Root bind:open={sessionView.mobileSidebarOpen}>
+			<Sheet.Root bind:open={app.ui.mobileSidebarOpen}>
 				<Sheet.Content
 					side="left"
 					overlayClass="bg-transparent"
@@ -260,10 +190,10 @@
 						collapsible
 						collapsedSize={0}
 						onCollapse={() => {
-							sessionView.desktopSidebarOpen = false;
+							app.ui.setDesktopSidebarOpen(false);
 						}}
 						onExpand={() => {
-							sessionView.desktopSidebarOpen = true;
+							app.ui.setDesktopSidebarOpen(true);
 						}}
 					>
 						<div class="box-border h-full min-h-0 pb-3 pl-3 pr-2 pt-1">
@@ -280,7 +210,7 @@
 					</Resizable.Pane>
 				</Resizable.PaneGroup>
 
-				{#if !sessionView.desktopSidebarOpen}
+				{#if !app.ui.desktopSidebarOpen}
 					<div
 						class="pointer-events-none absolute inset-y-0 left-0 z-20 box-border pb-3 pl-3 pr-2 pt-1"
 					>

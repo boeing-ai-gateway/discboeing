@@ -69,12 +69,14 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	);
 	assert.match(source, /function handleWindowKeydown\(event: KeyboardEvent\)/);
 	assert.match(source, /function handleWindowKeyup\(event: KeyboardEvent\)/);
+	assert.match(source, /app\.ui\.setMobileSidebarOpen\(false\);/);
 	assert.match(source, /<svelte:window\s+onkeydown=\{handleWindowKeydown\}/);
 	assert.match(source, /onkeyup=\{handleWindowKeyup\}/);
 	assert.match(source, /onblur=\{closeOverlays\}/);
 	assert.match(source, /<RecentThreadSwitcherDialog/);
 	assert.match(source, /<KeyboardShortcutHelpDialog/);
 	assert.doesNotMatch(source, /availableThreads/);
+	assert.doesNotMatch(source, /sessionContext\.ui\.mobileSidebarOpen = false;/);
 });
 
 test("keyboard shortcut help dialog renders multiple key groups", () => {

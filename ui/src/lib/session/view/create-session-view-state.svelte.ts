@@ -40,8 +40,6 @@ export type SessionViewState = {
 	terminalRootEnabled: boolean;
 	dockMaximized: boolean;
 	composerDraft: string;
-	desktopSidebarOpen: boolean;
-	mobileSidebarOpen: boolean;
 	hooksExpanded: boolean;
 	queueExpanded: boolean;
 	hookDialogOpen: boolean;
@@ -75,8 +73,6 @@ export type SessionViewState = {
 	setPendingWorkspaceValidating: (value: boolean) => void;
 	setPendingWorkspaceSetupMessage: (value: string | null) => void;
 	resetPendingWorkspaceSetup: () => void;
-	setDesktopSidebarOpen: (value: boolean) => void;
-	setMobileSidebarOpen: (value: boolean) => void;
 	setHooksExpanded: (value: boolean) => void;
 	setQueueExpanded: (value: boolean) => void;
 	openHookDialog: (hookId: string) => void;
@@ -93,8 +89,6 @@ export function createSessionViewState(
 	let terminalRootEnabled = $state(false);
 	let dockMaximized = $state(false);
 	let composerDraft = $state("");
-	let desktopSidebarOpen = $state(false);
-	let mobileSidebarOpen = $state(false);
 	let hooksExpanded = $state(false);
 	let queueExpanded = $state(false);
 	let hookDialogOpen = $state(false);
@@ -180,18 +174,6 @@ export function createSessionViewState(
 		},
 		get composerDraft() {
 			return composerDraft;
-		},
-		get desktopSidebarOpen() {
-			return desktopSidebarOpen;
-		},
-		set desktopSidebarOpen(value: boolean) {
-			desktopSidebarOpen = value;
-		},
-		get mobileSidebarOpen() {
-			return mobileSidebarOpen;
-		},
-		set mobileSidebarOpen(value: boolean) {
-			mobileSidebarOpen = value;
 		},
 		get hooksExpanded() {
 			return hooksExpanded;
@@ -339,12 +321,6 @@ export function createSessionViewState(
 			pendingWorkspaceSetupMessage = value;
 		},
 		resetPendingWorkspaceSetup,
-		setDesktopSidebarOpen: (value) => {
-			desktopSidebarOpen = value;
-		},
-		setMobileSidebarOpen: (value) => {
-			mobileSidebarOpen = value;
-		},
 		setHooksExpanded: (value) => {
 			hooksExpanded = value;
 		},
@@ -363,8 +339,6 @@ export function createSessionViewState(
 			terminalRootEnabled = false;
 			dockMaximized = false;
 			composerDraft = "";
-			desktopSidebarOpen = false;
-			mobileSidebarOpen = false;
 			hooksExpanded = false;
 			queueExpanded = false;
 			closeHookDialog();

@@ -2,6 +2,7 @@ import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
+import type { ChatMessage } from "$lib/api-types";
 import { toSessionSummaries } from "$lib/app/app-helpers";
 import type { AppSessions } from "$lib/app/app-context.types";
 import type { SessionContextValue } from "$lib/session/session-context.types";
@@ -26,6 +27,7 @@ export function createAppSessionsDomain(
 	let pendingSessionId = $state<string>(generateId());
 	let awaitingInitialStatusId = $state<string | null>(null);
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
+	const optimisticMessagesByThread = new SvelteMap<string, ChatMessage[]>();
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
 	if (args.initialSelectedSessionId && args.initialSelectedThreadId) {
@@ -33,6 +35,13 @@ export function createAppSessionsDomain(
 			args.initialSelectedSessionId,
 			args.initialSelectedThreadId,
 		);
+	}
+
+	function getOptimisticMessagesKey(
+		sessionId: string,
+		threadId: string,
+	): string {
+		return `${sessionId}:${threadId}`;
 	}
 
 	const selectSession = (sessionId: string) => {
@@ -312,6 +321,20 @@ export function createAppSessionsDomain(
 			const threadId = requestedThreadIdBySession.get(sessionId) ?? null;
 			requestedThreadIdBySession.delete(sessionId);
 			return threadId;
+		},
+		stageOptimisticMessages: (sessionId, threadId, messages) => {
+			const key = getOptimisticMessagesKey(sessionId, threadId);
+			if (messages.length === 0) {
+				optimisticMessagesByThread.delete(key);
+				return;
+			}
+			optimisticMessagesByThread.set(key, messages);
+		},
+		takeOptimisticMessages: (sessionId, threadId) => {
+			const key = getOptimisticMessagesKey(sessionId, threadId);
+			const messages = optimisticMessagesByThread.get(key) ?? [];
+			optimisticMessagesByThread.delete(key);
+			return messages;
 		},
 	};
 }

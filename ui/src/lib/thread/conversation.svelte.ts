@@ -21,6 +21,7 @@ type CreateConversationDomainArgs = {
 	sessionId: string;
 	hasSession: () => boolean;
 	threadId: string;
+	initialMessages?: ChatMessage[];
 	refreshThread: () => Promise<void>;
 	applyThreadUpdate?: (thread: Thread) => void;
 	applyHooksStatusUpdate?: (
@@ -120,7 +121,7 @@ export function getStartChatErrorDetails(error: unknown): {
 
 export function createConversationDomain(args: CreateConversationDomainArgs) {
 	const app = useAppContext();
-	let messages = $state<ChatMessage[]>([]);
+	let messages = $state<ChatMessage[]>(args.initialMessages ?? []);
 	let historyReplayVersion = $state(0);
 	let streamError = $state<string | null>(null);
 	let fatalStreamError = $state(false);

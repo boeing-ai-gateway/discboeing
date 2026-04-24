@@ -41,7 +41,10 @@ function createSessionContext(
 	});
 
 	const stores: SessionStores = {
-		threads: new ThreadStore(),
+		threads: new ThreadStore({
+			sessionId,
+			enabled: () => hasSession,
+		}),
 	};
 
 	const filesDomain = createSessionFilesDomain({

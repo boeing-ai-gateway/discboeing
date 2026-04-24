@@ -34,6 +34,7 @@ import type {
 	OAuthRefreshResponse,
 	CredentialAuthType,
 	CredentialEnvVar,
+	ChatMessage,
 	Session,
 	StartChatRequest,
 	StartChatResponse,
@@ -87,6 +88,8 @@ export type AppUI = {
 	credentialFlowIntent: "github-git" | "codex" | null;
 	credentialsDialogTargetId: string | null;
 	supportInfoDialogOpen: boolean;
+	desktopSidebarOpen: boolean;
+	mobileSidebarOpen: boolean;
 	visibleRecentThreads: RecentThreadSummary[];
 	mountedSessionIds: string[];
 	settingsDialog: {
@@ -100,6 +103,8 @@ export type AppUI = {
 	closeCredentialsDialog: () => void;
 	openSupportInfo: () => void;
 	closeSupportInfo: () => void;
+	setDesktopSidebarOpen: (value: boolean) => void;
+	setMobileSidebarOpen: (value: boolean) => void;
 };
 
 export type AppPreferences = {
@@ -165,6 +170,15 @@ export type AppSessions = {
 	remove: (sessionId: string) => Promise<boolean>;
 	removeFromMemory: (sessionId: string) => boolean;
 	takeRequestedThreadId: (sessionId: string) => string | null;
+	stageOptimisticMessages: (
+		sessionId: string,
+		threadId: string,
+		messages: ChatMessage[],
+	) => void;
+	takeOptimisticMessages: (
+		sessionId: string,
+		threadId: string,
+	) => ChatMessage[];
 };
 
 export type AppWorkspaces = {

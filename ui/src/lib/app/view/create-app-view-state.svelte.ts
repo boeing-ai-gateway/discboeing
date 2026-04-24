@@ -83,22 +83,22 @@ export function getVisibleRecentThreads(args: {
 }
 
 function getMountedSessionIds(args: {
-	selectedSessionId: string | null;
+	activeSessionId: string | null;
 	recentThreads: AppUI["visibleRecentThreads"];
 	limit?: number;
 }): string[] {
 	const {
-		selectedSessionId,
+		activeSessionId,
 		recentThreads,
 		limit = RECENT_SESSIONS_LIMIT,
 	} = args;
 	const sessionIds: string[] = [];
 	const seen: Record<string, true> = {};
 
-	// Keep the selected session mounted first, then add sessions referenced by the
+	// Keep the active session mounted first, then add sessions referenced by the
 	// visible recent-thread list until we hit the small preload budget.
 	for (const sessionId of [
-		selectedSessionId,
+		activeSessionId,
 		...recentThreads.map((thread) => thread.sessionId),
 	]) {
 		if (!sessionId || seen[sessionId]) {
@@ -125,6 +125,8 @@ export function createAppViewState(args: {
 	let settingsDialogOpen = $state(false);
 	let credentialsDialogOpen = $state(false);
 	let supportInfoDialogOpen = $state(false);
+	let desktopSidebarOpen = $state(false);
+	let mobileSidebarOpen = $state(false);
 	const visibleRecentThreads = $derived.by(() =>
 		getVisibleRecentThreads({
 			recentThreads: sessions.recentThreads,
@@ -134,7 +136,7 @@ export function createAppViewState(args: {
 	);
 	const mountedSessionIds = $derived.by(() =>
 		getMountedSessionIds({
-			selectedSessionId: sessions.selectedId,
+			activeSessionId: sessions.selectedId ?? sessions.pendingId,
 			recentThreads: visibleRecentThreads,
 			limit: RECENT_SESSIONS_LIMIT,
 		}),
@@ -181,6 +183,18 @@ export function createAppViewState(args: {
 		set supportInfoDialogOpen(value) {
 			supportInfoDialogOpen = value;
 		},
+		get desktopSidebarOpen() {
+			return desktopSidebarOpen;
+		},
+		set desktopSidebarOpen(value) {
+			desktopSidebarOpen = value;
+		},
+		get mobileSidebarOpen() {
+			return mobileSidebarOpen;
+		},
+		set mobileSidebarOpen(value) {
+			mobileSidebarOpen = value;
+		},
 		get credentialsDialogOpen() {
 			return credentialsDialogOpen;
 		},
@@ -218,6 +232,12 @@ export function createAppViewState(args: {
 		},
 		closeSupportInfo: () => {
 			supportInfoDialogOpen = false;
+		},
+		setDesktopSidebarOpen: (value) => {
+			desktopSidebarOpen = value;
+		},
+		setMobileSidebarOpen: (value) => {
+			mobileSidebarOpen = value;
 		},
 		openSettingsDialogAt,
 		openCredentialsDialog: (credentialId?: string | Event) => {

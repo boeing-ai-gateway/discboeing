@@ -12,29 +12,49 @@ function readThreadWorkspaceSource() {
 	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("thread workspace keeps pending sessions on the active conversation view and shows loading only for unresolved ready sessions", () => {
+test("thread workspace keeps pending sessions on the active conversation view and avoids the loading screen once messages exist", () => {
 	const source = readThreadWorkspaceSource();
 
 	assert.doesNotMatch(source, /let sessionsMenuOpen = \$state\(false\)/);
 	assert.doesNotMatch(source, /<SessionSidebar/);
 	assert.doesNotMatch(source, /<Popover\.Root/);
-	assert.match(source, /const props: Props = \$props\(\);/);
+	assert.match(source, /type Props = \{/);
 	assert.match(source, /threadId: string;/);
 	assert.match(source, /sidebarOpen\?: boolean;/);
+	assert.match(source, /let \{/);
+	assert.match(source, /\}: Props = \$props\(\);/);
+	assert.match(
+		source,
+		/const thread = setThreadContext\(untrack\(\(\) => threadId\)\);/,
+	);
 	assert.match(source, /<ThreadWorkspaceActive/);
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
 		source,
 		/session\.isPending \|\| session\.threads\.selectedId !== null/,
 	);
+	assert.match(
+		source,
+		/const hasConversationMessages = \$derived\.by\(\(\) => thread\.messages\.length > 0\);/,
+	);
+	assert.match(source, /const showActiveConversation = \$derived\.by/);
+	assert.match(
+		source,
+		/\(\) => hasSelectedThread \|\| hasConversationMessages/,
+	);
 	assert.match(source, /const sandboxReady = \$derived\.by/);
 	assert.match(source, /const isLoadingThread = \$derived\.by/);
 	assert.match(
 		source,
-		/\(\) => !session\.isPending && !hasSelectedThread && !sandboxReady/,
+		/\(\) => !showActiveConversation && !session\.isPending && !sandboxReady/,
 	);
 	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
 	assert.match(source, /<ConversationComposerSessionSetupStatus/);
+	assert.match(
+		source,
+		/import Loader2Icon from "@lucide\/svelte\/icons\/loader-2"/,
+	);
+	assert.match(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
 	assert.match(
 		source,
 		/title=\{isLoadingThread \? "Loading thread" : "No thread selected"\}/,

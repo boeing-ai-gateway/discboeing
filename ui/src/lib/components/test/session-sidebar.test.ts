@@ -109,11 +109,16 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	);
 	assert.match(source, /if \(!sessionContext\) \{/);
 	assert.match(source, /return sessionContext\.threads\.list;/);
-	assert.match(
-		source,
-		/const sessionContext = app\.sessions\.sessionContexts\.get\(sessionId\);/,
-	);
 	assert.match(source, /void sessionContext\?\.threads\.refresh\(\);/);
+	assert.doesNotMatch(source, /void sessions\.reloadSession\(sessionId\);/);
+	assert.doesNotMatch(
+		source,
+		/if \(!session \|\| session\.status === SessionStatusValue\.STOPPED\) \{/,
+	);
+	assert.doesNotMatch(
+		source,
+		/sessions\.setAwaitingInitialStatus\(sessionId\);/,
+	);
 	assert.match(
 		source,
 		/if \([\s\S]*isCurrentSession &&[\s\S]*sessionContext &&[\s\S]*sessionContext\.threads\.list\.length > 1[\s\S]*\) \{/,

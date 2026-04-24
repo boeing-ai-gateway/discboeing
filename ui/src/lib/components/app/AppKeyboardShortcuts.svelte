@@ -122,13 +122,7 @@
 		closeOverlays();
 		app.sessions.startNew();
 		if (isMobile.current) {
-			const selectedSessionId =
-				app.sessions.selectedId ?? app.sessions.pendingId;
-			const sessionContext =
-				app.sessions.sessionContexts.get(selectedSessionId);
-			if (sessionContext?.ui) {
-				sessionContext.ui.mobileSidebarOpen = false;
-			}
+			app.ui.setMobileSidebarOpen(false);
 		}
 	}
 

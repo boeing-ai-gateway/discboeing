@@ -4,9 +4,7 @@
 
 	const app = useAppContext();
 	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
-	const selectedSessionId = $derived.by(
-		() => app.sessions.selectedId ?? app.sessions.pendingId,
-	);
+	const selectedSessionId = $derived.by(() => app.sessions.selectedId);
 </script>
 
 {#each mountedSessionIds as sessionId (sessionId)}

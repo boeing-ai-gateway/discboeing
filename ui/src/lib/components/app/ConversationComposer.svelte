@@ -339,6 +339,12 @@
 	}
 
 	function finalizePendingSessionStart(sessionId: string, threadId: string) {
+		const optimisticMessages = thread.messages.filter(
+			(message) => message.provisional === true,
+		);
+		if (optimisticMessages.length > 0) {
+			sessions.stageOptimisticMessages(sessionId, threadId, optimisticMessages);
+		}
 		if (mounted) {
 			sessions.openThread(sessionId, threadId);
 		}

@@ -185,6 +185,10 @@ function createThreadContext(
 		sessionId: session.sessionId,
 		hasSession: () => hasSession,
 		threadId,
+		initialMessages: app.sessions.takeOptimisticMessages(
+			session.sessionId,
+			threadId,
+		),
 		refreshThread: async () => {
 			await session.threads.refreshThread(threadId);
 		},
