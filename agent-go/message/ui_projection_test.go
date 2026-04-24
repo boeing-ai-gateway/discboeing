@@ -129,6 +129,27 @@ func TestProjectUIMessages_AssistantToolPair(t *testing.T) {
 	}
 }
 
+func TestProjectUIMessages_SkipsEmptyAssistantMessages(t *testing.T) {
+	msgs := []Message{
+		{ID: "empty-assistant", Role: "assistant"},
+		{ID: "user-1", Role: "user", Parts: []Part{TextPart{Text: "hello"}}},
+	}
+
+	result, err := ProjectUIMessages(msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("got %d messages, want 1", len(result))
+	}
+	if result[0].Role != "user" {
+		t.Fatalf("got role %q, want user", result[0].Role)
+	}
+	if result[0].ID != "user-1" {
+		t.Fatalf("got id %q, want user-1", result[0].ID)
+	}
+}
+
 func TestProjectUIMessages_RawToolInput(t *testing.T) {
 	patch := "*** Begin Patch\n*** End Patch"
 	msgs := []Message{{

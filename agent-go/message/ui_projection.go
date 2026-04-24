@@ -130,6 +130,9 @@ func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 				}
 				ui.Parts = append(ui.Parts, parts...)
 			}
+			if len(ui.Parts) == 0 {
+				continue
+			}
 			result = append(result, ui)
 		default:
 			// Skip unknown roles (including orphan "tool" messages).
