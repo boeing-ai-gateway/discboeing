@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -190,7 +191,7 @@ func TestParseWebSocketStream(t *testing.T) {
 		defer conn.CloseNow()
 
 		var chunks []message.ProviderMessageChunk
-		respID, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+		respID, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return false
@@ -201,6 +202,9 @@ func TestParseWebSocketStream(t *testing.T) {
 			return true
 		})
 
+		if parseErr != nil {
+			t.Fatalf("unexpected parse error: %v", parseErr)
+		}
 		if !clean {
 			t.Error("expected clean=true for response.completed")
 		}
@@ -239,13 +243,16 @@ func TestParseWebSocketStream(t *testing.T) {
 		defer conn.CloseNow()
 
 		var gotErr error
-		_, clean := parseWebSocketStream(context.Background(), conn, func(_ message.ProviderMessageChunk, err error) bool {
+		_, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(_ message.ProviderMessageChunk, err error) bool {
 			if err != nil {
 				gotErr = err
 			}
 			return true // keep consuming even on error
 		})
 
+		if parseErr != nil {
+			t.Fatalf("unexpected parse error: %v", parseErr)
+		}
 		if clean {
 			t.Error("expected clean=false for response.failed")
 		}
@@ -288,7 +295,7 @@ func TestParseWebSocketStream(t *testing.T) {
 		defer conn.CloseNow()
 
 		var chunks []message.ProviderMessageChunk
-		_, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+		_, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return false
@@ -299,6 +306,9 @@ func TestParseWebSocketStream(t *testing.T) {
 			return true
 		})
 
+		if parseErr != nil {
+			t.Fatalf("unexpected parse error: %v", parseErr)
+		}
 		if !clean {
 			t.Error("expected clean=true")
 		}
@@ -346,7 +356,7 @@ func TestParseWebSocketStream(t *testing.T) {
 		defer conn.CloseNow()
 
 		var chunks []message.ProviderMessageChunk
-		_, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+		_, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return false
@@ -357,6 +367,9 @@ func TestParseWebSocketStream(t *testing.T) {
 			return true
 		})
 
+		if parseErr != nil {
+			t.Fatalf("unexpected parse error: %v", parseErr)
+		}
 		if !clean {
 			t.Error("expected clean=true")
 		}
@@ -412,7 +425,7 @@ func TestParseWebSocketStream(t *testing.T) {
 		defer conn.CloseNow()
 
 		var chunks []message.ProviderMessageChunk
-		_, clean := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+		_, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return false
@@ -423,6 +436,9 @@ func TestParseWebSocketStream(t *testing.T) {
 			return true
 		})
 
+		if parseErr != nil {
+			t.Fatalf("unexpected parse error: %v", parseErr)
+		}
 		if !clean {
 			t.Error("expected clean=true")
 		}
@@ -444,6 +460,52 @@ func TestParseWebSocketStream(t *testing.T) {
 		if finish.FinishReason.Unified != "tool-calls" {
 			t.Errorf("expected finish reason %q, got %q", "tool-calls", finish.FinishReason.Unified)
 		}
+	})
+
+	t.Run("normal close before completion returns peer close error", func(t *testing.T) {
+		ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
+			if err := conn.Write(r.Context(), websocket.MessageText, []byte(`{"type":"response.created","response":{"id":"resp_close","model":"gpt-4o"}}`)); err != nil {
+				t.Errorf("write response.created: %v", err)
+				return
+			}
+			if err := conn.Close(websocket.StatusNormalClosure, ""); err != nil {
+				t.Errorf("normal close: %v", err)
+			}
+		})
+		defer ts.Close()
+
+		wsURL := strings.Replace(ts.URL, "http://", "ws://", 1) + "/responses"
+		conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer conn.CloseNow()
+
+		var chunks []message.ProviderMessageChunk
+		respID, clean, parseErr := parseWebSocketStream(context.Background(), conn, func(chunk message.ProviderMessageChunk, err error) bool {
+			if err != nil {
+				t.Fatalf("unexpected callback error: %v", err)
+			}
+			if chunk != nil {
+				chunks = append(chunks, chunk)
+			}
+			return true
+		})
+
+		if clean {
+			t.Fatal("expected clean=false")
+		}
+		if respID != "resp_close" {
+			t.Fatalf("expected respID %q, got %q", "resp_close", respID)
+		}
+		var closeErr *webSocketPeerClosedError
+		if !errors.As(parseErr, &closeErr) {
+			t.Fatalf("expected peer close error, got %v", parseErr)
+		}
+		if closeErr.status != websocket.StatusNormalClosure {
+			t.Fatalf("expected normal closure, got %v", closeErr.status)
+		}
+		assertChunkTypes(t, chunks, "stream-start", "response-metadata")
 	})
 }
 

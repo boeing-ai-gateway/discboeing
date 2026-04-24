@@ -91,6 +91,23 @@ func (e *openAIStreamError) Error() string {
 	return fmt.Sprintf("openai: stream error: %s", e.message)
 }
 
+type webSocketPeerClosedError struct {
+	status websocket.StatusCode
+}
+
+func (e *webSocketPeerClosedError) Error() string {
+	switch e.status {
+	case websocket.StatusNormalClosure:
+		return "openai: websocket closed normally before response.completed"
+	case websocket.StatusGoingAway:
+		return "openai: websocket went away before response.completed"
+	case websocket.StatusNoStatusRcvd:
+		return "openai: websocket closed without a status before response.completed"
+	default:
+		return fmt.Sprintf("openai: websocket closed before response.completed (status %d)", e.status)
+	}
+}
+
 // newWSPool derives a wss:// WebSocket URL from the HTTP base URL and returns
 // an initialised wsPool. Connections are created lazily on first use.
 func newWSPool(apiKey, httpBaseURL string) *wsPool {
@@ -415,7 +432,7 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 	}
 
 	result := webSocketAttemptResult{}
-	respID, clean := parseWebSocketStream(ctx, pc.conn, func(chunk message.ProviderMessageChunk, err error) bool {
+	respID, clean, err := parseWebSocketStream(ctx, pc.conn, func(chunk message.ProviderMessageChunk, err error) bool {
 		if err != nil {
 			result.err = err
 			if result.retryUnsafe {
@@ -428,6 +445,12 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 		}
 		return yield(chunk, nil)
 	})
+	if err != nil {
+		result.err = err
+		if result.retryUnsafe {
+			yield(nil, err)
+		}
+	}
 	result.responseID = respID
 	result.clean = clean
 	return result
@@ -449,8 +472,9 @@ func isWebSocketRetryUnsafeChunk(chunk message.ProviderMessageChunk) bool {
 // rather than separate SSE event/data lines.
 //
 // Returns the response ID captured from the response.created event (empty if
-// not received) and clean=true when the stream ended with a terminal event.
-func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(message.ProviderMessageChunk, error) bool) (responseID string, clean bool) {
+// not received), clean=true when the stream ended with a terminal event, and a
+// non-nil error when the stream ended unexpectedly before a terminal event.
+func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(message.ProviderMessageChunk, error) bool) (responseID string, clean bool, err error) {
 	state := &streamState{
 		itemCallIDs:            make(map[string]string),
 		functionCallArgsStream: make(map[string]bool),
@@ -459,8 +483,15 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 	for {
 		_, msgBytes, err := conn.Read(ctx)
 		if err != nil {
-			yield(nil, fmt.Errorf("openai: websocket read: %w", err))
-			return responseID, false
+			status := websocket.CloseStatus(err)
+			switch status {
+			case websocket.StatusNormalClosure, websocket.StatusGoingAway, websocket.StatusNoStatusRcvd:
+				return responseID, false, &webSocketPeerClosedError{status: status}
+			}
+			if !yield(nil, fmt.Errorf("openai: websocket read: %w", err)) {
+				return responseID, false, nil
+			}
+			return responseID, false, nil
 		}
 
 		var header struct {
@@ -471,7 +502,7 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 		}
 		if err := json.Unmarshal(msgBytes, &header); err != nil {
 			if !yield(nil, fmt.Errorf("openai: parse websocket event: %w", err)) {
-				return responseID, false
+				return responseID, false, nil
 			}
 			continue
 		}
@@ -486,7 +517,7 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 		// json.Unmarshal to extract only the fields they care about and
 		// silently ignore the extra "type" key present in WebSocket messages.
 		if !state.handleSSEEvent(header.Type, msgBytes, yield) {
-			return responseID, false
+			return responseID, false, nil
 		}
 
 		// Terminal events mark the end of a single response on this connection.
@@ -495,9 +526,9 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 		// clean=false so the connection is closed and a fresh one dialled next turn.
 		switch header.Type {
 		case "response.completed":
-			return responseID, true
+			return responseID, true, nil
 		case "response.failed", "response.incomplete":
-			return responseID, false
+			return responseID, false, nil
 		}
 	}
 }
