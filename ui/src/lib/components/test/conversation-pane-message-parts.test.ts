@@ -5,6 +5,7 @@ import type { ChatMessage } from "$lib/api-types";
 import type { AssistantConversationPaneRenderablePart } from "../app/conversation-pane-message-parts";
 import {
 	getAssistantMessagePartGroups,
+	getHookFailureCollapsedSummary,
 	getHookFailureMessageMetadata,
 	getHookPathDisplayLabel,
 	getUserMessageSlashCommandMetadata,
@@ -459,6 +460,63 @@ test("getHookPathDisplayLabel keeps non-discobot hook paths intact", () => {
 	assert.equal(
 		getHookPathDisplayLabel(".claude/hooks/backend-check.sh"),
 		".claude/hooks/backend-check.sh",
+	);
+});
+
+test("getHookFailureCollapsedSummary prefers the last non-empty output line", () => {
+	assert.equal(
+		getHookFailureCollapsedSummary({
+			kind: "hook-failure",
+			hookName: "lint",
+			exitCode: 1,
+			output: "Running lint\n\nbackend check failed",
+		}),
+		"backend check failed",
+	);
+});
+
+test("getHookFailureCollapsedSummary falls back to file counts", () => {
+	assert.equal(
+		getHookFailureCollapsedSummary({
+			kind: "hook-failure",
+			hookName: "lint",
+			exitCode: 1,
+			files: ["agent-go/main.go", "server/main.go"],
+			extraFileCount: 1,
+		}),
+		"3 files affected",
+	);
+});
+
+test("getHookFailureCollapsedSummary falls back to pattern and hook file metadata", () => {
+	assert.equal(
+		getHookFailureCollapsedSummary({
+			kind: "hook-failure",
+			hookName: "lint",
+			exitCode: 1,
+			pattern: "**/*.go",
+		}),
+		"Pattern: **/*.go",
+	);
+	assert.equal(
+		getHookFailureCollapsedSummary({
+			kind: "hook-failure",
+			hookName: "lint",
+			exitCode: 1,
+			hookPath: ".discobot/hooks/09-ci.sh",
+		}),
+		"Hook file: 09-ci.sh",
+	);
+});
+
+test("getHookFailureCollapsedSummary returns null without details", () => {
+	assert.equal(
+		getHookFailureCollapsedSummary({
+			kind: "hook-failure",
+			hookName: "lint",
+			exitCode: 1,
+		}),
+		null,
 	);
 });
 

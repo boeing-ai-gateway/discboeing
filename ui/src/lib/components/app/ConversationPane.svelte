@@ -12,6 +12,7 @@
 	} from "$lib/components/app/conversation-pane-message-parts";
 	import {
 		getAssistantMessagePartGroups,
+		getHookFailureCollapsedSummary,
 		getHookFailureMessageMetadata,
 		getHookPathDisplayLabel,
 		getUserMessageRenderableParts,
@@ -169,6 +170,7 @@
 	let isNearBottom = $state(true);
 	let expandedAssistantStepMessages = $state<Record<string, boolean>>({});
 	let expandedGeneratedUserMessages = $state<Record<string, boolean>>({});
+	let expandedHookFailureMessages = $state<Record<string, boolean>>({});
 	let lastReservedSubmitMessageId = $state<string | null>(null);
 	let reservedTurnMinHeight = $state(0);
 	let hookPreviewOpen = $state(false);
@@ -254,9 +256,20 @@
 		return expandedGeneratedUserMessages[messageId] ?? false;
 	}
 
+	function isHookFailureMessageExpanded(messageId: string): boolean {
+		return expandedHookFailureMessages[messageId] ?? false;
+	}
+
 	function setGeneratedUserMessageExpanded(messageId: string, open: boolean) {
 		expandedGeneratedUserMessages = {
 			...expandedGeneratedUserMessages,
+			[messageId]: open,
+		};
+	}
+
+	function setHookFailureMessageExpanded(messageId: string, open: boolean) {
+		expandedHookFailureMessages = {
+			...expandedHookFailureMessages,
 			[messageId]: open,
 		};
 	}
@@ -576,135 +589,165 @@
 	{/if}
 {/snippet}
 
-{#snippet renderHookFailureMessage(metadata: HookFailureMessageMetadata)}
-	<div
-		class="w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+{#snippet renderHookFailureMessage(
+	messageId: string,
+	metadata: HookFailureMessageMetadata,
+)}
+	{@const isExpanded = isHookFailureMessageExpanded(messageId)}
+	{@const collapsedSummary = getHookFailureCollapsedSummary(metadata)}
+	<Collapsible
+		open={isExpanded}
+		onOpenChange={(open) => setHookFailureMessageExpanded(messageId, open)}
 	>
 		<div
-			class="flex items-center justify-between gap-3 border-border border-b bg-muted/20 px-4 py-3"
+			class="w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm"
 		>
-			<div class="min-w-0 space-y-1">
-				<div class="font-medium text-foreground text-sm">Hook failed</div>
-				<div class="truncate text-muted-foreground text-sm">
-					{metadata.hookName}
+			<div
+				class="flex items-center justify-between gap-3 bg-muted/20 px-4 py-3"
+			>
+				<div class="min-w-0 space-y-1">
+					<div class="font-medium text-foreground text-sm">Hook failed</div>
+					<div class="truncate text-muted-foreground text-sm">
+						{metadata.hookName}
+					</div>
+					{#if collapsedSummary}
+						<div
+							class="line-clamp-2 whitespace-pre-wrap break-words text-muted-foreground text-xs [overflow-wrap:anywhere]"
+						>
+							{collapsedSummary}
+						</div>
+					{/if}
+				</div>
+				<div class="flex shrink-0 items-center gap-3">
+					<div
+						class="rounded-md border border-border bg-background px-2 py-1 font-mono text-foreground text-xs"
+					>
+						exit {metadata.exitCode}
+					</div>
+					<CollapsibleTrigger
+						aria-expanded={isExpanded}
+						class="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground"
+						type="button"
+					>
+						{isExpanded ? "Hide details" : "Show details"}
+					</CollapsibleTrigger>
 				</div>
 			</div>
-			<div
-				class="rounded-md border border-border bg-background px-2 py-1 font-mono text-foreground text-xs"
-			>
-				exit {metadata.exitCode}
-			</div>
-		</div>
 
-		<div class="space-y-4 p-4">
-			<div class="grid gap-3 text-sm sm:grid-cols-2">
-				{#if metadata.pattern}
-					<div class="space-y-1">
-						<div
-							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-						>
-							Pattern
-						</div>
-						<div class="font-mono text-foreground text-xs">
-							{metadata.pattern}
-						</div>
-					</div>
-				{/if}
+			<CollapsibleContent class="overflow-hidden border-border border-t">
+				{#if isExpanded}
+					<div class="space-y-4 p-4">
+						<div class="grid gap-3 text-sm sm:grid-cols-2">
+							{#if metadata.pattern}
+								<div class="space-y-1">
+									<div
+										class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+									>
+										Pattern
+									</div>
+									<div class="font-mono text-foreground text-xs">
+										{metadata.pattern}
+									</div>
+								</div>
+							{/if}
 
-				{#if metadata.hookPath}
-					<div class="space-y-1 sm:col-span-2">
-						<div
-							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-						>
-							Hook file
-						</div>
-						<Button
-							class="h-auto justify-start px-0 font-mono text-xs"
-							onclick={() => {
-								void openHookPreview(metadata);
-							}}
-							size="sm"
-							variant="link"
-						>
-							{getHookPathDisplayLabel(metadata.hookPath)}
-						</Button>
-					</div>
-				{/if}
+							{#if metadata.hookPath}
+								<div class="space-y-1 sm:col-span-2">
+									<div
+										class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+									>
+										Hook file
+									</div>
+									<Button
+										class="h-auto justify-start px-0 font-mono text-xs"
+										onclick={() => {
+											void openHookPreview(metadata);
+										}}
+										size="sm"
+										variant="link"
+									>
+										{getHookPathDisplayLabel(metadata.hookPath)}
+									</Button>
+								</div>
+							{/if}
 
-				{#if metadata.files && metadata.files.length > 0}
-					<div class="space-y-1 sm:col-span-2">
-						<div
-							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-						>
-							Files
-						</div>
-						<div class="space-y-1 font-mono text-foreground text-xs">
-							{#each metadata.files as file}
-								<div class="break-all">{file}</div>
-							{/each}
-							{#if metadata.extraFileCount}
-								<div class="text-muted-foreground">
-									and {metadata.extraFileCount} more
+							{#if metadata.files && metadata.files.length > 0}
+								<div class="space-y-1 sm:col-span-2">
+									<div
+										class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+									>
+										Files
+									</div>
+									<div class="space-y-1 font-mono text-foreground text-xs">
+										{#each metadata.files as file}
+											<div class="break-all">{file}</div>
+										{/each}
+										{#if metadata.extraFileCount}
+											<div class="text-muted-foreground">
+												and {metadata.extraFileCount} more
+											</div>
+										{/if}
+									</div>
 								</div>
 							{/if}
 						</div>
+
+						{#if metadata.output}
+							<div class="space-y-2">
+								<div
+									class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+								>
+									Output
+								</div>
+								<div
+									class="overflow-x-auto rounded-md border border-border bg-background"
+								>
+									<pre
+										class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
+											>{metadata.output}</code
+										></pre>
+								</div>
+							</div>
+						{:else if metadata.outputPath || metadata.outputTail}
+							<div class="space-y-2">
+								{#if metadata.outputPath}
+									<div class="space-y-2">
+										<div
+											class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+										>
+											Log file
+										</div>
+										<div
+											class="rounded-md border border-border bg-background px-3 py-2 font-mono text-foreground text-xs break-all"
+										>
+											{metadata.outputPath}
+										</div>
+									</div>
+								{/if}
+								{#if metadata.outputTail}
+									<div class="space-y-2">
+										<div
+											class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+										>
+											Last 15 lines
+										</div>
+										<div
+											class="overflow-x-auto rounded-md border border-border bg-background"
+										>
+											<pre
+												class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
+													>{metadata.outputTail}</code
+												></pre>
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				{/if}
-			</div>
-
-			{#if metadata.output}
-				<div class="space-y-2">
-					<div
-						class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-					>
-						Output
-					</div>
-					<div
-						class="overflow-x-auto rounded-md border border-border bg-background"
-					>
-						<pre
-							class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
-								>{metadata.output}</code
-							></pre>
-					</div>
-				</div>
-			{:else if metadata.outputPath || metadata.outputTail}
-				<div class="space-y-2">
-					{#if metadata.outputPath}
-						<div class="space-y-2">
-							<div
-								class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-							>
-								Log file
-							</div>
-							<div
-								class="rounded-md border border-border bg-background px-3 py-2 font-mono text-foreground text-xs break-all"
-							>
-								{metadata.outputPath}
-							</div>
-						</div>
-					{/if}
-					{#if metadata.outputTail}
-						<div class="space-y-2">
-							<div
-								class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-							>
-								Last 15 lines
-							</div>
-							<div
-								class="overflow-x-auto rounded-md border border-border bg-background"
-							>
-								<pre
-									class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
-										>{metadata.outputTail}</code
-									></pre>
-							</div>
-						</div>
-					{/if}
-				</div>
-			{/if}
+			</CollapsibleContent>
 		</div>
-	</div>
+	</Collapsible>
 {/snippet}
 
 {#snippet renderAssistantMessageParts(
@@ -822,7 +865,10 @@
 									>
 										<MessageContent>
 											{#if hookFailure}
-												{@render renderHookFailureMessage(hookFailure)}
+												{@render renderHookFailureMessage(
+													message.id,
+													hookFailure,
+												)}
 											{:else}
 												{@render renderUserMessageParts(message, userParts)}
 											{/if}

@@ -45,6 +45,49 @@ export type HookFailureMessageMetadata = {
 	outputTruncated?: boolean;
 };
 
+function getLastNonEmptyLine(text: string | undefined): string | null {
+	if (!text) {
+		return null;
+	}
+
+	const lines = text
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+	return lines.at(-1) ?? null;
+}
+
+export function getHookFailureCollapsedSummary(
+	metadata: HookFailureMessageMetadata,
+): string | null {
+	const outputLine =
+		getLastNonEmptyLine(metadata.output) ??
+		getLastNonEmptyLine(metadata.outputTail);
+	if (outputLine) {
+		return outputLine;
+	}
+
+	const totalFiles =
+		(metadata.files?.length ?? 0) + (metadata.extraFileCount ?? 0);
+	if (totalFiles > 0) {
+		return `${totalFiles} ${totalFiles === 1 ? "file" : "files"} affected`;
+	}
+
+	if (metadata.pattern) {
+		return `Pattern: ${metadata.pattern}`;
+	}
+
+	if (metadata.hookPath) {
+		return `Hook file: ${getHookPathDisplayLabel(metadata.hookPath)}`;
+	}
+
+	if (metadata.outputPath) {
+		return `Log file: ${metadata.outputPath}`;
+	}
+
+	return null;
+}
+
 export function isConversationPaneMessageStreaming(
 	message: ChatMessage,
 ): boolean {
