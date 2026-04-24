@@ -219,7 +219,7 @@ func renderToolTail(label string, isError bool, text, detail string) {
 	}
 	fmt.Fprintf(os.Stderr, "%s [%s] %s: %d lines\n", styleToolOutputArrow(isError), styleToolLabel(label), kind, lineCount)
 
-	detail = strings.TrimSpace(strings.ReplaceAll(detail, "\r\n", "\n"))
+	detail = strings.Trim(strings.ReplaceAll(detail, "\r\n", "\n"), "\n")
 	if detail == "" {
 		return
 	}

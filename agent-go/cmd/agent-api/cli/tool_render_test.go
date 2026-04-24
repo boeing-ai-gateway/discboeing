@@ -177,6 +177,43 @@ func TestRenderChunk_ToolOutputErrorPrintsToolOutput(t *testing.T) {
 	}
 }
 
+func TestRenderToolTail_PreservesLeadingIndentation(t *testing.T) {
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderrReader.Close()
+
+	oldStderr := os.Stderr
+	oldNoColor := noColor
+	os.Stderr = stderrWriter
+	noColor = true
+	defer func() {
+		os.Stderr = oldStderr
+		noColor = oldNoColor
+	}()
+
+	renderToolTail("Bash(12345678)", false, "     1→one\n     2→two\n", "     1→one\n     2→two\n")
+
+	if err := stderrWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := string(output)
+	for _, want := range []string{
+		"         1→one",
+		"         2→two",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
 func TestRenderChunk_ToolInputDoesNotStartWithBlankLine(t *testing.T) {
 	stderrReader, stderrWriter, err := os.Pipe()
 	if err != nil {
