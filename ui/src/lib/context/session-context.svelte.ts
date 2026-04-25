@@ -64,6 +64,9 @@ function createSessionContext(
 			selectedThreadId = threadId;
 		},
 		takeRequestedId: () => app.sessions.takeRequestedThreadId(sessionId),
+		onThreadRemoved: (threadId) => {
+			app.stores.recentThreads.pruneThread(sessionId, threadId);
+		},
 	});
 
 	const hooks = createSessionHooksDomain({

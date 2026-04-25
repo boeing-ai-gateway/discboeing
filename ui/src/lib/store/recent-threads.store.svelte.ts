@@ -207,6 +207,18 @@ export class RecentThreadStore {
 		}
 	}
 
+	pruneThread(sessionId: string, threadId: string): void {
+		this.#setEntries(
+			this.#entries.filter(
+				(entry) => entry.sessionId !== sessionId || entry.threadId !== threadId,
+			),
+		);
+
+		if (this.#lastRecordedKey === recentThreadKey(sessionId, threadId)) {
+			this.#lastRecordedKey = null;
+		}
+	}
+
 	#setEntries(entries: SavedRecentThreadEntry[]): void {
 		const nextEntries = normalizeEntries(entries);
 		this.#entries = nextEntries;
