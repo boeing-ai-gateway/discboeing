@@ -199,9 +199,23 @@ test("conversation loader keeps closed-stream recovery at the websocket layer", 
 test("conversation loader falls back to stream finish when completion status never clears", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
+	assert.match(source, /let afterTurnPending = \$state\(false\);/);
 	assert.match(
 		source,
-		/onFinish: \(\) => \{[\s\S]*completionRunning = false;[\s\S]*dismissRetryToast\(args\.threadId\);/,
+		/const handleCompletionStart = \(\) => \{[\s\S]*if \(completionRunning\) \{[\s\S]*return;[\s\S]*afterTurnPending = true;[\s\S]*completionRunning = true;[\s\S]*pendingQuestionId = null;/,
+	);
+	assert.match(
+		source,
+		/const handleCompletionFinish = \(\) => \{[\s\S]*if \(!completionRunning\) \{[\s\S]*return;[\s\S]*completionRunning = false;[\s\S]*dismissRetryToast\(args\.threadId\);[\s\S]*runAfterTurnIfNeeded\(\);/,
+	);
+	assert.match(source, /onStart: \(\) => \{[\s\S]*handleCompletionStart\(\);/);
+	assert.match(
+		source,
+		/onCompletionStatus: \(\{ isRunning \}\) => \{[\s\S]*if \(isRunning\) \{[\s\S]*handleCompletionStart\(\);[\s\S]*return;[\s\S]*\}[\s\S]*handleCompletionFinish\(\);/,
+	);
+	assert.match(
+		source,
+		/onFinish: \(\) => \{[\s\S]*handleCompletionFinish\(\);/,
 	);
 });
 

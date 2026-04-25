@@ -126,6 +126,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let streamError = $state<string | null>(null);
 	let fatalStreamError = $state(false);
 	let completionRunning = $state(false);
+	let afterTurnPending = $state(false);
 	let pendingQuestionId = $state<string | null>(null);
 	let loadStatus = $state<"idle" | "loading" | "ready" | "error">("idle");
 	let activeSubscription: ChatStreamSubscription | null = null;
@@ -154,29 +155,42 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		getPendingQuestionState(messages, pendingQuestionId),
 	);
 
+	const handleCompletionStart = () => {
+		if (completionRunning) {
+			return;
+		}
+		streamError = null;
+		afterTurnPending = true;
+		completionRunning = true;
+		pendingQuestionId = null;
+	};
+
+	const handleCompletionFinish = () => {
+		if (!completionRunning) {
+			return;
+		}
+		completionRunning = false;
+		void dismissRetryToast(args.threadId);
+		return runAfterTurnIfNeeded();
+	};
+
 	const streamState = createChatStreamState({
 		getMessages: () => messages,
 		setMessages: (nextMessages) => {
 			messages = nextMessages;
 		},
+		onStart: () => {
+			handleCompletionStart();
+		},
 		onCompletionStatus: ({ isRunning }) => {
-			const wasRunning = completionRunning;
 			if (isRunning) {
-				streamError = null;
-			}
-			completionRunning = isRunning;
-			if (isRunning) {
-				pendingQuestionId = null;
+				handleCompletionStart();
 				return;
 			}
-			void dismissRetryToast(args.threadId);
-			if (wasRunning) {
-				return args.afterTurn?.();
-			}
+			return handleCompletionFinish();
 		},
 		onFinish: () => {
-			completionRunning = false;
-			void dismissRetryToast(args.threadId);
+			return handleCompletionFinish();
 		},
 		onHistoryReplayEnd: () => {
 			fatalStreamError = false;
@@ -218,6 +232,14 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		activeSubscription?.unsubscribe();
 		activeSubscription = null;
 		activeStreamKey = null;
+	}
+
+	function runAfterTurnIfNeeded() {
+		if (!afterTurnPending) {
+			return;
+		}
+		afterTurnPending = false;
+		return args.afterTurn?.();
 	}
 
 	function resetLoadPromise() {
