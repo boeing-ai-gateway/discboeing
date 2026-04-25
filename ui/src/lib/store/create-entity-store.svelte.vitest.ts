@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 
+import { describe, it } from "vitest";
 import { flushSync } from "svelte";
 
 import { createEntityStore } from "./create-entity-store.svelte";

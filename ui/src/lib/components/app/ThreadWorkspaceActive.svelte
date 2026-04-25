@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, untrack } from "svelte";
+	import { onDestroy } from "svelte";
 	import ConversationPane from "$lib/components/app/ConversationPane.svelte";
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
@@ -21,7 +21,10 @@
 		session.threads.selectedId ?? session.sessionId,
 	);
 
-	untrack(() => {
+	$effect(() => {
+		if (!session.current) {
+			return;
+		}
 		void thread.connect();
 	});
 

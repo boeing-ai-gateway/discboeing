@@ -12,10 +12,13 @@ function readThreadWorkspaceActiveSource() {
 	return readFileSync(THREAD_WORKSPACE_ACTIVE_COMPONENT, "utf-8");
 }
 
-test("thread workspace active keeps the thread stream connected while mounted", () => {
+test("thread workspace active reconnects when the session becomes available", () => {
 	const source = readThreadWorkspaceActiveSource();
 
-	assert.match(
+	assert.match(source, /\$effect\(\(\) => \{/);
+	assert.match(source, /if \(!session\.current\) \{/);
+	assert.match(source, /void thread\.connect\(\);/);
+	assert.doesNotMatch(
 		source,
 		/untrack\(\(\) => \{\s*void thread\.connect\(\);\s*\}\);/,
 	);
