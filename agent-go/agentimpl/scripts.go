@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
@@ -12,11 +13,13 @@ import (
 )
 
 const (
-	readThreadEmbeddedScript  = "scripts/read-thread.sh"
-	listThreadsEmbeddedScript = "scripts/list-threads.sh"
+	readThreadEmbeddedScriptUnix     = "scripts/read-thread.sh"
+	readThreadEmbeddedScriptWindows  = "scripts/read-thread.ps1"
+	listThreadsEmbeddedScriptUnix    = "scripts/list-threads.sh"
+	listThreadsEmbeddedScriptWindows = "scripts/list-threads.ps1"
 )
 
-//go:embed scripts/*.sh
+//go:embed scripts/*.sh scripts/*.ps1
 var embeddedScripts embed.FS
 
 type stagedScript struct {
@@ -41,15 +44,15 @@ func applypatchScriptPath() string {
 }
 
 func readThreadScriptContent() string {
-	return embeddedScriptContent(readThreadEmbeddedScript)
+	return embeddedScriptContent(helperScriptSourcePath("read-thread"))
 }
 
 func listThreadsScriptContent() string {
-	return embeddedScriptContent(listThreadsEmbeddedScript)
+	return embeddedScriptContent(helperScriptSourcePath("list-threads"))
 }
 
 func generateApplyPatchScriptContent(agentBin string) string {
-	return "#!/usr/bin/env bash\nset -eu\n\nexec " + shellSingleQuote(agentBin) + " --discobot-run-as-apply-patch \"$@\"\n"
+	return generateApplyPatchScriptContentForOS(runtime.GOOS, agentBin)
 }
 
 func embeddedScriptContent(path string) string {
@@ -62,8 +65,8 @@ func embeddedScriptContent(path string) string {
 
 func (a *DefaultAgent) ensureHelperScripts() {
 	a.ensureStagedScripts([]stagedScript{
-		{SourcePath: readThreadEmbeddedScript, TargetName: "read-thread"},
-		{SourcePath: listThreadsEmbeddedScript, TargetName: "list-threads"},
+		{SourcePath: helperScriptSourcePath("read-thread"), TargetName: "read-thread"},
+		{SourcePath: helperScriptSourcePath("list-threads"), TargetName: "list-threads"},
 	})
 	agentBin, err := os.Executable()
 	if err != nil || strings.TrimSpace(agentBin) == "" {
@@ -107,4 +110,49 @@ func (a *DefaultAgent) ensureHelperScript(path string, content []byte) {
 
 func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+func powershellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+func helperScriptSourcePath(targetName string) string {
+	if runtime.GOOS == "windows" {
+		switch targetName {
+		case "read-thread":
+			return readThreadEmbeddedScriptWindows
+		case "list-threads":
+			return listThreadsEmbeddedScriptWindows
+		}
+	}
+	switch targetName {
+	case "read-thread":
+		return readThreadEmbeddedScriptUnix
+	case "list-threads":
+		return listThreadsEmbeddedScriptUnix
+	default:
+		return ""
+	}
+}
+
+func generateApplyPatchScriptContentForOS(goos, agentBin string) string {
+	if goos != "windows" {
+		return "#!/usr/bin/env bash\nset -eu\n\nexec " + shellSingleQuote(agentBin) + " --discobot-run-as-apply-patch \"$@\"\n"
+	}
+	return strings.Join([]string{
+		"param(",
+		"    [Parameter(ValueFromRemainingArguments = $true)]",
+		"    [string[]]$Arguments",
+		")",
+		"",
+		"& " + powershellSingleQuote(agentBin) + " --discobot-run-as-apply-patch @Arguments",
+		"if ($null -ne $LASTEXITCODE) {",
+		"    exit $LASTEXITCODE",
+		"}",
+		"if ($?) {",
+		"    exit 0",
+		"}",
+		"exit 1",
+		"",
+	}, "\n")
 }

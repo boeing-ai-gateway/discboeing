@@ -26,6 +26,7 @@ type RendererComponent = Component<ToolRendererComponentProps>;
 const TOOL_RENDERERS: Record<string, RendererComponent> = {
 	AskUserQuestion: AskUserQuestionToolRenderer,
 	Bash: BashToolRenderer,
+	PowerShell: BashToolRenderer,
 	Read: ReadToolRenderer,
 	RequestCommitPull: RequestCommitPullToolRenderer,
 	Write: WriteToolRenderer,
@@ -71,7 +72,8 @@ export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 	const safeInput = input as Record<string, unknown>;
 
 	switch (toolName) {
-		case "Bash": {
+		case "Bash":
+		case "PowerShell": {
 			const command = safeInput.command;
 			if (typeof command === "string") {
 				const truncated =

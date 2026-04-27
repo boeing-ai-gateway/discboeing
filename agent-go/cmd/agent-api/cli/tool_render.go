@@ -247,7 +247,7 @@ func toolOutputDetail(toolName string, input json.RawMessage, outputText string)
 		return editOutputDetail(input)
 	case "apply_patch":
 		return applyPatchOutputDetail(input)
-	case "bash":
+	case "bash", "powershell":
 		return bashOutputDetail(outputText)
 	case "glob":
 		return globOutputDetail(outputText)

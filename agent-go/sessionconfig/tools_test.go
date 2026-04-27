@@ -298,20 +298,88 @@ func TestBuiltinTools_WebSearchDescriptionMentionsSources(t *testing.T) {
 	}
 }
 
+func TestAdaptToolsForRuntime_WindowsAppliesEmbeddedOverride(t *testing.T) {
+	tools := AdaptToolsForRuntime("windows", []providers.ToolDefinition{findTool(t, "Bash")})
+	if len(tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(tools))
+	}
+	if tools[0].Name != windowsShellToolName {
+		t.Fatalf("tool name = %q, want %q", tools[0].Name, windowsShellToolName)
+	}
+	if !strings.Contains(tools[0].Description, "Run a PowerShell command and return its output.") {
+		t.Fatalf("expected Windows override description, got %q", tools[0].Description)
+	}
+	if strings.Contains(tools[0].Description, "Run a bash command and return its output.") {
+		t.Fatalf("did not expect bash wording after Windows override, got %q", tools[0].Description)
+	}
+}
+
+func TestAdaptToolsForRuntime_OverlayMergesNestedMaps(t *testing.T) {
+	merged := mergeToolDefinitionMaps(
+		map[string]any{
+			"description": "base",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"command": map[string]any{
+						"type":        "string",
+						"description": "base description",
+					},
+					"timeout": map[string]any{
+						"type": "number",
+					},
+				},
+			},
+		},
+		map[string]any{
+			"description": "override",
+			"inputSchema": map[string]any{
+				"properties": map[string]any{
+					"command": map[string]any{
+						"description": "override description",
+					},
+				},
+			},
+		},
+	)
+
+	if merged["description"] != "override" {
+		t.Fatalf("description = %v, want override", merged["description"])
+	}
+	schema := merged["inputSchema"].(map[string]any)
+	props := schema["properties"].(map[string]any)
+	command := props["command"].(map[string]any)
+	if command["type"] != "string" {
+		t.Fatalf("command.type = %v, want string", command["type"])
+	}
+	if command["description"] != "override description" {
+		t.Fatalf("command.description = %v, want override description", command["description"])
+	}
+	if _, ok := props["timeout"]; !ok {
+		t.Fatal("expected timeout property to be preserved during overlay merge")
+	}
+}
+
 func findToolSchema(t *testing.T, name string) map[string]any {
+	t.Helper()
+	tool := findTool(t, name)
+	var schema map[string]any
+	if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+		t.Fatalf("%s schema: %v", name, err)
+	}
+	return schema
+}
+
+func findTool(t *testing.T, name string) providers.ToolDefinition {
 	t.Helper()
 	tools := BuiltinTools("")
 	for _, tool := range tools {
 		if tool.Name == name {
-			var schema map[string]any
-			if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
-				t.Fatalf("%s schema: %v", name, err)
-			}
-			return schema
+			return tool
 		}
 	}
 	t.Fatalf("%s tool not found", name)
-	return nil
+	return providers.ToolDefinition{}
 }
 
 func TestFormatToolAvailabilityChangeReminder(t *testing.T) {

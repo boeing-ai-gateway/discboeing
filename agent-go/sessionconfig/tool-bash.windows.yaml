@@ -1,0 +1,16 @@
+name: PowerShell
+description: |-
+  Run a PowerShell command and return its output.
+
+  Use dedicated tools instead of shell equivalents when possible:
+  - Glob for file search
+  - Grep for content search
+  - Read for file contents
+  - Edit for edits
+  - Write for new files
+
+  Prefer one PowerShell call for dependent commands and separate tool calls for independent commands. Large output is capped at 2000 lines or 50 KB inline; the full output is saved to a file when truncated.
+
+  For git work, avoid destructive commands, force pushes, or skipped hooks unless the user explicitly requests them. Do not commit or push unless asked.
+
+  If a command needs a secret, first use RequestUserCredential to request it. Later PowerShell calls may reuse approved credential ids and approved-use ids through `credentialUses`. Never invent or guess credential ids or approved-use ids; only use ids returned by RequestUserCredential.

@@ -34,6 +34,13 @@ test("request user credential uses the optimized tool renderer", () => {
 	);
 });
 
+test("powershell uses the optimized bash renderer", () => {
+	const source = readRegistrySource();
+
+	assert.match(source, /PowerShell: BashToolRenderer,/);
+	assert.match(source, /case "PowerShell": \{/);
+});
+
 test("optimized tool renderer auto-expands pending credential requests", () => {
 	const source = readOptimizedRendererSource();
 

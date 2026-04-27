@@ -748,16 +748,16 @@ func TestResolveBashCommandForOS_NonWindows(t *testing.T) {
 	}
 }
 
-func TestResolveBashCommandForOS_WindowsPrefersRealExecutable(t *testing.T) {
+func TestResolveBashCommandForOS_WindowsPrefersPowerShellExecutable(t *testing.T) {
 	dirWithCmd := t.TempDir()
 	dirWithExe := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(dirWithCmd, "bash.cmd"), []byte("@echo off\r\n"), 0o644); err != nil {
-		t.Fatalf("failed to create bash.cmd: %v", err)
+	if err := os.WriteFile(filepath.Join(dirWithCmd, "powershell.cmd"), []byte("@echo off\r\n"), 0o644); err != nil {
+		t.Fatalf("failed to create powershell.cmd: %v", err)
 	}
-	want := filepath.Join(dirWithExe, "bash.exe")
+	want := filepath.Join(dirWithExe, "powershell.exe")
 	if err := os.WriteFile(want, []byte("fake exe"), 0o644); err != nil {
-		t.Fatalf("failed to create bash.exe: %v", err)
+		t.Fatalf("failed to create powershell.exe: %v", err)
 	}
 
 	got, err := resolveBashCommandForOS("windows", []string{dirWithCmd, dirWithExe}, ".CMD;.EXE;.BAT")
@@ -769,17 +769,17 @@ func TestResolveBashCommandForOS_WindowsPrefersRealExecutable(t *testing.T) {
 	}
 }
 
-func TestResolveBashCommandForOS_WindowsUsesFirstExecutableInPath(t *testing.T) {
+func TestResolveBashCommandForOS_WindowsUsesFirstPowerShellExecutableInPath(t *testing.T) {
 	firstDir := t.TempDir()
 	secondDir := t.TempDir()
 
-	first := filepath.Join(firstDir, "bash.exe")
-	second := filepath.Join(secondDir, "bash.exe")
+	first := filepath.Join(firstDir, "powershell.exe")
+	second := filepath.Join(secondDir, "powershell.exe")
 	if err := os.WriteFile(first, []byte("first"), 0o644); err != nil {
-		t.Fatalf("failed to create first bash.exe: %v", err)
+		t.Fatalf("failed to create first powershell.exe: %v", err)
 	}
 	if err := os.WriteFile(second, []byte("second"), 0o644); err != nil {
-		t.Fatalf("failed to create second bash.exe: %v", err)
+		t.Fatalf("failed to create second powershell.exe: %v", err)
 	}
 
 	got, err := resolveBashCommandForOS("windows", []string{firstDir, secondDir}, ".EXE")
@@ -791,20 +791,22 @@ func TestResolveBashCommandForOS_WindowsUsesFirstExecutableInPath(t *testing.T) 
 	}
 }
 
-func TestResolveBashCommandForOS_WindowsRejectsBatchShims(t *testing.T) {
+func TestResolveBashCommandForOS_WindowsRejectsBatchShimsWithoutPowerShellFallback(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "bash.cmd"), []byte("@echo off\r\n"), 0o644); err != nil {
-		t.Fatalf("failed to create bash.cmd: %v", err)
+	t.Setenv("SystemRoot", "")
+	t.Setenv("ProgramFiles", "")
+	if err := os.WriteFile(filepath.Join(dir, "powershell.cmd"), []byte("@echo off\r\n"), 0o644); err != nil {
+		t.Fatalf("failed to create powershell.cmd: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "bash.bat"), []byte("@echo off\r\n"), 0o644); err != nil {
-		t.Fatalf("failed to create bash.bat: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "pwsh.bat"), []byte("@echo off\r\n"), 0o644); err != nil {
+		t.Fatalf("failed to create pwsh.bat: %v", err)
 	}
 
 	_, err := resolveBashCommandForOS("windows", []string{dir}, ".CMD;.BAT")
 	if err == nil {
-		t.Fatal("expected resolveBashCommandForOS to fail when only batch shims exist")
+		t.Fatal("expected resolveBashCommandForOS to fail when only batch shims exist and fallback locations are disabled")
 	}
-	if !strings.Contains(err.Error(), "bash.cmd and bash.bat are not supported") {
+	if !strings.Contains(err.Error(), "PowerShell is not available") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

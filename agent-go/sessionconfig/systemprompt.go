@@ -25,7 +25,7 @@ type systemConfig struct {
 	AllowedTools []string
 }
 
-const credentialUseAuthorizerSystemPrompt = "You validate whether a Bash command is within one or more previously approved credential uses. Be strict and reject on ambiguity. Allow only when the command is clearly consistent with at least one approved use description and does not appear to perform broader credentialed actions than necessary. Evaluate the approved uses together. Respond with exactly one minified JSON object matching this shape and no surrounding text: {\"allow\":true|false,\"reason\":\"short reason\"}."
+const credentialUseAuthorizerSystemPrompt = "You validate whether a shell command is within one or more previously approved credential uses. Be strict and reject on ambiguity. Allow only when the command is clearly consistent with at least one approved use description and does not appear to perform broader credentialed actions than necessary. Evaluate the approved uses together. Respond with exactly one minified JSON object matching this shape and no surrounding text: {\"allow\":true|false,\"reason\":\"short reason\"}."
 
 func CredentialUseAuthorizerSystemPrompt() string {
 	return credentialUseAuthorizerSystemPrompt

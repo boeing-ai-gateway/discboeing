@@ -27,6 +27,9 @@ func FormatRuntimeEnvironmentReminder(snapshot RuntimeEnvironmentSnapshot) strin
 	if snapshot.CurrentModel != "" {
 		fmt.Fprintf(&b, "- Current model: %s\n", snapshot.CurrentModel)
 	}
+	if runtime.GOOS == "windows" {
+		fmt.Fprintf(&b, "- Shell tool note: the %q-configured command tool is exposed in this runtime as %q and runs commands with PowerShell.\n", "Bash", windowsShellToolName)
+	}
 	fmt.Fprintf(&b, "- Git state (captured at the current time of this reminder; this may change throughout the conversation): %s\n", snapshot.GitState)
 	b.WriteString("</system-reminder>")
 	return b.String()

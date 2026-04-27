@@ -2,9 +2,12 @@ package sessionconfig
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -28,6 +31,8 @@ var (
 	builtinToolMapErr  error
 )
 
+const windowsShellToolName = "PowerShell"
+
 // BuiltinTools returns the default embedded tool set in SYSTEM.md order.
 func BuiltinTools(_ string) []providers.ToolDefinition {
 	cfg, err := defaultSystemConfig()
@@ -39,6 +44,23 @@ func BuiltinTools(_ string) []providers.ToolDefinition {
 		panic("sessionconfig: load builtin tools: " + err.Error())
 	}
 	return tools
+}
+
+// AdaptToolsForRuntime renames or rewrites tool definitions for the current
+// runtime while keeping configuration names stable on disk.
+func AdaptToolsForRuntime(goos string, tools []providers.ToolDefinition) []providers.ToolDefinition {
+	if strings.TrimSpace(goos) == "" {
+		goos = runtime.GOOS
+	}
+	if len(tools) == 0 {
+		return nil
+	}
+
+	adapted := make([]providers.ToolDefinition, len(tools))
+	for i, tool := range tools {
+		adapted[i] = adaptToolForRuntime(goos, tool)
+	}
+	return adapted
 }
 
 func toolsForNames(names []string) ([]providers.ToolDefinition, error) {
@@ -71,6 +93,17 @@ func builtinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 	return clone, nil
 }
 
+func adaptToolForRuntime(goos string, tool providers.ToolDefinition) providers.ToolDefinition {
+	if strings.TrimSpace(goos) == "" || strings.TrimSpace(tool.Name) == "" {
+		return tool
+	}
+	adapted, err := applyRuntimeToolOverride(goos, tool)
+	if err != nil {
+		panic("sessionconfig: apply runtime tool override: " + err.Error())
+	}
+	return adapted
+}
+
 func loadBuiltinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 	entries, err := embeddedConfigFiles.ReadDir(".")
 	if err != nil {
@@ -83,13 +116,14 @@ func loadBuiltinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 			continue
 		}
 		name := entry.Name()
-		matched, err := filepath.Match("tool-*.yaml", name)
-		if err != nil {
-			return nil, fmt.Errorf("match embedded tool file %s: %w", name, err)
+		baseName, goos, ok := parseToolDefinitionFileName(name)
+		if !ok {
+			continue
 		}
-		if matched {
-			paths = append(paths, name)
+		if strings.TrimSpace(baseName) == "" || strings.TrimSpace(goos) != "" {
+			continue
 		}
+		paths = append(paths, name)
 	}
 	sort.Strings(paths)
 
@@ -99,40 +133,163 @@ func loadBuiltinToolDefinitions() (map[string]providers.ToolDefinition, error) {
 
 	tools := make(map[string]providers.ToolDefinition, len(paths))
 	for _, path := range paths {
-		data, err := embeddedConfigFiles.ReadFile(path)
+		tool, err := loadEmbeddedToolDefinition(path)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+			return nil, err
 		}
-
-		var raw embeddedToolDefinition
-		if err := yaml.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf("unmarshal %s: %w", path, err)
+		if _, exists := tools[tool.Name]; exists {
+			return nil, fmt.Errorf("duplicate tool name %q", tool.Name)
 		}
-		if raw.Name == "" {
-			return nil, fmt.Errorf("%s: missing tool name", path)
-		}
-		if raw.InputSchema == nil {
-			return nil, fmt.Errorf("%s: missing inputSchema", path)
-		}
-		if _, exists := tools[raw.Name]; exists {
-			return nil, fmt.Errorf("duplicate tool name %q", raw.Name)
-		}
-
-		schema, err := json.Marshal(raw.InputSchema)
-		if err != nil {
-			return nil, fmt.Errorf("marshal inputSchema for %s: %w", raw.Name, err)
-		}
-
-		tools[raw.Name] = providers.ToolDefinition{
-			Type:        raw.Type,
-			Name:        raw.Name,
-			Description: raw.Description,
-			InputSchema: schema,
-			Format:      raw.Format,
-		}
+		tools[tool.Name] = tool
 	}
 
 	return tools, nil
+}
+
+func applyRuntimeToolOverride(goos string, tool providers.ToolDefinition) (providers.ToolDefinition, error) {
+	overridePath := runtimeToolOverridePath(tool.Name, goos)
+	if overridePath == "" {
+		return tool, nil
+	}
+
+	overrideMap, err := loadEmbeddedToolDefinitionMap(overridePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return tool, nil
+		}
+		return providers.ToolDefinition{}, err
+	}
+
+	baseMap, err := toolDefinitionToMap(tool)
+	if err != nil {
+		return providers.ToolDefinition{}, err
+	}
+	merged := mergeToolDefinitionMaps(baseMap, overrideMap)
+	return toolDefinitionFromMap(overridePath, merged)
+}
+
+func loadEmbeddedToolDefinition(path string) (providers.ToolDefinition, error) {
+	raw, err := loadEmbeddedToolDefinitionMap(path)
+	if err != nil {
+		return providers.ToolDefinition{}, err
+	}
+	return toolDefinitionFromMap(path, raw)
+}
+
+func loadEmbeddedToolDefinitionMap(path string) (map[string]any, error) {
+	data, err := embeddedConfigFiles.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
+	}
+	if raw == nil {
+		raw = make(map[string]any)
+	}
+	return raw, nil
+}
+
+func toolDefinitionFromMap(path string, raw map[string]any) (providers.ToolDefinition, error) {
+	data, err := yaml.Marshal(raw)
+	if err != nil {
+		return providers.ToolDefinition{}, fmt.Errorf("marshal %s: %w", path, err)
+	}
+
+	var decoded embeddedToolDefinition
+	if err := yaml.Unmarshal(data, &decoded); err != nil {
+		return providers.ToolDefinition{}, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if decoded.Name == "" {
+		return providers.ToolDefinition{}, fmt.Errorf("%s: missing tool name", path)
+	}
+	if decoded.InputSchema == nil {
+		return providers.ToolDefinition{}, fmt.Errorf("%s: missing inputSchema", path)
+	}
+
+	schema, err := json.Marshal(decoded.InputSchema)
+	if err != nil {
+		return providers.ToolDefinition{}, fmt.Errorf("marshal inputSchema for %s: %w", decoded.Name, err)
+	}
+
+	return providers.ToolDefinition{
+		Type:        decoded.Type,
+		Name:        decoded.Name,
+		Description: decoded.Description,
+		InputSchema: schema,
+		Format:      decoded.Format,
+	}, nil
+}
+
+func toolDefinitionToMap(tool providers.ToolDefinition) (map[string]any, error) {
+	raw := map[string]any{
+		"name":        tool.Name,
+		"description": tool.Description,
+	}
+	if strings.TrimSpace(tool.Type) != "" {
+		raw["type"] = tool.Type
+	}
+	if len(tool.InputSchema) > 0 {
+		var schema any
+		if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+			return nil, fmt.Errorf("unmarshal input schema for %s: %w", tool.Name, err)
+		}
+		raw["inputSchema"] = schema
+	}
+	if tool.Format != nil {
+		var format any
+		data, err := json.Marshal(tool.Format)
+		if err != nil {
+			return nil, fmt.Errorf("marshal format for %s: %w", tool.Name, err)
+		}
+		if err := json.Unmarshal(data, &format); err != nil {
+			return nil, fmt.Errorf("unmarshal format for %s: %w", tool.Name, err)
+		}
+		raw["format"] = format
+	}
+	return raw, nil
+}
+
+func mergeToolDefinitionMaps(base, override map[string]any) map[string]any {
+	merged := make(map[string]any, len(base)+len(override))
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range override {
+		baseMap, baseOK := merged[key].(map[string]any)
+		overrideMap, overrideOK := value.(map[string]any)
+		if baseOK && overrideOK {
+			merged[key] = mergeToolDefinitionMaps(baseMap, overrideMap)
+			continue
+		}
+		merged[key] = value
+	}
+	return merged
+}
+
+func parseToolDefinitionFileName(name string) (baseName, goos string, ok bool) {
+	if matched, err := filepath.Match("tool-*.yaml", name); err != nil || !matched {
+		return "", "", false
+	}
+	stem := strings.TrimSuffix(strings.TrimPrefix(name, "tool-"), ".yaml")
+	if stem == "" {
+		return "", "", false
+	}
+	if idx := strings.LastIndex(stem, "."); idx > 0 {
+		return stem[:idx], stem[idx+1:], true
+	}
+	return stem, "", true
+}
+
+func runtimeToolOverridePath(toolName, goos string) string {
+	toolName = strings.TrimSpace(strings.ToLower(toolName))
+	goos = strings.TrimSpace(strings.ToLower(goos))
+	if toolName == "" || goos == "" {
+		return ""
+	}
+	return fmt.Sprintf("tool-%s.%s.yaml", toolName, goos)
 }
 
 // FormatToolAvailabilityChangeReminder formats a mid-conversation tool change as

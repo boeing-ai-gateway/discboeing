@@ -67,7 +67,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	cwd := e.getCwd(toolCtx)
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
 	cwdPath := logPath + ".cwd"
-	bashPath, err := resolveBashCommand()
+	shellPath, err := resolveBashCommand()
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
@@ -84,9 +84,8 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	wrapped := fmt.Sprintf("%s\n__exit=$?\n%s > \"$DISCOBOT_BASH_CWD_PATH\"\nexit $__exit", command, bashPwdCaptureCommand())
-
-	cmd := exec.CommandContext(cmdCtx, bashPath, "-c", wrapped)
+	wrapped := wrapShellCommandForOS(runtime.GOOS, command)
+	cmd := exec.CommandContext(cmdCtx, shellPath, shellCommandArgsForOS(runtime.GOOS, wrapped)...)
 	cmd.Dir = cwd
 	cmd.Env = append(e.bashEnv(), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
 	// Put bash in its own process group so that killing it also kills any
@@ -153,7 +152,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message.ToolCallPart, command string) (thread.ToolExecuteResult, error) {
 	cwd := e.getCwd(toolCtx)
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
-	bashPath, err := resolveBashCommand()
+	shellPath, err := resolveBashCommand()
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
@@ -167,7 +166,7 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 		return errResult(call, fmt.Sprintf("failed to create log file: %v", err)), nil
 	}
 
-	cmd := exec.Command(bashPath, "-c", command) //nolint:gosec
+	cmd := exec.Command(shellPath, shellCommandArgsForOS(runtime.GOOS, command)...) //nolint:gosec
 	cmd.Dir = cwd
 	cmd.Env = e.bashEnv()
 	cmd.Stdout = logFile
@@ -186,9 +185,10 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 		logFile.Close()
 	}()
 
+	followCommand, stopCommand := backgroundShellHintsForOS(runtime.GOOS, logPath, pid)
 	return textResult(call, fmt.Sprintf(
-		"Background process started.\nPID: %d\nOutput: %s\n\nUse `tail -f %s` to follow the output, or `kill %d` to stop it.",
-		pid, logPath, logPath, pid,
+		"Background process started.\nPID: %d\nOutput: %s\n\nUse `%s` to follow the output, or `%s` to stop it.",
+		pid, logPath, followCommand, stopCommand,
 	)), nil
 }
 
@@ -216,20 +216,35 @@ func resolveBashCommandForOS(goos string, pathDirs []string, pathExt string) (st
 		return "", fmt.Errorf("bash is not available: no bash executable was found")
 	}
 
-	for _, dir := range pathDirs {
-		dir = strings.TrimSpace(strings.Trim(dir, `"`))
-		if dir == "" {
-			continue
-		}
-		for _, ext := range windowsBashExtensions(pathExt) {
-			candidate := filepath.Join(dir, "bash"+ext)
+	for _, base := range []string{"powershell", "powershell.exe", "pwsh", "pwsh.exe"} {
+		for _, dir := range pathDirs {
+			dir = strings.TrimSpace(strings.Trim(dir, `"`))
+			if dir == "" {
+				continue
+			}
+			for _, ext := range windowsExecutableExtensions(pathExt) {
+				candidate := filepath.Join(dir, strings.TrimSuffix(base, ext)+ext)
+				if isExecutableFile(candidate) {
+					return candidate, nil
+				}
+			}
+			candidate := filepath.Join(dir, base)
 			if isExecutableFile(candidate) {
 				return candidate, nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("bash is not available: no real Bash executable was found in PATH. Install a Bash executable such as bash.exe from Git Bash or another compatibility layer; bash.cmd and bash.bat are not supported")
+	for _, candidate := range []string{
+		filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+		filepath.Join(os.Getenv("ProgramFiles"), "PowerShell", "7", "pwsh.exe"),
+	} {
+		if isExecutableFile(candidate) {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("PowerShell is not available: no powershell.exe or pwsh.exe executable was found")
 }
 
 func isExecutableFile(path string) bool {
@@ -237,7 +252,7 @@ func isExecutableFile(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func windowsBashExtensions(pathExt string) []string {
+func windowsExecutableExtensions(pathExt string) []string {
 	exts := []string{".exe"}
 	seen := map[string]struct{}{
 		".exe": {},
@@ -262,6 +277,33 @@ func windowsBashExtensions(pathExt string) []string {
 	}
 
 	return exts
+}
+
+func wrapShellCommandForOS(goos, command string) string {
+	if goos != "windows" {
+		return fmt.Sprintf("%s\n__exit=$?\n%s > \"$DISCOBOT_BASH_CWD_PATH\"\nexit $__exit", command, bashPwdCaptureCommand())
+	}
+	return strings.Join([]string{
+		`$ErrorActionPreference = "Continue"`,
+		command,
+		`$__discobot_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
+		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCOBOT_BASH_CWD_PATH -NoNewline`,
+		`exit $__discobot_exit`,
+	}, "\n")
+}
+
+func shellCommandArgsForOS(goos string, command string) []string {
+	if goos != "windows" {
+		return []string{"-c", command}
+	}
+	return []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command}
+}
+
+func backgroundShellHintsForOS(goos, logPath string, pid int) (follow, stop string) {
+	if goos != "windows" {
+		return fmt.Sprintf("tail -f %s", logPath), fmt.Sprintf("kill %d", pid)
+	}
+	return fmt.Sprintf("Get-Content -Wait %s", logPath), fmt.Sprintf("Stop-Process -Id %d", pid)
 }
 
 // extractCwdFromOutput splits the sentinel + pwd from the end of the output.

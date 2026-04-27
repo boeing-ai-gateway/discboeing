@@ -217,7 +217,7 @@ func normalizeScriptName(name string) string {
 	name = filepath.Base(strings.TrimSpace(name))
 	ext := strings.ToLower(filepath.Ext(name))
 	switch ext {
-	case ".sh", ".bash", ".zsh", ".py", ".js", ".ts", ".rb", ".pl", ".php":
+	case ".sh", ".bash", ".zsh", ".py", ".js", ".ts", ".rb", ".pl", ".php", ".ps1", ".cmd", ".bat":
 		name = strings.TrimSuffix(name, filepath.Ext(name))
 	}
 	return strings.TrimSpace(name)

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -899,7 +900,7 @@ func resolvePromptTools(req agent.PromptRequest, sessionCfg *sessionconfig.Sessi
 	if subAgentCfg != nil {
 		tools = filterTools(tools, subAgentCfg.AllowedTools, subAgentCfg.DisallowedTools)
 	}
-	return tools
+	return sessionconfig.AdaptToolsForRuntime(runtime.GOOS, tools)
 }
 
 func (a *DefaultAgent) resolveMCPManager(ctx context.Context) *mcp.Manager {

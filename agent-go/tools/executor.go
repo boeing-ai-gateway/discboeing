@@ -38,6 +38,7 @@ type fileRecord struct {
 // Plan mode is read-only: the agent may explore but must not write code or execute commands.
 var planModeBlockedTools = map[string]bool{
 	"Bash":          true,
+	"PowerShell":    true,
 	"Write":         true,
 	"Edit":          true,
 	"apply_patch":   true,
@@ -445,7 +446,7 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 	}
 
 	switch call.ToolName {
-	case "Bash":
+	case "Bash", "PowerShell":
 		return e.executeBash(ctx, toolCtx, call)
 	case "Read":
 		return e.executeRead(toolCtx, call)

@@ -4,9 +4,48 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func writeVisibleSkillScript(t *testing.T, dir, name string) {
+	t.Helper()
+
+	if runtime.GOOS != "windows" {
+		scriptPath := filepath.Join(dir, name+".sh")
+		content := "#!/bin/sh\n#---\n# description: greet\n#---\nprintf 'argc=%s\\narg1=%s\\n' \"$#\" \"$1\"\n"
+		if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	scriptPath := filepath.Join(dir, name+".ps1")
+	content := "#!/usr/bin/env pwsh\n#---\n# description: greet\n#---\nWrite-Output (\"argc=$($args.Count)`narg1=$($args[0])\")\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeHiddenSkillScript(t *testing.T, dir, name string) {
+	t.Helper()
+
+	if runtime.GOOS != "windows" {
+		scriptPath := filepath.Join(dir, name+".sh")
+		content := "#!/bin/sh\n#---\n# visible: false\n#---\nprintf 'secret\\n'\n"
+		if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	scriptPath := filepath.Join(dir, name+".ps1")
+	content := "#!/usr/bin/env pwsh\n#---\n# visible: false\n#---\nWrite-Output 'secret'\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRunSkillExecutesVisibleScript(t *testing.T) {
 	t.Parallel()
@@ -19,10 +58,8 @@ func TestRunSkillExecutesVisibleScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scriptPath := filepath.Join(cwd, ".discobot", "scripts", "hello.sh")
-	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\n#---\n# description: greet\n#---\nprintf 'argc=%s\\narg1=%s\\n' \"$#\" \"$1\"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	scriptDir := filepath.Join(cwd, ".discobot", "scripts")
+	writeVisibleSkillScript(t, scriptDir, "hello")
 
 	result, err := runSkill(context.Background(), cwd, nil, "hello", `world "quoted" tail`)
 	if err != nil {
@@ -44,10 +81,7 @@ func TestRunSkillSkipsHiddenScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scriptPath := filepath.Join(cwd, ".discobot", "scripts", "secret.sh")
-	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\n#---\n# visible: false\n#---\nprintf 'secret\\n'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	writeHiddenSkillScript(t, filepath.Join(cwd, ".discobot", "scripts"), "secret")
 
 	_, err := runSkill(context.Background(), cwd, nil, "secret", "")
 	if err == nil {

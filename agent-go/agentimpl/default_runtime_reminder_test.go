@@ -1,9 +1,11 @@
 package agentimpl
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -436,10 +438,6 @@ func TestEnsureHelperScripts_SkipsUnchangedScript(t *testing.T) {
 }
 
 func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 is not available")
-	}
-
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
@@ -462,12 +460,12 @@ func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 		}
 	}
 
-	bashPath, err := exec.LookPath("bash")
+	cmd, err := helperScriptCommand(listThreadsScriptPath())
 	if err != nil {
-		t.Skip("bash is not available")
+		t.Skip(err.Error())
 	}
-	cmd := exec.Command(bashPath, listThreadsScriptPath())
 	cmd.Env = append(os.Environ(),
+		"HOME="+home,
 		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
 		"DISCOBOT_SESSION_ID=thread-current",
 	)
@@ -486,6 +484,172 @@ func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 	if !strings.Contains(got, "thread-2") {
 		t.Fatalf("expected unnamed thread id in output, got %q", got)
 	}
+}
+
+func TestListThreadsPowerShellScript_Windows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only test")
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	if got := filepath.Ext(listThreadsScriptPath()); got != ".ps1" {
+		t.Fatalf("expected PowerShell helper path, got %q", listThreadsScriptPath())
+	}
+
+	for _, tc := range []struct {
+		id   string
+		name string
+	}{
+		{id: "thread-current", name: "Current thread"},
+		{id: "thread-1", name: "First thread"},
+		{id: "thread-2", name: ""},
+	} {
+		if err := store.CreateThread(tc.id); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.SaveConfig(tc.id, thread.Config{Name: tc.name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmd, err := powershellScriptCommand(listThreadsScriptPath())
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+		"DISCOBOT_SESSION_ID=thread-current",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list-threads.ps1 failed: %v\n%s", err, string(out))
+	}
+
+	got := string(out)
+	if strings.Contains(got, "thread-current") {
+		t.Fatalf("expected current thread to be skipped, got %q", got)
+	}
+	if !strings.Contains(got, "thread-1\tFirst thread") {
+		t.Fatalf("expected named thread in output, got %q", got)
+	}
+	if !strings.Contains(got, "thread-2") {
+		t.Fatalf("expected unnamed thread id in output, got %q", got)
+	}
+}
+
+func TestReadThreadPowerShellScript_Windows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only test")
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	if got := filepath.Ext(readThreadScriptPath()); got != ".ps1" {
+		t.Fatalf("expected PowerShell helper path, got %q", readThreadScriptPath())
+	}
+
+	threadID := "thread-1"
+	if err := store.CreateThread(threadID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:         "Smoke Thread",
+		ActiveLeafID: "msg-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	messagesDir := filepath.Join(store.ThreadDir(threadID), "messages")
+	if err := os.MkdirAll(messagesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := json.Marshal(map[string]any{
+		"id":       "msg-1",
+		"parentId": "",
+		"message": map[string]any{
+			"role":      "user",
+			"createdAt": "2026-01-01T00:00:00Z",
+			"parts": []map[string]any{{
+				"type": "text",
+				"text": "hello from test",
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(messagesDir, "msg-1.json"), msg, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, err := powershellScriptCommand(readThreadScriptPath(), threadID)
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("read-thread.ps1 failed: %v\n%s", err, string(out))
+	}
+
+	got := string(out)
+	for _, want := range []string{
+		"# Thread " + threadID,
+		"Name: Smoke Thread",
+		"## USER msg-1",
+		"createdAt: 2026-01-01T00:00:00Z",
+		"hello from test",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in output, got %q", want, got)
+		}
+	}
+}
+
+func helperScriptCommand(path string) (*exec.Cmd, error) {
+	if runtime.GOOS != "windows" {
+		bashPath, err := exec.LookPath("bash")
+		if err != nil {
+			return nil, err
+		}
+		return exec.Command(bashPath, path), nil
+	}
+
+	for _, name := range []string{"powershell.exe", "powershell", "pwsh.exe", "pwsh"} {
+		shellPath, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		return exec.Command(shellPath, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path), nil
+	}
+
+	return nil, os.ErrNotExist
+}
+
+func powershellScriptCommand(path string, args ...string) (*exec.Cmd, error) {
+	for _, name := range []string{"powershell.exe", "powershell", "pwsh.exe", "pwsh"} {
+		shellPath, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		commandArgs := append([]string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path}, args...)
+		return exec.Command(shellPath, commandArgs...), nil
+	}
+
+	return nil, os.ErrNotExist
 }
 
 func messageText(parts []message.Part) string {

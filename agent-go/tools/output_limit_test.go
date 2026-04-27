@@ -3,8 +3,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -33,6 +35,22 @@ func runTool(t *testing.T, e *Executor, toolName string, input map[string]any) (
 	return "", false
 }
 
+func longOutputCommand(lineCount int, tail string) string {
+	if runtime.GOOS != "windows" {
+		command := "i=1; while [ \"$i\" -le %d ]; do echo line-$i; i=$((i+1)); done"
+		if tail == "" {
+			return fmt.Sprintf(command, lineCount)
+		}
+		return fmt.Sprintf(command+"; echo %s", lineCount, tail)
+	}
+
+	command := `1..%d | ForEach-Object { Write-Output "line-$_" }`
+	if tail == "" {
+		return fmt.Sprintf(command, lineCount)
+	}
+	return fmt.Sprintf(command+`; Write-Output %q`, lineCount, tail)
+}
+
 // TestLimitOutput_ShortOutput verifies output within the limit passes through unchanged.
 func TestLimitOutput_ShortOutput(t *testing.T) {
 	cwd := t.TempDir()
@@ -57,7 +75,7 @@ func TestLimitOutput_ShortOutput(t *testing.T) {
 func TestLimitOutput_LongOutputTruncated(t *testing.T) {
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Bash", map[string]any{
-		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+		"command": longOutputCommand(2505, ""),
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
@@ -83,7 +101,7 @@ func TestLimitOutput_SpillFileContainsFullOutput(t *testing.T) {
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Bash", map[string]any{
-		"command": "i=1; while [ \"$i\" -le 2500 ]; do echo line-$i; i=$((i+1)); done; echo " + needle,
+		"command": longOutputCommand(2500, needle),
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
@@ -116,7 +134,7 @@ func TestLimitOutput_SpillPathUnderDataDir(t *testing.T) {
 	dataDir := t.TempDir()
 	e := New(t.TempDir(), dataDir, threadID)
 	out, ok := runTool(t, e, "Bash", map[string]any{
-		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+		"command": longOutputCommand(2505, ""),
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
@@ -133,7 +151,7 @@ func TestLimitOutput_AppliesToBash(t *testing.T) {
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	// Generate output beyond the inline caps.
 	out, ok := runTool(t, e, "Bash", map[string]any{
-		"command": "i=1; while [ \"$i\" -le 2505 ]; do echo line-$i; i=$((i+1)); done",
+		"command": longOutputCommand(2505, ""),
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)

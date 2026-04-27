@@ -3,6 +3,7 @@ package helperbin
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -19,6 +20,13 @@ func Dir() string {
 }
 
 func ScriptPath(name string) string {
+	return ScriptPathForOS(runtime.GOOS, name)
+}
+
+func ScriptPathForOS(goos, name string) string {
+	if goos == "windows" && filepath.Ext(name) == "" {
+		name += ".ps1"
+	}
 	return filepath.Join(Dir(), name)
 }
 
