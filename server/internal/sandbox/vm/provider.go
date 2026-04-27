@@ -70,19 +70,15 @@ type Provider struct {
 	// Used by VZ to start the proxy container.
 	postVMSetup func(ctx context.Context, projectID string, dockerProv *docker.Provider) error
 
-	// idleTimeout is how long a VM with no running sandboxes can be idle before shutdown.
-	// Zero means VMs are never shut down automatically.
+	// idleTimeout is how long a project VM with no running sandboxes can remain
+	// idle before the shared idle-runtime monitor shuts it down.
 	idleTimeout time.Duration
 
-	// idleSince tracks when each project's VM first had no running sandboxes.
-	// Reset when sandboxes are running again.
-	idleSince   map[string]time.Time
-	idleSinceMu sync.Mutex
-
-	// stopCh signals background goroutines to stop.
-	stopCh chan struct{}
-
 	httpClients *sandbox.HTTPClientCache
+
+	// idleMonitor shuts down project VMs once they have had no running
+	// sandboxes for the configured idle period.
+	idleMonitor *sandbox.IdleRuntimeMonitor
 }
 
 // Option configures a Provider.
@@ -130,8 +126,6 @@ func NewProvider(cfg *config.Config, vmManager ProjectVMManager, resolver Sessio
 		httpClients:            sandbox.NewHTTPClientCache(),
 		sessionProjectResolver: resolver,
 		systemManager:          systemManager,
-		idleSince:              make(map[string]time.Time),
-		stopCh:                 make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -150,7 +144,8 @@ func NewProvider(cfg *config.Config, vmManager ProjectVMManager, resolver Sessio
 
 		// Start idle VM cleanup after ready
 		if p.idleTimeout > 0 {
-			go p.cleanupIdleVMs()
+			p.idleMonitor = sandbox.NewIdleRuntimeMonitor(p, p.providerName, p.idleTimeout, time.Minute)
+			p.idleMonitor.Start(context.Background())
 		}
 	}()
 
@@ -267,10 +262,6 @@ func (p *Provider) ApplyProjectResourceUpdate(ctx context.Context, projectID str
 	p.dockerProvidersMu.Lock()
 	delete(p.dockerProviders, projectID)
 	p.dockerProvidersMu.Unlock()
-
-	p.idleSinceMu.Lock()
-	delete(p.idleSince, projectID)
-	p.idleSinceMu.Unlock()
 
 	if req.DataDiskGB != nil {
 		diskResizer, ok := p.vmManager.(DiskResizer)
@@ -546,7 +537,9 @@ func (p *Provider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error)
 func (p *Provider) Close() error {
 	log.Printf("Shutting down VM+Docker provider")
 
-	close(p.stopCh)
+	if p.idleMonitor != nil {
+		_ = p.idleMonitor.Stop(context.Background())
+	}
 	p.vmManager.Shutdown()
 
 	// Close all Docker providers
@@ -871,19 +864,19 @@ func (p *Provider) getDockerProviderForSession(ctx context.Context, sessionID st
 	return projectID, dockerProv, nil
 }
 
-// countRunningSandboxes returns the number of running sandboxes for a project.
-func (p *Provider) countRunningSandboxes(projectID string) int {
+// RunningSandboxCount implements sandbox.IdleRuntimeController for project VMs.
+func (p *Provider) RunningSandboxCount(_ context.Context, projectID string) (int, error) {
 	p.dockerProvidersMu.RLock()
 	dockerProv, exists := p.dockerProviders[projectID]
 	p.dockerProvidersMu.RUnlock()
 
 	if !exists {
-		return 0
+		return 0, nil
 	}
 
 	sandboxes, err := dockerProv.List(context.Background())
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	count := 0
@@ -892,56 +885,28 @@ func (p *Provider) countRunningSandboxes(projectID string) int {
 			count++
 		}
 	}
-	return count
+	return count, nil
 }
 
-// cleanupIdleVMs periodically checks for VMs with no running sandboxes
-// and shuts them down after the idle timeout.
-func (p *Provider) cleanupIdleVMs() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+// ListRuntimeIDs implements sandbox.IdleRuntimeController for project VMs.
+func (p *Provider) ListRuntimeIDs(_ context.Context) ([]string, error) {
+	return p.vmManager.ListProjectIDs(), nil
+}
 
-	for {
-		select {
-		case <-p.stopCh:
-			return
-		case <-ticker.C:
-			p.idleSinceMu.Lock()
-			for _, projectID := range p.vmManager.ListProjectIDs() {
-				if p.countRunningSandboxes(projectID) > 0 {
-					// VM is active — clear idle timer
-					delete(p.idleSince, projectID)
-					continue
-				}
-
-				// No running sandboxes — track idle start time
-				idleStart, exists := p.idleSince[projectID]
-				if !exists {
-					p.idleSince[projectID] = time.Now()
-					continue
-				}
-
-				// Check if idle timeout exceeded
-				if time.Since(idleStart) < p.idleTimeout {
-					continue
-				}
-
-				log.Printf("Shutting down idle project VM: %s (idle for %v)", projectID, time.Since(idleStart))
-
-				if err := p.vmManager.RemoveVM(projectID); err != nil {
-					log.Printf("Error removing idle VM %s: %v", projectID, err)
-					continue
-				}
-
-				p.dockerProvidersMu.Lock()
-				delete(p.dockerProviders, projectID)
-				p.dockerProvidersMu.Unlock()
-
-				delete(p.idleSince, projectID)
-			}
-			p.idleSinceMu.Unlock()
-		}
+// StopRuntime implements sandbox.IdleRuntimeController for project VMs.
+func (p *Provider) StopRuntime(_ context.Context, projectID string) error {
+	if err := p.vmManager.RemoveVM(projectID); err != nil {
+		return err
 	}
+
+	p.dockerProvidersMu.Lock()
+	if dockerProv, ok := p.dockerProviders[projectID]; ok {
+		_ = dockerProv.Close()
+		delete(p.dockerProviders, projectID)
+	}
+	p.dockerProvidersMu.Unlock()
+
+	return nil
 }
 
 // progressReader wraps an io.Reader and logs transfer progress.

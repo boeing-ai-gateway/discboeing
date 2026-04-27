@@ -87,6 +87,16 @@ type Config struct {
 	VZMemoryMB      int    // Memory per VM in MB (0 = half system memory, rounded down to nearest GB)
 	VZDataDiskGB    int    // Data disk size per VM in GB (0 = 100GB default)
 
+	// WSL-specific settings (Windows Subsystem for Linux)
+	WSLDistroName      string        // Managed WSL distro name
+	WSLInstallDir      string        // Directory where the distro is imported and stored
+	WSLStateDir        string        // Directory for WSL runtime state and metadata
+	WSLImageRef        string        // Docker registry image ref for WSL rootfs downloads
+	WSLBridgeType      string        // Docker bridge transport type (named_pipe|tcp)
+	WSLBridgePort      int           // TCP bridge port (0 = random)
+	WSLIdleTimeout     time.Duration // How long to keep the distro running when idle (0 = never auto-stop)
+	WSLUpgradeStrategy string        // Upgrade strategy (currently planned: inplace)
+
 	// Local provider settings
 	LocalProviderEnabled bool   // Enable local sandbox provider (default: false)
 	LocalAgentBinary     string // Path to agent API binary for local provider (default: obot-agent-api in PATH)
@@ -233,6 +243,18 @@ func Load() (*Config, error) {
 	cfg.VZCPUCount = getEnvInt("VZ_CPU_COUNT", 0)
 	cfg.VZMemoryMB = getEnvInt("VZ_MEMORY_MB", 0)
 	cfg.VZDataDiskGB = getEnvInt("VZ_DATA_DISK_GB", 0)
+
+	// WSL-specific settings (Windows Subsystem for Linux)
+	// WSL state defaults to XDG_STATE_HOME/discobot/wsl so development builds keep
+	// all runtime-managed state under the same application directory structure.
+	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", appName)
+	cfg.WSLInstallDir = getEnv("WSL_INSTALL_DIR", filepath.Join(xdg.StateHome, appName, "wsl", "distro"))
+	cfg.WSLStateDir = getEnv("WSL_STATE_DIR", filepath.Join(xdg.StateHome, appName, "wsl"))
+	cfg.WSLImageRef = getEnv("WSL_IMAGE_REF", DefaultVZImage())
+	cfg.WSLBridgeType = strings.ToLower(getEnv("WSL_BRIDGE_TYPE", "tcp"))
+	cfg.WSLBridgePort = getEnvInt("WSL_BRIDGE_PORT", 0)
+	cfg.WSLIdleTimeout = getEnvDuration("WSL_IDLE_TIMEOUT", 0)
+	cfg.WSLUpgradeStrategy = strings.ToLower(getEnv("WSL_UPGRADE_STRATEGY", "inplace"))
 
 	// Local provider settings
 	cfg.LocalProviderEnabled = getEnvBool("LOCAL_PROVIDER_ENABLED", false)

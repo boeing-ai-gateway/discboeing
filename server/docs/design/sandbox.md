@@ -7,6 +7,7 @@ This module provides the sandbox runtime abstraction for managing execution envi
 | File | Description |
 |------|-------------|
 | `internal/sandbox/runtime.go` | Provider interface definition |
+| `internal/sandbox/idle_runtime_monitor.go` | Shared idle host-runtime shutdown monitor |
 | `internal/sandbox/errors.go` | Error types |
 | `internal/sandbox/manager.go` | Provider manager and proxy |
 | `internal/sandbox/docker/provider.go` | Docker implementation |
@@ -15,6 +16,8 @@ This module provides the sandbox runtime abstraction for managing execution envi
 | `internal/sandbox/vz/vz_vm_manager.go` | Apple Virtualization.framework VM manager (macOS) |
 | `internal/sandbox/vz/vz_docker.go` | Hybrid provider: VZ VMs with Docker containers (macOS) |
 | `internal/sandbox/vz/vsock.go` | VSOCK communication types |
+| `internal/sandbox/wsl/` | Planned Windows WSL2 provider and lifecycle management |
+| `server/docs/design/wsl2-sandbox-plan.md` | Working implementation plan for the WSL2 sandbox backend |
 | `internal/sandbox/vz/provider_stub.go` | Stub for non-darwin platforms |
 | `internal/sandbox/local/provider.go` | Local process provider (development) |
 | `internal/sandbox/mock/provider.go` | Mock implementation for testing |
@@ -78,9 +81,15 @@ This module provides the sandbox runtime abstraction for managing execution envi
 3. **VM Abstraction Layer**: Platform-agnostic VM management
    - Interface-based design supporting multiple hypervisors
    - VZ implementation (macOS) - Apple Virtualization.framework
-   - Future: KVM implementation (Linux), WSL2 implementation (Windows)
+   - Future: KVM implementation (Linux)
+   - WSL2 is currently planned as a dedicated Windows provider layered on top of a managed shared distro rather than the current per-project VM abstraction
    - Project-level VMs with session reference counting
    - Configurable console logging and resource allocation
+
+6. **Shared Idle Runtime Monitor**: Generic host-runtime shutdown logic
+   - Separate from the session-scoped sandbox `Provider` interface
+   - Watches shared runtimes such as project VMs or the managed WSL distro
+   - Stops a runtime only after it has no running Discobot sandboxes for the configured idle period
 
 4. **Local Provider**: Direct process execution (development only)
    - No container/VM overhead
