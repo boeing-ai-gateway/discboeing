@@ -8,7 +8,9 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import {
 	AgentWatcher,
 	type CommandRunner,
+	getCommandEnv,
 	type Logger,
+	resolveDockerCommand,
 	shouldIgnorePath,
 	updateEnvFile,
 } from "./watcher.js";
@@ -62,6 +64,79 @@ describe("shouldIgnorePath", () => {
 		assert.equal(shouldIgnorePath("src/index.ts"), false);
 		assert.equal(shouldIgnorePath("Dockerfile"), false);
 		assert.equal(shouldIgnorePath("package.json"), false);
+	});
+});
+
+describe("resolveDockerCommand", () => {
+	it("returns docker on non-Windows platforms", () => {
+		assert.equal(resolveDockerCommand("darwin", {}, () => false), "docker");
+		assert.equal(resolveDockerCommand("linux", {}, () => false), "docker");
+	});
+
+	it("prefers DOCKER_EXE when provided on Windows", () => {
+		assert.equal(
+			resolveDockerCommand(
+				"win32",
+				{ DOCKER_EXE: "D:\\tools\\docker.exe" },
+				() => false,
+			),
+			"D:\\tools\\docker.exe",
+		);
+	});
+
+	it("uses the Docker Desktop install path on Windows when present", () => {
+		const env = { ProgramFiles: "C:\\Program Files" };
+		assert.equal(
+			resolveDockerCommand("win32", env, (path) => {
+				return (
+					path ===
+					"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"
+				);
+			}),
+			"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+		);
+	});
+
+	it("falls back to docker on Windows when no known install path exists", () => {
+		assert.equal(
+			resolveDockerCommand("win32", { ProgramFiles: "C:\\Program Files" }, () => {
+				return false;
+			}),
+			"docker",
+		);
+	});
+});
+
+describe("getCommandEnv", () => {
+	it("returns the original env for PATH-based commands", () => {
+		const env = { PATH: "C:\\Windows\\System32" };
+		assert.equal(getCommandEnv("docker", env), env);
+	});
+
+	it("prepends the command directory for absolute executable paths", () => {
+		const env = { PATH: "C:\\Windows\\System32" };
+		assert.deepEqual(
+			getCommandEnv(
+				"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				env,
+			),
+			{
+				PATH: [
+					"C:\\Program Files\\Docker\\Docker\\resources\\bin",
+					"C:\\Windows\\System32",
+				].join(";"),
+			},
+		);
+	});
+
+	it("does not duplicate the command directory in PATH", () => {
+		const env = {
+			PATH: [
+				"C:\\Program Files\\Docker\\Docker\\resources\\bin",
+				"C:\\Windows\\System32",
+			].join(";"),
+		};
+		assert.equal(getCommandEnv("C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe", env), env);
 	});
 });
 
@@ -203,6 +278,7 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "my-image",
 				imageTag: "dev",
+				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
 				logger: createSilentLogger(),
@@ -256,6 +332,7 @@ describe("AgentWatcher", () => {
 				imageName: "my-image",
 				imageTag: "dev",
 				buildTarget: "runtime-shell",
+				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
 				logger: createSilentLogger(),
@@ -274,6 +351,44 @@ describe("AgentWatcher", () => {
 			]);
 		});
 
+		it("uses a configured docker command", async () => {
+			const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+
+			const mockRunner: CommandRunner = async (command, args, cwd) => {
+				calls.push({ command, args, cwd });
+				if (args.includes("inspect")) {
+					return {
+						stdout: "sha256:abcdef1234567890\n",
+						stderr: "",
+						exitCode: 0,
+					};
+				}
+				return { stdout: "", stderr: "", exitCode: 0 };
+			};
+
+			const watcher = new AgentWatcher({
+				agentDir,
+				projectRoot: tempDir,
+				envFilePath: envPath,
+				imageName: "my-image",
+				imageTag: "dev",
+				dockerCommand: "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				debounceMs: 100,
+				runCommand: mockRunner,
+				logger: createSilentLogger(),
+			});
+
+			await watcher.buildImage();
+
+			assert.equal(calls.length, 3);
+			for (const call of calls) {
+				assert.equal(
+					call.command,
+					"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				);
+			}
+		});
+
 		it("returns null on build failure", async () => {
 			const mockRunner: CommandRunner = async () => {
 				return { stdout: "", stderr: "Build failed", exitCode: 1 };
@@ -285,6 +400,7 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "my-image",
 				imageTag: "dev",
+				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
 				logger: createSilentLogger(),
@@ -321,6 +437,7 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "test-image",
 				imageTag: "v1",
+				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
 				logger: createSilentLogger(),

@@ -6,8 +6,9 @@
  */
 
 import { spawn } from "node:child_process";
-import { type FSWatcher, watch } from "node:fs";
+import { existsSync, type FSWatcher, watch } from "node:fs";
 import { access, constants, readFile, writeFile } from "node:fs/promises";
+import { delimiter, dirname, join } from "node:path";
 
 export interface WatcherConfig {
 	/** Primary agent directory (agent-go) */
@@ -19,6 +20,7 @@ export interface WatcherConfig {
 	envFilePath: string;
 	imageName: string;
 	imageTag: string;
+	dockerCommand?: string;
 	debounceMs: number;
 	/** Optional: Dockerfile build target stage (e.g., "runtime-shell") */
 	buildTarget?: string;
@@ -46,6 +48,69 @@ export interface Logger {
 	success: (message: string) => void;
 }
 
+/**
+ * Resolves the Docker CLI command.
+ * On Windows, prefer Docker Desktop's standard install location so a stale
+ * PATH in the current shell does not break the watcher.
+ */
+export function resolveDockerCommand(
+	platform = process.platform,
+	env: NodeJS.ProcessEnv = process.env,
+	fileExists: (path: string) => boolean = existsSync,
+): string {
+	if (platform !== "win32") {
+		return "docker";
+	}
+
+	const configuredDocker = env.DOCKER_EXE?.trim();
+	if (configuredDocker) {
+		return configuredDocker;
+	}
+
+	for (const baseDir of [env.ProgramFiles, env.ProgramW6432]) {
+		if (!baseDir) {
+			continue;
+		}
+		const dockerPath = join(
+			baseDir,
+			"Docker",
+			"Docker",
+			"resources",
+			"bin",
+			"docker.exe",
+		);
+		if (fileExists(dockerPath)) {
+			return dockerPath;
+		}
+	}
+
+	return "docker";
+}
+
+export function getCommandEnv(
+	command: string,
+	env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+	const commandDir = dirname(command);
+	if (commandDir === ".") {
+		return env;
+	}
+
+	const currentPath = env.PATH ?? env.Path ?? "";
+	const pathEntries = currentPath
+		.split(delimiter)
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	if (pathEntries.includes(commandDir)) {
+		return env;
+	}
+
+	return {
+		...env,
+		PATH: [commandDir, currentPath].filter(Boolean).join(delimiter),
+	};
+}
+
 /** Default command runner using child_process.spawn */
 export async function defaultRunCommand(
 	command: string,
@@ -55,6 +120,7 @@ export async function defaultRunCommand(
 	return new Promise((resolve) => {
 		const proc = spawn(command, args, {
 			cwd,
+			env: getCommandEnv(command),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 
@@ -162,6 +228,7 @@ export class AgentWatcher {
 	private config: WatcherConfig;
 	private runCommand: CommandRunner;
 	public logger: Logger;
+	private dockerCommand: string;
 	private watchers: FSWatcher[] = [];
 	private dockerfileWatcher: FSWatcher | null = null;
 	private buildInProgress = false;
@@ -178,6 +245,7 @@ export class AgentWatcher {
 		this.config = config;
 		this.runCommand = config.runCommand ?? defaultRunCommand;
 		this.logger = config.logger ?? createDefaultLogger();
+		this.dockerCommand = config.dockerCommand ?? resolveDockerCommand();
 	}
 
 	get imageRef(): string {
@@ -197,7 +265,7 @@ export class AgentWatcher {
 		this.logger.log(`Building Docker image ${this.imageRef}...`);
 
 		const result = await this.runCommand(
-			"docker",
+			this.dockerCommand,
 			[
 				"build",
 				...(this.config.buildTarget
@@ -220,7 +288,7 @@ export class AgentWatcher {
 
 		// Get the image ID to use as a stable tag
 		const inspectResult = await this.runCommand(
-			"docker",
+			this.dockerCommand,
 			["inspect", "--format={{.Id}}", this.imageRef],
 			this.config.projectRoot,
 		);
@@ -242,7 +310,7 @@ export class AgentWatcher {
 
 		// Tag the image with the ID-based reference
 		const tagResult = await this.runCommand(
-			"docker",
+			this.dockerCommand,
 			["tag", this.imageRef, localImageRef],
 			this.config.projectRoot,
 		);
@@ -338,6 +406,10 @@ export class AgentWatcher {
 
 		for (const dir of dirsToWatch) {
 			this.logger.log(`Watching ${dir} for changes`);
+		}
+
+		if (this.dockerCommand !== "docker") {
+			this.logger.log(`Using Docker CLI at ${this.dockerCommand}`);
 		}
 
 		// Do an initial build

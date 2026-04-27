@@ -11,7 +11,7 @@
     "dev:app:tauri": "pnpm build:server && tauri dev",
     "dev:app:electron": "node scripts/build-electron.mjs && cross-env NODE_OPTIONS=--import=tsx electron ./electron/main.ts",
     "dev:frontend": "pnpm ui:dev",
-    "dev:server": "cd server && cross-env SUGGESTIONS_ENABLED=true go run github.com/air-verse/air@latest",
+    "dev:server": "node scripts/dev-server.mjs",
     "dev:authservice": "cd authservice && go run github.com/air-verse/air@latest",
     "dev:agent": "tsx --watch scripts/agent-watcher/index.ts",
     "dev:db": "bash .discobot/services/db.sh",

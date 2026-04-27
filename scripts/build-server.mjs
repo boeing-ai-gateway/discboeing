@@ -69,9 +69,14 @@ function syncEmbeddedUI() {
   });
 
   console.log("Syncing built UI into server/static/ui/dist...");
-  rmSync(embeddedUIDir, { recursive: true, force: true });
+  if (os.platform() !== "win32") {
+    rmSync(embeddedUIDir, { recursive: true, force: true });
+  }
+  // Windows can keep open handles on the embedded UI directory when another
+  // local server process is running, so update files in place there instead of
+  // deleting the directory first.
   mkdirSync(embeddedUIDir, { recursive: true });
-  cpSync(uiBuildDir, embeddedUIDir, { recursive: true });
+  cpSync(uiBuildDir, embeddedUIDir, { recursive: true, force: true });
 }
 
 // Get target triple from environment or detect from current platform
