@@ -23,6 +23,7 @@
     "build": "pnpm build:app",
     "build:frontend": "pnpm ui:build",
     "build:server": "node scripts/build-server.mjs",
+    "build:disco": "node scripts/build-disco.mjs",
     "build:app": "tauri build",
     "preview": "pnpm --dir ./ui preview",
     "test": "pnpm test:unit && pnpm test:integration",
