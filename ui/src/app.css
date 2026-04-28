@@ -107,7 +107,7 @@ body {
 	--card-foreground: oklch(0.15 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.15 0 0);
-	--primary: oklch(0.55 0.15 250);
+	--primary: #4f7ef3;
 	--primary-foreground: oklch(1 0 0);
 	--secondary: oklch(0.95 0 0);
 	--secondary-foreground: oklch(0.15 0 0);
@@ -119,8 +119,8 @@ body {
 	--destructive-foreground: oklch(1 0 0);
 	--border: oklch(0.88 0 0);
 	--input: oklch(0.88 0 0);
-	--ring: oklch(0.55 0.15 250);
-	--chart-1: oklch(0.55 0.15 250);
+	--ring: #4f7ef3;
+	--chart-1: #4f7ef3;
 	--chart-2: oklch(0.65 0.15 160);
 	--chart-3: oklch(0.6 0.15 35);
 	--chart-4: oklch(0.55 0.15 300);
@@ -128,16 +128,16 @@ body {
 	--radius: 0.5rem;
 	--sidebar: oklch(0.96 0 0);
 	--sidebar-foreground: oklch(0.15 0 0);
-	--sidebar-primary: oklch(0.55 0.15 250);
+	--sidebar-primary: #4f7ef3;
 	--sidebar-primary-foreground: oklch(1 0 0);
 	--sidebar-accent: oklch(0.93 0 0);
 	--sidebar-accent-foreground: oklch(0.15 0 0);
 	--sidebar-border: oklch(0.88 0 0);
-	--sidebar-ring: oklch(0.55 0.15 250);
+	--sidebar-ring: #4f7ef3;
 
 	/* IDE-specific tokens */
 	--tree-hover: oklch(0.93 0 0);
-	--tree-selected: oklch(0.55 0.15 250 / 0.15);
+	--tree-selected: rgb(79 126 243 / 0.15);
 	--turn-border: oklch(0.88 0 0);
 	--terminal-bg: oklch(0.12 0 0);
 	--terminal-fg: oklch(0.85 0.12 145);
@@ -156,7 +156,7 @@ body {
 	--card-foreground: oklch(0.93 0 0);
 	--popover: oklch(0.15 0 0);
 	--popover-foreground: oklch(0.93 0 0);
-	--primary: oklch(0.65 0.15 250);
+	--primary: #4f7ef3;
 	--primary-foreground: oklch(0.12 0 0);
 	--secondary: oklch(0.22 0 0);
 	--secondary-foreground: oklch(0.93 0 0);
@@ -168,24 +168,24 @@ body {
 	--destructive-foreground: oklch(0.93 0 0);
 	--border: oklch(0.25 0 0);
 	--input: oklch(0.25 0 0);
-	--ring: oklch(0.65 0.15 250);
-	--chart-1: oklch(0.65 0.15 250);
+	--ring: #4f7ef3;
+	--chart-1: #4f7ef3;
 	--chart-2: oklch(0.7 0.15 160);
 	--chart-3: oklch(0.65 0.15 35);
 	--chart-4: oklch(0.65 0.15 300);
 	--chart-5: oklch(0.65 0.15 75);
 	--sidebar: oklch(0.1 0 0);
 	--sidebar-foreground: oklch(0.93 0 0);
-	--sidebar-primary: oklch(0.65 0.15 250);
-	--sidebar-primary-foreground: oklch(0.12 0 0);
+	--sidebar-primary: #4f7ef3;
+	--sidebar-primary-foreground: oklch(1 0 0);
 	--sidebar-accent: oklch(0.18 0 0);
 	--sidebar-accent-foreground: oklch(0.93 0 0);
 	--sidebar-border: oklch(0.25 0 0);
-	--sidebar-ring: oklch(0.65 0.15 250);
+	--sidebar-ring: #4f7ef3;
 
 	/* IDE-specific tokens dark */
 	--tree-hover: oklch(0.18 0 0);
-	--tree-selected: oklch(0.65 0.15 250 / 0.2);
+	--tree-selected: rgb(79 126 243 / 0.2);
 	--turn-border: oklch(0.25 0 0);
 	--terminal-bg: oklch(0.08 0 0);
 	--terminal-fg: oklch(0.75 0.15 145);

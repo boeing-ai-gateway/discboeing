@@ -35,7 +35,7 @@ export const THEME_METADATA: ThemeMetadata[] = [
 		mode: "light",
 		preview: {
 			background: "#fafafa",
-			primary: "#3b82f6",
+			primary: "#4f7ef3",
 			foreground: "#262626",
 		},
 	},
@@ -85,7 +85,7 @@ export const THEME_METADATA: ThemeMetadata[] = [
 		mode: "dark",
 		preview: {
 			background: "#1e1e1e",
-			primary: "#3b82f6",
+			primary: "#4f7ef3",
 			foreground: "#ededed",
 		},
 	},
