@@ -10,6 +10,8 @@ import type { RecentThreadSummary } from "$lib/shell-types";
 import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import type { SessionStore } from "$lib/store/sessions.store.svelte";
 
+const INITIAL_SESSION_STATUS_RETRY_DELAYS_MS = [150, 300, 500, 1000];
+
 type CreateAppSessionsDomainArgs = {
 	store: SessionStore;
 	recentThreadStore: RecentThreadStore;
@@ -26,6 +28,7 @@ export function createAppSessionsDomain(
 	);
 	let pendingSessionId = $state<string>(generateId());
 	let awaitingInitialStatusId = $state<string | null>(null);
+	let initialStatusRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
 	const optimisticMessagesByThread = new SvelteMap<string, ChatMessage[]>();
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
@@ -42,6 +45,32 @@ export function createAppSessionsDomain(
 		threadId: string,
 	): string {
 		return `${sessionId}:${threadId}`;
+	}
+
+	function clearInitialStatusRetry(): void {
+		if (initialStatusRetryTimer !== null) {
+			clearTimeout(initialStatusRetryTimer);
+			initialStatusRetryTimer = null;
+		}
+	}
+
+	function scheduleInitialStatusRetry(sessionId: string, attempt = 0): void {
+		if (awaitingInitialStatusId !== sessionId) {
+			return;
+		}
+		const delay = INITIAL_SESSION_STATUS_RETRY_DELAYS_MS[attempt];
+		if (delay === undefined) {
+			return;
+		}
+
+		clearInitialStatusRetry();
+		initialStatusRetryTimer = setTimeout(() => {
+			initialStatusRetryTimer = null;
+			if (awaitingInitialStatusId !== sessionId) {
+				return;
+			}
+			void reloadSession(sessionId, attempt + 1);
+		}, delay);
 	}
 
 	const selectSession = (sessionId: string) => {
@@ -170,6 +199,7 @@ export function createAppSessionsDomain(
 
 		if (sessionId === awaitingInitialStatusId) {
 			awaitingInitialStatusId = null;
+			clearInitialStatusRetry();
 		}
 
 		if (!store.list.some((session) => session.id === sessionId)) {
@@ -184,14 +214,20 @@ export function createAppSessionsDomain(
 		await store.fetch();
 	};
 
-	const reloadSession = async (sessionId: string) => {
+	const reloadSession = async (sessionId: string, attempt = 0) => {
 		await store.fetchOne(sessionId);
-		if (awaitingInitialStatusId === sessionId) {
-			const session = store.peek(sessionId);
-			if (session?.status) {
-				awaitingInitialStatusId = null;
-			}
+		if (awaitingInitialStatusId !== sessionId) {
+			return;
 		}
+
+		const session = store.peek(sessionId);
+		if (session?.status) {
+			awaitingInitialStatusId = null;
+			clearInitialStatusRetry();
+			return;
+		}
+
+		scheduleInitialStatusRetry(sessionId, attempt);
 	};
 
 	return {
@@ -254,9 +290,14 @@ export function createAppSessionsDomain(
 			pendingSessionId = generateId();
 			currentSelectedSessionId = null;
 			awaitingInitialStatusId = null;
+			clearInitialStatusRetry();
 		},
 		setAwaitingInitialStatus: (sessionId) => {
 			awaitingInitialStatusId = sessionId;
+			clearInitialStatusRetry();
+			if (sessionId) {
+				void reloadSession(sessionId);
+			}
 		},
 		refresh,
 		reloadSession,
@@ -314,6 +355,10 @@ export function createAppSessionsDomain(
 			recentThreadStore.pruneSession(sessionId);
 			if (sessionId === currentSelectedSessionId) {
 				currentSelectedSessionId = null;
+			}
+			if (sessionId === awaitingInitialStatusId) {
+				awaitingInitialStatusId = null;
+				clearInitialStatusRetry();
 			}
 			return true;
 		},
