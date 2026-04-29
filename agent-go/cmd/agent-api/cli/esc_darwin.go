@@ -4,7 +4,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -56,7 +55,6 @@ func watchEscDuringTurn(ctx context.Context, cancel context.CancelFunc) {
 		}
 
 		if buf[0] == 0x1b { // ESC
-			fmt.Fprint(os.Stderr, "\n^C\n")
 			cancel()
 			return
 		}

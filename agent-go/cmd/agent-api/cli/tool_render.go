@@ -29,15 +29,28 @@ func renderChunk(chunk message.MessageChunk, md *markdownRenderer, tools *toolRe
 		} else {
 			fmt.Fprint(os.Stderr, "\033[2m")
 		}
+		if tools != nil {
+			tools.reasoningAtLineStart = true
+		}
 
 	case message.ReasoningDeltaChunk:
+		if tools != nil && !tools.reasoningAtLineStart && reasoningDeltaNeedsLeadingNewline(c.Delta) {
+			fmt.Fprintln(os.Stderr)
+			tools.reasoningAtLineStart = true
+		}
 		fmt.Fprint(os.Stderr, c.Delta)
+		if tools != nil {
+			tools.reasoningAtLineStart = endsAtLineStart(c.Delta)
+		}
 
 	case message.ReasoningEndChunk:
 		if noColor {
 			fmt.Fprint(os.Stderr, "\n[/thinking]\n")
 		} else {
 			fmt.Fprint(os.Stderr, "\033[0m\n")
+		}
+		if tools != nil {
+			tools.reasoningAtLineStart = true
 		}
 
 	case message.ToolInputAvailableChunk:
@@ -75,17 +88,47 @@ func renderChunk(chunk message.MessageChunk, md *markdownRenderer, tools *toolRe
 }
 
 type toolRenderState struct {
-	labels    map[string]string
-	toolNames map[string]string
-	inputs    map[string]json.RawMessage
+	labels               map[string]string
+	toolNames            map[string]string
+	inputs               map[string]json.RawMessage
+	reasoningAtLineStart bool
 }
 
 func newToolRenderState() *toolRenderState {
 	return &toolRenderState{
-		labels:    map[string]string{},
-		toolNames: map[string]string{},
-		inputs:    map[string]json.RawMessage{},
+		labels:               map[string]string{},
+		toolNames:            map[string]string{},
+		inputs:               map[string]json.RawMessage{},
+		reasoningAtLineStart: true,
 	}
+}
+
+func reasoningDeltaNeedsLeadingNewline(delta string) bool {
+	if delta == "" || delta[0] == '\n' || delta[0] == '\r' {
+		return false
+	}
+	trim := strings.TrimLeft(delta, " \t")
+	if trim == "" {
+		return false
+	}
+	if _, _, ok := parseHeading(trim); ok {
+		return true
+	}
+	if strings.HasPrefix(trim, "***") || strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") || strings.HasPrefix(trim, ">") {
+		return true
+	}
+	if _, _, ok := parseUnorderedList(trim); ok {
+		return true
+	}
+	if _, _, ok := parseOrderedList(trim); ok {
+		return true
+	}
+	_, ok := parseTableRow(trim)
+	return ok
+}
+
+func endsAtLineStart(s string) bool {
+	return strings.HasSuffix(s, "\n") || strings.HasSuffix(s, "\r")
 }
 
 func (s *toolRenderState) rememberInput(toolCallID, toolName string, input json.RawMessage) {

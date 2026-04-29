@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"os"
 	"strconv"
@@ -125,6 +126,7 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisess
 				md.Finish()
 				spin.Stop()
 				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+					printTurnInterrupted(os.Stderr, md, currentSection)
 					return
 				}
 				fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
@@ -205,7 +207,8 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisess
 		spin.Stop()
 
 		if ctx.Err() != nil {
-			return // cancelled by Ctrl+C or ESC
+			printTurnInterrupted(os.Stderr, md, currentSection)
+			return
 		}
 
 		// Check whether the turn paused waiting for user approval.
@@ -252,6 +255,13 @@ func handlePendingQuestion(ctx context.Context, session clisession.Session, thre
 		return false
 	}
 	return true
+}
+
+func printTurnInterrupted(out io.Writer, md *markdownRenderer, currentSection sectionKind) {
+	if currentSection == skText && !md.AtLineStart() {
+		fmt.Fprintln(out)
+	}
+	fmt.Fprintln(out, "^C")
 }
 
 // collectAnswers presents each question to the user on stderr and reads

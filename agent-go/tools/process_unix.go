@@ -7,12 +7,29 @@ import (
 	"syscall"
 )
 
-// setSysProcAttr configures the command to run in its own process group.
-func setSysProcAttr(cmd *exec.Cmd) {
+type unixProcessGroupController struct{}
+
+func newProcessGroupController() processGroupController {
+	return &unixProcessGroupController{}
+}
+
+// configure runs the command in its own process group so cancellation can
+// signal the whole tree instead of only the shell process.
+func (*unixProcessGroupController) configure(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// killProcessGroup sends a signal to the entire process group.
-func killProcessGroup(pid int, sig syscall.Signal) error {
-	return syscall.Kill(-pid, sig)
+func (*unixProcessGroupController) afterStart(_ *exec.Cmd) error {
+	return nil
+}
+
+func (*unixProcessGroupController) cancel(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+}
+
+func (*unixProcessGroupController) close() error {
+	return nil
 }

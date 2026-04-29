@@ -299,6 +299,78 @@ func TestRenderChunk_PowerShellToolInputShowsPowerShellLabel(t *testing.T) {
 	}
 }
 
+func TestRenderChunk_ReasoningBlockHeaderStartsOnNewLine(t *testing.T) {
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderrReader.Close()
+
+	oldStderr := os.Stderr
+	oldNoColor := noColor
+	os.Stderr = stderrWriter
+	noColor = true
+	defer func() {
+		os.Stderr = oldStderr
+		noColor = oldNoColor
+	}()
+
+	state := newToolRenderState()
+	renderChunk(message.ReasoningStartChunk{ID: "r1"}, nil, state)
+	renderChunk(message.ReasoningDeltaChunk{ID: "r1", Delta: "***Some Header***\ninfo"}, nil, state)
+	renderChunk(message.ReasoningDeltaChunk{ID: "r1", Delta: "***Second Header***\nmore"}, nil, state)
+	renderChunk(message.ReasoningEndChunk{ID: "r1"}, nil, state)
+
+	if err := stderrWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "[thinking]\n***Some Header***\ninfo\n***Second Header***\nmore\n[/thinking]\n"
+	if got := string(output); got != want {
+		t.Fatalf("unexpected reasoning render output:\nwant:\n%q\n\ngot:\n%q", want, got)
+	}
+}
+
+func TestRenderChunk_ReasoningInlineContinuationDoesNotAddNewline(t *testing.T) {
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderrReader.Close()
+
+	oldStderr := os.Stderr
+	oldNoColor := noColor
+	os.Stderr = stderrWriter
+	noColor = true
+	defer func() {
+		os.Stderr = oldStderr
+		noColor = oldNoColor
+	}()
+
+	state := newToolRenderState()
+	renderChunk(message.ReasoningStartChunk{ID: "r1"}, nil, state)
+	renderChunk(message.ReasoningDeltaChunk{ID: "r1", Delta: "hello"}, nil, state)
+	renderChunk(message.ReasoningDeltaChunk{ID: "r1", Delta: " world"}, nil, state)
+	renderChunk(message.ReasoningEndChunk{ID: "r1"}, nil, state)
+
+	if err := stderrWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "[thinking]\nhello world\n[/thinking]\n"
+	if got := string(output); got != want {
+		t.Fatalf("unexpected reasoning continuation output:\nwant:\n%q\n\ngot:\n%q", want, got)
+	}
+}
+
 func TestSectionNeedsGap(t *testing.T) {
 	tests := []struct {
 		from sectionKind

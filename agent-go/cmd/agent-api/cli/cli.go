@@ -139,7 +139,6 @@ func Run(cfg *config.Config, flags *Flags) {
 				cancel := turnCancel
 				turnMu.Unlock()
 				if cancel != nil {
-					fmt.Fprintln(os.Stderr, "\n^C")
 					cancel()
 				} else {
 					// Idle between readLine exits — exit the program.

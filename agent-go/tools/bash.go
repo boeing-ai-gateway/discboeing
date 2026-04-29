@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -88,16 +87,12 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	cmd := exec.CommandContext(cmdCtx, shellPath, shellCommandArgsForOS(runtime.GOOS, wrapped)...)
 	cmd.Dir = cwd
 	cmd.Env = append(e.bashEnv(), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
-	// Put bash in its own process group so that killing it also kills any
-	// child processes it spawned (e.g. sleep, subshells).
-	setSysProcAttr(cmd)
+	processGroup := newProcessGroupController()
+	processGroup.configure(cmd)
 	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		// Kill the entire process group (negative PID = pgid).
-		return killProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
+		return processGroup.cancel(cmd)
 	}
+	defer processGroup.close()
 
 	// Write stdout/stderr directly to a real file instead of a pipe-backed
 	// writer. That way, a shell-backgrounded descendant inheriting stdout or
@@ -105,7 +100,23 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
-	runErr := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		if closeErr := logFile.Close(); closeErr != nil {
+			return errResult(call, fmt.Sprintf("failed to close log file: %v", closeErr)), nil
+		}
+		return errResult(call, fmt.Sprintf("failed to run command: %v", err)), nil
+	}
+	if err := processGroup.afterStart(cmd); err != nil {
+		_ = processGroup.cancel(cmd)
+		runErr := cmd.Wait()
+		_ = processGroup.close()
+		if closeErr := logFile.Close(); closeErr != nil {
+			return errResult(call, fmt.Sprintf("failed to close log file: %v", closeErr)), nil
+		}
+		return errResult(call, fmt.Sprintf("failed to configure command cleanup: %v (wait error: %v)", err, runErr)), nil
+	}
+
+	runErr := cmd.Wait()
 
 	if cmdCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 		fmt.Fprintf(logFile, "[Command timed out after %s and was killed]\n", timeout)
