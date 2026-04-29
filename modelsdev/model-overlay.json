@@ -101,6 +101,24 @@
 			],
 			"name": "ChatGPT Codex"
 		},
+		"codex-auto-review": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"name": "Codex Auto Review",
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			],
+			"tool_call": true
+		},
 		"gpt-5": {
 			"contextWindow": 272000,
 			"customTools": true,
@@ -139,26 +157,6 @@
 			"reasoning": true,
 			"reasoningLevels": [
 				"low",
-				"medium",
-				"high"
-			],
-			"tool_call": true
-		},
-		"gpt-5-codex-mini": {
-			"contextWindow": 272000,
-			"customTools": true,
-			"defaultReasonLevel": "medium",
-			"family": "gpt-codex",
-			"inputModalities": [
-				"text",
-				"image"
-			],
-			"name": "GPT-5 Codex Mini",
-			"outputModalities": [
-				"text"
-			],
-			"reasoning": true,
-			"reasoningLevels": [
 				"medium",
 				"high"
 			],
@@ -257,6 +255,7 @@
 				"text",
 				"image"
 			],
+			"maxOutputTokens": 128000,
 			"name": "GPT-5.2",
 			"outputModalities": [
 				"text"
@@ -301,6 +300,7 @@
 				"text",
 				"image"
 			],
+			"maxOutputTokens": 128000,
 			"name": "GPT-5.3 Codex",
 			"outputModalities": [
 				"text"
@@ -345,13 +345,60 @@
 		"gpt-5.4": {
 			"contextWindow": 272000,
 			"customTools": true,
+			"defaultReasonLevel": "xhigh",
+			"family": "gpt",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"maxOutputTokens": 128000,
+			"name": "GPT-5.4",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			],
+			"tool_call": true
+		},
+		"gpt-5.4-mini": {
+			"contextWindow": 272000,
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"family": "gpt-mini",
+			"inputModalities": [
+				"text",
+				"image"
+			],
+			"maxOutputTokens": 128000,
+			"name": "GPT-5.4 mini",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			],
+			"tool_call": true
+		},
+		"gpt-5.5": {
+			"contextWindow": 272000,
+			"customTools": true,
 			"defaultReasonLevel": "medium",
 			"family": "gpt",
 			"inputModalities": [
 				"text",
 				"image"
 			],
-			"name": "GPT-5.4",
+			"maxOutputTokens": 128000,
+			"name": "GPT-5.5",
 			"outputModalities": [
 				"text"
 			],
@@ -821,6 +868,44 @@
 			]
 		},
 		"gpt-5.4-pro-2026-03-05": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.5": {
+			"customTools": true,
+			"defaultReasonLevel": "medium",
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.5-2026-04-23": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"none",
+				"low",
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.5-pro": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium",
+				"high",
+				"xhigh"
+			]
+		},
+		"gpt-5.5-pro-2026-04-23": {
 			"reasoning": true,
 			"reasoningLevels": [
 				"medium",

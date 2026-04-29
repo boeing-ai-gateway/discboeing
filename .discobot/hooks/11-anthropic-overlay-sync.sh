@@ -2,7 +2,7 @@
 #---
 # name: Anthropic overlay sync
 # type: file
-# pattern: modelsdev/model-overlay.json
+# pattern: modelsdev/{model-overlay.json,models-dev-api.json}
 # notify_llm: false
 #---
 set -euo pipefail
