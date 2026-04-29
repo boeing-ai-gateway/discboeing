@@ -540,14 +540,18 @@ func (p *Provider) Close() error {
 	if p.idleMonitor != nil {
 		_ = p.idleMonitor.Stop(context.Background())
 	}
-	p.vmManager.Shutdown()
 
 	// Close all Docker providers
 	p.dockerProvidersMu.Lock()
-	for projectID := range p.dockerProviders {
+	for projectID, dockerProv := range p.dockerProviders {
+		if err := dockerProv.Close(); err != nil {
+			log.Printf("Warning: failed to close Docker provider for project %s: %v", projectID, err)
+		}
 		delete(p.dockerProviders, projectID)
 	}
 	p.dockerProvidersMu.Unlock()
+
+	p.vmManager.Shutdown()
 
 	// Close host Docker client if initialized
 	if p.hostDockerClient != nil {

@@ -105,6 +105,9 @@ type Provider struct {
 	ensureImageOnce sync.Once
 	ensureImageDone chan struct{}
 	ensureImageErr  error
+
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // SystemManager interface for tracking startup tasks
@@ -149,6 +152,7 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 		containerIDs:           make(map[string]string),
 		httpClients:            sandbox.NewHTTPClientCache(),
 		sessionProjectResolver: sessionProjectResolver,
+		stopCh:                 make(chan struct{}),
 	}
 
 	// Apply options
@@ -210,7 +214,17 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 	// Kick off image pull in the background (non-blocking).
 	// EnsureImage is synchronized: the first caller triggers the pull, all others wait.
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			select {
+			case <-p.stopCh:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
 		if err := p.EnsureImage(ctx); err != nil {
 			log.Printf("Docker provider background image initialization failed: %v", err)
 			return
@@ -792,6 +806,16 @@ func (p *Provider) doEnsureImage() {
 	defer close(p.ensureImageDone)
 
 	image := p.cfg.SandboxImage
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		select {
+		case <-p.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 
 	// Local images can't be pulled from a registry. They are loaded externally
 	// (e.g., via ensureImageInVM in the VZ provider which transfers from host Docker).
@@ -830,7 +854,12 @@ func (p *Provider) doEnsureImage() {
 	attempt := 1
 
 	for {
-		pullCtx, pullCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		if ctx.Err() != nil {
+			p.ensureImageErr = ctx.Err()
+			return
+		}
+
+		pullCtx, pullCancel := context.WithTimeout(ctx, 5*time.Minute)
 		err := p.pullSandboxImage(pullCtx, image)
 		pullCancel()
 
@@ -842,10 +871,18 @@ func (p *Provider) doEnsureImage() {
 			return
 		}
 
+		if ctx.Err() != nil {
+			p.ensureImageErr = ctx.Err()
+			return
+		}
+
 		log.Printf("Warning: Failed to pull sandbox image (attempt %d): %v", attempt, err)
 		log.Printf("Retrying in %v...", backoff)
 
-		time.Sleep(backoff)
+		if err := waitForRetry(ctx, backoff); err != nil {
+			p.ensureImageErr = err
+			return
+		}
 
 		backoff *= 2
 		if backoff > maxBackoff {
@@ -1616,6 +1653,9 @@ func (p *Provider) Client() *client.Client {
 
 // Close closes the Docker client connection.
 func (p *Provider) Close() error {
+	p.stopOnce.Do(func() {
+		close(p.stopCh)
+	})
 	return p.client.Close()
 }
 
