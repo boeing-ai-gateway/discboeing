@@ -42,7 +42,7 @@
 >
 	<div
 		class={cn(
-			"flex items-center justify-between gap-3 border-b border-sidebar-border px-3 py-2",
+			"flex h-10 shrink-0 items-center justify-between gap-3 border-b border-sidebar-border px-3",
 			headerClass,
 		)}
 	>

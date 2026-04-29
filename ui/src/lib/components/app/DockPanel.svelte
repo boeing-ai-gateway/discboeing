@@ -4,12 +4,13 @@
 	import FilesPanel from "$lib/components/app/parts/FilesPanel.svelte";
 	import ServicePanel from "$lib/components/app/parts/ServicePanel.svelte";
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
+	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
 	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
-	import { DESKTOP_SERVICE_ID } from "$lib/shell-types";
+	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 
 	type DockPanelKind = Exclude<SessionActiveView["kind"], "chat">;
 
@@ -19,11 +20,22 @@
 	const sessionView = session.ui;
 	const visibleServices = $derived.by(() =>
 		session.services.list.filter(
-			(service) => service.id !== DESKTOP_SERVICE_ID,
+			(service) =>
+				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
 		),
 	);
 	const desktopAvailable = $derived.by(() =>
 		session.services.list.some((service) => service.id === DESKTOP_SERVICE_ID),
+	);
+	const editorEnabled = $derived.by(() => app.preferences.showEditorButton);
+	const vscodeAvailable = $derived.by(() =>
+		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
+	);
+	const vscodeService = $derived.by(
+		() =>
+			session.services.list.find(
+				(service) => service.id === VSCODE_SERVICE_ID,
+			) ?? null,
 	);
 	const sessionFileContents = $derived.by(() => session.files.contents);
 	const sessionFileDiff = $derived.by(() => session.files.diff);
@@ -41,6 +53,12 @@
 		}
 
 		mountedDockPanelKinds = [...mountedDockPanelKinds, activeKind];
+	});
+
+	$effect(() => {
+		if (!editorEnabled && sessionView.activeView.kind === "vscode") {
+			sessionView.openChat();
+		}
 	});
 
 	function buildDiffSelectionPrompt({
@@ -72,6 +90,10 @@ ${selectedText}
 		await thread.submit({
 			parts: buildUserMessageParts(prompt, []),
 		});
+	}
+
+	function handleOpenDiffFile(path: string) {
+		void session.files.open(path);
 	}
 </script>
 
@@ -105,6 +127,21 @@ ${selectedText}
 		</div>
 	{/if}
 
+	{#if editorEnabled && mountedDockPanelKinds.includes("vscode")}
+		<div
+			class={sessionView.activeView.kind === "vscode" ? "contents" : "hidden"}
+		>
+			<VSCodePanel
+				dockMaximized={sessionView.dockMaximized}
+				onClose={sessionView.openChat}
+				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				resolvedTheme={app.preferences.resolvedTheme}
+				sessionId={session.sessionId}
+				service={vscodeService}
+			/>
+		</div>
+	{/if}
+
 	{#if mountedDockPanelKinds.includes("file")}
 		<div class={sessionView.activeView.kind === "file" ? "contents" : "hidden"}>
 			<FilesPanel
@@ -127,7 +164,7 @@ ${selectedText}
 			<DiffReviewPanel
 				dockMaximized={sessionView.dockMaximized}
 				onClose={sessionView.openChat}
-				onOpenFile={(path) => session.files.open(path)}
+				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
 				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}

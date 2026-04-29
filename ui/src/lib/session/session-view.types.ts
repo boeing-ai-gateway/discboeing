@@ -2,6 +2,7 @@ export type SessionActiveView =
 	| { kind: "chat" }
 	| { kind: "terminal" }
 	| { kind: "desktop" }
+	| { kind: "vscode" }
 	| { kind: "diff-review" }
 	| { kind: "file"; path: string }
 	| { kind: "services" };

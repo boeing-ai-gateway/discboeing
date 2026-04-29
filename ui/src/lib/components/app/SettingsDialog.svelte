@@ -401,6 +401,25 @@
 										/>
 									</ItemActions>
 								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Show editor button</ItemTitle>
+										<ItemDescription>
+											Display the embedded editor entry point in the session
+											toolbar. Disabled by default.
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Switch
+											id="settings-show-editor-button"
+											checked={preferences.showEditorButton}
+											onCheckedChange={(checked) => {
+												preferences.setShowEditorButton(checked === true);
+											}}
+										/>
+									</ItemActions>
+								</Item>
 							</ItemGroup>
 						</CardContent>
 					</Card>

@@ -30,6 +30,7 @@
 	import { openUrl } from "$lib/shell";
 	import {
 		DESKTOP_SERVICE_ID,
+		VSCODE_SERVICE_ID,
 		type IdeOption,
 		type JetBrainsIdeOption,
 	} from "$lib/shell-types";
@@ -58,9 +59,14 @@
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	const sessionServices = $derived.by(() =>
 		session.services.list.filter(
-			(service) => service.id !== DESKTOP_SERVICE_ID,
+			(service) =>
+				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
 		),
 	);
+	const vscodeAvailable = $derived.by(() =>
+		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
+	);
+	const showEditorButton = $derived.by(() => preferences.showEditorButton);
 
 	function isJetBrainsIdeOption(
 		option: IdeOption,
@@ -166,6 +172,15 @@
 		}
 
 		sessionView.openDesktop();
+	}
+
+	function toggleVSCode() {
+		if (sessionView.activeView.kind === "vscode") {
+			sessionView.openChat();
+			return;
+		}
+
+		sessionView.openVSCode();
 	}
 
 	function toggleFiles() {
@@ -373,6 +388,18 @@
 			>
 				Desktop
 			</Button>
+			{#if showEditorButton}
+				<Button
+					variant={sessionView.activeView.kind === "vscode"
+						? "secondary"
+						: "ghost"}
+					size="xs"
+					onclick={toggleVSCode}
+					disabled={!vscodeAvailable}
+				>
+					Editor
+				</Button>
+			{/if}
 			<Button
 				variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
 				size="xs"

@@ -13,7 +13,7 @@ import type {
 	SessionStores,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
-import { DESKTOP_SERVICE_ID } from "$lib/shell-types";
+import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 import { createSessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 import { ThreadStore } from "$lib/store/threads.store.svelte";
 
@@ -36,7 +36,11 @@ function createSessionContext(
 		getFiles: () => filesDomain.list,
 		getServices: () =>
 			services.list
-				.filter((service) => service.id !== DESKTOP_SERVICE_ID)
+				.filter(
+					(service) =>
+						service.id !== DESKTOP_SERVICE_ID &&
+						service.id !== VSCODE_SERVICE_ID,
+				)
 				.map((service) => service.id),
 	});
 

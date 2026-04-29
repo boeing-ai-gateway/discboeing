@@ -57,6 +57,7 @@ export type SessionViewState = {
 	openChat: () => void;
 	openTerminal: () => void;
 	openDesktop: () => void;
+	openVSCode: () => void;
 	openDiffReview: () => void;
 	openFile: (file?: string) => void;
 	openServices: () => void;
@@ -113,6 +114,10 @@ export function createSessionViewState(
 
 	const openDesktop = () => {
 		activeView = { kind: "desktop" };
+	};
+
+	const openVSCode = () => {
+		activeView = { kind: "vscode" };
 	};
 
 	const openDiffReview = () => {
@@ -289,6 +294,7 @@ export function createSessionViewState(
 		openChat,
 		openTerminal,
 		openDesktop,
+		openVSCode,
 		openDiffReview,
 		openFile,
 		openServices,

@@ -16,6 +16,7 @@ export const SIDEBAR_RECENT_OPEN_STORAGE_KEY = "sidebar.recent.open";
 export const SIDEBAR_ALL_OPEN_STORAGE_KEY = "sidebar.all.open";
 export const SIDEBAR_ALL_GROUPED_STORAGE_KEY = "sidebar.all.grouped";
 export const SHOW_REFRESH_BUTTON_STORAGE_KEY = "header.show.refresh.button";
+export const SHOW_EDITOR_BUTTON_STORAGE_KEY = "header.show.editor.button";
 export const RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY =
 	"recent.threads.visible.limit";
 export const PROMPT_HISTORY_STORAGE_KEY = "discobot:composer-history";
@@ -83,6 +84,9 @@ export class UIStateStore {
 	#showRefreshButton = $state(
 		readBoolean(SHOW_REFRESH_BUTTON_STORAGE_KEY, true),
 	);
+	#showEditorButton = $state(
+		readBoolean(SHOW_EDITOR_BUTTON_STORAGE_KEY, false),
+	);
 	#promptHistory = $state<string[]>(
 		readStringArray(PROMPT_HISTORY_STORAGE_KEY),
 	);
@@ -124,6 +128,10 @@ export class UIStateStore {
 
 	get showRefreshButton(): boolean {
 		return this.#showRefreshButton;
+	}
+
+	get showEditorButton(): boolean {
+		return this.#showEditorButton;
 	}
 
 	get promptHistory(): string[] {
@@ -212,6 +220,11 @@ export class UIStateStore {
 	setShowRefreshButton(value: boolean): void {
 		this.#showRefreshButton = value;
 		writeStorage(SHOW_REFRESH_BUTTON_STORAGE_KEY, String(value));
+	}
+
+	setShowEditorButton(value: boolean): void {
+		this.#showEditorButton = value;
+		writeStorage(SHOW_EDITOR_BUTTON_STORAGE_KEY, String(value));
 	}
 
 	ignoreUpdateVersion(version: string | null): void {

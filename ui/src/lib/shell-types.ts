@@ -10,6 +10,7 @@ export type CenterPanel =
 	| "chat"
 	| "terminal"
 	| "desktop"
+	| "vscode"
 	| "files"
 	| "diff-review"
 	| `service:${string}`;
@@ -75,6 +76,7 @@ export function isPreferredIde(
 }
 
 export const DESKTOP_SERVICE_ID = "discobot-desktop";
+export const VSCODE_SERVICE_ID = "discobot-vscode";
 
 export type ServiceItem = {
 	id: string;

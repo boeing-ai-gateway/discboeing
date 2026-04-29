@@ -42,3 +42,13 @@ test("settings dialog only shows updates when the runtime supports them", () => 
 	);
 	assert.doesNotMatch(source, /environment\.runtime === "tauri"/);
 });
+
+test("settings dialog exposes a toggle for the editor button", () => {
+	assert.match(source, /<ItemTitle>Show editor button<\/ItemTitle>/);
+	assert.match(source, /id="settings-show-editor-button"/);
+	assert.match(source, /checked=\{preferences\.showEditorButton\}/);
+	assert.match(
+		source,
+		/onCheckedChange=\{\(checked\) => \{\s*preferences\.setShowEditorButton\(checked === true\);/m,
+	);
+});

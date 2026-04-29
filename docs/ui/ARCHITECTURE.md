@@ -4,7 +4,7 @@ This document describes the architecture of the Discobot frontend, a SvelteKit a
 
 ## Overview
 
-The UI is a single-page SvelteKit application. It renders an IDE-style interface with resizable panels for workspace navigation, chat/terminal, and file diffs.
+The UI is a single-page SvelteKit application. It renders an IDE-style interface with resizable panels for workspace navigation, chat/terminal, file diffs, and embedded session tools such as the desktop viewer and VS Code.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -92,6 +92,10 @@ The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) proc
 - Surfaces mode/model/reasoning metadata
 
 Mounted thread workspaces subscribe through a single app-scoped project WebSocket, which multiplexes chat streams, project events, and service logs across multiple sessions and avoids holding separate SSE connections per mounted workspace or service panel. The shell only preloads the active session plus recent sessions the user has already opened, so sidebar recents can remain visible without eagerly creating session or thread contexts for untouched sessions.
+
+The dock reserves `discobot-desktop` and `discobot-vscode` as first-class panes. Both are backed by the existing per-session service proxy, but the VS Code pane is rendered separately from generic service previews so it can use a looser iframe policy and its own toolbar. The editor entry point is disabled by default and can be exposed from Settings, which lets the UI hide the editor button entirely without changing service discovery.
+
+The sandbox image seeds code-server profile defaults from `container-assets/code-server/` into `/home/discobot/.local/share/discobot-code-server/` on first launch. The cache volume now preserves `/home/discobot/.local/share/discobot-code-server/User` and `/home/discobot/.local/share/discobot-code-server/extensions` by default so editor settings and installed extensions carry across sessions, while workspace `.vscode/` settings still apply as normal workspace-level overrides. When `code-server` is present in the sandbox PATH, the agent exposes `discobot-vscode` as a built-in passive service, and the `VSCodePanel` writes the resolved light/dark mode to `.discobot/.vscode-theme.json` so the bundled theme extension can watch that file and keep the embedded editor aligned with the surrounding UI.
 
 Reasoning is level-based and sourced from each model's `reasoningLevels`/`defaultReasoning` metadata.
 

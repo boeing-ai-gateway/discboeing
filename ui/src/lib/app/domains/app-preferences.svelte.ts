@@ -106,6 +106,9 @@ export function createAppPreferencesDomain(
 		get showRefreshButton() {
 			return uiStateStore.showRefreshButton;
 		},
+		get showEditorButton() {
+			return uiStateStore.showEditorButton;
+		},
 		setTheme: (mode) => applyThemeState(mode),
 		setColorScheme: (scheme) => {
 			if (!availableThemes.some((t) => t.id === scheme)) return;
@@ -149,6 +152,9 @@ export function createAppPreferencesDomain(
 		},
 		setShowRefreshButton: (value) => {
 			uiStateStore.setShowRefreshButton(value);
+		},
+		setShowEditorButton: (value) => {
+			uiStateStore.setShowEditorButton(value);
 		},
 	};
 }
