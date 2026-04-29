@@ -515,7 +515,7 @@ stopped → starting → running → stopping → stopped
 
 ### Passive Services
 
-Passive services declare an HTTP endpoint without providing a script to run. They're useful when a service is managed externally (e.g., by `devcontainer.json` or `docker-compose`).
+Passive services declare an HTTP endpoint without providing a script to run. They're useful when a service is managed externally (e.g., by `devcontainer.json`, `docker-compose`, or a socket-activated systemd unit inside the sandbox).
 
 **Example — Externally-managed web app:**
 

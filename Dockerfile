@@ -130,6 +130,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh nodejs \
+    # Install code-server
+    && curl -fsSL https://code-server.dev/install.sh | sh \
+    # Seed bundled code-server extensions
+    && mkdir -p /opt/discobot/code-server-defaults/extensions \
+    && code-server --install-extension vscodevim.vim --extensions-dir /opt/discobot/code-server-defaults/extensions \
     # Install Claude Code CLI and OpenCode CLI
     && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp pnpm opencode-ai \
     # Install latest stable Go
@@ -284,6 +289,9 @@ COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobo
 # Copy systemd service files for container service management
 COPY container-assets/systemd/ /etc/systemd/system/
 
+# Copy code-server default profile templates
+COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-defaults/
+
 # Copy container-specific agent configuration (Discobot scripts, docs, etc.)
 # These are placed in /home/discobot/.discobot/ for user-level availability
 COPY --chown=1000:1000 container-assets/claude /home/discobot/.discobot
@@ -307,7 +315,8 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     discobot-setup.service \
     discobot-proxy.service \
     docker.socket \
-    discobot-agent-api.service
+    discobot-agent-api.service \
+    discobot-vscode.socket
 
 # Stage 3e: Full runtime with graphical desktop tools (X11, VNC, browser)
 FROM runtime-gui-base AS runtime
@@ -329,6 +338,7 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     discobot-proxy.service \
     docker.socket \
     discobot-agent-api.service \
+    discobot-vscode.socket \
     x11-display.socket \
     x11vnc.socket \
     websockify-proxy.socket

@@ -73,6 +73,8 @@ The agent automatically mounts these cache directories without configuration:
 - `.config/JetBrains` - JetBrains IDE settings and shared config
 - `.local/share/JetBrains/Toolbox/apps` - JetBrains Toolbox-managed IDE installs
 - `.local/share/JetBrains/Daemon/bundles` - JetBrains daemon bundles
+- `.local/share/discobot-code-server/User` - Discobot code-server user profile
+- `.local/share/discobot-code-server/extensions` - Discobot code-server extensions
 - `.vscode-server` - VS Code Server
 - `.cursor-server` - Cursor Server
 - `.zed_server` - Zed Server

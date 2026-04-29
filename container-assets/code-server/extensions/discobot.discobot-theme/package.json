@@ -1,0 +1,28 @@
+{
+	"name": "discobot-theme",
+	"displayName": "Discobot Theme",
+	"publisher": "discobot",
+	"version": "0.0.1",
+	"description": "Discobot light and dark themes with file-based UI theme sync.",
+	"engines": {
+		"vscode": "^1.101.0"
+	},
+	"categories": ["Themes"],
+	"extensionKind": ["ui"],
+	"browser": "./dist/web-extension.js",
+	"activationEvents": ["onStartupFinished"],
+	"contributes": {
+		"themes": [
+			{
+				"label": "Discobot Light",
+				"uiTheme": "vs",
+				"path": "./themes/discobot-light-color-theme.json"
+			},
+			{
+				"label": "Discobot Dark",
+				"uiTheme": "vs-dark",
+				"path": "./themes/discobot-dark-color-theme.json"
+			}
+		]
+	}
+}

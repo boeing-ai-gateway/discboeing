@@ -1856,6 +1856,8 @@ func wellKnownCachePaths() []string {
 		"/home/discobot/.config/JetBrains",
 		"/home/discobot/.local/share/JetBrains/Toolbox/apps",
 		"/home/discobot/.local/share/JetBrains/Daemon/bundles",
+		"/home/discobot/.local/share/discobot-code-server/User",
+		"/home/discobot/.local/share/discobot-code-server/extensions",
 		"/home/discobot/.vscode-server",
 		"/home/discobot/.cursor-server",
 		"/home/discobot/.zed_server",

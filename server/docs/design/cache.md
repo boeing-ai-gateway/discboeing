@@ -116,6 +116,8 @@ The agent automatically mounts the following well-known cache directories:
 - `/home/discobot/.bun/install/cache` - Bun cache
 - `/home/discobot/.docker/buildx` - Docker buildx cache
 - `/home/discobot/.ccache` - ccache
+- `/home/discobot/.local/share/discobot-code-server/User` - Discobot code-server user profile
+- `/home/discobot/.local/share/discobot-code-server/extensions` - Discobot code-server extensions
 - `/home/discobot/.vscode-server` - VS Code Server
 - `/home/discobot/.cursor-server` - Cursor Server
 - `/home/discobot/.zed_server` - Zed Server

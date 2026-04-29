@@ -1,0 +1,17 @@
+{
+	"workbench.colorTheme": "Discobot Dark",
+	"window.commandCenter": false,
+	"workbench.activityBar.location": "hidden",
+	"editor.minimap.enabled": false,
+	"files.autoSave": "onFocusChange",
+	"security.workspace.trust.enabled": false,
+	"telemetry.telemetryLevel": "off",
+	"chat.agent.enabled": false,
+	"workbench.secondarySideBar.defaultVisibility": "hidden",
+	"workbench.layoutControl.enabled": false,
+	"workbench.startupEditor": "none",
+	"workbench.sideBar.location": "right",
+	"workbench.statusBar.visible": false,
+	"workbench.editor.empty.hint": "hidden",
+	"terminal.integrated.initialHint": false
+}
