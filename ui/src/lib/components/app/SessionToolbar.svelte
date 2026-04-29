@@ -27,7 +27,7 @@
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
-	import { openUrl } from "$lib/tauri";
+	import { openUrl } from "$lib/shell";
 	import {
 		DESKTOP_SERVICE_ID,
 		type IdeOption,
@@ -349,11 +349,11 @@
 
 <div
 	class="flex h-full w-full min-w-0 items-center justify-end gap-2 bg-background px-2"
-	data-tauri-drag-region
+	data-desktop-drag-region
 >
 	{#if !isMobile.current}
 		<div
-			class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 		>
 			<Button
 				variant={sessionView.activeView.kind === "terminal"
@@ -407,7 +407,7 @@
 		</div>
 	{:else if diffStats.filesChanged > 0}
 		<div
-			class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 		>
 			<Button
 				variant={sessionView.activeView.kind === "diff-review"
@@ -428,7 +428,7 @@
 		{#if operationState.showSplitButton}
 			<DropdownMenu>
 				<div
-					class="tauri-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+					class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
 				>
 					<Button
 						variant="outline"
@@ -505,7 +505,7 @@
 				size="xs"
 				onclick={handlePrimaryCommand}
 				disabled={operationDisabled}
-				class="tauri-no-drag gap-1.5"
+				class="desktop-no-drag gap-1.5"
 				title={commandLabel(primaryCommand)}
 			>
 				{#if operationState.showPending}
@@ -523,7 +523,7 @@
 
 	{#if !isMobile.current}
 		<SplitDropdownButton
-			class="tauri-no-drag"
+			class="desktop-no-drag"
 			label={`Open ${selectedIdeOption?.label ?? "Cursor"}`}
 			menuAriaLabel="Select preferred IDE"
 			onclick={openPreferredIde}

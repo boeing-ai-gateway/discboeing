@@ -69,7 +69,7 @@
 							class="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base"
 						>
 							Compare the combined lockups, logo-only marks, and app-facing
-							treatments before wiring them into Tauri icons and product
+							treatments before wiring them into desktop icons and product
 							surfaces.
 						</p>
 					</div>

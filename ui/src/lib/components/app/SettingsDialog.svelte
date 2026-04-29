@@ -125,7 +125,7 @@
 	const ui = app.ui;
 	const updates = app.updates;
 	const environment = app.environment;
-	const showUpdateTab = $derived(environment.isTauri);
+	const showUpdateTab = $derived(environment.supportsAppUpdates);
 	const themeModes: ThemeMode[] = ["light", "dark", "system"];
 	let clearCacheDialogOpen = $state(false);
 	let clearingCache = $state(false);

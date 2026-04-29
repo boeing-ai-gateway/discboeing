@@ -1,5 +1,14 @@
 import type { AppUpdates, UpdateStatus } from "$lib/app/app-context.types";
-import { isTauriShell } from "$lib/environment";
+import {
+	checkForAppUpdate,
+	closeAppUpdate,
+	downloadAppUpdate,
+	supportsAppUpdates,
+	installAppUpdate,
+	relaunchApp,
+	getDesktopRuntimeKind,
+	type DesktopDownloadEvent,
+} from "$lib/shell";
 import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 import { env as publicEnv } from "$env/dynamic/public";
 
@@ -7,35 +16,9 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const GITHUB_RELEASES_API_URL =
 	publicEnv.PUBLIC_DISCOBOT_RELEASES_API_URL ?? "";
 
-type DownloadEvent =
-	| {
-			event: "Started";
-			data: {
-				contentLength?: number;
-			};
-	  }
-	| {
-			event: "Progress";
-			data: {
-				chunkLength: number;
-			};
-	  }
-	| {
-			event: "Finished";
-	  };
-
 type PendingUpdate = {
 	updateRid: number;
 	bytesRid: number | null;
-};
-
-type UpdateMetadata = {
-	rid: number;
-	currentVersion: string;
-	version: string;
-	date?: string;
-	body?: string;
-	rawJson: Record<string, unknown>;
 };
 
 type CreateAppUpdatesDomainArgs = {
@@ -53,6 +36,20 @@ type GitHubRelease = {
 	tag_name: string;
 	assets: GitHubReleaseAsset[];
 };
+
+function prereleaseAssetNames(): string[] {
+	if (getDesktopRuntimeKind() !== "electron") {
+		return ["latest.json"];
+	}
+	const platform = navigator.platform.toLowerCase();
+	if (platform.includes("mac")) {
+		return ["latest-mac.yml", "latest.yml"];
+	}
+	if (platform.includes("win")) {
+		return ["latest.yml"];
+	}
+	return ["latest-linux.yml", "latest.yml"];
+}
 
 export function createAppUpdatesDomain(
 	args: CreateAppUpdatesDomainArgs,
@@ -88,11 +85,7 @@ export function createAppUpdatesDomain(
 		pendingUpdate = null;
 
 		try {
-			const { invoke } = await import("@tauri-apps/api/core");
-			await invoke("close_app_update", {
-				updateRid: update.updateRid,
-				bytesRid: update.bytesRid,
-			});
+			await closeAppUpdate(update.updateRid, update.bytesRid);
 		} catch {
 			// Ignore cleanup failures.
 		}
@@ -110,7 +103,7 @@ export function createAppUpdatesDomain(
 			stack: error instanceof Error ? error.stack : undefined,
 			status: updateStatus,
 			availableVersion,
-			isTauri: isTauriShell(),
+			runtime: getDesktopRuntimeKind(),
 		});
 	}
 
@@ -141,20 +134,21 @@ export function createAppUpdatesDomain(
 			throw new Error("No GitHub pre-release is available.");
 		}
 
-		const latestJson = release.assets.find(
-			(asset) => asset.name === "latest.json",
+		const assetNames = prereleaseAssetNames();
+		const releaseAsset = release.assets.find((asset) =>
+			assetNames.includes(asset.name),
 		);
-		if (!latestJson) {
+		if (!releaseAsset) {
 			throw new Error(
-				`GitHub pre-release ${release.tag_name} does not include latest.json.`,
+				`GitHub pre-release ${release.tag_name} does not include ${assetNames.join(" or ")}.`,
 			);
 		}
 
-		return latestJson.browser_download_url;
+		return releaseAsset.browser_download_url;
 	}
 
 	$effect(() => {
-		if (!isTauriShell()) {
+		if (!supportsAppUpdates()) {
 			return;
 		}
 
@@ -181,16 +175,9 @@ export function createAppUpdatesDomain(
 		resetProgress();
 
 		try {
-			const { Channel, invoke } = await import("@tauri-apps/api/core");
-
 			await closePendingUpdate();
 
-			const nextUpdate = await invoke<UpdateMetadata | null>(
-				"check_for_app_update",
-				{
-					endpoint: await resolveUpdateEndpoint(),
-				},
-			);
+			const nextUpdate = await checkForAppUpdate(await resolveUpdateEndpoint());
 			if (!nextUpdate) {
 				availableVersion = null;
 				updateStatus = "idle";
@@ -200,10 +187,7 @@ export function createAppUpdatesDomain(
 			availableVersion = nextUpdate.version;
 
 			if (ignoredUpdateVersion === nextUpdate.version) {
-				await invoke("close_app_update", {
-					updateRid: nextUpdate.rid,
-					bytesRid: null,
-				});
+				await closeAppUpdate(nextUpdate.rid, null);
 				updateStatus = "ready";
 				return;
 			}
@@ -213,27 +197,25 @@ export function createAppUpdatesDomain(
 				bytesRid: null,
 			};
 			updateStatus = "downloading";
-			const channel = new Channel<DownloadEvent>();
-			channel.onmessage = (event: DownloadEvent) => {
-				switch (event.event) {
-					case "Started":
-						totalBytes = event.data?.contentLength ?? null;
-						downloadedBytes = 0;
-						break;
-					case "Progress":
-						downloadedBytes += event.data?.chunkLength ?? 0;
-						break;
-					case "Finished":
-						if (totalBytes !== null) {
-							downloadedBytes = totalBytes;
-						}
-						break;
-				}
-			};
-			const bytesRid = await invoke<number>("download_app_update", {
-				rid: nextUpdate.rid,
-				onEvent: channel,
-			});
+			const bytesRid = await downloadAppUpdate(
+				nextUpdate.rid,
+				(event: DesktopDownloadEvent) => {
+					switch (event.event) {
+						case "Started":
+							totalBytes = event.data?.contentLength ?? null;
+							downloadedBytes = 0;
+							break;
+						case "Progress":
+							downloadedBytes += event.data?.chunkLength ?? 0;
+							break;
+						case "Finished":
+							if (totalBytes !== null) {
+								downloadedBytes = totalBytes;
+							}
+							break;
+					}
+				},
+			);
 			pendingUpdate.bytesRid = bytesRid;
 			updateStatus = "ready";
 		} catch (error) {
@@ -277,7 +259,7 @@ export function createAppUpdatesDomain(
 			return canTrackPrereleases && trackPrereleases;
 		},
 		check: async () => {
-			if (!isTauriShell()) {
+			if (!supportsAppUpdates()) {
 				updateStatus = "error";
 				updateError = "App updates are only available in the desktop app.";
 				return;
@@ -287,7 +269,7 @@ export function createAppUpdatesDomain(
 		},
 		installAndRelaunch: async () => {
 			if (updateStatus !== "ready" || !pendingUpdate) return;
-			if (!isTauriShell()) {
+			if (!supportsAppUpdates()) {
 				updateStatus = "error";
 				updateError = "App updates are only available in the desktop app.";
 				return;
@@ -300,13 +282,8 @@ export function createAppUpdatesDomain(
 					throw new Error("Update download is not ready yet.");
 				}
 
-				const { invoke } = await import("@tauri-apps/api/core");
-				const { relaunch } = await import("@tauri-apps/plugin-process");
-				await invoke("install_app_update", {
-					updateRid: pendingUpdate.updateRid,
-					bytesRid: pendingUpdate.bytesRid,
-				});
-				await relaunch();
+				await installAppUpdate(pendingUpdate.updateRid, pendingUpdate.bytesRid);
+				await relaunchApp();
 			} catch (error) {
 				logUpdateError("install", error);
 				updateStatus = "error";

@@ -1,31 +1,14 @@
 <script lang="ts">
-	import { isTauriShell } from "$lib/environment";
-
-	async function withCurrentWindow<T>(
-		callback: (
-			window: Awaited<
-				ReturnType<
-					(typeof import("@tauri-apps/api/window"))["getCurrentWindow"]
-				>
-			>,
-		) => Promise<T>,
-	) {
-		if (!isTauriShell()) {
-			return;
-		}
-
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
-		return callback(getCurrentWindow());
-	}
+	import { withCurrentDesktopWindow } from "$lib/shell";
 
 	function minimizeWindow() {
-		void withCurrentWindow(async (window) => {
+		void withCurrentDesktopWindow(async (window) => {
 			await window.minimize();
 		});
 	}
 
 	function toggleMaximizeWindow() {
-		void withCurrentWindow(async (window) => {
+		void withCurrentDesktopWindow(async (window) => {
 			const maximized = await window.isMaximized();
 			if (maximized) {
 				await window.unmaximize();
@@ -36,16 +19,16 @@
 	}
 
 	function closeWindow() {
-		void withCurrentWindow(async (window) => {
+		void withCurrentDesktopWindow(async (window) => {
 			await window.close();
 		});
 	}
 </script>
 
-<div class="tauri-no-drag flex h-full items-stretch pr-1">
+<div class="desktop-no-drag flex h-full items-stretch pr-1">
 	<button
 		type="button"
-		class="tauri-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10"
+		class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10"
 		aria-label="Minimize"
 		onclick={minimizeWindow}
 	>
@@ -55,7 +38,7 @@
 	</button>
 	<button
 		type="button"
-		class="tauri-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10"
+		class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10"
 		aria-label="Maximize"
 		onclick={toggleMaximizeWindow}
 	>
@@ -72,7 +55,7 @@
 	</button>
 	<button
 		type="button"
-		class="tauri-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-[#e81123] hover:text-white"
+		class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-[#e81123] hover:text-white"
 		aria-label="Close"
 		onclick={closeWindow}
 	>

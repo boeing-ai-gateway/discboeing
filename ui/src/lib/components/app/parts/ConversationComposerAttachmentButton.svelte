@@ -43,7 +43,7 @@
 />
 
 <DropdownMenu>
-	<DropdownMenuTrigger class="tauri-no-drag" {disabled}>
+	<DropdownMenuTrigger class="desktop-no-drag" {disabled}>
 		<InputGroupButton
 			size="icon-sm"
 			variant="ghost"

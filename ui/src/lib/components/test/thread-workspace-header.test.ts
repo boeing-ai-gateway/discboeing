@@ -37,13 +37,13 @@ test("thread workspace header no longer renders a mobile sidebar toggle", () => 
 	assert.doesNotMatch(source, /<PanelLeftIcon/);
 });
 
-test("thread workspace header keeps the intended non-drag layout and is not a tauri drag region", () => {
+test("thread workspace header keeps the intended non-drag layout and avoids desktop drag regions", () => {
 	const source = readThreadWorkspaceHeaderSource();
 
 	assert.match(
 		source,
 		/class="flex h-10 min-w-0 items-center gap-1 bg-background px-3"/,
 	);
-	assert.doesNotMatch(source, /data-tauri-drag-region/);
-	assert.doesNotMatch(source, /tauri-no-drag/);
+	assert.doesNotMatch(source, /data-desktop-drag-region/);
+	assert.doesNotMatch(source, /desktop-no-drag/);
 });

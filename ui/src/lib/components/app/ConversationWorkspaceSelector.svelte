@@ -11,8 +11,7 @@
 	import type { WorkspaceSelectionResult } from "$lib/components/app/conversation-composer.types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { isTauriShell } from "$lib/environment";
-	import { pickDirectory } from "$lib/tauri";
+	import { isDesktopShell, pickDirectory } from "$lib/shell";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
@@ -95,7 +94,7 @@
 		() => sessionView.pendingWorkspaceValidation?.suggestions ?? [],
 	);
 	const showLocalDirectoryPicker = $derived.by(
-		() => isTauriShell() && workspaceSourceType === "local",
+		() => isDesktopShell() && workspaceSourceType === "local",
 	);
 
 	function shortenHomePath(path: string): string {
@@ -778,7 +777,7 @@
 
 {#if showBranchSelector}
 	<DropdownMenu>
-		<DropdownMenuTrigger class="tauri-no-drag">
+		<DropdownMenuTrigger class="desktop-no-drag">
 			<InputGroupButton
 				type="button"
 				size="icon-sm"

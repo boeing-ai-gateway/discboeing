@@ -31,21 +31,16 @@
 	function showWindowsLinuxControls(): boolean {
 		return (
 			!isMobile.current &&
-			environment.isTauri &&
+			environment.supportsNativeWindowControls &&
 			environment.windowControlsSide === "right"
 		);
 	}
 </script>
 
 <header
-	class={`tauri-drag-region relative ${isMobile.current ? "" : "z-[60]"} grid h-10 items-center bg-background ${isMobile.current ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)_auto_auto]"}`}
-	data-tauri-drag-region
+	class={`desktop-drag-region relative grid h-10 items-center bg-background ${isMobile.current ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)_auto_auto]"}`}
+	data-desktop-drag-region
 >
-	<div
-		class="absolute inset-0 pointer-events-auto"
-		data-tauri-drag-region
-	></div>
-
 	<div class="relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3">
 		{#if isMobile.current}
 			<DiscobotLogo size={24} />
@@ -55,7 +50,7 @@
 					onclick={onToggleSidebar}
 					aria-label="Expand sessions panel"
 					title="Expand sessions panel"
-					class="tauri-no-drag gap-1 px-1.5 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
+					class="desktop-no-drag gap-1 px-1.5 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
 				>
 					<PanelLeftIcon class="size-3.5" />
 					<span>Sessions</span>
@@ -69,7 +64,7 @@
 
 	<div class="relative z-20 min-w-0 px-2">
 		{#if showSessionToolbar}
-			<div class="tauri-no-drag min-w-0">
+			<div class="desktop-no-drag min-w-0">
 				<SessionToolbarStack />
 			</div>
 		{/if}
@@ -81,7 +76,7 @@
 			onclick={() => sessions.startNew()}
 			aria-label="New session"
 			title="New session"
-			class="tauri-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"
+			class="desktop-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"
 		>
 			<PlusIcon class="size-3 shrink-0" />
 			<span>{isMobile.current ? "New" : "New Session"}</span>
@@ -95,7 +90,7 @@
 					onclick={() => location.reload()}
 					aria-label="Refresh"
 					title="Refresh"
-					class="tauri-no-drag"
+					class="desktop-no-drag"
 				>
 					<RefreshCwIcon class="size-4" />
 				</Button>
@@ -106,7 +101,7 @@
 				onclick={() => ui.openSettings()}
 				aria-label="Settings"
 				title="Settings"
-				class="relative"
+				class="desktop-no-drag relative"
 			>
 				<SettingsIcon class="size-4" />
 				{#if updates.showBadge}
@@ -119,7 +114,7 @@
 
 	{#if !isMobile.current}
 		<div
-			class="relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"
+			class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"
 		>
 			{#if showWindowsLinuxControls()}
 				<RightWindowControls />

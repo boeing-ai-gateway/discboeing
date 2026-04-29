@@ -87,8 +87,9 @@ fn start_server(
         .env("PORT", port.to_string())
         .env("SSH_PORT", ssh_port.to_string())
         .env("CORS_ORIGINS", "http://tauri.localhost,tauri://localhost")
+        .env("DISCOBOT_DESKTOP_RUNTIME", "tauri")
+        .env("DISCOBOT_DESKTOP_SECRET", secret)
         .env("DISCOBOT_SECRET", secret)
-        .env("TAURI", "true")
         .env("SUGGESTIONS_ENABLED", "true")
         .env("STDIN_KEEPALIVE", "true")
         .env("LOG_FILE", log_path.to_string_lossy().to_string());

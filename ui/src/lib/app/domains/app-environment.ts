@@ -14,7 +14,10 @@ export function createAppEnvironmentDomain(
 	const env = getAppEnvironment();
 	return {
 		apiBase: env.apiBase,
-		isTauri: env.isTauri,
+		runtime: env.runtime,
+		isDesktop: env.isDesktop,
+		supportsNativeWindowControls: env.supportsNativeWindowControls,
+		supportsAppUpdates: env.supportsAppUpdates,
 		windowControlsSide: env.windowControlsSide,
 		windowControls: args.bootstrap.windowControls,
 	};

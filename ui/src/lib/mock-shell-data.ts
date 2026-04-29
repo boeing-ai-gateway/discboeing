@@ -263,7 +263,7 @@ export const supportInfoFixture: SupportInfoResponse = {
 		auth_enabled: true,
 		workspace_dir: "/home/discobot/workspace",
 		sandbox_image: "ghcr.io/obot-platform/discobot:latest",
-		tauri_mode: false,
+		desktop_mode: false,
 		ssh_enabled: true,
 		ssh_port: 2222,
 		dispatcher_enabled: true,

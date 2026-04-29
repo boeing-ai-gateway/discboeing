@@ -584,7 +584,7 @@
 
 					<InputGroupAddon align="block-end" class="justify-between gap-1">
 						<div
-							class="tauri-no-drag flex min-w-0 flex-1 flex-wrap items-center gap-1"
+							class="desktop-no-drag flex min-w-0 flex-1 flex-wrap items-center gap-1"
 						>
 							<ConversationComposerAttachmentButton
 								onFilesAdd={addFiles}
@@ -614,7 +614,7 @@
 							{/if}
 						</div>
 
-						<div class="tauri-no-drag flex items-center justify-end gap-2">
+						<div class="desktop-no-drag flex items-center justify-end gap-2">
 							{#if showPendingWorkspaceSelector}
 								<div class="hidden md:contents">
 									<ConversationWorkspaceSelector />

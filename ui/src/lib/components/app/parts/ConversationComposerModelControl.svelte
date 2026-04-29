@@ -91,7 +91,7 @@
 </script>
 
 <DropdownMenu>
-	<DropdownMenuTrigger class="tauri-no-drag">
+	<DropdownMenuTrigger class="desktop-no-drag">
 		<InputGroupButton
 			size="xs"
 			variant="ghost"

@@ -1,5 +1,11 @@
 import type { Session } from "$lib/api-types";
-import { getApiBase, isTauriShell } from "$lib/environment";
+import { getApiBase } from "$lib/api-config";
+import {
+	getDesktopRuntimeKind,
+	isDesktopShell,
+	supportsAppUpdates,
+	supportsNativeWindowControls,
+} from "$lib/shell";
 import { type SessionSummary, type WindowControlsSide } from "$lib/shell-types";
 
 export function detectWindowControlsSide(): WindowControlsSide {
@@ -46,9 +52,14 @@ export function toSessionSummaries(sessions: Session[]): SessionSummary[] {
 }
 
 export function getAppEnvironment() {
+	const runtime = getDesktopRuntimeKind();
+	const isDesktop = isDesktopShell();
 	return {
 		apiBase: getApiBase(),
-		isTauri: isTauriShell(),
+		runtime,
+		isDesktop,
+		supportsNativeWindowControls: supportsNativeWindowControls(),
+		supportsAppUpdates: supportsAppUpdates(),
 		windowControlsSide: detectWindowControlsSide(),
 	};
 }

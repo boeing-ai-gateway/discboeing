@@ -760,14 +760,14 @@ body {
 	}
 }
 
-/* Tauri window drag regions */
-[data-tauri-drag-region],
-.tauri-drag-region {
+/* Desktop window drag regions */
+[data-desktop-drag-region],
+.desktop-drag-region {
 	-webkit-app-region: drag;
 	app-region: drag;
 }
 
-.tauri-no-drag {
+.desktop-no-drag {
 	-webkit-app-region: no-drag;
 	app-region: no-drag;
 }

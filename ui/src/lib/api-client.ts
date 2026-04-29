@@ -121,7 +121,7 @@ import type {
 } from "./api-types";
 
 class ApiClient {
-	// Use getters to get current base URL (may change after Tauri init)
+	// Use getters to get current base URL (may change after desktop runtime init)
 	private get base() {
 		return getApiBase();
 	}

@@ -45,7 +45,7 @@
 </script>
 
 <DropdownMenu>
-	<DropdownMenuTrigger class="tauri-no-drag">
+	<DropdownMenuTrigger class="desktop-no-drag">
 		<InputGroupButton
 			size="icon-sm"
 			variant="ghost"

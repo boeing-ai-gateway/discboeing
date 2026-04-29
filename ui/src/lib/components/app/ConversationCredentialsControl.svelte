@@ -499,7 +499,7 @@
 </script>
 
 <DropdownMenu bind:open={dropdownOpen}>
-	<DropdownMenuTrigger class="tauri-no-drag">
+	<DropdownMenuTrigger class="desktop-no-drag">
 		<Button
 			variant="ghost"
 			size="xs"
