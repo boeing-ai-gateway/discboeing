@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +12,8 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/store"
 )
 
 // createWorkspaceTestGitRepo creates a test git repository for workspace initialization tests
@@ -269,6 +273,21 @@ func TestDeleteWorkspace(t *testing.T) {
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	session := &model.Session{
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Test Session",
+		Status:      model.SessionStatusReady,
+	}
+	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	if _, err := ts.MockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{}); err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := ts.MockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
 	client := ts.AuthenticatedClient(user)
 
 	resp := client.Delete("/api/projects/" + project.ID + "/workspaces/" + workspace.ID)
@@ -281,6 +300,13 @@ func TestDeleteWorkspace(t *testing.T) {
 	defer resp.Body.Close()
 
 	AssertStatus(t, resp, http.StatusNotFound)
+
+	if _, err := ts.Store.GetSessionByIDIncludingDeleted(context.Background(), session.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("Expected session to be fully deleted, got err=%v", err)
+	}
+	if _, err := ts.MockSandbox.Get(context.Background(), session.ID); !errors.Is(err, sandbox.ErrNotFound) {
+		t.Fatalf("Expected sandbox to be removed, got err=%v", err)
+	}
 }
 
 func TestListWorkspaces_WithData(t *testing.T) {

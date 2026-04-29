@@ -16,6 +16,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/events"
 	discogit "github.com/obot-platform/discobot/server/internal/git"
 	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
@@ -108,17 +109,19 @@ type Workspace struct {
 
 // WorkspaceService handles workspace operations
 type WorkspaceService struct {
-	store       *store.Store
-	gitProvider discogit.Provider
-	eventBroker *events.Broker
+	store           *store.Store
+	gitProvider     discogit.Provider
+	sandboxProvider sandbox.Provider
+	eventBroker     *events.Broker
 }
 
 // NewWorkspaceService creates a new workspace service
-func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, eventBroker *events.Broker) *WorkspaceService {
+func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, sandboxProvider sandbox.Provider, eventBroker *events.Broker) *WorkspaceService {
 	return &WorkspaceService{
-		store:       s,
-		gitProvider: gitProvider,
-		eventBroker: eventBroker,
+		store:           s,
+		gitProvider:     gitProvider,
+		sandboxProvider: sandboxProvider,
+		eventBroker:     eventBroker,
 	}
 }
 
@@ -293,6 +296,28 @@ func (s *WorkspaceService) mapWorkspace(ctx context.Context, ws *model.Workspace
 // DeleteWorkspace deletes a workspace. If deleteFiles is true, also removes the
 // working directory from disk.
 func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, workspaceID string, deleteFiles bool) error {
+	// Clean up all sessions through the session deletion flow first so sandboxes
+	// are stopped and removed before the workspace record disappears.
+	sessions, err := s.store.ListSessionsByWorkspaceIncludingDeleted(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to list workspace sessions: %w", err)
+	}
+	sessionSvc := NewSessionService(s.store, nil, s.sandboxProvider, nil, s.eventBroker, nil)
+	for _, sess := range sessions {
+		if sess.DeletedAt.Valid {
+			if err := sessionSvc.PerformDeferredSandboxDeletion(ctx, sess.ID); err != nil {
+				return fmt.Errorf("failed to remove deleted session sandbox %s: %w", sess.ID, err)
+			}
+			continue
+		}
+		if err := sessionSvc.PerformDeletion(ctx, sess.ProjectID, sess.ID); err != nil {
+			return fmt.Errorf("failed to delete workspace session %s: %w", sess.ID, err)
+		}
+		if err := sessionSvc.PerformDeferredSandboxDeletion(ctx, sess.ID); err != nil {
+			return fmt.Errorf("failed to remove workspace session sandbox %s: %w", sess.ID, err)
+		}
+	}
+
 	// Delete files first if requested (before removing DB record)
 	if deleteFiles && s.gitProvider != nil {
 		if err := s.gitProvider.RemoveWorkspace(ctx, workspaceID); err != nil {
@@ -301,7 +326,10 @@ func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, workspaceID stri
 		}
 	}
 
-	return s.store.DeleteWorkspace(ctx, workspaceID)
+	if err := s.store.DeleteWorkspace(ctx, workspaceID); err != nil {
+		return fmt.Errorf("failed to delete workspace: %w", err)
+	}
+	return nil
 }
 
 // GetWorkspaceWithSessions returns a workspace with all its sessions

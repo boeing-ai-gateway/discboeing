@@ -292,7 +292,7 @@ func main() {
 		disp = dispatcher.NewService(s, cfg, eventBroker)
 
 		// Register workspace init executor
-		workspaceSvc := service.NewWorkspaceService(s, gitProvider, eventBroker)
+		workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxProvider, eventBroker)
 		disp.RegisterExecutor(dispatcher.NewWorkspaceInitExecutor(workspaceSvc))
 
 		// Register session init, delete, and commit executors if sandbox provider is available

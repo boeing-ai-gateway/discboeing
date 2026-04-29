@@ -181,7 +181,7 @@ func NewTestServer(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, eventBroker)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker)
 
 	gitSvc := service.NewGitService(s, gitProvider)
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
@@ -470,7 +470,7 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, eventBroker)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker)
 
 	gitSvc := service.NewGitService(s, gitProvider)
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)

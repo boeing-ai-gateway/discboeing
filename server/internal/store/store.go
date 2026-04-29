@@ -312,6 +312,9 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.PromptSubmission{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.SessionCommitLog{}).Error; err != nil {
+			return err
+		}
 
 		// Delete sessions
 		if err := tx.Unscoped().Where("workspace_id = ?", id).Delete(&model.Session{}).Error; err != nil {
@@ -451,6 +454,14 @@ func (s *Store) ListSessionsByProject(ctx context.Context, projectID string) ([]
 func (s *Store) ListSessionsByWorkspace(ctx context.Context, workspaceID string) ([]*model.Session, error) {
 	var sessions []*model.Session
 	err := s.readDB.WithContext(ctx).Where("workspace_id = ?", workspaceID).Find(&sessions).Error
+	return sessions, err
+}
+
+// ListSessionsByWorkspaceIncludingDeleted returns all sessions for a workspace,
+// including soft-deleted sessions.
+func (s *Store) ListSessionsByWorkspaceIncludingDeleted(ctx context.Context, workspaceID string) ([]*model.Session, error) {
+	var sessions []*model.Session
+	err := s.readDB.WithContext(ctx).Unscoped().Where("workspace_id = ?", workspaceID).Find(&sessions).Error
 	return sessions, err
 }
 
