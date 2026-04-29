@@ -126,7 +126,30 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	assert.match(source, /\{#if sessionHasNestedThreads\(sessionObj\.id\)\}/);
 	assert.match(
 		source,
-		/\{#each visibleThreadsForSession\(sessionObj\.id\) as threadObj \(threadObj\.id\)\}/,
+		/\{#each visibleRootThreadsForSession\(sessionObj\.id\) as threadObj \(threadObj\.id\)\}/,
+	);
+});
+
+test("session sidebar nests task threads by parent metadata and renders a task icon", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /type TaskThreadMetadata = \{/);
+	assert.match(source, /function threadMetadata\(threadObj: Thread\)/);
+	assert.match(source, /function isTaskThread\(threadObj: Thread\)/);
+	assert.match(source, /threadMetadata\(threadObj\)\?\.type === "task"/);
+	assert.match(source, /function threadParentId\(threadObj: Thread\)/);
+	assert.match(source, /threadMetadata\(threadObj\)\?\.parentThreadId/);
+	assert.match(
+		source,
+		/visibleChildThreadsForSession\(sessionId, threadObj\.id\)\.length > 0/,
+	);
+	assert.match(
+		source,
+		/\{#each visibleChildThreadsForSession\(sessionId, threadObj\.id\) as childThreadObj \(childThreadObj\.id\)\}/,
+	);
+	assert.match(
+		source,
+		/<GitBranchIcon class="size-3 shrink-0 text-sidebar-foreground\/50" \/>/,
 	);
 });
 

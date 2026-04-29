@@ -65,6 +65,10 @@
 		sourceType: "local" | "git" | "managed";
 		sessions: (typeof sessions.list)[number][];
 	};
+	type TaskThreadMetadata = {
+		type?: string;
+		parentThreadId?: string;
+	};
 
 	let renameDialogOpen = $state(false);
 	let renameSessionId = $state<string | null>(null);
@@ -173,6 +177,43 @@
 
 	function sessionHasNestedThreads(sessionId: string) {
 		return visibleThreadsForSession(sessionId).length > 1;
+	}
+
+	function threadMetadata(threadObj: Thread): TaskThreadMetadata | null {
+		const metadata = threadObj.metadata;
+		if (!metadata || Array.isArray(metadata)) {
+			return null;
+		}
+		return metadata as TaskThreadMetadata;
+	}
+
+	function isTaskThread(threadObj: Thread) {
+		return threadMetadata(threadObj)?.type === "task";
+	}
+
+	function threadParentId(threadObj: Thread) {
+		const parentThreadId = threadMetadata(threadObj)?.parentThreadId;
+		return typeof parentThreadId === "string" && parentThreadId.length > 0
+			? parentThreadId
+			: null;
+	}
+
+	function visibleRootThreadsForSession(sessionId: string): Thread[] {
+		const threads = visibleThreadsForSession(sessionId);
+		const threadIDs = new Set(threads.map((threadObj) => threadObj.id));
+		return threads.filter((threadObj) => {
+			const parentThreadId = threadParentId(threadObj);
+			return !parentThreadId || !threadIDs.has(parentThreadId);
+		});
+	}
+
+	function visibleChildThreadsForSession(
+		sessionId: string,
+		parentThreadId: string,
+	): Thread[] {
+		return visibleThreadsForSession(sessionId).filter(
+			(threadObj) => threadParentId(threadObj) === parentThreadId,
+		);
 	}
 
 	function isSessionSelected(sessionId: string) {
@@ -558,6 +599,67 @@
 	});
 </script>
 
+{#snippet threadItem(sessionId: string, threadObj: Thread, depth: number)}
+	<div class="space-y-0.5">
+		<div class="group flex min-w-0 items-center gap-0.5">
+			<button
+				type="button"
+				onclick={() => handleSelectRecentThread(sessionId, threadObj.id)}
+				class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionId, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+			>
+				{#if isTaskThread(threadObj)}
+					<GitBranchIcon class="size-3 shrink-0 text-sidebar-foreground/50" />
+				{/if}
+				<span class="min-w-0 flex-1 truncate"
+					>{threadObj.name || "New Thread"}</span
+				>
+			</button>
+
+			<DropdownMenu>
+				<DropdownMenuTrigger>
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						class={`h-8 w-7 rounded-md transition-colors ${isSessionThreadSelected(sessionId, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+						aria-label={`Thread actions for ${threadObj.name || "New Thread"}`}
+						onclick={(event) => event.stopPropagation()}
+					>
+						<EllipsisIcon
+							class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+						/>
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" class="w-32">
+					<DropdownMenuItem
+						onclick={() => openRenameThreadDialog(threadObj.id)}
+					>
+						Rename
+					</DropdownMenuItem>
+					{#if !isPrimaryThread(threadObj.id)}
+						<DropdownMenuItem
+							variant="destructive"
+							onclick={() => openDeleteThreadDialog(threadObj.id)}
+						>
+							Delete
+						</DropdownMenuItem>
+					{/if}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+
+		{#if visibleChildThreadsForSession(sessionId, threadObj.id).length > 0}
+			<div
+				class="space-y-0.5 border-l border-sidebar-border/70 pl-2"
+				style={`margin-left: ${Math.max(depth, 0) + 1}rem;`}
+			>
+				{#each visibleChildThreadsForSession(sessionId, threadObj.id) as childThreadObj (childThreadObj.id)}
+					{@render threadItem(sessionId, childThreadObj, depth + 1)}
+				{/each}
+			</div>
+		{/if}
+	</div>
+{/snippet}
+
 {#snippet sessionItem(
 	sessionObj: (typeof sessions.list)[number],
 	isSelected: boolean,
@@ -614,50 +716,8 @@
 
 		{#if sessionHasNestedThreads(sessionObj.id)}
 			<div class="ml-5 space-y-0.5 border-l border-sidebar-border pl-2">
-				{#each visibleThreadsForSession(sessionObj.id) as threadObj (threadObj.id)}
-					<div class="group flex min-w-0 items-center gap-0.5">
-						<button
-							type="button"
-							onclick={() =>
-								handleSelectRecentThread(sessionObj.id, threadObj.id)}
-							class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionObj.id, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
-						>
-							<span class="min-w-0 flex-1 truncate"
-								>{threadObj.name || "New Thread"}</span
-							>
-						</button>
-
-						<DropdownMenu>
-							<DropdownMenuTrigger>
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									class={`h-8 w-7 rounded-md transition-colors ${isSessionThreadSelected(sessionObj.id, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
-									aria-label={`Thread actions for ${threadObj.name || "New Thread"}`}
-									onclick={(event) => event.stopPropagation()}
-								>
-									<EllipsisIcon
-										class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-									/>
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" class="w-32">
-								<DropdownMenuItem
-									onclick={() => openRenameThreadDialog(threadObj.id)}
-								>
-									Rename
-								</DropdownMenuItem>
-								{#if !isPrimaryThread(threadObj.id)}
-									<DropdownMenuItem
-										variant="destructive"
-										onclick={() => openDeleteThreadDialog(threadObj.id)}
-									>
-										Delete
-									</DropdownMenuItem>
-								{/if}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</div>
+				{#each visibleRootThreadsForSession(sessionObj.id) as threadObj (threadObj.id)}
+					{@render threadItem(sessionObj.id, threadObj, 0)}
 				{/each}
 			</div>
 		{/if}

@@ -20,6 +20,7 @@ export interface Thread {
 	activeCommand?: string; // empty or omitted when no command is running
 	pending?: boolean;
 	promptQueue?: QueuedPrompt[];
+	metadata?: Record<string, unknown>;
 }
 
 export type QueuedPromptMessagePart =
