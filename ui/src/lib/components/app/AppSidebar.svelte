@@ -205,6 +205,11 @@
 			sessionContext.threads.select(null);
 		}
 		void sessionContext?.threads.refresh();
+		const activeSessionContext =
+			app.sessions.sessionContexts.get(sessionId) ?? sessionContext;
+		if (activeSessionContext !== sessionContext) {
+			void activeSessionContext?.threads.refresh();
+		}
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}

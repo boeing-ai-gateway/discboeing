@@ -47,6 +47,7 @@ export function createAppSessionsDomain(
 	const selectSession = (sessionId: string) => {
 		currentSelectedSessionId = sessionId;
 		store.ensure(sessionId);
+		void reloadSession(sessionId);
 	};
 
 	const list = $derived.by(() => toSessionSummaries(store.list));
