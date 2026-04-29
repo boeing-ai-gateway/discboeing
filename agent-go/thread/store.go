@@ -1047,6 +1047,12 @@ func (s *Store) PrependQueuedPrompt(threadID string, prompt QueuedPrompt) (Confi
 	if err != nil {
 		return Config{}, err
 	}
+	if prompt.ID == "" {
+		prompt.ID = generateID()
+	}
+	if prompt.CreatedAt.IsZero() {
+		prompt.CreatedAt = time.Now().UTC()
+	}
 	cfg.PromptQueue = append([]QueuedPrompt{prompt}, cfg.PromptQueue...)
 	if err := s.SaveConfig(threadID, cfg); err != nil {
 		return Config{}, err

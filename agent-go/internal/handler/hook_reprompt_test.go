@@ -182,6 +182,9 @@ func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.
 	}
 
 	first := cfg.PromptQueue[0]
+	if first.ID == "" {
+		t.Fatal("expected queued hook re-prompt id")
+	}
 	part, ok := first.Message.Parts[0].(message.UITextPart)
 	if !ok {
 		t.Fatalf("expected UITextPart, got %T", first.Message.Parts[0])
