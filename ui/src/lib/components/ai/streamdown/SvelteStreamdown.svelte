@@ -2,7 +2,10 @@
 	import { cjk } from "@streamdown/cjk";
 	import { code } from "@streamdown/code";
 	import { math } from "@streamdown/math";
-	import { LinkSafetyModal } from "$lib/components/ai/link-safety-modal";
+	import {
+		LinkSafetyModal,
+		LinkSafetyState,
+	} from "$lib/components/ai/link-safety-modal";
 	import { hasIncompleteCodeFence } from "$lib/markdown/incomplete-code-utils";
 	import { parseMarkdownIntoBlocks } from "$lib/markdown/parse-blocks";
 	import { parseMarkdownToHast } from "$lib/markdown/pipeline";
@@ -30,12 +33,8 @@
 	}: Props = $props();
 
 	let host = $state<HTMLDivElement | null>(null);
-	let pendingUrl = $state<string | null>(null);
 	let renderedBlocks: string[] = [];
-
-	function closeModal() {
-		pendingUrl = null;
-	}
+	const linkSafety = new LinkSafetyState();
 
 	function createBlockElement(
 		block: string,
@@ -53,7 +52,7 @@
 				renderMarkdownTree(tree, {
 					isIncompleteCodeFence,
 					onLinkClick: (url) => {
-						pendingUrl = url;
+						linkSafety.requestOpen(url);
 					},
 					plugins,
 				}),
@@ -132,7 +131,7 @@
 ></div>
 
 <LinkSafetyModal
-	isOpen={pendingUrl !== null}
-	onClose={closeModal}
-	url={pendingUrl ?? ""}
+	isOpen={linkSafety.isOpen}
+	onClose={() => linkSafety.close()}
+	url={linkSafety.url}
 />

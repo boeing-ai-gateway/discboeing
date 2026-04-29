@@ -1,5 +1,10 @@
 <script lang="ts">
+	import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 	import GlobeIcon from "@lucide/svelte/icons/globe";
+	import {
+		LinkSafetyModal,
+		LinkSafetyState,
+	} from "$lib/components/ai/link-safety-modal";
 	import { MessageResponse } from "$lib/components/ai/message";
 	import {
 		ToolContent,
@@ -43,18 +48,31 @@
 		() => toolPart.errorText || validOutput?.error,
 	);
 	const rawOutputText = $derived.by(() => renderToolValue(toolPart.output));
+	const linkSafety = new LinkSafetyState();
 </script>
 
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
-	<CollapsibleTrigger
-		class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground"
-	>
-		<GlobeIcon class="size-4 shrink-0 text-muted-foreground" />
-		<span class="truncate font-medium text-sm">
-			{headerUrl || (isStreaming ? "Loading web fetch..." : "Web fetch")}
-		</span>
+	<div class="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
+		<CollapsibleTrigger
+			class="flex min-w-0 items-center gap-2 text-left text-muted-foreground"
+		>
+			<GlobeIcon class="size-4 shrink-0 text-muted-foreground" />
+			<span class="font-medium text-sm">
+				{isStreaming ? "Loading web fetch..." : "Web fetch"}
+			</span>
+		</CollapsibleTrigger>
+		{#if headerUrl}
+			<button
+				type="button"
+				class="flex min-w-0 items-center gap-1 truncate text-left font-medium text-primary text-sm underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+				onclick={() => linkSafety.requestOpen(headerUrl)}
+			>
+				<span class="truncate">{headerUrl}</span>
+				<ExternalLinkIcon class="size-3.5 shrink-0" />
+			</button>
+		{/if}
 		<ToolHeaderStatus state={toolPart.state} />
-	</CollapsibleTrigger>
+	</div>
 	<ToolHeaderControls {isRaw} {onToggleRaw} />
 </div>
 
@@ -124,3 +142,9 @@
 		</div>
 	{/if}
 </ToolContent>
+
+<LinkSafetyModal
+	isOpen={linkSafety.isOpen}
+	onClose={() => linkSafety.close()}
+	url={linkSafety.url}
+/>
