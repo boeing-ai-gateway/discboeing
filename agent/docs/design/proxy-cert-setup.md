@@ -122,6 +122,11 @@ cp /.data/proxy/certs/ca.crt /usr/local/share/ca-certificates/discobot-proxy-ca.
 update-ca-certificates
 ```
 
+After updating, the agent verifies that the exact proxy CA certificate is
+present in `/etc/ssl/certs/ca-certificates.crt`. If the bundle is still stale
+after a normal update, the agent forces a full rebuild with
+`update-ca-certificates --fresh` before continuing.
+
 **What happens**:
 - Certificate is added to `/etc/ssl/certs/ca-certificates.crt` (bundle)
 - All programs using OpenSSL/GnuTLS automatically trust it

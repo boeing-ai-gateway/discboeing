@@ -47,6 +47,83 @@ func TestHasUsableProxyCertificateReturnsFalseWhenKeyMissing(t *testing.T) {
 	}
 }
 
+func TestPEMFileContainsCertificate(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "ca.crt")
+	keyPath := filepath.Join(dir, "ca.key")
+	otherCertPath := filepath.Join(dir, "other.crt")
+	otherKeyPath := filepath.Join(dir, "other.key")
+	bundlePath := filepath.Join(dir, "bundle.pem")
+
+	if err := generateCACertificate(certPath, keyPath); err != nil {
+		t.Fatalf("generateCACertificate(certPath) failed: %v", err)
+	}
+	if err := generateCACertificate(otherCertPath, otherKeyPath); err != nil {
+		t.Fatalf("generateCACertificate(otherCertPath) failed: %v", err)
+	}
+
+	certData, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read certPath: %v", err)
+	}
+	otherCertData, err := os.ReadFile(otherCertPath)
+	if err != nil {
+		t.Fatalf("read otherCertPath: %v", err)
+	}
+
+	if err := os.WriteFile(bundlePath, append(otherCertData, certData...), 0o644); err != nil {
+		t.Fatalf("write bundlePath: %v", err)
+	}
+
+	contains, err := pemFileContainsCertificate(bundlePath, certPath)
+	if err != nil {
+		t.Fatalf("pemFileContainsCertificate returned error: %v", err)
+	}
+	if !contains {
+		t.Fatal("pemFileContainsCertificate = false, want true")
+	}
+
+	contains, err = pemFileContainsCertificate(bundlePath, otherCertPath)
+	if err != nil {
+		t.Fatalf("pemFileContainsCertificate(other) returned error: %v", err)
+	}
+	if !contains {
+		t.Fatal("pemFileContainsCertificate(other) = false, want true")
+	}
+}
+
+func TestPEMFileContainsCertificateReturnsFalseWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "ca.crt")
+	keyPath := filepath.Join(dir, "ca.key")
+	otherCertPath := filepath.Join(dir, "other.crt")
+	otherKeyPath := filepath.Join(dir, "other.key")
+	bundlePath := filepath.Join(dir, "bundle.pem")
+
+	if err := generateCACertificate(certPath, keyPath); err != nil {
+		t.Fatalf("generateCACertificate(certPath) failed: %v", err)
+	}
+	if err := generateCACertificate(otherCertPath, otherKeyPath); err != nil {
+		t.Fatalf("generateCACertificate(otherCertPath) failed: %v", err)
+	}
+
+	otherCertData, err := os.ReadFile(otherCertPath)
+	if err != nil {
+		t.Fatalf("read otherCertPath: %v", err)
+	}
+	if err := os.WriteFile(bundlePath, otherCertData, 0o644); err != nil {
+		t.Fatalf("write bundlePath: %v", err)
+	}
+
+	contains, err := pemFileContainsCertificate(bundlePath, certPath)
+	if err != nil {
+		t.Fatalf("pemFileContainsCertificate returned error: %v", err)
+	}
+	if contains {
+		t.Fatal("pemFileContainsCertificate = true, want false")
+	}
+}
+
 func TestInstallSandboxSSHKeyFiles(t *testing.T) {
 	srcDir := t.TempDir()
 	homeDir := t.TempDir()

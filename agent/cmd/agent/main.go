@@ -1477,6 +1477,8 @@ func installCertificateInSystemTrust(certPath string) error {
 
 // installCertDebianStyle installs the certificate on Debian/Ubuntu/Alpine systems.
 func installCertDebianStyle(certPath string) error {
+	const bundlePath = "/etc/ssl/certs/ca-certificates.crt"
+
 	// Copy certificate to /usr/local/share/ca-certificates/
 	destDir := "/usr/local/share/ca-certificates"
 	if err := os.MkdirAll(destDir, 0755); err != nil {
@@ -1496,17 +1498,92 @@ func installCertDebianStyle(certPath string) error {
 		return fmt.Errorf("failed to write certificate to %s: %w", destPath, err)
 	}
 
-	// Run update-ca-certificates
-	cmd := exec.Command("update-ca-certificates")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if err := runUpdateCACertificates(); err != nil {
+		return err
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run update-ca-certificates: %w", err)
+	installed, err := pemFileContainsCertificate(bundlePath, certPath)
+	if err != nil {
+		return fmt.Errorf("failed to verify system CA bundle %s: %w", bundlePath, err)
+	}
+	if !installed {
+		fmt.Printf("discobot-agent: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
+		if err := runUpdateCACertificates("--fresh"); err != nil {
+			return err
+		}
+		installed, err = pemFileContainsCertificate(bundlePath, certPath)
+		if err != nil {
+			return fmt.Errorf("failed to verify rebuilt system CA bundle %s: %w", bundlePath, err)
+		}
+		if !installed {
+			return fmt.Errorf("proxy CA certificate still missing from %s after update-ca-certificates --fresh", bundlePath)
+		}
 	}
 
 	fmt.Printf("discobot-agent: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
 	return nil
+}
+
+func runUpdateCACertificates(args ...string) error {
+	cmd := exec.Command("update-ca-certificates", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run update-ca-certificates %s: %w", strings.Join(args, " "), err)
+	}
+	return nil
+}
+
+func pemFileContainsCertificate(pemPath, certPath string) (bool, error) {
+	certData, err := os.ReadFile(certPath)
+	if err != nil {
+		return false, fmt.Errorf("read certificate %s: %w", certPath, err)
+	}
+	want, err := parseFirstCertificate(certData)
+	if err != nil {
+		return false, fmt.Errorf("parse certificate %s: %w", certPath, err)
+	}
+
+	pemData, err := os.ReadFile(pemPath)
+	if err != nil {
+		return false, fmt.Errorf("read PEM file %s: %w", pemPath, err)
+	}
+
+	for len(pemData) > 0 {
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		if len(block.Bytes) == len(want.Raw) && string(block.Bytes) == string(want.Raw) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func parseFirstCertificate(data []byte) (*x509.Certificate, error) {
+	for len(data) > 0 {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			break
+		}
+		data = rest
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		return cert, nil
+	}
+
+	return nil, fmt.Errorf("no PEM certificate found")
 }
 
 // installCertFedoraStyle installs the certificate on Fedora/RHEL/CentOS systems.
