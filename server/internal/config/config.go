@@ -146,6 +146,7 @@ type Config struct {
 	// MCP OAuth settings (injected into agent containers)
 	MCPOAuthRedirectBase string // Base URL for MCP OAuth callbacks (MCP_OAUTH_REDIRECT_BASE)
 	AgentServerURL       string // URL the agent uses to reach this server (AGENT_SERVER_URL)
+	ValidateAPIKeys      bool   // Validate provider API keys when saving secret credentials (VALIDATE_API_KEYS)
 
 	// Tauri mode settings
 	TauriMode   bool   // Running inside Tauri app (TAURI=true)
@@ -302,6 +303,7 @@ func Load() (*Config, error) {
 	// the server and receive OAuth callbacks without explicit env var configuration.
 	cfg.MCPOAuthRedirectBase = getEnv("MCP_OAUTH_REDIRECT_BASE", fmt.Sprintf("http://127.0.0.1:%d", cfg.Port))
 	cfg.AgentServerURL = getEnv("AGENT_SERVER_URL", fmt.Sprintf("http://127.0.0.1:%d", cfg.Port))
+	cfg.ValidateAPIKeys = getEnvBool("VALIDATE_API_KEYS", true)
 
 	// Tauri mode settings
 	cfg.TauriMode = getEnvBool("TAURI", false)

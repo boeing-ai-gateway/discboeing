@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/oauth"
 	"github.com/obot-platform/discobot/server/internal/providers"
@@ -157,6 +158,10 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 
 		info, err := h.credentialService.SetAPIKeyWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, visibility, inactive)
 		if err != nil {
+			if errors.Is(err, keyvalidator.ErrValidationFailed) {
+				h.Error(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			if errors.Is(err, service.ErrInvalidProvider) {
 				h.Error(w, http.StatusBadRequest, "Invalid provider")
 				return
@@ -238,6 +243,40 @@ func (h *Handler) GetCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, info)
+}
+
+// ValidateCredentials validates all credentials for a project.
+func (h *Handler) ValidateCredentials(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+
+	validations, err := h.credentialService.ValidateAll(r.Context(), projectID)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to validate credentials")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, map[string]any{"validations": validations})
+}
+
+// ValidateCredential validates a single stored credential.
+func (h *Handler) ValidateCredential(w http.ResponseWriter, r *http.Request) {
+	projectID := middleware.GetProjectID(r.Context())
+	identifier := chi.URLParam(r, "provider")
+
+	validation, err := h.credentialService.ValidateByProvider(r.Context(), projectID, identifier)
+	if err != nil {
+		validation, err = h.credentialService.ValidateByID(r.Context(), projectID, identifier)
+	}
+	if err != nil {
+		if errors.Is(err, service.ErrCredentialNotFound) {
+			h.Error(w, http.StatusNotFound, "Credential not found")
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, "Failed to validate credential")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, validation)
 }
 
 // DeleteCredential deletes a credential.

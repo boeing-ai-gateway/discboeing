@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/providers"
 )
@@ -14,6 +16,370 @@ func clearStartupCredentialEnv(t *testing.T) {
 	t.Helper()
 	for _, spec := range startupCredentialImportSpecs {
 		t.Setenv(spec.envVar, "")
+	}
+}
+
+type recordingKeyValidator struct {
+	called bool
+	count  int
+	apiKey string
+	err    error
+}
+
+func (v *recordingKeyValidator) Validate(_ context.Context, apiKey string) error {
+	v.called = true
+	v.count++
+	v.apiKey = apiKey
+	return v.err
+}
+
+func TestSetAPIKeyWithMetadata_ValidatesProviderKey(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	_, err = credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Anthropic",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("SetAPIKeyWithMetadata failed: %v", err)
+	}
+	if !validator.called {
+		t.Fatal("expected validator to be called")
+	}
+	if validator.count != 1 {
+		t.Fatalf("expected validator to be called once, got %d", validator.count)
+	}
+	if validator.apiKey != "sk-ant-test-123" {
+		t.Fatalf("expected validator to receive API key, got %q", validator.apiKey)
+	}
+}
+
+func TestSetAPIKeyWithMetadata_SkipsValidationWhenKeyUnchanged(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	info, err := credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Original Name",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("initial SetAPIKeyWithMetadata failed: %v", err)
+	}
+
+	_, err = credSvc.SetAPIKeyCredentialWithMetadata(
+		context.Background(),
+		"test-project",
+		info.ID,
+		ProviderAnthropic,
+		"Updated Name",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("second SetAPIKeyCredentialWithMetadata failed: %v", err)
+	}
+	if validator.count != 1 {
+		t.Fatalf("expected unchanged key update to skip revalidation, got %d calls", validator.count)
+	}
+}
+
+func TestSetAPIKeyWithMetadata_RevalidatesWhenKeyChanges(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	info, err := credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Original Name",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("initial SetAPIKeyWithMetadata failed: %v", err)
+	}
+
+	_, err = credSvc.SetAPIKeyCredentialWithMetadata(
+		context.Background(),
+		"test-project",
+		info.ID,
+		ProviderAnthropic,
+		"Updated Name",
+		"",
+		"sk-ant-test-456",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("second SetAPIKeyCredentialWithMetadata failed: %v", err)
+	}
+	if validator.count != 2 {
+		t.Fatalf("expected changed key update to revalidate, got %d calls", validator.count)
+	}
+	if validator.apiKey != "sk-ant-test-456" {
+		t.Fatalf("expected validator to see updated key, got %q", validator.apiKey)
+	}
+}
+
+func TestSetAPIKeyWithMetadata_StopsOnValidationError(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{err: &keyvalidator.ValidationError{
+		Provider: "Anthropic",
+		Message:  "Anthropic rejected the API key: invalid x-api-key",
+	}}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	_, err = credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Anthropic",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !errors.Is(err, keyvalidator.ErrValidationFailed) {
+		t.Fatalf("expected validation failure, got %v", err)
+	}
+
+	_, getErr := credSvc.Get(context.Background(), "test-project", ProviderAnthropic)
+	if !errors.Is(getErr, ErrCredentialNotFound) {
+		t.Fatalf("expected credential not to be saved, got %v", getErr)
+	}
+}
+
+func TestSetIDWithMetadata_DoesNotValidateAPIKey(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderDiscobot: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	_, err = credSvc.SetIDWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderDiscobot,
+		"Discobot ID",
+		"",
+		"discobot_123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("SetIDWithMetadata failed: %v", err)
+	}
+	if validator.called {
+		t.Fatal("expected ID credential save to skip key validation")
+	}
+}
+
+func TestSetOAuthTokensWithMetadata_DoesNotValidateAPIKey(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789"), ValidateAPIKeys: true}
+	validator := &recordingKeyValidator{}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	_, err = credSvc.SetOAuthTokensWithMetadata(
+		context.Background(),
+		"test-project",
+		"",
+		ProviderAnthropic,
+		"Anthropic OAuth",
+		"",
+		CredentialVisibility{},
+		false,
+		&OAuthCredential{AccessToken: "oauth-token", TokenType: "Bearer"},
+	)
+	if err != nil {
+		t.Fatalf("SetOAuthTokensWithMetadata failed: %v", err)
+	}
+	if validator.called {
+		t.Fatal("expected OAuth credential save to skip key validation")
+	}
+}
+
+func TestValidateAll_ReturnsStatusesForStoredCredentials(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789")}
+	validator := &recordingKeyValidator{err: &keyvalidator.ValidationError{
+		Provider: "Anthropic",
+		Message:  "Anthropic rejected the API key: invalid x-api-key",
+	}}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	apiKey, err := credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Anthropic",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("SetAPIKeyWithMetadata failed: %v", err)
+	}
+	idCred, err := credSvc.SetIDWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderDiscobot,
+		"Discobot ID",
+		"",
+		"discobot_123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("SetIDWithMetadata failed: %v", err)
+	}
+
+	validations, err := credSvc.ValidateAll(context.Background(), "test-project")
+	if err != nil {
+		t.Fatalf("ValidateAll failed: %v", err)
+	}
+	if len(validations) != 2 {
+		t.Fatalf("expected 2 validation results, got %d", len(validations))
+	}
+
+	byID := map[string]CredentialValidationInfo{}
+	for _, validation := range validations {
+		byID[validation.CredentialID] = validation
+	}
+	if byID[apiKey.ID].Status != CredentialValidationStatusInvalid {
+		t.Fatalf("expected anthropic key to be invalid, got %s", byID[apiKey.ID].Status)
+	}
+	if byID[idCred.ID].Status != CredentialValidationStatusUnsupported {
+		t.Fatalf("expected discobot id validation to be unsupported, got %s", byID[idCred.ID].Status)
+	}
+}
+
+func TestValidateByID_InvalidAPIKeyReturnsInvalidStatus(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: []byte("test-key-32-bytes-long-123456789")}
+	validator := &recordingKeyValidator{err: &keyvalidator.ValidationError{
+		Provider: "Anthropic",
+		Message:  "Anthropic rejected the API key: invalid x-api-key",
+	}}
+
+	credSvc, err := NewCredentialServiceWithValidators(
+		st,
+		cfg,
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderAnthropic: validator}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	info, err := credSvc.SetAPIKeyWithMetadata(
+		context.Background(),
+		"test-project",
+		ProviderAnthropic,
+		"Anthropic",
+		"",
+		"sk-ant-test-123",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("SetAPIKeyWithMetadata failed: %v", err)
+	}
+
+	validation, err := credSvc.ValidateByID(context.Background(), "test-project", info.ID)
+	if err != nil {
+		t.Fatalf("ValidateByID failed: %v", err)
+	}
+	if validation.Status != CredentialValidationStatusInvalid {
+		t.Fatalf("expected invalid status, got %s", validation.Status)
+	}
+	if validation.Message != "Anthropic rejected the API key: invalid x-api-key" {
+		t.Fatalf("unexpected validation message %q", validation.Message)
+	}
+	if validation.CheckedAt.IsZero() {
+		t.Fatal("expected CheckedAt to be set")
 	}
 }
 

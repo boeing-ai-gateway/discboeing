@@ -1519,11 +1519,31 @@ func main() {
 				})
 
 				credReg.Register(r, routes.Route{
+					Method: "GET", Pattern: "/validate",
+					Handler: h.ValidateCredentials,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "Validate credentials",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
 					Method: "GET", Pattern: "/{provider}",
 					Handler: h.GetCredential,
 					Meta: routes.Meta{
 						Group:       "Credentials",
 						Description: "Get credential",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "provider", Example: "anthropic"}},
+					},
+				})
+
+				credReg.Register(r, routes.Route{
+					Method: "GET", Pattern: "/{provider}/validate",
+					Handler: h.ValidateCredential,
+					Meta: routes.Meta{
+						Group:       "Credentials",
+						Description: "Validate credential",
 						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "provider", Example: "anthropic"}},
 					},
 				})

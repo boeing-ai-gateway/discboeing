@@ -18,6 +18,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
+	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/oauth"
 	"github.com/obot-platform/discobot/server/internal/providers"
@@ -151,6 +152,22 @@ type CredentialInfo struct {
 	UpdatedAt    time.Time            `json:"updatedAt"`
 }
 
+const (
+	CredentialValidationStatusValid       = "valid"
+	CredentialValidationStatusInvalid     = "invalid"
+	CredentialValidationStatusUnsupported = "unsupported"
+	CredentialValidationStatusError       = "error"
+)
+
+type CredentialValidationInfo struct {
+	CredentialID string    `json:"credentialId"`
+	Provider     string    `json:"provider"`
+	AuthType     string    `json:"authType"`
+	Status       string    `json:"status"`
+	Message      string    `json:"message,omitempty"`
+	CheckedAt    time.Time `json:"checkedAt,omitzero"`
+}
+
 // SessionCredentialAssignmentInfo is the client-safe representation of a credential assigned to a session.
 type SessionCredentialAssignmentInfo struct {
 	CredentialID        string                 `json:"credentialId"`
@@ -179,6 +196,7 @@ type CredentialService struct {
 	store            *store.Store
 	cfg              *config.Config
 	encryptor        *encryption.Encryptor
+	keyValidators    *keyvalidator.Registry
 	lastRefreshFail  map[string]time.Time // Track last refresh failure per provider
 	refreshFailMutex sync.RWMutex         // Protect the map
 }
@@ -200,6 +218,11 @@ var startupCredentialImportSpecs = []startupCredentialImportSpec{
 
 // NewCredentialService creates a new credential service
 func NewCredentialService(s *store.Store, cfg *config.Config) (*CredentialService, error) {
+	return NewCredentialServiceWithValidators(s, cfg, keyvalidator.DefaultRegistry(nil))
+}
+
+// NewCredentialServiceWithValidators creates a credential service with an explicit key validator registry.
+func NewCredentialServiceWithValidators(s *store.Store, cfg *config.Config, validators *keyvalidator.Registry) (*CredentialService, error) {
 	enc, err := encryption.NewEncryptor(cfg.EncryptionKey)
 	if err != nil {
 		return nil, err
@@ -209,6 +232,7 @@ func NewCredentialService(s *store.Store, cfg *config.Config) (*CredentialServic
 		store:           s,
 		cfg:             cfg,
 		encryptor:       enc,
+		keyValidators:   validators,
 		lastRefreshFail: make(map[string]time.Time),
 	}, nil
 }
@@ -476,6 +500,46 @@ func (s *CredentialService) GetByID(ctx context.Context, projectID, credentialID
 	return &info, nil
 }
 
+// ValidateByID validates a stored credential by credential ID.
+func (s *CredentialService) ValidateByID(ctx context.Context, projectID, credentialID string) (*CredentialValidationInfo, error) {
+	cred, err := s.store.GetCredentialByIDForProject(ctx, projectID, credentialID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, ErrCredentialNotFound
+		}
+		return nil, err
+	}
+	info := s.validateStoredCredential(ctx, cred)
+	return &info, nil
+}
+
+// ValidateByProvider validates a stored credential by provider.
+func (s *CredentialService) ValidateByProvider(ctx context.Context, projectID, provider string) (*CredentialValidationInfo, error) {
+	cred, err := s.store.GetCredentialByProvider(ctx, projectID, provider)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, ErrCredentialNotFound
+		}
+		return nil, err
+	}
+	info := s.validateStoredCredential(ctx, cred)
+	return &info, nil
+}
+
+// ValidateAll validates every stored credential in a project.
+func (s *CredentialService) ValidateAll(ctx context.Context, projectID string) ([]CredentialValidationInfo, error) {
+	creds, err := s.store.ListCredentialsByProject(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]CredentialValidationInfo, len(creds))
+	for i, cred := range creds {
+		result[i] = s.validateStoredCredential(ctx, cred)
+	}
+	return result, nil
+}
+
 // UpdateMetadata updates non-secret credential fields without changing stored secret values.
 func (s *CredentialService) UpdateMetadata(ctx context.Context, projectID, credentialID, name, description string, visibility CredentialVisibility, inactive bool) (*CredentialInfo, error) {
 	cred, err := s.store.GetCredentialByIDForProject(ctx, projectID, credentialID)
@@ -724,12 +788,18 @@ func (s *CredentialService) setSecretCredential(ctx context.Context, projectID, 
 	}
 
 	normalizedEnvVars := normalizeSecretEnvVars(envVars)
+	var existingData *SecretCredentialData
 	if existing != nil && existing.AuthType != AuthTypeOAuth {
-		existingData, err := s.getSecretData(existing)
+		existingData, err = s.getSecretData(existing)
 		if err != nil {
 			return nil, err
 		}
 		normalizedEnvVars = mergeSecretEnvVars(existingData.EnvVars, normalizedEnvVars)
+	}
+	if authType == AuthTypeAPIKey && s.shouldValidateAPIKeyOnSave(existingData, normalizedEnvVars) {
+		if err := s.keyValidators.ValidateAPIKey(ctx, provider, firstSecretEnvVarValue(normalizedEnvVars)); err != nil {
+			return nil, err
+		}
 	}
 
 	data := SecretCredentialData{EnvVars: normalizedEnvVars}
@@ -1384,6 +1454,47 @@ func (s *CredentialService) getSecretData(cred *model.Credential) (*SecretCreden
 	return &data, nil
 }
 
+func (s *CredentialService) validateStoredCredential(ctx context.Context, cred *model.Credential) CredentialValidationInfo {
+	result := CredentialValidationInfo{
+		CredentialID: cred.ID,
+		Provider:     cred.Provider,
+		AuthType:     cred.AuthType,
+	}
+
+	if cred.AuthType != AuthTypeAPIKey {
+		result.Status = CredentialValidationStatusUnsupported
+		result.Message = "Validation is only supported for API key credentials"
+		return result
+	}
+	if s.keyValidators == nil || !s.keyValidators.HasValidator(cred.Provider) {
+		result.Status = CredentialValidationStatusUnsupported
+		result.Message = "Validation is not supported for this provider"
+		return result
+	}
+
+	result.CheckedAt = time.Now().UTC()
+	data, err := s.getSecretData(cred)
+	if err != nil {
+		result.Status = CredentialValidationStatusError
+		result.Message = "Failed to read stored credential"
+		return result
+	}
+
+	if err := s.keyValidators.ValidateAPIKey(ctx, cred.Provider, firstSecretEnvVarValue(data.EnvVars)); err != nil {
+		if errors.Is(err, keyvalidator.ErrValidationFailed) {
+			result.Status = CredentialValidationStatusInvalid
+			result.Message = err.Error()
+			return result
+		}
+		result.Status = CredentialValidationStatusError
+		result.Message = err.Error()
+		return result
+	}
+
+	result.Status = CredentialValidationStatusValid
+	return result
+}
+
 func normalizeSecretEnvVars(envVars []SecretEnvVar) []SecretEnvVar {
 	result := make([]SecretEnvVar, 0, len(envVars))
 	seen := map[string]struct{}{}
@@ -1399,6 +1510,26 @@ func normalizeSecretEnvVars(envVars []SecretEnvVar) []SecretEnvVar {
 		result = append(result, SecretEnvVar{Key: key, Value: envVar.Value})
 	}
 	return result
+}
+
+func firstSecretEnvVarValue(envVars []SecretEnvVar) string {
+	for _, envVar := range envVars {
+		if strings.TrimSpace(envVar.Key) == "" {
+			continue
+		}
+		return envVar.Value
+	}
+	return ""
+}
+
+func (s *CredentialService) shouldValidateAPIKeyOnSave(existingData *SecretCredentialData, envVars []SecretEnvVar) bool {
+	if s == nil || s.cfg == nil || !s.cfg.ValidateAPIKeys {
+		return false
+	}
+	if existingData == nil {
+		return true
+	}
+	return firstSecretEnvVarValue(existingData.EnvVars) != firstSecretEnvVarValue(envVars)
 }
 
 func mergeSecretEnvVars(existingEnvVars, updatedEnvVars []SecretEnvVar) []SecretEnvVar {
