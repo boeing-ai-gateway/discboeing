@@ -58,11 +58,11 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 		source,
 		/let tabSwitcherCommitModifier = \$state<SwitcherCommitModifier \| null>\(null\)/,
 	);
-	assert.match(source, /let keyboardHelpOpen = \$state\(false\)/);
 	assert.match(
 		source,
-		/const shortcutAction = matchGlobalShortcutKeydown\(event, isMacPlatform\);/,
+		/const selectedIndex = tabSwitcherOpen[\s\S]*: selectedThreadKey[\s\S]*\? 0[\s\S]*: -1;/,
 	);
+	assert.match(source, /const nextIndex =[\s\S]*selectedIndex >= 0[\s\S]*: 0;/);
 	assert.match(
 		source,
 		/shouldCommitTabSwitcherOnKeyup\(event, tabSwitcherCommitModifier\)/,

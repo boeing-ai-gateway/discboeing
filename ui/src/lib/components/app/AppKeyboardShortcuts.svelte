@@ -71,7 +71,11 @@
 			return;
 		}
 
-		const selectedIndex = tabSwitcherOpen ? getTabSwitcherSelectedIndex() : 0;
+		const selectedIndex = tabSwitcherOpen
+			? getTabSwitcherSelectedIndex()
+			: selectedThreadKey
+				? 0
+				: -1;
 		const nextIndex =
 			selectedIndex >= 0
 				? (selectedIndex + (reverse ? switcherThreads.length - 1 : 1)) %
