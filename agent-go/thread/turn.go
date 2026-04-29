@@ -369,6 +369,7 @@ func executeLoop(
 	if toolCtx.ThreadID == "" {
 		toolCtx.ThreadID = threadID
 	}
+	toolCtx.EmitChunk = yield
 	lc := &loopContext{
 		ctx:       ctx,
 		provider:  provider,

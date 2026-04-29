@@ -60,6 +60,15 @@ func (m *mockSubAgent) FinalResponse(threadID string) (string, error) {
 	return "", nil
 }
 
+type storeBackedMockSubAgent struct {
+	*mockSubAgent
+	store *thread.Store
+}
+
+func (m *storeBackedMockSubAgent) Store() *thread.Store {
+	return m.store
+}
+
 type recursiveTaskState struct {
 	subThreadID   string
 	pending       *agent.PendingQuestion
@@ -397,7 +406,7 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	const wantPrompt = "summarise the logs"
 	const wantType = "log-analyst"
 
-	var gotPrompt, gotType, gotParentTaskID string
+	var gotPrompt, gotType, gotParentTaskID, gotModel string
 	var gotDepth int
 	subAgent := &mockSubAgent{
 		promptFn: func(_ context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
@@ -407,6 +416,7 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 				}
 			}
 			gotType = req.SubagentType
+			gotModel = req.Model
 			gotParentTaskID = req.ParentTaskID
 			gotDepth = req.SubagentDepth
 			return func(_ func(message.MessageChunk, error) bool) {}
@@ -420,6 +430,7 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	raw, _ := json.Marshal(map[string]string{
 		"prompt":        wantPrompt,
 		"subagent_type": wantType,
+		"model":         "haiku",
 	})
 	call := message.ToolCallPart{
 		ToolCallID: t.Name() + "-tc",
@@ -443,6 +454,9 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	}
 	if gotType != wantType {
 		t.Errorf("subagent_type: got %q, want %q", gotType, wantType)
+	}
+	if gotModel != "haiku" {
+		t.Errorf("model: got %q, want %q", gotModel, "haiku")
 	}
 	if gotParentTaskID == "" {
 		t.Errorf("parent_task_id: got %q, want non-empty task id", gotParentTaskID)
@@ -793,6 +807,228 @@ func TestTask_SubAgentQuestionPropagatesApproval(t *testing.T) {
 	}
 	if gotAnswers[question] != "A" {
 		t.Fatalf("answers: got %#v", gotAnswers)
+	}
+}
+
+func TestTask_RunInBackgroundReturnsTaskIDAndTaskOutputFindsIt(t *testing.T) {
+	const want = "background task complete"
+
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"background task","prompt":"do it","subagent_type":"helper","run_in_background":true}`,
+	}
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async != nil {
+		t.Fatal("expected background task to return immediately")
+	}
+	out, ok := result.Result.Output.(message.JSONOutput)
+	if !ok {
+		t.Fatalf("expected JSONOutput, got %T", result.Result.Output)
+	}
+	var payload struct {
+		TaskID   string `json:"task_id"`
+		ThreadID string `json:"thread_id"`
+		Status   string `json:"status"`
+	}
+	if err := json.Unmarshal(out.Value, &payload); err != nil {
+		t.Fatalf("unmarshal task payload: %v", err)
+	}
+	if payload.TaskID == "" {
+		t.Fatal("expected task_id in background task result")
+	}
+	if payload.TaskID != payload.ThreadID {
+		t.Fatalf("expected thread_id to match task_id, got %+v", payload)
+	}
+	t.Cleanup(func() { cleanupTask(payload.TaskID) })
+
+	outputCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + payload.TaskID + `","block":true,"timeout":1000}`,
+	}
+	outputResult, err := exec.Execute(context.Background(), toolCtx, outputCall)
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	if got := textOutput(outputResult.Result); got != want {
+		t.Fatalf("task output: got %q, want %q", got, want)
+	}
+}
+
+func TestTask_ResumeInputReattachesToBackgroundTask(t *testing.T) {
+	const want = "resumed background task complete"
+
+	release := make(chan struct{})
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			return func(_ func(message.MessageChunk, error) bool) {
+				<-release
+			}
+		},
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+
+	startCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-start",
+		ToolName:   "Task",
+		Input:      `{"description":"background task","prompt":"do it","subagent_type":"helper","run_in_background":true}`,
+	}
+	started, err := exec.Execute(context.Background(), toolCtx, startCall)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	startedPayload, ok := started.Result.Output.(message.JSONOutput)
+	if !ok {
+		t.Fatalf("expected JSONOutput, got %T", started.Result.Output)
+	}
+	var startedInfo struct {
+		TaskID string `json:"task_id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(startedPayload.Value, &startedInfo); err != nil {
+		t.Fatalf("unmarshal started payload: %v", err)
+	}
+	if startedInfo.TaskID == "" {
+		t.Fatal("expected task_id for background task")
+	}
+	t.Cleanup(func() { cleanupTask(startedInfo.TaskID) })
+
+	resumeCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-resume",
+		ToolName:   "Task",
+		Input:      `{"description":"background task","prompt":"do it","subagent_type":"helper","run_in_background":true,"resume":"` + startedInfo.TaskID + `"}`,
+	}
+	resumed, err := exec.Execute(context.Background(), toolCtx, resumeCall)
+	if err != nil {
+		t.Fatalf("Execute resume: %v", err)
+	}
+	resumedPayload, ok := resumed.Result.Output.(message.JSONOutput)
+	if !ok {
+		t.Fatalf("expected JSONOutput from resume, got %T", resumed.Result.Output)
+	}
+	var resumedInfo struct {
+		TaskID string `json:"task_id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(resumedPayload.Value, &resumedInfo); err != nil {
+		t.Fatalf("unmarshal resumed payload: %v", err)
+	}
+	if resumedInfo.TaskID != startedInfo.TaskID {
+		t.Fatalf("expected resumed task_id %q, got %q", startedInfo.TaskID, resumedInfo.TaskID)
+	}
+	if resumedInfo.Status != "in_progress" {
+		t.Fatalf("expected resumed task status in_progress, got %q", resumedInfo.Status)
+	}
+
+	close(release)
+
+	outputCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + startedInfo.TaskID + `","block":true,"timeout":1000}`,
+	}
+	outputResult, err := exec.Execute(context.Background(), toolCtx, outputCall)
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	if got := textOutput(outputResult.Result); got != want {
+		t.Fatalf("task output: got %q, want %q", got, want)
+	}
+}
+
+func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	subAgent := &storeBackedMockSubAgent{
+		mockSubAgent: &mockSubAgent{
+			promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+				return func(_ func(message.MessageChunk, error) bool) {}
+			},
+			finalResponseFn: func(_ string) (string, error) { return "ok", nil },
+		},
+		store: store,
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	var emitted []message.MessageChunk
+	toolCtx := &thread.ToolContext{
+		ThreadID: "parent-thread",
+		Agent:    subAgent,
+		EmitChunk: func(chunk message.MessageChunk, err error) bool {
+			if err != nil {
+				t.Fatalf("unexpected emitted error: %v", err)
+			}
+			emitted = append(emitted, chunk)
+			return true
+		},
+	}
+
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"Investigate task flow","prompt":"inspect the child thread","subagent_type":"helper","run_in_background":true,"model":"sonnet"}`,
+	}
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	payload := result.Result.Output.(message.JSONOutput)
+	var info struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal(payload.Value, &info); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	t.Cleanup(func() { cleanupTask(info.TaskID) })
+
+	cfg, err := store.LoadConfig(info.TaskID)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.LastMessage != "inspect the child thread" {
+		t.Fatalf("lastMessage = %q", cfg.LastMessage)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(cfg.Metadata, &metadata); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if metadata["type"] != "task" {
+		t.Fatalf("metadata type = %#v", metadata["type"])
+	}
+	if metadata["prompt"] != "inspect the child thread" {
+		t.Fatalf("metadata prompt = %#v", metadata["prompt"])
+	}
+	if metadata["model"] != "sonnet" {
+		t.Fatalf("metadata model = %#v", metadata["model"])
+	}
+	if len(emitted) == 0 {
+		t.Fatal("expected a thread update chunk for the new task thread")
+	}
+	update, ok := emitted[0].(message.ThreadUpdateChunk)
+	if !ok {
+		t.Fatalf("expected ThreadUpdateChunk, got %T", emitted[0])
+	}
+	if update.Data.Thread.ID != info.TaskID {
+		t.Fatalf("thread update id = %q, want %q", update.Data.Thread.ID, info.TaskID)
+	}
+	if len(update.Data.Thread.Metadata) == 0 {
+		t.Fatal("expected thread update metadata")
 	}
 }
 

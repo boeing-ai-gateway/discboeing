@@ -101,16 +101,17 @@ type ErrorResponse struct {
 
 // Thread represents a single conversation thread.
 type Thread struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	LastMessage   string         `json:"lastMessage,omitempty"`
-	ErrorMessage  string         `json:"errorMessage,omitempty"`
-	Model         string         `json:"model,omitempty"`         // full "providerId/modelId" ref
-	Reasoning     string         `json:"reasoning,omitempty"`     // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	Mode          string         `json:"mode"`                    // "build" or "plan"
-	State         string         `json:"state,omitempty"`         // "interrupted" or "cancelled"
-	ActiveCommand string         `json:"activeCommand,omitempty"` // empty when no command is running
-	PromptQueue   []QueuedPrompt `json:"promptQueue,omitempty"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	LastMessage   string          `json:"lastMessage,omitempty"`
+	ErrorMessage  string          `json:"errorMessage,omitempty"`
+	Model         string          `json:"model,omitempty"`         // full "providerId/modelId" ref
+	Reasoning     string          `json:"reasoning,omitempty"`     // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
+	Mode          string          `json:"mode"`                    // "build" or "plan"
+	State         string          `json:"state,omitempty"`         // "interrupted" or "cancelled"
+	ActiveCommand string          `json:"activeCommand,omitempty"` // empty when no command is running
+	PromptQueue   []QueuedPrompt  `json:"promptQueue,omitempty"`
+	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }
 
 type QueuedPrompt struct {

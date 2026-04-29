@@ -684,6 +684,8 @@ type Config struct {
 	// PromptQueue stores queued follow-up prompts waiting to run after the
 	// current completion finishes.
 	PromptQueue []QueuedPrompt `json:"promptQueue,omitempty"`
+	// Metadata carries thread-scoped structured data for UI features such as task threads.
+	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
 // CommunicatedCredentialBinding records one session-scoped credential binding
@@ -949,6 +951,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ActiveCommand           string                          `json:"activeCommand"`
 		CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials"`
 		PromptQueue             []QueuedPrompt                  `json:"promptQueue"`
+		Metadata                json.RawMessage                 `json:"metadata"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("unmarshal thread config: %w", err)
@@ -977,6 +980,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ActiveCommand:           strings.TrimSpace(raw.ActiveCommand),
 		CommunicatedCredentials: NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
 		PromptQueue:             raw.PromptQueue,
+		Metadata:                raw.Metadata,
 	}, nil
 }
 

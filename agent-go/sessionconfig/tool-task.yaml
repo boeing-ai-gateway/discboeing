@@ -4,7 +4,7 @@ description: |-
 
   Use this for broad research, open-ended code exploration, planning, or delegated execution. Prefer direct tools for simple file reads or targeted searches.
 
-  Set `subagent_type`, give a short `description`, and write a clear `prompt`. Use `resume` to continue an existing agent. Use `run_in_background` for work you do not need immediately.
+  Set `subagent_type`, give a short `description`, and write a clear `prompt`. Use `resume` with a previously returned `task_id`/`thread_id` to reattach to an existing task instead of creating a new one. Use `run_in_background` to launch the task immediately and get back a `task_id`/`thread_id` pair for `TaskOutput`.
 
   Agent results are not shown to the user automatically; summarize useful results back to the user yourself.
 inputSchema:
@@ -35,7 +35,7 @@ inputSchema:
       description: Task instructions for the agent.
     resume:
       type: string
-      description: Existing agent ID to resume.
+      description: Existing task or thread ID to resume.
     run_in_background:
       type: boolean
       description: Run the agent in the background.

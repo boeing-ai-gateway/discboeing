@@ -31,11 +31,26 @@ type taskInput struct {
 }
 
 type taskContinuation struct {
+	TaskID      string `json:"taskId,omitempty"`
 	SubThreadID string `json:"subThreadId"`
+}
+
+type taskThreadMetadata struct {
+	Type            string    `json:"type"`
+	TaskID          string    `json:"taskId"`
+	ParentThreadID  string    `json:"parentThreadId,omitempty"`
+	ParentTaskID    string    `json:"parentTaskId,omitempty"`
+	SubagentType    string    `json:"subagentType,omitempty"`
+	Description     string    `json:"description,omitempty"`
+	Prompt          string    `json:"prompt,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	RunInBackground bool      `json:"runInBackground,omitempty"`
+	StartedAt       time.Time `json:"startedAt"`
 }
 
 // taskRecord tracks an in-progress or completed Task.
 type taskRecord struct {
+	taskID  string
 	status  string // "pending", "in_progress", "waiting_for_answer", "completed", "failed"
 	output  string
 	created time.Time
@@ -51,6 +66,10 @@ type taskRecord struct {
 	mu     sync.Mutex
 	done   chan struct{}
 	cancel context.CancelFunc // non-nil for Task/Agent sub-agent tasks; called by TaskStop
+}
+
+type threadStoreCarrier interface {
+	Store() *thread.Store
 }
 
 // taskStore holds all tasks for this executor instance.
@@ -69,7 +88,7 @@ func subagentDepthFromThreadID(threadID string) int {
 	return strings.Count(threadID, ".sub.")
 }
 
-func (e *Executor) executeTask(_ context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
+func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input taskInput
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
@@ -86,6 +105,16 @@ func (e *Executor) executeTask(_ context.Context, toolCtx *thread.ToolContext, c
 	if toolCtx == nil || toolCtx.Agent == nil {
 		return errResult(call, "Task tool is not available: no sub-agent configured"), nil
 	}
+	if resumeID := strings.TrimSpace(input.Resume); resumeID != "" {
+		resumed, err := e.continueTask(ctx, toolCtx, call, marshalTaskContinuation(resumeID), nil)
+		if err != nil {
+			return thread.ToolExecuteResult{}, err
+		}
+		if input.RunInBackground && resumed.Async != nil {
+			return backgroundTaskResult(call, resumeID, taskStatus(resumeID)), nil
+		}
+		return resumed, nil
+	}
 	subAgent := toolCtx.Agent
 	currentThreadID := contextThreadID(toolCtx, e.defaultThreadID)
 	childDepth := toolCtx.SubagentDepth + 1
@@ -96,6 +125,7 @@ func (e *Executor) executeTask(_ context.Context, toolCtx *thread.ToolContext, c
 	subThreadID := newSubThreadID(currentThreadID)
 
 	rec := &taskRecord{
+		taskID:         subThreadID,
 		status:         "in_progress",
 		created:        time.Now(),
 		parentThreadID: currentThreadID,
@@ -108,22 +138,69 @@ func (e *Executor) executeTask(_ context.Context, toolCtx *thread.ToolContext, c
 	globalTasks.tasks[subThreadID] = rec
 	globalTasks.mu.Unlock()
 
+	bootstrapTaskThread(toolCtx, subThreadID, taskThreadMetadata{
+		Type:            "task",
+		TaskID:          rec.taskID,
+		ParentThreadID:  currentThreadID,
+		ParentTaskID:    toolCtx.CurrentTaskID,
+		SubagentType:    input.SubagentType,
+		Description:     input.Description,
+		Prompt:          prompt,
+		Model:           input.Model,
+		RunInBackground: input.RunInBackground,
+		StartedAt:       rec.created.UTC(),
+	})
+
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		Model:         input.Model,
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
 		MaxTurns:      input.MaxTurns,
 	})
 
+	if input.RunInBackground {
+		return backgroundTaskResult(call, rec.taskID, rec.status), nil
+	}
+
 	return thread.ToolExecuteResult{Async: taskHandle(call, rec, subThreadID)}, nil
+}
+
+func backgroundTaskResult(call message.ToolCallPart, taskID, status string) thread.ToolExecuteResult {
+	return thread.ToolExecuteResult{
+		Result: message.ToolResultPart{
+			ToolCallID: call.ToolCallID,
+			ToolName:   call.ToolName,
+			Output: message.JSONOutput{Value: mustMarshalJSON(map[string]any{
+				"task_id":   taskID,
+				"thread_id": taskID,
+				"status":    status,
+			})},
+		},
+	}
+}
+
+func taskStatus(taskID string) string {
+	globalTasks.mu.Lock()
+	rec := globalTasks.tasks[taskID]
+	globalTasks.mu.Unlock()
+	if rec == nil {
+		return "completed"
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if strings.TrimSpace(rec.status) == "" {
+		return "completed"
+	}
+	return rec.status
 }
 
 func marshalTaskContinuation(subThreadID string) json.RawMessage {
 	if subThreadID == "" {
 		return nil
 	}
-	data, err := json.Marshal(taskContinuation{SubThreadID: subThreadID})
+	data, err := json.Marshal(taskContinuation{TaskID: subThreadID, SubThreadID: subThreadID})
 	if err != nil {
 		return nil
 	}
@@ -134,6 +211,9 @@ func unmarshalTaskContinuation(data json.RawMessage) (string, error) {
 	var cont taskContinuation
 	if err := json.Unmarshal(data, &cont); err != nil {
 		return "", fmt.Errorf("invalid task continuation: %w", err)
+	}
+	if cont.SubThreadID == "" {
+		cont.SubThreadID = cont.TaskID
 	}
 	if cont.SubThreadID == "" {
 		return "", fmt.Errorf("invalid task continuation: missing subThreadId")
@@ -215,6 +295,7 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 		}
 
 		rec = &taskRecord{
+			taskID:         subThreadID,
 			status:         "in_progress",
 			created:        time.Now(),
 			parentThreadID: contextThreadID(toolCtx, e.defaultThreadID),
@@ -248,6 +329,7 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 	}
 
 	rec = &taskRecord{
+		taskID:      subThreadID,
 		status:      "in_progress",
 		created:     time.Now(),
 		subThreadID: subThreadID,
@@ -258,6 +340,7 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		Model:         input.Model,
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
@@ -265,6 +348,54 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 	})
 
 	return thread.ToolExecuteResult{Async: taskHandle(call, rec, subThreadID)}, nil
+}
+
+func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata taskThreadMetadata) {
+	if toolCtx == nil || toolCtx.Agent == nil {
+		return
+	}
+	storeAgent, ok := toolCtx.Agent.(threadStoreCarrier)
+	if !ok || storeAgent.Store() == nil {
+		return
+	}
+
+	store := storeAgent.Store()
+	if err := store.CreateThread(threadID); err != nil {
+		return
+	}
+	cfg, err := store.LoadConfig(threadID)
+	if err != nil {
+		return
+	}
+	if strings.TrimSpace(cfg.Name) == "" {
+		cfg.Name = taskThreadName(metadata)
+	}
+	cfg.LastMessage = metadata.Prompt
+	cfg.Metadata = mustMarshalJSON(metadata)
+	if err := store.SaveConfig(threadID, cfg); err != nil {
+		return
+	}
+	if toolCtx.EmitChunk != nil {
+		toolCtx.EmitChunk(thread.UpdateChunkFromConfig(threadID, cfg), nil)
+	}
+}
+
+func taskThreadName(metadata taskThreadMetadata) string {
+	if title := strings.TrimSpace(metadata.Description); title != "" {
+		return title
+	}
+	if prompt := strings.TrimSpace(metadata.Prompt); prompt != "" {
+		return prompt
+	}
+	return metadata.TaskID
+}
+
+func mustMarshalJSON(v any) json.RawMessage {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 func startSubAgentRun(rec *taskRecord, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) {

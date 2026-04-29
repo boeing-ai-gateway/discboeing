@@ -56,6 +56,7 @@ type ToolContext struct {
 	ProviderResolver providers.ProviderResolver
 	Agent            agent.Agent
 	ResolveTools     func(context.Context) ([]providers.ToolDefinition, error)
+	EmitChunk        func(message.MessageChunk, error) bool
 	ModeChange       *string // set by a tool that changes the mode; consumed by the turn loop
 }
 

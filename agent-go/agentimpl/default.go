@@ -303,6 +303,8 @@ func (a *DefaultAgent) promptStream(
 			ActiveLeafID:            effectiveLeafID,
 			ActiveCommand:           activeCommand,
 			CommunicatedCredentials: currentCommunicatedCredentials,
+			PromptQueue:             env.threadCfg.PromptQueue,
+			Metadata:                env.threadCfg.Metadata,
 		}
 		if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
 			yield(nil, fmt.Errorf("save thread config: %w", err))
@@ -746,12 +748,12 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 		currentProviderID = providers.CurrentProviderFromRef(threadCfg.Model)
 	}
 
-	ref, err := a.registry.ResolveModelInProvider(currentProviderID, model, providers.ModelTaskChat)
+	ref, err := a.resolvePromptModel(threadID, currentProviderID, model, req)
 	if err != nil {
 		return nil, fmt.Errorf("invalid model: %w", err)
 	}
 	if subAgentCfg != nil && subAgentCfg.Model != "" {
-		ref, err = a.registry.ResolveModelInProvider(ref.ProviderID, subAgentCfg.Model, providers.ModelTaskChat)
+		ref, err = a.resolveSubAgentPromptModel(threadID, ref, subAgentCfg.Model, req)
 		if err != nil {
 			return nil, fmt.Errorf("invalid sub-agent model: %w", err)
 		}
@@ -786,6 +788,58 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 		currentDepth:     currentDepth,
 		maxSteps:         maxSteps,
 	}, nil
+}
+
+func (a *DefaultAgent) resolvePromptModel(
+	threadID, currentProviderID, model string,
+	req agent.PromptRequest,
+) (providers.ModelRef, error) {
+	ref, err := a.registry.ResolveModelInProvider(currentProviderID, model, providers.ModelTaskChat)
+	if err == nil {
+		return ref, nil
+	}
+	if !shouldFallbackPromptModel(req) {
+		return providers.ModelRef{}, err
+	}
+	fallback, fallbackErr := a.registry.ResolveModelInProvider(currentProviderID, "", providers.ModelTaskChat)
+	if fallbackErr != nil {
+		return providers.ModelRef{}, err
+	}
+	log.Printf(
+		"agent: warning: thread %s: could not resolve task model %q: %v; falling back to %s",
+		threadID,
+		model,
+		err,
+		fallback.String(),
+	)
+	return fallback, nil
+}
+
+func (a *DefaultAgent) resolveSubAgentPromptModel(
+	threadID string,
+	current providers.ModelRef,
+	model string,
+	req agent.PromptRequest,
+) (providers.ModelRef, error) {
+	ref, err := a.registry.ResolveModelInProvider(current.ProviderID, model, providers.ModelTaskChat)
+	if err == nil {
+		return ref, nil
+	}
+	if !shouldFallbackPromptModel(req) {
+		return providers.ModelRef{}, err
+	}
+	log.Printf(
+		"agent: warning: thread %s: could not resolve sub-agent model %q: %v; keeping %s",
+		threadID,
+		model,
+		err,
+		current.String(),
+	)
+	return current, nil
+}
+
+func shouldFallbackPromptModel(req agent.PromptRequest) bool {
+	return req.SubagentType != "" || req.SubagentDepth > 0 || req.ParentTaskID != ""
 }
 
 func resolveSubAgentConfig(sessionCfg *sessionconfig.SessionConfig, subAgentType string) (*sessionconfig.SubAgentConfig, error) {

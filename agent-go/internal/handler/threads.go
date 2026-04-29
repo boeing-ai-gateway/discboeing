@@ -46,6 +46,7 @@ func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread 
 		State:         state,
 		ActiveCommand: strings.TrimSpace(cfg.ActiveCommand),
 		PromptQueue:   queuedPromptResponse(cfg.PromptQueue),
+		Metadata:      cfg.Metadata,
 	}
 }
 

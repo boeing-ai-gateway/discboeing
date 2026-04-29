@@ -27,6 +27,7 @@ func UpdateChunkFromConfig(threadID string, cfg Config) message.ThreadUpdateChun
 				State:         string(cfg.LastTurnState),
 				ActiveCommand: cfg.ActiveCommand,
 				PromptQueue:   promptQueueToThreadUpdateInfo(cfg.PromptQueue),
+				Metadata:      cfg.Metadata,
 			},
 		},
 	}

@@ -2,7 +2,7 @@ name: TaskOutput
 description: |-
   Get output from a running or completed background task.
 
-  Use `block: true` to wait for completion or `block: false` for a quick status check.
+  Pass the `task_id` returned by `Task` when `run_in_background` is true. Use `block: true` to wait for completion or `block: false` for a quick status check.
 inputSchema:
   type: object
   additionalProperties: false

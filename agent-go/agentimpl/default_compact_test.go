@@ -829,6 +829,96 @@ Use another provider.`), 0o644); err != nil {
 	}
 }
 
+func TestPrompt_SubAgentInvalidRequestedModelFallsBackToDefault(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-subagent-invalid-model"
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:       "Pinned",
+		NameSource: thread.ThreadNameSourceUser,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := providers.NewProviderRegistry(nil)
+	openaiProvider := &modelResolutionMockProvider{
+		id: "openai",
+		defaults: map[string]providers.ModelRef{
+			providers.ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	}
+	registry.Add(openaiProvider)
+
+	agentImpl := NewDefaultAgent(store, registry, nil, t.TempDir(), MCPConfig{})
+	for _, err := range agentImpl.Prompt(context.Background(), threadID, agent.PromptRequest{
+		Model:         "sonnet",
+		ParentTaskID:  "task-1",
+		SubagentDepth: 1,
+		UserParts:     []message.UIPart{message.UITextPart{Text: "hello", State: "done"}},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(openaiProvider.requests) != 1 {
+		t.Fatalf("expected 1 provider request, got %d", len(openaiProvider.requests))
+	}
+	if got := openaiProvider.requests[0].Model.String(); got != "openai/gpt-5.4" {
+		t.Fatalf("expected fallback model openai/gpt-5.4, got %q", got)
+	}
+}
+
+func TestPrompt_SubAgentInvalidConfiguredModelFallsBackToResolvedModel(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-subagent-invalid-configured-model"
+	cwd := t.TempDir()
+	agentsDir := filepath.Join(cwd, ".claude", "agents")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "reviewer.md"), []byte(`---
+name: reviewer
+model: openai/
+---
+Use a provider-specific task agent.`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:       "Pinned",
+		NameSource: thread.ThreadNameSourceUser,
+		Model:      "openai/gpt-5.4",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := providers.NewProviderRegistry(nil)
+	openaiProvider := &modelResolutionMockProvider{
+		id: "openai",
+		defaults: map[string]providers.ModelRef{
+			providers.ModelTaskChat: {ProviderID: "openai", ModelID: "gpt-5.4"},
+		},
+	}
+	registry.Add(openaiProvider)
+
+	agentImpl := NewDefaultAgent(store, registry, nil, cwd, MCPConfig{})
+	for _, err := range agentImpl.Prompt(context.Background(), threadID, agent.PromptRequest{
+		Model:        "openai",
+		SubagentType: "reviewer",
+		UserParts:    []message.UIPart{message.UITextPart{Text: "hello", State: "done"}},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(openaiProvider.requests) != 1 {
+		t.Fatalf("expected 1 provider request, got %d", len(openaiProvider.requests))
+	}
+	if got := openaiProvider.requests[0].Model.String(); got != "openai/gpt-5.4" {
+		t.Fatalf("expected configured-model fallback to keep openai/gpt-5.4, got %q", got)
+	}
+}
+
 func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	threadID := "thread-resume-overrides"

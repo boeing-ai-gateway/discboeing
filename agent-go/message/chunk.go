@@ -343,6 +343,7 @@ type ThreadUpdateInfo struct {
 	ActiveCommand string                   `json:"activeCommand,omitempty"`
 	Pending       *bool                    `json:"pending,omitempty"`
 	PromptQueue   []ThreadQueuedPromptInfo `json:"promptQueue,omitempty"`
+	Metadata      json.RawMessage          `json:"metadata,omitempty"`
 }
 
 // ThreadQueuedPromptInfo summarizes one queued prompt for thread chrome.
