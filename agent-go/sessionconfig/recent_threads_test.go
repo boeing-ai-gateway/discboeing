@@ -62,3 +62,33 @@ func TestFormatRecentThreadsReminder_Empty(t *testing.T) {
 		t.Fatalf("expected empty reminder, got %q", got)
 	}
 }
+
+func TestFormatWorkspaceChangeReminder(t *testing.T) {
+	got := FormatWorkspaceChangeReminder("/tmp/changes.txt", []string{
+		"a.go",
+		"b.go",
+		"c.go",
+	}, 2)
+
+	if !strings.Contains(got, "<system-reminder>") {
+		t.Fatalf("expected system reminder, got %q", got)
+	}
+	if !strings.Contains(got, "The following files have changed in the workspace since the end of the last turn:") {
+		t.Fatalf("expected change heading, got %q", got)
+	}
+	if !strings.Contains(got, "- a.go") || !strings.Contains(got, "- b.go") {
+		t.Fatalf("expected listed files, got %q", got)
+	}
+	if strings.Contains(got, "- c.go") {
+		t.Fatalf("did not expect truncated file in inline reminder, got %q", got)
+	}
+	if !strings.Contains(got, "and 1 more, read file /tmp/changes.txt for the full list.") {
+		t.Fatalf("expected overflow note, got %q", got)
+	}
+}
+
+func TestFormatWorkspaceChangeReminder_Empty(t *testing.T) {
+	if got := FormatWorkspaceChangeReminder("/tmp/changes.txt", nil, 10); got != "" {
+		t.Fatalf("expected empty reminder, got %q", got)
+	}
+}

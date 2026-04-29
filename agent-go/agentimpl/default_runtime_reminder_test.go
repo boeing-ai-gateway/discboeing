@@ -302,6 +302,110 @@ func TestEnsureHelperScripts_WritesManagedScripts(t *testing.T) {
 	}
 }
 
+func TestBuildWorkspaceChangeReminder_WritesFullListAndTruncatesInlineOutput(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	workspace := t.TempDir()
+	runGit(t, workspace, "init", "-q")
+	runGit(t, workspace, "config", "user.email", "discobot@example.com")
+	runGit(t, workspace, "config", "user.name", "Discobot")
+	agent := NewDefaultAgent(store, nil, nil, workspace, MCPConfig{})
+	threadID := "thread-workspace-changes"
+
+	if err := store.CreateThread(threadID); err != nil {
+		t.Fatal(err)
+	}
+
+	markerTime := time.Now().Add(-time.Hour).UTC()
+	if err := agent.recordTurnBoundary(threadID, markerTime); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(workspace, "dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2 {
+		path := filepath.Join(workspace, "dir", "file-"+strconv.Itoa(i)+".txt")
+		if err := os.WriteFile(path, []byte("tracked"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runGit(t, workspace, "add", "dir/file-0.txt", "dir/file-1.txt")
+	runGit(t, workspace, "commit", "-qm", "seed tracked files")
+
+	for i := range 12 {
+		path := filepath.Join(workspace, "dir", "file-"+strconv.Itoa(i)+".txt")
+		if i < 2 {
+			if err := os.WriteFile(path, []byte("tracked-updated"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			if err := os.WriteFile(path, []byte("untracked"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		modTime := markerTime.Add(time.Duration(i+1) * time.Minute)
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	reminder := agent.buildWorkspaceChangeReminder(threadID)
+	if !strings.Contains(reminder, "The following files have changed in the workspace since the end of the last turn:") {
+		t.Fatalf("expected workspace change reminder, got %q", reminder)
+	}
+	for _, want := range []string{
+		"dir/file-0.txt",
+		"dir/file-1.txt",
+		"dir/file-10.txt",
+		"dir/file-11.txt",
+		"dir/file-2.txt",
+		"dir/file-3.txt",
+		"dir/file-4.txt",
+		"dir/file-5.txt",
+		"dir/file-6.txt",
+		"dir/file-7.txt",
+	} {
+		if !strings.Contains(reminder, want) {
+			t.Fatalf("expected inline reminder to include %s, got %q", want, reminder)
+		}
+	}
+	if strings.Contains(reminder, "dir/file-8.txt") || strings.Contains(reminder, "dir/file-9.txt") {
+		t.Fatalf("expected inline reminder to truncate after 10 files, got %q", reminder)
+	}
+	listPath := agent.workspaceChangeListPath(threadID, []string{
+		"dir/file-0.txt",
+		"dir/file-1.txt",
+		"dir/file-10.txt",
+		"dir/file-11.txt",
+		"dir/file-2.txt",
+		"dir/file-3.txt",
+		"dir/file-4.txt",
+		"dir/file-5.txt",
+		"dir/file-6.txt",
+		"dir/file-7.txt",
+		"dir/file-8.txt",
+		"dir/file-9.txt",
+	})
+	if !strings.Contains(reminder, "and 2 more, read file "+listPath+" for the full list.") {
+		t.Fatalf("expected full-list note, got %q", reminder)
+	}
+
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullList := string(data)
+	for i := range 12 {
+		want := "dir/file-" + strconv.Itoa(i) + ".txt"
+		if !strings.Contains(fullList, want) {
+			t.Fatalf("expected full list to include %s, got %q", want, fullList)
+		}
+	}
+	if strings.Contains(fullList, ".git/index") {
+		t.Fatalf("did not expect .git files in change list, got %q", fullList)
+	}
+}
+
 func TestEnsureHelperScripts_SkipsUnchangedScript(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

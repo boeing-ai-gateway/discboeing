@@ -5,12 +5,14 @@ package agentimpl
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
 	"log"
 	"maps"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
+	agenthooks "github.com/obot-platform/discobot/agent-go/internal/hooks"
 	"github.com/obot-platform/discobot/agent-go/mcp"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
@@ -254,7 +257,13 @@ func (a *DefaultAgent) promptStream(
 		currentCommunicatedCredentials, credentialReminder := a.buildCredentialChangeReminder(
 			env.threadCfg.CommunicatedCredentials,
 		)
-		cfg.PreludeMessages = buildTurnPreludeMessages(userChangedMode, env.planMode, credentialReminder)
+		workspaceChangeReminder := a.buildWorkspaceChangeReminder(threadID)
+		cfg.PreludeMessages = buildTurnPreludeMessages(
+			userChangedMode,
+			env.planMode,
+			credentialReminder,
+			workspaceChangeReminder,
+		)
 
 		// Resolve provider for new turn.
 		provider, resolveErr := a.registry.Get(cfg.ProviderID)
@@ -319,6 +328,7 @@ func (a *DefaultAgent) promptStream(
 			if !a.clearActiveCommand(threadID, yield) {
 				return
 			}
+			a.recordTurnBoundaryIfComplete(threadID)
 			return
 		}
 
@@ -359,6 +369,7 @@ func (a *DefaultAgent) promptStream(
 			return
 		}
 		a.persistActiveLeaf(threadID)
+		a.recordTurnBoundaryIfComplete(threadID)
 		if !threadNameBg.flush(true, yield) {
 			return
 		}
@@ -861,8 +872,8 @@ func lastUserPromptFromUIParts(parts []message.UIPart) string {
 	return strings.TrimSpace(strings.Join(textParts, "\n"))
 }
 
-func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder string) []message.Message {
-	prelude := make([]message.Message, 0, 2)
+func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder, workspaceChangeReminder string) []message.Message {
+	prelude := make([]message.Message, 0, 3)
 	if userChangedMode {
 		prelude = append(prelude, message.Message{
 			ID:        "mode-" + agent.GenerateID(),
@@ -890,10 +901,115 @@ func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder
 			}},
 		})
 	}
+	if strings.TrimSpace(workspaceChangeReminder) != "" {
+		prelude = append(prelude, message.Message{
+			ID:        "workspace-changes-" + agent.GenerateID(),
+			Role:      "user",
+			Synthetic: true,
+			Parts: []message.Part{message.TextPart{
+				Text: workspaceChangeReminder,
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+					ReminderKind: "workspace-changes",
+				}),
+			}},
+		})
+	}
 	if len(prelude) == 0 {
 		return nil
 	}
 	return prelude
+}
+
+const workspaceChangeReminderLimit = 10
+
+func (a *DefaultAgent) workspaceChangesDir(threadID string) string {
+	return filepath.Join(a.store.ThreadDir(threadID), "workspace-changes")
+}
+
+func (a *DefaultAgent) workspaceChangeMarkerPath(threadID string) string {
+	return filepath.Join(a.workspaceChangesDir(threadID), "last-turn-ended-at")
+}
+
+func (a *DefaultAgent) workspaceChangeListPath(threadID string, changedFiles []string) string {
+	sum := sha256.Sum256([]byte(strings.Join(changedFiles, "\n")))
+	return filepath.Join(
+		a.workspaceChangesDir(threadID),
+		fmt.Sprintf("changed-since-last-turn-%x.txt", sum[:8]),
+	)
+}
+
+func (a *DefaultAgent) buildWorkspaceChangeReminder(threadID string) string {
+	if a.store == nil {
+		return ""
+	}
+
+	sinceInfo, err := os.Stat(a.workspaceChangeMarkerPath(threadID))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("agent: warning: stat workspace change marker for %s: %v", threadID, err)
+		}
+		return ""
+	}
+
+	_ = sinceInfo
+	changedFiles := agenthooks.DirtyFilesSinceMarker(a.cwd, a.workspaceChangeMarkerPath(threadID))
+	listPath, err := a.writeWorkspaceChangeList(threadID, changedFiles)
+	if err != nil {
+		log.Printf("agent: warning: save workspace change list for %s: %v", threadID, err)
+	}
+	return sessionconfig.FormatWorkspaceChangeReminder(
+		listPath,
+		changedFiles,
+		workspaceChangeReminderLimit,
+	)
+}
+
+func (a *DefaultAgent) writeWorkspaceChangeList(threadID string, changedFiles []string) (string, error) {
+	dir := a.workspaceChangesDir(threadID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create workspace change dir: %w", err)
+	}
+	content := strings.Join(changedFiles, "\n")
+	if content != "" {
+		content += "\n"
+	}
+	path := a.workspaceChangeListPath(threadID, changedFiles)
+	if err := thread.WriteFileAtomic(path, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (a *DefaultAgent) recordTurnBoundaryIfComplete(threadID string) {
+	if a.store == nil {
+		return
+	}
+	state, err := a.store.LoadTurnState(threadID)
+	if err != nil {
+		log.Printf("agent: warning: load turn state before workspace change marker for %s: %v", threadID, err)
+		return
+	}
+	if state != nil {
+		return
+	}
+	if err := a.recordTurnBoundary(threadID, time.Now().UTC()); err != nil {
+		log.Printf("agent: warning: record workspace change marker for %s: %v", threadID, err)
+	}
+}
+
+func (a *DefaultAgent) recordTurnBoundary(threadID string, at time.Time) error {
+	dir := a.workspaceChangesDir(threadID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create workspace change dir: %w", err)
+	}
+	path := a.workspaceChangeMarkerPath(threadID)
+	if err := thread.WriteFileAtomic(path, []byte(at.UTC().Format(time.RFC3339Nano)+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write workspace change marker: %w", err)
+	}
+	if err := os.Chtimes(path, at, at); err != nil {
+		return fmt.Errorf("set workspace change marker time: %w", err)
+	}
+	return nil
 }
 
 const generatedThreadNameMaxRunes = 72

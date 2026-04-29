@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -346,7 +347,7 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 		return nil, nil
 	}
 
-	allDirty := getAllDirtyFiles(m.workspaceRoot)
+	allDirty := DirtyFiles(m.workspaceRoot)
 	matching := matchFiles(allDirty, hook.Pattern)
 	if len(matching) == 0 {
 		matching = allDirty // run even with no matches
@@ -437,7 +438,7 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 	}
 
 	// Get all dirty files for pattern matching
-	allDirty := getAllDirtyFiles(m.workspaceRoot)
+	allDirty := DirtyFiles(m.workspaceRoot)
 
 	for _, hookID := range pendingIDs {
 		hook, ok := hooksByID[hookID]
@@ -482,8 +483,8 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 	return FileHookEvalResult{Evaluated: true}
 }
 
-// getAllDirtyFiles returns all dirty files in the workspace (staged, unstaged, untracked).
-func getAllDirtyFiles(workspaceRoot string) []string {
+// DirtyFiles returns all dirty files in the workspace (staged, unstaged, untracked).
+func DirtyFiles(workspaceRoot string) []string {
 	fileSet := make(map[string]bool)
 
 	// git diff --name-only HEAD
@@ -504,25 +505,23 @@ func getAllDirtyFiles(workspaceRoot string) []string {
 	for f := range fileSet {
 		result = append(result, f)
 	}
+	sort.Strings(result)
 	return result
 }
 
-// findChangedFilesSinceMarker returns dirty files newer than the .last-eval marker.
-func (m *Manager) findChangedFilesSinceMarker() []string {
-	markerPath := filepath.Join(m.hooksDataDir, ".last-eval")
+// DirtyFilesSinceMarker returns dirty files newer than markerPath.
+// If the marker does not exist, all dirty files are returned.
+func DirtyFilesSinceMarker(workspaceRoot, markerPath string) []string {
 	markerInfo, err := os.Stat(markerPath)
-
-	allDirty := getAllDirtyFiles(m.workspaceRoot)
-
+	allDirty := DirtyFiles(workspaceRoot)
 	if err != nil {
-		// No marker — all dirty files are new
 		return allDirty
 	}
 	markerMtime := markerInfo.ModTime()
 
-	var changed []string
+	changed := make([]string, 0, len(allDirty))
 	for _, f := range allDirty {
-		fullPath := filepath.Join(m.workspaceRoot, f)
+		fullPath := filepath.Join(workspaceRoot, f)
 		info, err := os.Stat(fullPath)
 		if err != nil {
 			continue
@@ -532,6 +531,11 @@ func (m *Manager) findChangedFilesSinceMarker() []string {
 		}
 	}
 	return changed
+}
+
+// findChangedFilesSinceMarker returns dirty files newer than the .last-eval marker.
+func (m *Manager) findChangedFilesSinceMarker() []string {
+	return DirtyFilesSinceMarker(m.workspaceRoot, filepath.Join(m.hooksDataDir, ".last-eval"))
 }
 
 // touchMarker creates or updates the .last-eval marker file.

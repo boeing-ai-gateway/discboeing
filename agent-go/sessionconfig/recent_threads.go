@@ -38,6 +38,32 @@ type RecentThreadReference struct {
 	Label    string
 }
 
+// FormatWorkspaceChangeReminder formats a changed-file snapshot as a
+// <system-reminder> block. Returns empty string if files is empty.
+func FormatWorkspaceChangeReminder(fullListPath string, files []string, limit int) string {
+	if len(files) == 0 {
+		return ""
+	}
+	if limit <= 0 {
+		limit = len(files)
+	}
+	if limit > len(files) {
+		limit = len(files)
+	}
+
+	var b strings.Builder
+	b.WriteString("<system-reminder>\n")
+	b.WriteString("The following files have changed in the workspace since the end of the last turn:\n")
+	for _, file := range files[:limit] {
+		fmt.Fprintf(&b, "- %s\n", file)
+	}
+	if remaining := len(files) - limit; remaining > 0 {
+		fmt.Fprintf(&b, "and %d more, read file %s for the full list.\n", remaining, fullListPath)
+	}
+	b.WriteString("</system-reminder>")
+	return b.String()
+}
+
 // FormatRecentThreadsReminder formats recent thread references as a
 // <system-reminder> block. Returns empty string if refs is empty.
 func FormatRecentThreadsReminder(currentThreadID, readerScriptPath, listScriptPath string, refs []RecentThreadReference) string {
