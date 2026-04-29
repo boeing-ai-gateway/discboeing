@@ -53,6 +53,7 @@ type Provider struct {
 	AttachFunc     func(ctx context.Context, sessionID string, opts sandbox.AttachOptions) (sandbox.PTY, error)
 	ExecStreamFunc func(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error)
 	WatchFunc      func(ctx context.Context) (<-chan sandbox.StateEvent, error)
+	ClearCacheFunc func(ctx context.Context, projectID string) error
 }
 
 // NewProvider creates a new mock provider with default behavior.
@@ -722,6 +723,14 @@ func (p *Provider) ApplyProjectResourceUpdate(_ context.Context, projectID strin
 	}
 
 	p.projectResources[projectID] = info
+	return nil
+}
+
+// ClearCache is a no-op for the mock provider unless overridden for tests.
+func (p *Provider) ClearCache(ctx context.Context, projectID string) error {
+	if p.ClearCacheFunc != nil {
+		return p.ClearCacheFunc(ctx, projectID)
+	}
 	return nil
 }
 

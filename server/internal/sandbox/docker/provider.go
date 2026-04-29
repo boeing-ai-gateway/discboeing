@@ -87,6 +87,9 @@ type Provider struct {
 	containerIDs   map[string]string
 	containerIDsMu sync.RWMutex
 
+	// lifecycleMu serializes cache clearing against sandbox lifecycle mutations.
+	lifecycleMu sync.RWMutex
+
 	httpClients *sandbox.HTTPClientCache
 
 	// vsockDialer is an optional custom dialer for VSOCK connections
@@ -477,6 +480,9 @@ func (p *Provider) Image() string {
 
 // Create creates a new Docker container for the given session.
 func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+	p.lifecycleMu.RLock()
+	defer p.lifecycleMu.RUnlock()
+
 	// Check if sandbox already exists in cache
 	p.containerIDsMu.RLock()
 	cachedID, existsInCache := p.containerIDs[sessionID]
@@ -1034,7 +1040,7 @@ func (p *Provider) Reconcile(_ context.Context) error {
 
 // RemoveProject cleans up all provider-managed resources for a project.
 func (p *Provider) RemoveProject(ctx context.Context, projectID string) error {
-	if err := p.RemoveCacheVolume(ctx, projectID); err != nil {
+	if err := p.ClearCache(ctx, projectID); err != nil {
 		log.Printf("Warning: failed to remove cache volume for project %s: %v", projectID, err)
 	}
 	return nil
@@ -1042,6 +1048,9 @@ func (p *Provider) RemoveProject(ctx context.Context, projectID string) error {
 
 // Start starts a previously created sandbox.
 func (p *Provider) Start(ctx context.Context, sessionID string) error {
+	p.lifecycleMu.RLock()
+	defer p.lifecycleMu.RUnlock()
+
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		return err
@@ -1056,6 +1065,8 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 
 // Stop stops a running sandbox gracefully.
 func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+	p.lifecycleMu.RLock()
+	defer p.lifecycleMu.RUnlock()
 	p.httpClients.Remove(sessionID)
 
 	containerID, err := p.getContainerID(ctx, sessionID)
@@ -1079,6 +1090,9 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 // By default, data volumes are preserved (useful for rebuilds).
 // Pass sandbox.RemoveVolumes() to delete volumes (for session deletion).
 func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+	p.lifecycleMu.RLock()
+	defer p.lifecycleMu.RUnlock()
+
 	cfg := sandbox.ParseRemoveOptions(opts)
 
 	containerID, err := p.getContainerID(ctx, sessionID)

@@ -280,6 +280,10 @@ class ApiClient {
 		return this.fetch<ProjectInspectionInfo>("/inspection");
 	}
 
+	async clearProjectCache(): Promise<void> {
+		await this.fetch<void>("/cache", { method: "DELETE" });
+	}
+
 	// Workspaces
 
 	async getWorkspaces(): Promise<{ workspaces: Workspace[] }> {

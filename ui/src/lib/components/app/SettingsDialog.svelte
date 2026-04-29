@@ -1,7 +1,16 @@
 <script lang="ts">
 	import InfoIcon from "@lucide/svelte/icons/info";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
+	import {
+		AlertDialog,
+		AlertDialogAction,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle,
+	} from "$lib/components/ui/alert-dialog";
 	import { Button } from "$lib/components/ui/button";
 	import {
 		Card,
@@ -38,7 +47,9 @@
 	import CredentialsManager from "$lib/components/app/CredentialsManager.svelte";
 	import ProjectSettingsTabContent from "$lib/components/app/parts/ProjectSettingsTabContent.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
+	import { api } from "$lib/api-client";
 	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
 
@@ -116,6 +127,25 @@
 	const environment = app.environment;
 	const showUpdateTab = $derived(environment.isTauri);
 	const themeModes: ThemeMode[] = ["light", "dark", "system"];
+	let clearCacheDialogOpen = $state(false);
+	let clearingCache = $state(false);
+	let clearCacheError = $state<string | null>(null);
+	let clearCacheSucceeded = $state(false);
+	let currentProviderSupportsClearCache = $state(false);
+
+	async function loadProviderCapabilities() {
+		try {
+			const providers = await api.getProviders();
+			const activeProviderName = providers.providers[providers.default]
+				? providers.default
+				: Object.keys(providers.providers)[0];
+			currentProviderSupportsClearCache = activeProviderName
+				? (providers.providers[activeProviderName]?.supportsClearCache ?? false)
+				: false;
+		} catch {
+			currentProviderSupportsClearCache = false;
+		}
+	}
 
 	function formatBytes(bytes: number): string {
 		if (bytes < 1024 * 1024) {
@@ -152,6 +182,7 @@
 		}
 
 		ui.settingsDialog.open = true;
+		void loadProviderCapabilities();
 	}
 
 	function handleSettingsTabChange(value: string) {
@@ -174,6 +205,23 @@
 
 	function handleSettingsEscapeKeydown(event: KeyboardEvent) {
 		event.preventDefault();
+	}
+
+	async function handleClearCache() {
+		clearingCache = true;
+		clearCacheError = null;
+		clearCacheSucceeded = false;
+
+		try {
+			await api.clearProjectCache();
+			clearCacheDialogOpen = false;
+			clearCacheSucceeded = true;
+		} catch (error) {
+			clearCacheError =
+				error instanceof Error ? error.message : "Failed to clear cache.";
+		} finally {
+			clearingCache = false;
+		}
 	}
 </script>
 
@@ -555,6 +603,44 @@
 										You're on the latest version.
 									</div>
 								{/if}
+
+								{#if currentProviderSupportsClearCache}
+									<div
+										class="rounded-md border border-destructive/30 bg-destructive/5 p-3"
+									>
+										<div class="flex items-start justify-between gap-3">
+											<div class="space-y-1">
+												<p class="text-sm font-medium">Project cache</p>
+												<p class="text-sm text-muted-foreground">
+													Delete the Docker cache volume for this project and
+													any containers attached to it. No other named volumes
+													are removed.
+												</p>
+												{#if clearCacheError}
+													<p class="text-sm text-destructive">
+														{clearCacheError}
+													</p>
+												{:else if clearCacheSucceeded}
+													<p class="text-sm text-foreground">
+														Cache cleared. Sessions will restart when they are
+														used again.
+													</p>
+												{/if}
+											</div>
+											<Button
+												variant="destructive"
+												size="xs"
+												disabled={clearingCache}
+												onclick={() => {
+													clearCacheError = null;
+													clearCacheDialogOpen = true;
+												}}
+											>
+												{clearingCache ? "Clearing..." : "Clear cache"}
+											</Button>
+										</div>
+									</div>
+								{/if}
 							</CardContent>
 						</Card>
 					</TabsContent>
@@ -597,6 +683,32 @@
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
+
+{#if currentProviderSupportsClearCache}
+	<AlertDialog bind:open={clearCacheDialogOpen}>
+		<AlertDialogContent>
+			<AlertDialogHeader>
+				<AlertDialogTitle>Clear project cache?</AlertDialogTitle>
+				<AlertDialogDescription>
+					This deletes the Docker cache volume for this project and removes any
+					containers currently attached to it. No other named volumes will be
+					deleted.
+				</AlertDialogDescription>
+			</AlertDialogHeader>
+			<AlertDialogFooter>
+				<AlertDialogCancel disabled={clearingCache}>Cancel</AlertDialogCancel>
+				<AlertDialogAction
+					disabled={clearingCache}
+					onclick={() => {
+						void handleClearCache();
+					}}
+				>
+					{clearingCache ? "Clearing..." : "Clear cache"}
+				</AlertDialogAction>
+			</AlertDialogFooter>
+		</AlertDialogContent>
+	</AlertDialog>
+{/if}
 
 {#if ui.supportInfoDialogOpen}
 	<SupportInfoDialog />

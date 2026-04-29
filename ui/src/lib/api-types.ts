@@ -174,6 +174,7 @@ export interface ProviderStatus {
 	available: boolean;
 	state: "ready" | "downloading" | "failed" | "not_available";
 	message?: string;
+	supportsClearCache: boolean;
 	details?: unknown;
 }
 

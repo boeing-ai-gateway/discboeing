@@ -41,4 +41,8 @@ var (
 	// ErrProjectInspectionUnsupported indicates the provider does not support
 	// project inspection shell access.
 	ErrProjectInspectionUnsupported = errors.New("project inspection not supported by provider")
+
+	// ErrProjectCacheUnsupported indicates the provider does not support
+	// project cache clearing.
+	ErrProjectCacheUnsupported = errors.New("project cache clearing not supported by provider")
 )

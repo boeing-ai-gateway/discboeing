@@ -280,6 +280,9 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 			r.Post("/invitations", h.CreateInvitation)
 			r.Post("/invitations/{token}/accept", h.AcceptInvitation)
 
+			r.Get("/cache", h.ListProjectCacheVolumes)
+			r.Delete("/cache", h.DeleteProjectCacheVolume)
+
 			r.Route("/workspaces", func(r chi.Router) {
 				r.Get("/", h.ListWorkspaces)
 				r.Post("/", h.CreateWorkspace)

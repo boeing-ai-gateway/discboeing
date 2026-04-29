@@ -143,6 +143,15 @@ type ProjectInspectionManager interface {
 	AttachProjectInspection(ctx context.Context, projectID string, opts AttachOptions) (PTY, error)
 }
 
+// ProjectCacheManager is an optional provider capability for clearing
+// provider-managed cache for a project.
+type ProjectCacheManager interface {
+	// ClearCache removes the provider-managed cache for a project.
+	// For Docker this deletes the project cache volume and any containers
+	// currently attached to it, without deleting any other named volumes.
+	ClearCache(ctx context.Context, projectID string) error
+}
+
 // DockerProxyProvider is an optional interface that sandbox providers can implement
 // to expose the Docker daemon for debugging. This is used by the debug Docker proxy
 // to forward Docker API requests to the sandbox runtime (e.g., inside a VZ VM).
@@ -154,9 +163,10 @@ type DockerProxyProvider interface {
 
 // ProviderStatus represents the current status of a sandbox provider.
 type ProviderStatus struct {
-	Available bool   `json:"available"`
-	State     string `json:"state"` // "ready", "downloading", "failed", "not_available"
-	Message   string `json:"message,omitempty"`
+	Available          bool   `json:"available"`
+	State              string `json:"state"` // "ready", "downloading", "failed", "not_available"
+	Message            string `json:"message,omitempty"`
+	SupportsClearCache bool   `json:"supportsClearCache"`
 	// Details contains provider-specific status information (e.g., download progress, config).
 	Details any `json:"details,omitempty"`
 }

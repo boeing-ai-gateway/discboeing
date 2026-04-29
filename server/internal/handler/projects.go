@@ -382,18 +382,17 @@ func (h *Handler) DeleteProjectCacheVolume(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Check if provider supports cache volume removal
-	type cacheVolumeManager interface {
-		RemoveCacheVolume(ctx context.Context, projectID string) error
-	}
-
-	cvm, ok := h.sandboxProvider.(cacheVolumeManager)
+	cacheManager, ok := h.sandboxProvider.(sandbox.ProjectCacheManager)
 	if !ok {
-		h.Error(w, http.StatusNotImplemented, "Cache volumes not supported by provider")
+		h.Error(w, http.StatusNotImplemented, sandbox.ErrProjectCacheUnsupported.Error())
 		return
 	}
 
-	if err := cvm.RemoveCacheVolume(r.Context(), projectID); err != nil {
+	if err := cacheManager.ClearCache(r.Context(), projectID); err != nil {
+		if errors.Is(err, sandbox.ErrProjectCacheUnsupported) {
+			h.Error(w, http.StatusNotImplemented, err.Error())
+			return
+		}
 		h.Error(w, http.StatusInternalServerError, "Failed to delete cache volume")
 		return
 	}

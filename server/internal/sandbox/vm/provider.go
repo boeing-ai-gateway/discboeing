@@ -584,6 +584,18 @@ func (p *Provider) RemoveProject(ctx context.Context, projectID string) error {
 	return nil
 }
 
+// ClearCache delegates to the project's Docker provider.
+func (p *Provider) ClearCache(ctx context.Context, projectID string) error {
+	p.dockerProvidersMu.RLock()
+	dockerProv, ok := p.dockerProviders[projectID]
+	p.dockerProvidersMu.RUnlock()
+
+	if ok {
+		return dockerProv.ClearCache(ctx, projectID)
+	}
+	return nil
+}
+
 // Status returns the current status of the VM provider.
 // Implements sandbox.StatusProvider.
 func (p *Provider) Status() sandbox.ProviderStatus {

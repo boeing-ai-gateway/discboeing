@@ -250,6 +250,10 @@ func (p *imageIDAwareReconcileProvider) RemoveProject(_ context.Context, _ strin
 	return nil
 }
 
+func (p *imageIDAwareReconcileProvider) ClearCache(_ context.Context, _ string) error {
+	return nil
+}
+
 func TestSandboxUsesExpectedImage(t *testing.T) {
 	t.Parallel()
 

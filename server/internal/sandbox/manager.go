@@ -104,14 +104,17 @@ func (m *Manager) GetProviderStatus(name string) (ProviderStatus, bool) {
 		return ProviderStatus{}, false
 	}
 
-	if sp, ok := provider.(StatusProvider); ok {
-		return sp.Status(), true
-	}
-
-	return ProviderStatus{
+	status := ProviderStatus{
 		Available: true,
 		State:     "ready",
-	}, true
+	}
+	if sp, ok := provider.(StatusProvider); ok {
+		status = sp.Status()
+	}
+
+	_, status.SupportsClearCache = provider.(ProjectCacheManager)
+
+	return status, true
 }
 
 // ListProviderStatuses returns the status of all registered providers.
@@ -467,4 +470,19 @@ func (p *ProviderProxy) AttachProjectInspection(ctx context.Context, projectID s
 	}
 
 	return inspectionManager.AttachProjectInspection(ctx, projectID, opts)
+}
+
+// ClearCache delegates to the default provider when supported.
+func (p *ProviderProxy) ClearCache(ctx context.Context, projectID string) error {
+	provider := p.manager.GetDefault()
+	if provider == nil {
+		return fmt.Errorf("no sandbox provider available")
+	}
+
+	cacheManager, ok := provider.(ProjectCacheManager)
+	if !ok {
+		return ErrProjectCacheUnsupported
+	}
+
+	return cacheManager.ClearCache(ctx, projectID)
 }

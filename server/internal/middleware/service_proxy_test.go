@@ -204,6 +204,10 @@ func (m *mockSandboxProvider) RemoveProject(_ context.Context, _ string) error {
 	return nil
 }
 
+func (m *mockSandboxProvider) ClearCache(_ context.Context, _ string) error {
+	return nil
+}
+
 // TestServiceProxyNonServiceSubdomain verifies that non-service requests pass through
 func TestServiceProxyNonServiceSubdomain(t *testing.T) {
 	provider := &mockSandboxProvider{
