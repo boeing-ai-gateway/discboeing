@@ -323,6 +323,11 @@ type sessionHandler struct {
 	envVarFetcher   EnvVarFetcher
 }
 
+type sessionUser struct {
+	user    string
+	homeDir string
+}
+
 func newSessionHandler(sessionID string, provider sandbox.Provider, userInfoFetcher UserInfoFetcher, envVarFetcher EnvVarFetcher) *sessionHandler {
 	return &sessionHandler{
 		sessionID:       sessionID,
@@ -363,6 +368,44 @@ func (h *sessionHandler) getUser(ctx context.Context) string {
 	}
 
 	return strconv.Itoa(uid) + ":" + strconv.Itoa(gid)
+}
+
+// getSessionUser returns the sandbox user and the best-known home directory for
+// SSH-launched processes. If user info is unavailable, both fields are empty so
+// the sandbox runtime can fall back to its defaults.
+func (h *sessionHandler) getSessionUser(ctx context.Context) sessionUser {
+	if h.userInfoFetcher == nil {
+		return sessionUser{}
+	}
+
+	username, uid, gid, err := h.userInfoFetcher.GetUserInfo(ctx, h.sessionID)
+	if err != nil {
+		log.Printf("SSH session %s: failed to get user info, using default: %v", h.sessionID, err)
+		return sessionUser{}
+	}
+
+	info := sessionUser{
+		user: strconv.Itoa(uid) + ":" + strconv.Itoa(gid),
+	}
+	switch username {
+	case "":
+		return info
+	case "root":
+		info.homeDir = "/root"
+	default:
+		info.homeDir = filepath.Join("/home", username)
+	}
+
+	return info
+}
+
+// sessionWorkDir prefers an explicit HOME env var for the initial SSH working
+// directory, then falls back to the sandbox user's home directory.
+func sessionWorkDir(envVars map[string]string, fallbackHomeDir string) string {
+	if home := envVars["HOME"]; filepath.IsAbs(home) {
+		return filepath.Clean(home)
+	}
+	return fallbackHomeDir
 }
 
 func (h *sessionHandler) handleChannel(newChannel ssh.NewChannel) {
@@ -510,15 +553,14 @@ func (h *sessionHandler) handleSessionChannel(newChannel ssh.NewChannel) {
 func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVars map[string]string, onPTY func(resizeable)) {
 	ctx := context.Background()
 
-	// Get user for this session (uid:gid format)
-	user := h.getUser(ctx)
-
 	// Merge runtime-managed env vars with SSH client-provided vars (client takes precedence)
 	mergedEnv := h.getEnvVars(ctx, envVars)
+	sessionUser := h.getSessionUser(ctx)
 
 	opts := sandbox.AttachOptions{
-		Env:  mergedEnv,
-		User: user,
+		Env:     mergedEnv,
+		User:    sessionUser.user,
+		WorkDir: sessionWorkDir(mergedEnv, sessionUser.homeDir),
 	}
 	if ptyReq != nil {
 		opts.Rows = int(ptyReq.Rows)
@@ -564,17 +606,16 @@ func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVa
 func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *ptyRequest, envVars map[string]string, onResize func(resizeable)) {
 	ctx := context.Background()
 
-	// Get user for this session (uid:gid format)
-	user := h.getUser(ctx)
-
 	// Merge runtime-managed env vars with SSH client-provided vars (client takes precedence)
 	mergedEnv := h.getEnvVars(ctx, envVars)
+	sessionUser := h.getSessionUser(ctx)
 
 	// Execute command in sandbox using streaming to avoid buffering large outputs.
 	stream, err := h.provider.ExecStream(ctx, h.sessionID, []string{"sh", "-c", command}, sandbox.ExecStreamOptions{
-		Env:  mergedEnv,
-		User: user,
-		TTY:  ptyReq != nil,
+		Env:     mergedEnv,
+		User:    sessionUser.user,
+		WorkDir: sessionWorkDir(mergedEnv, sessionUser.homeDir),
+		TTY:     ptyReq != nil,
 	})
 
 	if err != nil {
@@ -627,13 +668,13 @@ func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *pt
 func (h *sessionHandler) runSFTP(channel ssh.Channel) {
 	ctx := context.Background()
 
-	// Get user for this session (uid:gid format)
-	user := h.getUser(ctx)
+	sessionUser := h.getSessionUser(ctx)
 
 	// Run sftp-server inside the container using ExecStream for bidirectional I/O
 	// The sftp-server binary handles the SFTP protocol
 	stream, err := h.provider.ExecStream(ctx, h.sessionID, []string{"/usr/lib/openssh/sftp-server"}, sandbox.ExecStreamOptions{
-		User: user,
+		User:    sessionUser.user,
+		WorkDir: sessionUser.homeDir,
 	})
 	if err != nil {
 		log.Printf("SSH session %s: sftp-server failed to start: %v", h.sessionID, err)

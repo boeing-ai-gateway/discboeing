@@ -912,12 +912,14 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 
 	// Track the user passed to Attach
 	var attachedUser string
+	var attachedWorkDir string
 
 	provider.AttachFunc = func(_ context.Context, sid string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
 		attachedUser = opts.User
+		attachedWorkDir = opts.WorkDir
 		pty := newTestPTY(0)
 		// Exit immediately
 		go func() {
@@ -980,6 +982,75 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 	expectedUser := "1000:1000"
 	if attachedUser != expectedUser {
 		t.Errorf("attached user = %q, want %q", attachedUser, expectedUser)
+	}
+	if attachedWorkDir != "/home/testuser" {
+		t.Errorf("attached workdir = %q, want %q", attachedWorkDir, "/home/testuser")
+	}
+}
+
+func TestSSHServer_Integration_ExecUsesSSHHomeWorkDir(t *testing.T) {
+	SkipIfShort(t) // SSH integration test
+	provider := mock.NewProvider()
+	ctx := context.Background()
+
+	sessionID := "exec-home-workdir-session"
+	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	if err := provider.Start(ctx, sessionID); err != nil {
+		t.Fatalf("failed to start sandbox: %v", err)
+	}
+
+	var execWorkDir string
+	provider.ExecStreamFunc = func(_ context.Context, sid string, _ []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+		if sid != sessionID {
+			return nil, sandbox.ErrNotFound
+		}
+		execWorkDir = opts.WorkDir
+		return newExecStream(nil, 0), nil
+	}
+
+	sshServer, err := ssh.New(&ssh.Config{
+		Address:         "127.0.0.1:0",
+		SandboxProvider: provider,
+		UserInfoFetcher: &mockUserInfoFetcher{uid: 1000, gid: 1000},
+	})
+	if err != nil {
+		t.Fatalf("failed to create SSH server: %v", err)
+	}
+
+	go sshServer.Start()
+	defer sshServer.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	config := &gossh.ClientConfig{
+		User:            sessionID,
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
+		Timeout:         5 * time.Second,
+	}
+
+	client, err := gossh.Dial("tcp", sshServer.Addr(), config)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	defer session.Close()
+
+	if err := session.Setenv("HOME", "/tmp/ssh-home"); err != nil {
+		t.Fatalf("failed to set HOME: %v", err)
+	}
+	if err := session.Run("pwd"); err != nil {
+		t.Fatalf("failed to run command: %v", err)
+	}
+
+	if execWorkDir != "/tmp/ssh-home" {
+		t.Errorf("exec workdir = %q, want %q", execWorkDir, "/tmp/ssh-home")
 	}
 }
 

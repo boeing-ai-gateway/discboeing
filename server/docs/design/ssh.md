@@ -82,7 +82,7 @@ Within a session channel, the handler processes:
 1. Client opens session channel
 2. Client sends pty-req (optional)
 3. Client sends shell request
-4. Server calls Provider.Attach() with PTY options
+4. Server calls Provider.Attach() with PTY options and starts in $HOME
 5. Bidirectional I/O between SSH channel and PTY
 6. Server sends exit-status when PTY closes
 ```
@@ -92,7 +92,7 @@ Within a session channel, the handler processes:
 ```
 1. Client opens session channel
 2. Client sends exec request with command
-3. Server calls Provider.Exec() with command
+3. Server calls Provider.Exec() with command and starts in $HOME
 4. Server writes stdout/stderr to channel
 5. Server sends exit-status
 ```
@@ -106,6 +106,10 @@ Within a session channel, the handler processes:
 4. Bidirectional I/O between SSH channel and sftp-server
 5. Connection closes when client disconnects
 ```
+
+SSH sessions prefer an explicit `HOME` value supplied by the SSH client. When
+no `HOME` env var is provided, the server falls back to the sandbox user's home
+directory instead of inheriting the image's Dockerfile `WORKDIR`.
 
 ### Port Forwarding (direct-tcpip)
 
