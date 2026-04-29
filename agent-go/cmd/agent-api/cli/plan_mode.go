@@ -1,37 +1,23 @@
 package cli
 
 import (
+	"context"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 )
 
-// getThreadPlanMode reads the persisted plan mode state for a thread.
-func getThreadPlanMode(store *thread.Store, threadID string) bool {
-	cfg, err := store.LoadConfig(threadID)
+func getThreadPlanMode(ctx context.Context, session clisession.Session, threadID string) bool {
+	thread, err := session.GetThread(ctx, threadID)
 	if err != nil {
 		return false
 	}
-	return strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan")
+	return strings.EqualFold(strings.TrimSpace(thread.Mode), "plan")
 }
 
-// saveThreadPlanMode persists the plan mode state for a thread, preserving other config fields.
-func saveThreadPlanMode(store *thread.Store, threadID string, enabled bool) {
-	cfg, _ := store.LoadConfig(threadID)
-	if enabled {
-		cfg.Mode.Value = "plan"
-		cfg.Mode.SetBy = "user"
-	} else {
-		cfg.Mode.Value = "build"
-		cfg.Mode.SetBy = "user"
-	}
-	_ = store.SaveConfig(threadID, cfg)
-}
-
-// planModeStr converts a planMode bool to the Mode string expected by PromptRequest.
-func planModeStr(enabled bool) string {
+func planModeRequest(enabled bool) string {
 	if enabled {
 		return "plan"
 	}
-	return ""
+	return "build"
 }

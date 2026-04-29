@@ -14,12 +14,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 // readMultilineInput captures input lines until endMarker is entered as a
@@ -129,12 +127,12 @@ func imagePartFromRawBytes(input []byte) (message.UIFilePart, bool) {
 // Returns the (possibly changed) threadID and true when handled locally by the
 // CLI, or current threadID and false when the command should be passed through
 // to the agent.
-func handleSlashCommand(ctx context.Context, line string, a *agentimpl.DefaultAgent, store *thread.Store, cfg *config.Config, currentThreadID string, reg *providers.ProviderRegistry, currentModel *string, currentPlanMode *bool, pendingFresh map[string]bool) (string, bool) {
+func handleSlashCommand(ctx context.Context, line string, session clisession.Session, currentThreadID string, reg *providers.ProviderRegistry, currentModel *string, currentPlanMode *bool, pendingFresh map[string]bool) (string, bool) {
 	parts := strings.Fields(line)
 	cmd := parts[0]
 	switch cmd {
 	case "/resume":
-		return handleResumeCommand(ctx, a, store, cfg, currentThreadID), true
+		return handleResumeCommand(ctx, session, currentThreadID), true
 	case "/clear":
 		if pendingFresh != nil {
 			pendingFresh[currentThreadID] = true
@@ -144,9 +142,6 @@ func handleSlashCommand(ctx context.Context, line string, a *agentimpl.DefaultAg
 	case "/plan":
 		enabled := !*currentPlanMode
 		*currentPlanMode = enabled
-		if threadExists(cfg.ThreadsDir, currentThreadID) {
-			saveThreadPlanMode(store, currentThreadID, enabled)
-		}
 		if enabled {
 			fmt.Fprintln(os.Stderr, "Plan mode enabled.")
 		} else {
@@ -157,15 +152,15 @@ func handleSlashCommand(ctx context.Context, line string, a *agentimpl.DefaultAg
 		handleModelsCommand(ctx, reg, currentModel)
 		return currentThreadID, true
 	case "/history":
-		if !printThreadHistory(store, currentThreadID) {
+		if !printThreadHistory(ctx, session, currentThreadID) {
 			fmt.Fprintln(os.Stderr, "No printable messages in current thread.")
 		}
 		return currentThreadID, true
 	default:
-		if isAgentSlashCommand(a, cfg.AgentCwd, cmd) {
+		if isAgentSlashCommand(ctx, session, cmd) {
 			return currentThreadID, false
 		}
-		fmt.Fprintf(os.Stderr, "Unknown command %q. Available commands: %s\n", cmd, availableCommandsList(a, cfg.AgentCwd))
+		fmt.Fprintf(os.Stderr, "Unknown command %q. Available commands: %s\n", cmd, availableCommandsList(ctx, session))
 		return currentThreadID, true
 	}
 }
@@ -175,7 +170,7 @@ var cliBuiltinCommands = []string{"resume", "clear", "plan", "models", "history"
 
 // availableCommands returns a sorted list of slash-prefixed command names
 // available to the user (CLI built-ins + agent commands).
-func availableCommands(a *agentimpl.DefaultAgent, cwd string) []string {
+func availableCommands(ctx context.Context, session clisession.Session) []string {
 	seen := make(map[string]struct{})
 	var names []string
 
@@ -190,15 +185,11 @@ func availableCommands(a *agentimpl.DefaultAgent, cwd string) []string {
 	for _, name := range cliBuiltinCommands {
 		add(name)
 	}
-	if a != nil {
-		if cmds, err := a.ListCommands(); err == nil {
+	if session != nil {
+		if cmds, err := session.ListCommands(ctx); err == nil {
 			for _, c := range cmds {
 				add(c.Name)
 			}
-		}
-	} else if agentCmds, err := agentSlashCommands(cwd); err == nil {
-		for name := range agentCmds {
-			add(name)
 		}
 	}
 
@@ -208,37 +199,32 @@ func availableCommands(a *agentimpl.DefaultAgent, cwd string) []string {
 
 // availableCommandsList returns a sorted, slash-prefixed, comma-separated list
 // of all commands available to the user (CLI built-ins + agent commands).
-func availableCommandsList(a *agentimpl.DefaultAgent, cwd string) string {
-	return strings.Join(availableCommands(a, cwd), ", ")
+func availableCommandsList(ctx context.Context, session clisession.Session) string {
+	return strings.Join(availableCommands(ctx, session), ", ")
 }
 
-func commandCompletionOptions(a *agentimpl.DefaultAgent, cwd string) *readLineOptions {
-	cmds := availableCommands(a, cwd)
+func commandCompletionOptions(ctx context.Context, session clisession.Session) *readLineOptions {
+	cmds := availableCommands(ctx, session)
 	if len(cmds) == 0 {
 		return nil
 	}
 	return &readLineOptions{slashCommands: cmds}
 }
 
-func isAgentSlashCommand(a *agentimpl.DefaultAgent, cwd, cmd string) bool {
-	if a != nil {
-		cmds, err := a.ListCommands()
-		if err != nil {
-			return false
-		}
-		for _, c := range cmds {
-			if "/"+strings.TrimPrefix(c.Name, "/") == cmd {
-				return true
-			}
-		}
+func isAgentSlashCommand(ctx context.Context, session clisession.Session, cmd string) bool {
+	if session == nil {
 		return false
 	}
-	commands, err := agentSlashCommands(cwd)
+	cmds, err := session.ListCommands(ctx)
 	if err != nil {
 		return false
 	}
-	_, ok := commands[cmd]
-	return ok
+	for _, c := range cmds {
+		if "/"+strings.TrimPrefix(c.Name, "/") == cmd {
+			return true
+		}
+	}
+	return false
 }
 
 func agentSlashCommands(cwd string) (map[string]struct{}, error) {

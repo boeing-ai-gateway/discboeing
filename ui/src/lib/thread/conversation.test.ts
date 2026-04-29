@@ -139,16 +139,16 @@ test("getStartChatErrorDetails extracts pending-question metadata", () => {
 	});
 });
 
-test("getStartChatErrorDetails suppresses the auto-resume conflict message", () => {
+test("getStartChatErrorDetails keeps non-pending chat errors visible", () => {
 	const error = new StartChatError(
-		"This thread has an interrupted turn that must resume before sending a new message.",
-		"interrupted_turn_requires_resume",
+		"Failed to start chat",
+		"request_failed",
 		undefined,
 		"resume-123",
 	);
 
 	assert.deepEqual(getStartChatErrorDetails(error), {
-		message: null,
+		message: "Failed to start chat",
 		pendingQuestionId: null,
 		completionId: "resume-123",
 	});

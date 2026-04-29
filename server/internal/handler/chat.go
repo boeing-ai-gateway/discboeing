@@ -167,12 +167,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 					CompletionID: startErr.CompletionID,
 				})
 				return
-			case "interrupted_turn_requires_resume", "pending_question_requires_answer":
+			case "pending_question_requires_answer":
 				h.JSON(w, http.StatusConflict, sandboxapi.ChatTurnStateConflictResponse{
-					Error:        startErr.ErrorCode,
-					Message:      startErr.Message,
-					QuestionID:   startErr.QuestionID,
-					CompletionID: startErr.CompletionID,
+					Error:      startErr.ErrorCode,
+					Message:    startErr.Message,
+					QuestionID: startErr.QuestionID,
 				})
 				return
 			}

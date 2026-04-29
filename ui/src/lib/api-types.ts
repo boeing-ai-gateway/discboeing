@@ -912,12 +912,9 @@ export interface StartChatConflictResponse {
 }
 
 export interface StartChatTurnStateConflictResponse {
-	error:
-		| "interrupted_turn_requires_resume"
-		| "pending_question_requires_answer";
+	error: "pending_question_requires_answer";
 	message?: string;
 	questionId?: string;
-	completionId?: string;
 }
 
 export type StartChatErrorResponse =

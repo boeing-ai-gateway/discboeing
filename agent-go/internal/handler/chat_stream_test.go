@@ -87,6 +87,43 @@ func (m *streamTestAgent) SubmitAnswer(threadID, approvalID string, req api.Answ
 func (m *streamTestAgent) FinalResponse(_ string) (string, error) { return "", nil }
 func (m *streamTestAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
 
+func TestListMessages_ReturnsProjectedHistory(t *testing.T) {
+	ma := &streamTestAgent{
+		messagesFn: func(threadID, leafID string) ([]message.UIMessage, error) {
+			if threadID != "thread-1" {
+				t.Fatalf("threadID = %q, want %q", threadID, "thread-1")
+			}
+			if leafID != "leaf-1" {
+				t.Fatalf("leafID = %q, want %q", leafID, "leaf-1")
+			}
+			return []message.UIMessage{{
+				ID:    "msg-1",
+				Role:  "user",
+				Parts: []message.UIPart{message.UITextPart{Text: "hello"}},
+			}}, nil
+		},
+	}
+	h := New("", agent.NewCompletionManager(ma), nil, nil, nil)
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/threads/thread-1/messages?leafId=leaf-1", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp api.ListMessagesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Messages) != 1 || resp.Messages[0].ID != "msg-1" {
+		t.Fatalf("unexpected messages response: %#v", resp.Messages)
+	}
+}
+
 type interruptedPromptProvider struct {
 	mu       sync.Mutex
 	requests []providers.CompleteRequest

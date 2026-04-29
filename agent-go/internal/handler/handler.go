@@ -351,6 +351,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/", Handler: h.GetThread,
 			Meta: routes.Meta{Group: "Threads", Description: "Get thread metadata"}})
+		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/messages", Handler: h.ListMessages,
+			Meta: routes.Meta{
+				Group:       "Threads",
+				Description: "List thread messages",
+				Params:      []routes.Param{{Name: "leafId", In: "query"}},
+			}})
 		threadReg.Register(r, routes.Route{Method: "PUT", Pattern: "/", Handler: h.UpdateThread,
 			Meta: routes.Meta{
 				Group:       "Threads",
@@ -393,6 +399,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			Meta: routes.Meta{Group: "Chat", Description: "Stream completion events (SSE)"}})
 		threadReg.Register(r, routes.Route{Method: "POST", Pattern: "/chat/cancel", Handler: h.CancelChat,
 			Meta: routes.Meta{Group: "Chat", Description: "Cancel the active completion"}})
+		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/chat/question", Handler: h.GetPendingQuestion,
+			Meta: routes.Meta{Group: "Chat", Description: "Get current pending AskUserQuestion"}})
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/chat/question/{questionId}", Handler: h.GetQuestion,
 			Meta: routes.Meta{Group: "Chat", Description: "Get pending AskUserQuestion"}})
 		threadReg.Register(r, routes.Route{Method: "POST", Pattern: "/chat/answer/{questionId}", Handler: h.PostAnswer,

@@ -54,3 +54,33 @@ func TestCreateThread_DoesNotReturnThreadIDAsNameFallback(t *testing.T) {
 		t.Fatalf("expected empty name, got %q", got.Name)
 	}
 }
+
+func TestCreateThread_DefaultsCWDToHandlerRoot(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	root := t.TempDir()
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, root, agentimpl.MCPConfig{})
+	h := New(root, agent.NewCompletionManager(&streamTestAgent{}), nil, nil, defaultAgent)
+	ts := newThreadsTestServer(t, h)
+	defer ts.Close()
+
+	resp, err := ts.Client().Post(
+		ts.URL+"/threads",
+		"application/json",
+		strings.NewReader(`{"id":"thread-1"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, resp.StatusCode)
+	}
+
+	var got api.Thread
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CWD != root {
+		t.Fatalf("expected cwd %q, got %q", root, got.CWD)
+	}
+}

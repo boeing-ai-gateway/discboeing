@@ -17,10 +17,13 @@ import (
 
 // ChatRequest is the POST /threads/{id}/chat request body.
 type ChatRequest struct {
-	Messages  []message.UIMessage `json:"messages"`
-	Model     string              `json:"model,omitempty"`
-	Reasoning string              `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	Mode      string              `json:"mode,omitempty"`      // "" keeps current thread mode (or defaults to build), "plan" sets plan, "build" sets build
+	Messages     []message.UIMessage `json:"messages"`
+	Model        string              `json:"model,omitempty"`
+	Reasoning    string              `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
+	Mode         string              `json:"mode,omitempty"`      // "" keeps current thread mode (or defaults to build), "plan" sets plan, "build" sets build
+	FreshContext bool                `json:"freshContext,omitempty"`
+	SubagentType string              `json:"subagentType,omitempty"`
+	MaxTurns     int                 `json:"maxTurns,omitempty"`
 }
 
 // WriteFileRequest is the POST /files/write request body.
@@ -101,17 +104,19 @@ type ErrorResponse struct {
 
 // Thread represents a single conversation thread.
 type Thread struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	LastMessage   string          `json:"lastMessage,omitempty"`
-	ErrorMessage  string          `json:"errorMessage,omitempty"`
-	Model         string          `json:"model,omitempty"`         // full "providerId/modelId" ref
-	Reasoning     string          `json:"reasoning,omitempty"`     // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	Mode          string          `json:"mode"`                    // "build" or "plan"
-	State         string          `json:"state,omitempty"`         // "interrupted" or "cancelled"
-	ActiveCommand string          `json:"activeCommand,omitempty"` // empty when no command is running
-	PromptQueue   []QueuedPrompt  `json:"promptQueue,omitempty"`
-	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	CWD             string          `json:"cwd,omitempty"`
+	LastMessage     string          `json:"lastMessage,omitempty"`
+	ErrorMessage    string          `json:"errorMessage,omitempty"`
+	Model           string          `json:"model,omitempty"`     // full "providerId/modelId" ref
+	Reasoning       string          `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
+	Mode            string          `json:"mode"`                // "build" or "plan"
+	State           string          `json:"state,omitempty"`     // "interrupted" or "cancelled"
+	PendingQuestion bool            `json:"pendingQuestion,omitempty"`
+	ActiveCommand   string          `json:"activeCommand,omitempty"` // empty when no command is running
+	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 
 type QueuedPrompt struct {
@@ -128,15 +133,22 @@ type ListThreadsResponse struct {
 	Threads []Thread `json:"threads"`
 }
 
+// ListMessagesResponse is the GET /threads/{id}/messages response.
+type ListMessagesResponse struct {
+	Messages []message.UIMessage `json:"messages"`
+}
+
 // CreateThreadRequest is the POST /threads request body.
 type CreateThreadRequest struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
+	CWD  string `json:"cwd,omitempty"`
 }
 
 // UpdateThreadRequest is the PUT /threads/{id} request body.
 type UpdateThreadRequest struct {
 	Name string `json:"name,omitempty"`
+	CWD  string `json:"cwd,omitempty"`
 }
 
 // DeleteThreadResponse is the DELETE /threads/{id} response body.
@@ -202,10 +214,9 @@ type ChatConflictResponse struct {
 // ChatTurnStateConflictResponse is the POST /threads/{id}/chat response
 // when the thread already has persisted turn state that must be resolved first.
 type ChatTurnStateConflictResponse struct {
-	Error        string `json:"error"`                  // "interrupted_turn_requires_resume" or "pending_question_requires_answer"
-	Message      string `json:"message,omitempty"`      // user-facing summary
-	QuestionID   string `json:"questionId,omitempty"`   // pending AskUserQuestion approval ID when applicable
-	CompletionID string `json:"completionId,omitempty"` // recovery completion ID when resume was started automatically
+	Error      string `json:"error"`                // "pending_question_requires_answer"
+	Message    string `json:"message,omitempty"`    // user-facing summary
+	QuestionID string `json:"questionId,omitempty"` // pending AskUserQuestion approval ID when applicable
 }
 
 // CancelCompletionResponse is the POST /threads/{id}/chat/cancel response.
@@ -400,7 +411,8 @@ type PendingQuestionResponse struct {
 
 // AnswerQuestionResponse is the POST /threads/{id}/chat/answer/{questionId} response.
 type AnswerQuestionResponse struct {
-	Success bool `json:"success"`
+	Success      bool   `json:"success"`
+	CompletionID string `json:"completionId,omitempty"`
 }
 
 // ============================================================================

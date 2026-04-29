@@ -14,6 +14,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 func skipOnWindows(t *testing.T) {
@@ -63,8 +64,13 @@ func stageApplyPatchShimForTests(t *testing.T) {
 // It accepts an arbitrary input map so callers can set timeout, run_in_background, etc.
 func runBash(t *testing.T, e *Executor, input map[string]any) (string, bool) {
 	t.Helper()
+	return runBashWithContext(t, e, nil, input)
+}
+
+func runBashWithContext(t *testing.T, e *Executor, toolCtx *thread.ToolContext, input map[string]any) (string, bool) {
+	t.Helper()
 	raw, _ := json.Marshal(input)
-	result, err := e.Execute(context.Background(), nil, message.ToolCallPart{
+	result, err := e.Execute(context.Background(), toolCtx, message.ToolCallPart{
 		ToolCallID: t.Name(),
 		ToolName:   "Bash",
 		Input:      string(raw),
@@ -173,6 +179,49 @@ func TestBash_CwdPersistsAcrossCalls(t *testing.T) {
 	}
 	if !strings.Contains(out, "/tmp") {
 		t.Errorf("expected cwd '/tmp' after 'cd /tmp', got: %s", out)
+	}
+}
+
+func TestBash_CwdPersistsPerThreadContext(t *testing.T) {
+	skipOnWindows(t)
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	dirOne := filepath.Join(t.TempDir(), "one")
+	dirTwo := filepath.Join(t.TempDir(), "two")
+	if err := os.MkdirAll(dirOne, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dirTwo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	threadOne := &thread.ToolContext{ThreadID: "thread-1", CurrentWorkingDirectory: dirOne}
+	threadOne.SetCurrentWorkingDirectory = func(cwd string) error {
+		threadOne.CurrentWorkingDirectory = cwd
+		return nil
+	}
+	threadTwo := &thread.ToolContext{ThreadID: "thread-2", CurrentWorkingDirectory: dirTwo}
+	threadTwo.SetCurrentWorkingDirectory = func(cwd string) error {
+		threadTwo.CurrentWorkingDirectory = cwd
+		return nil
+	}
+
+	if _, ok := runBashWithContext(t, e, threadOne, map[string]any{"command": "cd .."}); !ok {
+		t.Fatal("expected first thread cd to succeed")
+	}
+	out, ok := runBashWithContext(t, e, threadOne, map[string]any{"command": "pwd"})
+	if !ok {
+		t.Fatalf("unexpected error for first thread: %s", out)
+	}
+	if !strings.Contains(out, filepath.Dir(dirOne)) {
+		t.Fatalf("expected first thread cwd %q, got: %s", filepath.Dir(dirOne), out)
+	}
+
+	out, ok = runBashWithContext(t, e, threadTwo, map[string]any{"command": "pwd"})
+	if !ok {
+		t.Fatalf("unexpected error for second thread: %s", out)
+	}
+	if !strings.Contains(out, dirTwo) {
+		t.Fatalf("expected second thread cwd %q, got: %s", dirTwo, out)
 	}
 }
 
@@ -601,7 +650,7 @@ func TestBash_InvalidWorkingDirReturnsError(t *testing.T) {
 	skipIfBashUnavailable(t)
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
-	e.setCwd(filepath.Join(t.TempDir(), "missing"))
+	_ = e.setCwd(nil, filepath.Join(t.TempDir(), "missing"))
 
 	out, ok := runBash(t, e, map[string]any{"command": "pwd"})
 	if ok {
@@ -628,8 +677,8 @@ func TestBash_WindowsSecondCommandStillRunsAfterPwd(t *testing.T) {
 	if strings.TrimSpace(out) == "" {
 		t.Fatal("expected first pwd output to be non-empty")
 	}
-	if !sameResolvedPath(e.getCwd(), cwd) {
-		t.Fatalf("executor cwd = %q, want native path matching %q", e.getCwd(), cwd)
+	if !sameResolvedPath(e.getCwd(nil), cwd) {
+		t.Fatalf("executor cwd = %q, want native path matching %q", e.getCwd(nil), cwd)
 	}
 
 	out, ok = runBash(t, e, map[string]any{"command": "pwd"})

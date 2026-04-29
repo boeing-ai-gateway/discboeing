@@ -45,19 +45,21 @@ type AsyncWaitResult struct {
 // It is passed explicitly to every tool call so executor implementations stay
 // stateless across threads and concurrent turns.
 type ToolContext struct {
-	ThreadID         string
-	PlanMode         bool
-	PlanFilePath     string
-	ProviderID       string
-	ModelID          string
-	SubagentDepth    int
-	MaxSubagentDepth int
-	CurrentTaskID    string
-	ProviderResolver providers.ProviderResolver
-	Agent            agent.Agent
-	ResolveTools     func(context.Context) ([]providers.ToolDefinition, error)
-	EmitChunk        func(message.MessageChunk, error) bool
-	ModeChange       *string // set by a tool that changes the mode; consumed by the turn loop
+	ThreadID                   string
+	CurrentWorkingDirectory    string
+	PlanMode                   bool
+	PlanFilePath               string
+	ProviderID                 string
+	ModelID                    string
+	SubagentDepth              int
+	MaxSubagentDepth           int
+	CurrentTaskID              string
+	ProviderResolver           providers.ProviderResolver
+	Agent                      agent.Agent
+	ResolveTools               func(context.Context) ([]providers.ToolDefinition, error)
+	EmitChunk                  func(message.MessageChunk, error) bool
+	SetCurrentWorkingDirectory func(string) error
+	ModeChange                 *string // set by a tool that changes the mode; consumed by the turn loop
 }
 
 // AsyncContinuationHandle represents in-flight asynchronous tool work.

@@ -10,11 +10,11 @@ The agent-go API uses different route naming than the original TypeScript agent-
 |---|---|---|
 | `GET /session/{id}/{agent}/chat` | `GET /threads/{id}/chat/stream` | History replay and live deltas now share the SSE endpoint |
 | `GET /session/{id}/{agent}/chat` (SSE) | `GET /threads/{id}/chat/stream` | Separate SSE endpoint |
-| `POST /session/{id}/{agent}/chat` | `POST /threads/{id}/chat` | Removed `{agent}` path param |
+| `POST /session/{id}/{agent}/chat` | `POST /threads/{id}/chat` | Removed `{agent}` path param; interrupted turns auto-resume server-side |
 | `POST /session/{id}/{agent}/cancel` | `POST /threads/{id}/cancel` | Removed `{agent}` path param |
 | `GET /session/{id}/{agent}/chat/status` | _(removed)_ | Server doesn't have equivalent |
 | `GET /sessions` | `GET /threads` | Renamed |
-| Question routes | `GET /threads/{id}/chat/question/{questionId}` | Path param instead of query |
+| Question routes | `GET /threads/{id}/chat/question` and `GET /threads/{id}/chat/question/{questionId}` | Current pending question or question-by-id |
 | Answer routes | `POST /threads/{id}/chat/answer/{questionId}` | Path param instead of body |
 
 ### Key differences
@@ -57,6 +57,12 @@ Update service layer to match new route structure.
 
 ### `lib/api-types.ts`
 
+- Update thread summary types to include `cwd` for the thread-specific tool working directory
+- Update thread summary types to include `pendingQuestion`
+- Update create/update thread request types to accept optional `cwd`
+- Update chat request types to accept optional `freshContext`, `subagentType`, and `maxTurns`
+- The chat start response and question-answer response may include `completionId`
+  so clients can attach to the resumed stream after a pending answer is accepted
 - Update types for question/answer to use `questionId` path param
 - Thread-based naming where applicable
 

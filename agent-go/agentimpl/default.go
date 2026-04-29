@@ -87,6 +87,60 @@ func (a *DefaultAgent) Store() *thread.Store {
 	return a.store
 }
 
+func (a *DefaultAgent) resolveThreadCWD(cwd string) string {
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		cwd = a.cwd
+	}
+	cwd = filepath.Clean(cwd)
+	if abs, err := filepath.Abs(cwd); err == nil {
+		cwd = abs
+	}
+	return cwd
+}
+
+func (a *DefaultAgent) ensureThreadCWD(threadID string, cfg thread.Config) (thread.Config, bool, error) {
+	resolved := a.resolveThreadCWD(cfg.CWD)
+	if resolved == cfg.CWD {
+		return cfg, false, nil
+	}
+	cfg.CWD = resolved
+	if err := a.store.SaveConfig(threadID, cfg); err != nil {
+		return cfg, false, fmt.Errorf("save thread config cwd: %w", err)
+	}
+	return cfg, true, nil
+}
+
+func (a *DefaultAgent) newToolContext(threadID string, planMode bool, maxSubagentDepth int, providerID, modelID, cwd string) *thread.ToolContext {
+	toolCtx := &thread.ToolContext{
+		ThreadID:                threadID,
+		CurrentWorkingDirectory: a.resolveThreadCWD(cwd),
+		PlanMode:                planMode,
+		MaxSubagentDepth:        maxSubagentDepth,
+		ProviderResolver:        a.registry,
+		Agent:                   a,
+		ProviderID:              providerID,
+		ModelID:                 modelID,
+	}
+	toolCtx.SetCurrentWorkingDirectory = func(next string) error {
+		resolved := a.resolveThreadCWD(next)
+		if resolved == toolCtx.CurrentWorkingDirectory {
+			return nil
+		}
+		cfg, err := a.store.LoadConfig(threadID)
+		if err != nil {
+			return fmt.Errorf("load thread config cwd: %w", err)
+		}
+		cfg.CWD = resolved
+		if err := a.store.SaveConfig(threadID, cfg); err != nil {
+			return fmt.Errorf("save thread config cwd: %w", err)
+		}
+		toolCtx.CurrentWorkingDirectory = resolved
+		return nil
+	}
+	return toolCtx
+}
+
 // NewDefaultAgent creates a DefaultAgent. Session configuration (system prompt,
 // tools, instructions) is loaded fresh from the cwd when a new thread is created.
 func NewDefaultAgent(
@@ -165,24 +219,16 @@ func (a *DefaultAgent) promptStream(
 	req agent.PromptRequest,
 	env *promptEnvironment,
 ) iter.Seq2[message.MessageChunk, error] {
-	toolCtx := &thread.ToolContext{
-		ThreadID:         threadID,
-		PlanMode:         env.planMode,
-		SubagentDepth:    env.currentDepth,
-		MaxSubagentDepth: env.sessionCfg.MaxSubagentDepth,
-		CurrentTaskID:    req.ParentTaskID,
-		ProviderResolver: a.registry,
-		Agent:            a,
-		ProviderID:       env.modelRef.ProviderID,
-		ModelID:          env.modelRef.ModelID,
-		ResolveTools: func(ctx context.Context) ([]providers.ToolDefinition, error) {
-			tools := resolvePromptTools(req, env.sessionCfg, env.subAgentCfg, env.currentDepth)
-			mcpMgr := a.resolveMCPManager(ctx)
-			if mcpMgr != nil {
-				tools = append(tools, mcpMgr.Tools()...)
-			}
-			return tools, nil
-		},
+	toolCtx := a.newToolContext(threadID, env.planMode, env.sessionCfg.MaxSubagentDepth, env.modelRef.ProviderID, env.modelRef.ModelID, env.threadCfg.CWD)
+	toolCtx.SubagentDepth = env.currentDepth
+	toolCtx.CurrentTaskID = req.ParentTaskID
+	toolCtx.ResolveTools = func(ctx context.Context) ([]providers.ToolDefinition, error) {
+		tools := resolvePromptTools(req, env.sessionCfg, env.subAgentCfg, env.currentDepth)
+		mcpMgr := a.resolveMCPManager(ctx)
+		if mcpMgr != nil {
+			tools = append(tools, mcpMgr.Tools()...)
+		}
+		return tools, nil
 	}
 
 	resolvedUserParts, originalText, activeCommand, slashCommand := resolveSlashCommand(a.cwd, req.UserParts)
@@ -273,13 +319,7 @@ func (a *DefaultAgent) promptStream(
 		}
 
 		// Persist the resolved model and cwd so new sessions can resume by directory.
-		cwd := filepath.Clean(a.cwd)
-		if abs, err := filepath.Abs(cwd); err == nil {
-			cwd = abs
-		}
-		if env.useThreadConfig && strings.TrimSpace(env.threadCfg.CWD) != "" {
-			cwd = env.threadCfg.CWD
-		}
+		cwd := a.resolveThreadCWD(env.threadCfg.CWD)
 		// Persist the resolved model, working directory, and canonical mode.
 		modeValue := "build"
 		if env.planMode {
@@ -432,6 +472,11 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 	if err != nil {
 		return agent.ResumeResult{}, err
 	}
+	threadCfg, cwdUpdated, err := a.ensureThreadCWD(threadID, threadCfg)
+	if err != nil {
+		return agent.ResumeResult{}, err
+	}
+	cfgUpdated = cfgUpdated || cwdUpdated
 
 	replayLeafID := resumeReplayLeafID(threadID, state, threadCfg, a.store)
 	if a.registry == nil {
@@ -451,15 +496,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		}
 	}
 
-	toolCtx := &thread.ToolContext{
-		ThreadID:         threadID,
-		PlanMode:         state.Config.PlanMode,
-		MaxSubagentDepth: sessionCfg.MaxSubagentDepth,
-		ProviderResolver: a.registry,
-		Agent:            a,
-		ProviderID:       state.Config.ProviderID,
-		ModelID:          state.Config.Model,
-	}
+	toolCtx := a.newToolContext(threadID, state.Config.PlanMode, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
 	resumeMessageID := a.resolveResumeMessageID(threadID, state)
 
 	executor := thread.ToolExecutor(a.executor)
@@ -549,15 +586,12 @@ func (a *DefaultAgent) closeInterruptedTurnForPrompt(ctx context.Context, thread
 		}
 	}
 
-	toolCtx := &thread.ToolContext{
-		ThreadID:         threadID,
-		PlanMode:         state.Config.PlanMode,
-		MaxSubagentDepth: sessionCfg.MaxSubagentDepth,
-		ProviderResolver: a.registry,
-		Agent:            a,
-		ProviderID:       state.Config.ProviderID,
-		ModelID:          state.Config.Model,
+	threadCfg, err := a.store.LoadConfig(threadID)
+	if err != nil {
+		log.Printf("agent: warning: thread config: %v", err)
+		threadCfg = thread.Config{}
 	}
+	toolCtx := a.newToolContext(threadID, state.Config.PlanMode, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
 
 	executor := thread.ToolExecutor(a.executor)
 	if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {

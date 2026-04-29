@@ -245,7 +245,7 @@ func (c *ChatService) handlePromptDispatchError(ctx context.Context, submission 
 				return markErr
 			}
 			return nil
-		case "interrupted_turn_requires_resume", "pending_question_requires_answer":
+		case "pending_question_requires_answer":
 			if markErr := c.store.MarkPromptSubmissionFailed(ctx, submission.ID, err.Error()); markErr != nil {
 				return markErr
 			}

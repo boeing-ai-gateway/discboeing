@@ -28,6 +28,11 @@ func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread 
 		mode = "plan"
 	}
 
+	pendingQuestion := false
+	if state, err := h.defaultAgent.Store().LoadTurnState(threadID); err == nil && state != nil {
+		pendingQuestion = state.Phase == thread.PhaseWaitingForAnswer
+	}
+
 	state := string(cfg.LastTurnState)
 	if h.completions.ActiveCompletionID(threadID) == "" {
 		if interrupted, err := h.completions.HasInterruptedTurn(threadID); err == nil && interrupted {
@@ -36,17 +41,19 @@ func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread 
 	}
 
 	return api.Thread{
-		ID:            threadID,
-		Name:          name,
-		LastMessage:   strings.TrimSpace(cfg.LastMessage),
-		ErrorMessage:  strings.TrimSpace(cfg.ErrorMessage),
-		Model:         cfg.Model,
-		Reasoning:     string(cfg.Reasoning),
-		Mode:          mode,
-		State:         state,
-		ActiveCommand: strings.TrimSpace(cfg.ActiveCommand),
-		PromptQueue:   queuedPromptResponse(cfg.PromptQueue),
-		Metadata:      cfg.Metadata,
+		ID:              threadID,
+		Name:            name,
+		CWD:             strings.TrimSpace(cfg.CWD),
+		LastMessage:     strings.TrimSpace(cfg.LastMessage),
+		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
+		Model:           cfg.Model,
+		Reasoning:       string(cfg.Reasoning),
+		Mode:            mode,
+		State:           state,
+		PendingQuestion: pendingQuestion,
+		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
+		PromptQueue:     queuedPromptResponse(cfg.PromptQueue),
+		Metadata:        cfg.Metadata,
 	}
 }
 
@@ -131,9 +138,16 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if trimmedCWD := strings.TrimSpace(req.CWD); trimmedCWD != "" {
+		cfg.CWD = trimmedCWD
+	} else if strings.TrimSpace(cfg.CWD) == "" {
+		cfg.CWD = strings.TrimSpace(h.agentCwd)
+	}
 	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
 		cfg.Name = trimmedName
 		cfg.NameSource = thread.ThreadNameSourceUser
+	}
+	if strings.TrimSpace(cfg.CWD) != "" || strings.TrimSpace(req.Name) != "" {
 		if err := store.SaveConfig(req.ID, cfg); err != nil {
 			h.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -192,8 +206,8 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		h.Error(w, http.StatusBadRequest, "name is required")
+	if strings.TrimSpace(req.Name) == "" && strings.TrimSpace(req.CWD) == "" {
+		h.Error(w, http.StatusBadRequest, "name or cwd is required")
 		return
 	}
 
@@ -216,6 +230,9 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
 		cfg.Name = trimmedName
 		cfg.NameSource = thread.ThreadNameSourceUser
+	}
+	if trimmedCWD := strings.TrimSpace(req.CWD); trimmedCWD != "" {
+		cfg.CWD = trimmedCWD
 	}
 	if err := store.SaveConfig(threadID, cfg); err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())

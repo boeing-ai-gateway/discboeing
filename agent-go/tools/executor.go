@@ -51,8 +51,10 @@ type Executor struct {
 	threadsDir      string // root for per-thread runtime data; defaults to {dataDir}/threads
 	defaultThreadID string
 
-	// cwdMu guards currentCwd, which tracks the shell working directory
-	// across Bash calls (cwd persists between commands, shell state does not).
+	// cwdMu guards currentCwd, the fallback working directory used by callers
+	// that do not provide a thread-scoped ToolContext (mainly tests and legacy
+	// compatibility wrappers). Real agent turns should use
+	// ToolContext.CurrentWorkingDirectory instead.
 	cwdMu      sync.Mutex
 	currentCwd string
 
@@ -466,7 +468,7 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 	case "RequestUserCredential":
 		return e.executeRequestUserCredential(call)
 	case "RequestCommitPull":
-		return e.executeRequestCommitPull(call)
+		return e.executeRequestCommitPull(toolCtx, call)
 	case "EnterPlanMode":
 		return e.executeEnterPlanMode(toolCtx, call)
 	case "ExitPlanMode":

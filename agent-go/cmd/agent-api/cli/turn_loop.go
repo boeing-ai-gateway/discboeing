@@ -12,8 +12,8 @@ import (
 	"golang.org/x/term"
 
 	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -72,7 +72,7 @@ func sectionNeedsGap(from, to sectionKind) bool {
 // On each approval loop iteration, the agent is resumed explicitly so the
 // interrupted turn continues from persisted disk state after the user's answer
 // is saved.
-func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.DefaultAgent, threadID string, req agent.PromptRequest, startWithResume bool, onPlanModeChange func(bool)) {
+func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisession.Session, threadID string, req agent.PromptRequest, startWithResume bool, onPlanModeChange func(bool)) {
 	toolState := newToolRenderState()
 	pendingPlanToolCalls := map[string]string{}
 	activePlanMode := req.Mode == "plan"
@@ -96,7 +96,7 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 		watcher := startEscWatch(watchCtx, cancel)
 		var seq iter.Seq2[message.MessageChunk, error]
 		if resumeOnly {
-			resumed, err := a.Resume(ctx, threadID, agent.PromptRequest{})
+			resumed, err := session.Resume(ctx, threadID, agent.PromptRequest{})
 			if err != nil {
 				stopEscWatch()
 				watcher.Wait()
@@ -105,9 +105,18 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 				fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
 				return
 			}
-			seq = resumed.Stream
+			seq = resumed
 		} else {
-			seq = a.Prompt(ctx, threadID, req)
+			started, err := session.Prompt(ctx, threadID, req)
+			if err != nil {
+				stopEscWatch()
+				watcher.Wait()
+				md.Finish()
+				spin.Stop()
+				fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
+				return
+			}
+			seq = started
 		}
 		for chunk, err := range seq {
 			if err != nil {
@@ -200,7 +209,7 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 		}
 
 		// Check whether the turn paused waiting for user approval.
-		pending, err := a.PendingQuestion(threadID)
+		pending, err := session.PendingQuestion(ctx, threadID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\nError checking for pending question: %v\n", err)
 			return
@@ -219,24 +228,24 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, a *agentimpl.De
 		}
 
 		// Handle the approval interactively and resume the turn.
-		if !handlePendingQuestion(ctx, a, threadID, pending) {
+		if !handlePendingQuestion(ctx, session, threadID, pending) {
 			return
 		}
 		resumeOnly = true
-		req = agent.PromptRequest{Mode: planModeStr(activePlanMode)}
+		req = agent.PromptRequest{Mode: planModeRequest(activePlanMode)}
 	}
 }
 
 // handlePendingQuestion presents a pending AskUserQuestion / ExitPlanMode
 // approval to the user, collects answers, and submits them.
 // Returns false if stdin was closed or an error occurred.
-func handlePendingQuestion(ctx context.Context, a *agentimpl.DefaultAgent, threadID string, pending *agent.PendingQuestion) bool {
+func handlePendingQuestion(ctx context.Context, session clisession.Session, threadID string, pending *agent.PendingQuestion) bool {
 	answers := collectAnswers(ctx, pending.Questions)
 	if answers == nil {
 		return false // EOF or cancellation
 	}
 
-	if err := a.SubmitAnswer(threadID, pending.ApprovalID, api.AnswerQuestionRequest{
+	if err := session.SubmitAnswer(ctx, threadID, pending.ApprovalID, api.AnswerQuestionRequest{
 		Answers: answers,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "\nError submitting answer: %v\n", err)

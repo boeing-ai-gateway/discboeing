@@ -20,6 +20,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	"github.com/obot-platform/discobot/agent-go/internal/credentials"
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -181,6 +182,10 @@ func Run(cfg *config.Config, flags *Flags) {
 		cfg.DiscobotProjectID,
 	)
 	a := agentimpl.NewDefaultAgent(store, reg, exec, cfg.AgentCwd, mcpCfg)
+	var session clisession.Session = clisession.NewLocal(a, store, cfg.AgentCwd)
+	if remote := newRemoteSession(cfg); remote != nil {
+		session = remote
+	}
 
 	// Wire the OAuth callback handler now that we have the agent reference.
 	if oauthSrv != nil {
@@ -203,44 +208,41 @@ func Run(cfg *config.Config, flags *Flags) {
 	if *flags.reasoning {
 		reasoning = "enabled"
 	}
-	planMode := getThreadPlanMode(store, threadID)
+	threadPlanModes := map[string]bool{}
+	planMode := getThreadPlanMode(rootCtx, session, threadID)
 	if *flags.plan {
 		planMode = true
-		if threadExists(cfg.ThreadsDir, threadID) {
-			saveThreadPlanMode(store, threadID, true)
-		}
 	}
+	threadPlanModes[threadID] = planMode
 
 	// ── Main input loop ───────────────────────────────────────────────────────
-	showResume, showHistory := startupCommandHints(store, cfg, threadID)
+	showResume, showHistory := startupCommandHints(rootCtx, session, threadID)
 	fmt.Fprintln(os.Stderr, startupMessage(showResume, showHistory))
 	pendingFresh := map[string]bool{}
 
 	// Handle any pending AskUserQuestion left from a previous session.
-	if pending, _ := a.PendingQuestion(threadID); pending != nil {
+	if pending, _ := session.PendingQuestion(rootCtx, threadID); pending != nil {
 		fmt.Fprintln(os.Stderr, "Resuming pending approval from previous session...")
 		startTurn(func(ctx context.Context, cancel context.CancelFunc) {
-			if handlePendingQuestion(ctx, a, threadID, pending) {
-				runTurnLoop(ctx, cancel, a, threadID, agent.PromptRequest{Mode: planModeStr(planMode)}, true, func(enabled bool) {
+			if handlePendingQuestion(ctx, session, threadID, pending) {
+				runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
 					planMode = enabled
-					saveThreadPlanMode(store, threadID, enabled)
+					threadPlanModes[threadID] = enabled
 				})
-				planMode = getThreadPlanMode(store, threadID)
 			}
 		})
 	}
 
 	recoverIfInterrupted := func(ctx context.Context, cancel context.CancelFunc) {
-		interrupted, err := a.HasInterruptedTurn(threadID)
+		interrupted, err := session.HasInterruptedTurn(ctx, threadID)
 		if err != nil || !interrupted {
 			return
 		}
 		fmt.Fprintln(os.Stderr, "Recovering interrupted turn...")
-		runTurnLoop(ctx, cancel, a, threadID, agent.PromptRequest{Mode: planModeStr(planMode)}, true, func(enabled bool) {
+		runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
 			planMode = enabled
-			saveThreadPlanMode(store, threadID, enabled)
+			threadPlanModes[threadID] = enabled
 		})
-		planMode = getThreadPlanMode(store, threadID)
 	}
 	consumeFreshContext := func(threadID string) bool {
 		if !pendingFresh[threadID] {
@@ -255,7 +257,7 @@ func Run(cfg *config.Config, flags *Flags) {
 
 	for {
 		prompt := formatPrompt(model, planMode)
-		line, err := readLineWithOptions(prompt, hist, commandCompletionOptions(a, cfg.AgentCwd))
+		line, err := readLineWithOptions(prompt, hist, commandCompletionOptions(rootCtx, session))
 		if err == io.EOF || err == errInterrupt {
 			break // Ctrl+D or Ctrl+C at idle prompt → exit
 		}
@@ -288,23 +290,19 @@ func Run(cfg *config.Config, flags *Flags) {
 					return
 				}
 
-				threadExistedBeforePrompt := threadExists(cfg.ThreadsDir, threadID)
 				req := agent.PromptRequest{
 					Model:        model,
 					Reasoning:    reasoning,
-					Mode:         planModeStr(planMode),
+					Mode:         planModeRequest(planMode),
 					MaxTurns:     *flags.maxTurns,
 					SubagentType: *flags.subagent,
 					FreshContext: consumeFreshContext(threadID),
 					UserParts:    parts,
 				}
-				runTurnLoop(ctx, cancel, a, threadID, req, false, func(enabled bool) {
+				runTurnLoop(ctx, cancel, session, threadID, req, false, func(enabled bool) {
 					planMode = enabled
-					saveThreadPlanMode(store, threadID, enabled)
+					threadPlanModes[threadID] = enabled
 				})
-				if !threadExistedBeforePrompt && planMode && threadExists(cfg.ThreadsDir, threadID) {
-					saveThreadPlanMode(store, threadID, true)
-				}
 			})
 			if rootCtx.Err() != nil {
 				break
@@ -317,20 +315,24 @@ func Run(cfg *config.Config, flags *Flags) {
 		startTurn(func(ctx context.Context, cancel context.CancelFunc) {
 			// Handle slash commands.
 			if strings.HasPrefix(line, "/") {
-				if newID, handled := handleSlashCommand(ctx, line, a, store, cfg, threadID, reg, &model, &planMode, pendingFresh); handled {
+				if newID, handled := handleSlashCommand(ctx, line, session, threadID, reg, &model, &planMode, pendingFresh); handled {
 					if newID != threadID {
 						threadID = newID
-						planMode = getThreadPlanMode(store, threadID)
+						if remembered, ok := threadPlanModes[threadID]; ok {
+							planMode = remembered
+						} else {
+							planMode = getThreadPlanMode(ctx, session, threadID)
+							threadPlanModes[threadID] = planMode
+						}
 						fmt.Fprintf(os.Stderr, "Switched to thread %s\n", threadID)
-						printThreadHistory(store, threadID)
-						if pending, _ := a.PendingQuestion(threadID); pending != nil {
+						printThreadHistory(ctx, session, threadID)
+						if pending, _ := session.PendingQuestion(ctx, threadID); pending != nil {
 							fmt.Fprintln(os.Stderr, "Resuming pending approval...")
-							if handlePendingQuestion(ctx, a, threadID, pending) {
-								runTurnLoop(ctx, cancel, a, threadID, agent.PromptRequest{Mode: planModeStr(planMode)}, true, func(enabled bool) {
+							if handlePendingQuestion(ctx, session, threadID, pending) {
+								runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
 									planMode = enabled
-									saveThreadPlanMode(store, threadID, enabled)
+									threadPlanModes[threadID] = enabled
 								})
-								planMode = getThreadPlanMode(store, threadID)
 							}
 						}
 					}
@@ -338,24 +340,20 @@ func Run(cfg *config.Config, flags *Flags) {
 				}
 			}
 
-			threadExistedBeforePrompt := threadExists(cfg.ThreadsDir, threadID)
 			recoverIfInterrupted(ctx, cancel)
 			req := agent.PromptRequest{
 				Model:        model,
 				Reasoning:    reasoning,
-				Mode:         planModeStr(planMode),
+				Mode:         planModeRequest(planMode),
 				MaxTurns:     *flags.maxTurns,
 				SubagentType: *flags.subagent,
 				FreshContext: consumeFreshContext(threadID),
 				UserParts:    []message.UIPart{message.UITextPart{Text: line}},
 			}
-			runTurnLoop(ctx, cancel, a, threadID, req, false, func(enabled bool) {
+			runTurnLoop(ctx, cancel, session, threadID, req, false, func(enabled bool) {
 				planMode = enabled
-				saveThreadPlanMode(store, threadID, enabled)
+				threadPlanModes[threadID] = enabled
 			})
-			if !threadExistedBeforePrompt && planMode && threadExists(cfg.ThreadsDir, threadID) {
-				saveThreadPlanMode(store, threadID, true)
-			}
 		})
 
 		if rootCtx.Err() != nil {
@@ -363,9 +361,9 @@ func Run(cfg *config.Config, flags *Flags) {
 		}
 	}
 
-	a.Close()
+	session.Close()
 	fmt.Fprintln(os.Stderr, "\nGoodbye.")
-	if threadExists(cfg.ThreadsDir, threadID) {
+	if threadExists(context.Background(), session, threadID) {
 		if cmd := resumeThreadCommand(threadID, os.Args[0]); cmd != "" {
 			fmt.Fprintf(os.Stderr, "Resume this thread with:\n  %s\n", cmd)
 		}

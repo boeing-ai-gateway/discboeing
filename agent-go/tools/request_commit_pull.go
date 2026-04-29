@@ -38,7 +38,7 @@ const (
 	requestCommitPullApprovedResponseText = "The user approved pulling the prepared sandbox commit into the host workspace."
 )
 
-func (e *Executor) executeRequestCommitPull(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
+func (e *Executor) executeRequestCommitPull(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input requestCommitPullInput
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
@@ -58,7 +58,7 @@ func (e *Executor) executeRequestCommitPull(call message.ToolCallPart) (thread.T
 			},
 		},
 	}
-	metadata, err := e.requestCommitPullMetadata(input.BaseCommit)
+	metadata, err := e.requestCommitPullMetadata(toolCtx, input.BaseCommit)
 	if err != nil {
 		return errResult(call, err.Error()), nil
 	}
@@ -84,8 +84,8 @@ func (e *Executor) executeRequestCommitPull(call message.ToolCallPart) (thread.T
 	}, nil
 }
 
-func (e *Executor) requestCommitPullMetadata(requestedBaseCommit string) (*requestCommitPullMetadata, error) {
-	cwd := e.getCwd()
+func (e *Executor) requestCommitPullMetadata(_ *thread.ToolContext, requestedBaseCommit string) (*requestCommitPullMetadata, error) {
+	cwd := e.cwd
 	if _, err := gitOutput(cwd, "rev-parse", "--show-toplevel"); err != nil {
 		return nil, fmt.Errorf("request commit pull requires a git repository: %w", err)
 	}

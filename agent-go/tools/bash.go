@@ -64,7 +64,7 @@ func (e *Executor) bashLogPath(toolCtx *thread.ToolContext, toolCallID string) s
 // runBashSync runs a bash command synchronously, returns the combined output,
 // and saves it to a log file in {threadsDir}/{threadID}/bash/.
 func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart, command string, timeout time.Duration) (thread.ToolExecuteResult, error) {
-	cwd := e.getCwd()
+	cwd := e.getCwd(toolCtx)
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
 	cwdPath := logPath + ".cwd"
 	bashPath, err := resolveBashCommand()
@@ -128,7 +128,9 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	output := string(outputBytes)
 
 	if newCwd != "" && newCwd != cwd {
-		e.setCwd(newCwd)
+		if err := e.setCwd(toolCtx, newCwd); err != nil {
+			return errResult(call, fmt.Sprintf("failed to persist working directory: %v", err)), nil
+		}
 	}
 
 	if runErr != nil {
@@ -149,7 +151,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 // immediately with the process PID and log path so the LLM can tail or read
 // the output at any time. Output is streamed directly to the log file.
 func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message.ToolCallPart, command string) (thread.ToolExecuteResult, error) {
-	cwd := e.getCwd()
+	cwd := e.getCwd(toolCtx)
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
 	bashPath, err := resolveBashCommand()
 	if err != nil {
@@ -353,16 +355,27 @@ func buildWindowsDrivePath(drive byte, rest string) string {
 	return filepath.Clean(base + strings.ReplaceAll(rest, "/", `\`))
 }
 
-// getCwd returns the current persisted working directory.
-func (e *Executor) getCwd() string {
+// getCwd returns the current working directory for this tool execution.
+func (e *Executor) getCwd(toolCtx *thread.ToolContext) string {
+	if toolCtx != nil && strings.TrimSpace(toolCtx.CurrentWorkingDirectory) != "" {
+		return toolCtx.CurrentWorkingDirectory
+	}
 	e.cwdMu.Lock()
 	defer e.cwdMu.Unlock()
 	return e.currentCwd
 }
 
-// setCwd updates the persisted working directory.
-func (e *Executor) setCwd(cwd string) {
+// setCwd updates the current working directory for this tool execution.
+func (e *Executor) setCwd(toolCtx *thread.ToolContext, cwd string) error {
+	if toolCtx != nil {
+		if toolCtx.SetCurrentWorkingDirectory != nil {
+			return toolCtx.SetCurrentWorkingDirectory(cwd)
+		}
+		toolCtx.CurrentWorkingDirectory = cwd
+		return nil
+	}
 	e.cwdMu.Lock()
 	defer e.cwdMu.Unlock()
 	e.currentCwd = cwd
+	return nil
 }

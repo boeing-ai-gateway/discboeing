@@ -15,9 +15,9 @@ import (
 func TestExecuteRequestCommitPull(t *testing.T) {
 	repo := initRequestCommitPullRepo(t)
 	e := New(repo, t.TempDir(), t.Name())
-	e.setCwd(filepath.Join(repo, "subdir"))
+	_ = e.setCwd(nil, filepath.Join(repo, "subdir"))
 
-	result, err := e.executeRequestCommitPull(message.ToolCallPart{
+	result, err := e.executeRequestCommitPull(nil, message.ToolCallPart{
 		ToolCallID: "tc1",
 		ToolName:   "RequestCommitPull",
 		Input:      `{"notes":"ready to apply"}`,
@@ -44,7 +44,7 @@ func TestExecuteRequestCommitPull(t *testing.T) {
 	if err := json.Unmarshal(result.Approval.Metadata, &metadata); err != nil {
 		t.Fatalf("unmarshal metadata: %v", err)
 	}
-	wantDir := filepath.ToSlash(filepath.Join(repo, "subdir"))
+	wantDir := filepath.ToSlash(repo)
 	if metadata.Directory != wantDir {
 		t.Fatalf("directory = %q, want %q", metadata.Directory, wantDir)
 	}
@@ -71,7 +71,7 @@ func TestExecuteRequestCommitPull_UsesExplicitBaseCommit(t *testing.T) {
 	e := New(repo, t.TempDir(), t.Name())
 
 	baseCommit := strings.TrimSpace(gitOutputForTest(t, repo, "rev-parse", "HEAD"))
-	result, err := e.executeRequestCommitPull(message.ToolCallPart{
+	result, err := e.executeRequestCommitPull(nil, message.ToolCallPart{
 		ToolCallID: "tc1",
 		ToolName:   "RequestCommitPull",
 		Input:      `{"baseCommit":"` + baseCommit + `"}`,

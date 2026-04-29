@@ -11,11 +11,62 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/thread"
 )
+
+type testSession struct {
+	commands []agent.Command
+	threads  map[string]api.Thread
+}
+
+func (s *testSession) WorkspaceRoot() string { return "" }
+func (s *testSession) Close()                {}
+func (s *testSession) ListCommands(context.Context) ([]agent.Command, error) {
+	return s.commands, nil
+}
+func (s *testSession) ListThreads(context.Context) ([]api.Thread, error) {
+	var out []api.Thread
+	for _, thread := range s.threads {
+		out = append(out, thread)
+	}
+	return out, nil
+}
+func (s *testSession) GetThread(_ context.Context, id string) (api.Thread, error) {
+	thread, ok := s.threads[id]
+	if !ok {
+		return api.Thread{}, clisession.ErrNotFound
+	}
+	return thread, nil
+}
+func (s *testSession) UpdateThread(_ context.Context, id string, req api.UpdateThreadRequest) (api.Thread, error) {
+	thread := s.threads[id]
+	if req.Name != "" {
+		thread.Name = req.Name
+	}
+	if req.CWD != "" {
+		thread.CWD = req.CWD
+	}
+	s.threads[id] = thread
+	return thread, nil
+}
+func (s *testSession) Messages(context.Context, string) ([]message.UIMessage, error) { return nil, nil }
+func (s *testSession) HasInterruptedTurn(context.Context, string) (bool, error)      { return false, nil }
+func (s *testSession) PendingQuestion(context.Context, string) (*agent.PendingQuestion, error) {
+	return nil, nil
+}
+func (s *testSession) SubmitAnswer(context.Context, string, string, api.AnswerQuestionRequest) error {
+	return nil
+}
+func (s *testSession) Prompt(context.Context, string, agent.PromptRequest) (iter.Seq2[message.MessageChunk, error], error) {
+	return nil, nil
+}
+func (s *testSession) Resume(context.Context, string, agent.PromptRequest) (iter.Seq2[message.MessageChunk, error], error) {
+	return nil, nil
+}
 
 type testModelListProvider struct {
 	id string
@@ -97,8 +148,8 @@ func TestHandleSlashCommand_ForwardsKnownAgentCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &config.Config{AgentCwd: root}
-	threadID, handled := handleSlashCommand(context.Background(), "/deploy", nil, nil, cfg, "thread-1", nil, nil, nil, nil)
+	session := &testSession{commands: []agent.Command{{Name: "deploy"}}}
+	threadID, handled := handleSlashCommand(context.Background(), "/deploy", session, "thread-1", nil, nil, nil, nil)
 	if handled {
 		t.Fatalf("expected /deploy to be forwarded to agent, handled=%v", handled)
 	}
@@ -111,8 +162,8 @@ func TestHandleSlashCommand_UnknownStillHandledLocally(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", filepath.Join(root, "home"))
 
-	cfg := &config.Config{AgentCwd: root}
-	threadID, handled := handleSlashCommand(context.Background(), "/does-not-exist", nil, nil, cfg, "thread-1", nil, nil, nil, nil)
+	session := &testSession{}
+	threadID, handled := handleSlashCommand(context.Background(), "/does-not-exist", session, "thread-1", nil, nil, nil, nil)
 	if !handled {
 		t.Fatalf("expected unknown slash command to be handled locally")
 	}
@@ -123,12 +174,11 @@ func TestHandleSlashCommand_UnknownStillHandledLocally(t *testing.T) {
 
 func TestHandleSlashCommand_PlanDoesNotCreateThreadBeforePrompt(t *testing.T) {
 	threadsDir := t.TempDir()
-	store := thread.NewStore(threadsDir)
-	cfg := &config.Config{AgentCwd: threadsDir, ThreadsDir: threadsDir}
+	session := &testSession{}
 	planMode := false
 	threadID := "thread-lazy"
 
-	newThreadID, handled := handleSlashCommand(context.Background(), "/plan", nil, store, cfg, threadID, nil, nil, &planMode, nil)
+	newThreadID, handled := handleSlashCommand(context.Background(), "/plan", session, threadID, nil, nil, &planMode, nil)
 	if !handled {
 		t.Fatalf("expected /plan to be handled locally")
 	}
@@ -155,9 +205,9 @@ func TestHandleSlashCommand_LocalCommandsTakePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &config.Config{AgentCwd: root}
 	pendingFresh := map[string]bool{}
-	newThreadID, handled := handleSlashCommand(context.Background(), "/clear", nil, nil, cfg, "thread-1", nil, nil, nil, pendingFresh)
+	session := &testSession{}
+	newThreadID, handled := handleSlashCommand(context.Background(), "/clear", session, "thread-1", nil, nil, nil, pendingFresh)
 	if !handled {
 		t.Fatalf("expected /clear to be handled locally")
 	}

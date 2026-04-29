@@ -99,12 +99,8 @@ export function getStartChatErrorDetails(error: unknown): {
 	completionId: string | null;
 } {
 	if (error instanceof StartChatError) {
-		const autoResuming =
-			error.code === "interrupted_turn_requires_resume" &&
-			typeof error.completionId === "string" &&
-			error.completionId.length > 0;
 		return {
-			message: autoResuming ? null : error.message,
+			message: error.message,
 			pendingQuestionId:
 				error.code === "pending_question_requires_answer"
 					? (error.questionId ?? null)

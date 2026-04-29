@@ -1,12 +1,17 @@
 package cli
 
 import (
+	"context"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -64,29 +69,7 @@ func TestSelectInitialThreadID_DefaultsToFreshThread(t *testing.T) {
 }
 
 func TestPrintThreadHistory_UsesPromptStyleForUserAndInlineAssistant(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
 	threadID := "thread-1"
-
-	if err := store.SaveMessage(threadID, thread.StoredMessage{
-		ID: "msg-1",
-		Message: message.Message{
-			Role:  "user",
-			Parts: []message.Part{message.TextPart{Text: "hello"}},
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := store.SaveMessage(threadID, thread.StoredMessage{
-		ID:       "msg-2",
-		ParentID: "msg-1",
-		Message: message.Message{
-			Role:  "assistant",
-			Parts: []message.Part{message.TextPart{Text: "world"}},
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
 
 	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {
@@ -103,7 +86,13 @@ func TestPrintThreadHistory_UsesPromptStyleForUserAndInlineAssistant(t *testing.
 		noColor = oldNoColor
 	}()
 
-	if !printThreadHistory(store, threadID) {
+	session := &threadHistorySession{messages: map[string][]message.UIMessage{
+		threadID: {
+			{ID: "msg-1", Role: "user", Parts: []message.UIPart{message.UITextPart{Text: "hello"}}},
+			{ID: "msg-2", Role: "assistant", Parts: []message.UIPart{message.UITextPart{Text: "world"}}},
+		},
+	}}
+	if !printThreadHistory(context.Background(), session, threadID) {
 		t.Fatal("expected printable history")
 	}
 
@@ -124,4 +113,41 @@ func TestPrintThreadHistory_UsesPromptStyleForUserAndInlineAssistant(t *testing.
 			t.Fatalf("expected history output to contain %q, got %q", want, got)
 		}
 	}
+}
+
+type threadHistorySession struct {
+	messages map[string][]message.UIMessage
+}
+
+func (s *threadHistorySession) WorkspaceRoot() string { return "" }
+func (s *threadHistorySession) Close()                {}
+func (s *threadHistorySession) ListCommands(context.Context) ([]agent.Command, error) {
+	return nil, nil
+}
+func (s *threadHistorySession) ListThreads(context.Context) ([]api.Thread, error) {
+	return nil, nil
+}
+func (s *threadHistorySession) GetThread(context.Context, string) (api.Thread, error) {
+	return api.Thread{}, clisession.ErrNotFound
+}
+func (s *threadHistorySession) UpdateThread(context.Context, string, api.UpdateThreadRequest) (api.Thread, error) {
+	return api.Thread{}, nil
+}
+func (s *threadHistorySession) Messages(_ context.Context, threadID string) ([]message.UIMessage, error) {
+	return s.messages[threadID], nil
+}
+func (s *threadHistorySession) HasInterruptedTurn(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (s *threadHistorySession) PendingQuestion(context.Context, string) (*agent.PendingQuestion, error) {
+	return nil, nil
+}
+func (s *threadHistorySession) SubmitAnswer(context.Context, string, string, api.AnswerQuestionRequest) error {
+	return nil
+}
+func (s *threadHistorySession) Prompt(context.Context, string, agent.PromptRequest) (iter.Seq2[message.MessageChunk, error], error) {
+	return nil, nil
+}
+func (s *threadHistorySession) Resume(context.Context, string, agent.PromptRequest) (iter.Seq2[message.MessageChunk, error], error) {
+	return nil, nil
 }

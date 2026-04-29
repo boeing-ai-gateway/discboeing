@@ -115,10 +115,9 @@ type ChatConflictResponse struct {
 // ChatTurnStateConflictResponse is the POST /chat response when the thread must
 // resolve existing persisted turn state before starting a new prompt.
 type ChatTurnStateConflictResponse struct {
-	Error        string `json:"error"`
-	Message      string `json:"message,omitempty"`
-	QuestionID   string `json:"questionId,omitempty"`
-	CompletionID string `json:"completionId,omitempty"`
+	Error      string `json:"error"`
+	Message    string `json:"message,omitempty"`
+	QuestionID string `json:"questionId,omitempty"`
 }
 
 // ErrorResponse is returned for 4xx/5xx errors.
@@ -389,7 +388,8 @@ type AnswerQuestionRequest struct {
 
 // AnswerQuestionResponse is the POST /chat/answer response body.
 type AnswerQuestionResponse struct {
-	Success bool `json:"success"`
+	Success      bool   `json:"success"`
+	CompletionID string `json:"completionId,omitempty"`
 }
 
 // ============================================================================

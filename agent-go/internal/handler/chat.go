@@ -50,12 +50,15 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	promptReq := agent.PromptRequest{
-		LeafID:    leafID,
-		Model:     req.Model,
-		Reasoning: req.Reasoning,
-		Mode:      req.Mode,
-		UserParts: userMessage.Parts,
-		Metadata:  userMessage.Metadata,
+		LeafID:       leafID,
+		Model:        req.Model,
+		Reasoning:    req.Reasoning,
+		Mode:         req.Mode,
+		FreshContext: req.FreshContext,
+		SubagentType: req.SubagentType,
+		MaxTurns:     req.MaxTurns,
+		UserParts:    userMessage.Parts,
+		Metadata:     userMessage.Metadata,
 	}
 
 	// Check for active completion.
@@ -549,6 +552,36 @@ func (h *Handler) GetQuestion(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetPendingQuestion handles GET /threads/{id}/chat/question — returns the
+// current pending AskUserQuestion for the thread, if any.
+func (h *Handler) GetPendingQuestion(w http.ResponseWriter, r *http.Request) {
+	threadID := chi.URLParam(r, "id")
+
+	pending, err := h.completions.PendingQuestion(threadID)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if pending == nil {
+		h.JSON(w, http.StatusOK, api.PendingQuestionResponse{
+			Status:   "answered",
+			Question: nil,
+		})
+		return
+	}
+
+	h.JSON(w, http.StatusOK, api.PendingQuestionResponse{
+		Status: "pending",
+		Question: &api.PendingQuestion{
+			ToolUseID:   pending.ApprovalID,
+			Questions:   pending.Questions,
+			Credentials: pending.Credentials,
+			Metadata:    pending.Metadata,
+			Context:     pending.Context,
+		},
+	})
+}
+
 // PostAnswer handles POST /threads/{id}/chat/answer/{questionId} — submits answers to a pending question.
 func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
@@ -579,10 +612,16 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 	// Resume the interrupted turn.
 	completionID, chatErr := h.completions.Resume(threadID, agent.PromptRequest{})
 	if chatErr != nil {
-		// Answer was saved but resume failed — log but still return success.
-		log.Printf("question: answer saved but failed to resume turn: %v", chatErr)
+		if existingID := completionIDFromInProgressError(chatErr); existingID != "" {
+			completionID = existingID
+		} else {
+			// Answer was saved but resume failed — log but still return success.
+			log.Printf("question: answer saved but failed to resume turn: %v", chatErr)
+		}
 	}
-	_ = completionID
 
-	h.JSON(w, http.StatusOK, api.AnswerQuestionResponse{Success: true})
+	h.JSON(w, http.StatusOK, api.AnswerQuestionResponse{
+		Success:      true,
+		CompletionID: completionID,
+	})
 }

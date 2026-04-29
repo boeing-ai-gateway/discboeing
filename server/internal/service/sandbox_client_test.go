@@ -320,15 +320,15 @@ func TestSandboxChatClient_SendMessages_409Conflict(t *testing.T) {
 	}
 }
 
-func TestSandboxChatClient_StartChat_InterruptedTurnConflictIncludesCompletionID(t *testing.T) {
+func TestSandboxChatClient_StartChat_PendingQuestionConflict(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
 			json.NewEncoder(w).Encode(map[string]string{
-				"error":        "interrupted_turn_requires_resume",
-				"message":      "This thread has an interrupted turn that must resume before sending a new message.",
-				"completionId": "resume-123",
+				"error":      "pending_question_requires_answer",
+				"message":    "This thread is waiting for an answer to an earlier question before sending a new message.",
+				"questionId": "question-123",
 			})
 			return
 		}
@@ -344,18 +344,18 @@ func TestSandboxChatClient_StartChat_InterruptedTurnConflictIncludesCompletionID
 	messages := json.RawMessage(`[{"role":"user","content":"hello"}]`)
 	_, err := client.StartChat(ctx, "test-session", "test-thread", messages, "", nil)
 	if err == nil {
-		t.Fatal("Expected error for interrupted turn conflict")
+		t.Fatal("expected error for pending question conflict")
 	}
 
 	var startErr *SandboxChatStartError
 	if !errors.As(err, &startErr) {
 		t.Fatalf("expected SandboxChatStartError, got %T", err)
 	}
-	if startErr.ErrorCode != "interrupted_turn_requires_resume" {
-		t.Fatalf("expected interrupted turn error code, got %#v", startErr)
+	if startErr.ErrorCode != "pending_question_requires_answer" {
+		t.Fatalf("expected pending question error code, got %#v", startErr)
 	}
-	if startErr.CompletionID != "resume-123" {
-		t.Fatalf("expected completionId resume-123, got %#v", startErr)
+	if startErr.QuestionID != "question-123" {
+		t.Fatalf("expected questionId question-123, got %#v", startErr)
 	}
 }
 

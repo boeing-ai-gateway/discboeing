@@ -331,7 +331,7 @@ func (c *SandboxChatClient) StartChat(ctx context.Context, sessionID, threadID s
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
 		var conflict sandboxapi.ChatConflictResponse
-		if err := json.Unmarshal(body, &conflict); err == nil && conflict.Error != "" {
+		if err := json.Unmarshal(body, &conflict); err == nil && conflict.Error == "completion_in_progress" {
 			return nil, &SandboxChatStartError{
 				StatusCode:   resp.StatusCode,
 				ErrorCode:    conflict.Error,
@@ -341,11 +341,10 @@ func (c *SandboxChatClient) StartChat(ctx context.Context, sessionID, threadID s
 		var turnConflict sandboxapi.ChatTurnStateConflictResponse
 		if err := json.Unmarshal(body, &turnConflict); err == nil && turnConflict.Error != "" {
 			return nil, &SandboxChatStartError{
-				StatusCode:   resp.StatusCode,
-				ErrorCode:    turnConflict.Error,
-				Message:      turnConflict.Message,
-				QuestionID:   turnConflict.QuestionID,
-				CompletionID: turnConflict.CompletionID,
+				StatusCode: resp.StatusCode,
+				ErrorCode:  turnConflict.Error,
+				Message:    turnConflict.Message,
+				QuestionID: turnConflict.QuestionID,
 			}
 		}
 		var apiErr sandboxapi.ErrorResponse
