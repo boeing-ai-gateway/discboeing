@@ -1960,7 +1960,7 @@
 				}
 			}}
 		>
-			<Dialog.Content class="sm:max-w-lg">
+			<Dialog.Content class="z-60 sm:max-w-lg" overlayClass="z-60">
 				<Dialog.Header>
 					<Dialog.Title
 						>Create environment variables from pasted text?</Dialog.Title
