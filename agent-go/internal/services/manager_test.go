@@ -14,6 +14,74 @@ import (
 	"time"
 )
 
+func TestGetServicesIncludesBuiltInVSCodeWhenAvailable(t *testing.T) {
+	workspaceRoot := t.TempDir()
+
+	originalLookPath := lookPath
+	lookPath = func(file string) (string, error) {
+		if file == "code-server" {
+			return "/usr/bin/code-server", nil
+		}
+		return "", os.ErrNotExist
+	}
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+	})
+
+	mgr := NewManager()
+	services, err := mgr.GetServices(workspaceRoot)
+	if err != nil {
+		t.Fatalf("GetServices() failed: %v", err)
+	}
+
+	var found *ServiceInfo
+	for i := range services {
+		if services[i].ID == vscodeService.ID {
+			found = &services[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("GetServices() did not include %q", vscodeService.ID)
+	}
+	if !found.Passive {
+		t.Fatalf("VS Code service passive = %v, want true", found.Passive)
+	}
+	if found.HTTP != vscodeService.HTTP {
+		t.Fatalf("VS Code service HTTP port = %d, want %d", found.HTTP, vscodeService.HTTP)
+	}
+}
+
+func TestGetServiceReturnsBuiltInVSCodeWhenAvailable(t *testing.T) {
+	workspaceRoot := t.TempDir()
+
+	originalLookPath := lookPath
+	lookPath = func(file string) (string, error) {
+		if file == "code-server" {
+			return "/usr/bin/code-server", nil
+		}
+		return "", os.ErrNotExist
+	}
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+	})
+
+	mgr := NewManager()
+	svc, err := mgr.GetService(workspaceRoot, vscodeService.ID)
+	if err != nil {
+		t.Fatalf("GetService() failed: %v", err)
+	}
+	if svc == nil {
+		t.Fatalf("GetService() returned nil for %q", vscodeService.ID)
+	}
+	if svc.ID != vscodeService.ID {
+		t.Fatalf("service ID = %q, want %q", svc.ID, vscodeService.ID)
+	}
+	if svc.Status != "running" {
+		t.Fatalf("service status = %q, want running", svc.Status)
+	}
+}
+
 func TestStopServiceKillsEntireProcessGroup(t *testing.T) {
 	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()

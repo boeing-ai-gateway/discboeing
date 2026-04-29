@@ -95,6 +95,20 @@ var desktopService = ServiceInfo{
 	Passive: true,
 }
 
+// vscodeService is the built-in code-server service.
+var vscodeService = ServiceInfo{
+	ID:          "discobot-vscode",
+	Name:        "VS Code",
+	Description: "Browser-based VS Code workspace",
+	HTTP:        13337,
+	Path:        "",
+	URLPath:     "/",
+	Status:      "running",
+	Passive:     true,
+}
+
+var lookPath = exec.LookPath
+
 // isDesktopAvailable checks if x11vnc is installed and executable.
 func isDesktopAvailable() bool {
 	info, err := os.Stat("/usr/bin/x11vnc")
@@ -102,6 +116,12 @@ func isDesktopAvailable() bool {
 		return false
 	}
 	return info.Mode()&0o111 != 0
+}
+
+// isVSCodeAvailable checks if code-server is installed and executable.
+func isVSCodeAvailable() bool {
+	_, err := lookPath("code-server")
+	return err == nil
 }
 
 // GetServices returns all discovered services merged with running state.
@@ -113,16 +133,25 @@ func (mgr *Manager) GetServices(workspaceRoot string) ([]ServiceInfo, error) {
 	}
 
 	var result []ServiceInfo
+	seen := make(map[string]struct{})
 
-	// Add desktop service if available
+	// Add built-in passive services if available.
 	if isDesktopAvailable() {
 		result = append(result, desktopService)
+		seen[desktopService.ID] = struct{}{}
+	}
+	if isVSCodeAvailable() {
+		result = append(result, vscodeService)
+		seen[vscodeService.ID] = struct{}{}
 	}
 
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
 
 	for _, svc := range discovered {
+		if _, exists := seen[svc.ID]; exists {
+			continue
+		}
 		if managed, ok := mgr.services[svc.ID]; ok {
 			managed.mu.Lock()
 			result = append(result, managed.service)
@@ -137,9 +166,16 @@ func (mgr *Manager) GetServices(workspaceRoot string) ([]ServiceInfo, error) {
 
 // GetService returns a single service by ID.
 func (mgr *Manager) GetService(workspaceRoot, serviceID string) (*ServiceInfo, error) {
-	if serviceID == "discobot-desktop" {
+	if serviceID == desktopService.ID {
 		if isDesktopAvailable() {
 			svc := desktopService
+			return &svc, nil
+		}
+		return nil, nil
+	}
+	if serviceID == vscodeService.ID {
+		if isVSCodeAvailable() {
+			svc := vscodeService
 			return &svc, nil
 		}
 		return nil, nil
