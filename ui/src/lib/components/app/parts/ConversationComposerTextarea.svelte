@@ -1,9 +1,17 @@
 <script lang="ts">
+	import type { AgentCommand } from "$lib/api-types";
 	import ConversationPromptHistoryDropdown from "$lib/components/app/ConversationPromptHistoryDropdown.svelte";
 	import ConversationFileMentionDropdown from "$lib/components/app/parts/ConversationFileMentionDropdown.svelte";
+	import ConversationSlashCommandDropdown from "$lib/components/app/parts/ConversationSlashCommandDropdown.svelte";
 	import { InputGroupTextarea } from "$lib/components/ui/input-group";
 
 	type FileMentionDropdownHandle = {
+		handleInput: (value: string, cursor: number) => void;
+		handleKeydown: (event: KeyboardEvent) => boolean;
+		closeDropdown: () => void;
+	};
+
+	type SlashCommandDropdownHandle = {
 		handleInput: (value: string, cursor: number) => void;
 		handleKeydown: (event: KeyboardEvent) => boolean;
 		closeDropdown: () => void;
@@ -19,11 +27,13 @@
 		disabled?: boolean;
 		onDraftChange: (value: string) => void;
 		sessionId: string | null;
+		commands: AgentCommand[];
+		commandsLoading: boolean;
 		attachmentCount: number;
 		onAddFiles: (files: File[] | FileList) => void;
 		onRemoveLastAttachment: () => void;
 		onSubmit: () => void | Promise<void>;
-		onRequestMentionSession?: () => void | Promise<boolean>;
+		onRequestAutocompleteSession?: () => void | Promise<boolean>;
 	};
 
 	let {
@@ -31,15 +41,18 @@
 		disabled = false,
 		onDraftChange,
 		sessionId,
+		commands,
+		commandsLoading,
 		attachmentCount,
 		onAddFiles,
 		onRemoveLastAttachment,
 		onSubmit,
-		onRequestMentionSession,
+		onRequestAutocompleteSession,
 	}: Props = $props();
 
 	let isComposing = $state(false);
 	let fileMentionDropdownRef = $state<FileMentionDropdownHandle | null>(null);
+	let slashCommandDropdownRef = $state<SlashCommandDropdownHandle | null>(null);
 	let promptHistoryDropdownRef = $state<PromptHistoryDropdownHandle | null>(
 		null,
 	);
@@ -53,17 +66,26 @@
 		return /@([^\s@]*)$/.test(value.slice(0, cursor));
 	}
 
-	function syncFileMentionDropdown() {
+	function hasActiveSlashCommand(value: string, cursor: number): boolean {
+		return /^\/([^\s/]*)$/.test(value.slice(0, cursor));
+	}
+
+	function syncAutocompleteDropdowns() {
 		const textarea = fileMentionTextareaRef;
 		if (!textarea) {
 			return;
 		}
 
 		const cursor = textarea.selectionStart ?? textarea.value.length;
+		slashCommandDropdownRef?.handleInput(textarea.value, cursor);
 		fileMentionDropdownRef?.handleInput(textarea.value, cursor);
 	}
 
 	function handleTextareaKeydown(event: KeyboardEvent) {
+		if (slashCommandDropdownRef?.handleKeydown(event)) {
+			return;
+		}
+
 		if (fileMentionDropdownRef?.handleKeydown(event)) {
 			return;
 		}
@@ -99,9 +121,14 @@
 		onDraftChange(textarea.value);
 		promptHistoryDropdownRef?.closePromptHistoryDropdown();
 		const cursor = textarea.selectionStart ?? textarea.value.length;
-		if (!sessionId && hasActiveFileMention(textarea.value, cursor)) {
-			void onRequestMentionSession?.();
+		if (
+			!sessionId &&
+			(hasActiveFileMention(textarea.value, cursor) ||
+				hasActiveSlashCommand(textarea.value, cursor))
+		) {
+			void onRequestAutocompleteSession?.();
 		}
+		slashCommandDropdownRef?.handleInput(textarea.value, cursor);
 		fileMentionDropdownRef?.handleInput(textarea.value, cursor);
 	}
 
@@ -132,6 +159,10 @@
 		fileMentionDropdownRef?.closeDropdown();
 	}
 
+	export function closeSlashCommandDropdown() {
+		slashCommandDropdownRef?.closeDropdown();
+	}
+
 	export function closePromptHistoryDropdown() {
 		promptHistoryDropdownRef?.closePromptHistoryDropdown();
 	}
@@ -144,9 +175,18 @@
 		textarea.focus();
 		const cursor = textarea.value.length;
 		textarea.setSelectionRange(cursor, cursor);
-		syncFileMentionDropdown();
+		syncAutocompleteDropdowns();
 	}
 </script>
+
+<ConversationSlashCommandDropdown
+	bind:this={slashCommandDropdownRef}
+	{sessionId}
+	{commands}
+	{commandsLoading}
+	textareaRef={fileMentionTextareaRef}
+	onDraftChange={(value) => onDraftChange(value)}
+/>
 
 <ConversationFileMentionDropdown
 	bind:this={fileMentionDropdownRef}

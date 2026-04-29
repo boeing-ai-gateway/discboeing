@@ -58,6 +58,7 @@
 	const thread = useThreadContext();
 	const sessionView = session.ui;
 	const sessionHooks = session.hooks;
+	const sessionCommands = session.commands;
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
 	let composerContainer = $state<HTMLDivElement | null>(null);
@@ -66,7 +67,9 @@
 	);
 	let sessionSetupRef = $state<WorkspaceSelectorHandle | null>(null);
 	let pendingSubmitError = $state<string | null>(null);
-	let pendingMentionSessionCreation = $state<Promise<boolean> | null>(null);
+	let pendingAutocompleteSessionCreation = $state<Promise<boolean> | null>(
+		null,
+	);
 	let mounted = true;
 
 	function findModelById(modelId: string | null): ModelInfo | null {
@@ -157,6 +160,15 @@
 	);
 	const showPendingWorkspaceSelector = $derived.by(
 		() => session.isPending && !awaitingInitialStatus,
+	);
+	const availableCommands = $derived.by(() =>
+		session.isPending ? [] : sessionCommands.list,
+	);
+	const commandsLoading = $derived.by(
+		() =>
+			!session.isPending &&
+			sessionCommands.fetchedAt === null &&
+			sessionCommands.status !== "error",
 	);
 
 	function handleModeSelect(nextMode: ComposerMode) {
@@ -374,23 +386,23 @@
 		await thread.deleteQueuedPrompt(queueId);
 	}
 
-	async function createSessionForFileMentions(): Promise<boolean> {
+	async function createSessionForComposerAutocomplete(): Promise<boolean> {
 		if (!session.isPending) {
 			return true;
 		}
 
-		if (pendingMentionSessionCreation) {
-			return pendingMentionSessionCreation;
+		if (pendingAutocompleteSessionCreation) {
+			return pendingAutocompleteSessionCreation;
 		}
 
 		const creation = submitComposer({
 			forceEmptyPendingMessage: true,
 			preserveDraft: true,
 		});
-		pendingMentionSessionCreation = creation;
+		pendingAutocompleteSessionCreation = creation;
 		return creation.finally(() => {
-			if (pendingMentionSessionCreation === creation) {
-				pendingMentionSessionCreation = null;
+			if (pendingAutocompleteSessionCreation === creation) {
+				pendingAutocompleteSessionCreation = null;
 			}
 		});
 	}
@@ -410,6 +422,7 @@
 		if (isGenerating() && emptyWithoutAttachments) {
 			await thread.cancel();
 			composerTextareaRef?.closeMentionDropdown();
+			composerTextareaRef?.closeSlashCommandDropdown();
 			composerTextareaRef?.closePromptHistoryDropdown();
 			return false;
 		}
@@ -463,6 +476,7 @@
 			if (!preserveDraft) {
 				thread.clearNextComposerValues();
 				composerTextareaRef?.closeMentionDropdown();
+				composerTextareaRef?.closeSlashCommandDropdown();
 				composerTextareaRef?.closePromptHistoryDropdown();
 				clearAttachments();
 				await focusComposerTextarea();
@@ -559,10 +573,12 @@
 						disabled={composerDisabled}
 						onDraftChange={(v) => sessionView.setComposerDraft(v)}
 						sessionId={session.isPending ? null : session.sessionId}
+						commands={availableCommands}
+						{commandsLoading}
 						attachmentCount={attachmentFiles.length}
 						onAddFiles={addFiles}
 						onRemoveLastAttachment={removeLastAttachment}
-						onRequestMentionSession={createSessionForFileMentions}
+						onRequestAutocompleteSession={createSessionForComposerAutocomplete}
 						onSubmit={handleComposerSubmit}
 					/>
 

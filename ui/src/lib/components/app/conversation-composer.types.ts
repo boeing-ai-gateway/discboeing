@@ -24,6 +24,7 @@ export type WorkspaceSelectorHandle = {
 
 export type ConversationComposerTextareaHandle = {
 	closeMentionDropdown: () => void;
+	closeSlashCommandDropdown: () => void;
 	closePromptHistoryDropdown: () => void;
 	focus: () => void;
 };
