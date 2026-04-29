@@ -606,9 +606,10 @@
 				class="flex items-center justify-between gap-3 bg-muted/20 px-4 py-3"
 			>
 				<div class="min-w-0 space-y-1">
-					<div class="font-medium text-foreground text-sm">Hook failed</div>
-					<div class="truncate text-muted-foreground text-sm">
-						{metadata.hookName}
+					<div class="truncate font-medium text-foreground text-sm">
+						Hook Failed: <span class="text-muted-foreground"
+							>{metadata.hookName}</span
+						>
 					</div>
 					{#if collapsedSummary}
 						<div
