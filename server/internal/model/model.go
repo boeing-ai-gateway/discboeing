@@ -147,6 +147,7 @@ const (
 	WorkspaceStatusInitializing = "initializing" // Workspace just created, starting setup
 	WorkspaceStatusCloning      = "cloning"      // Cloning git repository
 	WorkspaceStatusReady        = "ready"        // Workspace is ready for use
+	WorkspaceStatusRemoving     = "removing"     // Workspace is queued for deletion
 	WorkspaceStatusError        = "error"        // Something failed during setup
 )
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/events"
 	discogit "github.com/obot-platform/discobot/server/internal/git"
+	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/store"
@@ -113,15 +114,17 @@ type WorkspaceService struct {
 	gitProvider     discogit.Provider
 	sandboxProvider sandbox.Provider
 	eventBroker     *events.Broker
+	jobEnqueuer     JobEnqueuer
 }
 
 // NewWorkspaceService creates a new workspace service
-func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, sandboxProvider sandbox.Provider, eventBroker *events.Broker) *WorkspaceService {
+func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, sandboxProvider sandbox.Provider, eventBroker *events.Broker, jobEnqueuer JobEnqueuer) *WorkspaceService {
 	return &WorkspaceService{
 		store:           s,
 		gitProvider:     gitProvider,
 		sandboxProvider: sandboxProvider,
 		eventBroker:     eventBroker,
+		jobEnqueuer:     jobEnqueuer,
 	}
 }
 
@@ -293,9 +296,58 @@ func (s *WorkspaceService) mapWorkspace(ctx context.Context, ws *model.Workspace
 	return result
 }
 
-// DeleteWorkspace deletes a workspace. If deleteFiles is true, also removes the
-// working directory from disk.
+// DeleteWorkspace initiates async deletion of a workspace.
 func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, workspaceID string, deleteFiles bool) error {
+	if s.jobEnqueuer == nil {
+		return fmt.Errorf("job enqueuer not configured")
+	}
+
+	ws, err := s.store.GetWorkspaceByID(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("workspace not found: %w", err)
+	}
+
+	if ws.Status == model.WorkspaceStatusRemoving {
+		return nil
+	}
+
+	previousStatus := ws.Status
+	previousError := ws.ErrorMessage
+	ws.Status = model.WorkspaceStatusRemoving
+	ws.ErrorMessage = nil
+	if err := s.store.UpdateWorkspace(ctx, ws); err != nil {
+		return fmt.Errorf("failed to update workspace status: %w", err)
+	}
+	if s.eventBroker != nil {
+		if err := s.eventBroker.PublishWorkspaceUpdated(ctx, ws.ProjectID, workspaceID, model.WorkspaceStatusRemoving); err != nil {
+			log.Printf("Failed to publish workspace removing event: %v", err)
+		}
+	}
+
+	if err := s.jobEnqueuer.Enqueue(ctx, jobs.WorkspaceDeletePayload{
+		ProjectID:   ws.ProjectID,
+		WorkspaceID: workspaceID,
+		DeleteFiles: deleteFiles,
+	}); err != nil {
+		ws.Status = previousStatus
+		ws.ErrorMessage = previousError
+		if updateErr := s.store.UpdateWorkspace(ctx, ws); updateErr != nil {
+			log.Printf("Failed to restore workspace %s after enqueue failure: %v", workspaceID, updateErr)
+		}
+		if s.eventBroker != nil {
+			if err := s.eventBroker.PublishWorkspaceUpdated(ctx, ws.ProjectID, workspaceID, previousStatus); err != nil {
+				log.Printf("Failed to publish workspace status rollback event: %v", err)
+			}
+		}
+		return fmt.Errorf("failed to enqueue workspace delete job: %w", err)
+	}
+
+	return nil
+}
+
+// PerformDeletion performs the actual workspace deletion work.
+// This is called by the WorkspaceDeleteExecutor job handler.
+func (s *WorkspaceService) PerformDeletion(ctx context.Context, workspaceID string, deleteFiles bool) error {
 	// Clean up all sessions through the session deletion flow first so sandboxes
 	// are stopped and removed before the workspace record disappears.
 	sessions, err := s.store.ListSessionsByWorkspaceIncludingDeleted(ctx, workspaceID)

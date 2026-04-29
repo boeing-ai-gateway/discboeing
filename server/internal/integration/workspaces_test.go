@@ -288,6 +288,19 @@ func TestDeleteWorkspace(t *testing.T) {
 	if err := ts.MockSandbox.Start(context.Background(), session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
+
+	stopStarted := make(chan struct{}, 1)
+	releaseStop := make(chan struct{})
+	ts.MockSandbox.StopFunc = func(ctx context.Context, sessionID string, timeout time.Duration) error {
+		select {
+		case stopStarted <- struct{}{}:
+		default:
+		}
+		<-releaseStop
+		ts.MockSandbox.StopFunc = nil
+		return ts.MockSandbox.Stop(ctx, sessionID, timeout)
+	}
+
 	client := ts.AuthenticatedClient(user)
 
 	resp := client.Delete("/api/projects/" + project.ID + "/workspaces/" + workspace.ID)
@@ -295,18 +308,48 @@ func TestDeleteWorkspace(t *testing.T) {
 
 	AssertStatus(t, resp, http.StatusOK)
 
-	// Verify workspace is deleted
+	select {
+	case <-stopStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for background workspace delete to start")
+	}
+
+	// Verify the delete request returned before background cleanup finished.
 	resp = client.Get("/api/projects/" + project.ID + "/workspaces/" + workspace.ID)
 	defer resp.Body.Close()
+	AssertStatus(t, resp, http.StatusOK)
 
-	AssertStatus(t, resp, http.StatusNotFound)
+	var ws struct {
+		Status string `json:"status"`
+	}
+	ParseJSON(t, resp, &ws)
+	if ws.Status != model.WorkspaceStatusRemoving {
+		t.Fatalf("workspace status = %q, want %q", ws.Status, model.WorkspaceStatusRemoving)
+	}
 
-	if _, err := ts.Store.GetSessionByIDIncludingDeleted(context.Background(), session.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("Expected session to be fully deleted, got err=%v", err)
+	if _, err := ts.Store.GetSessionByIDIncludingDeleted(context.Background(), session.ID); err != nil {
+		t.Fatalf("expected session to still exist while delete job is blocked, got err=%v", err)
 	}
-	if _, err := ts.MockSandbox.Get(context.Background(), session.ID); !errors.Is(err, sandbox.ErrNotFound) {
-		t.Fatalf("Expected sandbox to be removed, got err=%v", err)
+
+	close(releaseStop)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		resp = client.Get("/api/projects/" + project.ID + "/workspaces/" + workspace.ID)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			if _, err := ts.Store.GetSessionByIDIncludingDeleted(context.Background(), session.ID); !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("expected session to be fully deleted, got err=%v", err)
+			}
+			if _, err := ts.MockSandbox.Get(context.Background(), session.ID); !errors.Is(err, sandbox.ErrNotFound) {
+				t.Fatalf("expected sandbox to be removed, got err=%v", err)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+
+	t.Fatal("workspace was not fully deleted within timeout")
 }
 
 func TestListWorkspaces_WithData(t *testing.T) {

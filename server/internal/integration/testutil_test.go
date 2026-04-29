@@ -181,7 +181,7 @@ func NewTestServer(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker, jobQueue)
 
 	gitSvc := service.NewGitService(s, gitProvider)
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
@@ -190,7 +190,10 @@ func NewTestServer(t *testing.T) *TestServer {
 
 	disp := dispatcher.NewService(s, cfg, eventBroker)
 	disp.RegisterExecutor(dispatcher.NewWorkspaceInitExecutor(workspaceSvc))
+	disp.RegisterExecutor(dispatcher.NewWorkspaceDeleteExecutor(workspaceSvc))
 	disp.RegisterExecutor(dispatcher.NewSessionInitExecutor(sessionSvc))
+	disp.RegisterExecutor(dispatcher.NewSessionDeleteExecutor(sessionSvc))
+	disp.RegisterExecutor(dispatcher.NewSessionSandboxDeleteExecutor(sessionSvc))
 	disp.RegisterExecutor(dispatcher.NewSessionCommitExecutor(sessionSvc))
 	disp.Start(context.Background())
 
@@ -470,7 +473,7 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker, jobQueue)
 
 	gitSvc := service.NewGitService(s, gitProvider)
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
@@ -479,7 +482,10 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 
 	disp := dispatcher.NewService(s, cfg, eventBroker)
 	disp.RegisterExecutor(dispatcher.NewWorkspaceInitExecutor(workspaceSvc))
+	disp.RegisterExecutor(dispatcher.NewWorkspaceDeleteExecutor(workspaceSvc))
 	disp.RegisterExecutor(dispatcher.NewSessionInitExecutor(sessionSvc))
+	disp.RegisterExecutor(dispatcher.NewSessionDeleteExecutor(sessionSvc))
+	disp.RegisterExecutor(dispatcher.NewSessionSandboxDeleteExecutor(sessionSvc))
 	disp.RegisterExecutor(dispatcher.NewSessionCommitExecutor(sessionSvc))
 	disp.Start(context.Background())
 

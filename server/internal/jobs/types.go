@@ -13,6 +13,7 @@ const (
 	JobTypeSessionCommit        JobType = "session_commit"
 	JobTypePromptDispatch       JobType = "prompt_dispatch"
 	JobTypeWorkspaceInit        JobType = "workspace_init"
+	JobTypeWorkspaceDelete      JobType = "workspace_delete"
 )
 
 // JobPayload is implemented by all job payloads. The payload struct itself
@@ -59,6 +60,20 @@ func (p WorkspaceInitPayload) JobType() JobType { return JobTypeWorkspaceInit }
 func (p WorkspaceInitPayload) ResourceKey() (string, string) {
 	return ResourceTypeWorkspace, p.WorkspaceID
 }
+
+// WorkspaceDeletePayload is the payload for workspace_delete jobs.
+type WorkspaceDeletePayload struct {
+	ProjectID   string `json:"projectId"`
+	WorkspaceID string `json:"workspaceId"`
+	DeleteFiles bool   `json:"deleteFiles"`
+}
+
+func (p WorkspaceDeletePayload) JobType() JobType { return JobTypeWorkspaceDelete }
+func (p WorkspaceDeletePayload) ResourceKey() (string, string) {
+	return ResourceTypeWorkspace, p.WorkspaceID
+}
+func (p WorkspaceDeletePayload) Priority() int         { return 5 }
+func (p WorkspaceDeletePayload) AllowDuplicates() bool { return true }
 
 // SessionDeletePayload is the payload for session_delete jobs.
 type SessionDeletePayload struct {
