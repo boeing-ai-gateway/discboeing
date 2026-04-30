@@ -9,12 +9,18 @@ function normalizeModuleId(id: string): string {
 }
 
 function patchNoVncBrowserCode(code: string): string {
-	return code.replace(/= await _checkWebCodecsH264DecodeSupport\(\)/g, "= false");
+	return code.replace(
+		/= await _checkWebCodecsH264DecodeSupport\(\)/g,
+		"= false",
+	);
 }
 
 function isNoVncBrowserModule(id: string): boolean {
 	const normalizedId = normalizeModuleId(id);
-	return normalizedId.includes("/@novnc/novnc/") && normalizedId.endsWith("/browser.js");
+	return (
+		normalizedId.includes("/@novnc/novnc/") &&
+		normalizedId.endsWith("/browser.js")
+	);
 }
 
 function fixNoVncCjs(): Plugin {
