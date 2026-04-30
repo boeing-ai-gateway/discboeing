@@ -8,7 +8,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { access, constants, readFile, writeFile } from "node:fs/promises";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, win32 } from "node:path";
 
 export interface WatcherConfig {
 	/** Primary agent directory (agent-go) */
@@ -48,6 +48,10 @@ export interface Logger {
 	success: (message: string) => void;
 }
 
+function isWindowsStylePath(path: string): boolean {
+	return /^[A-Za-z]:[\\/]/.test(path);
+}
+
 /**
  * Resolves the Docker CLI command.
  * On Windows, prefer Docker Desktop's standard install location so a stale
@@ -71,7 +75,7 @@ export function resolveDockerCommand(
 		if (!baseDir) {
 			continue;
 		}
-		const dockerPath = join(
+		const dockerPath = win32.join(
 			baseDir,
 			"Docker",
 			"Docker",
@@ -91,14 +95,16 @@ export function getCommandEnv(
 	command: string,
 	env: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-	const commandDir = dirname(command);
+	const pathModule = isWindowsStylePath(command) ? win32 : null;
+	const commandDir = pathModule ? pathModule.dirname(command) : dirname(command);
 	if (commandDir === ".") {
 		return env;
 	}
 
+	const pathDelimiter = pathModule ? win32.delimiter : delimiter;
 	const currentPath = env.PATH ?? env.Path ?? "";
 	const pathEntries = currentPath
-		.split(delimiter)
+		.split(pathDelimiter)
 		.map((entry) => entry.trim())
 		.filter(Boolean);
 	if (pathEntries.includes(commandDir)) {
@@ -107,7 +113,7 @@ export function getCommandEnv(
 
 	return {
 		...env,
-		PATH: [commandDir, currentPath].filter(Boolean).join(delimiter),
+		PATH: [commandDir, currentPath].filter(Boolean).join(pathDelimiter),
 	};
 }
 
