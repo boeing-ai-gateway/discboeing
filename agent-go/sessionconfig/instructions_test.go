@@ -159,8 +159,8 @@ func TestInstructionDisplayPath(t *testing.T) {
 	})
 
 	t.Run("windows absolute prefix keeps windows separators", func(t *testing.T) {
-		got := instructionDisplayPath(`C:\\discobot\\rules`, "policy.md")
-		if got != `C:\\discobot\\rules\\policy.md` {
+		got := instructionDisplayPath(`C:\discobot\rules`, "policy.md")
+		if got != `C:\discobot\rules\policy.md` {
 			t.Fatalf("got %q", got)
 		}
 	})
