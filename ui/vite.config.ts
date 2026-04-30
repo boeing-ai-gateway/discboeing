@@ -97,6 +97,29 @@ export default defineConfig(() => ({
 		},
 	},
 	optimizeDeps: {
-		exclude: ["@novnc/novnc"],
+		include: ["@novnc/novnc/lib/rfb"],
+		esbuildOptions: {
+			plugins: [
+				{
+					name: "fix-novnc-cjs",
+					setup(build) {
+						build.onLoad(
+							{ filter: /browser\.js$/, namespace: "file" },
+							(args) => {
+								if (!args.path.includes("@novnc/novnc")) return;
+								const code = readFileSync(args.path, "utf-8");
+								return {
+									contents: code.replace(
+										/= await _checkWebCodecsH264DecodeSupport\(\)/g,
+										"= false",
+									),
+									loader: "js",
+								};
+							},
+						);
+					},
+				},
+			],
+		},
 	},
 }));
