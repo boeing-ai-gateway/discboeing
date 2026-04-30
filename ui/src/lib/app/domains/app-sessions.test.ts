@@ -25,6 +25,21 @@ test("app sessions retries the initial session reload after materializing a pend
 	assert.match(source, /scheduleInitialStatusRetry\(sessionId, attempt\);/);
 });
 
+test("app sessions prune stale recent-session entries after a successful session list refresh", () => {
+	const source = readSource();
+
+	assert.match(source, /function purgeMissingRecentSessions\(\): void \{/);
+	assert.match(source, /const validSessionIds = Object\.fromEntries\(/);
+	assert.match(
+		source,
+		/if \(!validSessionIds\[entry\.sessionId\]\) \{[\s\S]*trackStaleSessionId\(entry\.sessionId\);[\s\S]*\}/,
+	);
+	assert.match(
+		source,
+		/await store\.fetch\(\);\s*purgeMissingRecentSessions\(\);/,
+	);
+});
+
 test("setAwaitingInitialStatus immediately kicks off a session reload", () => {
 	const source = readSource();
 

@@ -183,6 +183,32 @@ export function createAppSessionsDomain(
 		});
 	});
 
+	function purgeMissingRecentSessions(): void {
+		const validSessionIds = Object.fromEntries(
+			store.list.map((session) => [session.id, true] as const),
+		);
+		const staleSessionIds: string[] = [];
+		const trackStaleSessionId = (sessionId: string) => {
+			if (!staleSessionIds.includes(sessionId)) {
+				staleSessionIds.push(sessionId);
+			}
+		};
+		for (const entry of recentThreadStore.entries) {
+			if (!validSessionIds[entry.sessionId]) {
+				trackStaleSessionId(entry.sessionId);
+			}
+		}
+		if (
+			currentSelectedSessionId &&
+			!validSessionIds[currentSelectedSessionId]
+		) {
+			trackStaleSessionId(currentSelectedSessionId);
+		}
+		for (const sessionId of staleSessionIds) {
+			removeFromMemory(sessionId);
+		}
+	}
+
 	const removeFromMemory = (sessionId: string): boolean => {
 		sessionContexts.get(sessionId)?.dispose();
 		sessionContexts.delete(sessionId);
@@ -212,6 +238,7 @@ export function createAppSessionsDomain(
 
 	const refresh = async () => {
 		await store.fetch();
+		purgeMissingRecentSessions();
 	};
 
 	const reloadSession = async (sessionId: string, attempt = 0) => {
