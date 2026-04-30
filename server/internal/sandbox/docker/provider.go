@@ -290,20 +290,6 @@ func inspectionContainerNeedsRecreate(existing containerTypes.InspectResponse, i
 		existing.HostConfig.CgroupnsMode != containerTypes.CgroupnsModeHost
 }
 
-func isWindowsAbsolutePath(sourcePath string) bool {
-	if len(sourcePath) < 3 {
-		return false
-	}
-	if sourcePath[1] != ':' {
-		return false
-	}
-	if (sourcePath[0] < 'A' || sourcePath[0] > 'Z') &&
-		(sourcePath[0] < 'a' || sourcePath[0] > 'z') {
-		return false
-	}
-	return sourcePath[2] == '\\' || sourcePath[2] == '/'
-}
-
 func resolveWorkspaceMountSource(sourcePath string) (string, error) {
 	sourcePath = strings.TrimSpace(sourcePath)
 	if sourcePath == "" {
