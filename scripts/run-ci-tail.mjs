@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 
-function commandName(name) {
-	return process.platform === "win32" ? `${name}.cmd` : name;
-}
-
 if (process.env.CI !== "true") {
 	process.exit(0);
 }
 
-execFileSync(commandName("pnpm"), ["build:frontend"], { stdio: "inherit" });
+if (process.platform === "win32") {
+	execFileSync("cmd.exe", ["/d", "/s", "/c", "pnpm build:frontend"], {
+		stdio: "inherit",
+	});
+} else {
+	execFileSync("pnpm", ["build:frontend"], { stdio: "inherit" });
+}
 execFileSync("git", ["diff", "--exit-code"], { stdio: "inherit" });
