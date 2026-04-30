@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -353,6 +354,37 @@ func TestUpgradeStreamSession_DropsChunksWhenWriterBlocks(t *testing.T) {
 	if got := session.droppedBytes.Load(); got == 0 {
 		t.Fatal("expected dropped bytes to be recorded")
 	}
+}
+
+func TestUpgradeStreamSession_RecordChunkAfterCloseDoesNotPanic(t *testing.T) {
+	session := newUpgradeStreamSession(discardWriteCloser{}, 1, nil)
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			<-start
+			for range 1000 {
+				session.RecordChunk(UpgradeStreamClientToServer, []byte("x"))
+			}
+		})
+	}
+
+	close(start)
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+	wg.Wait()
+}
+
+type discardWriteCloser struct{}
+
+func (discardWriteCloser) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func (discardWriteCloser) Close() error {
+	return nil
 }
 
 type blockingWriteCloser struct {

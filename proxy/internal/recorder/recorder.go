@@ -135,6 +135,9 @@ type UpgradeStreamSession struct {
 	closeOnce sync.Once
 	wg        *sync.WaitGroup // parent Recorder's streamWg; may be nil
 
+	stateMu sync.RWMutex
+	closed  bool
+
 	droppedChunks atomic.Uint64
 	droppedBytes  atomic.Uint64
 	clientBytes   atomic.Uint64
@@ -270,6 +273,12 @@ func (s *UpgradeStreamSession) RecordChunk(direction UpgradeStreamDirection, pay
 	chunk := bytes.Clone(payload)
 	event := streamEvent{direction: byte(direction), payload: chunk}
 
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	if s.closed {
+		return
+	}
+
 	select {
 	case s.events <- event:
 	default:
@@ -285,6 +294,9 @@ func (s *UpgradeStreamSession) Close() error {
 	}
 
 	s.closeOnce.Do(func() {
+		s.stateMu.Lock()
+		defer s.stateMu.Unlock()
+		s.closed = true
 		close(s.events)
 	})
 	<-s.done
