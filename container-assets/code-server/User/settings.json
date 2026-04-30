@@ -1,7 +1,7 @@
 {
 	"workbench.colorTheme": "Discobot Dark",
 	"window.commandCenter": false,
-	"workbench.activityBar.location": "hidden",
+	"workbench.activityBar.location": "top",
 	"editor.minimap.enabled": false,
 	"files.autoSave": "onFocusChange",
 	"security.workspace.trust.enabled": false,
@@ -13,5 +13,11 @@
 	"workbench.sideBar.location": "right",
 	"workbench.statusBar.visible": false,
 	"workbench.editor.empty.hint": "hidden",
+	"remote.autoForwardPorts": false,
+	"vim.handleKeys": {
+		"<C-o>": false,
+		"<C-s>": false,
+		"<C-z>": false
+	},
 	"terminal.integrated.initialHint": false
 }
