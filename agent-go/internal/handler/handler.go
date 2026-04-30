@@ -540,9 +540,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 				Body:        map[string]any{"runAfter": time.Now().UTC().Add(time.Hour).Format(time.RFC3339)},
 			}})
 
-		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/models", Handler: h.ListModels,
-			Meta: routes.Meta{Group: "Threads", Description: "List available models"}})
-
 		threadReg.Register(r, routes.Route{Method: "POST", Pattern: "/chat", Handler: h.PostChat,
 			Meta: routes.Meta{
 				Group:       "Chat",

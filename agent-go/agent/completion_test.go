@@ -11,7 +11,6 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
 // --- Mock agent for completion tests ---
@@ -23,7 +22,6 @@ type mockAgent struct {
 	cancelFn   func(threadID string) bool
 
 	interruptedThreads []string
-	models             []providers.ModelInfo
 	threads            []string
 }
 
@@ -53,10 +51,6 @@ func (m *mockAgent) Messages(threadID, leafID string) ([]message.UIMessage, erro
 		return m.messagesFn(threadID, leafID)
 	}
 	return nil, nil
-}
-
-func (m *mockAgent) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
-	return m.models, nil
 }
 
 func (m *mockAgent) ListThreads() ([]string, error) {

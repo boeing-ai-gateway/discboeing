@@ -13,7 +13,6 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
@@ -37,11 +36,10 @@ func (m *mockSubAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest
 	return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 }
 
-func (m *mockSubAgent) Cancel(_ string) bool                                        { return false }
-func (m *mockSubAgent) Messages(_, _ string) ([]message.UIMessage, error)           { return nil, nil }
-func (m *mockSubAgent) ListModels(_ context.Context) ([]providers.ModelInfo, error) { return nil, nil }
-func (m *mockSubAgent) ListThreads() ([]string, error)                              { return nil, nil }
-func (m *mockSubAgent) HasInterruptedTurn(string) (bool, error)                     { return false, nil }
+func (m *mockSubAgent) Cancel(_ string) bool                              { return false }
+func (m *mockSubAgent) Messages(_, _ string) ([]message.UIMessage, error) { return nil, nil }
+func (m *mockSubAgent) ListThreads() ([]string, error)                    { return nil, nil }
+func (m *mockSubAgent) HasInterruptedTurn(string) (bool, error)           { return false, nil }
 func (m *mockSubAgent) PendingQuestion(threadID string) (*agent.PendingQuestion, error) {
 	if m.pendingQuestionFn != nil {
 		return m.pendingQuestionFn(threadID)
@@ -209,11 +207,8 @@ func (a *recursiveTaskAgent) Resume(_ context.Context, _ string, _ agent.PromptR
 
 func (a *recursiveTaskAgent) Cancel(_ string) bool                              { return false }
 func (a *recursiveTaskAgent) Messages(_, _ string) ([]message.UIMessage, error) { return nil, nil }
-func (a *recursiveTaskAgent) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
-	return nil, nil
-}
-func (a *recursiveTaskAgent) ListThreads() ([]string, error)          { return nil, nil }
-func (a *recursiveTaskAgent) HasInterruptedTurn(string) (bool, error) { return false, nil }
+func (a *recursiveTaskAgent) ListThreads() ([]string, error)                    { return nil, nil }
+func (a *recursiveTaskAgent) HasInterruptedTurn(string) (bool, error)           { return false, nil }
 func (a *recursiveTaskAgent) PendingQuestion(threadID string) (*agent.PendingQuestion, error) {
 	return a.state(threadID).pending, nil
 }

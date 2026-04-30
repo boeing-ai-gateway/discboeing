@@ -57,9 +57,6 @@ func (m *streamTestAgent) Messages(threadID, leafID string) ([]message.UIMessage
 	}
 	return nil, nil
 }
-func (m *streamTestAgent) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
-	return nil, nil
-}
 func (m *streamTestAgent) ListThreads() ([]string, error) {
 	if m.listThreadsFn != nil {
 		return m.listThreadsFn()

@@ -1837,12 +1837,6 @@ func (a *DefaultAgent) clearActiveCommand(
 	return yield(thread.UpdateChunkFromConfig(threadID, cfg), nil)
 }
 
-// ListModels returns available models from all registered providers.
-// Model IDs are prefixed with "providerId/".
-func (a *DefaultAgent) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	return a.registry.ListModels(ctx)
-}
-
 // builtinCommands are slash commands handled natively by the agent, independent
 // of any user-defined skills or legacy commands.
 var builtinCommands = []agent.Command{

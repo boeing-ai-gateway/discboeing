@@ -121,9 +121,6 @@ type Agent interface {
 	// UI-projected messages.
 	Messages(threadID, leafID string) ([]message.UIMessage, error)
 
-	// ListModels returns available models from the underlying provider.
-	ListModels(ctx context.Context) ([]providers.ModelInfo, error)
-
 	// ListThreads returns all thread IDs.
 	ListThreads() ([]string, error)
 

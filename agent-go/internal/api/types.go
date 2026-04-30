@@ -254,23 +254,6 @@ type NoActiveCompletionResponse struct {
 	Error string `json:"error"` // "no_active_completion"
 }
 
-// ModelInfo represents a model from the AI provider's API.
-type ModelInfo struct {
-	ID               string   `json:"id"`
-	DisplayName      string   `json:"display_name"`
-	Provider         string   `json:"provider"`
-	CreatedAt        string   `json:"created_at"`
-	Type             string   `json:"type"`
-	Reasoning        bool     `json:"reasoning"`
-	ReasoningLevels  []string `json:"reasoningLevels,omitempty"`
-	DefaultReasoning string   `json:"defaultReasoning,omitempty"`
-}
-
-// ModelsResponse is the GET /threads/{id}/models response.
-type ModelsResponse struct {
-	Models []ModelInfo `json:"models"`
-}
-
 // ============================================================================
 // File System Types
 // ============================================================================

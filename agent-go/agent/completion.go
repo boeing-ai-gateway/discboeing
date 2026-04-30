@@ -9,7 +9,6 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
 // CompletionListener observes completion lifecycle events.
@@ -434,11 +433,6 @@ func (cm *CompletionManager) activeCompletionLeafID(threadID string) string {
 		return ""
 	}
 	return comp.leafMsg
-}
-
-// ListModels returns available models from the provider.
-func (cm *CompletionManager) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	return cm.agent.ListModels(ctx)
 }
 
 // ListThreads returns all thread IDs.
