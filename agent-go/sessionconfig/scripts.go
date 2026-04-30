@@ -21,7 +21,8 @@ type ScriptConfig struct {
 	Discobot     DiscobotCommandMetadata
 }
 
-// discoverScripts loads executable scripts from project and user script directories.
+// discoverScripts loads executable scripts from project, user, and Discobot
+// system script directories.
 func discoverScripts(projectRoot string) ([]ScriptConfig, []string, error) {
 	home, _ := os.UserHomeDir()
 	return discoverScriptsWithHome(projectRoot, home)
@@ -61,6 +62,11 @@ func discoverScriptsWithHome(projectRoot, home string) ([]ScriptConfig, []string
 			}
 		}
 	}
+	for _, dir := range discobotSystemPaths("scripts") {
+		if err := addFrom(loadScriptsDir(dir)); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	return scripts, warnings, nil
 }
@@ -80,6 +86,7 @@ func lookupScriptWithHome(projectRoot, name, home string, visibleOnly bool) (Scr
 			dirs = append(dirs, filepath.Join(home, dir, "scripts"))
 		}
 	}
+	dirs = append(dirs, discobotSystemPaths("scripts")...)
 
 	for _, dir := range dirs {
 		cfg, ok, err := lookupScriptInDir(dir, name)

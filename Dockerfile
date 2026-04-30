@@ -273,6 +273,21 @@ ENV DISPLAY=:0
 
 EXPOSE 5900
 
+# Stage 3b: Package browser-harness under its upstream command name
+FROM runtime-base AS browser-harness-builder
+
+ARG BROWSER_HARNESS_REPO=https://github.com/browser-use/browser-harness.git
+ARG BROWSER_HARNESS_REF=main
+
+RUN git clone --depth 1 --branch "${BROWSER_HARNESS_REF}" "${BROWSER_HARNESS_REPO}" /tmp/browser-harness \
+    && mkdir -p /opt/browser-harness-skills/browser-harness \
+    && cp -a /tmp/browser-harness/. /opt/browser-harness-skills/browser-harness/ \
+    && rm -f /opt/browser-harness-skills/browser-harness/install.md \
+    && uv venv /opt/browser-harness \
+    && uv pip install --python /opt/browser-harness/bin/python /tmp/browser-harness \
+    && ln -s /opt/browser-harness/bin/browser-harness /usr/local/bin/browser-harness \
+    && rm -rf /tmp/browser-harness /root/.cache/uv
+
 # Stage 3c: Runtime overlay with frequently-changing binaries and container assets
 FROM scratch AS runtime-overlay
 
@@ -280,6 +295,11 @@ FROM scratch AS runtime-overlay
 COPY --from=agent-go-builder --chmod=755 /discobot-agent-api /opt/discobot/bin/discobot-agent-api
 COPY --from=proxy-builder --chmod=755 /proxy /opt/discobot/bin/proxy
 COPY --from=agent-builder --chmod=755 /discobot-agent /opt/discobot/bin/discobot-agent
+
+# Copy browser-harness runtime and expose it at /usr/local/bin/browser-harness
+COPY --from=browser-harness-builder /opt/browser-harness /opt/browser-harness
+COPY --from=browser-harness-builder /usr/local/bin/browser-harness /usr/local/bin/browser-harness
+COPY --from=browser-harness-builder /opt/browser-harness-skills/ /opt/discobot/skills/
 
 # Docker wrapper: injects --output type=docker for build commands so remote
 # buildx builders always load images into the local daemon.
@@ -293,8 +313,8 @@ COPY container-assets/systemd/ /etc/systemd/system/
 COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-defaults/
 
 # Copy container-specific agent configuration (Discobot scripts, docs, etc.)
-# These are placed in /home/discobot/.discobot/ for user-level availability
-COPY --chown=1000:1000 container-assets/claude /home/discobot/.discobot
+# into system-level Discobot directories for session config discovery.
+COPY container-assets/claude/scripts/ /opt/discobot/scripts/
 COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
 
 # Stage 3d: Minimal runtime without graphical tools

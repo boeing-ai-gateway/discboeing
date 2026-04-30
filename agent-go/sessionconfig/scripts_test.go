@@ -58,3 +58,68 @@ printf 'ok\n'
 		t.Fatalf("approved uses = %#v", request.ApprovedUses)
 	}
 }
+
+func TestDiscoverScripts_SystemDir(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+
+	scriptsDir := filepath.Join(systemRoot, "scripts")
+	mkdirAll(t, scriptsDir)
+	writeFile(t, filepath.Join(scriptsDir, "release"), `#!/bin/sh
+#---
+# name: release
+# description: Release from system dir
+#---
+echo ok
+`)
+	if err := os.Chmod(filepath.Join(scriptsDir, "release"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scripts, _, err := discoverScriptsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) != 1 {
+		t.Fatalf("expected 1 script, got %d", len(scripts))
+	}
+	if scripts[0].Name != "release" {
+		t.Fatalf("script name = %q, want release", scripts[0].Name)
+	}
+}
+
+func TestLookupScript_SystemDir(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+
+	scriptsDir := filepath.Join(systemRoot, "scripts")
+	mkdirAll(t, scriptsDir)
+	path := filepath.Join(scriptsDir, "release")
+	writeFile(t, path, `#!/bin/sh
+#---
+# name: release
+# description: Release from system dir
+#---
+echo ok
+`)
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	script, found, err := lookupScriptWithHome(root, "release", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected script to be found")
+	}
+	if script.Name != "release" {
+		t.Fatalf("script name = %q, want release", script.Name)
+	}
+}

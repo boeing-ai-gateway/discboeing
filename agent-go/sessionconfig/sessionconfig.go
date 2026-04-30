@@ -45,9 +45,9 @@ type SessionConfig struct {
 
 	// Skills are discovered skill configurations from project-level .claude/skills/
 	// and .discobot/skills/, user-level ~/.claude/skills, ~/.discobot/skills,
-	// ~/.agents/skills, and legacy commands directories including ~/.agents/
-	// commands. They are listed in the system-reminder so the model knows which
-	// slash commands are available.
+	// ~/.agents/skills, Discobot system directories, and legacy commands
+	// directories including ~/.agents/commands. They are listed in the
+	// system-reminder so the model knows which slash commands are available.
 	Skills []SkillConfig
 
 	// SkillDiscoveryWarnings are non-fatal skill loading issues, such as
@@ -56,9 +56,9 @@ type SessionConfig struct {
 	SkillDiscoveryWarnings []string
 
 	// Scripts are discovered executable slash-command scripts from .discobot/
-	// scripts and supported user-level script directories. Visible scripts are
-	// listed in the system reminders so the model knows which executable slash
-	// commands are available.
+	// scripts, supported user-level script directories, and Discobot system
+	// script directories. Visible scripts are listed in the system reminders so
+	// the model knows which executable slash commands are available.
 	Scripts []ScriptConfig
 
 	// ScriptDiscoveryWarnings are non-fatal script loading issues.

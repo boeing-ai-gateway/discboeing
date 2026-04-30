@@ -354,132 +354,8 @@ func TestSyncNewFilesPreservesExistingWorkspaceAndAddsMissingFiles(t *testing.T)
 	}
 }
 
-func TestRefreshBundledScriptsOverwritesBundledFilesOnly(t *testing.T) {
-	srcHome := t.TempDir()
-	dstHome := t.TempDir()
-	srcScripts := filepath.Join(srcHome, ".discobot", "scripts")
-	dstScripts := filepath.Join(dstHome, ".discobot", "scripts")
-	if err := os.MkdirAll(srcScripts, 0o755); err != nil {
-		t.Fatalf("mkdir src scripts: %v", err)
-	}
-	if err := os.MkdirAll(dstScripts, 0o755); err != nil {
-		t.Fatalf("mkdir dst scripts: %v", err)
-	}
-
-	if err := os.WriteFile(filepath.Join(srcScripts, "discobot-commit"), []byte("new script\n"), 0o755); err != nil {
-		t.Fatalf("write src script: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dstScripts, "discobot-commit"), []byte("old script\n"), 0o755); err != nil {
-		t.Fatalf("write dst script: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dstHome, ".bashrc"), []byte("custom bashrc\n"), 0o644); err != nil {
-		t.Fatalf("write dst bashrc: %v", err)
-	}
-
-	u := &userInfo{uid: os.Getuid(), gid: os.Getgid()}
-	if err := refreshBundledScripts(srcHome, dstHome, u); err != nil {
-		t.Fatalf("refreshBundledScripts failed: %v", err)
-	}
-
-	commandBody, err := os.ReadFile(filepath.Join(dstScripts, "discobot-commit"))
-	if err != nil {
-		t.Fatalf("read refreshed script: %v", err)
-	}
-	if string(commandBody) != "new script\n" {
-		t.Fatalf("script body = %q, want refreshed contents", string(commandBody))
-	}
-
-	bashrc, err := os.ReadFile(filepath.Join(dstHome, ".bashrc"))
-	if err != nil {
-		t.Fatalf("read dst bashrc: %v", err)
-	}
-	if string(bashrc) != "custom bashrc\n" {
-		t.Fatalf("bashrc = %q, want unrelated file unchanged", string(bashrc))
-	}
-}
-
-func TestRefreshBundledCommandsCreatesCommandsWhenThreadsDirExists(t *testing.T) {
-	srcHome := t.TempDir()
-	dstHome := t.TempDir()
-	srcCommands := filepath.Join(srcHome, ".discobot", "commands")
-	threadsDir := filepath.Join(dstHome, ".discobot", "threads", "thread-1")
-	if err := os.MkdirAll(srcCommands, 0o755); err != nil {
-		t.Fatalf("mkdir src commands: %v", err)
-	}
-	if err := os.MkdirAll(threadsDir, 0o755); err != nil {
-		t.Fatalf("mkdir threads dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(srcCommands, "discobot-commit.md"), []byte("new command\n"), 0o644); err != nil {
-		t.Fatalf("write src command: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(threadsDir, "state.json"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatalf("write thread state: %v", err)
-	}
-
-	u := &userInfo{uid: os.Getuid(), gid: os.Getgid()}
-	if err := refreshBundledCommands(srcHome, dstHome, u); err != nil {
-		t.Fatalf("refreshBundledCommands failed: %v", err)
-	}
-
-	commandBody, err := os.ReadFile(filepath.Join(dstHome, ".discobot", "commands", "discobot-commit.md"))
-	if err != nil {
-		t.Fatalf("read refreshed command: %v", err)
-	}
-	if string(commandBody) != "new command\n" {
-		t.Fatalf("command body = %q, want refreshed contents", string(commandBody))
-	}
-
-	threadState, err := os.ReadFile(filepath.Join(threadsDir, "state.json"))
-	if err != nil {
-		t.Fatalf("read thread state: %v", err)
-	}
-	if string(threadState) != "{}\n" {
-		t.Fatalf("thread state = %q, want existing contents preserved", string(threadState))
-	}
-}
-
-func TestRefreshBundledCommandsRemovesLegacyClaudeCommands(t *testing.T) {
-	srcHome := t.TempDir()
-	dstHome := t.TempDir()
-	srcCommands := filepath.Join(srcHome, ".discobot", "commands")
-	legacyCommands := filepath.Join(dstHome, ".claude", "commands")
-	if err := os.MkdirAll(srcCommands, 0o755); err != nil {
-		t.Fatalf("mkdir src commands: %v", err)
-	}
-	if err := os.MkdirAll(legacyCommands, 0o755); err != nil {
-		t.Fatalf("mkdir legacy commands: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(srcCommands, "discobot-commit.md"), []byte("new command\n"), 0o644); err != nil {
-		t.Fatalf("write src default command: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyCommands, "discobot-commit.md"), []byte("old command\n"), 0o644); err != nil {
-		t.Fatalf("write legacy command: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyCommands, "custom.md"), []byte("custom command\n"), 0o644); err != nil {
-		t.Fatalf("write legacy custom command: %v", err)
-	}
-
-	u := &userInfo{uid: os.Getuid(), gid: os.Getgid()}
-	if err := refreshBundledCommands(srcHome, dstHome, u); err != nil {
-		t.Fatalf("refreshBundledCommands failed: %v", err)
-	}
-
-	body, err := os.ReadFile(filepath.Join(dstHome, ".discobot", "commands", "discobot-commit.md"))
-	if err != nil {
-		t.Fatalf("read discobot command: %v", err)
-	}
-	if string(body) != "new command\n" {
-		t.Fatalf("discobot command = %q, want refreshed contents", string(body))
-	}
-
-	if _, err := os.Stat(legacyCommands); !os.IsNotExist(err) {
-		t.Fatalf("expected legacy commands dir removed, err=%v", err)
-	}
-}
-
 func TestInstallCommitCommandVariant(t *testing.T) {
-	homeDir := t.TempDir()
-	scriptsDir := filepath.Join(homeDir, ".discobot", "scripts")
+	scriptsDir := t.TempDir()
 	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
 		t.Fatalf("mkdir scripts dir: %v", err)
 	}
@@ -495,7 +371,7 @@ func TestInstallCommitCommandVariant(t *testing.T) {
 		t.Fatalf("write remote script: %v", err)
 	}
 
-	if err := installCommitCommandVariant(homeDir, false, nil); err != nil {
+	if err := installCommitCommandVariant(scriptsDir, false, nil); err != nil {
 		t.Fatalf("installCommitCommandVariant(false) failed: %v", err)
 	}
 
@@ -513,7 +389,7 @@ func TestInstallCommitCommandVariant(t *testing.T) {
 	if err := os.WriteFile(remotePath, []byte(remoteBody), 0o755); err != nil {
 		t.Fatalf("rewrite remote script: %v", err)
 	}
-	if err := installCommitCommandVariant(homeDir, true, nil); err != nil {
+	if err := installCommitCommandVariant(scriptsDir, true, nil); err != nil {
 		t.Fatalf("installCommitCommandVariant(true) failed: %v", err)
 	}
 
@@ -529,27 +405,61 @@ func TestInstallCommitCommandVariant(t *testing.T) {
 	}
 }
 
-func TestRemoveLegacyBundledCommands(t *testing.T) {
+func TestRemoveObsoleteBundledHomeConfig(t *testing.T) {
 	homeDir := t.TempDir()
+	scriptsDir := filepath.Join(homeDir, ".discobot", "scripts")
 	commandsDir := filepath.Join(homeDir, ".discobot", "commands")
+	skillsDir := filepath.Join(homeDir, ".discobot", "skills", "browser-harness")
+	legacyCommandsDir := filepath.Join(homeDir, ".claude", "commands")
+	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+		t.Fatalf("mkdir scripts dir: %v", err)
+	}
 	if err := os.MkdirAll(commandsDir, 0o755); err != nil {
 		t.Fatalf("mkdir commands dir: %v", err)
 	}
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatalf("mkdir skills dir: %v", err)
+	}
+	if err := os.MkdirAll(legacyCommandsDir, 0o755); err != nil {
+		t.Fatalf("mkdir legacy commands dir: %v", err)
+	}
 
+	for _, name := range []string{"discobot-commit", "discobot-commit-remote", "discobot-rebase"} {
+		if err := os.WriteFile(filepath.Join(scriptsDir, name), []byte("legacy\n"), 0o755); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
 	for _, name := range []string{"discobot-commit.md", "discobot-commit-remote.md", "discobot-rebase.md"} {
 		if err := os.WriteFile(filepath.Join(commandsDir, name), []byte("legacy\n"), 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-
-	if err := removeLegacyBundledCommands(homeDir); err != nil {
-		t.Fatalf("removeLegacyBundledCommands failed: %v", err)
+	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("legacy\n"), 0o644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyCommandsDir, "custom.md"), []byte("legacy\n"), 0o644); err != nil {
+		t.Fatalf("write legacy command: %v", err)
 	}
 
+	if err := removeObsoleteBundledHomeConfig(homeDir); err != nil {
+		t.Fatalf("removeObsoleteBundledHomeConfig failed: %v", err)
+	}
+
+	for _, name := range []string{"discobot-commit", "discobot-commit-remote", "discobot-rebase"} {
+		if _, err := os.Stat(filepath.Join(scriptsDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("expected %s to be removed, got err=%v", name, err)
+		}
+	}
 	for _, name := range []string{"discobot-commit.md", "discobot-commit-remote.md", "discobot-rebase.md"} {
 		if _, err := os.Stat(filepath.Join(commandsDir, name)); !os.IsNotExist(err) {
 			t.Fatalf("expected %s to be removed, got err=%v", name, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(skillsDir, "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected browser-harness skill to be removed, got err=%v", err)
+	}
+	if _, err := os.Stat(legacyCommandsDir); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy commands dir removed, got err=%v", err)
 	}
 }
 

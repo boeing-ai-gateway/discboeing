@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -63,7 +64,15 @@ func runSkill(ctx context.Context, cwd string, env []string, skillName, args str
 		// Claude: "If you see a <command-name> tag in the current conversation
 		// turn, the skill has ALREADY been loaded — follow the instructions
 		// directly instead of calling this tool again."
-		return fmt.Sprintf("<%s>\n%s\n</%s>", skillName, body, skillName), nil
+		prefix := ""
+		if cfg.Skill != nil && cfg.Skill.SourcePath != "" {
+			label := "Skill directory"
+			if cfg.Kind == sessionconfig.SkillLikeKindCommand {
+				label = "Command directory"
+			}
+			prefix = fmt.Sprintf("%s: %s\n\n", label, filepath.Dir(cfg.Skill.SourcePath))
+		}
+		return fmt.Sprintf("%s<%s>\n%s\n</%s>", prefix, skillName, body, skillName), nil
 	case sessionconfig.SkillLikeKindScript:
 		result, err := scriptexec.RunDiscovered(ctx, *cfg.Script, cwd, env, args)
 		if err != nil {

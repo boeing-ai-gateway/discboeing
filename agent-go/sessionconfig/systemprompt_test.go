@@ -103,7 +103,6 @@ func TestDefaultSystemPrompt_Content(t *testing.T) {
 		"## Tool use",
 		"## Communication style",
 		"/discobot/docs.txt",
-		"/usr/bin/agent-browser",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("missing %q", want)

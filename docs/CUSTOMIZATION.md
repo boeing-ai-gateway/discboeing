@@ -82,6 +82,15 @@ user-facing slash commands. They are discovered from the workspace and from
 supported user-level script directories, but when Discobot tells the LLM about
 them, they are presented through the same `Skill` tool as markdown skills.
 
+Discobot resolves executable slash commands from these locations, in order:
+
+1. workspace `.discobot/scripts/`
+2. user `~/.discobot/scripts/`
+3. user `~/.agents/scripts/`
+4. system `/opt/discobot/scripts/`
+5. system `/usr/local/share/discobot/scripts/`
+6. system `/usr/share/discobot/scripts/`
+
 That means:
 
 - users can invoke them with `/name ...args`

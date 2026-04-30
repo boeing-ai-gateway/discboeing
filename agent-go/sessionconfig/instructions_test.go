@@ -116,6 +116,40 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 	}
 }
 
+func TestDiscoverInstructions_SystemFiles(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	mkdirAll(t, filepath.Join(root, ".git"))
+
+	writeFile(t, filepath.Join(systemRoot, "CLAUDE.md"), "System instructions")
+	rulesDir := filepath.Join(systemRoot, "rules")
+	mkdirAll(t, rulesDir)
+	writeFile(t, filepath.Join(rulesDir, "policy.md"), "System rule")
+
+	entries, err := discoverInstructions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Path != filepath.Join(systemRoot, "CLAUDE.md") {
+		t.Fatalf("first path = %q", entries[0].Path)
+	}
+	if entries[0].Description != "system-level instructions" {
+		t.Fatalf("first description = %q", entries[0].Description)
+	}
+	if entries[1].Path != filepath.Join(systemRoot, "rules", "policy.md") {
+		t.Fatalf("second path = %q", entries[1].Path)
+	}
+	if entries[1].Description != "system rule" {
+		t.Fatalf("second description = %q", entries[1].Description)
+	}
+}
+
 func TestDiscoverInstructions_NoFiles(t *testing.T) {
 	dir := t.TempDir()
 	mkdirAll(t, filepath.Join(dir, ".git"))

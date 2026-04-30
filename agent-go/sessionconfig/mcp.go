@@ -79,7 +79,8 @@ func discoverMCPServers(projectRoot string) ([]MCPServerConfig, error) {
 
 // DiscoverMCPState loads MCP server definitions and computes a reload token for
 // the MCP config files relevant to the given working directory. It checks the
-// project .mcp.json, ~/.claude/.mcp.json, and ~/.discobot/mcp.json.
+// project .mcp.json, ~/.claude/.mcp.json, ~/.discobot/mcp.json, and Discobot
+// system mcp.json files.
 func DiscoverMCPState(cwd string) (*MCPDiscoveryState, error) {
 	projectRoot := findProjectRoot(cwd)
 	paths, err := discoverMCPPaths(projectRoot)
@@ -119,6 +120,7 @@ func discoverMCPPaths(projectRoot string) ([]string, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	paths = append(paths, discobotSystemPaths("mcp.json")...)
 	return paths, nil
 }
 

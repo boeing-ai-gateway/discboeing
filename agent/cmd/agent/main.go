@@ -54,9 +54,9 @@ const (
 	mountHome    = "/home/discobot" // Where overlayfs mounts
 	symlinkPath  = "/workspace"     // Symlink to /home/discobot/workspace
 
-	defaultCommitScriptRelPath = ".discobot/scripts/discobot-commit"
-	remoteCommitScriptRelPath  = ".discobot/scripts/discobot-commit-remote"
-	scriptsDirRelPath          = ".discobot/scripts"
+	systemScriptsDir           = "/opt/discobot/scripts"
+	defaultCommitScriptRelPath = "discobot-commit"
+	remoteCommitScriptRelPath  = "discobot-commit-remote"
 )
 
 func main() {
@@ -133,13 +133,10 @@ func runSetup() error {
 	if err := setupBaseHome(userInfo); err != nil {
 		return fmt.Errorf("base home setup failed: %w", err)
 	}
-	if err := refreshBundledScripts(mountHome, baseHomeDir, userInfo); err != nil {
-		return fmt.Errorf("script refresh failed: %w", err)
+	if err := removeObsoleteBundledHomeConfig(baseHomeDir); err != nil {
+		return fmt.Errorf("obsolete bundled config cleanup failed: %w", err)
 	}
-	if err := removeLegacyBundledCommands(baseHomeDir); err != nil {
-		return fmt.Errorf("legacy command cleanup failed: %w", err)
-	}
-	if err := installCommitCommandVariant(baseHomeDir, isGitURL(workspaceSource), userInfo); err != nil {
+	if err := installCommitCommandVariant(systemScriptsDir, isGitURL(workspaceSource), userInfo); err != nil {
 		return fmt.Errorf("commit script setup failed: %w", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
@@ -637,13 +634,22 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 	})
 }
 
-func refreshBundledScripts(srcHomeDir, dstHomeDir string, u *userInfo) error {
-	srcDir := filepath.Join(srcHomeDir, scriptsDirRelPath)
-	if err := refreshBundledScriptsDir(srcDir, filepath.Join(dstHomeDir, scriptsDirRelPath), u); err != nil {
-		return err
+func removeObsoleteBundledHomeConfig(homeDir string) error {
+	for _, relPath := range []string{
+		".discobot/scripts/discobot-commit",
+		".discobot/scripts/discobot-commit-remote",
+		".discobot/scripts/discobot-rebase",
+		".discobot/commands/discobot-commit.md",
+		".discobot/commands/discobot-commit-remote.md",
+		".discobot/commands/discobot-rebase.md",
+		".discobot/skills/browser-harness/SKILL.md",
+	} {
+		if err := os.RemoveAll(filepath.Join(homeDir, relPath)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 
-	legacyDir := filepath.Join(dstHomeDir, ".claude", "commands")
+	legacyDir := filepath.Join(homeDir, ".claude", "commands")
 	if err := os.RemoveAll(legacyDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove legacy commands dir: %w", err)
 	}
@@ -651,85 +657,9 @@ func refreshBundledScripts(srcHomeDir, dstHomeDir string, u *userInfo) error {
 	return nil
 }
 
-func refreshBundledScriptsDir(srcDir, dstDir string, u *userInfo) error {
-	if _, err := os.Stat(srcDir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("stat bundled scripts dir: %w", err)
-	}
-
-	return filepath.Walk(srcDir, func(srcPath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(srcDir, srcPath)
-		if err != nil {
-			return err
-		}
-		dstPath := filepath.Join(dstDir, relPath)
-
-		if info.IsDir() {
-			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
-				return err
-			}
-			if u != nil {
-				if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-
-		if err := os.RemoveAll(dstPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-
-		if info.Mode()&os.ModeSymlink != 0 {
-			link, err := os.Readlink(srcPath)
-			if err != nil {
-				return err
-			}
-			if err := os.Symlink(link, dstPath); err != nil {
-				return err
-			}
-			if u != nil {
-				if err := os.Lchown(dstPath, u.uid, u.gid); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-
-		if err := copyFile(srcPath, dstPath); err != nil {
-			return err
-		}
-		if u != nil {
-			if err := os.Chown(dstPath, u.uid, u.gid); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-func removeLegacyBundledCommands(homeDir string) error {
-	for _, relPath := range []string{
-		".discobot/commands/discobot-commit.md",
-		".discobot/commands/discobot-commit-remote.md",
-		".discobot/commands/discobot-rebase.md",
-	} {
-		if err := os.Remove(filepath.Join(homeDir, relPath)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-func installCommitCommandVariant(homeDir string, useRemoteVariant bool, u *userInfo) error {
-	scriptPath := filepath.Join(homeDir, defaultCommitScriptRelPath)
-	remoteVariantPath := filepath.Join(homeDir, remoteCommitScriptRelPath)
+func installCommitCommandVariant(scriptsDir string, useRemoteVariant bool, u *userInfo) error {
+	scriptPath := filepath.Join(scriptsDir, defaultCommitScriptRelPath)
+	remoteVariantPath := filepath.Join(scriptsDir, remoteCommitScriptRelPath)
 	sourcePath := scriptPath
 	if useRemoteVariant {
 		sourcePath = remoteVariantPath

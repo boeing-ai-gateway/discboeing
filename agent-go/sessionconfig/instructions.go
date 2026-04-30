@@ -71,13 +71,38 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 		}
 	}
 
-	// 3. Modular rules from project root (.discobot/rules/*.md).
+	// 3. System-level instructions.
+	for _, p := range discobotSystemPaths("CLAUDE.md") {
+		content, err := readFileIfExists(p)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", p, err)
+		}
+		if content == "" {
+			continue
+		}
+		entries = append(entries, InstructionEntry{
+			Path:        p,
+			Description: "system-level instructions",
+			Content:     strings.TrimSpace(content),
+		})
+	}
+
+	// 4. Modular rules from project root (.discobot/rules/*.md).
 	rulesDir := filepath.Join(projectRoot, ".discobot", "rules")
-	ruleEntries, err := discoverRules(rulesDir)
+	ruleEntries, err := discoverRules(rulesDir, ".discobot/rules", "project rule")
 	if err != nil {
 		return nil, err
 	}
 	entries = append(entries, ruleEntries...)
+
+	// 5. Modular rules from system roots.
+	for _, rulesDir := range discobotSystemPaths("rules") {
+		ruleEntries, err := discoverRules(rulesDir, rulesDir, "system rule")
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, ruleEntries...)
+	}
 
 	return entries, nil
 }
@@ -92,8 +117,8 @@ func descriptionForFile(name string) string {
 	}
 }
 
-// discoverRules loads .discobot/rules/*.md files sorted by name.
-func discoverRules(rulesDir string) ([]InstructionEntry, error) {
+// discoverRules loads markdown rule files from rulesDir sorted by name.
+func discoverRules(rulesDir, displayPrefix, description string) ([]InstructionEntry, error) {
 	dirEntries, err := os.ReadDir(rulesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -119,8 +144,8 @@ func discoverRules(rulesDir string) ([]InstructionEntry, error) {
 		}
 		if len(content) > 0 {
 			entries = append(entries, InstructionEntry{
-				Path:        ".discobot/rules/" + e.Name(),
-				Description: "project rule",
+				Path:        displayPrefix + "/" + e.Name(),
+				Description: description,
 				Content:     strings.TrimSpace(string(content)),
 			})
 		}

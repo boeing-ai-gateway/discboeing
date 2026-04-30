@@ -322,6 +322,17 @@ func resolveWorkspaceMountSource(sourcePath string) (string, error) {
 	return absPath, nil
 }
 
+func isWindowsAbsolutePath(path string) bool {
+	if len(path) >= 3 && isASCIIAlpha(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/') {
+		return true
+	}
+	return strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, `//`)
+}
+
+func isASCIIAlpha(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
 func (p *Provider) attachToContainer(ctx context.Context, containerID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
 	cmd := opts.Cmd
 	if len(cmd) == 0 {

@@ -228,6 +228,40 @@ func TestDiscoverMCPState_LoadsDiscobotUserConfig(t *testing.T) {
 	}
 }
 
+func TestDiscoverMCPState_LoadsSystemConfig(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	mkdirAll(t, filepath.Join(root, ".git"))
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	writeFile(t, filepath.Join(systemRoot, "mcp.json"), `{
+		"mcpServers": {
+			"discobot-system": {"command": "system-mcp"}
+		}
+	}`)
+
+	state, err := DiscoverMCPState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, s := range state.Servers {
+		if s.Name == "discobot-system" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected to discover system mcp.json server, got %#v", state.Servers)
+	}
+}
+
 func TestDiscoverMCPState_ReloadTokenChangesWhenFilesChange(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()

@@ -42,6 +42,14 @@ Behavior:
 - failure forwards execution metadata plus trimmed `stdout` and `stderr`
 - empty successful output does not trigger a no-op model response
 
+Discovery order for script-backed slash commands:
+- workspace `.discobot/scripts/`
+- user `~/.discobot/scripts/`
+- user `~/.agents/scripts/`
+- system `/opt/discobot/scripts/`
+- system `/usr/local/share/discobot/scripts/`
+- system `/usr/share/discobot/scripts/`
+
 Example:
 
 ```bash

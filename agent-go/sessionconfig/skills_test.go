@@ -563,6 +563,79 @@ func TestLookupSkill_NotFound(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkills_SystemSkillAndCommandDirs(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+
+	skillDir := filepath.Join(systemRoot, "skills", "release")
+	mkdirAll(t, skillDir)
+	writeFile(t, filepath.Join(skillDir, "SKILL.md"), "---\nname: release\ndescription: Release from system skill.\n---\nRun the system skill.")
+
+	cmdDir := filepath.Join(systemRoot, "commands", "rebase")
+	mkdirAll(t, cmdDir)
+	writeFile(t, filepath.Join(cmdDir, "SKILL.md"), "---\nname: rebase\ndescription: Rebase from system command.\n---\nRun the system command.")
+
+	skills, _, err := discoverSkillsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 {
+		t.Fatalf("expected 2 skill-like entries, got %d", len(skills))
+	}
+	if skills[0].Name != "release" || skills[1].Name != "rebase" {
+		t.Fatalf("unexpected entries: %#v", skills)
+	}
+}
+
+func TestLookupSkill_FoundInSystemSkillsDir(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+
+	dir := filepath.Join(systemRoot, "skills", "myskill")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: myskill\ndescription: System skill.\n---\nDo the system thing.")
+
+	skill, found, err := lookupSkillWithHome(root, "myskill", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected skill to be found")
+	}
+	if skill.Body != "Do the system thing." {
+		t.Fatalf("body = %q", skill.Body)
+	}
+}
+
+func TestLookupCommand_FoundInSystemCommandsDir(t *testing.T) {
+	root := t.TempDir()
+	systemRoot := t.TempDir()
+	originalRoots := discobotSystemRoots
+	discobotSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+
+	dir := filepath.Join(systemRoot, "commands", "release")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: release\n---\nRun the system command.")
+
+	cmd, found, err := lookupCommandWithHome(root, "release", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected command to be found")
+	}
+	if cmd.Body != "Run the system command." {
+		t.Fatalf("body = %q", cmd.Body)
+	}
+}
+
 func TestFormatSkillsReminder_Empty(t *testing.T) {
 	got := FormatSkillsReminder(nil)
 	if got != "" {

@@ -24,6 +24,10 @@ type SkillConfig struct {
 	// Body is the markdown prompt content (after frontmatter is stripped).
 	Body string
 
+	// SourcePath is the absolute path to the markdown file that defined the
+	// skill or command.
+	SourcePath string
+
 	// Kind is "skill" for entries from skills/ directories and "command" for
 	// entries from commands/ directories.
 	Kind string
@@ -57,11 +61,13 @@ type DiscobotCredentialApprovedUse struct {
 // discoverSkills loads skill configs from the project's .claude/skills and
 // .claude/commands directories, plus user-level skill directories including
 // ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills, along with
-// ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands.
+// ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands. Discobot
+// system directories under /opt/discobot, /usr/local/share/discobot, and
+// /usr/share/discobot are also checked for skills/ and commands/.
 // The equivalent .discobot/ directories are also checked as an alternative
 // naming style.
 // Priority: project skills (.claude then .discobot) → user skills →
-// project commands → user commands.
+// project commands → user commands → system skills → system commands.
 // Later entries with a duplicate name are ignored.
 func discoverSkills(projectRoot string) ([]SkillConfig, []string, error) {
 	home, _ := os.UserHomeDir()
@@ -126,13 +132,26 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 		}
 	}
 
+	// 5. System skills and commands installed with the image.
+	for _, dir := range discobotSystemPaths("skills") {
+		if err := addFrom(loadSkillsDir(dir)); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, dir := range discobotSystemPaths("commands") {
+		if err := addFrom(loadCommandsDir(dir)); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return skills, warnings, nil
 }
 
 // LookupSkill searches for a skill by name in skills/ directories only.
 // It does NOT search commands/ — use LookupCommand for legacy commands.
 // Project-level .claude and .discobot directory styles are checked, along with
-// user-level ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills.
+// user-level ~/.claude/skills, ~/.discobot/skills, ~/.agents/skills, and the
+// Discobot system skills directories.
 // Returns (zero, false, nil) if the skill is not found.
 func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 	home, _ := os.UserHomeDir()
@@ -149,6 +168,9 @@ func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool
 			paths = append(paths, skillLookupPaths(filepath.Join(home, dir, "skills"), skillName)...)
 		}
 	}
+	for _, dir := range discobotSystemPaths("skills") {
+		paths = append(paths, skillLookupPaths(dir, skillName)...)
+	}
 	skill, ok, err := lookupFirst(skillName, paths)
 	if ok {
 		skill.Kind = "skill"
@@ -160,7 +182,8 @@ func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool
 // Commands are expanded programmatically when a user message starts with /name,
 // unlike skills which are invoked via the Skill tool by the LLM.
 // Project-level .claude and .discobot directory styles are checked, along with
-// user-level ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands.
+// user-level ~/.claude/commands, ~/.discobot/commands, ~/.agents/commands, and
+// the Discobot system commands directories.
 // Returns (zero, false, nil) if the command is not found.
 func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 	home, _ := os.UserHomeDir()
@@ -176,6 +199,9 @@ func lookupCommandWithHome(projectRoot, cmdName, home string) (SkillConfig, bool
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
 			paths = append(paths, commandLookupPaths(filepath.Join(home, dir, "commands"), cmdName)...)
 		}
+	}
+	for _, dir := range discobotSystemPaths("commands") {
+		paths = append(paths, commandLookupPaths(dir, cmdName)...)
 	}
 	cmd, ok, err := lookupFirst(cmdName, paths)
 	if ok {
@@ -256,6 +282,7 @@ func lookupFirst(defaultName string, paths []string) (SkillConfig, bool, error) 
 		if err != nil {
 			return SkillConfig{}, false, fmt.Errorf("parse skill %s: %w", p, err)
 		}
+		skill.SourcePath = p
 		return skill, true, nil
 	}
 	return SkillConfig{}, false, nil
@@ -340,6 +367,7 @@ func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfi
 			warnings = append(warnings, fmt.Sprintf("parse skill %s: %v", candidate.path, err))
 			continue
 		}
+		skill.SourcePath = candidate.path
 		skill.Kind = kind
 		skills = append(skills, skill)
 	}
