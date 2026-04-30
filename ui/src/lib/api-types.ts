@@ -74,6 +74,32 @@ export type ChatMessageMetadata = {
 	slashCommand?: ChatSlashCommandMetadata;
 } & Record<string, unknown>;
 
+export type BrowserEventFile = {
+	path: string;
+	uri?: string;
+	mediaType: string;
+	filename?: string;
+};
+
+export type BrowserEvent = {
+	eventId: string;
+	stepIndex: number;
+	requestId?: string;
+	method?: string;
+	direction: string;
+	payload?: unknown;
+	files?: BrowserEventFile[];
+	recordedAt?: string;
+};
+
+export type BrowserEventChunkData = {
+	threadId?: string;
+	turnId?: string;
+	assistantMessageId?: string;
+	stepIndex: number;
+	event: BrowserEvent;
+};
+
 export type ChatMessageDataTypes = {
 	"thread-update": {
 		thread: Thread;
@@ -99,6 +125,7 @@ export type ChatMessageDataTypes = {
 		approved?: boolean;
 		reason?: string;
 	};
+	"browser-event": BrowserEventChunkData;
 	"hooks-status": HooksStatusResponse;
 };
 

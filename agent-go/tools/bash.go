@@ -86,7 +86,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	wrapped := wrapShellCommandForOS(runtime.GOOS, command)
 	cmd := exec.CommandContext(cmdCtx, shellPath, shellCommandArgsForOS(runtime.GOOS, wrapped)...)
 	cmd.Dir = cwd
-	cmd.Env = append(e.bashEnv(), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
+	cmd.Env = append(e.bashEnvForTool(toolCtx), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
 	processGroup := newProcessGroupController()
 	processGroup.configure(cmd)
 	cmd.Cancel = func() error {
@@ -179,7 +179,7 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 
 	cmd := exec.Command(shellPath, shellCommandArgsForOS(runtime.GOOS, command)...) //nolint:gosec
 	cmd.Dir = cwd
-	cmd.Env = e.bashEnv()
+	cmd.Env = e.bashEnvForTool(toolCtx)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
@@ -205,6 +205,24 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 
 func resolveBashCommand() (string, error) {
 	return resolveBashCommandForOS(runtime.GOOS, filepath.SplitList(os.Getenv("PATH")), os.Getenv("PATHEXT"))
+}
+
+func (e *Executor) bashEnvForTool(toolCtx *thread.ToolContext) []string {
+	env := e.bashEnv()
+	if toolCtx == nil || strings.TrimSpace(toolCtx.ThreadID) == "" || e.envForThread == nil {
+		return env
+	}
+	threadEnv := e.envForThread(toolCtx.ThreadID)
+	if len(threadEnv) == 0 {
+		return env
+	}
+	for key, value := range threadEnv {
+		if strings.TrimSpace(key) == "" || value == "" {
+			continue
+		}
+		env = append(env, key+"="+value)
+	}
+	return env
 }
 
 func resolveBashCommandForOS(goos string, pathDirs []string, pathExt string) (string, error) {

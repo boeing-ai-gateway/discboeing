@@ -14,6 +14,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
+	"github.com/obot-platform/discobot/agent-go/browser"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
@@ -30,6 +31,7 @@ type Handler struct {
 	hookManager    *hooks.Manager          // nil if hooks are disabled
 	serviceManager *services.Manager       // always initialized
 	defaultAgent   *agentimpl.DefaultAgent // for MCP manager access; may be nil
+	browserManager *browser.Manager
 	chatPingEvery  time.Duration
 
 	hookMu             sync.Mutex
@@ -44,13 +46,18 @@ type Handler struct {
 }
 
 // New creates a new Handler.
-func New(agentCwd string, completions *agent.CompletionManager, hookManager *hooks.Manager, serviceManager *services.Manager, defaultAgent *agentimpl.DefaultAgent) *Handler {
+func New(agentCwd string, completions *agent.CompletionManager, hookManager *hooks.Manager, serviceManager *services.Manager, defaultAgent *agentimpl.DefaultAgent, browserManager ...*browser.Manager) *Handler {
+	var bm *browser.Manager
+	if len(browserManager) > 0 {
+		bm = browserManager[0]
+	}
 	h := &Handler{
 		agentCwd:           agentCwd,
 		completions:        completions,
 		hookManager:        hookManager,
 		serviceManager:     serviceManager,
 		defaultAgent:       defaultAgent,
+		browserManager:     bm,
 		chatPingEvery:      defaultChatStreamPingInterval,
 		hookRetryCount:     make(map[string]int),
 		hookNotificationTo: make(map[string]string),
@@ -485,6 +492,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Health", Description: "Current user info"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/commands", Handler: h.ListCommands,
 		Meta: routes.Meta{Group: "Commands", Description: "List available slash commands"}})
+	if h.browserManager != nil {
+		reg.Register(r, routes.Route{Method: "GET", Pattern: "/sessions/{sessionId}/browser", Handler: h.GetBrowserSession,
+			Meta: routes.Meta{Group: "Browser", Description: "Get session-scoped browser runtime info"}})
+	}
 
 	// Thread routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads", Handler: h.ListThreads,
@@ -556,6 +567,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			Meta: routes.Meta{Group: "Chat", Description: "Cancel the active completion"}})
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/chat/question", Handler: h.GetPendingQuestion,
 			Meta: routes.Meta{Group: "Chat", Description: "Get current pending AskUserQuestion"}})
+		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/artifacts/read", Handler: h.ReadThreadArtifact,
+			Meta: routes.Meta{
+				Group:       "Threads",
+				Description: "Read a thread-local artifact by artifacts:// URI",
+				Params:      []routes.Param{{Name: "uri", In: "query", Required: true}},
+			}})
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/chat/question/{questionId}", Handler: h.GetQuestion,
 			Meta: routes.Meta{Group: "Chat", Description: "Get pending AskUserQuestion"}})
 		threadReg.Register(r, routes.Route{Method: "POST", Pattern: "/chat/answer/{questionId}", Handler: h.PostAnswer,

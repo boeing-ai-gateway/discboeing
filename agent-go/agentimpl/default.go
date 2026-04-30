@@ -1507,11 +1507,46 @@ func (a *DefaultAgent) Messages(threadID, leafID string) ([]message.UIMessage, e
 			return nil, nil
 		}
 	}
-	history, err := a.store.BuildHistory(threadID, leafID)
+	historyEntries, err := a.store.BuildHistoryWithIDs(threadID, leafID)
 	if err != nil {
 		return nil, err
 	}
+	turnIDsByMessageID, err := a.store.HistoryTurnIDs(threadID)
+	if err != nil {
+		return nil, err
+	}
+	history := make([]message.Message, 0, len(historyEntries))
+	for _, entry := range historyEntries {
+		msg := entry.Message
+		if turnID := strings.TrimSpace(turnIDsByMessageID[entry.ID]); turnID != "" {
+			msg.Metadata = mergeTurnIDIntoMessageMetadata(msg.Metadata, turnID)
+		}
+		history = append(history, msg)
+	}
 	return message.ProjectUIMessages(history)
+}
+
+func mergeTurnIDIntoMessageMetadata(metadata json.RawMessage, turnID string) json.RawMessage {
+	if strings.TrimSpace(turnID) == "" {
+		return metadata
+	}
+	payload := map[string]any{}
+	if len(metadata) > 0 {
+		if err := json.Unmarshal(metadata, &payload); err != nil {
+			return metadata
+		}
+	}
+	discobot := map[string]any{}
+	if current, ok := payload["discobot"].(map[string]any); ok {
+		maps.Copy(discobot, current)
+	}
+	discobot["turnId"] = turnID
+	payload["discobot"] = discobot
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return metadata
+	}
+	return data
 }
 
 // FinalResponse returns the last assistant text from a completed thread turn.

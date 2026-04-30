@@ -987,6 +987,17 @@ func defaultMockHandler() http.Handler {
 			_, _ = fmt.Fprintf(w, `{"path":"%s","content":"# Mock Content","encoding":"utf8","size":14}`, path)
 			return
 
+		case strings.HasPrefix(r.URL.Path, "/threads/") && strings.HasSuffix(r.URL.Path, "/artifacts/read") && r.Method == "GET":
+			uri := r.URL.Query().Get("uri")
+			if uri == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"uri query parameter required"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"path":"artifacts/browser/sha256/mock.png","content":"iVBORw0KGgo=","encoding":"base64","size":8}`)
+			return
+
 		case r.URL.Path == "/files/write" && r.Method == "POST":
 			// Write file - return success
 			w.WriteHeader(http.StatusOK)

@@ -1,7 +1,12 @@
 import { api } from "$lib/api-client";
 import { StartChatError } from "$lib/api-client";
 import { useAppContext } from "$lib/context/app-context.svelte";
-import type { ChatMessage, HooksStatusResponse, Thread } from "$lib/api-types";
+import type {
+	BrowserEventChunkData,
+	ChatMessage,
+	HooksStatusResponse,
+	Thread,
+} from "$lib/api-types";
 import {
 	createChatStreamEventListeners,
 	createChatStreamState,
@@ -51,6 +56,30 @@ function isLostProjectStreamConnection(error: unknown): boolean {
 	return (
 		getStreamErrorMessage(error) === LOST_PROJECT_STREAM_CONNECTION_MESSAGE
 	);
+}
+
+function sortBrowserEvents(
+	events: BrowserEventChunkData[],
+): BrowserEventChunkData[] {
+	return [...events].sort((left, right) => {
+		if (left.stepIndex !== right.stepIndex) {
+			return left.stepIndex - right.stepIndex;
+		}
+		const leftTime = left.event.recordedAt
+			? Date.parse(left.event.recordedAt)
+			: Number.NaN;
+		const rightTime = right.event.recordedAt
+			? Date.parse(right.event.recordedAt)
+			: Number.NaN;
+		if (
+			!Number.isNaN(leftTime) &&
+			!Number.isNaN(rightTime) &&
+			leftTime !== rightTime
+		) {
+			return leftTime - rightTime;
+		}
+		return left.event.eventId.localeCompare(right.event.eventId);
+	});
 }
 
 async function showRetryToast(
@@ -124,6 +153,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let completionRunning = $state(false);
 	let afterTurnPending = $state(false);
 	let pendingQuestionId = $state<string | null>(null);
+	let browserEventsByTurnId = $state<Record<string, BrowserEventChunkData[]>>(
+		{},
+	);
 	let loadStatus = $state<"idle" | "loading" | "ready" | "error">("idle");
 	let activeSubscription: ChatStreamSubscription | null = null;
 	let activeStreamKey: string | null = null;
@@ -188,6 +220,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		onFinish: () => {
 			return handleCompletionFinish();
 		},
+		onHistoryReplayStart: () => {
+			browserEventsByTurnId = {};
+		},
 		onHistoryReplayEnd: () => {
 			fatalStreamError = false;
 			historyReplayVersion += 1;
@@ -221,6 +256,29 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		},
 		onHooksStatusUpdate: (status) => {
 			return args.applyHooksStatusUpdate?.(status);
+		},
+		onBrowserEvent: (event) => {
+			const turnId = event.turnId?.trim();
+			if (!turnId) {
+				return;
+			}
+			const current = browserEventsByTurnId[turnId] ?? [];
+			const existingIndex = current.findIndex(
+				(candidate) => candidate.event.eventId === event.event.eventId,
+			);
+			if (existingIndex === -1) {
+				browserEventsByTurnId = {
+					...browserEventsByTurnId,
+					[turnId]: sortBrowserEvents([...current, event]),
+				};
+				return;
+			}
+			const next = [...current];
+			next[existingIndex] = event;
+			browserEventsByTurnId = {
+				...browserEventsByTurnId,
+				[turnId]: sortBrowserEvents(next),
+			};
 		},
 	});
 
@@ -392,6 +450,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			streamError = null;
 			completionRunning = false;
 			pendingQuestionId = null;
+			browserEventsByTurnId = {};
 			void dismissRetryToast(args.threadId);
 			disconnectStream();
 			resetLoadPromise();
@@ -410,6 +469,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			streamError = null;
 			completionRunning = false;
 			pendingQuestionId = null;
+			browserEventsByTurnId = {};
 			void dismissRetryToast(args.threadId);
 			disconnectStream();
 			resetLoadPromise();
@@ -421,6 +481,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	return {
 		get messages() {
 			return messages;
+		},
+		get browserEventsByTurnId() {
+			return browserEventsByTurnId;
 		},
 		get historyReplayVersion() {
 			return historyReplayVersion;
@@ -580,6 +643,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			loadStatus = "idle";
 			completionRunning = false;
 			pendingQuestionId = null;
+			browserEventsByTurnId = {};
 			void dismissRetryToast(args.threadId);
 			resetLoadPromise();
 			disconnectStream();

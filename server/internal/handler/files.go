@@ -274,6 +274,44 @@ func (h *Handler) ReadSessionFile(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
+// ReadSessionThreadArtifact reads a thread-local artifact from a session.
+// GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/artifacts/read?uri=...
+func (h *Handler) ReadSessionThreadArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+	threadID := chi.URLParam(r, "threadId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	if threadID == "" {
+		h.Error(w, http.StatusBadRequest, "threadId is required")
+		return
+	}
+
+	uri := strings.TrimSpace(r.URL.Query().Get("uri"))
+	if uri == "" {
+		h.Error(w, http.StatusBadRequest, "uri query parameter required")
+		return
+	}
+
+	result, err := h.chatService.ReadThreadArtifact(ctx, projectID, sessionID, threadID, uri)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "invalid artifact URI") || strings.Contains(err.Error(), "uri query parameter required") || strings.Contains(err.Error(), "Invalid path") {
+			status = http.StatusBadRequest
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
 // WriteSessionFile writes a file to a session's workspace.
 // PUT /api/projects/{projectId}/sessions/{sessionId}/files/write
 func (h *Handler) WriteSessionFile(w http.ResponseWriter, r *http.Request) {

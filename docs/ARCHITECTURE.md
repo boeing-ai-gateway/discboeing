@@ -181,6 +181,24 @@ Sandbox secrets follow the same encrypted-at-rest pattern as credentials.
         └──────────┘ └──────────┘ └──────────┘
 ```
 
+The per-session agent container now also owns a session-scoped browser runtime.
+The runtime image packages the Browser Use harness as the `browser-harness`
+command and exposes a built-in browser-harness skill to teach the agent how to
+use it. `discobot-agent-api` can launch a local Chromium profile, expose a
+CDP WebSocket endpoint at `/sessions/{sessionId}/browser/cdp?token=...`, and
+inject that endpoint into agent tool subprocesses. This keeps browser state
+shared across threads within a session while preserving a stable seam for a
+future host- or Electron-backed browser broker. Tool subprocesses receive a
+thread-scoped variant of that URL so CDP request/response pairs can also be
+persisted against the active turn in a separate append-only browser event log.
+For action-like CDP commands, the proxy also captures a follow-up screenshot,
+saves it in a thread-scoped content-addressable browser artifact store, stores
+the file reference on the corresponding browser event record, and emits a live
+browser-event data chunk into the thread stream while the turn is active.
+Browser artifacts are exposed to the UI with `artifacts://...` URIs and are
+read back through a thread-scoped artifact endpoint instead of the workspace
+file API so screenshots remain outside the editable workspace tree.
+
 ## Data Model
 
 ### Entity Relationships

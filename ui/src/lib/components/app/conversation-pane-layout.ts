@@ -3,7 +3,7 @@ import type { ChatMessage } from "$lib/api-types";
 export type ConversationTurn = {
 	id: string;
 	userMessages: ChatMessage[];
-	assistantMessage: ChatMessage | null;
+	assistantMessages: ChatMessage[];
 };
 
 export type ReservedTurnMinHeightArgs = {
@@ -22,12 +22,33 @@ export function groupMessagesIntoTurns(
 	let currentTurn: ConversationTurn | null = null;
 
 	for (const message of messages) {
+		const stableTurnId = getStableTurnId(message);
+		if (stableTurnId) {
+			if (!currentTurn || currentTurn.id !== stableTurnId) {
+				currentTurn = {
+					id: stableTurnId,
+					userMessages: [],
+					assistantMessages: [],
+				};
+				turns.push(currentTurn);
+			}
+			if (message.role === "user") {
+				currentTurn.userMessages = [...currentTurn.userMessages, message];
+			} else {
+				currentTurn.assistantMessages = [
+					...currentTurn.assistantMessages,
+					message,
+				];
+			}
+			continue;
+		}
+
 		if (message.role === "user") {
-			if (!currentTurn || currentTurn.assistantMessage) {
+			if (!currentTurn || currentTurn.assistantMessages.length > 0) {
 				currentTurn = {
 					id: message.id,
 					userMessages: [message],
-					assistantMessage: null,
+					assistantMessages: [],
 				};
 				turns.push(currentTurn);
 				continue;
@@ -37,20 +58,34 @@ export function groupMessagesIntoTurns(
 			continue;
 		}
 
-		if (!currentTurn || currentTurn.assistantMessage) {
+		if (!currentTurn) {
 			currentTurn = {
 				id: message.id,
 				userMessages: [],
-				assistantMessage: message,
+				assistantMessages: [message],
 			};
 			turns.push(currentTurn);
 			continue;
 		}
 
-		currentTurn.assistantMessage = message;
+		currentTurn.assistantMessages = [...currentTurn.assistantMessages, message];
 	}
 
 	return turns;
+}
+
+function getStableTurnId(message: ChatMessage): string | null {
+	const metadata =
+		message.metadata && typeof message.metadata === "object"
+			? (message.metadata as Record<string, unknown>)
+			: null;
+	const discobot =
+		metadata?.discobot && typeof metadata.discobot === "object"
+			? (metadata.discobot as Record<string, unknown>)
+			: null;
+	return typeof discobot?.turnId === "string" && discobot.turnId.trim() !== ""
+		? discobot.turnId
+		: null;
 }
 
 export function getReservedTurnMinHeight({

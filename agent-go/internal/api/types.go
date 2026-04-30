@@ -218,6 +218,16 @@ type ChatStartedResponse struct {
 	QueuedPromptID string `json:"queuedPromptId,omitempty"`
 }
 
+type BrowserSessionResponse struct {
+	SessionID     string `json:"sessionId"`
+	Running       bool   `json:"running"`
+	WebSocketPath string `json:"webSocketPath"`
+	WebSocketURL  string `json:"webSocketUrl"`
+	Token         string `json:"token"`
+	UserDataDir   string `json:"userDataDir"`
+	LastError     string `json:"lastError,omitempty"`
+}
+
 // ChatConflictResponse is the POST /threads/{id}/chat response (409 Conflict).
 type ChatConflictResponse struct {
 	Error        string `json:"error"` // "completion_in_progress"

@@ -410,6 +410,9 @@ function createThreadContext(
 		get messages() {
 			return conversation.messages;
 		},
+		get browserEventsByTurnId() {
+			return conversation.browserEventsByTurnId;
+		},
 		get planEntries() {
 			return getPlanEntries(conversation.messages);
 		},

@@ -423,6 +423,20 @@ class ApiClient {
 	}
 
 	/**
+	 * Read a thread-local artifact from a session by artifacts:// URI.
+	 */
+	async readSessionThreadArtifact(
+		sessionId: string,
+		threadId: string,
+		uri: string,
+	): Promise<ReadSessionFileResponse> {
+		const params = new URLSearchParams({ uri });
+		return this.fetch<ReadSessionFileResponse>(
+			`/sessions/${sessionId}/threads/${threadId}/artifacts/read?${params}`,
+		);
+	}
+
+	/**
 	 * Write a file to a session's workspace.
 	 * @param sessionId Session ID
 	 * @param data File content and path (include originalContent for optimistic locking)

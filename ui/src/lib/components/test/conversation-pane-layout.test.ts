@@ -23,6 +23,20 @@ function makeAssistantMessage(id: string, text: string): ChatMessage {
 	};
 }
 
+function withTurnId(message: ChatMessage, turnId: string): ChatMessage {
+	return {
+		...message,
+		metadata: {
+			...(message.metadata && typeof message.metadata === "object"
+				? message.metadata
+				: {}),
+			discobot: {
+				turnId,
+			},
+		},
+	};
+}
+
 test("groupMessagesIntoTurns groups adjacent user messages into one turn", () => {
 	const turns = groupMessagesIntoTurns([
 		makeUserMessage("user-1", "first"),
@@ -36,7 +50,7 @@ test("groupMessagesIntoTurns groups adjacent user messages into one turn", () =>
 				makeUserMessage("user-1", "first"),
 				makeUserMessage("user-2", "second"),
 			],
-			assistantMessage: null,
+			assistantMessages: [],
 		},
 	]);
 });
@@ -52,12 +66,12 @@ test("groupMessagesIntoTurns closes a turn with the first assistant message", ()
 		{
 			id: "user-1",
 			userMessages: [makeUserMessage("user-1", "prompt")],
-			assistantMessage: makeAssistantMessage("assistant-1", "reply"),
+			assistantMessages: [makeAssistantMessage("assistant-1", "reply")],
 		},
 		{
 			id: "user-2",
 			userMessages: [makeUserMessage("user-2", "follow-up")],
-			assistantMessage: null,
+			assistantMessages: [],
 		},
 	]);
 });
@@ -76,8 +90,54 @@ test("groupMessagesIntoTurns leaves a user-only trailing turn open", () => {
 			makeUserMessage("user-2", "queued follow-up"),
 			makeUserMessage("user-3", "more context"),
 		],
-		assistantMessage: null,
+		assistantMessages: [],
 	});
+});
+
+test("groupMessagesIntoTurns keeps multiple assistant messages in one turn", () => {
+	const turns = groupMessagesIntoTurns([
+		makeUserMessage("user-1", "prompt"),
+		makeAssistantMessage("assistant-1", "step one"),
+		makeAssistantMessage("assistant-2", "final reply"),
+	]);
+
+	assert.deepEqual(turns, [
+		{
+			id: "user-1",
+			userMessages: [makeUserMessage("user-1", "prompt")],
+			assistantMessages: [
+				makeAssistantMessage("assistant-1", "step one"),
+				makeAssistantMessage("assistant-2", "final reply"),
+			],
+		},
+	]);
+});
+
+test("groupMessagesIntoTurns prefers stable backend turn ids from message metadata", () => {
+	const turns = groupMessagesIntoTurns([
+		withTurnId(makeUserMessage("user-1", "prompt"), "turn-a"),
+		withTurnId(makeAssistantMessage("assistant-1", "step one"), "turn-a"),
+		withTurnId(makeAssistantMessage("assistant-2", "final"), "turn-a"),
+		withTurnId(makeUserMessage("user-2", "follow-up"), "turn-b"),
+	]);
+
+	assert.deepEqual(turns, [
+		{
+			id: "turn-a",
+			userMessages: [withTurnId(makeUserMessage("user-1", "prompt"), "turn-a")],
+			assistantMessages: [
+				withTurnId(makeAssistantMessage("assistant-1", "step one"), "turn-a"),
+				withTurnId(makeAssistantMessage("assistant-2", "final"), "turn-a"),
+			],
+		},
+		{
+			id: "turn-b",
+			userMessages: [
+				withTurnId(makeUserMessage("user-2", "follow-up"), "turn-b"),
+			],
+			assistantMessages: [],
+		},
+	]);
 });
 
 test("getReservedTurnMinHeight fills the visible viewport when the turn is short", () => {

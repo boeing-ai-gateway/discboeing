@@ -1,11 +1,21 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/internal/files"
+)
+
+var (
+	errArtifactURIRequired = errors.New("artifact URI query parameter required")
+	errInvalidArtifactURI  = errors.New("invalid artifact URI")
 )
 
 // ListFiles handles GET /files — lists directory contents.
@@ -71,6 +81,70 @@ func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
 		Encoding: result.Encoding,
 		Size:     result.Size,
 	})
+}
+
+// ReadThreadArtifact handles GET /threads/{id}/artifacts/read — reads a
+// thread-local artifact via its artifacts:// URI.
+func (h *Handler) ReadThreadArtifact(w http.ResponseWriter, r *http.Request) {
+	threadID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if threadID == "" {
+		h.Error(w, http.StatusBadRequest, "thread ID is required")
+		return
+	}
+	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
+		h.Error(w, http.StatusServiceUnavailable, "thread store unavailable")
+		return
+	}
+
+	artifactPath, err := parseThreadArtifactURI(r.URL.Query().Get("uri"))
+	if err != nil {
+		h.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, fileErr := files.ReadFile(artifactPath, h.defaultAgent.Store().ThreadDir(threadID))
+	if fileErr != nil {
+		h.Error(w, fileErr.Status, fileErr.Message)
+		return
+	}
+
+	h.JSON(w, http.StatusOK, api.ReadFileResponse{
+		Path:     result.Path,
+		Content:  result.Content,
+		Encoding: result.Encoding,
+		Size:     result.Size,
+	})
+}
+
+func parseThreadArtifactURI(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", errArtifactURIRequired
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", errInvalidArtifactURI
+	}
+	if parsed.Scheme != "artifacts" {
+		return "", errInvalidArtifactURI
+	}
+
+	path := strings.TrimSpace(strings.TrimPrefix(filepathFromArtifactURI(parsed), "/"))
+	if path == "" {
+		return "", errArtifactURIRequired
+	}
+	return path, nil
+}
+
+func filepathFromArtifactURI(parsed *url.URL) string {
+	switch {
+	case parsed.Host != "" && parsed.Path != "":
+		return parsed.Host + parsed.Path
+	case parsed.Host != "":
+		return parsed.Host
+	default:
+		return parsed.Path
+	}
 }
 
 // WriteFile handles POST /files/write — writes file content.

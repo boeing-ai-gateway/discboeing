@@ -58,8 +58,18 @@ func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
 	if err := json.Unmarshal(meta, &wantMeta); err != nil {
 		t.Fatalf("unmarshal expected metadata: %v", err)
 	}
-	if !reflect.DeepEqual(gotChunkMeta, wantMeta) {
-		t.Fatalf("user chunk metadata = %#v, want %#v", gotChunkMeta, wantMeta)
+	if gotChunkMeta["originalText"] != nil {
+		t.Fatalf("user chunk metadata unexpectedly included originalText: %#v", gotChunkMeta)
+	}
+	gotDiscobot, ok := gotChunkMeta["discobot"].(map[string]any)
+	if !ok {
+		t.Fatalf("user chunk metadata missing discobot payload: %#v", gotChunkMeta)
+	}
+	if gotDiscobot["kind"] != "hook-failure" || gotDiscobot["hookName"] != "Go Check" || gotDiscobot["exitCode"] != float64(2) {
+		t.Fatalf("user chunk metadata lost existing discobot fields: %#v", gotChunkMeta)
+	}
+	if turnID, ok := gotDiscobot["turnId"].(string); !ok || turnID == "" {
+		t.Fatalf("user chunk metadata missing turnId: %#v", gotChunkMeta)
 	}
 
 	stored, err := store.LoadMessage(threadID, userChunk.Data.Message.ID)
@@ -70,8 +80,8 @@ func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
 	if err := json.Unmarshal(stored.Message.Metadata, &gotStoredMeta); err != nil {
 		t.Fatalf("unmarshal stored metadata: %v", err)
 	}
-	if !reflect.DeepEqual(gotStoredMeta, wantMeta) {
-		t.Fatalf("stored message metadata = %#v, want %#v", gotStoredMeta, wantMeta)
+	if !reflect.DeepEqual(gotStoredMeta, gotChunkMeta) {
+		t.Fatalf("stored message metadata = %#v, want %#v", gotStoredMeta, gotChunkMeta)
 	}
 }
 

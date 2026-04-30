@@ -1258,6 +1258,54 @@ func (c *SandboxChatClient) ReadFile(ctx context.Context, sessionID string, path
 	return &result, nil
 }
 
+// ReadThreadArtifact reads a thread-local artifact from the sandbox.
+// Retries with exponential backoff on connection errors and 5xx responses.
+func (c *SandboxChatClient) ReadThreadArtifact(ctx context.Context, sessionID, threadID, uri string) (*sandboxapi.ReadFileResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		params := url.Values{}
+		params.Set("uri", uri)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/threads/"+url.PathEscape(threadID)+"/artifacts/read?"+params.Encode(), nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read thread artifact: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.ReadFileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // WriteFile writes file content to the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
 func (c *SandboxChatClient) WriteFile(ctx context.Context, sessionID string, req *sandboxapi.WriteFileRequest) (*sandboxapi.WriteFileResponse, error) {

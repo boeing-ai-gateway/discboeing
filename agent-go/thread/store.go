@@ -2,6 +2,7 @@ package thread
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -58,7 +60,8 @@ type StoredMessage struct {
 // Each thread is a directory under baseDir containing message files and
 // step JSONL files for replay/recovery.
 type Store struct {
-	baseDir string
+	baseDir         string
+	browserEventsMu sync.Mutex
 }
 
 var ErrMessageExists = errors.New("message already exists")
@@ -142,6 +145,74 @@ func (s *Store) BuildHistory(threadID, leafID string) ([]message.Message, error)
 		chain[i], chain[j] = chain[j], chain[i]
 	}
 	return chain, nil
+}
+
+// HistoryTurnIDs returns a map from persisted message ID to stable backend turn
+// ID for completed turns in a thread. This lets replay consumers associate
+// replayed UI messages with persisted per-turn artifacts such as browser events.
+func (s *Store) HistoryTurnIDs(threadID string) (map[string]string, error) {
+	turnsDir := s.turnsDir(threadID)
+	entries, err := os.ReadDir(turnsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("read turns dir: %w", err)
+	}
+
+	turnIDsByMessageID := map[string]string{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		turnID := entry.Name()
+		pattern := filepath.Join(turnsDir, turnID, "step-*-result.json")
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("glob step results for turn %s: %w", turnID, err)
+		}
+		sort.Strings(matches)
+		for index, match := range matches {
+			base := filepath.Base(match)
+			var step int
+			if _, err := fmt.Sscanf(base, "step-%03d-result.json", &step); err != nil {
+				continue
+			}
+			result, err := s.LoadStepResult(threadID, turnID, step)
+			if err != nil {
+				return nil, err
+			}
+			if result == nil {
+				continue
+			}
+			assistantMessageID := strings.TrimSpace(result.AssistantMessageID)
+			if assistantMessageID == "" {
+				continue
+			}
+			turnIDsByMessageID[assistantMessageID] = turnID
+			if index == 0 {
+				stored, err := s.LoadMessage(threadID, assistantMessageID)
+				if err != nil {
+					return nil, fmt.Errorf("load first assistant message %s for turn %s: %w", assistantMessageID, turnID, err)
+				}
+				userMessageID := strings.TrimSpace(stored.ParentID)
+				if userMessageID != "" {
+					turnIDsByMessageID[userMessageID] = turnID
+				}
+			}
+			events, err := s.LoadStepEventMessages(threadID, turnID, step)
+			if err != nil {
+				return nil, err
+			}
+			for _, messageID := range events.MessageIDs {
+				messageID = strings.TrimSpace(messageID)
+				if messageID != "" {
+					turnIDsByMessageID[messageID] = turnID
+				}
+			}
+		}
+	}
+	return turnIDsByMessageID, nil
 }
 
 // HistoryEntry pairs a message with its stored ID and parent ID.
@@ -472,6 +543,11 @@ func (s *Store) stepEventsPath(threadID, turnID string, step int) string {
 	return filepath.Join(s.turnsDir(threadID), turnID, fmt.Sprintf("step-%03d-events.json", step))
 }
 
+// browserEventsPath returns the path to the append-only browser event log for a step.
+func (s *Store) browserEventsPath(threadID, turnID string, step int) string {
+	return filepath.Join(s.turnsDir(threadID), turnID, fmt.Sprintf("step-%03d-browser.jsonl", step))
+}
+
 // SaveAsyncContinuations persists async continuation metadata for a step.
 func (s *Store) SaveAsyncContinuations(threadID, turnID string, step int, continuations StepAsyncContinuations) error {
 	dir := filepath.Join(s.turnsDir(threadID), turnID)
@@ -530,6 +606,200 @@ func (s *Store) LoadStepEventMessages(threadID, turnID string, step int) (StepEv
 		return StepEventMessages{}, fmt.Errorf("unmarshal step event messages: %w", err)
 	}
 	return events, nil
+}
+
+// AppendBrowserEvent appends one browser event record to the per-step browser log.
+func (s *Store) AppendBrowserEvent(threadID, turnID string, step int, event BrowserEvent) error {
+	dir := filepath.Join(s.turnsDir(threadID), turnID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create turn dir: %w", err)
+	}
+	if event.EventID == "" {
+		event.EventID = generateID()
+	}
+	event.StepIndex = step
+	if event.RecordedAt == nil {
+		now := time.Now().UTC()
+		event.RecordedAt = &now
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal browser event: %w", err)
+	}
+	data = append(data, '\n')
+
+	s.browserEventsMu.Lock()
+	defer s.browserEventsMu.Unlock()
+
+	f, err := os.OpenFile(s.browserEventsPath(threadID, turnID, step), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("open browser event log: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.Write(data); err != nil {
+		return fmt.Errorf("append browser event: %w", err)
+	}
+	return nil
+}
+
+// LoadBrowserEvents loads append-only browser event records for a step.
+func (s *Store) LoadBrowserEvents(threadID, turnID string, step int) ([]BrowserEvent, error) {
+	f, err := os.Open(s.browserEventsPath(threadID, turnID, step))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open browser event log: %w", err)
+	}
+	defer f.Close()
+
+	var events []BrowserEvent
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var event BrowserEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+		events = append(events, event)
+	}
+	if err := scanner.Err(); err != nil {
+		return events, fmt.Errorf("scan browser event log: %w", err)
+	}
+	return events, nil
+}
+
+// LoadAllBrowserEventEntries loads browser events across all persisted turns in
+// a thread so stream reconnects can replay browser activity in the UI.
+func (s *Store) LoadAllBrowserEventEntries(threadID string) ([]BrowserEventEntry, error) {
+	turnsDir := s.turnsDir(threadID)
+	entries, err := os.ReadDir(turnsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read turns dir: %w", err)
+	}
+
+	type turnDirInfo struct {
+		name    string
+		modTime time.Time
+	}
+	turnDirs := make([]turnDirInfo, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, fmt.Errorf("stat turn dir %s: %w", entry.Name(), err)
+		}
+		turnDirs = append(turnDirs, turnDirInfo{
+			name:    entry.Name(),
+			modTime: info.ModTime(),
+		})
+	}
+	sort.Slice(turnDirs, func(i, j int) bool {
+		if turnDirs[i].modTime.Equal(turnDirs[j].modTime) {
+			return turnDirs[i].name < turnDirs[j].name
+		}
+		return turnDirs[i].modTime.Before(turnDirs[j].modTime)
+	})
+
+	var out []BrowserEventEntry
+	for _, turnDir := range turnDirs {
+		pattern := filepath.Join(turnsDir, turnDir.name, "step-*-browser.jsonl")
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("glob browser event logs for turn %s: %w", turnDir.name, err)
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			base := filepath.Base(match)
+			var step int
+			if _, err := fmt.Sscanf(base, "step-%03d-browser.jsonl", &step); err != nil {
+				continue
+			}
+			events, err := s.LoadBrowserEvents(threadID, turnDir.name, step)
+			if err != nil {
+				return nil, err
+			}
+			if len(events) == 0 {
+				continue
+			}
+			result, err := s.LoadStepResult(threadID, turnDir.name, step)
+			if err != nil {
+				return nil, err
+			}
+			assistantMessageID := ""
+			if result != nil {
+				assistantMessageID = strings.TrimSpace(result.AssistantMessageID)
+			}
+			for _, event := range events {
+				out = append(out, BrowserEventEntry{
+					TurnID:             turnDir.name,
+					AssistantMessageID: assistantMessageID,
+					StepIndex:          step,
+					Event:              event,
+				})
+			}
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) browserArtifactDir(threadID string) string {
+	return filepath.Join(s.threadDir(threadID), "artifacts", "browser", "sha256")
+}
+
+// BrowserArtifactURI returns the canonical artifacts:// URI for a thread-local
+// browser artifact path.
+func BrowserArtifactURI(path string) string {
+	path = strings.TrimSpace(filepath.ToSlash(path))
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return "artifacts://"
+	}
+	return "artifacts://" + path
+}
+
+// SaveBrowserScreenshot stores a screenshot file for one browser event and
+// returns the persisted file reference relative to the thread directory.
+func (s *Store) SaveBrowserScreenshot(threadID, turnID string, step int, eventID string, png []byte) (BrowserEventFile, error) {
+	_ = turnID
+	_ = step
+	_ = eventID
+	if len(png) == 0 {
+		return BrowserEventFile{}, fmt.Errorf("browser screenshot is empty")
+	}
+	dir := s.browserArtifactDir(threadID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return BrowserEventFile{}, fmt.Errorf("create browser artifact dir: %w", err)
+	}
+	sum := sha256.Sum256(png)
+	filename := fmt.Sprintf("%x.png", sum)
+	path := filepath.Join(dir, filename)
+	if _, err := os.Stat(path); err != nil {
+		if !os.IsNotExist(err) {
+			return BrowserEventFile{}, fmt.Errorf("stat browser screenshot: %w", err)
+		}
+		if err := WriteFileAtomic(path, png, 0o644); err != nil {
+			return BrowserEventFile{}, fmt.Errorf("write browser screenshot: %w", err)
+		}
+	}
+	relPath, err := filepath.Rel(s.threadDir(threadID), path)
+	if err != nil {
+		return BrowserEventFile{}, fmt.Errorf("make browser screenshot path relative: %w", err)
+	}
+	return BrowserEventFile{
+		Path:      filepath.ToSlash(relPath),
+		URI:       BrowserArtifactURI(relPath),
+		MediaType: "image/png",
+		Filename:  filename,
+	}, nil
 }
 
 // --- Question/Answer Persistence ---

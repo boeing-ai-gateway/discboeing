@@ -302,6 +302,31 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeEvent("", "history-end", json.RawMessage(`{}`))
+		if h.defaultAgent != nil && h.defaultAgent.Store() != nil {
+			browserEvents, err := h.defaultAgent.Store().LoadAllBrowserEventEntries(threadID)
+			if err == nil {
+				for _, entry := range browserEvents {
+					data, err := json.Marshal(browserEventChunkPayload{
+						ThreadID:           threadID,
+						TurnID:             entry.TurnID,
+						AssistantMessageID: entry.AssistantMessageID,
+						StepIndex:          entry.StepIndex,
+						Event:              entry.Event,
+					})
+					if err != nil {
+						continue
+					}
+					chunk, err := message.MarshalChunk(message.DataChunk{
+						DataType: "browser-event",
+						Data:     data,
+					})
+					if err != nil {
+						continue
+					}
+					writeEvent("", "chunk", chunk)
+				}
+			}
+		}
 		if currentCompletionID != "" {
 			emitCompletionStatusEvent(writeEvent, threadID, currentCompletionID, true)
 			offset = 0

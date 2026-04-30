@@ -75,6 +75,36 @@ type StepEventMessages struct {
 	MessageIDs []string `json:"messageIds"`
 }
 
+// BrowserEvent records one browser CDP request/response pair attributed to a
+// specific turn step without affecting approval or turn phase state.
+type BrowserEvent struct {
+	EventID    string             `json:"eventId"`
+	StepIndex  int                `json:"stepIndex"`
+	RequestID  string             `json:"requestId,omitempty"`
+	Method     string             `json:"method,omitempty"`
+	Direction  string             `json:"direction"`
+	Payload    json.RawMessage    `json:"payload,omitempty"`
+	Files      []BrowserEventFile `json:"files,omitempty"`
+	RecordedAt *time.Time         `json:"recordedAt,omitempty"`
+}
+
+// BrowserEventFile references one browser artifact saved alongside turn state.
+type BrowserEventFile struct {
+	Path      string `json:"path"`
+	URI       string `json:"uri,omitempty"`
+	MediaType string `json:"mediaType"`
+	Filename  string `json:"filename,omitempty"`
+}
+
+// BrowserEventEntry binds a browser event to the assistant message it belongs
+// to so the UI can replay and render browser activity alongside the turn.
+type BrowserEventEntry struct {
+	TurnID             string       `json:"turnId"`
+	AssistantMessageID string       `json:"assistantMessageId,omitempty"`
+	StepIndex          int          `json:"stepIndex"`
+	Event              BrowserEvent `json:"event"`
+}
+
 // AsyncContinuationInfo identifies one persisted async continuation owned by a
 // tool executor.
 type AsyncContinuationInfo struct {

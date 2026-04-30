@@ -1302,6 +1302,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/threads/{threadId}/artifacts/read",
+						Handler: h.ReadSessionThreadArtifact,
+						Meta: routes.Meta{
+							Group:       "Threads",
+							Description: "Read a thread-local artifact by artifacts:// URI",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}, {Name: "uri", In: "query", Example: "artifacts://artifacts/browser/sha256/abc123.png"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "POST", Pattern: "/threads/{threadId}/cancel",
 						Handler: h.ChatCancel,
 						Meta: routes.Meta{

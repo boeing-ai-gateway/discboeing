@@ -81,6 +81,8 @@ type Executor struct {
 	// to merge request-scoped variables into its process environment.
 	envSnapshot func() map[string]string
 
+	envForThread func(threadID string) map[string]string
+
 	credentialUseAuthorizer func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error
 }
 
@@ -199,6 +201,10 @@ func (e *Executor) SetEnvLookup(fn func(key string) string) {
 // into command executions.
 func (e *Executor) SetEnvSnapshot(fn func() map[string]string) {
 	e.envSnapshot = fn
+}
+
+func (e *Executor) SetEnvForThread(fn func(threadID string) map[string]string) {
+	e.envForThread = fn
 }
 
 func (e *Executor) SetCredentialUseAuthorizer(fn func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error) {

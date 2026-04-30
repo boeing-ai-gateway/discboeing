@@ -1,5 +1,6 @@
 import type {
 	AgentCommand,
+	BrowserEventChunkData,
 	AgentCommandCredentialRequest,
 	ChatMessage,
 	CredentialInfo,
@@ -195,6 +196,7 @@ export type SessionCommandsDomain = {
 
 export type SessionConversationDomain = {
 	messages: ChatMessage[];
+	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
 	status: AsyncStatus | "streaming";
 	error: string | null;
 	hasPendingQuestion: boolean;
@@ -224,6 +226,7 @@ export type ThreadContextValue = {
 	setNextReasoning: (reasoning: string | undefined) => void;
 	clearNextComposerValues: () => void;
 	messages: ChatMessage[];
+	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
 	planEntries: PlanEntry[];
 	promptQueue: QueuedPrompt[];
 	status: AsyncStatus | "streaming";

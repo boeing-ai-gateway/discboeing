@@ -233,6 +233,13 @@ func (c *SessionClient) ReadFile(ctx context.Context, path string) (*sandboxapi.
 	})
 }
 
+// ReadThreadArtifact reads a thread-local artifact from the sandbox.
+func (c *SessionClient) ReadThreadArtifact(ctx context.Context, threadID, uri string) (*sandboxapi.ReadFileResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.ReadFileResponse, error) {
+		return c.inner.ReadThreadArtifact(ctx, c.sessionID, threadID, uri)
+	})
+}
+
 // WriteFile writes file content to the sandbox.
 func (c *SessionClient) WriteFile(ctx context.Context, req *sandboxapi.WriteFileRequest) (*sandboxapi.WriteFileResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.WriteFileResponse, error) {

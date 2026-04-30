@@ -1,5 +1,10 @@
 import { addToolApprovalResponse } from "$lib/session/domains/session-domain.helpers";
-import type { ChatMessage, HooksStatusResponse, Thread } from "$lib/api-types";
+import type {
+	BrowserEventChunkData,
+	ChatMessage,
+	HooksStatusResponse,
+	Thread,
+} from "$lib/api-types";
 import {
 	parseChatStreamChunk,
 	parseChatStreamMessage,
@@ -27,11 +32,13 @@ export type ChatStreamStateOptions = {
 		completionId?: string;
 		isRunning: boolean;
 	}) => void | Promise<void>;
+	onHistoryReplayStart?: () => void | Promise<void>;
 	onHistoryReplayEnd?: () => void | Promise<void>;
 	onChunkError?: (errorText: string) => void | Promise<void>;
 	onRetryStatus?: (message: string) => void | Promise<void>;
 	onThreadUpdate?: (thread: Thread) => void | Promise<void>;
 	onHooksStatusUpdate?: (status: HooksStatusResponse) => void | Promise<void>;
+	onBrowserEvent?: (event: BrowserEventChunkData) => void | Promise<void>;
 };
 
 type MessagePart = ChatMessage["parts"][number];
@@ -52,6 +59,10 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 
 	const beginHistoryReplay = () => {
 		historyMessages = [];
+		runCallbackInBackground(
+			"onHistoryReplayStart",
+			options.onHistoryReplayStart,
+		);
 	};
 
 	const commitHistoryReplay = () => {
@@ -441,6 +452,22 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 					"onRetryStatus",
 					options.onRetryStatus,
 					chunk.data.message,
+				);
+				return;
+			}
+
+			case "data-browser-event": {
+				if (
+					typeof chunk.data?.stepIndex !== "number" ||
+					typeof chunk.data?.event !== "object" ||
+					chunk.data.event === null
+				) {
+					return;
+				}
+				runCallbackInBackground(
+					"onBrowserEvent",
+					options.onBrowserEvent,
+					chunk.data as BrowserEventChunkData,
 				);
 				return;
 			}

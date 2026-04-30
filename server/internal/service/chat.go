@@ -473,6 +473,21 @@ func (c *ChatService) ReadFile(ctx context.Context, projectID, sessionID, path s
 	return client.ReadFile(ctx, path)
 }
 
+// ReadThreadArtifact reads a thread-local artifact from the sandbox.
+func (c *ChatService) ReadThreadArtifact(ctx context.Context, projectID, sessionID, threadID, uri string) (*sandboxapi.ReadFileResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.ReadThreadArtifact(ctx, threadID, uri)
+}
+
 // ReadFileFromBase reads a file from the base commit (for deleted files).
 // This is useful for displaying diffs of deleted files.
 func (c *ChatService) ReadFileFromBase(ctx context.Context, projectID, sessionID, path string) (*sandboxapi.ReadFileResponse, error) {

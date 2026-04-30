@@ -1,9 +1,16 @@
 <script lang="ts">
+	import AppWindowIcon from "@lucide/svelte/icons/app-window";
 	import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+	import GalleryHorizontalEndIcon from "@lucide/svelte/icons/gallery-horizontal-end";
+	import ListTreeIcon from "@lucide/svelte/icons/list-tree";
 	import { tick } from "svelte";
 	import { api } from "$lib/api-client";
 	import { isSessionTransitioningStatus } from "$lib/api-constants";
-	import type { ChatMessage } from "$lib/api-types";
+	import type {
+		BrowserEventChunkData,
+		BrowserEventFile,
+		ChatMessage,
+	} from "$lib/api-types";
 	import type { ChatWidthMode } from "$lib/app/app-context.types";
 	import type {
 		AssistantConversationPaneRenderablePart,
@@ -42,6 +49,7 @@
 	import ConversationComposer from "$lib/components/app/ConversationComposer.svelte";
 	import MessageResponseWithCommand from "$lib/components/app/parts/MessageResponseWithCommand.svelte";
 	import {
+		type ConversationTurn,
 		getReservedTurnMinHeight,
 		groupMessagesIntoTurns,
 	} from "$lib/components/app/conversation-pane-layout";
@@ -61,6 +69,14 @@
 
 	type ConversationPaneStatus = ThreadContextValue["status"];
 	type ConversationPaneErrorBannerKey = "session" | "thread";
+	type BrowserActivityViewMode = "simple" | "details";
+	type BrowserTimelineStep = {
+		index: number;
+		file: BrowserEventFile;
+		event: BrowserEventChunkData;
+		artifactURI: string;
+	};
+
 	type Props = {
 		contentTopPadding?: number;
 		messages?: ChatMessage[];
@@ -74,6 +90,8 @@
 	};
 
 	const SCROLL_TO_BOTTOM_BUFFER = 64;
+	const BROWSER_SCREENSHOT_MAX_LOAD_ATTEMPTS = 4;
+	const BROWSER_SCREENSHOT_RETRY_DELAY_MS = 200;
 
 	let {
 		contentTopPadding = 0,
@@ -102,6 +120,9 @@
 	);
 	const conversationTurns = $derived.by(() =>
 		groupMessagesIntoTurns(conversationMessages),
+	);
+	const browserEventsByTurnId = $derived.by(
+		() => thread?.browserEventsByTurnId ?? {},
 	);
 	const previousTodoEntriesByToolCallId = $derived.by(() => {
 		const entriesByToolCallId: Record<
@@ -171,6 +192,11 @@
 	let expandedAssistantStepMessages = $state<Record<string, boolean>>({});
 	let expandedGeneratedUserMessages = $state<Record<string, boolean>>({});
 	let expandedHookFailureMessages = $state<Record<string, boolean>>({});
+	let expandedBrowserActivityMessages = $state<Record<string, boolean>>({});
+	let expandedBrowserDetailEvents = $state<Record<string, boolean>>({});
+	let browserActivityViewModes = $state<
+		Record<string, BrowserActivityViewMode>
+	>({});
 	let lastReservedSubmitMessageId = $state<string | null>(null);
 	let reservedTurnMinHeight = $state(0);
 	let hookPreviewOpen = $state(false);
@@ -178,6 +204,15 @@
 	let hookPreviewContent = $state("");
 	let hookPreviewLoading = $state(false);
 	let hookPreviewError = $state<string | null>(null);
+	let browserScreenshotPreviewOpen = $state(false);
+	let browserScreenshotPreviewFile = $state<BrowserEventFile | null>(null);
+	let browserScreenshotPreviewURL = $state<string | null>(null);
+	let browserScreenshotPreviewLoading = $state(false);
+	let browserScreenshotPreviewError = $state<string | null>(null);
+	let browserScreenshotLoadErrors = $state<Record<string, string>>({});
+	let browserScreenshotPreviewCache = $state<Record<string, string>>({});
+	let browserScreenshotLoadPromises: Partial<Record<string, Promise<string>>> =
+		{};
 	let expandedErrorBanners = $state<
 		Partial<Record<ConversationPaneErrorBannerKey, boolean>>
 	>({});
@@ -281,8 +316,429 @@
 		};
 	}
 
+	function isBrowserActivityExpanded(turnId: string): boolean {
+		return (
+			isActiveStreamingTurn(turnId) ||
+			(expandedBrowserActivityMessages[turnId] ?? false)
+		);
+	}
+
+	function setBrowserActivityExpanded(messageId: string, open: boolean) {
+		expandedBrowserActivityMessages = {
+			...expandedBrowserActivityMessages,
+			[messageId]: open,
+		};
+	}
+
+	function isBrowserDetailEventExpanded(eventId: string): boolean {
+		return expandedBrowserDetailEvents[eventId] ?? false;
+	}
+
+	function setBrowserDetailEventExpanded(eventId: string, open: boolean) {
+		expandedBrowserDetailEvents = {
+			...expandedBrowserDetailEvents,
+			[eventId]: open,
+		};
+	}
+
+	function getBrowserActivityViewMode(turnId: string): BrowserActivityViewMode {
+		return browserActivityViewModes[turnId] ?? "simple";
+	}
+
+	function setBrowserActivityViewMode(
+		turnId: string,
+		mode: BrowserActivityViewMode,
+	) {
+		browserActivityViewModes = {
+			...browserActivityViewModes,
+			[turnId]: mode,
+		};
+	}
+
+	function getBrowserEventMethodLabel(event: BrowserEventChunkData): string {
+		return event.event.method?.trim() || "Unknown browser event";
+	}
+
+	function isBrowserEventDetailExpandable(
+		event: BrowserEventChunkData,
+	): boolean {
+		const collapsed = getBrowserEventDetails(event);
+		const expanded = getBrowserEventDetails(event, { expanded: true });
+		return Boolean(collapsed && expanded && collapsed !== expanded);
+	}
+
+	function getBrowserEventDetailToggleLabel(eventId: string): string {
+		return isBrowserDetailEventExpanded(eventId) ? "Show less" : "Show full";
+	}
+
+	function getBrowserEventTimestampLabel(
+		event: BrowserEventChunkData,
+	): string | null {
+		if (!event.event.recordedAt) {
+			return null;
+		}
+		const recordedAt = new Date(event.event.recordedAt);
+		return Number.isNaN(recordedAt.getTime())
+			? null
+			: recordedAt.toLocaleTimeString([], {
+					hour: "numeric",
+					minute: "2-digit",
+					second: "2-digit",
+				});
+	}
+
+	function getBrowserActivityStepCount(
+		events: BrowserEventChunkData[],
+	): number {
+		const screenshotKeys: string[] = [];
+
+		for (const event of events) {
+			for (const file of event.event.files ?? []) {
+				const key =
+					file.uri?.trim() || file.path?.trim() || file.filename?.trim();
+				if (key && !screenshotKeys.includes(key)) {
+					screenshotKeys.push(key);
+				}
+			}
+		}
+
+		return screenshotKeys.length;
+	}
+
+	function getBrowserEventDetails(
+		event: BrowserEventChunkData,
+		options: { expanded?: boolean } = {},
+	): string | null {
+		const payload =
+			event.event.payload && typeof event.event.payload === "object"
+				? (event.event.payload as Record<string, unknown>)
+				: null;
+		if (!payload) {
+			return null;
+		}
+		const data =
+			event.event.direction === "response"
+				? payload.result && typeof payload.result === "object"
+					? (payload.result as Record<string, unknown>)
+					: null
+				: payload.params && typeof payload.params === "object"
+					? (payload.params as Record<string, unknown>)
+					: null;
+		if (!data) {
+			return null;
+		}
+
+		const maxLength = options.expanded ? null : undefined;
+
+		switch (event.event.method) {
+			case "Page.navigate":
+				return getBrowserDetailText(data.url, maxLength);
+			case "Target.createTarget":
+				return getBrowserDetailText(
+					event.event.direction === "response" ? data.targetId : data.url,
+					maxLength,
+				);
+			case "Target.activateTarget":
+			case "Target.attachToTarget":
+			case "Target.closeTarget":
+				return getBrowserDetailText(
+					event.event.direction === "response"
+						? (data.sessionId ?? data.success)
+						: data.targetId,
+					maxLength,
+				);
+			case "Runtime.evaluate":
+				return getBrowserRuntimeEvaluateDetails(
+					event.event.direction,
+					data,
+					maxLength,
+				);
+			case "Input.dispatchMouseEvent":
+				return getBrowserInputDetails(
+					data,
+					["type", "x", "y", "button", "clickCount"],
+					maxLength,
+				);
+			case "Input.dispatchKeyEvent":
+				return getBrowserInputDetails(
+					data,
+					["type", "key", "code", "text"],
+					maxLength,
+				);
+			default:
+				return getBrowserInputDetails(
+					data,
+					event.event.direction === "response"
+						? ["targetId", "sessionId", "frameId", "loaderId", "success", "url"]
+						: [
+								"url",
+								"targetId",
+								"sessionId",
+								"type",
+								"key",
+								"button",
+								"x",
+								"y",
+							],
+					maxLength,
+				);
+		}
+	}
+
+	function getBrowserRuntimeEvaluateDetails(
+		direction: string,
+		data: Record<string, unknown>,
+		maxLength?: number | null,
+	): string | null {
+		if (direction === "request") {
+			return getBrowserDetailText(data.expression, maxLength ?? 120);
+		}
+		const result =
+			data.result && typeof data.result === "object"
+				? (data.result as Record<string, unknown>)
+				: null;
+		if (!result) {
+			return null;
+		}
+		return getBrowserDetailText(
+			result.value ?? result.description ?? result.type,
+			maxLength ?? 120,
+		);
+	}
+
+	function getBrowserInputDetails(
+		data: Record<string, unknown>,
+		keys: string[],
+		maxLength?: number | null,
+	): string | null {
+		const parts = keys
+			.map((key) => {
+				const value = getBrowserDetailText(data[key], maxLength ?? 60);
+				return value ? `${key}: ${value}` : null;
+			})
+			.filter((value): value is string => Boolean(value));
+		return parts.length > 0 ? parts.join(" • ") : null;
+	}
+
+	function getBrowserDetailText(
+		value: unknown,
+		maxLength: number | null = 80,
+	): string | null {
+		if (value === null || value === undefined) {
+			return null;
+		}
+		const text =
+			typeof value === "string"
+				? value
+				: typeof value === "number" || typeof value === "boolean"
+					? String(value)
+					: null;
+		if (!text) {
+			return null;
+		}
+		const trimmed = text.trim();
+		if (!trimmed) {
+			return null;
+		}
+		if (maxLength === null) {
+			return trimmed;
+		}
+		return trimmed.length > maxLength
+			? `${trimmed.slice(0, maxLength - 1)}…`
+			: trimmed;
+	}
+
+	function getBrowserArtifactURI(file: BrowserEventFile): string {
+		return file.uri ?? `artifacts://${file.path}`;
+	}
+
+	function getBrowserScreenshotURL(file: BrowserEventFile): string | null {
+		return browserScreenshotPreviewCache[getBrowserArtifactURI(file)] ?? null;
+	}
+
+	async function loadBrowserScreenshot(
+		file: BrowserEventFile,
+	): Promise<string> {
+		const artifactURI = getBrowserArtifactURI(file);
+		const cachedURL = browserScreenshotPreviewCache[artifactURI];
+		if (cachedURL) {
+			return cachedURL;
+		}
+		if (browserScreenshotLoadPromises[artifactURI]) {
+			return browserScreenshotLoadPromises[artifactURI];
+		}
+
+		const loadPromise = loadBrowserScreenshotWithRetry(file);
+		browserScreenshotLoadPromises = {
+			...browserScreenshotLoadPromises,
+			[artifactURI]: loadPromise,
+		};
+
+		try {
+			return await loadPromise;
+		} finally {
+			const { [artifactURI]: _, ...rest } = browserScreenshotLoadPromises;
+			browserScreenshotLoadPromises = rest;
+		}
+	}
+
+	async function loadBrowserScreenshotWithRetry(
+		file: BrowserEventFile,
+	): Promise<string> {
+		const artifactURI = getBrowserArtifactURI(file);
+		for (
+			let attempt = 1;
+			attempt <= BROWSER_SCREENSHOT_MAX_LOAD_ATTEMPTS;
+			attempt++
+		) {
+			const cachedURL = browserScreenshotPreviewCache[artifactURI];
+			if (cachedURL) {
+				return cachedURL;
+			}
+			if (!activeSessionId || !activeThreadId) {
+				throw new Error("No active thread.");
+			}
+
+			try {
+				const response = await api.readSessionThreadArtifact(
+					activeSessionId,
+					activeThreadId,
+					artifactURI,
+				);
+				const base64Content =
+					response.encoding === "base64"
+						? response.content
+						: btoa(response.content);
+				const nextURL = `data:${file.mediaType || "application/octet-stream"};base64,${base64Content}`;
+				browserScreenshotPreviewCache = {
+					...browserScreenshotPreviewCache,
+					[artifactURI]: nextURL,
+				};
+				if (browserScreenshotLoadErrors[artifactURI]) {
+					const { [artifactURI]: _, ...rest } = browserScreenshotLoadErrors;
+					browserScreenshotLoadErrors = rest;
+				}
+				return nextURL;
+			} catch (error) {
+				if (attempt === BROWSER_SCREENSHOT_MAX_LOAD_ATTEMPTS) {
+					throw error;
+				}
+				await new Promise((resolve) =>
+					setTimeout(resolve, BROWSER_SCREENSHOT_RETRY_DELAY_MS),
+				);
+			}
+		}
+
+		throw new Error("Failed to load browser screenshot.");
+	}
+
+	async function ensureBrowserScreenshotLoaded(file: BrowserEventFile) {
+		const artifactURI = getBrowserArtifactURI(file);
+		if (browserScreenshotPreviewCache[artifactURI]) {
+			return;
+		}
+
+		try {
+			await loadBrowserScreenshot(file);
+		} catch (error) {
+			browserScreenshotLoadErrors = {
+				...browserScreenshotLoadErrors,
+				[artifactURI]:
+					error instanceof Error
+						? error.message
+						: "Failed to load browser screenshot.",
+			};
+		}
+	}
+
+	async function preloadBrowserTimelineSteps(steps: BrowserTimelineStep[]) {
+		for (const step of steps) {
+			await ensureBrowserScreenshotLoaded(step.file);
+		}
+	}
+
+	function getBrowserScreenshotLoadError(
+		file: BrowserEventFile,
+	): string | null {
+		return browserScreenshotLoadErrors[getBrowserArtifactURI(file)] ?? null;
+	}
+
+	function getBrowserTimelineSteps(
+		events: BrowserEventChunkData[],
+	): BrowserTimelineStep[] {
+		const steps: BrowserTimelineStep[] = [];
+		let previousArtifactURI: string | null = null;
+
+		for (const event of events) {
+			for (const file of event.event.files ?? []) {
+				const artifactURI = getBrowserArtifactURI(file);
+				if (artifactURI === previousArtifactURI) {
+					continue;
+				}
+				steps.push({
+					index: steps.length + 1,
+					file,
+					event,
+					artifactURI,
+				});
+				previousArtifactURI = artifactURI;
+			}
+		}
+
+		return steps;
+	}
+
+	async function openBrowserScreenshotPreview(file: BrowserEventFile) {
+		browserScreenshotPreviewFile = file;
+		browserScreenshotPreviewError = null;
+		browserScreenshotPreviewOpen = true;
+		browserScreenshotPreviewURL = null;
+		browserScreenshotPreviewLoading = true;
+
+		try {
+			browserScreenshotPreviewURL = await loadBrowserScreenshot(file);
+		} catch (error) {
+			browserScreenshotPreviewError =
+				error instanceof Error
+					? error.message
+					: "Failed to load browser screenshot.";
+		} finally {
+			browserScreenshotPreviewLoading = false;
+		}
+	}
+
 	function getCollapsedStepLabel(stepCount: number): string {
 		return `${stepCount} ${stepCount === 1 ? "step" : "steps"}`;
+	}
+
+	function getBrowserActivityStepLabel(stepCount: number): string {
+		return `${stepCount} browser ${stepCount === 1 ? "step" : "steps"}`;
+	}
+
+	function getTurnFinalAssistantMessage(turn: ConversationTurn) {
+		return turn.assistantMessages.at(-1) ?? null;
+	}
+
+	function getTurnGroupedAssistantMessages(
+		turn: ConversationTurn,
+	): ChatMessage[] {
+		return turn.assistantMessages.slice(0, -1);
+	}
+
+	function getAssistantMessageAllRenderableParts(message: ChatMessage) {
+		const partGroups = getAssistantMessagePartGroups(message, {
+			isMessageComplete: !isActiveStreamingAssistantMessage(message),
+		});
+		return [...partGroups.collapsedParts, ...partGroups.visibleParts];
+	}
+
+	function getTurnGroupedStepCount(
+		turn: ConversationTurn,
+		partGroups: ReturnType<typeof getAssistantMessagePartGroups> | null,
+	): number {
+		return (
+			turn.assistantMessages.length - 1 + (partGroups?.collapsedStepCount ?? 0)
+		);
 	}
 
 	function shouldCollapseErrorBanner(errorText: string): boolean {
@@ -330,6 +786,10 @@
 			message.role === "assistant" &&
 			message.id === latestConversationMessageId
 		);
+	}
+
+	function isActiveStreamingTurn(turnId: string): boolean {
+		return isStreaming && turnId === activeTurnId;
 	}
 
 	function updateIsNearBottom() {
@@ -465,6 +925,20 @@
 			saveScrollPosition(element);
 			updateIsNearBottom();
 		});
+	});
+
+	$effect(() => {
+		for (const turn of conversationTurns) {
+			if (!isBrowserActivityExpanded(turn.id)) {
+				continue;
+			}
+			const browserEvents = browserEventsByTurnId[turn.id] ?? [];
+			const browserTimelineSteps = getBrowserTimelineSteps(browserEvents);
+			if (browserTimelineSteps.length === 0) {
+				continue;
+			}
+			void preloadBrowserTimelineSteps(browserTimelineSteps);
+		}
 	});
 
 	$effect(() => {
@@ -780,6 +1254,254 @@
 	{/each}
 {/snippet}
 
+{#snippet renderBrowserActivity(
+	turnId: string,
+	events: BrowserEventChunkData[],
+)}
+	{@const browserActivityStreaming = isActiveStreamingTurn(turnId)}
+	{@const browserActivityExpanded = isBrowserActivityExpanded(turnId)}
+	{@const browserActivityViewMode = getBrowserActivityViewMode(turnId)}
+	{@const browserStepCount = getBrowserActivityStepCount(events)}
+	{@const browserTimelineSteps = getBrowserTimelineSteps(events)}
+	<Collapsible
+		open={browserActivityExpanded}
+		onOpenChange={(open) => {
+			if (browserActivityStreaming && !open) {
+				return;
+			}
+			setBrowserActivityExpanded(turnId, open);
+			if (open) {
+				void preloadBrowserTimelineSteps(browserTimelineSteps);
+			}
+		}}
+	>
+		<CollapsibleTrigger
+			aria-label={`${browserActivityExpanded ? "Hide" : "Show"} browser activity`}
+			class="flex w-full items-center gap-3 py-1 text-left"
+			type="button"
+		>
+			<span class="h-px flex-1 bg-border"></span>
+			<span
+				class="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
+			>
+				<AppWindowIcon class="size-3" />
+				{getBrowserActivityStepLabel(browserStepCount)}
+			</span>
+			<span class="h-px flex-1 bg-border"></span>
+		</CollapsibleTrigger>
+		<CollapsibleContent class="overflow-hidden pt-3">
+			{#if browserActivityExpanded}
+				<div class="space-y-4">
+					<div class="flex justify-end">
+						<div
+							class="inline-flex items-center rounded-lg border border-border/70 bg-muted/30 p-1"
+						>
+							<Button
+								class="h-8 gap-2 px-3"
+								onclick={() => setBrowserActivityViewMode(turnId, "simple")}
+								size="sm"
+								type="button"
+								variant={browserActivityViewMode === "simple"
+									? "secondary"
+									: "ghost"}
+							>
+								<GalleryHorizontalEndIcon class="size-3.5" />
+								Simple
+							</Button>
+							<Button
+								class="h-8 gap-2 px-3"
+								onclick={() => setBrowserActivityViewMode(turnId, "details")}
+								size="sm"
+								type="button"
+								variant={browserActivityViewMode === "details"
+									? "secondary"
+									: "ghost"}
+							>
+								<ListTreeIcon class="size-3.5" />
+								Details
+							</Button>
+						</div>
+					</div>
+
+					{#if browserActivityViewMode === "simple"}
+						<div class="space-y-4 pl-3">
+							{#if browserTimelineSteps.length === 0}
+								<div
+									class="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center text-muted-foreground text-sm"
+								>
+									No screenshots captured.
+								</div>
+							{:else}
+								{#each browserTimelineSteps as step, index (step.artifactURI)}
+									<div class="relative flex gap-4">
+										<div class="flex w-8 shrink-0 flex-col items-center">
+											<div
+												class="z-10 flex size-8 items-center justify-center rounded-full border border-border bg-background font-medium text-foreground text-xs shadow-sm"
+											>
+												{step.index}
+											</div>
+											{#if index < browserTimelineSteps.length - 1}
+												<div class="mt-2 w-px flex-1 bg-border"></div>
+											{/if}
+										</div>
+										<div class="min-w-0 flex-1 pb-4">
+											<button
+												class="group block w-full overflow-hidden rounded-2xl border border-border/70 bg-card text-left shadow-sm transition-colors hover:border-border"
+												onclick={() => {
+													void openBrowserScreenshotPreview(step.file);
+												}}
+												type="button"
+											>
+												<div
+													class="flex items-center gap-2 border-border/70 border-b bg-muted/35 px-3 py-2"
+												>
+													<span class="size-2 rounded-full bg-rose-400/80"
+													></span>
+													<span class="size-2 rounded-full bg-amber-400/80"
+													></span>
+													<span class="size-2 rounded-full bg-emerald-400/80"
+													></span>
+													<div
+														class="ml-2 truncate rounded-md bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground"
+													>
+														{getBrowserEventMethodLabel(step.event)}
+													</div>
+												</div>
+												<div
+													class="bg-gradient-to-b from-muted/15 to-background p-3"
+												>
+													{#if getBrowserScreenshotURL(step.file)}
+														<img
+															alt={step.file.filename ??
+																`Browser step ${step.index}`}
+															class="w-full rounded-xl border border-border/60 bg-background object-cover shadow-sm"
+															src={getBrowserScreenshotURL(step.file) ??
+																undefined}
+														/>
+													{:else if getBrowserScreenshotLoadError(step.file)}
+														<div
+															class="flex aspect-[16/10] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 text-center text-muted-foreground text-sm"
+														>
+															Screenshot unavailable
+														</div>
+													{:else}
+														<div
+															class="flex aspect-[16/10] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 text-muted-foreground text-sm"
+														>
+															Loading screenshot…
+														</div>
+													{/if}
+												</div>
+											</button>
+											<div class="mt-2 pl-1 text-muted-foreground text-xs">
+												Step {step.event.stepIndex}
+												{#if getBrowserEventTimestampLabel(step.event)}
+													• {getBrowserEventTimestampLabel(step.event)}
+												{/if}
+											</div>
+										</div>
+									</div>
+								{/each}
+							{/if}
+						</div>
+					{:else}
+						<div class="space-y-2 pl-11">
+							{#each events as browserEvent (browserEvent.event.eventId)}
+								{@const browserEventDetails = getBrowserEventDetails(
+									browserEvent,
+									{
+										expanded: isBrowserDetailEventExpanded(
+											browserEvent.event.eventId,
+										),
+									},
+								)}
+								<div
+									class="rounded-md border border-border/60 bg-background/80 px-3 py-2"
+								>
+									<div
+										class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+									>
+										<span class="font-medium text-foreground">
+											{getBrowserEventMethodLabel(browserEvent)}
+										</span>
+										<span class="text-muted-foreground">
+											Step {browserEvent.stepIndex}
+										</span>
+										<span class="text-muted-foreground uppercase">
+											{browserEvent.event.direction}
+										</span>
+										{#if getBrowserEventTimestampLabel(browserEvent)}
+											<span class="text-muted-foreground">
+												{getBrowserEventTimestampLabel(browserEvent)}
+											</span>
+										{/if}
+									</div>
+									{#if browserEventDetails}
+										<div class="mt-1 space-y-1">
+											<button
+												class={`w-full text-left font-mono text-[11px] text-muted-foreground ${isBrowserDetailEventExpanded(browserEvent.event.eventId) ? "whitespace-pre-wrap break-words [overflow-wrap:anywhere]" : "truncate"}`}
+												onclick={() => {
+													if (!isBrowserEventDetailExpandable(browserEvent)) {
+														return;
+													}
+													setBrowserDetailEventExpanded(
+														browserEvent.event.eventId,
+														!isBrowserDetailEventExpanded(
+															browserEvent.event.eventId,
+														),
+													);
+												}}
+												type="button"
+											>
+												{browserEventDetails}
+											</button>
+											{#if isBrowserEventDetailExpandable(browserEvent)}
+												<Button
+													class="h-auto px-0 font-normal text-xs"
+													onclick={() =>
+														setBrowserDetailEventExpanded(
+															browserEvent.event.eventId,
+															!isBrowserDetailEventExpanded(
+																browserEvent.event.eventId,
+															),
+														)}
+													size="sm"
+													type="button"
+													variant="link"
+												>
+													{getBrowserEventDetailToggleLabel(
+														browserEvent.event.eventId,
+													)}
+												</Button>
+											{/if}
+										</div>
+									{/if}
+									{#if browserEvent.event.files && browserEvent.event.files.length > 0}
+										<div class="mt-2 flex flex-wrap gap-2">
+											{#each browserEvent.event.files as file (file.path)}
+												<Button
+													size="sm"
+													type="button"
+													variant="outline"
+													onclick={() => {
+														void openBrowserScreenshotPreview(file);
+													}}
+												>
+													{file.filename ?? "Screenshot"}
+												</Button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</CollapsibleContent>
+	</Collapsible>
+{/snippet}
+
 {#snippet renderErrorBanner(
 	key: ConversationPaneErrorBannerKey,
 	errorText: string,
@@ -876,64 +1598,100 @@
 										</MessageContent>
 									</Message>
 								{/each}
-								{#if turn.assistantMessage}
-									{@const assistantMessage = turn.assistantMessage}
-									{@const partGroups = getAssistantMessagePartGroups(
-										assistantMessage,
-										{
-											isMessageComplete:
-												!isActiveStreamingAssistantMessage(assistantMessage),
-										},
+								{#if turn.assistantMessages.length > 0}
+									{@const assistantMessage = getTurnFinalAssistantMessage(turn)}
+									{@const browserEvents = browserEventsByTurnId[turn.id] ?? []}
+									{@const groupedAssistantMessages =
+										getTurnGroupedAssistantMessages(turn)}
+									{@const partGroups = assistantMessage
+										? getAssistantMessagePartGroups(assistantMessage, {
+												isMessageComplete:
+													!isActiveStreamingAssistantMessage(assistantMessage),
+											})
+										: null}
+									{@const groupedStepCount = getTurnGroupedStepCount(
+										turn,
+										partGroups,
 									)}
-									<Message
-										data-conversation-message-id={assistantMessage.id}
-										from="assistant"
-									>
-										<MessageContent>
-											{@const isCollapsedStepSectionExpanded =
-												isAssistantStepMessageExpanded(assistantMessage.id)}
-											{#if partGroups.hasCollapsedSteps}
-												<Collapsible
-													open={isCollapsedStepSectionExpanded}
-													onOpenChange={(open) =>
-														setAssistantStepMessageExpanded(
-															assistantMessage.id,
-															open,
-														)}
+									{#if assistantMessage}
+										{@const isCollapsedStepSectionExpanded =
+											isAssistantStepMessageExpanded(turn.id)}
+										{#if groupedStepCount > 0}
+											<Collapsible
+												open={isCollapsedStepSectionExpanded}
+												onOpenChange={(open) =>
+													setAssistantStepMessageExpanded(turn.id, open)}
+											>
+												<CollapsibleTrigger
+													aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${getCollapsedStepLabel(groupedStepCount)}`}
+													class="flex w-full items-center gap-3 py-1 text-left"
+													type="button"
 												>
-													<CollapsibleTrigger
-														aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${getCollapsedStepLabel(partGroups.collapsedStepCount)}`}
-														class="flex w-full items-center gap-3 py-1 text-left"
-														type="button"
+													<span class="h-px flex-1 bg-border"></span>
+													<span
+														class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
 													>
-														<span class="h-px flex-1 bg-border"></span>
-														<span
-															class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
+														{getCollapsedStepLabel(groupedStepCount)}
+													</span>
+													<span class="h-px flex-1 bg-border"></span>
+												</CollapsibleTrigger>
+												<CollapsibleContent class="overflow-hidden">
+													{#if isCollapsedStepSectionExpanded}
+														<div
+															class="flex min-w-0 flex-col gap-2 [&>[data-ai-stack]+[data-ai-stack]]:-mt-8"
 														>
-															{getCollapsedStepLabel(
-																partGroups.collapsedStepCount,
-															)}
-														</span>
-														<span class="h-px flex-1 bg-border"></span>
-													</CollapsibleTrigger>
-													<CollapsibleContent
-														class="flex min-w-0 flex-col gap-2 overflow-hidden [&>[data-ai-stack]+[data-ai-stack]]:-mt-8"
-													>
-														{#if isCollapsedStepSectionExpanded}
-															{@render renderAssistantMessageParts(
+															{#each groupedAssistantMessages as groupedAssistantMessage (groupedAssistantMessage.id)}
+																<Message
+																	data-conversation-message-id={groupedAssistantMessage.id}
+																	from="assistant"
+																>
+																	<MessageContent>
+																		{@render renderAssistantMessageParts(
+																			groupedAssistantMessage,
+																			getAssistantMessageAllRenderableParts(
+																				groupedAssistantMessage,
+																			),
+																		)}
+																	</MessageContent>
+																</Message>
+															{/each}
+															{#if partGroups && partGroups.collapsedParts.length > 0}
+																<Message
+																	data-conversation-message-id={`${assistantMessage.id}:grouped`}
+																	from="assistant"
+																>
+																	<MessageContent>
+																		{@render renderAssistantMessageParts(
+																			assistantMessage,
+																			partGroups.collapsedParts,
+																		)}
+																	</MessageContent>
+																</Message>
+															{/if}
+														</div>
+													{/if}
+												</CollapsibleContent>
+											</Collapsible>
+										{/if}
+										{#if browserEvents.length > 0}
+											{@render renderBrowserActivity(turn.id, browserEvents)}
+										{/if}
+										<Message
+											data-conversation-message-id={assistantMessage.id}
+											from="assistant"
+										>
+											<MessageContent>
+												{@render renderAssistantMessageParts(
+													assistantMessage,
+													partGroups
+														? partGroups.visibleParts
+														: getAssistantMessageAllRenderableParts(
 																assistantMessage,
-																partGroups.collapsedParts,
-															)}
-														{/if}
-													</CollapsibleContent>
-												</Collapsible>
-											{/if}
-											{@render renderAssistantMessageParts(
-												assistantMessage,
-												partGroups.visibleParts,
-											)}
-										</MessageContent>
-									</Message>
+															),
+												)}
+											</MessageContent>
+										</Message>
+									{/if}
 								{/if}
 								{#if isStreaming && turn.id === activeTurnId}
 									<Message from="assistant">
@@ -1036,6 +1794,65 @@
 						}}
 					>
 						Edit
+					</Button>
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
+
+		<Dialog.Root bind:open={browserScreenshotPreviewOpen}>
+			<Dialog.Content class="sm:max-w-5xl">
+				<Dialog.Header>
+					<Dialog.Title
+						>{browserScreenshotPreviewFile?.filename ??
+							"Browser screenshot"}</Dialog.Title
+					>
+				</Dialog.Header>
+				<div class="space-y-3">
+					{#if browserScreenshotPreviewFile?.path}
+						<div class="font-mono text-muted-foreground text-xs break-all">
+							{browserScreenshotPreviewFile.path}
+						</div>
+					{/if}
+					{#if browserScreenshotPreviewLoading}
+						<div
+							class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
+						>
+							Loading screenshot...
+						</div>
+					{:else if browserScreenshotPreviewError}
+						<div
+							class="rounded-md border border-border bg-background px-3 py-4 text-destructive text-sm"
+						>
+							{browserScreenshotPreviewError}
+						</div>
+					{:else if browserScreenshotPreviewURL}
+						<div
+							class="overflow-auto rounded-md border border-border bg-background p-2"
+						>
+							<img
+								alt={browserScreenshotPreviewFile?.filename ??
+									"Browser screenshot"}
+								class="mx-auto h-auto max-w-full rounded"
+								src={browserScreenshotPreviewURL}
+							/>
+						</div>
+					{:else}
+						<div
+							class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
+						>
+							Screenshot unavailable.
+						</div>
+					{/if}
+				</div>
+				<Dialog.Footer>
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={() => {
+							browserScreenshotPreviewOpen = false;
+						}}
+					>
+						Close
 					</Button>
 				</Dialog.Footer>
 			</Dialog.Content>

@@ -19,6 +19,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
+	"github.com/obot-platform/discobot/agent-go/browser"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	"github.com/obot-platform/discobot/agent-go/internal/credentials"
 	"github.com/obot-platform/discobot/agent-go/internal/handler"
@@ -111,8 +112,15 @@ func Run(cfg *config.Config) {
 		}
 		return ""
 	})
+	browserMgr, err := browser.NewManager(cfg.SessionID, cfg.DataDir, cfg.Port)
+	if err != nil {
+		log.Fatalf("browser manager: %v", err)
+	}
+	exec.SetEnvForThread(browserMgr.EnvForThread)
 	exec.SetEnvSnapshot(func() map[string]string {
-		return visibleEnvSnapshot(cfg.AgentCwd, credMgr.Snapshot)
+		env := visibleEnvSnapshot(cfg.AgentCwd, credMgr.Snapshot)
+		maps.Copy(env, browserMgr.Env())
+		return env
 	})
 	authorizer := credentials.NewCredentialUseAuthorizer(
 		credentialUseAuthorizerResolver{registry: reg},
@@ -164,7 +172,7 @@ func Run(cfg *config.Config) {
 	})
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
-	h := handler.New(cfg.AgentCwd, completions, hookMgr, svcMgr, a)
+	h := handler.New(cfg.AgentCwd, completions, hookMgr, svcMgr, a, browserMgr)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -175,14 +183,24 @@ func Run(cfg *config.Config) {
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 
+	// Browser CDP: loopback-only websocket route authenticated by the session
+	// token in the query string rather than the normal Bearer middleware.
+	if browserMgr != nil {
+		r.Get("/sessions/{sessionId}/browser/cdp", h.ProxyBrowserCDP)
+	}
+
+	// All remaining routes stay behind the normal auth and credentials stack.
+	authed := chi.NewRouter()
+
 	// Auth: validates Bearer token against DISCOBOT_SECRET hash.
-	r.Use(middleware.Auth(cfg.SecretHash))
+	authed.Use(middleware.Auth(cfg.SecretHash))
 
 	// Credentials: applies X-Discobot-Credentials env vars and git user config.
-	r.Use(middleware.Credentials(credMgr, h.EnableQueuedPromptTimers))
+	authed.Use(middleware.Credentials(credMgr, h.EnableQueuedPromptTimers))
 
 	// Register all agent API routes (also populates the global routes registry).
-	h.RegisterRoutes(r)
+	h.RegisterRoutes(authed)
+	r.Mount("/", authed)
 
 	// ── Meta routes ──────────────────────────────────────────────────────────
 
@@ -235,6 +253,9 @@ func Run(cfg *config.Config) {
 
 	// Close MCP server connections.
 	a.Close()
+	if err := browserMgr.Close(); err != nil {
+		log.Printf("browser shutdown: %v", err)
+	}
 
 	// Give in-flight requests up to 5 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

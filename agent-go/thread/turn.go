@@ -85,10 +85,11 @@ func RunTurn(
 	return func(yield func(message.MessageChunk, error) bool) {
 		// 1. Build user message and persist config.
 		startedAt := time.Now().UTC()
+		turnID := generateID()
 		cfg.UserMessage = message.Message{
 			Role:      "user",
 			Parts:     cfg.UserParts,
-			Metadata:  buildUserMessageMetadata(cfg.Metadata, cfg.OriginalUserText, cfg.SlashCommand),
+			Metadata:  buildUserMessageMetadata(cfg.Metadata, turnID, cfg.OriginalUserText, cfg.SlashCommand),
 			CreatedAt: &startedAt,
 		}
 
@@ -114,7 +115,6 @@ func RunTurn(
 			parentID = prelude.ID
 		}
 
-		turnID := generateID()
 		turnState := TurnState{
 			ID:          turnID,
 			ThreadID:    threadID,
@@ -174,7 +174,7 @@ func RunTurn(
 		// Include the model in messageMetadata so the server can record which model was used.
 		if !yield(message.StartChunk{
 			MessageID:       turnState.AssistantMsgID,
-			MessageMetadata: buildMessageMetadata(cfg, turnState.StartedAt, nil),
+			MessageMetadata: buildMessageMetadata(cfg, turnState.ID, turnState.StartedAt, nil),
 		}, nil) {
 			return
 		}
@@ -205,7 +205,7 @@ func RunTurn(
 		}
 		yield(message.ResponseFinishChunk{
 			FinishReason:    "stop",
-			MessageMetadata: buildMessageMetadata(turnState.Config, turnState.StartedAt, turnState.FinishedAt),
+			MessageMetadata: buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt),
 		}, nil) //nolint:errcheck
 	}
 }
@@ -257,7 +257,7 @@ func ResumeTurn(
 					}
 					yield(message.ResponseFinishChunk{ //nolint:errcheck
 						FinishReason:    "stop",
-						MessageMetadata: buildMessageMetadata(turnState.Config, turnState.StartedAt, turnState.FinishedAt),
+						MessageMetadata: buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt),
 					}, nil)
 					return
 				}
@@ -285,7 +285,7 @@ func ResumeTurn(
 		}
 		yield(message.ResponseFinishChunk{ //nolint:errcheck
 			FinishReason:    "stop",
-			MessageMetadata: buildMessageMetadata(turnState.Config, turnState.StartedAt, turnState.FinishedAt),
+			MessageMetadata: buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt),
 		}, nil)
 	}
 }
@@ -1242,7 +1242,7 @@ func saveAssistantStepMessage(
 	}
 
 	assistantMsg := stepResult.AssistantMessage
-	assistantMsg.Metadata = buildMessageMetadata(cfg, turnState.StartedAt, nil)
+	assistantMsg.Metadata = buildMessageMetadata(cfg, turnState.ID, turnState.StartedAt, nil)
 	assistantMsgID := resolveMessageID(assistantMsg)
 	if err := store.SaveMessage(threadID, StoredMessage{
 		ID:       assistantMsgID,
@@ -1725,12 +1725,17 @@ func formatRetryMessage(event transport.RetryEvent) string {
 
 // buildUserMessageMetadata returns a JSON-encoded metadata object for UI-only
 // user message fields that should not be sent back to providers.
-func buildUserMessageMetadata(metadata json.RawMessage, originalText string, slashCommand *UserSlashCommandMetadata) json.RawMessage {
+func buildUserMessageMetadata(metadata json.RawMessage, turnID string, originalText string, slashCommand *UserSlashCommandMetadata) json.RawMessage {
 	payload := map[string]any{}
 	if len(metadata) > 0 {
 		if err := json.Unmarshal(metadata, &payload); err != nil {
 			return metadata
 		}
+	}
+	if turnID != "" {
+		payload["discobot"] = mergeDiscobotMetadata(payload["discobot"], map[string]any{
+			"turnId": turnID,
+		})
 	}
 	if originalText != "" {
 		payload["originalText"] = originalText
@@ -1751,8 +1756,13 @@ func buildUserMessageMetadata(metadata json.RawMessage, originalText string, sla
 // buildMessageMetadata returns a JSON-encoded messageMetadata object containing
 // the model identifier in "providerID/modelID" format, the effective reasoning
 // setting, and optional response timing fields.
-func buildMessageMetadata(cfg TurnConfig, startedAt, finishedAt *time.Time) json.RawMessage {
+func buildMessageMetadata(cfg TurnConfig, turnID string, startedAt, finishedAt *time.Time) json.RawMessage {
 	payload := map[string]any{}
+	if turnID != "" {
+		payload["discobot"] = map[string]any{
+			"turnId": turnID,
+		}
+	}
 	if cfg.ProviderID != "" && cfg.Model != "" {
 		payload["model"] = cfg.ProviderID + "/" + cfg.Model
 		payload["reasoning"] = string(effectiveReasoning(cfg))
@@ -1771,6 +1781,15 @@ func buildMessageMetadata(cfg TurnConfig, startedAt, finishedAt *time.Time) json
 		return nil
 	}
 	return data
+}
+
+func mergeDiscobotMetadata(current any, additions map[string]any) map[string]any {
+	merged := map[string]any{}
+	if currentMap, ok := current.(map[string]any); ok {
+		maps.Copy(merged, currentMap)
+	}
+	maps.Copy(merged, additions)
+	return merged
 }
 
 // effectiveReasoning returns the reasoning setting that the provider will use
@@ -1910,7 +1929,7 @@ func persistTurnResponseMetadata(store *Store, threadID string, turnState *TurnS
 	if err != nil {
 		return nil
 	}
-	stored.Message.Metadata = buildMessageMetadata(turnState.Config, turnState.StartedAt, turnState.FinishedAt)
+	stored.Message.Metadata = buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt)
 	return store.SaveMessage(threadID, stored)
 }
 

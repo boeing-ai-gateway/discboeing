@@ -228,6 +228,14 @@ test("conversation loader clears the running flag when the thread disconnects", 
 	);
 });
 
+test("conversation loader tracks browser events by turn id", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(source, /browserEventsByTurnId/);
+	assert.match(source, /onBrowserEvent:/);
+	assert.match(source, /turnId = event\.turnId\?\.trim\(\)/);
+});
+
 test("conversation loader keeps websocket disconnects transient while preserving fatal stream parse errors", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 

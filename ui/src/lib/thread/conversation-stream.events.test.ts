@@ -89,11 +89,26 @@ test("parseChatStreamMessageValue accepts data-* parts", async () => {
 					isRunning: true,
 				},
 			},
+			{
+				type: "data-browser-event",
+				data: {
+					threadId: "thread-1",
+					assistantMessageId: "assistant-2",
+					stepIndex: 1,
+					event: {
+						eventId: "browser-1",
+						stepIndex: 1,
+						direction: "response",
+						method: "Page.navigate",
+					},
+				},
+			},
 		],
 	});
 
 	assert.equal(parsed.parts[0]?.type, "data-thread-update");
 	assert.equal(parsed.parts[1]?.type, "data-completion-status");
+	assert.equal(parsed.parts[2]?.type, "data-browser-event");
 });
 
 test("parseChatStreamMessageValue normalizes legacy dynamic-tool approval payloads", async () => {
