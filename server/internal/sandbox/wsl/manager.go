@@ -1404,7 +1404,7 @@ func cleanupTempRootfsFile(path string) error {
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < defaultTempCleanupMaxRetries; attempt++ {
+	for attempt := range defaultTempCleanupMaxRetries {
 		err := removePath(path)
 		if err == nil || errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -1703,7 +1703,7 @@ func (m *Manager) startNamedPipeBridge(_ context.Context, pipeName string) error
 	m.pipeListenerName = pipeName
 	m.pipeListenerClose = closeCh
 
-	go m.serveNamedPipeBridge(listener, pipeName, closeCh)
+	go m.serveNamedPipeBridge(listener, closeCh)
 	return nil
 }
 
@@ -1805,7 +1805,7 @@ func (m *Manager) ensureVarDiskAttachedOnce(ctx context.Context) error {
 		}
 	}
 
-	devicePath, found, err := m.findVarDiskDeviceByLabel(ctx)
+	_, found, err := m.findVarDiskDeviceByLabel(ctx)
 	if err != nil {
 		return err
 	}
@@ -1813,7 +1813,7 @@ func (m *Manager) ensureVarDiskAttachedOnce(ctx context.Context) error {
 		return nil
 	}
 
-	devicePath, err = m.waitForNewDiskDevice(ctx, before)
+	devicePath, err := m.waitForNewDiskDevice(ctx, before)
 	if err != nil {
 		return fmt.Errorf("wait for attached WSL /var disk %q device: %w", m.varDiskPath(), err)
 	}
@@ -2032,22 +2032,6 @@ func (m *Manager) checkNamedDistroUnexpectedState(ctx context.Context, distroNam
 	return nil
 }
 
-func isMountProbeNotMountedError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		switch exitErr.ExitCode() {
-		case 1, 32:
-			return true
-		}
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "exit status 1") ||
-		strings.Contains(message, "exit status 32")
-}
-
 func isUnformattedVarDiskMountError(err error) bool {
 	if err == nil {
 		return false
@@ -2249,7 +2233,7 @@ func (m *Manager) stopNamedPipeBridgeLocked() {
 	m.pipeListenerName = ""
 }
 
-func (m *Manager) serveNamedPipeBridge(listener net.Listener, pipeName string, closeCh <-chan struct{}) {
+func (m *Manager) serveNamedPipeBridge(listener net.Listener, closeCh <-chan struct{}) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {

@@ -465,7 +465,7 @@ func (p *Provider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error)
 		currentInnerCh := innerCh
 
 		for {
-			reconnect := p.forwardManagedWatch(ctx, eventCh, currentRuntimeInfo, currentWatchCtx, currentCancel, currentInnerCh)
+			reconnect := p.forwardManagedWatch(ctx, currentWatchCtx, eventCh, currentRuntimeInfo, currentCancel, currentInnerCh)
 			currentCancel()
 			if !reconnect {
 				return
@@ -682,9 +682,9 @@ func (p *Provider) restartManagedWatch(ctx context.Context) (*RuntimeInfo, conte
 
 func (p *Provider) forwardManagedWatch(
 	ctx context.Context,
+	watchCtx context.Context,
 	eventCh chan<- sandbox.StateEvent,
 	runtimeInfo *RuntimeInfo,
-	watchCtx context.Context,
 	cancel context.CancelFunc,
 	innerCh <-chan sandbox.StateEvent,
 ) bool {

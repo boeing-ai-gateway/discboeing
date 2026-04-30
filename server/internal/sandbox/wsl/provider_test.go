@@ -446,7 +446,7 @@ func TestProviderRunningSandboxCountTreatsActiveWatchAsActivity(t *testing.T) {
 	t.Cleanup(func() {
 		runCommandOutput = originalRunCommandOutput
 	})
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, _ ...string) ([]byte, error) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %q", name)
 		}
@@ -468,7 +468,7 @@ func TestProviderRunningSandboxCountTreatsActiveWatchAsActivity(t *testing.T) {
 func TestProviderWatchRestartsWhenBridgeDisappears(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var mu sync.Mutex
@@ -514,7 +514,7 @@ func TestProviderWatchRestartsWhenBridgeDisappears(t *testing.T) {
 		probeBridgeReady: func(_ context.Context, runtimeInfo *RuntimeInfo) (bool, error) {
 			mu.Lock()
 			defer mu.Unlock()
-			return !(breakFirstHost && runtimeInfo.BridgeDockerHost == firstHost), nil
+			return !breakFirstHost || runtimeInfo.BridgeDockerHost != firstHost, nil
 		},
 	}
 

@@ -509,7 +509,7 @@ func TestAttachVarDiskBareUsesElevatedHelperWhenMountNeedsPrivileges(t *testing.
 func TestIsUnformattedVarDiskMountErrorMatchesInvalidArgumentMountFailure(t *testing.T) {
 	t.Parallel()
 
-	err := errors.New("wsl.exe --mount --vhd C:\\var.vhdx --name discobot-var --type ext4: exit status 1: The disk was attached but failed to mount: Invalid argument.")
+	err := errors.New("wsl.exe --mount --vhd C:\\var.vhdx --name discobot-var --type ext4: exit status 1: the disk was attached but failed to mount: invalid argument")
 	if !isUnformattedVarDiskMountError(err) {
 		t.Fatalf("isUnformattedVarDiskMountError(%q) = false, want true", err)
 	}

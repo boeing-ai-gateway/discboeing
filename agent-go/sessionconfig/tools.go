@@ -254,9 +254,7 @@ func toolDefinitionToMap(tool providers.ToolDefinition) (map[string]any, error) 
 
 func mergeToolDefinitionMaps(base, override map[string]any) map[string]any {
 	merged := make(map[string]any, len(base)+len(override))
-	for key, value := range base {
-		merged[key] = value
-	}
+	maps.Copy(merged, base)
 	for key, value := range override {
 		baseMap, baseOK := merged[key].(map[string]any)
 		overrideMap, overrideOK := value.(map[string]any)

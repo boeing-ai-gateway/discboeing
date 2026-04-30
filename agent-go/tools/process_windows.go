@@ -43,20 +43,22 @@ func (g *windowsProcessGroupController) afterStart(cmd *exec.Cmd) error {
 		uint32(unsafe.Sizeof(info)),
 	)
 	if err != nil {
-		windows.CloseHandle(job)
+		_ = windows.CloseHandle(job)
 		return nil
 	}
 
 	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid))
 	if err != nil {
-		windows.CloseHandle(job)
+		_ = windows.CloseHandle(job)
 		return nil
 	}
-	defer windows.CloseHandle(process)
+	defer func() {
+		_ = windows.CloseHandle(process)
+	}()
 
 	err = windows.AssignProcessToJobObject(job, process)
 	if err != nil {
-		windows.CloseHandle(job)
+		_ = windows.CloseHandle(job)
 		return nil
 	}
 

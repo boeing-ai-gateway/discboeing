@@ -10,4 +10,3 @@ type processGroupController interface {
 	cancel(*exec.Cmd) error
 	close() error
 }
-

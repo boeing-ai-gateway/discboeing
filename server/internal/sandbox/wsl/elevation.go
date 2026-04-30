@@ -93,7 +93,9 @@ var runElevatedWSLHelper = func(ctx context.Context, helperPath string, args ...
 	if info.HProcess == 0 {
 		return "", fmt.Errorf("launch elevated helper %q: missing process handle", helperPath)
 	}
-	defer windows.CloseHandle(info.HProcess)
+	defer func() {
+		_ = windows.CloseHandle(info.HProcess)
+	}()
 
 	if err := waitForElevatedProcess(ctx, info.HProcess); err != nil {
 		return "", fmt.Errorf("wait for elevated helper %q: %w", helperPath, err)

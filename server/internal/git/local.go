@@ -360,7 +360,7 @@ func (p *LocalProvider) Branches(ctx context.Context, workspaceID string) ([]Bra
 	if err != nil {
 		return nil, err
 	}
-	for _, line := range strings.Split(strings.TrimRight(localOutput, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(localOutput, "\n"), "\n") {
 		if line == "" {
 			continue
 		}
@@ -381,7 +381,7 @@ func (p *LocalProvider) Branches(ctx context.Context, workspaceID string) ([]Bra
 	if err != nil {
 		return nil, err
 	}
-	for _, line := range strings.Split(strings.TrimRight(remoteOutput, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(remoteOutput, "\n"), "\n") {
 		if line == "" {
 			continue
 		}
@@ -416,7 +416,7 @@ func (p *LocalProvider) FileTree(ctx context.Context, workspaceID, ref string) (
 	}
 
 	entries := make([]FileEntry, 0)
-	for _, record := range strings.Split(output, "\x00") {
+	for record := range strings.SplitSeq(output, "\x00") {
 		if record == "" {
 			continue
 		}
@@ -1031,16 +1031,6 @@ func countPatchLines(patch string) (int, int) {
 		}
 	}
 	return additions, deletions
-}
-
-func isBinaryContent(data []byte) bool {
-	checkLen := min(len(data), 8000)
-	for i := range checkLen {
-		if data[i] == 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func statusCodeToString(code byte) string {
