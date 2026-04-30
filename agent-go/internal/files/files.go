@@ -147,6 +147,13 @@ func ValidatePath(inputPath, workspaceRoot string) (string, error) {
 	return resolved, nil
 }
 
+func normalizeResultPath(relPath string) string {
+	if relPath == "" || relPath == "." {
+		return "."
+	}
+	return filepath.ToSlash(strings.ReplaceAll(relPath, "\\", "/"))
+}
+
 // IsTextFile determines if a file should be treated as text or binary.
 func IsTextFile(path string, content []byte) bool {
 	baseName := filepath.Base(path)
@@ -241,7 +248,7 @@ func ListDirectory(inputPath, workspaceRoot string, includeHidden bool) (*ListRe
 		relPath = "."
 	}
 
-	return &ListResult{Path: relPath, Entries: entries}, nil
+	return &ListResult{Path: normalizeResultPath(relPath), Entries: entries}, nil
 }
 
 // ReadFile reads the content of a file.
@@ -280,7 +287,7 @@ func ReadFile(inputPath, workspaceRoot string) (*ReadResult, *Error) {
 	isText := IsTextFile(inputPath, content)
 
 	result := &ReadResult{
-		Path: relPath,
+		Path: normalizeResultPath(relPath),
 		Size: info.Size(),
 	}
 	if isText {
@@ -327,7 +334,7 @@ func WriteFile(inputPath, content, encoding, workspaceRoot string) (*WriteResult
 	}
 
 	relPath, _ := filepath.Rel(workspaceRoot, resolved)
-	return &WriteResult{Path: relPath, Size: int64(len(data))}, nil
+	return &WriteResult{Path: normalizeResultPath(relPath), Size: int64(len(data))}, nil
 }
 
 // DeleteFile deletes a file or directory.
@@ -366,7 +373,7 @@ func DeleteFile(inputPath, workspaceRoot string) (*DeleteResult, *Error) {
 	}
 
 	relPath, _ := filepath.Rel(workspaceRoot, resolved)
-	return &DeleteResult{Path: relPath, Type: entryType}, nil
+	return &DeleteResult{Path: normalizeResultPath(relPath), Type: entryType}, nil
 }
 
 // RenameFile renames (moves) a file or directory.
@@ -409,7 +416,7 @@ func RenameFile(oldPath, newPath, workspaceRoot string) (*RenameResult, *Error) 
 
 	relOld, _ := filepath.Rel(workspaceRoot, resolvedOld)
 	relNew, _ := filepath.Rel(workspaceRoot, resolvedNew)
-	return &RenameResult{OldPath: relOld, NewPath: relNew}, nil
+	return &RenameResult{OldPath: normalizeResultPath(relOld), NewPath: normalizeResultPath(relNew)}, nil
 }
 
 // Directories to skip during manual file walk.

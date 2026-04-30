@@ -3,6 +3,7 @@ package sessionconfig
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -144,13 +145,33 @@ func discoverRules(rulesDir, displayPrefix, description string) ([]InstructionEn
 		}
 		if len(content) > 0 {
 			entries = append(entries, InstructionEntry{
-				Path:        displayPrefix + "/" + e.Name(),
+				Path:        instructionDisplayPath(displayPrefix, e.Name()),
 				Description: description,
 				Content:     strings.TrimSpace(string(content)),
 			})
 		}
 	}
 	return entries, nil
+}
+
+func instructionDisplayPath(displayPrefix, name string) string {
+	if displayPrefix == "" {
+		return name
+	}
+	if isWindowsAbsPath(displayPrefix) {
+		return strings.TrimRight(displayPrefix, `\\/`) + `\\` + strings.TrimLeft(name, `\\/`)
+	}
+	if filepath.IsAbs(displayPrefix) {
+		return filepath.Join(displayPrefix, name)
+	}
+	return path.Join(filepath.ToSlash(displayPrefix), name)
+}
+
+func isWindowsAbsPath(displayPrefix string) bool {
+	if len(displayPrefix) >= 2 && ((displayPrefix[0] >= 'A' && displayPrefix[0] <= 'Z') || (displayPrefix[0] >= 'a' && displayPrefix[0] <= 'z')) && displayPrefix[1] == ':' {
+		return true
+	}
+	return strings.HasPrefix(displayPrefix, `\\`) || strings.HasPrefix(displayPrefix, `//`)
 }
 
 // FindProjectRoot walks up from dir looking for a .git directory.

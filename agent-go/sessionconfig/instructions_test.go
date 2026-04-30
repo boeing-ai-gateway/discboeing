@@ -150,6 +150,22 @@ func TestDiscoverInstructions_SystemFiles(t *testing.T) {
 	}
 }
 
+func TestInstructionDisplayPath(t *testing.T) {
+	t.Run("relative prefix uses slash path", func(t *testing.T) {
+		got := instructionDisplayPath(".discobot/rules", "policy.md")
+		if got != ".discobot/rules/policy.md" {
+			t.Fatalf("got %q", got)
+		}
+	})
+
+	t.Run("windows absolute prefix keeps windows separators", func(t *testing.T) {
+		got := instructionDisplayPath(`C:\\discobot\\rules`, "policy.md")
+		if got != `C:\\discobot\\rules\\policy.md` {
+			t.Fatalf("got %q", got)
+		}
+	})
+}
+
 func TestDiscoverInstructions_NoFiles(t *testing.T) {
 	dir := t.TempDir()
 	mkdirAll(t, filepath.Join(dir, ".git"))
