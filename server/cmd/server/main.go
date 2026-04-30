@@ -1271,6 +1271,17 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "PATCH", Pattern: "/threads/{threadId}/queue/{queueId}",
+						Handler: h.UpdateQueuedPrompt,
+						Meta: routes.Meta{
+							Group:       "Threads",
+							Description: "Update queued prompt in session thread",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}, {Name: "queueId", Example: "queue-1"}},
+							Body:        map[string]any{"runAfter": time.Now().UTC().Add(time.Hour).Format(time.RFC3339)},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "DELETE", Pattern: "/threads/{threadId}/queue/{queueId}",
 						Handler: h.DeleteQueuedPrompt,
 						Meta: routes.Meta{

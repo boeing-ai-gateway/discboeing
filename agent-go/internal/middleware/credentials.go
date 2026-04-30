@@ -14,7 +14,7 @@ const (
 
 // Credentials returns middleware that applies credential environment variables
 // and git user configuration from request headers.
-func Credentials(mgr *credentials.Manager) func(http.Handler) http.Handler {
+func Credentials(mgr *credentials.Manager, onCredentialsApplied func()) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			credHeader := r.Header.Get(credentialsHeader)
@@ -23,6 +23,9 @@ func Credentials(mgr *credentials.Manager) func(http.Handler) http.Handler {
 
 			if credHeader != "" || gitName != "" || gitEmail != "" {
 				mgr.Apply(credHeader, gitName, gitEmail)
+				if credHeader != "" && onCredentialsApplied != nil {
+					onCredentialsApplied()
+				}
 			}
 
 			next.ServeHTTP(w, r)

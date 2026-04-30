@@ -237,6 +237,7 @@ export type ThreadContextValue = {
 		workspaceType?: "local" | "git" | null;
 		workspacePath?: string | null;
 		allowEmptyPendingMessage?: boolean;
+		runAfter?: string;
 	}) => Promise<ThreadSubmitResult | void>;
 	cancel: () => Promise<void>;
 	connect: () => Promise<void>;
@@ -248,6 +249,10 @@ export type ThreadContextValue = {
 		reason?: string;
 	}) => void;
 	deleteQueuedPrompt: (queueId: string) => Promise<void>;
+	updateQueuedPrompt: (
+		queueId: string,
+		payload: { runAfter?: string; clearRunAfter?: boolean },
+	) => Promise<void>;
 	dispose: () => void;
 	editorFiles: string[];
 	fileContents: Record<string, string>;

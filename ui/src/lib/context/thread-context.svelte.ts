@@ -344,6 +344,7 @@ function createThreadContext(
 		workspaceType,
 		workspacePath,
 		allowEmptyPendingMessage,
+		runAfter,
 	}) => {
 		const submitValues = resolveThreadComposerSubmitValues({
 			mode,
@@ -362,6 +363,7 @@ function createThreadContext(
 			workspaceType,
 			workspacePath,
 			allowEmptyPendingMessage,
+			runAfter,
 		});
 		mode = submitValues.mode;
 		modelId = submitValues.modelId;
@@ -435,6 +437,15 @@ function createThreadContext(
 		addToolApprovalResponse: conversation.addToolApprovalResponse,
 		deleteQueuedPrompt: async (queueId) => {
 			await api.deleteQueuedPrompt(session.sessionId, threadId, queueId);
+			await session.threads.refreshThread(threadId);
+		},
+		updateQueuedPrompt: async (queueId, payload) => {
+			await api.updateQueuedPrompt(
+				session.sessionId,
+				threadId,
+				queueId,
+				payload,
+			);
 			await session.threads.refreshThread(threadId);
 		},
 		dispose: () => {

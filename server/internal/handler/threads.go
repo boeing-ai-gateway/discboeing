@@ -199,3 +199,35 @@ func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 
 	h.JSON(w, http.StatusOK, result)
 }
+
+// UpdateQueuedPrompt updates a queued prompt in a session's sandbox thread.
+// PATCH /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/queue/{queueId}
+func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+	threadID := chi.URLParam(r, "threadId")
+	queueID := chi.URLParam(r, "queueId")
+	if threadID == "" {
+		h.Error(w, http.StatusBadRequest, "threadId is required")
+		return
+	}
+	if queueID == "" {
+		h.Error(w, http.StatusBadRequest, "queueId is required")
+		return
+	}
+
+	var req sandboxapi.UpdateQueuedPromptRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	result, err := h.chatService.UpdateQueuedPrompt(ctx, projectID, sessionID, threadID, queueID, &req)
+	if err != nil {
+		h.Error(w, threadErrorStatus(err), err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}

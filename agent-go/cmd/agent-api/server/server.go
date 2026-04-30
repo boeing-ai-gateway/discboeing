@@ -179,7 +179,7 @@ func Run(cfg *config.Config) {
 	r.Use(middleware.Auth(cfg.SecretHash))
 
 	// Credentials: applies X-Discobot-Credentials env vars and git user config.
-	r.Use(middleware.Credentials(credMgr))
+	r.Use(middleware.Credentials(credMgr, h.EnableQueuedPromptTimers))
 
 	// Register all agent API routes (also populates the global routes registry).
 	h.RegisterRoutes(r)

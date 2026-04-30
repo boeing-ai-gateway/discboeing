@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ClockIcon from "@lucide/svelte/icons/clock";
 	import { onDestroy, onMount, tick } from "svelte";
 	import { InputGroup, InputGroupAddon } from "$lib/components/ui/input-group";
 	import { Button } from "$lib/components/ui/button";
@@ -13,11 +14,17 @@
 	import ConversationPromptQueuePanel from "$lib/components/app/parts/ConversationPromptQueuePanel.svelte";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ConversationComposerSubmitButton from "$lib/components/app/parts/ConversationComposerSubmitButton.svelte";
+	import ConversationPromptSchedulePicker from "$lib/components/app/parts/ConversationPromptSchedulePicker.svelte";
 	import ConversationComposerTextarea from "$lib/components/app/parts/ConversationComposerTextarea.svelte";
 	import ConversationCredentialsControl from "$lib/components/app/ConversationCredentialsControl.svelte";
 	import ConversationHooksPanel from "$lib/components/app/ConversationHooksPanel.svelte";
 	import ConversationQueuePanel from "$lib/components/app/parts/ConversationQueuePanel.svelte";
 	import ConversationWorkspaceSelector from "$lib/components/app/ConversationWorkspaceSelector.svelte";
+	import {
+		Popover,
+		PopoverContent,
+		PopoverTrigger,
+	} from "$lib/components/ui/popover";
 	import {
 		moveComposerDraft,
 		resolveComposerDraftStorageKey,
@@ -67,6 +74,8 @@
 	);
 	let sessionSetupRef = $state<WorkspaceSelectorHandle | null>(null);
 	let pendingSubmitError = $state<string | null>(null);
+	let schedulePopoverOpen = $state(false);
+	let scheduledRunAfter = $state<string | null>(null);
 	let pendingAutocompleteSessionCreation = $state<Promise<boolean> | null>(
 		null,
 	);
@@ -382,6 +391,35 @@
 		thread.clearComposerDraft();
 	}
 
+	function parseRunAfter(value?: string | null): Date | null {
+		if (!value) {
+			return null;
+		}
+		const parsed = new Date(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+
+	function isScheduledRunAfterPaused(value?: string | null): boolean {
+		const parsed = parseRunAfter(value);
+		if (!parsed) {
+			return false;
+		}
+		return parsed.getTime() >= Date.now() + 25 * 365 * 24 * 60 * 60 * 1000;
+	}
+
+	const scheduledSubmitLabel = $derived.by(() => {
+		if (!scheduledRunAfter) {
+			return null;
+		}
+		if (isScheduledRunAfterPaused(scheduledRunAfter)) {
+			return "Submit paused prompt";
+		}
+		const parsed = parseRunAfter(scheduledRunAfter);
+		return parsed
+			? `Submit scheduled prompt for ${parsed.toLocaleString()}`
+			: null;
+	});
+
 	async function handleDeleteQueuedPrompt(queueId: string) {
 		await thread.deleteQueuedPrompt(queueId);
 	}
@@ -405,6 +443,13 @@
 				pendingAutocompleteSessionCreation = null;
 			}
 		});
+	}
+
+	async function handleUpdateQueuedPrompt(
+		queueId: string,
+		payload: { runAfter?: string; clearRunAfter?: boolean },
+	) {
+		await thread.updateQueuedPrompt(queueId, payload);
 	}
 
 	async function submitComposer({
@@ -443,6 +488,10 @@
 			: shouldAllowEmptyPendingMessage
 				? []
 				: await createMessageParts(nextMessageText);
+		const nextRunAfter =
+			!forceEmptyPendingMessage && scheduledRunAfter
+				? scheduledRunAfter
+				: undefined;
 		const pendingSubmitOptions = wasPending
 			? await getPendingSubmitOptions()
 			: null;
@@ -464,6 +513,7 @@
 			const result = await thread.submit({
 				parts: nextMessageParts,
 				allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
+				...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
 				...pendingSubmitOptions,
 			});
 			if (wasPending && result?.materialized) {
@@ -475,6 +525,8 @@
 			}
 			if (!preserveDraft) {
 				thread.clearNextComposerValues();
+				scheduledRunAfter = null;
+				schedulePopoverOpen = false;
 				composerTextareaRef?.closeMentionDropdown();
 				composerTextareaRef?.closeSlashCommandDropdown();
 				composerTextareaRef?.closePromptHistoryDropdown();
@@ -496,6 +548,11 @@
 	async function handleComposerSubmit() {
 		await submitComposer();
 	}
+
+	async function handleScheduledRunAfterSelect(runAfter: Date | null) {
+		scheduledRunAfter = runAfter ? runAfter.toISOString() : null;
+		schedulePopoverOpen = false;
+	}
 </script>
 
 <div bind:this={composerContainer} class="shrink-0 bg-background p-0 md:p-3">
@@ -506,6 +563,7 @@
 			<ConversationPromptQueuePanel
 				entries={thread.promptQueue}
 				onDelete={handleDeleteQueuedPrompt}
+				onUpdate={handleUpdateQueuedPrompt}
 			/>
 
 			<ConversationQueuePanel
@@ -634,6 +692,26 @@
 									threadId={thread.threadId}
 								/>
 							{/if}
+							<Popover bind:open={schedulePopoverOpen}>
+								<PopoverTrigger>
+									<Button
+										variant={scheduledRunAfter ? "default" : "ghost"}
+										size="icon-sm"
+										title={scheduledSubmitLabel ?? "Schedule prompt"}
+										aria-label={scheduledSubmitLabel ?? "Schedule prompt"}
+										disabled={composerDisabled ||
+											(session.isPending ? sessionSetupDisabled : false)}
+									>
+										<ClockIcon class="size-4" />
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent align="end" class="w-72 p-3">
+									<ConversationPromptSchedulePicker
+										currentRunAfter={scheduledRunAfter ?? undefined}
+										onSelect={handleScheduledRunAfterSelect}
+									/>
+								</PopoverContent>
+							</Popover>
 							<ConversationComposerSubmitButton
 								status={submitStatus}
 								inputEmpty={inputEmpty()}

@@ -42,6 +42,15 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	var runAfter time.Time
+	if req.RunAfter != "" {
+		parsedRunAfter, parseErr := time.Parse(time.RFC3339, req.RunAfter)
+		if parseErr != nil {
+			h.Error(w, http.StatusBadRequest, "invalid runAfter")
+			return
+		}
+		runAfter = parsedRunAfter.UTC()
+	}
 
 	leafID, userMessage, err := resolveLeafAndUserMessage(req.Messages)
 	if err != nil {
@@ -71,22 +80,27 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.queueMu.Lock()
-		cfg, queuedPrompt, queueErr := h.defaultAgent.Store().AppendQueuedPrompt(threadID, thread.QueuedPrompt{
-			Message:   userMessage,
-			Model:     req.Model,
-			Reasoning: req.Reasoning,
-			Mode:      req.Mode,
-		})
-		if queueErr == nil {
-			h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
-		}
-		h.queueMu.Unlock()
+		cfg, queuedPrompt, queueErr := h.enqueuePrompt(threadID, queuedPromptFromRequest(userMessage, req.Model, req.Reasoning, req.Mode, runAfter))
 		if queueErr != nil {
 			h.Error(w, http.StatusInternalServerError, queueErr.Error())
 			return
 		}
+		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 
+		h.JSON(w, http.StatusAccepted, api.ChatStartedResponse{
+			Status:         "queued",
+			QueuedPromptID: queuedPrompt.ID,
+		})
+		return
+	}
+
+	if !runAfter.IsZero() {
+		cfg, queuedPrompt, queueErr := h.enqueuePrompt(threadID, queuedPromptFromRequest(userMessage, req.Model, req.Reasoning, req.Mode, runAfter))
+		if queueErr != nil {
+			h.Error(w, http.StatusInternalServerError, queueErr.Error())
+			return
+		}
+		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 		h.JSON(w, http.StatusAccepted, api.ChatStartedResponse{
 			Status:         "queued",
 			QueuedPromptID: queuedPrompt.ID,
@@ -116,11 +130,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 	if interrupted {
 		completionID, resumeErr := h.completions.Resume(threadID, promptReq)
 		if resumeErr != nil {
-			if existingID := completionIDFromInProgressError(resumeErr); existingID != "" {
-				h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
-					Error:        "completion_in_progress",
-					CompletionID: existingID,
-				})
+			if h.writeChatStartError(w, resumeErr) {
 				return
 			}
 			h.Error(w, http.StatusInternalServerError, resumeErr.Error())
@@ -138,11 +148,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, agent.ErrInterruptedTurnRequiresResume) {
 			completionID, resumeErr := h.completions.Resume(threadID, promptReq)
 			if resumeErr != nil {
-				if existingID := completionIDFromInProgressError(resumeErr); existingID != "" {
-					h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
-						Error:        "completion_in_progress",
-						CompletionID: existingID,
-					})
+				if h.writeChatStartError(w, resumeErr) {
 					return
 				}
 				h.Error(w, http.StatusInternalServerError, resumeErr.Error())

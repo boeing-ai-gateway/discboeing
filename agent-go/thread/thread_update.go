@@ -43,6 +43,7 @@ func promptQueueToThreadUpdateInfo(queue []QueuedPrompt) []message.ThreadQueuedP
 		items = append(items, message.ThreadQueuedPromptInfo{
 			ID:        prompt.ID,
 			CreatedAt: prompt.CreatedAt,
+			RunAfter:  prompt.RunAfter,
 			Message:   prompt.Message,
 			Model:     prompt.Model,
 			Reasoning: prompt.Reasoning,

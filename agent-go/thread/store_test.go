@@ -624,6 +624,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		PromptQueue: []QueuedPrompt{{
 			ID:        "queue-1",
 			CreatedAt: time.Date(2026, time.March, 31, 1, 0, 0, 0, time.UTC),
+			RunAfter:  time.Date(2026, time.April, 1, 15, 30, 0, 0, time.UTC),
 			Message: message.UIMessage{
 				ID:    "user-queued",
 				Role:  "user",
@@ -678,6 +679,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.PromptQueue[0].ID != cfg.PromptQueue[0].ID {
 		t.Fatalf("expected queued prompt id %q, got %q", cfg.PromptQueue[0].ID, loaded.PromptQueue[0].ID)
+	}
+	if !loaded.PromptQueue[0].RunAfter.Equal(cfg.PromptQueue[0].RunAfter) {
+		t.Fatalf("expected queued prompt runAfter %v, got %v", cfg.PromptQueue[0].RunAfter, loaded.PromptQueue[0].RunAfter)
 	}
 	part, ok := loaded.PromptQueue[0].Message.Parts[0].(message.UITextPart)
 	if !ok || part.Text != "queued prompt" {
@@ -767,6 +771,48 @@ func TestQueueHelpers(t *testing.T) {
 	}
 	if len(cfg.PromptQueue) != 2 || cfg.PromptQueue[0].ID != "queue-0" {
 		t.Fatalf("expected queue-0 to be prepended, got %#v", cfg.PromptQueue)
+	}
+
+	future := time.Now().UTC().Add(2 * time.Hour)
+	cfg, updated, err := store.UpdateQueuedPromptRunAfter("thread1", "queue-0", &future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated {
+		t.Fatal("expected queued prompt runAfter to be updated")
+	}
+	if cfg.PromptQueue[0].RunAfter.IsZero() {
+		t.Fatal("expected queue-0 runAfter to be set")
+	}
+
+	cfg, popped, err = store.PopQueuedPrompt("thread1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if popped == nil || popped.ID != "queue-2" {
+		t.Fatalf("expected queue-2 to pop while queue-0 is delayed, got %#v", popped)
+	}
+	if len(cfg.PromptQueue) != 1 || cfg.PromptQueue[0].ID != "queue-0" {
+		t.Fatalf("expected delayed queue-0 to remain queued, got %#v", cfg.PromptQueue)
+	}
+
+	cfg, updated, err = store.UpdateQueuedPromptRunAfter("thread1", "queue-0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated {
+		t.Fatal("expected queued prompt runAfter to be cleared")
+	}
+	if !cfg.PromptQueue[0].RunAfter.IsZero() {
+		t.Fatalf("expected queue-0 runAfter to be cleared, got %#v", cfg.PromptQueue[0].RunAfter)
+	}
+
+	_, popped, err = store.PopQueuedPrompt("thread1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if popped == nil || popped.ID != "queue-0" {
+		t.Fatalf("expected queue-0 to pop after clearing runAfter, got %#v", popped)
 	}
 }
 

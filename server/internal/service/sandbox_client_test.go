@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 )
 
 // mockSandboxProvider implements sandbox.Provider for testing SandboxChatClient.
@@ -223,10 +224,14 @@ func TestSandboxChatClient_SendMessages_Returns202ThenStreams(t *testing.T) {
 
 func TestSandboxChatClient_StartChat_UsesProvidedThreadID(t *testing.T) {
 	var requestedPath string
+	var requestBody sandboxapi.ChatRequest
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
 			requestedPath = r.URL.Path
+			if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+				t.Fatalf("failed to decode request body: %v", err)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			json.NewEncoder(w).Encode(map[string]string{
@@ -245,13 +250,18 @@ func TestSandboxChatClient_StartChat_UsesProvidedThreadID(t *testing.T) {
 	defer cancel()
 
 	messages := json.RawMessage(`[{"role":"user","content":"hello"}]`)
-	_, err := client.StartChat(ctx, "test-session", "thread-custom", messages, "", nil)
+	_, err := client.StartChat(ctx, "test-session", "thread-custom", messages, "", &RequestOptions{
+		RunAfter: "2026-04-01T19:00:00Z",
+	})
 	if err != nil {
 		t.Fatalf("StartChat failed: %v", err)
 	}
 
 	if requestedPath != "/threads/thread-custom/chat" {
 		t.Fatalf("expected thread-specific path %q, got %q", "/threads/thread-custom/chat", requestedPath)
+	}
+	if requestBody.RunAfter != "2026-04-01T19:00:00Z" {
+		t.Fatalf("expected runAfter to be forwarded, got %#v", requestBody)
 	}
 }
 

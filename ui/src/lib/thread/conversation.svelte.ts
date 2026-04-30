@@ -449,6 +449,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			workspaceType,
 			workspacePath,
 			allowEmptyPendingMessage,
+			runAfter,
 		}: {
 			parts: ChatMessage["parts"];
 			mode: "build" | "plan";
@@ -458,6 +459,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			workspaceType?: "local" | "git" | null;
 			workspacePath?: string | null;
 			allowEmptyPendingMessage?: boolean;
+			runAfter?: string;
 		}) => {
 			const hasMessageContent = hasUserMessageContent(parts);
 			if (
@@ -473,13 +475,15 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			const nextMode = mode === "plan" ? "plan" : "build";
 			const submittingWhileGenerating =
 				args.hasSession() && (status === "streaming" || status === "loading");
+			const shouldOptimisticallyInsert =
+				!submittingWhileGenerating && !runAfter;
 			const userMessage = hasMessageContent
 				? createUserMessageFromParts(parts, {
 						provisional: true,
 					})
 				: null;
 
-			if (userMessage && !submittingWhileGenerating) {
+			if (userMessage && shouldOptimisticallyInsert) {
 				messages = [...messages, userMessage];
 			}
 
@@ -499,6 +503,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 						model: nextModel,
 						reasoning: nextReasoning,
 						mode: nextMode,
+						...(runAfter ? { runAfter } : {}),
 					});
 					return {
 						sessionId: response.sessionId,
@@ -524,9 +529,11 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					model: nextModel,
 					reasoning: nextReasoning,
 					mode: nextMode,
+					...(runAfter ? { runAfter } : {}),
 				});
 				if (response.status === "queued" && userMessage) {
 					messages = removeProvisionalSubmitMessage(messages, userMessage.id);
+					await args.refreshThread();
 				}
 				return {
 					sessionId: args.sessionId,

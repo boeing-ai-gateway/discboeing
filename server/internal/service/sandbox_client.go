@@ -232,8 +232,18 @@ type RequestOptions struct {
 	// Mode is the permission mode: "plan" for planning mode, "" for default.
 	Mode string
 
+	// RunAfter queues the prompt until the given RFC3339 timestamp.
+	RunAfter string
+
 	// LastEventID forwards the client's SSE resume cursor when reconnecting.
 	LastEventID string
+}
+
+func optsRunAfter(opts *RequestOptions) string {
+	if opts == nil {
+		return ""
+	}
+	return opts.RunAfter
 }
 
 type GetCommitsRequest struct {
@@ -292,6 +302,7 @@ func (c *SandboxChatClient) StartChat(ctx context.Context, sessionID, threadID s
 		Model:     model,
 		Reasoning: reasoning,
 		Mode:      mode,
+		RunAfter:  optsRunAfter(opts),
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -800,6 +811,54 @@ func (c *SandboxChatClient) DeleteQueuedPrompt(ctx context.Context, sessionID, t
 	}
 
 	var result sandboxapi.DeleteQueuedPromptResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateQueuedPrompt updates a queued prompt in the sandbox agent.
+func (c *SandboxChatClient) UpdateQueuedPrompt(ctx context.Context, sessionID, threadID, queuedPromptID string, reqBody *sandboxapi.UpdateQueuedPromptRequest) (*sandboxapi.UpdateQueuedPromptResponse, error) {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.threadURL(threadID, "/queue/"+url.PathEscape(queuedPromptID)), bytes.NewReader(body))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update queued prompt: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.UpdateQueuedPromptResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}

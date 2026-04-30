@@ -60,6 +60,8 @@ import type {
 	GitHubCallbackStatusRequest,
 	GitHubCallbackStatusResponse,
 	DeleteQueuedPromptResponse,
+	UpdateQueuedPromptRequest,
+	UpdateQueuedPromptResponse,
 	DeleteSessionFileRequest,
 	DeleteSessionFileResponse,
 	ValidateWorkspaceRequest,
@@ -679,6 +681,21 @@ class ApiClient {
 			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/queue/${encodeURIComponent(queueId)}`,
 			{
 				method: "DELETE",
+			},
+		);
+	}
+
+	async updateQueuedPrompt(
+		sessionId: string,
+		threadId: string,
+		queueId: string,
+		data: UpdateQueuedPromptRequest,
+	): Promise<UpdateQueuedPromptResponse> {
+		return this.fetch<UpdateQueuedPromptResponse>(
+			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/queue/${encodeURIComponent(queueId)}`,
+			{
+				method: "PATCH",
+				body: JSON.stringify(data),
 			},
 		);
 	}

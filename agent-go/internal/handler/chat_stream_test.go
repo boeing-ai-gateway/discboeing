@@ -589,9 +589,309 @@ func TestPostChat_QueuesPromptWhileCompletionIsActive(t *testing.T) {
 	if got.PromptQueue[0].ID != started.QueuedPromptID {
 		t.Fatalf("expected queued prompt id %q, got %#v", started.QueuedPromptID, got.PromptQueue[0])
 	}
+	if got.PromptQueue[0].RunAfter != "" {
+		t.Fatalf("expected queued prompt runAfter to be empty, got %#v", got.PromptQueue[0].RunAfter)
+	}
 	part, ok := got.PromptQueue[0].Message.Parts[0].(message.UITextPart)
 	if !ok || part.Text != "queued follow-up" {
 		t.Fatalf("expected queued prompt text %q, got %#v", "queued follow-up", got.PromptQueue[0].Message.Parts)
+	}
+}
+
+func TestPostChat_QueuesScheduledPromptWhileIdle(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	ts := newFullHandlerTestServer(t, h)
+	defer ts.Close()
+
+	runAfter := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	body, err := json.Marshal(api.ChatRequest{
+		Messages: []message.UIMessage{{
+			ID:    "msg-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "scheduled follow-up", State: "done"}},
+		}},
+		RunAfter: runAfter.Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := ts.Client().Post(ts.URL+"/threads/thread-1/chat", "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d", resp.StatusCode)
+	}
+
+	var started api.ChatStartedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&started); err != nil {
+		t.Fatal(err)
+	}
+	if started.Status != "queued" {
+		t.Fatalf("expected queued status, got %#v", started)
+	}
+	if started.QueuedPromptID == "" {
+		t.Fatalf("expected queuedPromptId, got %#v", started)
+	}
+
+	select {
+	case promptReq := <-reqCh:
+		t.Fatalf("expected scheduled prompt to remain queued, got %#v", promptReq)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	cfg, err := store.LoadConfig("thread-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.PromptQueue) != 1 {
+		t.Fatalf("expected 1 queued prompt, got %#v", cfg.PromptQueue)
+	}
+	if cfg.PromptQueue[0].RunAfter.IsZero() {
+		t.Fatalf("expected queued prompt runAfter to be set, got %#v", cfg.PromptQueue[0])
+	}
+}
+
+func TestUpdateQueuedPrompt_SetsRunAfter(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	_, queued, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+		ID:       "queue-1",
+		RunAfter: time.Now().UTC().Add(time.Hour),
+		Message: message.UIMessage{
+			ID:    "msg-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "later me", State: "done"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := agent.NewCompletionManager(&streamTestAgent{})
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	ts := newFullHandlerTestServer(t, h)
+	defer ts.Close()
+
+	runAfter := time.Now().UTC().Add(45 * time.Minute).Truncate(time.Second)
+	runAfterValue := runAfter.Format(time.RFC3339)
+	body, err := json.Marshal(api.UpdateQueuedPromptRequest{RunAfter: &runAfterValue})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, ts.URL+"/threads/thread-1/queue/"+queued.ID, strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var updated api.UpdateQueuedPromptResponse
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Success || updated.Queue == nil {
+		t.Fatalf("expected updated queued prompt response, got %#v", updated)
+	}
+	if updated.Queue.RunAfter == "" {
+		t.Fatalf("expected updated queued prompt runAfter, got %#v", updated.Queue)
+	}
+
+	cfg, err := store.LoadConfig("thread-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.PromptQueue) != 1 {
+		t.Fatalf("expected 1 queued prompt, got %#v", cfg.PromptQueue)
+	}
+	if cfg.PromptQueue[0].RunAfter.IsZero() {
+		t.Fatalf("expected stored runAfter to be set, got %#v", cfg.PromptQueue[0])
+	}
+}
+
+func TestUpdateQueuedPrompt_ClearRunAfterStartsQueuedPromptWhenIdle(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
+	_, queued, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+		ID:       "queue-1",
+		RunAfter: time.Now().UTC().Add(time.Hour),
+		Message: message.UIMessage{
+			ID:    "msg-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "run now", State: "done"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	h.EnableQueuedPromptTimers()
+	ts := newFullHandlerTestServer(t, h)
+	defer ts.Close()
+
+	body, err := json.Marshal(api.UpdateQueuedPromptRequest{ClearRunAfter: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, ts.URL+"/threads/thread-1/queue/"+queued.ID, strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	select {
+	case promptReq := <-reqCh:
+		part, ok := promptReq.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "run now" {
+			t.Fatalf("expected cleared queued prompt to start, got %#v", promptReq.UserParts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for cleared queued prompt to start")
+	}
+}
+
+func TestQueuedPromptTimer_WaitsForCredentialsBeforeStarting(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+		ID:       "queue-1",
+		RunAfter: time.Now().UTC().Add(150 * time.Millisecond),
+		Message: message.UIMessage{
+			ID:    "msg-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "scheduled", State: "done"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	_ = New("", cm, nil, nil, defaultAgent)
+
+	select {
+	case promptReq := <-reqCh:
+		part, ok := promptReq.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "scheduled" {
+			t.Fatalf("expected scheduled queued prompt to stay blocked before credentials, got %#v", promptReq.UserParts)
+		}
+		t.Fatal("scheduled queued prompt started before credentials were applied")
+	case <-time.After(350 * time.Millisecond):
+	}
+}
+
+func TestQueuedPromptTimer_StartsPromptAfterCredentialsArrive(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+		ID:       "queue-1",
+		RunAfter: time.Now().UTC().Add(150 * time.Millisecond),
+		Message: message.UIMessage{
+			ID:    "msg-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "scheduled", State: "done"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
+		},
+	}
+	cm := agent.NewCompletionManager(ma)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+
+	time.Sleep(50 * time.Millisecond)
+	h.EnableQueuedPromptTimers()
+
+	select {
+	case promptReq := <-reqCh:
+		part, ok := promptReq.UserParts[0].(message.UITextPart)
+		if !ok || part.Text != "scheduled" {
+			t.Fatalf("expected scheduled queued prompt to start, got %#v", promptReq.UserParts)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for scheduled queued prompt timer after credentials")
 	}
 }
 
@@ -906,6 +1206,13 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 		req      agent.PromptRequest
 	}
 	resumeCh := make(chan resumeCall, 1)
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
+		t.Fatal(err)
+	}
 	ma := &streamTestAgent{
 		hasInterruptedTurnFn: func(threadID string) (bool, error) {
 			if threadID != "thread-1" {
@@ -919,15 +1226,16 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 		},
 	}
 	cm := agent.NewCompletionManager(ma)
-	h := New("", cm, nil, nil, nil)
-	ts := newChatTestServer(t, h)
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
-	body, err := json.Marshal(api.ChatRequest{Messages: []message.UIMessage{{
+	body, err := json.Marshal(api.ChatRequest{Model: "openai/gpt-5.4", Reasoning: "high", Mode: "plan", Messages: []message.UIMessage{{
 		ID:    "msg-1",
 		Role:  "user",
 		Parts: []message.UIPart{message.UITextPart{Text: "hi", State: "done"}},
-	}}, Model: "openai/gpt-5.4", Reasoning: "high", Mode: "plan"})
+	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,6 +1257,7 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 	if got.Status != "started" || got.CompletionID == "" {
 		t.Fatalf("expected started response with completionId, got %#v", got)
 	}
+
 	select {
 	case call := <-resumeCh:
 		if call.threadID != "thread-1" {
@@ -962,6 +1271,9 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 		}
 		if call.req.Mode != "plan" {
 			t.Fatalf("expected resume mode override, got %#v", call.req)
+		}
+		if len(call.req.UserParts) != 1 {
+			t.Fatalf("expected resume user parts, got %#v", call.req)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for resume call")

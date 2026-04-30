@@ -351,6 +351,7 @@ type ThreadUpdateInfo struct {
 type ThreadQueuedPromptInfo struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt,omitzero"`
+	RunAfter  time.Time `json:"runAfter,omitzero"`
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`

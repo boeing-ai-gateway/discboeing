@@ -21,6 +21,7 @@ type ChatRequest struct {
 	Model        string              `json:"model,omitempty"`
 	Reasoning    string              `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
 	Mode         string              `json:"mode,omitempty"`      // "" keeps current thread mode (or defaults to build), "plan" sets plan, "build" sets build
+	RunAfter     string              `json:"runAfter,omitempty"`
 	FreshContext bool                `json:"freshContext,omitempty"`
 	SubagentType string              `json:"subagentType,omitempty"`
 	MaxTurns     int                 `json:"maxTurns,omitempty"`
@@ -122,6 +123,7 @@ type Thread struct {
 type QueuedPrompt struct {
 	ID        string            `json:"id"`
 	CreatedAt string            `json:"createdAt,omitempty"`
+	RunAfter  string            `json:"runAfter,omitempty"`
 	Message   message.UIMessage `json:"message"`
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
@@ -191,6 +193,17 @@ type ListCommandsResponse struct {
 // DeleteQueuedPromptResponse is the DELETE /threads/{id}/queue/{queueId} response body.
 type DeleteQueuedPromptResponse struct {
 	Success bool `json:"success"`
+}
+
+// UpdateQueuedPromptRequest is the PATCH /threads/{id}/queue/{queueId} request body.
+type UpdateQueuedPromptRequest struct {
+	RunAfter      *string `json:"runAfter,omitempty"`
+	ClearRunAfter bool    `json:"clearRunAfter,omitempty"`
+}
+
+type UpdateQueuedPromptResponse struct {
+	Success bool          `json:"success"`
+	Queue   *QueuedPrompt `json:"queue,omitempty"`
 }
 
 // ChatStatusResponse is the GET /threads/{id}/chat/status response.

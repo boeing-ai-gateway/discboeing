@@ -34,6 +34,8 @@ type ChatRequest struct {
 	Reasoning string `json:"reasoning,omitempty"`
 	// Mode is the permission mode: "plan" for planning mode, "" for default (build mode).
 	Mode string `json:"mode,omitempty"`
+	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
+	RunAfter string `json:"runAfter,omitempty"`
 }
 
 // ============================================================================
@@ -148,6 +150,7 @@ type Thread struct {
 type QueuedPrompt struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt,omitzero"`
+	RunAfter  time.Time `json:"runAfter,omitzero"`
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`
@@ -177,6 +180,16 @@ type DeleteThreadResponse struct {
 
 type DeleteQueuedPromptResponse struct {
 	Success bool `json:"success"`
+}
+
+type UpdateQueuedPromptRequest struct {
+	RunAfter      *string `json:"runAfter,omitempty"`
+	ClearRunAfter bool    `json:"clearRunAfter,omitempty"`
+}
+
+type UpdateQueuedPromptResponse struct {
+	Success bool          `json:"success"`
+	Queue   *QueuedPrompt `json:"queue,omitempty"`
 }
 
 // UIMessage represents a message in AI SDK UIMessage format.

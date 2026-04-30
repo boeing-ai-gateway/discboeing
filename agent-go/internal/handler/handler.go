@@ -39,6 +39,8 @@ type Handler struct {
 	answeredMu        sync.Mutex
 	answeredQuestions map[string]bool // toolCallID → true (tracks answered questions for status polling)
 	queueMu           sync.Mutex
+	queueTimers       map[string]*time.Timer
+	queueTimersReady  bool
 }
 
 // New creates a new Handler.
@@ -53,6 +55,7 @@ func New(agentCwd string, completions *agent.CompletionManager, hookManager *hoo
 		hookRetryCount:     make(map[string]int),
 		hookNotificationTo: make(map[string]string),
 		answeredQuestions:  make(map[string]bool),
+		queueTimers:        make(map[string]*time.Timer),
 	}
 
 	if hookManager != nil {
@@ -67,6 +70,7 @@ func New(agentCwd string, completions *agent.CompletionManager, hookManager *hoo
 
 // OnTurnStart clears thread-local error state when a turn begins.
 func (h *Handler) OnTurnStart(threadID string) {
+	h.clearQueuedPromptTimer(threadID)
 	if cfg, cleared := h.clearThreadError(threadID); cleared {
 		go h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 	}
@@ -127,36 +131,86 @@ func (h *Handler) clearThreadError(threadID string) (thread.Config, bool) {
 	return cfg, true
 }
 
-func (h *Handler) startNextQueuedPrompt(threadID string) {
+func cloneUIParts(parts []message.UIPart) []message.UIPart {
+	if len(parts) == 0 {
+		return nil
+	}
+	return append([]message.UIPart{}, parts...)
+}
+
+func queuedPromptFromRequest(userMessage message.UIMessage, model, reasoning, mode string, runAfter time.Time) thread.QueuedPrompt {
+	queued := thread.QueuedPrompt{
+		Message: message.UIMessage{
+			ID:       userMessage.ID,
+			Role:     userMessage.Role,
+			Parts:    cloneUIParts(userMessage.Parts),
+			Metadata: userMessage.Metadata,
+		},
+		Model:     model,
+		Reasoning: reasoning,
+		Mode:      mode,
+	}
+	if !runAfter.IsZero() {
+		queued.RunAfter = runAfter.UTC()
+	}
+	return queued
+}
+
+func (h *Handler) enqueuePrompt(threadID string, queued thread.QueuedPrompt) (thread.Config, thread.QueuedPrompt, error) {
 	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
-		return
+		return thread.Config{}, thread.QueuedPrompt{}, errors.New("prompt queue unavailable")
 	}
 
 	h.queueMu.Lock()
 	defer h.queueMu.Unlock()
 
-	if h.completions.ActiveCompletionID(threadID) != "" {
+	cfg, saved, err := h.defaultAgent.Store().AppendQueuedPrompt(threadID, queued)
+	if err != nil {
+		return thread.Config{}, thread.QueuedPrompt{}, err
+	}
+	h.rescheduleQueuedPromptTimerLocked(threadID)
+	return cfg, saved, nil
+}
+
+func (h *Handler) startNextQueuedPrompt(threadID string) {
+	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
 		return
 	}
 
 	store := h.defaultAgent.Store()
+	h.queueMu.Lock()
+	h.stopQueuedPromptTimerLocked(threadID)
+	if h.completions.ActiveCompletionID(threadID) != "" {
+		h.rescheduleQueuedPromptTimerLocked(threadID)
+		h.queueMu.Unlock()
+		return
+	}
+
 	cfg, queuedPrompt, err := store.PopQueuedPrompt(threadID)
 	if err != nil {
 		log.Printf("queue: failed to pop queued prompt for %s: %v", threadID, err)
+		h.rescheduleQueuedPromptTimerLocked(threadID)
+		h.queueMu.Unlock()
 		return
 	}
 	if queuedPrompt == nil {
+		h.rescheduleQueuedPromptTimerLocked(threadID)
+		h.queueMu.Unlock()
 		return
 	}
+	h.queueMu.Unlock()
 
 	leafID := strings.TrimSpace(cfg.ActiveLeafID)
 	if leafID == "" {
 		leafID, err = store.FindLeaf(threadID)
 		if err != nil {
 			log.Printf("queue: failed to resolve leaf for %s: %v", threadID, err)
+			h.queueMu.Lock()
 			if _, restoreErr := store.PrependQueuedPrompt(threadID, *queuedPrompt); restoreErr != nil {
 				log.Printf("queue: failed to restore queued prompt for %s: %v", threadID, restoreErr)
 			}
+			h.rescheduleQueuedPromptTimerLocked(threadID)
+			h.queueMu.Unlock()
 			return
 		}
 	}
@@ -170,12 +224,19 @@ func (h *Handler) startNextQueuedPrompt(threadID string) {
 		Mode:      queuedPrompt.Mode,
 	}
 	if _, err := h.startPromptRequest(threadID, req); err != nil {
+		h.queueMu.Lock()
 		if _, restoreErr := store.PrependQueuedPrompt(threadID, *queuedPrompt); restoreErr != nil {
 			log.Printf("queue: failed to restore queued prompt for %s: %v", threadID, restoreErr)
 		}
 		log.Printf("queue: failed to start queued prompt for %s: %v", threadID, err)
+		h.rescheduleQueuedPromptTimerLocked(threadID)
+		h.queueMu.Unlock()
 		return
 	}
+
+	h.queueMu.Lock()
+	h.rescheduleQueuedPromptTimerLocked(threadID)
+	h.queueMu.Unlock()
 	h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 }
 
@@ -236,8 +297,96 @@ func (h *Handler) enqueueHookFailureReprompt(threadID string, result hooks.FileH
 	if err != nil {
 		return err
 	}
+	h.rescheduleQueuedPromptTimerLocked(threadID)
 	h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 	return nil
+}
+
+func (h *Handler) resumeQueuedPromptTimers() {
+	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
+		return
+	}
+	threadIDs, err := h.defaultAgent.Store().ListThreads()
+	if err != nil {
+		log.Printf("queue: failed to list threads for timer resume: %v", err)
+		return
+	}
+	for _, threadID := range threadIDs {
+		h.rescheduleQueuedPromptTimer(threadID)
+	}
+}
+
+func (h *Handler) clearQueuedPromptTimer(threadID string) {
+	h.queueMu.Lock()
+	defer h.queueMu.Unlock()
+	h.stopQueuedPromptTimerLocked(threadID)
+}
+
+func (h *Handler) EnableQueuedPromptTimers() {
+	h.queueMu.Lock()
+	if h.queueTimersReady {
+		h.queueMu.Unlock()
+		return
+	}
+	h.queueTimersReady = true
+	h.queueMu.Unlock()
+	go h.resumeQueuedPromptTimers()
+}
+
+func (h *Handler) rescheduleQueuedPromptTimer(threadID string) {
+	h.queueMu.Lock()
+	defer h.queueMu.Unlock()
+	h.rescheduleQueuedPromptTimerLocked(threadID)
+}
+
+func (h *Handler) stopQueuedPromptTimerLocked(threadID string) {
+	timer := h.queueTimers[threadID]
+	if timer == nil {
+		return
+	}
+	timer.Stop()
+	delete(h.queueTimers, threadID)
+}
+
+func (h *Handler) rescheduleQueuedPromptTimerLocked(threadID string) {
+	if !h.queueTimersReady {
+		return
+	}
+	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
+		return
+	}
+
+	h.stopQueuedPromptTimerLocked(threadID)
+	if h.completions.ActiveCompletionID(threadID) != "" {
+		return
+	}
+
+	cfg, err := h.defaultAgent.Store().LoadConfig(threadID)
+	if err != nil {
+		log.Printf("queue: failed to load config for timer reschedule on %s: %v", threadID, err)
+		return
+	}
+
+	now := time.Now().UTC()
+	var nextRunAfter *time.Time
+	for _, queued := range cfg.PromptQueue {
+		if queued.RunAfter.IsZero() || !queued.RunAfter.After(now) {
+			go h.startNextQueuedPrompt(threadID)
+			return
+		}
+		if nextRunAfter == nil || queued.RunAfter.Before(*nextRunAfter) {
+			runAfter := queued.RunAfter
+			nextRunAfter = &runAfter
+		}
+	}
+	if nextRunAfter == nil {
+		return
+	}
+
+	delay := max(time.Until(*nextRunAfter), 0)
+	h.queueTimers[threadID] = time.AfterFunc(delay, func() {
+		h.startNextQueuedPrompt(threadID)
+	})
 }
 
 // scheduleHookEvaluation runs hook evaluation after a grace period, and
@@ -373,6 +522,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			Meta: routes.Meta{Group: "Threads", Description: "Delete a thread"}})
 		threadReg.Register(r, routes.Route{Method: "DELETE", Pattern: "/queue/{queueId}", Handler: h.DeleteQueuedPrompt,
 			Meta: routes.Meta{Group: "Threads", Description: "Delete a queued prompt"}})
+		threadReg.Register(r, routes.Route{Method: "PATCH", Pattern: "/queue/{queueId}", Handler: h.UpdateQueuedPrompt,
+			Meta: routes.Meta{
+				Group:       "Threads",
+				Description: "Update a queued prompt",
+				Body:        map[string]any{"runAfter": time.Now().UTC().Add(time.Hour).Format(time.RFC3339)},
+			}})
 
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/models", Handler: h.ListModels,
 			Meta: routes.Meta{Group: "Threads", Description: "List available models"}})

@@ -50,6 +50,8 @@ type ChatRequest struct {
 	Reasoning string `json:"reasoning,omitempty"`
 	// Mode is the permission mode: "plan" for planning mode, "" for default (build mode)
 	Mode string `json:"mode,omitempty"`
+	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
+	RunAfter string `json:"runAfter,omitempty"`
 }
 
 type ChatResponse struct {
@@ -155,7 +157,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	// client aborts the request. The explicit cancel endpoint
 	// (/sessions/{sessionId}/threads/{threadId}/cancel) remains the way to stop a running chat completion.
 	sendCtx := context.WithoutCancel(ctx)
-	submission, started, err := h.chatService.SubmitPrompt(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.Mode)
+	submission, started, err := h.chatService.SubmitPrompt(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.Mode, req.RunAfter)
 	if err != nil {
 		log.Printf("[Chat] Failed to start chat for session %s: %v", sessionID, err)
 		var startErr *service.SandboxChatStartError

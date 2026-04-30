@@ -1,15 +1,44 @@
 <script lang="ts">
+	import ClockIcon from "@lucide/svelte/icons/clock";
+	import PauseIcon from "@lucide/svelte/icons/pause";
+	import PlayIcon from "@lucide/svelte/icons/play";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
+	import { onMount } from "svelte";
 
-	import { Button } from "$lib/components/ui/button";
 	import type { QueuedPrompt } from "$lib/api-types";
+	import { Button } from "$lib/components/ui/button";
+	import {
+		Popover,
+		PopoverContent,
+		PopoverTrigger,
+	} from "$lib/components/ui/popover";
+	import ConversationPromptSchedulePicker from "$lib/components/app/parts/ConversationPromptSchedulePicker.svelte";
 
 	type Props = {
 		entries: QueuedPrompt[];
 		onDelete: (queueId: string) => void | Promise<void>;
+		onUpdate: (
+			queueId: string,
+			payload: { runAfter?: string; clearRunAfter?: boolean },
+		) => void | Promise<void>;
 	};
 
-	let { entries, onDelete }: Props = $props();
+	let { entries, onDelete, onUpdate }: Props = $props();
+
+	let schedulerOpenById = $state<Record<string, boolean>>({});
+	let savingById = $state<Record<string, boolean>>({});
+	let runAfterOverrideById = $state<Record<string, string | null>>({});
+	let now = $state(Date.now());
+
+	onMount(() => {
+		const interval = window.setInterval(() => {
+			now = Date.now();
+		}, 1000);
+
+		return () => {
+			window.clearInterval(interval);
+		};
+	});
 
 	const displayEntries = $derived(
 		entries.map((entry, index) => ({
@@ -36,6 +65,116 @@
 		const parts = entry.message.parts ?? [];
 		return parts.filter((part) => part.type === "file").length;
 	}
+
+	function getDisplayedRunAfter(entry: QueuedPrompt): string | undefined {
+		if (Object.hasOwn(runAfterOverrideById, entry.id)) {
+			return runAfterOverrideById[entry.id] ?? undefined;
+		}
+		return entry.runAfter;
+	}
+
+	function parseRunAfter(value?: string): Date | null {
+		if (!value) {
+			return null;
+		}
+		const parsed = new Date(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+
+	function isPausedRunAfter(value?: string): boolean {
+		const parsed = parseRunAfter(value);
+		if (!parsed) {
+			return false;
+		}
+		return parsed.getTime() >= now + 25 * 365 * 24 * 60 * 60 * 1000;
+	}
+
+	function formatAbsoluteRunAfter(value: Date): string {
+		return value.toLocaleString(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		});
+	}
+
+	function formatRelativeRunAfter(value: Date): string {
+		const diffMs = value.getTime() - now;
+		if (diffMs <= 0) {
+			return "Ready now";
+		}
+
+		const diffSeconds = Math.round(diffMs / 1000);
+		if (diffSeconds < 60) {
+			return `In ${diffSeconds} second${diffSeconds === 1 ? "" : "s"}`;
+		}
+
+		const diffMinutes = Math.round(diffMs / (60 * 1000));
+		if (diffMinutes < 60) {
+			return `In ${diffMinutes} minute${diffMinutes === 1 ? "" : "s"}`;
+		}
+
+		const diffHours = Math.round(diffMs / (60 * 60 * 1000));
+		if (diffHours < 24) {
+			return `In ${diffHours} hour${diffHours === 1 ? "" : "s"}`;
+		}
+
+		const diffDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
+		return `In ${diffDays} day${diffDays === 1 ? "" : "s"}`;
+	}
+
+	function formatRunAfterStatus(value?: string): string {
+		if (isPausedRunAfter(value)) {
+			return "Paused";
+		}
+		const parsed = parseRunAfter(value);
+		if (!parsed) {
+			return "";
+		}
+		return `${formatRelativeRunAfter(parsed)} · ${formatAbsoluteRunAfter(parsed)}`;
+	}
+
+	function setSaving(entryId: string, saving: boolean) {
+		savingById = { ...savingById, [entryId]: saving };
+	}
+
+	function getSchedulerOpen(entryId: string): boolean {
+		return schedulerOpenById[entryId] ?? false;
+	}
+
+	function setSchedulerOpen(entryId: string, open: boolean) {
+		schedulerOpenById = { ...schedulerOpenById, [entryId]: open };
+	}
+
+	function buildPauseDate(): Date {
+		const now = new Date();
+		return new Date(
+			now.getFullYear() + 100,
+			now.getMonth(),
+			now.getDate(),
+			now.getHours(),
+			now.getMinutes(),
+			now.getSeconds(),
+			now.getMilliseconds(),
+		);
+	}
+
+	async function saveLater(entryId: string, runAfter: Date | null) {
+		setSaving(entryId, true);
+		try {
+			if (runAfter === null) {
+				runAfterOverrideById = { ...runAfterOverrideById, [entryId]: null };
+				await onUpdate(entryId, { clearRunAfter: true });
+			} else {
+				runAfterOverrideById = {
+					...runAfterOverrideById,
+					[entryId]: runAfter.toISOString(),
+				};
+				await onUpdate(entryId, { runAfter: runAfter.toISOString() });
+			}
+			setSchedulerOpen(entryId, false);
+		} finally {
+			setSaving(entryId, false);
+		}
+	}
 </script>
 
 {#if entries.length > 0}
@@ -55,7 +194,7 @@
 							{getPromptText(entry)}
 						</div>
 						<div
-							class="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground"
+							class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
 						>
 							{#if getAttachmentCount(entry) > 0}
 								<span
@@ -72,19 +211,79 @@
 							{#if entry.mode}
 								<span>{entry.mode}</span>
 							{/if}
+							{#if getDisplayedRunAfter(entry)}
+								<span class="font-medium text-foreground/80"
+									>{formatRunAfterStatus(getDisplayedRunAfter(entry))}</span
+								>
+							{/if}
 						</div>
 					</div>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						class="shrink-0"
-						title="Delete queued prompt"
-						onclick={() => {
-							void onDelete(entry.id);
-						}}
-					>
-						<Trash2Icon class="size-3.5 text-destructive" />
-					</Button>
+					<div class="flex shrink-0 items-start gap-1">
+						{#if getDisplayedRunAfter(entry)}
+							<Popover
+								bind:open={
+									() => getSchedulerOpen(entry.id),
+									(open) => setSchedulerOpen(entry.id, open)
+								}
+							>
+								<PopoverTrigger>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										class="shrink-0"
+										title="Schedule queued prompt"
+										disabled={savingById[entry.id]}
+									>
+										<ClockIcon class="size-3.5" />
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent align="end" class="w-72 p-3">
+									<ConversationPromptSchedulePicker
+										currentRunAfter={getDisplayedRunAfter(entry)}
+										disabled={savingById[entry.id]}
+										onSelect={(runAfter) => saveLater(entry.id, runAfter)}
+									/>
+								</PopoverContent>
+							</Popover>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								class="shrink-0"
+								title="Run queued prompt now"
+								disabled={savingById[entry.id]}
+								onclick={() => {
+									void saveLater(entry.id, null);
+								}}
+							>
+								<PlayIcon class="size-3.5" />
+							</Button>
+						{:else}
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								class="shrink-0"
+								title="Pause queued prompt"
+								disabled={savingById[entry.id]}
+								onclick={() => {
+									void saveLater(entry.id, buildPauseDate());
+								}}
+							>
+								<PauseIcon class="size-3.5" />
+							</Button>
+						{/if}
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							class="shrink-0"
+							title="Delete queued prompt"
+							disabled={savingById[entry.id]}
+							onclick={() => {
+								void onDelete(entry.id);
+							}}
+						>
+							<Trash2Icon class="size-3.5 text-destructive" />
+						</Button>
+					</div>
 				</div>
 			{/each}
 		</div>

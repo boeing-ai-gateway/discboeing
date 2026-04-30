@@ -45,6 +45,7 @@ export interface QueuedPromptMessage {
 export interface QueuedPrompt {
 	id: string;
 	createdAt?: string;
+	runAfter?: string;
 	message: QueuedPromptMessage;
 	model?: string;
 	reasoning?: string;
@@ -884,6 +885,16 @@ export interface DeleteQueuedPromptResponse {
 	success: boolean;
 }
 
+export interface UpdateQueuedPromptRequest {
+	runAfter?: string;
+	clearRunAfter?: boolean;
+}
+
+export interface UpdateQueuedPromptResponse {
+	success: boolean;
+	queue?: QueuedPrompt;
+}
+
 export interface StartChatRequest {
 	id?: string;
 	sessionId: string;
@@ -893,6 +904,7 @@ export interface StartChatRequest {
 	model?: string;
 	reasoning?: string;
 	mode?: string;
+	runAfter?: string;
 	trigger?: string;
 	messageId?: string;
 }

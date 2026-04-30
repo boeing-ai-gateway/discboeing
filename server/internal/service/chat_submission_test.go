@@ -49,6 +49,7 @@ func TestSubmitPromptReturnsQueuedWhileDispatchContinues(t *testing.T) {
 		"",
 		"",
 		"",
+		"",
 	)
 	if err != nil {
 		t.Fatalf("SubmitPrompt returned error: %v", err)

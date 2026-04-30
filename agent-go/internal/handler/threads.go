@@ -63,9 +63,14 @@ func queuedPromptResponse(queue []thread.QueuedPrompt) []api.QueuedPrompt {
 	}
 	items := make([]api.QueuedPrompt, 0, len(queue))
 	for _, prompt := range queue {
+		runAfter := ""
+		if !prompt.RunAfter.IsZero() {
+			runAfter = prompt.RunAfter.UTC().Format(time.RFC3339Nano)
+		}
 		items = append(items, api.QueuedPrompt{
 			ID:        prompt.ID,
 			CreatedAt: prompt.CreatedAt.UTC().Format(time.RFC3339Nano),
+			RunAfter:  runAfter,
 			Message:   prompt.Message,
 			Model:     prompt.Model,
 			Reasoning: prompt.Reasoning,
@@ -267,6 +272,7 @@ func (h *Handler) DeleteThread(w http.ResponseWriter, r *http.Request) {
 
 	// Best-effort cancel if a completion is currently active for this thread.
 	h.completions.Cancel(threadID)
+	h.clearQueuedPromptTimer(threadID)
 
 	if err := store.DeleteThread(threadID); err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
@@ -307,6 +313,7 @@ func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 	h.queueMu.Lock()
 	cfg, removed, err := store.DeleteQueuedPrompt(threadID, queueID)
 	if err == nil && removed {
+		h.rescheduleQueuedPromptTimerLocked(threadID)
 		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
 	}
 	h.queueMu.Unlock()
@@ -320,4 +327,88 @@ func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, api.DeleteQueuedPromptResponse{Success: true})
+}
+
+// UpdateQueuedPrompt handles PATCH /threads/{id}/queue/{queueId} — updates a queued prompt.
+func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
+	if !h.requireThreadStore(w) {
+		return
+	}
+
+	threadID := chi.URLParam(r, "id")
+	queueID := chi.URLParam(r, "queueId")
+	if strings.TrimSpace(threadID) == "" {
+		h.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	if strings.TrimSpace(queueID) == "" {
+		h.Error(w, http.StatusBadRequest, "queueId is required")
+		return
+	}
+
+	var req api.UpdateQueuedPromptRequest
+	if err := h.DecodeJSON(r, &req); err != nil {
+		h.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.RunAfter == nil && !req.ClearRunAfter {
+		h.Error(w, http.StatusBadRequest, "runAfter or clearRunAfter is required")
+		return
+	}
+
+	var runAfter *time.Time
+	if !req.ClearRunAfter {
+		value := strings.TrimSpace(*req.RunAfter)
+		if value == "" {
+			h.Error(w, http.StatusBadRequest, "runAfter is required")
+			return
+		}
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			h.Error(w, http.StatusBadRequest, "runAfter must be RFC3339")
+			return
+		}
+		runAfter = &parsed
+	}
+
+	store := h.defaultAgent.Store()
+	exists, err := store.ThreadExists(threadID)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !exists {
+		h.Error(w, http.StatusNotFound, "thread not found")
+		return
+	}
+
+	h.queueMu.Lock()
+	cfg, updated, err := store.UpdateQueuedPromptRunAfter(threadID, queueID, runAfter)
+	if err == nil && updated {
+		h.rescheduleQueuedPromptTimerLocked(threadID)
+		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
+	}
+	h.queueMu.Unlock()
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !updated {
+		h.Error(w, http.StatusNotFound, "queued prompt not found")
+		return
+	}
+
+	var queued *api.QueuedPrompt
+	for _, item := range queuedPromptResponse(cfg.PromptQueue) {
+		if item.ID == queueID {
+			copyItem := item
+			queued = &copyItem
+			break
+		}
+	}
+
+	h.JSON(w, http.StatusOK, api.UpdateQueuedPromptResponse{
+		Success: true,
+		Queue:   queued,
+	})
 }

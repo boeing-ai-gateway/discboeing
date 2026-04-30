@@ -867,6 +867,7 @@ func DiffCommunicatedCredentialBindings(
 type QueuedPrompt struct {
 	ID        string            `json:"id"`
 	CreatedAt time.Time         `json:"createdAt,omitzero"`
+	RunAfter  time.Time         `json:"runAfter,omitzero"`
 	Message   message.UIMessage `json:"message"`
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
@@ -1028,7 +1029,8 @@ func (s *Store) DeleteQueuedPrompt(threadID, promptID string) (Config, bool, err
 	return cfg, true, nil
 }
 
-// PopQueuedPrompt removes and returns the next queued prompt.
+// PopQueuedPrompt removes and returns the next eligible queued prompt.
+// Prompts with RunAfter in the future remain queued and are skipped.
 func (s *Store) PopQueuedPrompt(threadID string) (Config, *QueuedPrompt, error) {
 	cfg, err := s.LoadConfig(threadID)
 	if err != nil {
@@ -1037,12 +1039,26 @@ func (s *Store) PopQueuedPrompt(threadID string) (Config, *QueuedPrompt, error) 
 	if len(cfg.PromptQueue) == 0 {
 		return cfg, nil, nil
 	}
-	prompt := cfg.PromptQueue[0]
-	cfg.PromptQueue = append([]QueuedPrompt{}, cfg.PromptQueue[1:]...)
+
+	now := time.Now().UTC()
+	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue)-1)
+	var prompt *QueuedPrompt
+	for _, queued := range cfg.PromptQueue {
+		if prompt == nil && (queued.RunAfter.IsZero() || !queued.RunAfter.After(now)) {
+			copyPrompt := queued
+			prompt = &copyPrompt
+			continue
+		}
+		nextQueue = append(nextQueue, queued)
+	}
+	if prompt == nil {
+		return cfg, nil, nil
+	}
+	cfg.PromptQueue = nextQueue
 	if err := s.SaveConfig(threadID, cfg); err != nil {
 		return Config{}, nil, err
 	}
-	return cfg, &prompt, nil
+	return cfg, prompt, nil
 }
 
 // PrependQueuedPrompt pushes a prompt onto the front of the queue.
@@ -1062,6 +1078,36 @@ func (s *Store) PrependQueuedPrompt(threadID string, prompt QueuedPrompt) (Confi
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// UpdateQueuedPromptRunAfter updates the RunAfter time for one queued prompt.
+// A nil runAfter clears the later schedule.
+func (s *Store) UpdateQueuedPromptRunAfter(threadID, promptID string, runAfter *time.Time) (Config, bool, error) {
+	cfg, err := s.LoadConfig(threadID)
+	if err != nil {
+		return Config{}, false, err
+	}
+	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue))
+	updated := false
+	for _, prompt := range cfg.PromptQueue {
+		if prompt.ID == promptID {
+			if runAfter == nil {
+				prompt.RunAfter = time.Time{}
+			} else {
+				prompt.RunAfter = runAfter.UTC()
+			}
+			updated = true
+		}
+		nextQueue = append(nextQueue, prompt)
+	}
+	if !updated {
+		return cfg, false, nil
+	}
+	cfg.PromptQueue = nextQueue
+	if err := s.SaveConfig(threadID, cfg); err != nil {
+		return Config{}, false, err
+	}
+	return cfg, true, nil
 }
 
 // FindLeaf returns the leaf message ID for a thread — the message that is not

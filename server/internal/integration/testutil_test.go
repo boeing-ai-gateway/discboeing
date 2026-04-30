@@ -329,6 +329,7 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 					r.Put("/threads/{threadId}", h.UpdateThread)
 					r.Patch("/threads/{threadId}", h.UpdateThread)
 					r.Delete("/threads/{threadId}", h.DeleteThread)
+					r.Patch("/threads/{threadId}/queue/{queueId}", h.UpdateQueuedPrompt)
 					r.Delete("/threads/{threadId}/queue/{queueId}", h.DeleteQueuedPrompt)
 					r.Get("/threads/{threadId}/stream", h.ChatStream)
 					r.Post("/threads/{threadId}/cancel", h.ChatCancel)

@@ -162,6 +162,13 @@ func (c *SessionClient) DeleteQueuedPrompt(ctx context.Context, threadID, queued
 	})
 }
 
+// UpdateQueuedPrompt updates a queued prompt in the sandbox.
+func (c *SessionClient) UpdateQueuedPrompt(ctx context.Context, threadID, queuedPromptID string, req *sandboxapi.UpdateQueuedPromptRequest) (*sandboxapi.UpdateQueuedPromptResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.UpdateQueuedPromptResponse, error) {
+		return c.inner.UpdateQueuedPrompt(ctx, c.sessionID, threadID, queuedPromptID, req)
+	})
+}
+
 // DeleteThread removes a thread from the sandbox.
 func (c *SessionClient) DeleteThread(ctx context.Context, threadID string) (*sandboxapi.DeleteThreadResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.DeleteThreadResponse, error) {
