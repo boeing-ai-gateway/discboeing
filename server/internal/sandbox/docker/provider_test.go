@@ -190,6 +190,11 @@ func TestResolveWorkspaceMountSource(t *testing.T) {
 			want:   `C:\Users\darre\repo`,
 		},
 		{
+			name:   "preserves windows absolute path with slash separators",
+			source: `C:/Users/darre/repo`,
+			want:   `C:/Users/darre/repo`,
+		},
+		{
 			name:   "cleans unix path",
 			source: "/mnt/c/Users/darre/../repo",
 			want:   "/mnt/c/Users/repo",
