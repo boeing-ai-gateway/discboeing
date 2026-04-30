@@ -20,13 +20,26 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
-func idleMonitorAgentHandler(statusByThread map[string]bool) http.HandlerFunc {
+type idleMonitorThreadState struct {
+	Running           bool
+	QueuedPromptCount int
+}
+
+func idleMonitorAgentHandler(statusByThread map[string]idleMonitorThreadState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/threads" {
 			w.Header().Set("Content-Type", "application/json")
 			threads := make([]string, 0, len(statusByThread))
-			for threadID := range statusByThread {
-				threads = append(threads, fmt.Sprintf(`{"id":%q,"name":%q}`, threadID, threadID))
+			for threadID, state := range statusByThread {
+				promptQueue := "[]"
+				if state.QueuedPromptCount > 0 {
+					items := make([]string, 0, state.QueuedPromptCount)
+					for i := 0; i < state.QueuedPromptCount; i++ {
+						items = append(items, fmt.Sprintf(`{"id":%q,"message":{"id":%q,"role":"user","parts":[]}}`, fmt.Sprintf("queue-%d", i), fmt.Sprintf("msg-%d", i)))
+					}
+					promptQueue = "[" + strings.Join(items, ",") + "]"
+				}
+				threads = append(threads, fmt.Sprintf(`{"id":%q,"name":%q,"promptQueue":%s}`, threadID, threadID, promptQueue))
 			}
 			fmt.Fprintf(w, `{"threads":[%s]}`, strings.Join(threads, ","))
 			return
@@ -34,7 +47,7 @@ func idleMonitorAgentHandler(statusByThread map[string]bool) http.HandlerFunc {
 		if strings.HasSuffix(r.URL.Path, "/chat/status") {
 			threadID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/threads/"), "/chat/status")
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"isRunning":%t}`, statusByThread[threadID])
+			fmt.Fprintf(w, `{"isRunning":%t}`, statusByThread[threadID].Running)
 			return
 		}
 		http.NotFound(w, r)
@@ -71,7 +84,7 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 	var stopCalled atomic.Bool
 
 	// Create mock agent API that reports no active chat via /chat/status.
-	handler := idleMonitorAgentHandler(map[string]bool{"test-session": false})
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{"test-session": {Running: false}})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -163,7 +176,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 	var stopCalled atomic.Bool
 
 	// Create mock agent API that returns running completion
-	handler := idleMonitorAgentHandler(map[string]bool{"test-session": true})
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{"test-session": {Running: true}})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -253,9 +266,9 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 
 	var stopCalled atomic.Bool
 
-	handler := idleMonitorAgentHandler(map[string]bool{
-		"test-session":     false,
-		"secondary-thread": true,
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{
+		"test-session":     {Running: false},
+		"secondary-thread": {Running: true},
 	})
 
 	mockProvider := &mockSandboxProvider{
@@ -325,6 +338,84 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 	}
 }
 
+func TestSandboxIdleMonitor_SkipsQueuedPrompts(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStoreForIdleMonitor(t)
+	logger := slog.Default()
+
+	var stopCalled atomic.Bool
+
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{
+		"test-session": {Running: false, QueuedPromptCount: 1},
+	})
+
+	mockProvider := &mockSandboxProvider{
+		secret:  "test-secret",
+		handler: handler,
+		onStop:  func(string) { stopCalled.Store(true) },
+	}
+
+	cfg := &config.Config{}
+	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+
+	monitor := NewSandboxIdleMonitor(
+		testStore,
+		sandboxSvc,
+		sessionSvc,
+		nil,
+		logger,
+		1*time.Second,
+		100*time.Millisecond,
+	)
+
+	project := &model.Project{ID: "test-project", Name: "Test"}
+	workspace := &model.Workspace{
+		ID:          "test-ws",
+		ProjectID:   project.ID,
+		Path:        "/test",
+		SourceType:  "local",
+		DisplayName: func() *string { s := "Test WS"; return &s }(),
+	}
+
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatal(err)
+	}
+
+	session := &model.Session{
+		ID:          "test-session",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusReady,
+		UpdatedAt:   time.Now().Add(-2 * time.Second),
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := monitor.checkIdleSessions(ctx); err != nil {
+		t.Fatalf("checkIdleSessions failed: %v", err)
+	}
+
+	if stopCalled.Load() {
+		t.Error("Expected sandbox NOT to be stopped when a thread has queued prompts")
+	}
+
+	updatedSession, err := testStore.GetSessionByID(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedSession.Status != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	}
+}
+
 // TestSandboxIdleMonitor_ActivityResetsTimer verifies that recent activity
 // prevents a session from being stopped.
 func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
@@ -335,7 +426,7 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 	// Track stop calls
 	var stopCalled atomic.Bool
 
-	handler := idleMonitorAgentHandler(map[string]bool{"test-session": false})
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{"test-session": {Running: false}})
 
 	mockProvider := &mockSandboxProvider{
 		secret:  "test-secret",
@@ -552,10 +643,10 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 	// Track stops per session
 	var stopCount atomic.Int32
 
-	handler := idleMonitorAgentHandler(map[string]bool{
-		"idle-session-1": false,
-		"idle-session-2": false,
-		"idle-session-3": false,
+	handler := idleMonitorAgentHandler(map[string]idleMonitorThreadState{
+		"idle-session-1": {Running: false},
+		"idle-session-2": {Running: false},
+		"idle-session-3": {Running: false},
 	})
 
 	mockProvider := &mockSandboxProvider{

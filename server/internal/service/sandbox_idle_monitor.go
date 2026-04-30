@@ -189,6 +189,14 @@ func (m *SandboxIdleMonitor) shouldStopSession(ctx context.Context, session *mod
 	}
 
 	for _, thread := range threads.Threads {
+		if len(thread.PromptQueue) > 0 {
+			logger.Debug("session idle but has queued prompts, skipping stop",
+				"thread_id", thread.ID,
+				"queued_prompt_count", len(thread.PromptQueue),
+				"idle_duration", time.Since(lastActivity))
+			return false
+		}
+
 		chatStatus, err := client.GetChatStatus(ctx, thread.ID)
 		if err != nil {
 			logger.Warn("failed to get chat status for idle check", "thread_id", thread.ID, "error", err)
