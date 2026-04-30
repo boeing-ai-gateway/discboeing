@@ -21,6 +21,12 @@ const (
 	defaultCatalogURL = "https://raw.githubusercontent.com/openai/codex/main/codex-rs/models-manager/models.json"
 )
 
+var defaultReasoningLevelOverrides = map[string]string{
+	// Codex currently advertises xhigh for GPT-5.4, but Discobot uses medium
+	// as the default to keep new sessions balanced unless users opt in.
+	"gpt-5.4": "medium",
+}
+
 type overlayFile map[string]map[string]map[string]any
 
 type rawData map[string]providerEntry
@@ -361,8 +367,8 @@ func syncedEntry(existing map[string]any, remote codexModel, baseModel modelMeta
 		"reasoningLevels": levels,
 		"tool_call":       supportsTools(remote),
 	}
-	if remote.DefaultReasoningLevel != "" {
-		entry["defaultReasonLevel"] = remote.DefaultReasoningLevel
+	if defaultLevel := defaultReasoningLevel(remote); defaultLevel != "" {
+		entry["defaultReasonLevel"] = defaultLevel
 	}
 	if contextWindow > 0 {
 		entry["contextWindow"] = contextWindow
@@ -396,6 +402,13 @@ func syncedEntry(existing map[string]any, remote codexModel, baseModel modelMeta
 	copyFieldIfPresent(entry, existing, "capabilities")
 	copyFieldIfPresent(entry, existing, "remove")
 	return entry
+}
+
+func defaultReasoningLevel(remote codexModel) string {
+	if override := defaultReasoningLevelOverrides[remote.Slug]; override != "" {
+		return override
+	}
+	return remote.DefaultReasoningLevel
 }
 
 func resolvedContextWindow(remote codexModel) int {

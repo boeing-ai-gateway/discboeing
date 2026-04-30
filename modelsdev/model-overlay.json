@@ -345,7 +345,7 @@
 		"gpt-5.4": {
 			"contextWindow": 272000,
 			"customTools": true,
-			"defaultReasonLevel": "xhigh",
+			"defaultReasonLevel": "medium",
 			"family": "gpt",
 			"inputModalities": [
 				"text",

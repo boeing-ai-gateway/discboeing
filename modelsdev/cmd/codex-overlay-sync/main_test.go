@@ -98,6 +98,23 @@ func TestSyncCodexOverlayRefreshesFromRemoteCatalog(t *testing.T) {
 	}
 }
 
+func TestSyncedEntryOverridesGPT54DefaultReasoning(t *testing.T) {
+	got := syncedEntry(nil, codexModel{
+		Slug:                  "gpt-5.4",
+		DefaultReasoningLevel: "xhigh",
+		SupportedReasoningLevels: []codexReasoningLevel{
+			{Effort: "low"},
+			{Effort: "medium"},
+			{Effort: "high"},
+			{Effort: "xhigh"},
+		},
+	}, modelMetadata{})
+
+	if got["defaultReasonLevel"] != "medium" {
+		t.Fatalf("defaultReasonLevel = %#v, want medium", got["defaultReasonLevel"])
+	}
+}
+
 func TestSyncCodexOverlayPreservesRemovedEntriesAndPrunesStaleOnRefresh(t *testing.T) {
 	overlay := overlayFile{
 		targetProviderID: {
