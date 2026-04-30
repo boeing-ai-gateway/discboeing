@@ -4,17 +4,27 @@ import tailwindcss from "@tailwindcss/vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, type Plugin } from "vite";
 
+function normalizeModuleId(id: string): string {
+	return id.replaceAll("\\", "/");
+}
+
+function patchNoVncBrowserCode(code: string): string {
+	return code.replace(/= await _checkWebCodecsH264DecodeSupport\(\)/g, "= false");
+}
+
+function isNoVncBrowserModule(id: string): boolean {
+	const normalizedId = normalizeModuleId(id);
+	return normalizedId.includes("/@novnc/novnc/") && normalizedId.endsWith("/browser.js");
+}
+
 function fixNoVncCjs(): Plugin {
 	return {
 		name: "fix-novnc-cjs",
 		enforce: "pre",
 		load(id) {
-			if (id.includes("@novnc/novnc") && id.endsWith("browser.js")) {
+			if (isNoVncBrowserModule(id)) {
 				const code = readFileSync(id, "utf-8");
-				return code.replace(
-					/= await _checkWebCodecsH264DecodeSupport\(\)/g,
-					"= false",
-				);
+				return patchNoVncBrowserCode(code);
 			}
 		},
 	};
@@ -34,7 +44,9 @@ function trackSSRBuild(): Plugin {
 					rollupOptions: {
 						output: {
 							manualChunks(id: string) {
-								if (isSSRBuild || !id.includes("node_modules")) {
+								const normalizedId = normalizeModuleId(id);
+
+								if (isSSRBuild || !normalizedId.includes("node_modules")) {
 									return;
 								}
 
@@ -43,17 +55,17 @@ function trackSSRBuild(): Plugin {
 								// ~75 MB and includes 5 large worker bundles (including the full
 								// TypeScript compiler), making it the primary driver of OOM
 								// failures during CI builds.
-								if (id.includes("/monaco-editor/")) {
+								if (normalizedId.includes("/monaco-editor/")) {
 									return "monaco-editor";
 								}
 
 								if (
-									id.includes("/svelte/") ||
-									id.includes("/@sveltejs/") ||
-									id.includes("/bits-ui/") ||
-									id.includes("/runed/") ||
-									id.includes("/svelte-toolbelt/") ||
-									id.includes("/paneforge/")
+									normalizedId.includes("/svelte/") ||
+									normalizedId.includes("/@sveltejs/") ||
+									normalizedId.includes("/bits-ui/") ||
+									normalizedId.includes("/runed/") ||
+									normalizedId.includes("/svelte-toolbelt/") ||
+									normalizedId.includes("/paneforge/")
 								) {
 									return "svelte-core";
 								}
@@ -106,13 +118,10 @@ export default defineConfig(() => ({
 						build.onLoad(
 							{ filter: /browser\.js$/, namespace: "file" },
 							(args) => {
-								if (!args.path.includes("@novnc/novnc")) return;
+								if (!isNoVncBrowserModule(args.path)) return;
 								const code = readFileSync(args.path, "utf-8");
 								return {
-									contents: code.replace(
-										/= await _checkWebCodecsH264DecodeSupport\(\)/g,
-										"= false",
-									),
+									contents: patchNoVncBrowserCode(code),
 									loader: "js",
 								};
 							},
