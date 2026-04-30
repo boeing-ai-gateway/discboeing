@@ -11,8 +11,8 @@
  *   arch: Architecture (amd64 or arm64, defaults to host arch)
  */
 
-import { execSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,26 @@ function maybeLoginToGhcr() {
 	});
 }
 
+function resolveTarCommand() {
+	if (process.platform !== "win32") {
+		return "tar";
+	}
+
+	const systemRoot = process.env.SystemRoot || "C:\\Windows";
+	const nativeTar = join(systemRoot, "System32", "tar.exe");
+	if (existsSync(nativeTar)) {
+		return nativeTar;
+	}
+	return "tar.exe";
+}
+
+function extractTarEntries(tarPath, outputDir, files) {
+	execFileSync(resolveTarCommand(), ["xf", tarPath, "-C", outputDir, ...files], {
+		cwd: projectRoot,
+		stdio: "inherit",
+	});
+}
+
 function extractionHint(error) {
 	const message = error instanceof Error ? error.message : String(error);
 	if (message.includes("DENIED") || message.includes("UNAUTHORIZED")) {
@@ -64,10 +84,7 @@ try {
 		`go tool crane export --platform "linux/${arch}" "${imageRef}" "${tempTarPath}"`,
 		{ cwd: projectRoot, stdio: "inherit" },
 	);
-	execSync(
-		`tar xf "${tempTarPath}" -C "${resourcesDir}" ${extractFiles.join(" ")}`,
-		{ cwd: projectRoot, stdio: "inherit" },
-	);
+	extractTarEntries(tempTarPath, resourcesDir, extractFiles);
 
 	console.log("WSL image files extracted successfully:");
 	for (const file of extractFiles) {
