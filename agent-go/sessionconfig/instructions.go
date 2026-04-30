@@ -159,7 +159,7 @@ func instructionDisplayPath(displayPrefix, name string) string {
 		return name
 	}
 	if isWindowsAbsPath(displayPrefix) {
-		return strings.TrimRight(displayPrefix, `\\/`) + `\\` + strings.TrimLeft(name, `\\/`)
+		return strings.TrimRight(displayPrefix, `\/`) + `\\` + strings.TrimLeft(name, `\/`)
 	}
 	if filepath.IsAbs(displayPrefix) {
 		return filepath.Join(displayPrefix, name)
