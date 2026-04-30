@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -730,7 +731,19 @@ func sameResolvedPath(targetPath, expectedPath string) bool {
 	if err != nil {
 		return false
 	}
-	return absTarget == absExpected
+
+	if targetInfo, err := os.Stat(absTarget); err == nil {
+		if expectedInfo, err := os.Stat(absExpected); err == nil && os.SameFile(targetInfo, expectedInfo) {
+			return true
+		}
+	}
+
+	cleanTarget := filepath.Clean(absTarget)
+	cleanExpected := filepath.Clean(absExpected)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(cleanTarget, cleanExpected)
+	}
+	return cleanTarget == cleanExpected
 }
 
 // resolvePath resolves a file path relative to cwd.

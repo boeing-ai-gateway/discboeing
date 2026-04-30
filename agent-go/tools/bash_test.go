@@ -690,6 +690,26 @@ func TestBash_WindowsSecondCommandStillRunsAfterPwd(t *testing.T) {
 	}
 }
 
+func TestSameResolvedPathUsesFileIdentity(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(target, []byte("discobot\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(target): %v", err)
+	}
+
+	alias := filepath.Join(dir, "alias.txt")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if !sameResolvedPath(target, alias) {
+		t.Fatalf("sameResolvedPath(%q, %q) = false, want true", target, alias)
+	}
+	if !sameResolvedPath(alias, target) {
+		t.Fatalf("sameResolvedPath(%q, %q) = false, want true", alias, target)
+	}
+}
+
 func TestNormalizeBashWorkingDirForOS(t *testing.T) {
 	tests := []struct {
 		name string
