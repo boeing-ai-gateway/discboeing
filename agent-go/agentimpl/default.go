@@ -889,6 +889,15 @@ func resolveSubAgentConfig(sessionCfg *sessionconfig.SessionConfig, subAgentType
 	return nil, fmt.Errorf("sub-agent type %q not found in session config", subAgentType)
 }
 
+func (a *DefaultAgent) ValidateSubagentType(subAgentType string) error {
+	sessionCfg, err := sessionconfig.Load(a.cwd)
+	if err != nil {
+		return fmt.Errorf("load session config: %w", err)
+	}
+	_, err = resolveSubAgentConfig(sessionCfg, subAgentType)
+	return err
+}
+
 func resolvePromptTools(req agent.PromptRequest, sessionCfg *sessionconfig.SessionConfig, subAgentCfg *sessionconfig.SubAgentConfig, currentDepth int) []providers.ToolDefinition {
 	tools := req.Tools
 	if tools == nil {

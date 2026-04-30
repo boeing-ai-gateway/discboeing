@@ -72,6 +72,10 @@ type threadStoreCarrier interface {
 	Store() *thread.Store
 }
 
+type subagentTypeValidator interface {
+	ValidateSubagentType(subagentType string) error
+}
+
 // taskStore holds all tasks for this executor instance.
 type taskStore struct {
 	mu    sync.Mutex
@@ -88,10 +92,29 @@ func subagentDepthFromThreadID(threadID string) int {
 	return strings.Count(threadID, ".sub.")
 }
 
+func normalizeSubagentType(subagentType string) string {
+	if strings.TrimSpace(subagentType) == "general" {
+		return "general-purpose"
+	}
+	return subagentType
+}
+
 func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input taskInput
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
+	}
+	input.SubagentType = normalizeSubagentType(input.SubagentType)
+
+	if resumeID := strings.TrimSpace(input.Resume); resumeID != "" {
+		resumed, err := e.continueTask(ctx, toolCtx, call, marshalTaskContinuation(resumeID), nil)
+		if err != nil {
+			return thread.ToolExecuteResult{}, err
+		}
+		if input.RunInBackground && resumed.Async != nil {
+			return backgroundTaskResult(call, resumeID, taskStatus(resumeID)), nil
+		}
+		return resumed, nil
 	}
 
 	prompt := input.Prompt
@@ -105,15 +128,10 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 	if toolCtx == nil || toolCtx.Agent == nil {
 		return errResult(call, "Task tool is not available: no sub-agent configured"), nil
 	}
-	if resumeID := strings.TrimSpace(input.Resume); resumeID != "" {
-		resumed, err := e.continueTask(ctx, toolCtx, call, marshalTaskContinuation(resumeID), nil)
-		if err != nil {
-			return thread.ToolExecuteResult{}, err
+	if validator, ok := toolCtx.Agent.(subagentTypeValidator); ok {
+		if err := validator.ValidateSubagentType(input.SubagentType); err != nil {
+			return errResult(call, err.Error()), nil
 		}
-		if input.RunInBackground && resumed.Async != nil {
-			return backgroundTaskResult(call, resumeID, taskStatus(resumeID)), nil
-		}
-		return resumed, nil
 	}
 	subAgent := toolCtx.Agent
 	currentThreadID := contextThreadID(toolCtx, e.defaultThreadID)
@@ -380,6 +398,20 @@ func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata 
 	}
 }
 
+func persistTaskThreadError(subAgent agent.Agent, threadID, message string) {
+	storeAgent, ok := subAgent.(threadStoreCarrier)
+	if !ok || storeAgent.Store() == nil {
+		return
+	}
+	store := storeAgent.Store()
+	cfg, err := store.LoadConfig(threadID)
+	if err != nil {
+		return
+	}
+	cfg.ErrorMessage = strings.TrimSpace(message)
+	_ = store.SaveConfig(threadID, cfg)
+}
+
 func taskThreadName(metadata taskThreadMetadata) string {
 	if title := strings.TrimSpace(metadata.Description); title != "" {
 		return title
@@ -438,6 +470,7 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	if runErr != nil {
 		rec.status = "failed"
 		rec.output = fmt.Sprintf("sub-agent failed: %v", runErr)
+		persistTaskThreadError(subAgent, subThreadID, rec.output)
 		return
 	}
 
@@ -445,6 +478,7 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	if err != nil {
 		rec.status = "failed"
 		rec.output = fmt.Sprintf("sub-agent question lookup failed: %v", err)
+		persistTaskThreadError(subAgent, subThreadID, rec.output)
 		return
 	}
 	if pending != nil {
@@ -452,12 +486,14 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 		if err != nil {
 			rec.status = "failed"
 			rec.output = fmt.Sprintf("sub-agent question marshal failed: %v", err)
+			persistTaskThreadError(subAgent, subThreadID, rec.output)
 			return
 		}
 		credentials, err := json.Marshal(pending.Credentials)
 		if err != nil {
 			rec.status = "failed"
 			rec.output = fmt.Sprintf("sub-agent credential marshal failed: %v", err)
+			persistTaskThreadError(subAgent, subThreadID, rec.output)
 			return
 		}
 		rec.status = "waiting_for_answer"
@@ -473,11 +509,13 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	if err != nil {
 		rec.status = "failed"
 		rec.output = fmt.Sprintf("sub-agent completed but result unavailable: %v", err)
+		persistTaskThreadError(subAgent, subThreadID, rec.output)
 		return
 	}
 
 	rec.status = "completed"
 	rec.output = output
+	persistTaskThreadError(subAgent, subThreadID, "")
 }
 
 // taskHandle builds the AsyncContinuationHandle that the turn loop waits on.

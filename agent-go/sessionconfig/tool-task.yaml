@@ -4,7 +4,7 @@ description: |-
 
   Use this for broad research, open-ended code exploration, planning, or delegated execution. Prefer direct tools for simple file reads or targeted searches.
 
-  Set `subagent_type`, give a short `description`, and write a clear `prompt`. Use `resume` with a previously returned `task_id`/`thread_id` to reattach to an existing task instead of creating a new one. Use `run_in_background` to launch the task immediately and get back a `task_id`/`thread_id` pair for `TaskOutput`.
+  Set `subagent_type` (use `general-purpose` for the built-in general agent), give a short `description`, and write a clear `prompt`. Use `resume` with a previously returned `task_id`/`thread_id` to reattach to an existing task instead of creating a new one. Use `run_in_background` to launch the task immediately and get back a `task_id`/`thread_id` pair for `TaskOutput`.
 
   Agent results are not shown to the user automatically; summarize useful results back to the user yourself.
 inputSchema:
@@ -41,7 +41,7 @@ inputSchema:
       description: Run the agent in the background.
     subagent_type:
       type: string
-      description: Specialized agent type.
+      description: Specialized agent type. Use `general-purpose` for the built-in general agent.
   required:
     - description
     - prompt

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 	"strings"
 	"sync"
@@ -19,10 +20,11 @@ import (
 // --- Mock sub-agent ---
 
 type mockSubAgent struct {
-	promptFn          func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
-	finalResponseFn   func(threadID string) (string, error)
-	pendingQuestionFn func(threadID string) (*agent.PendingQuestion, error)
-	submitAnswerFn    func(threadID, approvalID string, req api.AnswerQuestionRequest) error
+	promptFn               func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
+	finalResponseFn        func(threadID string) (string, error)
+	pendingQuestionFn      func(threadID string) (*agent.PendingQuestion, error)
+	submitAnswerFn         func(threadID, approvalID string, req api.AnswerQuestionRequest) error
+	validateSubagentTypeFn func(subagentType string) error
 }
 
 func (m *mockSubAgent) Prompt(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
@@ -53,6 +55,12 @@ func (m *mockSubAgent) SubmitAnswer(threadID, approvalID string, req api.AnswerQ
 	return nil
 }
 func (m *mockSubAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
+func (m *mockSubAgent) ValidateSubagentType(subagentType string) error {
+	if m.validateSubagentTypeFn != nil {
+		return m.validateSubagentTypeFn(subagentType)
+	}
+	return nil
+}
 func (m *mockSubAgent) FinalResponse(threadID string) (string, error) {
 	if m.finalResponseFn != nil {
 		return m.finalResponseFn(threadID)
@@ -463,6 +471,163 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	}
 	if gotDepth != 2 {
 		t.Errorf("subagent_depth: got %d, want 2", gotDepth)
+	}
+}
+
+func TestTask_NormalizesGeneralSubagentAlias(t *testing.T) {
+	var gotType string
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			gotType = req.SubagentType
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		finalResponseFn: func(_ string) (string, error) { return "ok", nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"background task","prompt":"do it","subagent_type":"general"}`,
+	}
+
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatal("expected Async handle")
+	}
+	t.Cleanup(func() { cleanupTask(continuationSubThreadID(t, result.Async.Continuation)) })
+
+	waitHandle(t, result.Async, 5*time.Second)
+
+	if gotType != "general-purpose" {
+		t.Errorf("subagent_type: got %q, want %q", gotType, "general-purpose")
+	}
+}
+
+func TestTask_ValidatesSubagentTypeBeforeCreatingThread(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	subAgent := &storeBackedMockSubAgent{
+		store: store,
+		mockSubAgent: &mockSubAgent{
+			validateSubagentTypeFn: func(subagentType string) error {
+				if subagentType != "missing" {
+					t.Fatalf("subagent_type = %q, want missing", subagentType)
+				}
+				return errors.New(`sub-agent type "missing" not found in session config`)
+			},
+		},
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"bad task","prompt":"do it","subagent_type":"missing","run_in_background":true}`,
+	}
+
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async != nil {
+		t.Fatal("expected validation to fail synchronously")
+	}
+	if !isErrorOutput(result.Result) {
+		t.Fatalf("expected error result, got %T", result.Result.Output)
+	}
+	threads, err := store.ListThreads()
+	if err != nil {
+		t.Fatalf("ListThreads: %v", err)
+	}
+	if len(threads) != 0 {
+		t.Fatalf("expected no child thread to be created, got %v", threads)
+	}
+}
+
+func TestTask_ResumeSkipsNewTaskValidation(t *testing.T) {
+	const want = "resumed task output"
+
+	subAgent := &mockSubAgent{
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+		validateSubagentTypeFn: func(subagentType string) error {
+			t.Fatalf("ValidateSubagentType called for resume with %q", subagentType)
+			return nil
+		},
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"resume":"already-finished-task"}`,
+	}
+
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async != nil {
+		t.Fatal("expected synchronous completed result")
+	}
+	if got := textOutput(result.Result); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestTask_BackgroundFailurePersistsThreadError(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	subAgent := &storeBackedMockSubAgent{
+		store: store,
+		mockSubAgent: &mockSubAgent{
+			promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+				return func(yield func(message.MessageChunk, error) bool) {
+					yield(nil, errors.New("boom"))
+				}
+			},
+		},
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"background task","prompt":"do it","subagent_type":"helper","run_in_background":true}`,
+	}
+
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var payload struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal(result.Result.Output.(message.JSONOutput).Value, &payload); err != nil {
+		t.Fatalf("decode task result: %v", err)
+	}
+	t.Cleanup(func() { cleanupTask(payload.TaskID) })
+
+	outputCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + payload.TaskID + `","block":true,"timeout":1000}`,
+	}
+	if _, err := exec.Execute(context.Background(), toolCtx, outputCall); err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+
+	cfg, err := store.LoadConfig(payload.TaskID)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ErrorMessage != "sub-agent failed: boom" {
+		t.Fatalf("errorMessage = %q, want %q", cfg.ErrorMessage, "sub-agent failed: boom")
 	}
 }
 
@@ -1029,6 +1194,15 @@ func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
 	}
 	if len(update.Data.Thread.Metadata) == 0 {
 		t.Fatal("expected thread update metadata")
+	}
+
+	outputCall := message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + info.TaskID + `","block":true,"timeout":1000}`,
+	}
+	if _, err := exec.Execute(context.Background(), toolCtx, outputCall); err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
 	}
 }
 
