@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	dockerclient "github.com/docker/docker/client"
+
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/docker"
@@ -150,6 +152,46 @@ func TestProviderEnsureRuntimeInfoWaitsForBackgroundInstall(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for ensureRuntimeInfo() to return")
+	}
+}
+
+func TestProviderCloseCancelsBackgroundBootstrap(t *testing.T) {
+	t.Parallel()
+
+	installCanceled := make(chan struct{})
+	provider := &Provider{
+		ensureInstalled: func(ctx context.Context, progress progressReporter) error {
+			progress.Update(50, "Installing managed WSL distro")
+			<-ctx.Done()
+			close(installCanceled)
+			return ctx.Err()
+		},
+		ensureRunning: func(context.Context, progressReporter) (*RuntimeInfo, error) {
+			t.Fatal("ensureRunning should not be called after Close cancels bootstrap")
+			return nil, nil
+		},
+	}
+
+	provider.startBackgroundBootstrap()
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- provider.Close()
+	}()
+
+	select {
+	case <-installCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for background bootstrap cancellation")
+	}
+
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Close() to return")
 	}
 }
 
@@ -462,6 +504,44 @@ func TestProviderRunningSandboxCountTreatsActiveWatchAsActivity(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("RunningSandboxCount() = %d, want 1 while a watch is active", count)
+	}
+}
+
+func TestProviderStopRuntimeClosesHostDockerClient(t *testing.T) {
+	t.Parallel()
+
+	const runtimeID = "discobot"
+	var closed int
+	provider := &Provider{
+		cfg: &config.Config{WSLDistroName: runtimeID},
+	}
+	provider.hostDockerClient = &dockerclient.Client{}
+	provider.hostDockerClientOnce.Do(func() {})
+	provider.hostDockerClientErr = errors.New("stale error")
+
+	originalClose := dockerClientClose
+	t.Cleanup(func() {
+		dockerClientClose = originalClose
+	})
+	dockerClientClose = func(cli *dockerclient.Client) error {
+		if cli == nil {
+			t.Fatal("dockerClientClose() got nil client")
+		}
+		closed++
+		return nil
+	}
+
+	if err := provider.StopRuntime(context.Background(), runtimeID); err != nil {
+		t.Fatalf("StopRuntime() error = %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("dockerClientClose() calls = %d, want 1", closed)
+	}
+	if provider.hostDockerClient != nil {
+		t.Fatal("StopRuntime() did not clear cached host Docker client")
+	}
+	if provider.hostDockerClientErr != nil {
+		t.Fatalf("StopRuntime() cached host Docker client error = %v, want nil", provider.hostDockerClientErr)
 	}
 }
 

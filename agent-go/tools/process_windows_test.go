@@ -3,10 +3,14 @@
 package tools
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsProcessGroupControllerCancelStopsCommand(t *testing.T) {
@@ -42,5 +46,23 @@ func TestWindowsProcessGroupControllerCancelStopsCommand(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "exit status") {
 		t.Fatalf("unexpected Wait() error: %v", err)
+	}
+}
+
+func TestWindowsProcessGroupControllerAfterStartReturnsCreateJobObjectError(t *testing.T) {
+	originalCreateJobObject := createJobObject
+	t.Cleanup(func() {
+		createJobObject = originalCreateJobObject
+	})
+
+	createErr := windows.ERROR_ACCESS_DENIED
+	createJobObject = func(*windows.SecurityAttributes, *uint16) (windows.Handle, error) {
+		return 0, createErr
+	}
+
+	controller := &windowsProcessGroupController{}
+	err := controller.afterStart(&exec.Cmd{Process: &os.Process{Pid: 1234}})
+	if !errors.Is(err, createErr) {
+		t.Fatalf("afterStart() error = %v, want %v", err, createErr)
 	}
 }

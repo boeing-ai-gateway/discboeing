@@ -4,6 +4,7 @@ package wsl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -22,6 +23,10 @@ const (
 	startupTaskWSLInstallID = "wsl-install"
 	startupTaskWSLStartID   = "wsl-start"
 )
+
+var dockerClientClose = func(cli *dockerclient.Client) error {
+	return cli.Close()
+}
 
 // SessionProjectResolver maps session IDs to project IDs.
 type SessionProjectResolver func(ctx context.Context, sessionID string) (projectID string, err error)
@@ -46,6 +51,8 @@ type Provider struct {
 
 	bootstrapMu          sync.RWMutex
 	bootstrapInstallDone chan struct{}
+	bootstrapCancel      context.CancelFunc
+	bootstrapDone        chan struct{}
 
 	mu             sync.RWMutex
 	dockerProvider *docker.Provider
@@ -55,6 +62,7 @@ type Provider struct {
 	runtimeErr     error
 	activeWatches  int
 
+	hostDockerClientMu   sync.Mutex
 	hostDockerClient     *dockerclient.Client
 	hostDockerClientOnce sync.Once
 	hostDockerClientErr  error
@@ -249,6 +257,48 @@ func (p *Provider) beginBackgroundInstallWait() chan struct{} {
 		p.bootstrapInstallDone = make(chan struct{})
 	}
 	return p.bootstrapInstallDone
+}
+
+func (p *Provider) beginBackgroundBootstrap() (context.Context, chan struct{}, bool) {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if p.bootstrapDone != nil {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	p.bootstrapCancel = cancel
+	p.bootstrapDone = done
+	return ctx, done, true
+}
+
+func (p *Provider) finishBackgroundBootstrap(done chan struct{}) {
+	p.bootstrapMu.Lock()
+	if p.bootstrapDone == done {
+		p.bootstrapDone = nil
+		p.bootstrapCancel = nil
+	}
+	p.bootstrapMu.Unlock()
+	close(done)
+}
+
+func (p *Provider) cancelBackgroundBootstrap(ctx context.Context) error {
+	p.bootstrapMu.RLock()
+	cancel := p.bootstrapCancel
+	done := p.bootstrapDone
+	p.bootstrapMu.RUnlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done == nil {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (p *Provider) finishBackgroundInstallWait(installDone chan struct{}) {
@@ -519,6 +569,8 @@ func (p *Provider) Close() error {
 		_ = p.idleMonitor.Stop(context.Background())
 	}
 
+	result := p.cancelBackgroundBootstrap(context.Background())
+
 	p.mu.Lock()
 	dockerProvider := p.dockerProvider
 	p.dockerProvider = nil
@@ -527,11 +579,13 @@ func (p *Provider) Close() error {
 	p.mu.Unlock()
 
 	if dockerProvider != nil {
-		if err := dockerProvider.Close(); err != nil {
-			return err
-		}
+		result = errors.Join(result, dockerProvider.Close())
 	}
-	return p.manager.Stop(context.Background())
+	result = errors.Join(result, p.closeHostDockerClient())
+	if p.manager != nil {
+		result = errors.Join(result, p.manager.Stop(context.Background()))
+	}
+	return result
 }
 
 // ListRuntimeIDs implements sandbox.IdleRuntimeController for the single managed
@@ -594,6 +648,8 @@ func (p *Provider) StopRuntime(ctx context.Context, runtimeID string) error {
 		return nil
 	}
 
+	result := p.cancelBackgroundBootstrap(ctx)
+
 	p.mu.Lock()
 	dockerProvider := p.dockerProvider
 	p.dockerProvider = nil
@@ -602,9 +658,13 @@ func (p *Provider) StopRuntime(ctx context.Context, runtimeID string) error {
 	p.mu.Unlock()
 
 	if dockerProvider != nil {
-		_ = dockerProvider.Close()
+		result = errors.Join(result, dockerProvider.Close())
 	}
-	return p.manager.Stop(ctx)
+	result = errors.Join(result, p.closeHostDockerClient())
+	if p.manager != nil {
+		result = errors.Join(result, p.manager.Stop(ctx))
+	}
+	return result
 }
 
 func (p *Provider) translateCreateOptions(opts sandbox.CreateOptions) (sandbox.CreateOptions, error) {
@@ -865,6 +925,8 @@ func (p *Provider) buildDockerProvider(cfg *config.Config) (*docker.Provider, er
 }
 
 func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {
+	p.hostDockerClientMu.Lock()
+	defer p.hostDockerClientMu.Unlock()
 	p.hostDockerClientOnce.Do(func() {
 		cli, err := docker.NewAPIClient(p.cfg)
 		if err != nil {
@@ -874,6 +936,19 @@ func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {
 		p.hostDockerClient = cli
 	})
 	return p.hostDockerClient, p.hostDockerClientErr
+}
+
+func (p *Provider) closeHostDockerClient() error {
+	p.hostDockerClientMu.Lock()
+	cli := p.hostDockerClient
+	p.hostDockerClient = nil
+	p.hostDockerClientErr = nil
+	p.hostDockerClientOnce = sync.Once{}
+	p.hostDockerClientMu.Unlock()
+	if cli == nil {
+		return nil
+	}
+	return dockerClientClose(cli)
 }
 
 func (p *Provider) ensureLocalImageLoaded(ctx context.Context, dockerProvider *docker.Provider) error {
@@ -910,6 +985,10 @@ func (p *Provider) startBackgroundBootstrap() {
 		return
 	}
 	installDone := p.beginBackgroundInstallWait()
+	bootstrapCtx, done, started := p.beginBackgroundBootstrap()
+	if !started {
+		return
+	}
 
 	if p.systemManager != nil {
 		p.systemManager.RegisterTask(startupTaskWSLInstallID, "Preparing managed WSL distro")
@@ -917,6 +996,7 @@ func (p *Provider) startBackgroundBootstrap() {
 	}
 
 	go func() {
+		defer p.finishBackgroundBootstrap(done)
 		log.Printf("Starting background WSL distro bootstrap")
 
 		if p.systemManager != nil {
@@ -931,7 +1011,7 @@ func (p *Provider) startBackgroundBootstrap() {
 				p.systemManager.UpdateTaskProgress(startupTaskWSLInstallID, progress, currentOperation)
 			},
 		}
-		if err := p.ensureInstalled(context.Background(), installProgress); err != nil {
+		if err := p.ensureInstalled(bootstrapCtx, installProgress); err != nil {
 			p.finishBackgroundInstallWait(installDone)
 			log.Printf("Background WSL distro setup failed: %v", err)
 			if p.systemManager != nil {
@@ -956,7 +1036,7 @@ func (p *Provider) startBackgroundBootstrap() {
 				p.systemManager.UpdateTaskProgress(startupTaskWSLStartID, progress, currentOperation)
 			},
 		}
-		runtimeInfo, err := p.ensureRuntimeInfo(context.Background(), startProgress)
+		runtimeInfo, err := p.ensureRuntimeInfo(bootstrapCtx, startProgress)
 		if err != nil {
 			log.Printf("Background WSL distro startup failed: %v", err)
 			if p.systemManager != nil {
