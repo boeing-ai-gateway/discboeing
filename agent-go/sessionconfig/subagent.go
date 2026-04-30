@@ -148,3 +148,38 @@ func parseSubAgent(filename, content string) (SubAgentConfig, error) {
 	}
 	return agent, nil
 }
+
+// FormatSubAgentReminder formats the discovered Task sub-agent types as a
+// startup reminder. It returns an empty string when no sub-agents are available.
+func FormatSubAgentReminder(agents []SubAgentConfig) string {
+	if len(agents) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("<system-reminder>\n")
+	b.WriteString("The following sub-agent types are available for use with the Task tool:\n\n")
+	wroteAgent := false
+	for _, agent := range agents {
+		name := strings.TrimSpace(agent.Name)
+		if name == "" {
+			continue
+		}
+		wroteAgent = true
+		b.WriteString("- ")
+		b.WriteString(name)
+		description := strings.TrimSpace(agent.Description)
+		if description != "" {
+			b.WriteString(": ")
+			b.WriteString(description)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\nUse only one of these exact values for Task.subagent_type. Do not guess or invent other sub-agent types.")
+	b.WriteString("\n</system-reminder>")
+
+	if !wroteAgent {
+		return ""
+	}
+	return b.String()
+}

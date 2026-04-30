@@ -2,6 +2,7 @@ package sessionconfig
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/obot-platform/discobot/agent-go/providers"
@@ -31,6 +32,35 @@ func TestDiscoverBuiltinSubAgents_IncludesGeneralPurpose(t *testing.T) {
 	}
 	if len(general.AllowedTools) == 0 {
 		t.Error("expected built-in general-purpose allowedTools")
+	}
+}
+
+func TestFormatSubAgentReminder(t *testing.T) {
+	got := FormatSubAgentReminder([]SubAgentConfig{
+		{Name: "reviewer", Description: "Reviews code"},
+		{Name: "general-purpose"},
+	})
+
+	if !strings.Contains(got, "<system-reminder>") || !strings.Contains(got, "</system-reminder>") {
+		t.Fatalf("expected system reminder tags, got %q", got)
+	}
+	if !strings.Contains(got, "- reviewer: Reviews code") {
+		t.Fatalf("expected reviewer description, got %q", got)
+	}
+	if !strings.Contains(got, "- general-purpose") {
+		t.Fatalf("expected general-purpose name, got %q", got)
+	}
+	if !strings.Contains(got, "Use only one of these exact values for Task.subagent_type.") {
+		t.Fatalf("expected exact-value instruction, got %q", got)
+	}
+}
+
+func TestFormatSubAgentReminder_Empty(t *testing.T) {
+	if got := FormatSubAgentReminder(nil); got != "" {
+		t.Fatalf("expected empty reminder, got %q", got)
+	}
+	if got := FormatSubAgentReminder([]SubAgentConfig{{Name: " "}}); got != "" {
+		t.Fatalf("expected empty reminder for blank names, got %q", got)
 	}
 }
 

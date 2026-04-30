@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
@@ -217,6 +218,7 @@ func TestBootstrapNewThreadMessages_IncludesRecentThreadsReminder(t *testing.T) 
 		"Claude Sonnet 4",
 		&sessionconfig.SessionConfig{MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -254,6 +256,82 @@ func TestBootstrapNewThreadMessages_IncludesRecentThreadsReminder(t *testing.T) 
 	}
 	if !strings.Contains(recentReminder, "- thread-2 (thread ID: thread-2)") {
 		t.Fatalf("expected unnamed thread to fall back to thread id, got %q", recentReminder)
+	}
+}
+
+func TestBootstrapNewThreadMessages_IncludesSubAgentReminderWhenTaskAvailable(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store := thread.NewStore(t.TempDir())
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+
+	leafID, err := agent.bootstrapNewThreadMessages(
+		"current-thread",
+		"system prompt",
+		"Claude Sonnet 4",
+		&sessionconfig.SessionConfig{
+			MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth,
+			SubAgents: []sessionconfig.SubAgentConfig{{
+				Name:        "general-purpose",
+				Description: "General helper",
+			}},
+		},
+		nil,
+		[]providers.ToolDefinition{{Name: "Task"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := store.BuildHistory("current-thread", leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, msg := range history {
+		text := messageText(msg.Parts)
+		if strings.Contains(text, "The following sub-agent types are available for use with the Task tool:") {
+			found = true
+			if !strings.Contains(text, "- general-purpose: General helper") {
+				t.Fatalf("expected general-purpose sub-agent in reminder, got %q", text)
+			}
+			if !strings.Contains(text, "Do not guess or invent other sub-agent types.") {
+				t.Fatalf("expected anti-guessing instruction, got %q", text)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected sub-agent reminder")
+	}
+}
+
+func TestBootstrapNewThreadMessages_SkipsSubAgentReminderWithoutTask(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store := thread.NewStore(t.TempDir())
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+
+	leafID, err := agent.bootstrapNewThreadMessages(
+		"current-thread",
+		"system prompt",
+		"Claude Sonnet 4",
+		&sessionconfig.SessionConfig{
+			MaxSubagentDepth: sessionconfig.DefaultMaxSubagentDepth,
+			SubAgents:        []sessionconfig.SubAgentConfig{{Name: "general-purpose"}},
+		},
+		nil,
+		[]providers.ToolDefinition{{Name: "Read"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := store.BuildHistory("current-thread", leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, msg := range history {
+		if strings.Contains(messageText(msg.Parts), "sub-agent types are available") {
+			t.Fatal("did not expect sub-agent reminder without Task tool")
+		}
 	}
 }
 

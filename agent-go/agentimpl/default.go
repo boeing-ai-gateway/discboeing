@@ -235,7 +235,7 @@ func (a *DefaultAgent) promptStream(
 	resolvedUserParts, originalText, activeCommand, slashCommand := resolveSlashCommand(a.cwd, req.UserParts)
 
 	return func(yield func(message.MessageChunk, error) bool) {
-		effectiveLeafID, err := a.resolveEffectiveLeafID(threadID, req.LeafID, req.FreshContext, env.systemPrompt, env.displayName, env.sessionCfg, env.subAgentCfg)
+		effectiveLeafID, err := a.resolveEffectiveLeafID(threadID, req.LeafID, req.FreshContext, env.systemPrompt, env.displayName, env.sessionCfg, env.subAgentCfg, env.tools)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -1606,6 +1606,7 @@ func (a *DefaultAgent) resolveEffectiveLeafID(
 	displayName string,
 	sessionCfg *sessionconfig.SessionConfig,
 	subAgentCfg *sessionconfig.SubAgentConfig,
+	tools []providers.ToolDefinition,
 ) (string, error) {
 	effectiveLeafID := requestedLeafID
 	if effectiveLeafID != "" {
@@ -1618,7 +1619,7 @@ func (a *DefaultAgent) resolveEffectiveLeafID(
 		}
 	}
 
-	if effectiveLeafID == "" && hasStartupBootstrapContent(systemPrompt, displayName, sessionCfg, subAgentCfg) {
+	if effectiveLeafID == "" && hasStartupBootstrapContent(systemPrompt, displayName, sessionCfg, subAgentCfg, tools) {
 		leaf, err := a.resolveExistingLeafForPrompt(threadID, startFresh)
 		if err != nil {
 			return "", fmt.Errorf("resolve current leaf: %w", err)
@@ -1626,7 +1627,7 @@ func (a *DefaultAgent) resolveEffectiveLeafID(
 		if leaf != "" {
 			return leaf, nil
 		}
-		return a.bootstrapNewThreadMessages(threadID, systemPrompt, displayName, sessionCfg, subAgentCfg)
+		return a.bootstrapNewThreadMessages(threadID, systemPrompt, displayName, sessionCfg, subAgentCfg, tools)
 	}
 
 	if effectiveLeafID == "" && !startFresh {
@@ -1645,6 +1646,7 @@ func hasStartupBootstrapContent(
 	displayName string,
 	sessionCfg *sessionconfig.SessionConfig,
 	subAgentCfg *sessionconfig.SubAgentConfig,
+	tools []providers.ToolDefinition,
 ) bool {
 	if systemPrompt != "" {
 		return true
@@ -1656,6 +1658,9 @@ func hasStartupBootstrapContent(
 		return true
 	}
 	if formatRuntimeEnvironmentReminder("", displayName) != "" {
+		return true
+	}
+	if hasNamedTool(tools, "Task") && sessionconfig.FormatSubAgentReminder(sessionCfg.SubAgents) != "" {
 		return true
 	}
 	if hasNamedTool(sessionCfg.Tools, "Skill") {
@@ -1680,6 +1685,7 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 	displayName string,
 	sessionCfg *sessionconfig.SessionConfig,
 	subAgentCfg *sessionconfig.SubAgentConfig,
+	tools []providers.ToolDefinition,
 ) (string, error) {
 	effectiveLeafID := ""
 
@@ -1724,6 +1730,13 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 	recentThreadsReminder := a.formatRecentThreadsReminder(threadID)
 	if err := appendMessage("recent-threads-"+agent.GenerateID(), "user", recentThreadsReminder); err != nil {
 		return "", fmt.Errorf("save recent threads reminder: %w", err)
+	}
+
+	if hasNamedTool(tools, "Task") {
+		subAgentReminder := sessionconfig.FormatSubAgentReminder(sessionCfg.SubAgents)
+		if err := appendMessage("sub-agents-"+agent.GenerateID(), "user", subAgentReminder); err != nil {
+			return "", fmt.Errorf("save sub-agent reminder: %w", err)
+		}
 	}
 
 	if hasNamedTool(sessionCfg.Tools, "Skill") {
