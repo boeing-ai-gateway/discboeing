@@ -15,7 +15,7 @@
 	},
 	"bundle": {
 		"resources": {
-			"resources/*": "vz/"
+			"resources/vz/*": "vz/"
 		}
 	}
 }

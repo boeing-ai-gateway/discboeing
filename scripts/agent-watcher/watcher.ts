@@ -111,6 +111,27 @@ export function getCommandEnv(
 	};
 }
 
+function isDockerCommand(command: string): boolean {
+	const baseName = command.split(/[/\\]/).at(-1)?.toLowerCase() ?? "";
+	return baseName === "docker" || baseName === "docker.exe";
+}
+
+export function resolveCommandInvocation(
+	command: string,
+	args: string[],
+	platform = process.platform,
+	env: NodeJS.ProcessEnv = process.env,
+): { command: string; args: string[] } {
+	const distro = env.DISCOBOT_DOCKER_WSL_DISTRO?.trim();
+	if (platform === "win32" && distro && isDockerCommand(command)) {
+		return {
+			command: "wsl.exe",
+			args: ["-d", distro, "--", "docker", ...args],
+		};
+	}
+	return { command, args };
+}
+
 /** Default command runner using child_process.spawn */
 export async function defaultRunCommand(
 	command: string,
@@ -118,9 +139,10 @@ export async function defaultRunCommand(
 	cwd: string,
 ): Promise<CommandResult> {
 	return new Promise((resolve) => {
-		const proc = spawn(command, args, {
+		const invocation = resolveCommandInvocation(command, args);
+		const proc = spawn(invocation.command, invocation.args, {
 			cwd,
-			env: getCommandEnv(command),
+			env: getCommandEnv(invocation.command),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 

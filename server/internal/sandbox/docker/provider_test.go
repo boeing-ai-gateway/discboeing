@@ -173,6 +173,62 @@ func TestInspectionContainerNeedsRecreate(t *testing.T) {
 	}
 }
 
+func TestResolveWorkspaceMountSource(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "preserves wsl unix path",
+			source: "/mnt/c/Users/darre/repo",
+			want:   "/mnt/c/Users/darre/repo",
+		},
+		{
+			name:   "preserves windows absolute path",
+			source: `C:\Users\darre\repo`,
+			want:   `C:\Users\darre\repo`,
+		},
+		{
+			name:   "cleans unix path",
+			source: "/mnt/c/Users/darre/../repo",
+			want:   "/mnt/c/Users/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveWorkspaceMountSource(tt.source)
+			if err != nil {
+				t.Fatalf("resolveWorkspaceMountSource(%q) error = %v", tt.source, err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveWorkspaceMountSource(%q) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWSLDockerDialCommand(t *testing.T) {
+	name, args, err := wslDockerDialCommand(" Ubuntu-24.04 ")
+	if err != nil {
+		t.Fatalf("wslDockerDialCommand() error = %v", err)
+	}
+	if name != "wsl.exe" {
+		t.Fatalf("wslDockerDialCommand() name = %q, want %q", name, "wsl.exe")
+	}
+	want := []string{"-d", "Ubuntu-24.04", "--", "docker", "system", "dial-stdio"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("wslDockerDialCommand() args = %#v, want %#v", args, want)
+	}
+}
+
+func TestWSLDockerDialCommandRejectsEmptyDistro(t *testing.T) {
+	if _, _, err := wslDockerDialCommand("   "); err == nil {
+		t.Fatal("expected empty WSL distro name to fail")
+	}
+}
+
 func TestBuildSSHKeyArchive(t *testing.T) {
 	archive, err := buildSSHKeyArchive(&sandbox.SSHKeyProvision{
 		Filename:   "discobot_sandbox",

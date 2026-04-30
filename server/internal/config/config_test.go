@@ -179,3 +179,15 @@ func TestLoadDesktopShellSettingsRequireSecretWhenRuntimeSet(t *testing.T) {
 		t.Fatal("expected Load() to fail when desktop runtime is set without a secret")
 	}
 }
+
+func TestLoadDockerWSLDistroFromEnv(t *testing.T) {
+	t.Setenv("DISCOBOT_DOCKER_WSL_DISTRO", "Ubuntu-24.04")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DockerWSLDistro != "Ubuntu-24.04" {
+		t.Fatalf("expected DockerWSLDistro %q, got %q", "Ubuntu-24.04", cfg.DockerWSLDistro)
+	}
+}

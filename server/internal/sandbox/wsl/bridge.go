@@ -56,6 +56,13 @@ func bridgePipePath(pipeName string) string {
 	return `\\.\pipe\` + pipeName
 }
 
+func bridgeTCPPingURL(port int) string {
+	if port <= 0 || port > 65535 {
+		return ""
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d/_ping", port)
+}
+
 func bridgePipeName(distroName string) string {
 	name := strings.ToLower(strings.TrimSpace(distroName))
 	if name == "" {

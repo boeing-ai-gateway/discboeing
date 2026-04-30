@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,6 +10,7 @@ import {
 	type CommandRunner,
 	getCommandEnv,
 	type Logger,
+	resolveCommandInvocation,
 	resolveDockerCommand,
 	shouldIgnorePath,
 	updateEnvFile,
@@ -32,9 +33,25 @@ function createSilentLogger(): Logger {
 }
 
 // Check if Docker is available
+function runDockerCLI(
+	args: string[],
+	options: Parameters<typeof execFileSync>[2] = {},
+): string {
+	const invocation = resolveCommandInvocation(
+		"docker",
+		args,
+		process.platform,
+		process.env,
+	);
+	return execFileSync(invocation.command, invocation.args, {
+		encoding: "utf-8",
+		...options,
+	});
+}
+
 function isDockerAvailable(): boolean {
 	try {
-		execSync("docker info", { stdio: "ignore" });
+		runDockerCLI(["info"], { stdio: "ignore" });
 		return true;
 	} catch {
 		return false;
@@ -137,6 +154,42 @@ describe("getCommandEnv", () => {
 			].join(";"),
 		};
 		assert.equal(getCommandEnv("C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe", env), env);
+	});
+});
+
+describe("resolveCommandInvocation", () => {
+	it("returns the original command when no WSL distro is configured", () => {
+		assert.deepEqual(resolveCommandInvocation("docker", ["build", "."], "win32", {}), {
+			command: "docker",
+			args: ["build", "."],
+		});
+	});
+
+	it("wraps docker commands with wsl.exe on Windows", () => {
+		assert.deepEqual(
+			resolveCommandInvocation(
+				"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				["build", "."],
+				"win32",
+				{ DISCOBOT_DOCKER_WSL_DISTRO: "Ubuntu-24.04" },
+			),
+			{
+				command: "wsl.exe",
+				args: ["-d", "Ubuntu-24.04", "--", "docker", "build", "."],
+			},
+		);
+	});
+
+	it("does not wrap non-docker commands", () => {
+		assert.deepEqual(
+			resolveCommandInvocation("pnpm", ["dev"], "win32", {
+				DISCOBOT_DOCKER_WSL_DISTRO: "Ubuntu-24.04",
+			}),
+			{
+				command: "pnpm",
+				args: ["dev"],
+			},
+		);
 	});
 });
 
@@ -748,9 +801,7 @@ LABEL org.opencontainers.image.title="agent-watcher-test"
 	after(async () => {
 		// Clean up test image
 		try {
-			execSync("docker rmi agent-watcher-test:e2e 2>/dev/null || true", {
-				stdio: "ignore",
-			});
+			runDockerCLI(["rmi", "agent-watcher-test:e2e"], { stdio: "ignore" });
 		} catch {
 			// Ignore cleanup errors
 		}
@@ -806,20 +857,24 @@ LABEL org.opencontainers.image.title="agent-watcher-test"
 		);
 
 		// Verify both images exist in Docker (dev tag and timestamped tag)
-		const devInspectResult = execSync(
-			"docker inspect agent-watcher-test:e2e --format '{{.Id}}'",
-			{ encoding: "utf-8" },
-		);
+		const devInspectResult = runDockerCLI([
+			"inspect",
+			"agent-watcher-test:e2e",
+			"--format",
+			"{{.Id}}",
+		]);
 		assert.ok(
 			devInspectResult.trim().startsWith("sha256:"),
 			"Dev tag image should exist in Docker",
 		);
 
 		// Verify timestamped tag also exists and points to same image
-		const localInspectResult = execSync(
-			`docker inspect ${imageRef} --format '{{.Id}}'`,
-			{ encoding: "utf-8" },
-		);
+		const localInspectResult = runDockerCLI([
+			"inspect",
+			imageRef as string,
+			"--format",
+			"{{.Id}}",
+		]);
 		assert.equal(
 			localInspectResult.trim(),
 			devInspectResult.trim(),

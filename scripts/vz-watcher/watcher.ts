@@ -22,9 +22,11 @@ import {
 	unlink,
 	writeFile,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
+
+import { getCommandEnv, resolveCommandInvocation } from "../agent-watcher/watcher.js";
 
 export interface VzWatcherConfig {
 	/** Project root directory (where Dockerfile lives) */
@@ -61,6 +63,95 @@ export interface Logger {
 	success: (message: string) => void;
 }
 
+interface BuildDockerTargetFilesOptions {
+	runCommand: CommandRunner;
+	projectRoot: string;
+	target: string;
+	artifacts: Array<{ source: string; destination: string }>;
+	temporaryTagPrefix: string;
+}
+
+function localDockerPath(projectRoot: string, destination: string): string {
+	// When Docker is proxied through `wsl.exe ... docker`, `docker cp` writes the
+	// destination path from the distro's view of the project checkout. Keep paths
+	// relative to the project root when possible so they resolve inside the mounted
+	// working tree instead of as a raw Windows path.
+	const rel = relative(projectRoot, destination);
+	if (rel && !rel.startsWith("..") && !rel.includes(":")) {
+		return rel.split(sep).join("/");
+	}
+	return destination;
+}
+
+export async function buildDockerTargetFiles(
+	options: BuildDockerTargetFilesOptions,
+): Promise<void> {
+	const imageRef = `${options.temporaryTagPrefix}:${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+	let containerID = "";
+
+	try {
+		const buildResult = await options.runCommand(
+			"docker",
+			["build", "--target", options.target, "-t", imageRef, "."],
+			options.projectRoot,
+		);
+		if (buildResult.exitCode !== 0) {
+			const message =
+				buildResult.stderr ||
+				buildResult.stdout ||
+				`docker build failed for target ${options.target}`;
+			if (
+				message.includes("docker-buildx") ||
+				message.includes("the --mount option requires BuildKit")
+			) {
+				throw new Error(
+					`${message}\n\nThe watcher no longer relies on docker build --output, but this Dockerfile still requires BuildKit features during docker build. If you proxy builds through a WSL distro, install Docker buildx there or use a BuildKit-capable Docker setup.`,
+				);
+			}
+			throw new Error(message);
+		}
+
+		const createResult = await options.runCommand(
+			"docker",
+			["create", imageRef],
+			options.projectRoot,
+		);
+		if (createResult.exitCode !== 0) {
+			throw new Error(createResult.stderr || createResult.stdout || `docker create failed for target ${options.target}`);
+		}
+		containerID = createResult.stdout.trim();
+		if (!containerID) {
+			throw new Error(`docker create for target ${options.target} did not return a container id`);
+		}
+
+		for (const artifact of options.artifacts) {
+			try {
+				await unlink(artifact.destination);
+			} catch {
+				// Ignore missing files so docker cp can write a fresh artifact.
+			}
+
+			const copyResult = await options.runCommand(
+				"docker",
+				[
+					"cp",
+					`${containerID}:${artifact.source}`,
+					localDockerPath(options.projectRoot, artifact.destination),
+				],
+				options.projectRoot,
+			);
+			if (copyResult.exitCode !== 0) {
+				throw new Error(copyResult.stderr || copyResult.stdout || `docker cp failed for ${artifact.source}`);
+			}
+		}
+	} finally {
+		if (containerID) {
+			await options.runCommand("docker", ["rm", "-f", containerID], options.projectRoot);
+		}
+		await options.runCommand("docker", ["rmi", imageRef], options.projectRoot);
+	}
+}
+
 /** Default command runner using child_process.spawn */
 export async function defaultRunCommand(
 	command: string,
@@ -68,8 +159,10 @@ export async function defaultRunCommand(
 	cwd: string,
 ): Promise<CommandResult> {
 	return new Promise((resolve) => {
-		const proc = spawn(command, args, {
+		const invocation = resolveCommandInvocation(command, args);
+		const proc = spawn(invocation.command, invocation.args, {
 			cwd,
+			env: getCommandEnv(invocation.command),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 
@@ -216,8 +309,8 @@ export class VzWatcher {
 	}
 
 	/**
-	 * Builds the VZ image using Docker buildx and extracts output files.
-	 * Uses --output type=local to extract vmlinuz + squashfs directly.
+	 * Builds the VZ image, then copies the extracted artifacts from a temporary
+	 * container so the watcher does not rely on docker build --output.
 	 */
 	async buildImage(): Promise<boolean> {
 		this.logger.log("Building VZ image (docker build --target vz-image)...");
@@ -225,22 +318,26 @@ export class VzWatcher {
 		// Ensure output directory exists
 		await mkdir(this.config.outputDir, { recursive: true });
 
-		const result = await this.runCommand(
-			"docker",
-			[
-				"build",
-				"--target",
-				"vz-image",
-				"--output",
-				`type=local,dest=${this.config.outputDir}`,
-				".",
-			],
-			this.config.projectRoot,
-		);
-
-		if (result.exitCode !== 0) {
+		try {
+			await buildDockerTargetFiles({
+				runCommand: this.runCommand,
+				projectRoot: this.config.projectRoot,
+				target: "vz-image",
+				temporaryTagPrefix: "discobot-vz-watcher-extract",
+				artifacts: [
+					{
+						source: "/vmlinuz",
+						destination: join(this.config.outputDir, "vmlinuz"),
+					},
+					{
+						source: "/discobot-rootfs.squashfs",
+						destination: join(this.config.outputDir, "discobot-rootfs.squashfs"),
+					},
+				],
+			});
+		} catch (error) {
 			this.logger.error("VZ image build failed:");
-			this.logger.error(result.stderr || result.stdout);
+			this.logger.error(error instanceof Error ? error.message : String(error));
 			return false;
 		}
 

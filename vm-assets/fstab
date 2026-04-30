@@ -1,8 +1,10 @@
 # /etc/fstab - static file system information
 # <device>  <mount>  <type>  <options>  <dump>  <pass>
 
-# Data disk for /var - auto-format on first boot with systemd-makefs
-/dev/vdb  /var  ext4  defaults,discard,x-systemd.makefs,x-systemd.growfs  0  2
+# /var is mounted by init-var.service so the shared guest image can choose the
+# right persistent backing store at boot time:
+# - /dev/vdb on Apple VZ
+# - a host-managed WSL VHD attached as a raw block device and mounted by label
 
 # tmpfs for writable directories on read-only root
 tmpfs  /tmp  tmpfs  defaults,nosuid,nodev  0  0

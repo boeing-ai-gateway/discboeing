@@ -334,7 +334,10 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     websockify-proxy.socket
 
 # Stage 4: VZ root filesystem builder with systemd and Docker
-# Build with: docker build --target vz-image --output type=local,dest=. .
+# Build with: docker build --target vz-image -t discobot-vz .
+# Then extract /vmlinuz and /discobot-rootfs.squashfs with docker cp from a
+# temporary container. The watcher uses this flow so local Windows/WSL builds
+# do not rely on docker build --output extraction.
 # This creates a minimal systemd-based system with Docker daemon for macOS Virtualization.framework
 # This stage is completely independent from the runtime image
 FROM ubuntu:24.04 AS vz-rootfs-builder
@@ -406,26 +409,33 @@ RUN set -ex \
 # This is copied to /var after the data disk is mounted
 RUN cp -a /var /var.skel
 
-# Copy VM assets (systemd units, scripts, network config, fstab)
+# Copy shared guest assets (systemd units, scripts, network config, fstab, WSL config)
 COPY vm-assets/fstab /etc/fstab
+COPY vm-assets/wsl/wsl.conf /etc/wsl.conf
 COPY vm-assets/systemd/docker-vsock-proxy.service /etc/systemd/system/
 COPY vm-assets/systemd/init-var.service /etc/systemd/system/
 COPY vm-assets/systemd/mount-home.service /etc/systemd/system/
 COPY vm-assets/systemd/preload-image.service /etc/systemd/system/
 COPY vm-assets/systemd/docker.service.d/ /etc/systemd/system/docker.service.d/
 COPY vm-assets/systemd/containerd.service.d/ /etc/systemd/system/containerd.service.d/
+COPY vm-assets/systemd/systemd-networkd.service.d/ /etc/systemd/system/systemd-networkd.service.d/
+COPY vm-assets/systemd/systemd-networkd-wait-online.service.d/ /etc/systemd/system/systemd-networkd-wait-online.service.d/
+COPY vm-assets/systemd/systemd-timesyncd.service.d/ /etc/systemd/system/systemd-timesyncd.service.d/
+COPY vm-assets/systemd/systemd-resolved.service.d/ /etc/systemd/system/systemd-resolved.service.d/
 COPY vm-assets/network/20-dhcp.network /etc/systemd/network/
+COPY --chmod=755 vm-assets/scripts/check-wsl-role.sh /usr/local/bin/
 COPY --chmod=755 vm-assets/scripts/init-var.sh /usr/local/bin/
 COPY --chmod=755 vm-assets/scripts/mount-home.sh /usr/local/bin/
 COPY --chmod=755 vm-assets/scripts/preload-image.sh /usr/local/bin/
 
 # Configure systemd for VM environment
 RUN set -ex \
-    # Disable unnecessary systemd services (but keep network services)
+    # Disable unnecessary systemd services.
     && systemctl mask \
     getty@.service \
     serial-getty@.service \
-    # Enable network services for connectivity
+    # Enable the network stack in the shared image; WSL role-aware drop-ins
+    # skip these units there while VZ keeps using them.
     && systemctl enable \
     systemd-networkd \
     systemd-resolved \
@@ -456,6 +466,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
     squashfs-tools \
+    zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the rootfs from builder
@@ -477,14 +488,15 @@ RUN set -ex \
 RUN set -ex \
     # Create essential mount points
     && mkdir -p /rootfs/proc /rootfs/sys /rootfs/dev /rootfs/run /rootfs/tmp \
-    # Configure systemd-resolved: symlink resolv.conf to stub resolver
-    # This routes DNS queries through resolved's stub listener at 127.0.0.53
+    # VZ uses systemd-resolved's stub listener here. WSL rewrites
+    # /etc/resolv.conf to /mnt/wsl/resolv.conf at runtime.
     && rm -f /rootfs/etc/resolv.conf \
     && ln -s /run/systemd/resolve/stub-resolv.conf /rootfs/etc/resolv.conf \
     # Clean up /boot to save space (kernel/initrd already extracted)
     && rm -rf /rootfs/boot/*
 
-# Create SquashFS image with zstd compression
+# Create SquashFS image with zstd compression for Apple VZ and a tar.zst
+# archive for managed WSL imports.
 # SquashFS is built into the kernel - no initrd needed!
 # Boot with: root=/dev/vda rootfstype=squashfs ro
 RUN set -ex \
@@ -495,16 +507,26 @@ RUN set -ex \
     -comp zstd \
     -Xcompression-level 19 \
     -noappend \
-    -info \
     && SQUASHFS_SIZE_MB=$(du -m /rootfs.squashfs | cut -f1) \
     && RATIO=$((100 - (SQUASHFS_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
-    && echo "SquashFS image: ${SQUASHFS_SIZE_MB}MB (${RATIO}% reduction)"
+    && echo "SquashFS image: ${SQUASHFS_SIZE_MB}MB (${RATIO}% reduction)" \
+    && echo "Creating WSL rootfs archive with zstd compression..." \
+    && tar --numeric-owner -C /rootfs -cf - . | zstd -T0 -19 -o /discobot-rootfs.tar.zst \
+    && ROOTFS_TAR_SIZE_MB=$(du -m /discobot-rootfs.tar.zst | cut -f1) \
+    && TAR_RATIO=$((100 - (ROOTFS_TAR_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
+    && echo "WSL rootfs archive: ${ROOTFS_TAR_SIZE_MB}MB (${TAR_RATIO}% reduction)"
 
 # Stage 6: Output stage with kernel and SquashFS root filesystem (no initrd needed)
+# This target is published as the macOS VZ guest image.
 FROM scratch AS vz-image
 COPY --from=vz-image-builder /vmlinuz /vmlinuz
 COPY --from=vz-image-builder /kernel-version /kernel-version
 COPY --from=vz-image-builder /rootfs.squashfs /discobot-rootfs.squashfs
+
+# Stage 7: Output stage with WSL rootfs archive
+# This target is published as the Windows WSL guest image.
+FROM scratch AS wsl-image
+COPY --from=vz-image-builder /discobot-rootfs.tar.zst /discobot-rootfs.tar.zst
 
 # Default target: runtime image
 FROM runtime

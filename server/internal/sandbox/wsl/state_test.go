@@ -12,7 +12,7 @@ func TestStateStoreSaveLoadClear(t *testing.T) {
 		DistroName: "discobot",
 		BridgeType: BridgeTypeTCP,
 		BridgePort: 23755,
-		ImageRef:   "ghcr.io/obot-platform/discobot-vz:test",
+		ImageRef:   "ghcr.io/obot-platform/discobot-wsl:test",
 	}
 	if err := store.Save(original); err != nil {
 		t.Fatalf("Save() error = %v", err)

@@ -76,6 +76,14 @@ func main() {
 
 	// Log version
 	log.Printf("Discobot Server version %s", version.Get())
+	if cfg.DockerWSLDistro != "" {
+		log.Printf("Host Docker access will proxy through WSL distro %q", cfg.DockerWSLDistro)
+	}
+	if cfg.WSLRootfsPath != "" {
+		log.Printf("WSL runtime rootfs source: local archive %s", cfg.WSLRootfsPath)
+	} else {
+		log.Printf("WSL runtime rootfs source: image %s", cfg.WSLImageRef)
+	}
 
 	// Connect to database
 	db, err := database.New(cfg)

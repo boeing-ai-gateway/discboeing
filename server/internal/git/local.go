@@ -4,31 +4,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-git/go-billy/v5"
-	gitrepo "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	indexformat "github.com/go-git/go-git/v5/plumbing/format/index"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/utils/merkletrie"
-	"github.com/go-git/go-git/v5/utils/merkletrie/filesystem"
-	mindex "github.com/go-git/go-git/v5/utils/merkletrie/index"
-	"github.com/go-git/go-git/v5/utils/merkletrie/noder"
-	"github.com/pmezard/go-difflib/difflib"
-
 	"github.com/obot-platform/discobot/server/internal/model"
 )
 
-// LocalProvider implements Provider using go-git against local repositories.
+// LocalProvider implements Provider using the local git CLI.
 // Workspaces are cloned directly to {baseDir}/{projectID}/workspaces/{workspaceID}.
 type LocalProvider struct {
 	baseDir string
@@ -122,7 +110,7 @@ func (p *LocalProvider) EnsureWorkspace(ctx context.Context, projectID, workspac
 	}
 
 	workDir := filepath.Join(projectWorkspacesDir, workspaceID)
-	if _, err := gitrepo.PlainOpen(workDir); err == nil {
+	if p.isGitRepositoryPath(ctx, workDir) {
 		info := &workspaceInfo{projectID: projectID, workDir: workDir, source: source, isRemote: IsGitURL(source)}
 		p.mu.Lock()
 		p.workspaceIndex[workspaceID] = info
@@ -131,39 +119,31 @@ func (p *LocalProvider) EnsureWorkspace(ctx context.Context, projectID, workspac
 		return workDir, commit, nil
 	}
 
-	var cloneSource string
-	var err error
-	if IsGitURL(source) {
-		cloneSource = source
-	} else {
-		cloneSource, err = filepath.Abs(source)
+	cloneSource := source
+	if !IsGitURL(source) {
+		absSource, err := filepath.Abs(source)
 		if err != nil {
 			return "", "", fmt.Errorf("invalid path: %w", err)
 		}
-		if _, err := gitrepo.PlainOpen(cloneSource); err != nil {
-			return "", "", fmt.Errorf("%w: %s", ErrNotARepository, cloneSource)
+		if !p.isGitRepositoryPath(ctx, absSource) {
+			return "", "", fmt.Errorf("%w: %s", ErrNotARepository, absSource)
 		}
+		cloneSource = absSource
 	}
 
-	cloneOpts := &gitrepo.CloneOptions{URL: cloneSource}
-	if ref != "" {
-		if branchRef, ok := branchReferenceName(ref); ok {
-			cloneOpts.ReferenceName = branchRef
-			cloneOpts.SingleBranch = true
-		}
+	_ = os.RemoveAll(workDir)
+	if err := p.runGit(ctx, "", "-c", "core.autocrlf=false", "clone", "--", cloneSource, workDir); err != nil {
+		_ = os.RemoveAll(workDir)
+		return "", "", fmt.Errorf("%w: %v", ErrCloneFailed, err)
 	}
-
-	repo, err := gitrepo.PlainCloneContext(ctx, workDir, false, cloneOpts)
-	if err != nil {
+	if err := p.runGit(ctx, workDir, "config", "core.autocrlf", "false"); err != nil {
+		_ = os.RemoveAll(workDir)
 		return "", "", fmt.Errorf("%w: %v", ErrCloneFailed, err)
 	}
 
-	if ref != "" && cloneOpts.ReferenceName == "" {
-		wt, err := repo.Worktree()
-		if err != nil {
-			return "", "", fmt.Errorf("failed to open worktree: %w", err)
-		}
-		if err := p.checkoutResolvedRef(repo, wt, ref); err != nil {
+	if ref != "" {
+		if err := p.checkoutRef(ctx, workDir, ref); err != nil {
+			_ = os.RemoveAll(workDir)
 			return "", "", fmt.Errorf("%w: %v", ErrCheckoutFailed, err)
 		}
 	}
@@ -210,12 +190,11 @@ func (p *LocalProvider) registerLocalWorkspace(ctx context.Context, workspaceID,
 		return "", "", fmt.Errorf("invalid path: %w", err)
 	}
 
-	if _, err := gitrepo.PlainOpen(absPath); err != nil {
-		return "", "", fmt.Errorf("%w: %s", ErrNotARepository, absPath)
-	}
-
 	commit, err := p.currentCommit(ctx, absPath)
 	if err != nil {
+		if err == ErrNotARepository {
+			return "", "", fmt.Errorf("%w: %s", ErrNotARepository, absPath)
+		}
 		return "", "", fmt.Errorf("failed to get HEAD: %w", err)
 	}
 
@@ -233,16 +212,9 @@ func (p *LocalProvider) Fetch(ctx context.Context, workspaceID string) error {
 		return fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, err := gitrepo.PlainOpen(workDir)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrNotFound, err)
-	}
-
-	err = repo.FetchContext(ctx, &gitrepo.FetchOptions{RemoteName: gitrepo.DefaultRemoteName, Prune: true, Tags: gitrepo.AllTags})
-	if err != nil && err != gitrepo.NoErrAlreadyUpToDate {
+	if err := p.runGit(ctx, workDir, "fetch", "--prune", "--tags", "origin"); err != nil {
 		return fmt.Errorf("%w: %v", ErrFetchFailed, err)
 	}
-
 	return nil
 }
 
@@ -253,15 +225,9 @@ func (p *LocalProvider) Checkout(ctx context.Context, workspaceID, ref string) e
 		return fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, wt, err := p.openWorktree(workDir)
-	if err != nil {
-		return err
-	}
-
-	if err := p.checkoutResolvedRef(repo, wt, ref); err != nil {
+	if err := p.checkoutRef(ctx, workDir, ref); err != nil {
 		return fmt.Errorf("%w: %v", ErrCheckoutFailed, err)
 	}
-
 	return nil
 }
 
@@ -272,56 +238,68 @@ func (p *LocalProvider) Status(ctx context.Context, workspaceID string) (*Status
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, wt, err := p.openWorktree(workDir)
+	status := &Status{
+		Staged:    []FileStatus{},
+		Unstaged:  []FileStatus{},
+		Untracked: []string{},
+		IsClean:   true,
+	}
+
+	commit, err := p.currentCommit(ctx, workDir)
+	if err != nil {
+		return nil, err
+	}
+	status.Commit = commit
+	if len(commit) >= 7 {
+		status.CommitShort = commit[:7]
+	}
+
+	branch, err := p.currentBranch(ctx, workDir)
+	if err == nil {
+		status.Branch = branch
+	}
+	status.Ahead, status.Behind = p.countAheadBehind(ctx, workDir)
+
+	output, err := p.runGitOutput(ctx, workDir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
 		return nil, err
 	}
 
-	gitStatus, err := wt.StatusWithOptions(gitrepo.StatusOptions{Strategy: gitrepo.Preload})
-	if err != nil {
-		return nil, err
-	}
-
-	status := &Status{Staged: []FileStatus{}, Unstaged: []FileStatus{}, Untracked: []string{}}
-
-	if head, err := repo.Head(); err == nil {
-		status.Commit = head.Hash().String()
-		if len(status.Commit) >= 7 {
-			status.CommitShort = status.Commit[:7]
-		}
-		if head.Name().IsBranch() {
-			status.Branch = head.Name().Short()
-		} else {
-			status.Branch = head.Name().Short()
-		}
-		status.Ahead, status.Behind = p.countAheadBehind(repo, head)
-	}
-
-	paths := make([]string, 0, len(gitStatus))
-	for path := range gitStatus {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-
-	status.IsClean = true
-	for _, path := range paths {
-		entry := gitStatus[path]
-		if entry.Staging == gitrepo.Unmodified && entry.Worktree == gitrepo.Unmodified {
+	entries := strings.Split(output, "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if entry == "" {
 			continue
 		}
-		status.IsClean = false
-		if entry.Staging == gitrepo.UpdatedButUnmerged || entry.Worktree == gitrepo.UpdatedButUnmerged {
-			status.HasConflicts = true
+		if len(entry) < 3 {
+			continue
 		}
-		if entry.Staging != gitrepo.Unmodified && entry.Staging != gitrepo.Untracked {
-			status.Staged = append(status.Staged, FileStatus{Path: path, Status: statusCodeToString(entry.Staging), OldPath: entry.Extra})
+
+		xy := entry[:2]
+		path := entry[3:]
+		oldPath := ""
+		if isRenameOrCopyStatus(xy) && i+1 < len(entries) {
+			oldPath = entries[i+1]
+			i++
 		}
-		if entry.Worktree == gitrepo.Untracked {
+
+		if xy == "??" {
+			status.IsClean = false
 			status.Untracked = append(status.Untracked, path)
 			continue
 		}
-		if entry.Worktree != gitrepo.Unmodified {
-			status.Unstaged = append(status.Unstaged, FileStatus{Path: path, Status: statusCodeToString(entry.Worktree), OldPath: entry.Extra})
+
+		if isConflictStatus(xy) {
+			status.HasConflicts = true
+		}
+		if xy[0] != ' ' || xy[1] != ' ' {
+			status.IsClean = false
+		}
+		if xy[0] != ' ' && xy[0] != '?' {
+			status.Staged = append(status.Staged, FileStatus{Path: path, Status: statusCodeToString(xy[0]), OldPath: oldPath})
+		}
+		if xy[1] != ' ' && xy[1] != '?' {
+			status.Unstaged = append(status.Unstaged, FileStatus{Path: path, Status: statusCodeToString(xy[1]), OldPath: oldPath})
 		}
 	}
 
@@ -335,40 +313,37 @@ func (p *LocalProvider) Diff(ctx context.Context, workspaceID string, opts DiffO
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, wt, err := p.openWorktree(workDir)
-	if err != nil {
-		return nil, err
-	}
-
 	contextLines := 3
 	if opts.Context > 0 {
 		contextLines = opts.Context
 	}
 
+	args := []string{"diff", "--find-renames", "--no-ext-diff", "--binary", fmt.Sprintf("-U%d", contextLines)}
 	switch {
 	case opts.BaseRef != "" && opts.HeadRef != "":
-		return p.diffBetweenRefs(ctx, repo, opts.BaseRef, opts.HeadRef, opts.Paths, contextLines)
+		args = append(args, opts.BaseRef, opts.HeadRef)
 	case opts.BaseRef != "" && opts.Staged:
-		baseTree, err := p.resolveTree(repo, opts.BaseRef)
-		if err != nil {
-			return nil, err
-		}
-		return p.diffTreeToIndex(repo, wt, baseTree, opts.Paths, contextLines)
+		args = append(args, "--cached", opts.BaseRef)
 	case opts.BaseRef != "":
-		baseTree, err := p.resolveTree(repo, opts.BaseRef)
-		if err != nil {
-			return nil, err
-		}
-		return p.diffTreeToWorktree(repo, wt, baseTree, opts.Paths, contextLines)
+		args = append(args, opts.BaseRef)
 	case opts.Staged:
-		headTree, err := p.headTree(repo)
-		if err != nil {
-			return nil, err
-		}
-		return p.diffTreeToIndex(repo, wt, headTree, opts.Paths, contextLines)
-	default:
-		return p.diffIndexToWorktree(repo, wt, opts.Paths, contextLines)
+		args = append(args, "--cached")
 	}
+	if len(opts.Paths) > 0 {
+		args = append(args, "--")
+		for _, path := range opts.Paths {
+			args = append(args, filepath.ToSlash(path))
+		}
+	}
+
+	output, err := p.runGitOutput(ctx, workDir, args...)
+	if err != nil {
+		if isInvalidRefError(err) {
+			return nil, fmt.Errorf("%w", ErrInvalidRef)
+		}
+		return nil, err
+	}
+	return parseGitDiffOutput(output), nil
 }
 
 // Branches lists all branches.
@@ -378,52 +353,47 @@ func (p *LocalProvider) Branches(ctx context.Context, workspaceID string) ([]Bra
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, err := gitrepo.PlainOpen(workDir)
-	if err != nil {
-		return nil, err
-	}
-
-	current := ""
-	if head, err := repo.Head(); err == nil && head.Name().IsBranch() {
-		current = head.Name().Short()
-	}
-
-	cfg, _ := repo.Config()
+	current, _ := p.currentBranch(ctx, workDir)
 	var branches []Branch
 
-	localIter, err := repo.Branches()
+	localOutput, err := p.runGitOutput(ctx, workDir, "for-each-ref", "--format=%(refname:short)%09%(objectname)%09%(upstream:short)", "refs/heads")
 	if err != nil {
 		return nil, err
 	}
-	if err := localIter.ForEach(func(ref *plumbing.Reference) error {
-		branch := Branch{Name: ref.Name().Short(), IsRemote: false, IsCurrent: ref.Name().Short() == current, Commit: ref.Hash().String()}
-		if cfg != nil {
-			if bcfg, ok := cfg.Branches[branch.Name]; ok && bcfg.Remote != "" && bcfg.Merge != "" {
-				branch.Upstream = plumbing.NewRemoteReferenceName(bcfg.Remote, bcfg.Merge.Short()).Short()
-			}
+	for _, line := range strings.Split(strings.TrimRight(localOutput, "\n"), "\n") {
+		if line == "" {
+			continue
 		}
-		branches = append(branches, branch)
-		return nil
-	}); err != nil {
-		return nil, err
+		fields := strings.Split(line, "\t")
+		if len(fields) < 3 || fields[0] == "" {
+			continue
+		}
+		branches = append(branches, Branch{
+			Name:      fields[0],
+			IsRemote:  false,
+			IsCurrent: fields[0] == current,
+			Commit:    fields[1],
+			Upstream:  fields[2],
+		})
 	}
 
-	refIter, err := repo.References()
+	remoteOutput, err := p.runGitOutput(ctx, workDir, "for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/remotes")
 	if err != nil {
 		return nil, err
 	}
-	if err := refIter.ForEach(func(ref *plumbing.Reference) error {
-		if !ref.Name().IsRemote() {
-			return nil
+	for _, line := range strings.Split(strings.TrimRight(remoteOutput, "\n"), "\n") {
+		if line == "" {
+			continue
 		}
-		name := ref.Name().Short()
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 || fields[0] == "" {
+			continue
+		}
+		name := fields[0]
 		if name == "origin/HEAD" || strings.HasSuffix(name, "/HEAD") {
-			return nil
+			continue
 		}
-		branches = append(branches, Branch{Name: name, IsRemote: true, Commit: ref.Hash().String()})
-		return nil
-	}); err != nil {
-		return nil, err
+		branches = append(branches, Branch{Name: name, IsRemote: true, Commit: fields[1]})
 	}
 
 	sort.Slice(branches, func(i, j int) bool { return branches[i].Name < branches[j].Name })
@@ -437,23 +407,35 @@ func (p *LocalProvider) FileTree(ctx context.Context, workspaceID, ref string) (
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, err := gitrepo.PlainOpen(workDir)
+	output, err := p.runGitOutput(ctx, workDir, "ls-tree", "-r", "-z", "--long", defaultRef(ref))
 	if err != nil {
+		if isInvalidRefError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidRef, defaultRef(ref))
+		}
 		return nil, err
 	}
 
-	tree, err := p.resolveTree(repo, defaultRef(ref))
-	if err != nil {
-		return nil, err
-	}
-
-	var entries []FileEntry
-	iter := tree.Files()
-	if err := iter.ForEach(func(file *object.File) error {
-		entries = append(entries, FileEntry{Path: file.Name, Name: filepath.Base(file.Name), IsDir: false, Size: file.Size, Mode: file.Mode.String()})
-		return nil
-	}); err != nil {
-		return nil, err
+	entries := make([]FileEntry, 0)
+	for _, record := range strings.Split(output, "\x00") {
+		if record == "" {
+			continue
+		}
+		meta, path, ok := strings.Cut(record, "\t")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(meta)
+		if len(fields) < 4 {
+			continue
+		}
+		size, _ := strconv.ParseInt(fields[3], 10, 64)
+		entries = append(entries, FileEntry{
+			Path:  path,
+			Name:  filepath.Base(path),
+			IsDir: false,
+			Size:  size,
+			Mode:  fields[0],
+		})
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
@@ -471,21 +453,18 @@ func (p *LocalProvider) ReadFile(ctx context.Context, workspaceID, ref, path str
 		return os.ReadFile(filepath.Join(workDir, path))
 	}
 
-	repo, err := gitrepo.PlainOpen(workDir)
+	gitPath := filepath.ToSlash(path)
+	content, err := p.runGitBytes(ctx, workDir, "show", fmt.Sprintf("%s:%s", ref, gitPath))
 	if err != nil {
+		if isGitPathNotFoundError(err) {
+			return nil, fmt.Errorf("%w: %s at %s", ErrNotFound, path, ref)
+		}
+		if isInvalidRefError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidRef, ref)
+		}
 		return nil, err
 	}
-
-	tree, err := p.resolveTree(repo, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := tree.File(path)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s at %s", ErrNotFound, path, ref)
-	}
-	return readBlobContent(file)
+	return content, nil
 }
 
 // WriteFile writes content to a file in the working tree.
@@ -509,19 +488,14 @@ func (p *LocalProvider) Stage(ctx context.Context, workspaceID string, paths []s
 		return fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	_, wt, err := p.openWorktree(workDir)
-	if err != nil {
-		return err
-	}
-
 	for _, path := range paths {
 		if path == "." {
-			if err := wt.AddWithOptions(&gitrepo.AddOptions{All: true}); err != nil {
+			if err := p.runGit(ctx, workDir, "add", "--all"); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := wt.Add(path); err != nil {
+		if err := p.runGit(ctx, workDir, "add", "--", filepath.ToSlash(path)); err != nil {
 			return err
 		}
 	}
@@ -535,23 +509,21 @@ func (p *LocalProvider) Commit(ctx context.Context, workspaceID, message, author
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, wt, err := p.openWorktree(workDir)
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := &gitrepo.CommitOptions{}
+	args := []string{"commit", "-m", message}
 	if authorName != "" && authorEmail != "" {
-		commitOpts.Author = &object.Signature{Name: authorName, Email: authorEmail, When: time.Now()}
-		if committer := p.loadCommitterSignature(repo); committer != nil {
-			commitOpts.Committer = committer
-		}
+		args = append(args, "--author", fmt.Sprintf("%s <%s>", authorName, authorEmail))
 	}
 
-	if _, err := wt.Commit(message, commitOpts); err != nil {
+	env := map[string]string{}
+	if committerName, committerEmail := p.loadCommitterIdentity(ctx, workDir); committerName != "" && committerEmail != "" {
+		env["GIT_COMMITTER_NAME"] = committerName
+		env["GIT_COMMITTER_EMAIL"] = committerEmail
+	}
+
+	if err := p.runGitWithEnv(ctx, workDir, env, args...); err != nil {
 		return nil, err
 	}
-	return p.getCommit(ctx, repo, "HEAD")
+	return p.getCommit(ctx, workDir, "HEAD")
 }
 
 // Log returns commit history.
@@ -561,51 +533,34 @@ func (p *LocalProvider) Log(ctx context.Context, workspaceID string, opts LogOpt
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, workspaceID)
 	}
 
-	repo, err := gitrepo.PlainOpen(workDir)
-	if err != nil {
-		return nil, err
-	}
-
-	startHash, _, err := p.resolveCommit(repo, defaultRef(opts.Ref))
-	if err != nil {
-		return nil, err
-	}
-
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 50
 	}
 
-	logOpts := &gitrepo.LogOptions{From: startHash, Order: gitrepo.LogOrderCommitterTime}
-	if len(opts.Paths) == 1 {
-		logOpts.FileName = &opts.Paths[0]
-	} else if len(opts.Paths) > 1 {
-		logOpts.PathFilter = func(path string) bool { return matchesPaths(path, opts.Paths) }
+	args := []string{
+		"log",
+		fmt.Sprintf("--max-count=%d", limit),
+		fmt.Sprintf("--skip=%d", opts.Skip),
+		"--date=iso-strict",
+		"--format=%H%x1f%h%x1f%B%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%cI%x1f%P%x1e",
+		defaultRef(opts.Ref),
+	}
+	if len(opts.Paths) > 0 {
+		args = append(args, "--")
+		for _, path := range opts.Paths {
+			args = append(args, filepath.ToSlash(path))
+		}
 	}
 
-	iter, err := repo.Log(logOpts)
+	output, err := p.runGitOutput(ctx, workDir, args...)
 	if err != nil {
+		if isInvalidRefError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidRef, defaultRef(opts.Ref))
+		}
 		return nil, err
 	}
-
-	var commits []Commit
-	skipped := 0
-	err = iter.ForEach(func(c *object.Commit) error {
-		if skipped < opts.Skip {
-			skipped++
-			return nil
-		}
-		commits = append(commits, mapCommit(c))
-		if len(commits) >= limit {
-			return io.EOF
-		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-
-	return commits, nil
+	return parseGitLogOutput(output), nil
 }
 
 // GetWorkDir returns the working directory path for a workspace.
@@ -708,12 +663,24 @@ func cleanGitEnv() []string {
 	return env
 }
 
+func gitEnv(extra map[string]string) []string {
+	env := cleanGitEnv()
+	for key, value := range extra {
+		env = append(env, key+"="+value)
+	}
+	return env
+}
+
 func (p *LocalProvider) runGit(ctx context.Context, workDir string, args ...string) error {
+	return p.runGitWithEnv(ctx, workDir, nil, args...)
+}
+
+func (p *LocalProvider) runGitWithEnv(ctx context.Context, workDir string, extraEnv map[string]string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
-	cmd.Env = cleanGitEnv()
+	cmd.Env = gitEnv(extraEnv)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -740,6 +707,14 @@ func (p *LocalProvider) runGitWithStdin(ctx context.Context, workDir string, std
 }
 
 func (p *LocalProvider) runGitOutput(ctx context.Context, workDir string, args ...string) (string, error) {
+	output, err := p.runGitBytes(ctx, workDir, args...)
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+func (p *LocalProvider) runGitBytes(ctx context.Context, workDir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if workDir != "" {
 		cmd.Dir = workDir
@@ -751,42 +726,75 @@ func (p *LocalProvider) runGitOutput(ctx context.Context, workDir string, args .
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+		return nil, fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
 	}
-	return stdout.String(), nil
+	return append([]byte(nil), stdout.Bytes()...), nil
 }
 
 // GetUserConfig retrieves the global git user name and email configuration.
 func (p *LocalProvider) GetUserConfig(_ context.Context) (name, email string) {
-	cfg, err := config.LoadConfig(config.GlobalScope)
-	if err != nil {
-		return "", ""
-	}
-	return cfg.User.Name, cfg.User.Email
+	name = strings.TrimSpace(runGitConfigValue("--global", "user.name"))
+	email = strings.TrimSpace(runGitConfigValue("--global", "user.email"))
+	return name, email
 }
 
-func (p *LocalProvider) openWorktree(workDir string) (*gitrepo.Repository, *gitrepo.Worktree, error) {
-	repo, err := gitrepo.PlainOpen(workDir)
+func runGitConfigValue(scope, key string) string {
+	cmd := exec.Command("git", "config", scope, "--get", key)
+	cmd.Env = cleanGitEnv()
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, nil, err
+		return ""
 	}
-	wt, err := repo.Worktree()
-	if err != nil {
-		return nil, nil, err
-	}
-	return repo, wt, nil
+	return string(output)
 }
 
-func (p *LocalProvider) currentCommit(_ context.Context, workDir string) (string, error) {
-	repo, err := gitrepo.PlainOpen(workDir)
+func (p *LocalProvider) currentCommit(ctx context.Context, workDir string) (string, error) {
+	output, err := p.runGitOutput(ctx, workDir, "rev-parse", "HEAD")
 	if err != nil {
+		if isNotGitRepositoryError(err) {
+			return "", ErrNotARepository
+		}
 		return "", err
 	}
-	head, err := repo.Head()
-	if err != nil {
-		return "", err
+	return strings.TrimSpace(output), nil
+}
+
+func (p *LocalProvider) currentBranch(ctx context.Context, workDir string) (string, error) {
+	output, err := p.runGitOutput(ctx, workDir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err == nil {
+		return strings.TrimSpace(output), nil
 	}
-	return head.Hash().String(), nil
+	if _, headErr := p.currentCommit(ctx, workDir); headErr == nil {
+		return "HEAD", nil
+	}
+	return "", err
+}
+
+func isNotGitRepositoryError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "not a git repository")
+}
+
+func isInvalidRefError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "bad revision") ||
+		strings.Contains(message, "unknown revision") ||
+		strings.Contains(message, "ambiguous argument") ||
+		strings.Contains(message, "invalid object name") ||
+		strings.Contains(message, "needed a single revision") ||
+		strings.Contains(message, "malformed object name")
+}
+
+func isGitPathNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "does not exist in") ||
+		strings.Contains(message, "exists on disk, but not in") ||
+		strings.Contains(message, "path '") && strings.Contains(message, " not in ")
 }
 
 func defaultRef(ref string) string {
@@ -796,565 +804,219 @@ func defaultRef(ref string) string {
 	return ref
 }
 
-func branchReferenceName(ref string) (plumbing.ReferenceName, bool) {
+func (p *LocalProvider) isGitRepositoryPath(ctx context.Context, path string) bool {
+	output, err := p.runGitOutput(ctx, path, "rev-parse", "--is-inside-work-tree")
+	return err == nil && strings.TrimSpace(output) == "true"
+}
+
+func (p *LocalProvider) checkoutRef(ctx context.Context, workDir, ref string) error {
 	if ref == "" {
-		return "", false
+		return nil
 	}
-	if strings.HasPrefix(ref, "refs/heads/") {
-		return plumbing.ReferenceName(ref), true
-	}
-	if strings.Contains(ref, "/") || strings.HasPrefix(ref, "refs/") {
-		return "", false
-	}
-	return plumbing.NewBranchReferenceName(ref), true
-}
-
-func (p *LocalProvider) resolveCommit(repo *gitrepo.Repository, ref string) (plumbing.Hash, *plumbing.Reference, error) {
-	if ref == "" || ref == "HEAD" {
-		head, err := repo.Head()
-		if err != nil {
-			return plumbing.ZeroHash, nil, err
-		}
-		return head.Hash(), head, nil
-	}
-
-	candidates := []plumbing.ReferenceName{
-		plumbing.ReferenceName(ref),
-		plumbing.NewBranchReferenceName(ref),
-		plumbing.NewTagReferenceName(ref),
-		plumbing.NewRemoteReferenceName(gitrepo.DefaultRemoteName, ref),
-	}
-	for _, candidate := range candidates {
-		resolved, err := repo.Reference(candidate, true)
-		if err == nil {
-			return resolved.Hash(), resolved, nil
-		}
-	}
-
-	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
-	if err != nil {
-		return plumbing.ZeroHash, nil, fmt.Errorf("%w: %s", ErrInvalidRef, ref)
-	}
-	return *hash, nil, nil
-}
-
-func (p *LocalProvider) resolveTree(repo *gitrepo.Repository, ref string) (*object.Tree, error) {
-	hash, _, err := p.resolveCommit(repo, ref)
-	if err != nil {
-		return nil, err
-	}
-	commit, err := repo.CommitObject(hash)
-	if err != nil {
-		return nil, err
-	}
-	return commit.Tree()
-}
-
-func (p *LocalProvider) headTree(repo *gitrepo.Repository) (*object.Tree, error) {
-	head, err := repo.Head()
-	if err != nil {
-		if err == plumbing.ErrReferenceNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-	commit, err := repo.CommitObject(head.Hash())
-	if err != nil {
-		return nil, err
-	}
-	return commit.Tree()
-}
-
-func (p *LocalProvider) checkoutResolvedRef(repo *gitrepo.Repository, wt *gitrepo.Worktree, ref string) error {
-	if branchRef, ok := branchReferenceName(ref); ok {
-		if _, err := repo.Reference(branchRef, false); err == nil {
-			return wt.Checkout(&gitrepo.CheckoutOptions{Branch: branchRef})
-		}
-		remoteRefName := plumbing.NewRemoteReferenceName(gitrepo.DefaultRemoteName, branchRef.Short())
-		if remoteRef, err := repo.Reference(remoteRefName, true); err == nil {
-			if err := wt.Checkout(&gitrepo.CheckoutOptions{Branch: branchRef, Create: true, Hash: remoteRef.Hash()}); err == nil {
-				return nil
-			}
-		}
-	}
-
-	hash, resolvedRef, err := p.resolveCommit(repo, ref)
-	if err != nil {
+	if err := p.runGit(ctx, workDir, "checkout", "--quiet", ref); err != nil {
 		return err
 	}
-	checkoutOpts := &gitrepo.CheckoutOptions{}
-	if resolvedRef != nil && resolvedRef.Name().IsBranch() {
-		checkoutOpts.Branch = resolvedRef.Name()
-	} else {
-		checkoutOpts.Hash = hash
-	}
-	return wt.Checkout(checkoutOpts)
+	return nil
 }
 
-func (p *LocalProvider) countAheadBehind(repo *gitrepo.Repository, head *plumbing.Reference) (int, int) {
-	if head == nil || !head.Name().IsBranch() {
-		return 0, 0
-	}
-
-	cfg, err := repo.Config()
+func (p *LocalProvider) countAheadBehind(ctx context.Context, workDir string) (int, int) {
+	output, err := p.runGitOutput(ctx, workDir, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
 	if err != nil {
 		return 0, 0
 	}
-	branchCfg, ok := cfg.Branches[head.Name().Short()]
-	if !ok || branchCfg.Remote == "" || branchCfg.Merge == "" {
+	fields := strings.Fields(strings.TrimSpace(output))
+	if len(fields) < 2 {
 		return 0, 0
 	}
-
-	upstreamName := plumbing.NewRemoteReferenceName(branchCfg.Remote, branchCfg.Merge.Short())
-	upstreamRef, err := repo.Reference(upstreamName, true)
-	if err != nil {
-		return 0, 0
-	}
-
-	headCommit, err := repo.CommitObject(head.Hash())
-	if err != nil {
-		return 0, 0
-	}
-	upstreamCommit, err := repo.CommitObject(upstreamRef.Hash())
-	if err != nil {
-		return 0, 0
-	}
-
-	bases, err := headCommit.MergeBase(upstreamCommit)
-	if err != nil || len(bases) == 0 {
-		return 0, 0
-	}
-	baseHash := bases[0].Hash
-
-	return countCommitsUntil(repo, head.Hash(), baseHash), countCommitsUntil(repo, upstreamRef.Hash(), baseHash)
+	ahead, _ := strconv.Atoi(fields[0])
+	behind, _ := strconv.Atoi(fields[1])
+	return ahead, behind
 }
 
-func countCommitsUntil(repo *gitrepo.Repository, from, until plumbing.Hash) int {
-	iter, err := repo.Log(&gitrepo.LogOptions{From: from})
-	if err != nil {
-		return 0
-	}
-	count := 0
-	_ = iter.ForEach(func(commit *object.Commit) error {
-		if commit.Hash == until {
-			return io.EOF
-		}
-		count++
-		return nil
-	})
-	return count
+func isRenameOrCopyStatus(xy string) bool {
+	return strings.ContainsRune(xy, 'R') || strings.ContainsRune(xy, 'C')
 }
 
-func (p *LocalProvider) diffBetweenRefs(ctx context.Context, repo *gitrepo.Repository, baseRef, headRef string, paths []string, contextLines int) ([]FileDiff, error) {
-	baseCommit, _, err := p.resolveCommit(repo, baseRef)
-	if err != nil {
-		return nil, err
-	}
-	headCommit, _, err := p.resolveCommit(repo, headRef)
-	if err != nil {
-		return nil, err
-	}
-	fromCommit, err := repo.CommitObject(baseCommit)
-	if err != nil {
-		return nil, err
-	}
-	toCommit, err := repo.CommitObject(headCommit)
-	if err != nil {
-		return nil, err
-	}
-	fromTree, err := fromCommit.Tree()
-	if err != nil {
-		return nil, err
-	}
-	toTree, err := toCommit.Tree()
-	if err != nil {
-		return nil, err
-	}
-	changes, err := object.DiffTreeWithOptions(ctx, fromTree, toTree, object.DefaultDiffTreeOptions)
-	if err != nil {
-		return nil, err
-	}
-	return buildTreeBackedDiffs(changes, paths, contextLines)
-}
-
-func (p *LocalProvider) diffTreeToIndex(repo *gitrepo.Repository, _ *gitrepo.Worktree, tree *object.Tree, paths []string, contextLines int) ([]FileDiff, error) {
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return nil, err
-	}
-	changes, err := diffTreeToIndexChanges(tree, idx)
-	if err != nil {
-		return nil, err
-	}
-	return buildIndexBackedDiffs(repo, tree, idx, changes, paths, contextLines)
-}
-
-func (p *LocalProvider) diffIndexToWorktree(repo *gitrepo.Repository, wt *gitrepo.Worktree, paths []string, contextLines int) ([]FileDiff, error) {
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return nil, err
-	}
-	changes, err := diffIndexToWorktreeChanges(wt, idx)
-	if err != nil {
-		return nil, err
-	}
-	return buildFilesystemBackedDiffs(repo, idx, nil, wt.Filesystem, changes, paths, contextLines, true)
-}
-
-func (p *LocalProvider) diffTreeToWorktree(repo *gitrepo.Repository, wt *gitrepo.Worktree, tree *object.Tree, paths []string, contextLines int) ([]FileDiff, error) {
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return nil, err
-	}
-	changes, err := diffTreeToWorktreeChanges(wt, tree, idx)
-	if err != nil {
-		return nil, err
-	}
-	return buildFilesystemBackedDiffs(repo, idx, tree, wt.Filesystem, changes, paths, contextLines, false)
-}
-
-func diffTreeToIndexChanges(tree *object.Tree, idx *indexformat.Index) (merkletrie.Changes, error) {
-	var from noder.Noder
-	if tree != nil {
-		from = object.NewTreeRootNode(tree)
-	}
-	to := mindex.NewRootNode(idx)
-	return merkletrie.DiffTree(from, to, diffTreeIsEquals)
-}
-
-func diffIndexToWorktreeChanges(wt *gitrepo.Worktree, idx *indexformat.Index) (merkletrie.Changes, error) {
-	submodules, err := getSubmoduleStatus(wt)
-	if err != nil {
-		return nil, err
-	}
-	from := mindex.NewRootNode(idx)
-	to := filesystem.NewRootNodeWithOptions(wt.Filesystem, submodules, filesystem.Options{Index: idx})
-	return merkletrie.DiffTree(from, to, diffTreeIsEquals)
-}
-
-func diffTreeToWorktreeChanges(wt *gitrepo.Worktree, tree *object.Tree, idx *indexformat.Index) (merkletrie.Changes, error) {
-	var from noder.Noder
-	if tree != nil {
-		from = object.NewTreeRootNode(tree)
-	}
-	submodules, err := getSubmoduleStatus(wt)
-	if err != nil {
-		return nil, err
-	}
-	to := filesystem.NewRootNodeWithOptions(wt.Filesystem, submodules, filesystem.Options{Index: idx})
-	return merkletrie.DiffTree(from, to, diffTreeIsEquals)
-}
-
-func getSubmoduleStatus(wt *gitrepo.Worktree) (map[string]plumbing.Hash, error) {
-	result := map[string]plumbing.Hash{}
-	submodules, err := wt.Submodules()
-	if err != nil {
-		return nil, err
-	}
-	statuses, err := submodules.Status()
-	if err != nil {
-		return nil, err
-	}
-	for _, status := range statuses {
-		if status.Current.IsZero() {
-			result[status.Path] = status.Expected
-			continue
-		}
-		result[status.Path] = status.Current
-	}
-	return result, nil
-}
-
-var emptyNoderHash = make([]byte, 24)
-
-func diffTreeIsEquals(a, b noder.Hasher) bool {
-	hashA := a.Hash()
-	hashB := b.Hash()
-	if bytes.Equal(hashA, emptyNoderHash) || bytes.Equal(hashB, emptyNoderHash) {
-		return false
-	}
-	return bytes.Equal(hashA, hashB)
-}
-
-func buildIndexBackedDiffs(repo *gitrepo.Repository, tree *object.Tree, idx *indexformat.Index, changes merkletrie.Changes, paths []string, contextLines int) ([]FileDiff, error) {
-	entries := indexEntryMap(idx)
-	var diffs []FileDiff
-	for _, change := range changes {
-		action, err := change.Action()
-		if err != nil {
-			return nil, err
-		}
-		var path string
-		switch action {
-		case merkletrie.Delete:
-			path = change.From.String()
-		default:
-			path = change.To.String()
-		}
-		if !matchesDiffPaths(path, "", paths) {
-			continue
-		}
-
-		var oldContent []byte
-		var newContent []byte
-		status := "modified"
-		oldPath := ""
-		switch action {
-		case merkletrie.Insert:
-			status = "added"
-			entry := entries[path]
-			newContent, err = readIndexEntry(repo, entry)
-		case merkletrie.Delete:
-			status = "deleted"
-			oldContent, err = readTreePath(tree, path)
-		case merkletrie.Modify:
-			oldContent, err = readTreePath(tree, path)
-			if err == nil {
-				newContent, err = readIndexEntry(repo, entries[path])
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-		diffs = append(diffs, buildFileDiff(path, oldPath, status, oldContent, newContent, contextLines))
-	}
-	sort.Slice(diffs, func(i, j int) bool { return diffs[i].Path < diffs[j].Path })
-	return diffs, nil
-}
-
-func buildFilesystemBackedDiffs(repo *gitrepo.Repository, idx *indexformat.Index, tree *object.Tree, fs billy.Filesystem, changes merkletrie.Changes, paths []string, contextLines int, compareIndex bool) ([]FileDiff, error) {
-	entries := indexEntryMap(idx)
-	var diffs []FileDiff
-	for _, change := range changes {
-		action, err := change.Action()
-		if err != nil {
-			return nil, err
-		}
-		var path string
-		switch action {
-		case merkletrie.Delete:
-			path = change.From.String()
-		default:
-			path = change.To.String()
-		}
-		if !matchesDiffPaths(path, "", paths) {
-			continue
-		}
-
-		var oldContent []byte
-		var newContent []byte
-		status := "modified"
-		switch action {
-		case merkletrie.Insert:
-			status = "added"
-			newContent, err = readFilesystemPath(fs, path)
-		case merkletrie.Delete:
-			status = "deleted"
-			if compareIndex {
-				oldContent, err = readIndexEntry(repo, entries[path])
-			} else {
-				oldContent, err = readTreePath(tree, path)
-			}
-		case merkletrie.Modify:
-			if compareIndex {
-				oldContent, err = readIndexEntry(repo, entries[path])
-			} else {
-				oldContent, err = readTreePath(tree, path)
-			}
-			if err == nil {
-				newContent, err = readFilesystemPath(fs, path)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-		diffs = append(diffs, buildFileDiff(path, "", status, oldContent, newContent, contextLines))
-	}
-	sort.Slice(diffs, func(i, j int) bool { return diffs[i].Path < diffs[j].Path })
-	return diffs, nil
-}
-
-func buildTreeBackedDiffs(changes object.Changes, paths []string, contextLines int) ([]FileDiff, error) {
-	var diffs []FileDiff
-	for _, change := range changes {
-		action, err := change.Action()
-		if err != nil {
-			return nil, err
-		}
-		path := change.To.Name
-		oldPath := change.From.Name
-		if path == "" {
-			path = oldPath
-		}
-		if !matchesDiffPaths(path, oldPath, paths) {
-			continue
-		}
-		fromFile, toFile, err := change.Files()
-		if err != nil {
-			return nil, err
-		}
-		var oldContent []byte
-		var newContent []byte
-		if fromFile != nil {
-			oldContent, err = readBlobContent(fromFile)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if toFile != nil {
-			newContent, err = readBlobContent(toFile)
-			if err != nil {
-				return nil, err
-			}
-		}
-		status := "modified"
-		switch action {
-		case merkletrie.Insert:
-			status = "added"
-		case merkletrie.Delete:
-			status = "deleted"
-		}
-		if oldPath != "" && path != oldPath && status == "modified" {
-			status = "renamed"
-		}
-		diffs = append(diffs, buildFileDiff(path, oldPath, status, oldContent, newContent, contextLines))
-	}
-	sort.Slice(diffs, func(i, j int) bool { return diffs[i].Path < diffs[j].Path })
-	return diffs, nil
-}
-
-func readTreePath(tree *object.Tree, path string) ([]byte, error) {
-	if tree == nil {
-		return nil, nil
-	}
-	file, err := tree.File(path)
-	if err != nil {
-		return nil, nil
-	}
-	return readBlobContent(file)
-}
-
-func readBlobContent(file interface{ Reader() (io.ReadCloser, error) }) ([]byte, error) {
-	reader, err := file.Reader()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = reader.Close() }()
-	return io.ReadAll(reader)
-}
-
-func readIndexEntry(repo *gitrepo.Repository, entry *indexformat.Entry) ([]byte, error) {
-	if entry == nil {
-		return nil, nil
-	}
-	blob, err := repo.BlobObject(entry.Hash)
-	if err != nil {
-		return nil, err
-	}
-	reader, err := blob.Reader()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = reader.Close() }()
-	return io.ReadAll(reader)
-}
-
-func readFilesystemPath(fs billy.Filesystem, path string) ([]byte, error) {
-	file, err := fs.Open(path)
-	if err != nil {
-		return nil, nil
-	}
-	defer func() { _ = file.Close() }()
-	return io.ReadAll(file)
-}
-
-func indexEntryMap(idx *indexformat.Index) map[string]*indexformat.Entry {
-	entries := make(map[string]*indexformat.Entry, len(idx.Entries))
-	for _, entry := range idx.Entries {
-		entries[entry.Name] = entry
-	}
-	return entries
-}
-
-func matchesDiffPaths(path, oldPath string, paths []string) bool {
-	if len(paths) == 0 {
+func isConflictStatus(xy string) bool {
+	switch xy {
+	case "DD", "AU", "UD", "UA", "DU", "AA", "UU":
 		return true
+	default:
+		return strings.ContainsRune(xy, 'U')
 	}
-	for _, candidate := range paths {
-		if candidate == path || candidate == oldPath {
-			return true
+}
+
+func parseGitDiffOutput(output string) []FileDiff {
+	chunks := splitGitDiffChunks(output)
+	diffs := make([]FileDiff, 0, len(chunks))
+	for _, chunk := range chunks {
+		diff, ok := parseGitDiffChunk(chunk)
+		if ok {
+			diffs = append(diffs, diff)
 		}
 	}
-	return false
+	return diffs
 }
 
-func matchesPaths(path string, paths []string) bool {
-	for _, candidate := range paths {
-		if candidate == path || strings.HasPrefix(path, candidate+"/") {
-			return true
+func splitGitDiffChunks(output string) []string {
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	chunks := []string{}
+	current := []string{}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git ") {
+			if len(current) > 0 {
+				chunks = append(chunks, strings.Join(current, "\n"))
+			}
+			current = []string{line}
+			continue
+		}
+		if len(current) > 0 {
+			current = append(current, line)
 		}
 	}
-	return false
+	if len(current) > 0 {
+		chunks = append(chunks, strings.Join(current, "\n"))
+	}
+	return chunks
 }
 
-func buildFileDiff(path, oldPath, status string, oldContent, newContent []byte, contextLines int) FileDiff {
-	binary := isBinaryContent(oldContent) || isBinaryContent(newContent)
-	patch := buildUnifiedPatch(path, oldPath, status, oldContent, newContent, contextLines, binary)
-	additions, deletions := countPatchLines(patch)
-	return FileDiff{Path: path, OldPath: oldPath, Status: status, Binary: binary, Additions: additions, Deletions: deletions, Patch: patch}
-}
+func parseGitDiffChunk(chunk string) (FileDiff, bool) {
+	lines := strings.Split(chunk, "\n")
+	if len(lines) == 0 || !strings.HasPrefix(lines[0], "diff --git ") {
+		return FileDiff{}, false
+	}
 
-func buildUnifiedPatch(path, oldPath, status string, oldContent, newContent []byte, contextLines int, binary bool) string {
-	oldFile := fmt.Sprintf("a/%s", path)
-	newFile := fmt.Sprintf("b/%s", path)
-	if oldPath != "" {
-		oldFile = fmt.Sprintf("a/%s", oldPath)
+	oldFile, newFile, ok := parseGitDiffHeaderPaths(lines[0])
+	if !ok {
+		return FileDiff{}, false
+	}
+	path := trimGitDiffPathPrefix(newFile)
+	oldPath := ""
+	status := "modified"
+	binary := false
+
+	for _, line := range lines[1:] {
+		switch {
+		case strings.HasPrefix(line, "rename from "):
+			oldPath = strings.TrimPrefix(line, "rename from ")
+			status = "renamed"
+		case strings.HasPrefix(line, "rename to "):
+			path = strings.TrimPrefix(line, "rename to ")
+			status = "renamed"
+		case strings.HasPrefix(line, "new file mode "):
+			status = "added"
+		case strings.HasPrefix(line, "deleted file mode "):
+			status = "deleted"
+		case strings.HasPrefix(line, "Binary files ") || line == "GIT binary patch":
+			binary = true
+		}
+	}
+
+	if status == "deleted" {
+		path = trimGitDiffPathPrefix(oldFile)
 	}
 	if status == "added" {
-		oldFile = "/dev/null"
+		oldPath = ""
 	}
-	if status == "deleted" {
-		newFile = "/dev/null"
+	if status == "modified" && oldPath != "" && oldPath != path {
+		status = "renamed"
 	}
 
-	if binary {
-		var lines []string
-		lines = append(lines, fmt.Sprintf("diff --git %s %s", oldFile, newFile))
-		switch status {
-		case "added":
-			lines = append(lines, "new file mode 100644")
-		case "deleted":
-			lines = append(lines, "deleted file mode 100644")
-		case "renamed":
-			if oldPath != "" {
-				lines = append(lines, fmt.Sprintf("rename from %s", oldPath))
-				lines = append(lines, fmt.Sprintf("rename to %s", path))
+	additions, deletions := 0, 0
+	if !binary {
+		additions, deletions = countPatchLines(chunk)
+	}
+
+	return FileDiff{
+		Path:      path,
+		OldPath:   oldPath,
+		Status:    status,
+		Binary:    binary,
+		Additions: additions,
+		Deletions: deletions,
+		Patch:     chunk,
+	}, true
+}
+
+func parseGitDiffHeaderPaths(line string) (string, string, bool) {
+	rest := strings.TrimPrefix(line, "diff --git ")
+	if strings.HasPrefix(rest, "\"") {
+		first, remaining, ok := consumeQuotedPath(rest)
+		if !ok {
+			return "", "", false
+		}
+		second, _, ok := consumeQuotedPath(strings.TrimLeft(remaining, " "))
+		if !ok {
+			return "", "", false
+		}
+		return first, second, true
+	}
+
+	parts := strings.SplitN(rest, " ", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func consumeQuotedPath(input string) (string, string, bool) {
+	if !strings.HasPrefix(input, "\"") {
+		return "", "", false
+	}
+	escaped := false
+	for i := 1; i < len(input); i++ {
+		switch {
+		case escaped:
+			escaped = false
+		case input[i] == '\\':
+			escaped = true
+		case input[i] == '"':
+			value, err := strconv.Unquote(input[:i+1])
+			if err != nil {
+				return "", "", false
 			}
+			return value, input[i+1:], true
 		}
-		lines = append(lines, fmt.Sprintf("Binary files %s and %s differ", oldFile, newFile))
-		return strings.Join(lines, "\n")
 	}
+	return "", "", false
+}
 
-	ud := difflib.UnifiedDiff{A: difflib.SplitLines(string(oldContent)), B: difflib.SplitLines(string(newContent)), FromFile: oldFile, ToFile: newFile, Context: contextLines}
-	body, _ := difflib.GetUnifiedDiffString(ud)
-	body = strings.TrimRight(body, "\n")
-	var lines []string
-	lines = append(lines, fmt.Sprintf("diff --git %s %s", oldFile, newFile))
-	switch status {
-	case "added":
-		lines = append(lines, "new file mode 100644")
-	case "deleted":
-		lines = append(lines, "deleted file mode 100644")
-	case "renamed":
-		if oldPath != "" {
-			lines = append(lines, fmt.Sprintf("rename from %s", oldPath))
-			lines = append(lines, fmt.Sprintf("rename to %s", path))
+func trimGitDiffPathPrefix(path string) string {
+	path = strings.TrimSpace(path)
+	if strings.HasPrefix(path, "a/") || strings.HasPrefix(path, "b/") {
+		return path[2:]
+	}
+	return path
+}
+
+func parseGitLogOutput(output string) []Commit {
+	records := strings.Split(output, "\x1e")
+	commits := make([]Commit, 0, len(records))
+	for _, record := range records {
+		record = strings.Trim(record, "\n\x00")
+		if record == "" {
+			continue
 		}
+		fields := strings.Split(record, "\x1f")
+		if len(fields) < 9 {
+			continue
+		}
+		authorDate, _ := time.Parse(time.RFC3339, fields[5])
+		commitDate, _ := time.Parse(time.RFC3339, fields[7])
+		message := strings.TrimSuffix(fields[2], "\n")
+		commits = append(commits, Commit{
+			SHA:         fields[0],
+			ShortSHA:    fields[1],
+			Message:     message,
+			Author:      fields[3],
+			AuthorEmail: fields[4],
+			AuthorDate:  authorDate,
+			Committer:   fields[6],
+			CommitDate:  commitDate,
+			Parents:     strings.Fields(fields[8]),
+		})
 	}
-	if body != "" {
-		lines = append(lines, strings.Split(body, "\n")...)
-	}
-	return strings.Join(lines, "\n")
+	return commits
 }
 
 func countPatchLines(patch string) (int, int) {
@@ -1381,66 +1043,75 @@ func isBinaryContent(data []byte) bool {
 	return false
 }
 
-func statusCodeToString(code gitrepo.StatusCode) string {
+func statusCodeToString(code byte) string {
 	switch code {
-	case gitrepo.Added:
+	case 'A':
 		return "added"
-	case gitrepo.Modified:
+	case 'M', 'T':
 		return "modified"
-	case gitrepo.Deleted:
+	case 'D':
 		return "deleted"
-	case gitrepo.Renamed:
+	case 'R':
 		return "renamed"
-	case gitrepo.Copied:
+	case 'C':
 		return "copied"
-	case gitrepo.UpdatedButUnmerged:
+	case 'U':
 		return "unmerged"
 	default:
 		return "unknown"
 	}
 }
 
-func (p *LocalProvider) getCommit(_ context.Context, repo *gitrepo.Repository, ref string) (*Commit, error) {
-	hash, _, err := p.resolveCommit(repo, ref)
+func (p *LocalProvider) getCommit(ctx context.Context, workDir, ref string) (*Commit, error) {
+	commits, err := p.logAtRef(ctx, workDir, ref, 1)
 	if err != nil {
 		return nil, err
 	}
-	commit, err := repo.CommitObject(hash)
+	if len(commits) == 0 {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, ref)
+	}
+	return &commits[0], nil
+}
+
+func (p *LocalProvider) logAtRef(ctx context.Context, workDir, ref string, limit int) ([]Commit, error) {
+	output, err := p.runGitOutput(ctx, workDir,
+		"log",
+		fmt.Sprintf("--max-count=%d", limit),
+		"--date=iso-strict",
+		"--format=%H%x1f%h%x1f%B%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%cI%x1f%P%x1e",
+		defaultRef(ref),
+	)
 	if err != nil {
+		if isInvalidRefError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidRef, defaultRef(ref))
+		}
 		return nil, err
 	}
-	mapped := mapCommit(commit)
-	return &mapped, nil
+	return parseGitLogOutput(output), nil
 }
 
-func mapCommit(commit *object.Commit) Commit {
-	parents := make([]string, 0, len(commit.ParentHashes))
-	for _, parent := range commit.ParentHashes {
-		parents = append(parents, parent.String())
+func (p *LocalProvider) loadCommitterIdentity(ctx context.Context, workDir string) (string, string) {
+	lookup := func(key string) string {
+		value, err := p.runGitOutput(ctx, workDir, "config", "--get", key)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(value)
 	}
-	short := commit.Hash.String()
-	if len(short) > 7 {
-		short = short[:7]
-	}
-	return Commit{SHA: commit.Hash.String(), ShortSHA: short, Message: strings.TrimSuffix(commit.Message, "\n"), Author: commit.Author.Name, AuthorEmail: commit.Author.Email, AuthorDate: commit.Author.When, Committer: commit.Committer.Name, CommitDate: commit.Committer.When, Parents: parents}
-}
 
-func (p *LocalProvider) loadCommitterSignature(repo *gitrepo.Repository) *object.Signature {
-	cfg, err := repo.Config()
-	if err != nil {
-		return nil
+	name := lookup("committer.name")
+	email := lookup("committer.email")
+	if name != "" && email != "" {
+		return name, email
 	}
-	if cfg.Committer.Name != "" && cfg.Committer.Email != "" {
-		return &object.Signature{Name: cfg.Committer.Name, Email: cfg.Committer.Email, When: time.Now()}
+
+	name = lookup("user.name")
+	email = lookup("user.email")
+	if name != "" && email != "" {
+		return name, email
 	}
-	if cfg.User.Name != "" && cfg.User.Email != "" {
-		return &object.Signature{Name: cfg.User.Name, Email: cfg.User.Email, When: time.Now()}
-	}
-	name, email := p.GetUserConfig(context.Background())
-	if name == "" || email == "" {
-		return nil
-	}
-	return &object.Signature{Name: name, Email: email, When: time.Now()}
+
+	return p.GetUserConfig(ctx)
 }
 
 // Ensure LocalProvider implements Provider.

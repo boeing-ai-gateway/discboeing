@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -10,17 +12,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	gitrepo "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing/transport"
-	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/go-git/go-git/v5/storage/memory"
 
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/middleware"
@@ -40,6 +39,11 @@ var githubRepoListCache = struct {
 	sync.RWMutex
 	Entries map[string]githubRepoListCacheEntry
 }{Entries: make(map[string]githubRepoListCacheEntry)}
+
+var (
+	errGitAuthenticationRequired = errors.New("git authentication required")
+	errGitAuthorizationFailed    = errors.New("git authorization failed")
+)
 
 type validateWorkspaceRequest struct {
 	Path       string `json:"path"`
@@ -143,7 +147,7 @@ func (h *Handler) ValidateWorkspace(w http.ResponseWriter, r *http.Request) {
 		response.Error = err.Error()
 
 		if isGitHubRepositoryURL(normalizedPath) {
-			if !hasGitHubToken || errors.Is(err, transport.ErrAuthenticationRequired) || errors.Is(err, transport.ErrAuthorizationFailed) || isGitHubRepositoryNotFound(err) {
+			if !hasGitHubToken || errors.Is(err, errGitAuthenticationRequired) || errors.Is(err, errGitAuthorizationFailed) || isGitHubRepositoryNotFound(err) {
 				response.AuthProvider = service.ProviderGitHub
 				response.AuthRequired = true
 				if !hasGitHubToken {
@@ -686,24 +690,74 @@ func isGitHubRepositoryNotFound(err error) bool {
 }
 
 func validateGitRemote(ctx context.Context, remoteURL string, githubToken string) error {
-	remote := gitrepo.NewRemote(memory.NewStorage(), &config.RemoteConfig{
-		Name: "origin",
-		URLs: []string{remoteURL},
-	})
+	validationURL := remoteURL
+	if convertedURL, ok := githubHTTPSValidationURL(remoteURL); ok {
+		validationURL = convertedURL
+	}
 
-	listOptions := &gitrepo.ListOptions{}
-	if isGitHubRepositoryURL(remoteURL) && githubToken != "" {
-		listOptions.Auth = &githttp.BasicAuth{
-			Username: "x-access-token",
-			Password: githubToken,
+	args := []string{
+		"-c", "credential.helper=",
+		"-c", "core.askPass=",
+		"-c", "credential.interactive=never",
+	}
+	if isGitHubRepositoryURL(validationURL) && githubToken != "" {
+		authValue := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + githubToken))
+		args = append(args, "-c", "http.extraHeader=AUTHORIZATION: basic "+authValue)
+	}
+	args = append(args, "ls-remote", "--exit-code", validationURL, "HEAD")
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Env = cleanGitValidationEnv()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			message = strings.TrimSpace(stdout.String())
+		}
+		lower := strings.ToLower(message)
+		switch {
+		case strings.Contains(lower, "could not read username"),
+			strings.Contains(lower, "terminal prompts disabled"),
+			strings.Contains(lower, "authentication failed"),
+			strings.Contains(lower, "could not authenticate"):
+			return fmt.Errorf("repository is not cloneable: %w", errGitAuthenticationRequired)
+		case strings.Contains(lower, "authorization failed"),
+			strings.Contains(lower, "access denied"),
+			strings.Contains(lower, "403"):
+			return fmt.Errorf("repository is not cloneable: %w", errGitAuthorizationFailed)
+		case message != "":
+			return fmt.Errorf("repository is not cloneable: %s", message)
+		default:
+			return fmt.Errorf("repository is not cloneable: %w", err)
 		}
 	}
 
-	if _, err := remote.ListContext(ctx, listOptions); err != nil {
-		return fmt.Errorf("repository is not cloneable: %w", err)
-	}
-
 	return nil
+}
+
+func githubHTTPSValidationURL(raw string) (string, bool) {
+	normalized := normalizeGitHubRepoQuery(raw)
+	if normalized == "" || !strings.Contains(normalized, "/") {
+		return "", false
+	}
+	if !isGitHubRepositoryURL(raw) {
+		return "", false
+	}
+	return "https://github.com/" + normalized, true
+}
+
+func cleanGitValidationEnv() []string {
+	env := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GIT_") {
+			env = append(env, entry)
+		}
+	}
+	return env
 }
 
 func (h *Handler) getGitHubToken(ctx context.Context, projectID string) (string, bool, error) {

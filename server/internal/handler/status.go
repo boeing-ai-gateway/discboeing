@@ -3,10 +3,7 @@ package handler
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
-
-	"github.com/adrg/xdg"
 
 	"github.com/obot-platform/discobot/server/internal/startup"
 	"github.com/obot-platform/discobot/server/internal/version"
@@ -34,6 +31,11 @@ func (h *Handler) GetServerConfig(w http.ResponseWriter, _ *http.Request) {
 
 // GetSystemStatus checks system requirements and returns status (including startup tasks)
 func (h *Handler) GetSystemStatus(w http.ResponseWriter, _ *http.Request) {
+	// Refresh provider status first so providers can reconcile any stale startup tasks.
+	if h.sandboxManager != nil {
+		_ = h.sandboxManager.ListProviderStatuses()
+	}
+
 	// Use system manager to get complete system status
 	if h.systemManager != nil {
 		status := h.systemManager.GetSystemStatus()
@@ -172,8 +174,8 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		configInfo.VZ = vzInfo
 	}
 
-	// Read server log file (desktop sidecar log)
-	logPath := filepath.Join(xdg.StateHome, "discobot", "logs", "server.log")
+	// Read server log file
+	logPath := h.cfg.ServerLogPath
 	logContent := ""
 	logExists := false
 
@@ -184,6 +186,9 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 
 	// Get system status from system manager
 	var systemStatus startup.SystemStatusResponse
+	if h.sandboxManager != nil {
+		_ = h.sandboxManager.ListProviderStatuses()
+	}
 	if h.systemManager != nil {
 		systemStatus = h.systemManager.GetSystemStatus()
 	}

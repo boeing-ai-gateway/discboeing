@@ -1,15 +1,16 @@
 [Unit]
-Description=Initialize /var contents on first boot
-# Run after /var is mounted (by fstab)
-After=var.mount
-Requires=var.mount
+Description=Prepare persistent /var storage
+After=local-fs.target
 # Run before Docker services (don't include journald to avoid cycles)
 Before=docker.service containerd.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+EnvironmentFile=-/etc/default/discobot-wsl
 ExecStart=/usr/local/bin/init-var.sh
+StandardOutput=journal+console
+StandardError=journal+console
 
 [Install]
 WantedBy=multi-user.target

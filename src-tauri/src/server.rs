@@ -120,6 +120,27 @@ fn start_server(
         }
     }
 
+    // Check for bundled WSL resources (Windows only)
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let wsl_dir = resource_dir.join("wsl");
+            let rootfs_path = wsl_dir.join("discobot-rootfs.tar.zst");
+
+            if rootfs_path.exists() {
+                println!("Found bundled WSL resources:");
+                println!("  Rootfs: {}", rootfs_path.display());
+
+                sidecar = sidecar.env(
+                    "WSL_ROOTFS_ARCHIVE_PATH",
+                    rootfs_path.to_string_lossy().to_string(),
+                );
+            } else {
+                println!("No bundled WSL resources found, will download from registry");
+            }
+        }
+    }
+
     let (_rx, child) = sidecar
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;

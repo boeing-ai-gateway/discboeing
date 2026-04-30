@@ -8,3 +8,6 @@
 
 # Built Go server binaries
 /binaries/
+
+# Bundled guest runtime assets extracted for Tauri packaging
+/resources/

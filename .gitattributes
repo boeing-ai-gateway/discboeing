@@ -12,6 +12,7 @@ LICENSE text eol=lf
 Makefile text eol=lf
 go.work text eol=lf
 .discobot/services/* text eol=lf
+vm-assets/** text eol=lf
 *.go text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf

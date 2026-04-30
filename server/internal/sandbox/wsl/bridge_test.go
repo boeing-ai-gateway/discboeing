@@ -82,3 +82,12 @@ func TestBridgePipeHelpers(t *testing.T) {
 		t.Fatalf("bridgePipePath() = %q", got)
 	}
 }
+
+func TestBridgeTCPPingURL(t *testing.T) {
+	if got := bridgeTCPPingURL(23755); got != "http://127.0.0.1:23755/_ping" {
+		t.Fatalf("bridgeTCPPingURL() = %q", got)
+	}
+	if got := bridgeTCPPingURL(0); got != "" {
+		t.Fatalf("bridgeTCPPingURL(0) = %q, want empty string", got)
+	}
+}

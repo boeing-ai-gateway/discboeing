@@ -9,6 +9,16 @@ import (
 	"testing"
 )
 
+type staticWorkspaceSource struct {
+	info *WorkspaceInfo
+}
+
+func (s staticWorkspaceSource) GetWorkspaceInfo(_ context.Context, workspaceID string) (*WorkspaceInfo, error) {
+	info := *s.info
+	info.WorkspaceID = workspaceID
+	return &info, nil
+}
+
 // createTestRepo creates a test git repository with initial content
 func createTestRepo(t *testing.T) string {
 	t.Helper()
@@ -214,6 +224,37 @@ func TestEnsureWorkspace(t *testing.T) {
 			t.Errorf("workDir2 should be under project2, got %s", workDir2)
 		}
 	})
+}
+
+func TestEnsureWorkspaceByIDWithWorktreeConfigLocalRepo(t *testing.T) {
+	ctx := context.Background()
+
+	baseDir := t.TempDir()
+	sourceRepo := createTestRepo(t)
+	runGit(t, sourceRepo, "config", "extensions.worktreeConfig", "true")
+	expectedCommit := strings.TrimSpace(runGit(t, sourceRepo, "rev-parse", "HEAD"))
+
+	provider, err := NewLocalProvider(baseDir, WithWorkspaceSource(staticWorkspaceSource{
+		info: &WorkspaceInfo{
+			ProjectID:  "project1",
+			Path:       sourceRepo,
+			SourceType: "local",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("NewLocalProvider failed: %v", err)
+	}
+
+	workDir, commit, err := provider.EnsureWorkspaceByID(ctx, "ws1")
+	if err != nil {
+		t.Fatalf("EnsureWorkspaceByID failed: %v", err)
+	}
+	if workDir != sourceRepo {
+		t.Fatalf("expected workDir %q, got %q", sourceRepo, workDir)
+	}
+	if commit != expectedCommit {
+		t.Fatalf("expected commit %q, got %q", expectedCommit, commit)
+	}
 }
 
 func TestFetch(t *testing.T) {

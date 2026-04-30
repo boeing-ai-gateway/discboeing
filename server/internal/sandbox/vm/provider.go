@@ -3,11 +3,9 @@ package vm
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +56,9 @@ type Provider struct {
 	// projectResourceResolver returns the effective VM resources for a project.
 	projectResourceResolver ProjectResourceResolver
 
-	// hostDockerClient connects to the host's Docker daemon (for image transfer to VMs).
+	// hostDockerClient connects to the configured host Docker daemon for image
+	// transfer to VMs. On Windows this can proxy through a user-managed WSL
+	// distro when DISCOBOT_DOCKER_WSL_DISTRO is set.
 	hostDockerClient     *dockerclient.Client
 	hostDockerClientOnce sync.Once
 	hostDockerClientErr  error
@@ -679,21 +679,11 @@ func (p *Provider) WaitForReady(ctx context.Context) error {
 	}
 }
 
-// getHostDockerClient returns a Docker client connected to the host's Docker daemon.
-// Used to export locally-built images for transfer into VMs.
+// getHostDockerClient returns a Docker client connected to the configured host
+// Docker daemon. Used to export locally-built images for transfer into VMs.
 func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {
 	p.hostDockerClientOnce.Do(func() {
-		clientOpts := []dockerclient.Opt{
-			dockerclient.FromEnv,
-			dockerclient.WithAPIVersionNegotiation(),
-		}
-		if p.cfg.DockerHost != "" {
-			clientOpts = append(clientOpts, dockerclient.WithHost(p.cfg.DockerHost))
-		} else if host := docker.DetectDockerHost(); host != "" {
-			clientOpts = append(clientOpts, dockerclient.WithHost(host))
-		}
-
-		cli, err := dockerclient.NewClientWithOpts(clientOpts...)
+		cli, err := docker.NewAPIClient(p.cfg)
 		if err != nil {
 			p.hostDockerClientErr = fmt.Errorf("failed to create host docker client: %w", err)
 			return
@@ -706,22 +696,9 @@ func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {
 // ensureImageInVM loads the sandbox image from the host's Docker into the VM's Docker
 // when the image is local (discobot-local/ tag) and cannot be pulled from a registry.
 func (p *Provider) ensureImageInVM(ctx context.Context, dockerProv *docker.Provider) error {
-	image := p.cfg.SandboxImage
-
-	// Only handle local images (discobot-local/ prefixed tags).
-	// Registry images are pulled by ensureImage().
-	if !strings.HasPrefix(image, "discobot-local/") {
+	if !docker.IsLocalImage(p.cfg.SandboxImage) {
 		return nil
 	}
-
-	// Check if image already exists in VM's Docker
-	vmClient := dockerProv.Client()
-	inspect, err := vmClient.ImageInspect(ctx, image)
-	if err == nil {
-		log.Printf("Image %s already exists in VM Docker (ID: %s)", image[:19], inspect.ID[:19])
-		return nil
-	}
-	log.Printf("Image %s not found in VM Docker, will load from host: %v", image[:19], err)
 
 	// Get host Docker client
 	hostClient, err := p.getHostDockerClient()
@@ -729,59 +706,9 @@ func (p *Provider) ensureImageInVM(ctx context.Context, dockerProv *docker.Provi
 		return fmt.Errorf("failed to get host docker client: %w", err)
 	}
 
-	// Verify image exists on host
-	if _, err := hostClient.ImageInspect(ctx, image); err != nil {
-		return fmt.Errorf("image %s not found on host docker: %w", image[:19], err)
+	if err := docker.EnsureLocalImageLoaded(ctx, hostClient, dockerProv.Client(), p.cfg.SandboxImage, p.systemManager); err != nil {
+		return fmt.Errorf("failed to load image into VM docker: %w", err)
 	}
-
-	// Get image size for progress reporting
-	inspectResult, err := hostClient.ImageInspect(ctx, image)
-	if err != nil {
-		return fmt.Errorf("failed to inspect image on host: %w", err)
-	}
-	imageSize := inspectResult.Size
-	log.Printf("Loading image %s (%d MB) from host Docker into VM Docker...", image[:19], imageSize/(1024*1024))
-
-	// Register system manager task for UI progress
-	if p.systemManager != nil {
-		p.systemManager.RegisterTask("docker-load", fmt.Sprintf("Loading runtime image: %s", image[:19]))
-		p.systemManager.StartTask("docker-load")
-	}
-
-	// Stream image from host to VM: ImageSave → progressReader → ImageLoad
-	reader, err := hostClient.ImageSave(ctx, []string{image})
-	if err != nil {
-		if p.systemManager != nil {
-			p.systemManager.FailTask("docker-load", err)
-		}
-		return fmt.Errorf("failed to export image from host: %w", err)
-	}
-	defer reader.Close()
-
-	pr := &progressReader{
-		reader:       reader,
-		total:        imageSize,
-		logEvery:     100 * 1024 * 1024, // Log every 100MB
-		label:        image[:19],
-		systemMgr:    p.systemManager,
-		systemTaskID: "docker-load",
-	}
-
-	resp, err := vmClient.ImageLoad(ctx, pr, dockerclient.ImageLoadWithQuiet(true))
-	if err != nil {
-		if p.systemManager != nil {
-			p.systemManager.FailTask("docker-load", err)
-		}
-		return fmt.Errorf("failed to load image into VM: %w", err)
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-
-	if p.systemManager != nil {
-		p.systemManager.CompleteTask("docker-load")
-	}
-
-	log.Printf("Successfully loaded image %s into VM Docker", image[:19])
 	return nil
 }
 
@@ -923,33 +850,4 @@ func (p *Provider) StopRuntime(_ context.Context, projectID string) error {
 	p.dockerProvidersMu.Unlock()
 
 	return nil
-}
-
-// progressReader wraps an io.Reader and logs transfer progress.
-type progressReader struct {
-	reader       io.Reader
-	total        int64
-	read         int64
-	logEvery     int64
-	lastLog      int64
-	label        string
-	systemMgr    SystemManager
-	systemTaskID string
-}
-
-func (r *progressReader) Read(p []byte) (int, error) {
-	n, err := r.reader.Read(p)
-	r.read += int64(n)
-
-	if r.read-r.lastLog >= r.logEvery {
-		pct := float64(r.read) / float64(r.total) * 100
-		log.Printf("Image transfer %s: %.1f%% (%d/%d MB)", r.label, pct, r.read/(1024*1024), r.total/(1024*1024))
-		r.lastLog = r.read
-
-		if r.systemMgr != nil {
-			r.systemMgr.UpdateTaskBytes(r.systemTaskID, r.read, r.total)
-		}
-	}
-
-	return n, err
 }

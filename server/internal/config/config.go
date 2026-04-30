@@ -34,6 +34,12 @@ func DefaultVZImage() string {
 	return "ghcr.io/obot-platform/discobot-vz:" + version.Get()
 }
 
+// DefaultWSLImage returns the default WSL image containing the managed distro
+// rootfs archive, tagged with the current build version.
+func DefaultWSLImage() string {
+	return "ghcr.io/obot-platform/discobot-wsl:" + version.Get()
+}
+
 // Config holds all configuration for the server
 type Config struct {
 	// Server settings
@@ -72,8 +78,9 @@ type Config struct {
 	SessionSandboxCleanupDelay time.Duration // Delay before removing a stopped sandbox after session deletion
 
 	// Docker-specific settings
-	DockerHost    string // Docker socket/host (default: unix:///var/run/docker.sock)
-	DockerNetwork string // Docker network to attach containers to
+	DockerHost      string // Docker socket/host (default: unix:///var/run/docker.sock)
+	DockerNetwork   string // Docker network to attach containers to
+	DockerWSLDistro string // Windows WSL distro to proxy host Docker access through
 
 	// VZ-specific settings (macOS Virtualization.framework)
 	VZDataDir       string // Directory for VM data (default: ./vz)
@@ -88,14 +95,16 @@ type Config struct {
 	VZDataDiskGB    int    // Data disk size per VM in GB (0 = 100GB default)
 
 	// WSL-specific settings (Windows Subsystem for Linux)
-	WSLDistroName      string        // Managed WSL distro name
-	WSLInstallDir      string        // Directory where the distro is imported and stored
-	WSLStateDir        string        // Directory for WSL runtime state and metadata
-	WSLImageRef        string        // Docker registry image ref for WSL rootfs downloads
-	WSLBridgeType      string        // Docker bridge transport type (named_pipe|tcp)
-	WSLBridgePort      int           // TCP bridge port (0 = random)
-	WSLIdleTimeout     time.Duration // How long to keep the distro running when idle (0 = never auto-stop)
-	WSLUpgradeStrategy string        // Upgrade strategy (currently planned: inplace)
+	WSLDistroName    string        // Managed WSL distro name
+	WSLInstallDir    string        // Directory where the distro is imported and stored
+	WSLStateDir      string        // Directory for WSL runtime state and metadata
+	WSLVarDiskPath   string        // Path to the persistent /var VHDX mounted into WSL
+	WSLVarDiskSizeGB int           // Size of the persistent /var VHDX in GB when created
+	WSLRootfsPath    string        // Path to a local WSL rootfs archive (optional, preferred over WSLImageRef)
+	WSLImageRef      string        // Docker registry image ref for WSL rootfs downloads
+	WSLBridgeType    string        // Docker bridge transport type (named_pipe|tcp)
+	WSLBridgePort    int           // TCP bridge port (0 = random)
+	WSLIdleTimeout   time.Duration // How long to keep the distro running when idle (0 = never auto-stop)
 
 	// Local provider settings
 	LocalProviderEnabled bool   // Enable local sandbox provider (default: false)
@@ -141,6 +150,7 @@ type Config struct {
 
 	// Process lifecycle
 	LogFile        string // Redirect stdout/stderr to this file (Unix only)
+	ServerLogPath  string // Path read by support info and used by development log teeing
 	StdinKeepalive bool   // Exit when stdin is closed (for parent process death detection)
 
 	// MCP OAuth settings (injected into agent containers)
@@ -231,6 +241,7 @@ func Load() (*Config, error) {
 	// Empty default lets the Docker SDK auto-detect (works on Linux, macOS, and Windows)
 	cfg.DockerHost = getEnv("DOCKER_HOST", "")
 	cfg.DockerNetwork = getEnv("DOCKER_NETWORK", "")
+	cfg.DockerWSLDistro = getEnv("DISCOBOT_DOCKER_WSL_DISTRO", "")
 
 	// VZ-specific settings (macOS Virtualization.framework)
 	// VZ state defaults to XDG_STATE_HOME/discobot/vz
@@ -252,11 +263,13 @@ func Load() (*Config, error) {
 	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", appName)
 	cfg.WSLInstallDir = getEnv("WSL_INSTALL_DIR", filepath.Join(xdg.StateHome, appName, "wsl", "distro"))
 	cfg.WSLStateDir = getEnv("WSL_STATE_DIR", filepath.Join(xdg.StateHome, appName, "wsl"))
-	cfg.WSLImageRef = getEnv("WSL_IMAGE_REF", DefaultVZImage())
+	cfg.WSLVarDiskPath = getEnv("WSL_VAR_DISK_PATH", filepath.Join(xdg.StateHome, appName, "wsl", "var.vhdx"))
+	cfg.WSLVarDiskSizeGB = getEnvInt("WSL_VAR_DISK_SIZE_GB", 100)
+	cfg.WSLRootfsPath = getEnv("WSL_ROOTFS_ARCHIVE_PATH", "")
+	cfg.WSLImageRef = getEnv("WSL_IMAGE_REF", DefaultWSLImage())
 	cfg.WSLBridgeType = strings.ToLower(getEnv("WSL_BRIDGE_TYPE", "tcp"))
 	cfg.WSLBridgePort = getEnvInt("WSL_BRIDGE_PORT", 0)
 	cfg.WSLIdleTimeout = getEnvDuration("WSL_IDLE_TIMEOUT", 0)
-	cfg.WSLUpgradeStrategy = strings.ToLower(getEnv("WSL_UPGRADE_STRATEGY", "inplace"))
 
 	// Local provider settings
 	cfg.LocalProviderEnabled = getEnvBool("LOCAL_PROVIDER_ENABLED", false)
@@ -298,6 +311,7 @@ func Load() (*Config, error) {
 
 	// Process lifecycle
 	cfg.LogFile = getEnv("LOG_FILE", "")
+	cfg.ServerLogPath = getEnv("SERVER_LOG_PATH", filepath.Join(xdg.StateHome, appName, "logs", "server.log"))
 	cfg.StdinKeepalive = getEnvBool("STDIN_KEEPALIVE", false)
 
 	// MCP OAuth — default to http://127.0.0.1:{Port} so containers can always reach

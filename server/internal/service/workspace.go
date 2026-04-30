@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
-
-	gitrepo "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/obot-platform/discobot/server/internal/events"
 	discogit "github.com/obot-platform/discobot/server/internal/git"
@@ -46,6 +43,8 @@ const (
 	// LocalWorkspaceClassificationInvalid indicates a path that is not usable as a workspace.
 	LocalWorkspaceClassificationInvalid = "invalid"
 )
+
+var errLocalGitRepositoryNotFound = errors.New("not a git repository")
 
 func classifyLocalWorkspacePath(path string) (string, string, error) {
 	expandedPath, err := expandPath(path)
@@ -85,13 +84,33 @@ func classifyLocalWorkspacePath(path string) (string, string, error) {
 		return expandedPath, LocalWorkspaceClassificationEmpty, nil
 	}
 
-	if _, err := gitrepo.PlainOpen(expandedPath); err == nil {
+	if err := inspectLocalGitRepository(expandedPath); err == nil {
 		return expandedPath, LocalWorkspaceClassificationExistingGit, nil
-	} else if !errors.Is(err, gitrepo.ErrRepositoryNotExists) {
+	} else if !errors.Is(err, errLocalGitRepositoryNotFound) {
 		return expandedPath, LocalWorkspaceClassificationInvalid, fmt.Errorf("failed to inspect git repository: %w", err)
 	}
 
-	return expandedPath, LocalWorkspaceClassificationInvalid, fmt.Errorf("not a git repository: directory must contain a .git folder")
+	return expandedPath, LocalWorkspaceClassificationInvalid, fmt.Errorf("not a git repository: directory must be a git repository or worktree")
+}
+
+func inspectLocalGitRepository(path string) error {
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--is-inside-work-tree")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		if strings.TrimSpace(string(output)) == "true" {
+			return nil
+		}
+		return errLocalGitRepositoryNotFound
+	}
+
+	message := strings.TrimSpace(string(output))
+	if strings.Contains(strings.ToLower(message), "not a git repository") {
+		return errLocalGitRepositoryNotFound
+	}
+	if message == "" {
+		return err
+	}
+	return fmt.Errorf("git rev-parse failed: %w: %s", err, message)
 }
 
 // Workspace represents a workspace with its sessions (for API responses)
@@ -211,14 +230,8 @@ func (s *WorkspaceService) ValidateLocalWorkspacePath(path string) (string, stri
 }
 
 func (s *WorkspaceService) initializeLocalRepository(ctx context.Context, path string) error {
-	repo, err := gitrepo.PlainInit(path, false)
-	if err != nil {
+	if err := runGitCommand(ctx, path, "init"); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
-	}
-
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to open git worktree: %w", err)
 	}
 
 	gitUserName := "Discobot"
@@ -233,21 +246,42 @@ func (s *WorkspaceService) initializeLocalRepository(ctx context.Context, path s
 		}
 	}
 
-	signature := &object.Signature{
-		Name:  gitUserName,
-		Email: gitUserEmail,
-		When:  time.Now(),
-	}
-
-	if _, err := worktree.Commit("Initial commit", &gitrepo.CommitOptions{
-		Author:            signature,
-		Committer:         signature,
-		AllowEmptyCommits: true,
-	}); err != nil {
+	if err := runGitCommand(
+		ctx,
+		path,
+		"-c", "user.name="+gitUserName,
+		"-c", "user.email="+gitUserEmail,
+		"commit", "--allow-empty", "-m", "Initial commit",
+	); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
 	return nil
+}
+
+func runGitCommand(ctx context.Context, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	cmd.Env = cleanGitCommandEnv()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, message)
+	}
+	return nil
+}
+
+func cleanGitCommandEnv() []string {
+	env := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GIT_") {
+			env = append(env, entry)
+		}
+	}
+	return env
 }
 
 // UpdateWorkspace updates a workspace

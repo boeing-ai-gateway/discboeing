@@ -3,6 +3,7 @@ package wsl
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,7 +12,7 @@ import (
 func TestImageDownloaderCheckCache(t *testing.T) {
 	tempDir := t.TempDir()
 	downloader := NewImageDownloader(ImageDownloadConfig{
-		ImageRef: "ghcr.io/obot-platform/discobot-vz:test",
+		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
 		DataDir:  tempDir,
 	})
 
@@ -68,5 +69,101 @@ func TestImageDownloaderExtractFiles(t *testing.T) {
 	}
 	if string(got) != string(payload) {
 		t.Fatalf("extractFiles() wrote %q, want %q", string(got), string(payload))
+	}
+}
+
+func TestImageDownloaderEnsureRootfsUsesLocalArchive(t *testing.T) {
+	tempDir := t.TempDir()
+	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
+		t.Fatalf("WriteFile(rootfs) error = %v", err)
+	}
+
+	downloader := NewImageDownloader(ImageDownloadConfig{
+		DataDir:            tempDir,
+		LocalRootfsArchive: rootfsPath,
+	})
+
+	artifact, err := downloader.EnsureRootfs(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureRootfs() error = %v", err)
+	}
+	if artifact.RootfsArchive != rootfsPath {
+		t.Fatalf("EnsureRootfs() rootfs = %q, want %q", artifact.RootfsArchive, rootfsPath)
+	}
+}
+
+func TestImageDownloaderEnsureRootfsUsesLocalArchiveReportsProgress(t *testing.T) {
+	tempDir := t.TempDir()
+	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
+		t.Fatalf("WriteFile(rootfs) error = %v", err)
+	}
+
+	downloader := NewImageDownloader(ImageDownloadConfig{
+		DataDir:            tempDir,
+		LocalRootfsArchive: rootfsPath,
+	})
+
+	var operations []string
+	_, err := downloader.EnsureRootfsWithProgress(context.Background(), func(progress ImageDownloadProgress) {
+		operations = append(operations, progress.CurrentOperation)
+	})
+	if err != nil {
+		t.Fatalf("EnsureRootfsWithProgress() error = %v", err)
+	}
+	if len(operations) != 1 || operations[0] != "Using local WSL rootfs archive" {
+		t.Fatalf("EnsureRootfsWithProgress() operations = %#v, want local archive progress", operations)
+	}
+}
+
+func TestImageDownloaderEnsureRootfsUsesCacheReportsProgress(t *testing.T) {
+	tempDir := t.TempDir()
+	downloader := NewImageDownloader(ImageDownloadConfig{
+		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
+		DataDir:  tempDir,
+	})
+
+	digest := downloader.computeDigest()
+	cacheDir := filepath.Join(tempDir, "images", digest)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, rootfsArchiveName), []byte("zstd"), 0644); err != nil {
+		t.Fatalf("WriteFile(rootfs) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "manifest.json"), []byte("{}\n"), 0644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+
+	var operations []string
+	artifact, err := downloader.EnsureRootfsWithProgress(context.Background(), func(progress ImageDownloadProgress) {
+		operations = append(operations, progress.CurrentOperation)
+	})
+	if err != nil {
+		t.Fatalf("EnsureRootfsWithProgress() error = %v", err)
+	}
+	if artifact.RootfsArchive != filepath.Join(cacheDir, rootfsArchiveName) {
+		t.Fatalf("EnsureRootfsWithProgress() rootfs = %q, want %q", artifact.RootfsArchive, filepath.Join(cacheDir, rootfsArchiveName))
+	}
+	if len(operations) != 1 || operations[0] != "Using cached WSL rootfs artifact" {
+		t.Fatalf("EnsureRootfsWithProgress() operations = %#v, want cached artifact progress", operations)
+	}
+}
+
+func TestImageDownloaderEnsureRootfsRejectsEmptyLocalArchive(t *testing.T) {
+	tempDir := t.TempDir()
+	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	if err := os.WriteFile(rootfsPath, nil, 0644); err != nil {
+		t.Fatalf("WriteFile(rootfs) error = %v", err)
+	}
+
+	downloader := NewImageDownloader(ImageDownloadConfig{
+		DataDir:            tempDir,
+		LocalRootfsArchive: rootfsPath,
+	})
+
+	if _, err := downloader.EnsureRootfs(context.Background()); err == nil {
+		t.Fatal("EnsureRootfs() error = nil, want non-nil")
 	}
 }

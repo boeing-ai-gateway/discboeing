@@ -35,7 +35,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/discobot-server"],
+    "externalBin": [
+      "binaries/discobot-server",
+      "binaries/discobot-wsl-helper"
+    ],
     "macOS": {
       "entitlements": "./entitlements.plist",
       "minimumSystemVersion": "12.0",

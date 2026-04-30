@@ -22,8 +22,9 @@ const rootfsArchiveName = "discobot-rootfs.tar.zst"
 
 // ImageDownloadConfig configures WSL runtime image downloads.
 type ImageDownloadConfig struct {
-	ImageRef string
-	DataDir  string
+	ImageRef           string
+	DataDir            string
+	LocalRootfsArchive string
 }
 
 // ImageArtifact describes a cached WSL runtime artifact set.
@@ -45,12 +46,46 @@ func NewImageDownloader(cfg ImageDownloadConfig) *ImageDownloader {
 }
 
 func (d *ImageDownloader) EnsureRootfs(ctx context.Context) (*ImageArtifact, error) {
+	return d.EnsureRootfsWithProgress(ctx, nil)
+}
+
+type ImageDownloadProgress struct {
+	CurrentOperation string
+}
+
+func (d *ImageDownloader) EnsureRootfsWithProgress(ctx context.Context, report func(ImageDownloadProgress)) (*ImageArtifact, error) {
+	if strings.TrimSpace(d.cfg.LocalRootfsArchive) != "" {
+		if report != nil {
+			report(ImageDownloadProgress{CurrentOperation: "Using local WSL rootfs archive"})
+		}
+		return d.localRootfsArtifact()
+	}
 	if artifact, ok, err := d.checkCache(); err != nil {
 		return nil, err
 	} else if ok {
+		if report != nil {
+			report(ImageDownloadProgress{CurrentOperation: "Using cached WSL rootfs artifact"})
+		}
 		return artifact, nil
 	}
-	return d.download(ctx)
+	return d.download(ctx, report)
+}
+
+func (d *ImageDownloader) localRootfsArtifact() (*ImageArtifact, error) {
+	rootfsPath := strings.TrimSpace(d.cfg.LocalRootfsArchive)
+	info, err := os.Stat(rootfsPath)
+	if err != nil {
+		return nil, fmt.Errorf("stat local WSL rootfs archive %q: %w", rootfsPath, err)
+	}
+	if info.Size() == 0 {
+		return nil, fmt.Errorf("local WSL rootfs archive %q is empty", rootfsPath)
+	}
+	return &ImageArtifact{
+		Digest:          computeShortDigest(rootfsPath),
+		RootfsArchive:   rootfsPath,
+		ImageRef:        rootfsPath,
+		DownloadedAtUTC: info.ModTime().UTC(),
+	}, nil
 }
 
 func (d *ImageDownloader) checkCache() (*ImageArtifact, bool, error) {
@@ -77,13 +112,19 @@ func (d *ImageDownloader) checkCache() (*ImageArtifact, bool, error) {
 	return artifact, true, nil
 }
 
-func (d *ImageDownloader) download(ctx context.Context) (*ImageArtifact, error) {
+func (d *ImageDownloader) download(ctx context.Context, report func(ImageDownloadProgress)) (*ImageArtifact, error) {
+	if report != nil {
+		report(ImageDownloadProgress{CurrentOperation: "Resolving WSL runtime image"})
+	}
 	ref, err := name.ParseReference(d.cfg.ImageRef)
 	if err != nil {
 		return nil, fmt.Errorf("invalid WSL image reference %s: %w", d.cfg.ImageRef, err)
 	}
 
 	platform := v1.Platform{OS: "linux", Architecture: runtime.GOARCH}
+	if report != nil {
+		report(ImageDownloadProgress{CurrentOperation: "Fetching WSL runtime image metadata"})
+	}
 	desc, err := remote.Get(ref, remote.WithContext(ctx), remote.WithPlatform(platform))
 	if err != nil {
 		return nil, fmt.Errorf("fetch WSL image descriptor: %w", err)
@@ -118,7 +159,12 @@ func (d *ImageDownloader) download(ctx context.Context) (*ImageArtifact, error) 
 	defer os.RemoveAll(tempDir)
 
 	rootfsFound := false
-	for _, layer := range layers {
+	for i, layer := range layers {
+		if report != nil {
+			report(ImageDownloadProgress{
+				CurrentOperation: fmt.Sprintf("Extracting WSL rootfs artifact from image layer %d/%d", i+1, len(layers)),
+			})
+		}
 		uncompressed, err := layer.Uncompressed()
 		if err != nil {
 			return nil, fmt.Errorf("open WSL image layer: %w", err)
@@ -148,10 +194,16 @@ func (d *ImageDownloader) download(ctx context.Context) (*ImageArtifact, error) 
 		return nil, fmt.Errorf("marshal WSL image metadata: %w", err)
 	}
 	metadataJSON = append(metadataJSON, '\n')
+	if report != nil {
+		report(ImageDownloadProgress{CurrentOperation: "Writing WSL runtime image metadata"})
+	}
 	if err := os.WriteFile(filepath.Join(tempDir, "manifest.json"), metadataJSON, 0644); err != nil {
 		return nil, fmt.Errorf("write WSL image metadata: %w", err)
 	}
 
+	if report != nil {
+		report(ImageDownloadProgress{CurrentOperation: "Finalizing cached WSL rootfs artifact"})
+	}
 	if err := os.RemoveAll(cacheDir); err != nil {
 		return nil, fmt.Errorf("remove existing WSL image cache: %w", err)
 	}

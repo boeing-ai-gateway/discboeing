@@ -119,9 +119,69 @@ jobs:
           build-args: |
             PRELOAD_IMAGE=${{ steps.preload.outputs.image }}
 
+  # Build and push the WSL runtime image
+  # Depends on runtime image so crane can pull it during the Docker build
+  build-wsl-image:
+    needs: build-runtime-image
+    if: github.event_name != 'pull_request'
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Depot
+        uses: depot/setup-action@v1
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}-wsl
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Compute preload image ref
+        id: preload
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            IMAGE_TAG="${GITHUB_REF_NAME#v}"
+          else
+            IMAGE_TAG="main"
+          fi
+          echo "image=ghcr.io/${{ github.repository }}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push WSL image
+        uses: depot/build-push-action@v1
+        with:
+          project: bbqjs4tj1g
+          context: .
+          target: wsl-image
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PRELOAD_IMAGE=${{ steps.preload.outputs.image }}
+
   # Build Tauri app and create GitHub release (tags only)
   release:
-    needs: build-vz-image
+    needs:
+      - build-vz-image
+      - build-wsl-image
     if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
@@ -131,6 +191,10 @@ jobs:
           - platform: depot-macos-15
             target: aarch64-apple-darwin
             vz-arch: arm64
+          # Windows x64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            wsl-arch: amd64
 
     runs-on: ${{ matrix.platform }}
 
@@ -162,9 +226,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Install crane for extracting VZ image (Docker is not available on macOS runners)
+      # Install crane for extracting bundled guest images (Docker is not available on release runners)
       - name: Install crane
-        if: matrix.vz-arch
+        if: matrix.vz-arch || matrix.wsl-arch
         run: go install github.com/google/go-containerregistry/cmd/crane@latest
 
       # Extract VZ image files for macOS builds
@@ -186,6 +250,26 @@ jobs:
           IMAGE_REF="ghcr.io/${{ github.repository }}-vz:${IMAGE_TAG}"
           echo "Extracting VZ image: ${IMAGE_REF}"
           node scripts/extract-vz-image.mjs "${IMAGE_REF}" ${{ matrix.vz-arch }}
+
+      # Extract WSL image files for Windows builds
+      - name: Extract WSL image
+        if: matrix.wsl-arch
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Authenticate crane with ghcr.io
+          echo "${GITHUB_TOKEN}" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          # Determine the image tag — strip 'v' prefix to match semver tags from metadata-action
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            IMAGE_TAG="${GITHUB_REF_NAME#v}"
+          else
+            IMAGE_TAG="main"
+          fi
+          IMAGE_REF="ghcr.io/${{ github.repository }}-wsl:${IMAGE_TAG}"
+          echo "Extracting WSL image: ${IMAGE_REF}"
+          node scripts/extract-wsl-image.mjs "${IMAGE_REF}" ${{ matrix.wsl-arch }}
 
       # Extract versions from tag
       # Full version for Go server: v0.1.0-alpha12 → 0.1.0-alpha12

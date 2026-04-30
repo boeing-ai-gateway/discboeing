@@ -15,6 +15,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -181,19 +182,8 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 			return nil, fmt.Errorf("failed to create docker client with vsock: %w", err)
 		}
 	} else {
-		// Use standard Docker client (local socket or configured host)
-		clientOpts := []client.Opt{
-			client.FromEnv,
-			client.WithAPIVersionNegotiation(),
-		}
-
-		if cfg.DockerHost != "" {
-			clientOpts = append(clientOpts, client.WithHost(cfg.DockerHost))
-		} else if host := DetectDockerHost(); host != "" {
-			clientOpts = append(clientOpts, client.WithHost(host))
-		}
-
-		cli, err = client.NewClientWithOpts(clientOpts...)
+		// Use standard Docker client (local socket, configured host, or WSL stdio proxy)
+		cli, err = NewAPIClient(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create docker client: %w", err)
 		}
@@ -298,6 +288,24 @@ func inspectionContainerNeedsRecreate(existing containerTypes.InspectResponse, i
 		existing.HostConfig.IpcMode != "host" ||
 		existing.HostConfig.UTSMode != "host" ||
 		existing.HostConfig.CgroupnsMode != containerTypes.CgroupnsModeHost
+}
+
+func resolveWorkspaceMountSource(sourcePath string) (string, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	if sourcePath == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(sourcePath, "/") {
+		return path.Clean(sourcePath), nil
+	}
+	if filepath.IsAbs(sourcePath) {
+		return sourcePath, nil
+	}
+	absPath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return "", err
+	}
+	return absPath, nil
 }
 
 func (p *Provider) attachToContainer(ctx context.Context, containerID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
@@ -649,14 +657,9 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 
 	// Mount workspace directory (always a local path)
 	if opts.WorkspacePath != "" {
-		// Ensure the source path is absolute (Docker requires absolute paths)
-		sourcePath := opts.WorkspacePath
-		if !filepath.IsAbs(sourcePath) {
-			absPath, err := filepath.Abs(sourcePath)
-			if err != nil {
-				return nil, fmt.Errorf("%w: failed to resolve absolute path for workspace: %v", sandbox.ErrStartFailed, err)
-			}
-			sourcePath = absPath
+		sourcePath, err := resolveWorkspaceMountSource(opts.WorkspacePath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to resolve workspace mount source: %v", sandbox.ErrStartFailed, err)
 		}
 
 		hostConfig.Mounts = append(hostConfig.Mounts, mount.Mount{
@@ -820,7 +823,7 @@ func (p *Provider) doEnsureImage() {
 	// Local images can't be pulled from a registry. They are loaded externally
 	// (e.g., via ensureImageInVM in the VZ provider which transfers from host Docker).
 	// Don't set an error here — the image may be loaded after provider creation.
-	if isLocalImage(image) {
+	if IsLocalImage(image) {
 		checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, err := p.client.ImageInspect(checkCtx, image)
 		cancel()
@@ -892,12 +895,16 @@ func (p *Provider) doEnsureImage() {
 	}
 }
 
-// isLocalImage checks if an image is a local image that cannot be pulled from a registry.
+// IsLocalImage checks if an image is a local image that cannot be pulled from a registry.
 // Local images include:
 // - Images with discobot-local/ prefix (locally built images)
 // - Bare digest references (sha256:...)
-func isLocalImage(image string) bool {
+func IsLocalImage(image string) bool {
 	return strings.HasPrefix(image, "discobot-local/") || strings.HasPrefix(image, "sha256:")
+}
+
+func isLocalImage(image string) bool {
+	return IsLocalImage(image)
 }
 
 // pullSandboxImage pulls the sandbox image if it doesn't exist locally and can be pulled.

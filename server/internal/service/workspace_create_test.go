@@ -139,6 +139,31 @@ func TestCreateWorkspaceAutoInit(t *testing.T) {
 	}
 }
 
+func TestClassifyLocalWorkspacePathAcceptsWorktreeConfigRepository(t *testing.T) {
+	dir := t.TempDir()
+
+	runGitForWorkspaceTest(t, dir, "init")
+	runGitForWorkspaceTest(t, dir, "config", "user.email", "test@example.com")
+	runGitForWorkspaceTest(t, dir, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Test\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+	runGitForWorkspaceTest(t, dir, "add", "README.md")
+	runGitForWorkspaceTest(t, dir, "commit", "-m", "Initial commit")
+	runGitForWorkspaceTest(t, dir, "config", "extensions.worktreeConfig", "true")
+
+	path, classification, err := classifyLocalWorkspacePath(dir)
+	if err != nil {
+		t.Fatalf("classifyLocalWorkspacePath failed: %v", err)
+	}
+	if classification != LocalWorkspaceClassificationExistingGit {
+		t.Fatalf("expected classification %q, got %q", LocalWorkspaceClassificationExistingGit, classification)
+	}
+	if path != filepath.Clean(dir) {
+		t.Fatalf("expected normalized path %q, got %q", filepath.Clean(dir), path)
+	}
+}
+
 // simulateLocalValidation mirrors the local-path branch of CreateWorkspace.
 func simulateLocalValidation(path string) error {
 	info, statErr := os.Stat(path)
@@ -202,6 +227,18 @@ func simulateLocalValidation(path string) error {
 		}
 	}
 	return nil
+}
+
+func runGitForWorkspaceTest(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\nOutput: %s", args, err, output)
+	}
+	return string(output)
 }
 
 // TestExpandPath tests the path expansion logic used in CreateWorkspace.

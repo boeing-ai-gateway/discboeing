@@ -8,7 +8,7 @@ resume work without reconstructing the design from scratch.
 
 - Owner: Discobot sandbox runtime work
 - Status: planned
-- Last updated: 2026-04-03
+- Last updated: 2026-04-27
 - Related docs:
   - `server/docs/design/sandbox.md`
   - `server/internal/sandbox/runtime.go`
@@ -23,7 +23,7 @@ resume work without reconstructing the design from scratch.
 
 - [x] Investigated current Linux Docker and macOS VZ sandbox implementations
 - [x] Chosen high-level Windows direction: managed WSL2 distro with Docker inside
-- [x] Chosen image strategy: reuse the same OCI image family used for VZ, with an additional WSL rootfs tar artifact
+- [x] Chosen image strategy: publish a dedicated WSL OCI image from the shared guest build pipeline
 - [x] Chosen provider strategy: implement a dedicated `wsl.Provider` that wraps `docker.Provider`
 - [x] Chosen path strategy: translate Windows bind source paths into WSL-visible paths before sandbox creation
 - [x] Chosen lifecycle strategy: one managed shared WSL distro per user install, not one distro per project
@@ -52,6 +52,28 @@ resume work without reconstructing the design from scratch.
 - [x] Added initial TCP bridge startup and readiness probing for Windows-to-WSL Docker access
 - [x] Updated WSL runtime state persistence to remember dynamically assigned TCP bridge ports
 - [x] Added shared host-runtime idle shutdown abstraction and wired WSL to use `WSLIdleTimeout` for managed distro shutdown
+- [x] Extended the shared guest image build to emit `discobot-rootfs.tar.zst` alongside the VZ squashfs artifact
+- [x] Added a local WSL development override (`WSL_ROOTFS_ARCHIVE_PATH`) and watcher script for rebuilding the rootfs archive into `server/.env`
+- [x] Start managed WSL distro setup and startup in the background during provider initialization and report task success/failure through system startup tasks
+- [x] Recover stale unregistered managed WSL install directories by moving them aside before re-import
+- [x] Report detailed WSL bootstrap progress phases for rootfs preparation, distro import, system startup, and Docker bridge readiness
+- [x] Enable systemd in the shared WSL guest image with `/etc/wsl.conf`
+- [x] Add shared guest-side `/var` persistence bootstrap for VZ and WSL
+- [x] Replace the separate `discobot-data` distro with a single persistent `/var` VHD mounted into WSL
+- [x] Mount `/var` from the attached WSL VHD by filesystem label inside the managed distro
+- [x] Preserve `/var` across main-distro upgrades by keeping mutable state on the VHD
+- [x] Remove the WSL guest role split while keeping the WSL-specific networking/resolver service drop-ins
+- [x] Detect a broken runtime distro that is reported as running but fails WSL entry commands, and recover it by reimporting only the runtime distro
+- [x] Launch a constrained elevated helper for host VHD operations that require UAC
+- [x] Make WSL `/var` readiness rely on guest-side `mountpoint` checks without a guest-side timeout
+- [x] Make managed WSL startup readiness retry until caller cancellation and treat `systemd` `degraded` as ready
+- [x] Share host-to-runtime local sandbox image loading between VM/VZ and WSL so `discobot-local/...` and bare `sha256:...` images are copied into the managed runtime Docker daemon
+- [x] Verify the persistent WSL `/var` VHD attachment and label visibility from `wsl.exe --system` before distro checks
+- [x] Make provider runtime startup wait for background WSL install/bootstrap work to finish before running `EnsureRunning`
+- [x] Run `wsl.exe --system` host block-device probes as `root`, and recover broken `/var` VHD attachment state with `wsl.exe --shutdown`
+- [x] Best-effort hide the managed WSL distro from Windows Terminal by marking matching generated WSL profiles as hidden during WSL bootstrap
+- [x] Keep the managed WSL runtime alive while sandbox watches are active and recreate Docker event watches after bridge loss
+- [x] Retry cleanup of temporary WSL rootfs tar files and sweep stale temp tar files from the WSL state directory during bootstrap
 
 ### In Progress
 
@@ -61,7 +83,6 @@ resume work without reconstructing the design from scratch.
 ### Not Started
 
 - [ ] Add `server/internal/sandbox/wsl/upgrade.go`
-- [ ] Extend build pipeline to emit `discobot-rootfs.tar.zst`
 - [ ] Add Windows integration tests for distro bootstrap and Docker connectivity
 
 ## Goals
@@ -116,7 +137,8 @@ Windows should follow the same broad shape as macOS:
 - Docker daemon running inside that boundary
 - one session container per session
 
-But unlike VZ, Windows should use one shared managed WSL distro instead of per-project VMs.
+But unlike VZ, Windows should use one shared managed runtime distro plus one
+shared persistent `/var` VHD instead of per-project VMs.
 
 ## Recommended Windows Architecture
 
@@ -124,26 +146,31 @@ But unlike VZ, Windows should use one shared managed WSL distro instead of per-p
 Windows host
   ├── Discobot server
   ├── WSL manager
-  └── Managed WSL distro: discobot
-        ├── systemd
-        ├── dockerd
-        ├── discobot docker bridge
-        └── session containers
+  ├── Persistent /var VHD: discobot-var.vhdx
+  │     └── attached into WSL as a raw block device
+  ├── Managed WSL distro: discobot
+  │     ├── systemd
+  │     ├── dockerd
+  │     ├── discobot docker bridge
+  │     ├── /var mounted from LABEL=discobot-var
+  │     └── session containers
 ```
 
 ## Key Design Decisions
 
-### 1. One shared managed distro
+### 1. One shared managed runtime plus one shared persistent `/var` VHD
 
-Use one WSL distro per user install.
+Use one runtime distro plus one persistent `/var` VHD per user install.
 
 Reasoning:
 
-- simpler install and upgrade path
+- simpler install and upgrade path than per-project distros
 - simpler Docker access model
 - simpler diagnostics and recovery
 - avoids forcing WSL into the current per-project VM abstraction
 - session isolation still comes from inner Docker containers
+- keeps rootfs replacement separate from persistent Docker and Discobot state
+- removes reliance on a second distro that can wedge independently of the runtime
 
 ### 2. Dedicated `wsl.Provider`
 
@@ -169,22 +196,24 @@ server/internal/sandbox/wsl/
   upgrade.go
 ```
 
-### 3. Reuse the VZ image family
+### 3. Publish a dedicated WSL image from the shared guest build
 
-Keep one OCI image family for guest runtime assets.
+Keep one shared guest rootfs build pipeline, but publish distinct OCI images
+for VZ and WSL runtime assets.
 
 Current VZ image contents include:
 
 - `vmlinuz`
 - `discobot-rootfs.squashfs`
 
-The Windows/WSL plan is to extend the image to also include:
+The Windows/WSL plan is to publish a separate image that includes:
 
 - `discobot-rootfs.tar.zst`
 - `image-manifest.json`
 - optional `rootfs-filelist.txt`
 
-That keeps the guest userspace aligned across Apple and Windows.
+That keeps the guest userspace aligned across Apple and Windows while letting
+WSL consume its own image name and artifact set.
 
 ### 4. Keep Docker on a Unix socket inside WSL
 
@@ -281,19 +310,29 @@ Proposed fields:
 WSLDistroName      string
 WSLInstallDir      string
 WSLStateDir        string
+WSLVarDiskPath     string
+WSLVarDiskSizeGB   int
+WSLRootfsPath      string
 WSLImageRef        string
 WSLBridgeType      string // named_pipe|tcp
 WSLBridgePort      int    // 0=random
 WSLIdleTimeout     time.Duration
-WSLUpgradeStrategy string // inplace
 ```
 
 Suggested defaults:
 
 - `WSLDistroName=discobot`
-- `WSLImageRef=DefaultVZImage()` initially
+- `WSLVarDiskPath=%LOCALAPPDATA%/discobot/wsl/var.vhdx`
+- `WSLVarDiskSizeGB=100`
+- `WSLImageRef=DefaultWSLImage()`
 - `WSLBridgeType=tcp` initially while named-pipe transport is still pending
 - install/state under `%LOCALAPPDATA%`
+
+For local Windows development, `DISCOBOT_DOCKER_WSL_DISTRO=<name>` can also
+proxy host-side Docker SDK access through
+`wsl.exe -d <name> -- docker system dial-stdio` so local image builds and
+host-to-VM image transfer reuse a user-managed Docker daemon running in
+another WSL distro.
 
 ## Distro Lifecycle
 
@@ -301,22 +340,37 @@ Suggested defaults:
 
 1. Verify `wsl.exe` exists.
 2. Verify WSL2 is enabled and available.
-3. Check whether the managed distro exists.
+3. Check whether the persistent `/var` VHD exists.
 4. If missing:
-   - download `discobot-rootfs.tar.zst`
-   - decompress to tar
+   - create a dynamic VHDX at `WSLVarDiskPath`
+5. Check whether the managed runtime distro exists.
+6. If missing:
    - run `wsl.exe --import <name> <install-dir> <rootfs.tar> --version 2`
-5. Run first-boot provisioning.
-6. Write installed digest metadata.
+7. Write installed digest metadata for the runtime distro.
 
 ## Start flow
 
-1. Ensure installed.
-2. Start the distro with `wsl.exe -d <name> -- true`.
-3. Wait for systemd readiness.
-4. Wait for `docker.service` readiness.
-5. Wait for the Docker bridge to be reachable.
-6. Return runtime connection info.
+1. Ensure the runtime distro is installed.
+2. Reconcile the runtime distro against the configured rootfs source and
+   automatically replace it when the configured source changes.
+3. Ensure the persistent `/var` VHD exists.
+4. Verify whether the `/var` VHD is already attached from `wsl.exe --system -u root`
+   by checking for the configured filesystem label; if not, attach it to WSL
+   with administrator privileges using `wsl.exe --mount --vhd --bare`.
+5. If the attached VHD is blank, format the discovered block device as ext4 with
+   the configured label. If WSL reports the VHD is already attached but the label
+   is still unavailable, first try `wsl.exe --unmount <vhd>` and, if detach still
+   fails with the known recovery error, issue `wsl.exe --shutdown` before
+   retrying the attach.
+   When Windows requires elevation for host VHD creation, attach, or detach
+   operations, launch a constrained elevated helper and continue only after the
+   helper succeeds.
+6. Start the runtime distro with `wsl.exe -d <name> -- true`.
+7. Wait for systemd readiness.
+8. Wait for `/var` readiness after the guest mounts the attached VHD by label.
+9. Wait for `docker.service` readiness.
+10. Wait for the Docker bridge to be reachable.
+11. Return runtime connection info.
 
 ## Stop flow
 
@@ -334,7 +388,7 @@ Then delete Discobot-managed Windows-side state.
 
 ## Distro Contents
 
-The managed rootfs should include:
+The shared managed rootfs should include:
 
 - systemd-enabled base runtime
 - Docker daemon
@@ -342,7 +396,17 @@ The managed rootfs should include:
 - Discobot upgrade helper
 - basic diagnostics tooling needed for support and recovery
 
-Required config should include `/etc/wsl.conf` with systemd enabled.
+Required config should include `/etc/wsl.conf` with systemd enabled. The
+shared guest image now ships this file so imported WSL distros boot under
+systemd on first launch.
+
+At runtime, the main distro mounts `/var` from the attached host-managed VHD by
+filesystem label. The imported guest rootfs now carries a small WSL env file
+that tells `init-var.sh` which label to wait for and mount onto `/var`. In WSL,
+the main distro also skips `systemd-networkd`, `systemd-networkd-wait-online`,
+`systemd-resolved`, and `systemd-timesyncd`, and relies on WSL-managed
+networking and `/etc/resolv.conf`. VZ keeps using the full guest networking
+stack and `/dev/vdb` for `/var`.
 
 ## Docker Bridge Design
 
@@ -431,34 +495,38 @@ If Windows-to-WSL localhost forwarding is not reliable enough, add a WSL-specifi
 
 ## Strong recommendation
 
-Use in-place distro upgrades rather than unregister/reimport.
+Use reimport-style upgrades for the runtime distro while preserving the data
+distro.
 
 ### Why
 
-Reimporting would risk losing:
+Reimporting the runtime distro is simple and reliable once mutable state lives
+outside the runtime rootfs:
 
-- Docker images
-- cache volumes
-- session data
-- logs
+- Docker images and layers stay under the mounted `/var` VHD
+- Discobot runtime state under `/var/lib/discobot` survives
+- logs and apt cache under `/var` survive
+- the OS rootfs can be replaced atomically by unregistering and reimporting
 
 ### Upgrade flow
 
-1. Compare installed digest to desired digest from OCI metadata.
+1. Compare installed runtime digest to desired digest from OCI metadata.
 2. If changed:
-   - pause or drain new sandbox creation
-   - run an in-distro upgrade helper
-   - untar the new rootfs over `/`
-   - preserve mutable directories such as:
-     - `/var/lib/docker`
-     - `/var/lib/discobot`
-     - `/var/log`
-     - possibly `/etc/discobot`
-   - remove deleted files using `rootfs-filelist.txt`
-3. Terminate distro.
-4. Restart distro.
-5. Verify Docker bridge health.
-6. Mark new digest as installed.
+   - ensure the `/var` VHD exists and is attached to WSL
+   - if the mounted VHD is still empty, seed it once from the old runtime
+     distro `/var`
+   - terminate the runtime distro
+   - unregister the runtime distro
+   - delete only the runtime install dir
+   - import the new runtime rootfs
+3. Restart the runtime distro.
+4. Verify `/var`, Docker, and bridge health.
+5. Mark the new runtime digest as installed.
+
+This reconciliation runs automatically as part of the normal
+`EnsureInstalled()` / `EnsureRunning()` path, so changing `WSL_IMAGE_REF` or
+`WSL_ROOTFS_ARCHIVE_PATH` is enough to trigger replacement of the runtime
+distro on the next bootstrap or sandbox operation.
 
 ## Build Pipeline Work
 
@@ -469,6 +537,11 @@ Extend the existing OCI runtime image build so it emits:
 - metadata files used for install and upgrade
 
 The root filesystem should be defined once and exported in multiple formats.
+For local Windows development, also support bypassing the registry path by
+building the archive into the workspace and setting
+`WSL_ROOTFS_ARCHIVE_PATH` in `server/.env`. The local watcher should publish
+content-addressed archive filenames so path changes trigger managed distro
+upgrades when the rootfs content changes.
 
 ## Status Reporting
 
@@ -623,7 +696,7 @@ Implemented the first real managed-runtime teardown and upgrade controls:
 
 - updated `server/internal/sandbox/wsl/manager.go` so `Stop()` now terminates a running managed distro with `wsl.exe --terminate`
 - updated `server/internal/sandbox/wsl/manager.go` so `Uninstall()` now unregisters the managed distro, removes the install directory, and clears persisted runtime state
-- updated `server/internal/sandbox/wsl/manager.go` so `UpgradeIfNeeded()` now supports the current `inplace` strategy by reinstalling when the persisted `ImageRef` differs from the configured WSL image
+- updated `server/internal/sandbox/wsl/manager.go` so `UpgradeIfNeeded()` reinstalls the runtime distro when the persisted `ImageRef` differs from the configured WSL image source
 - kept upgrade detection conservative by keying off persisted runtime state, avoiding destructive reinstall when the existing distro has no recorded image metadata yet
 
 Current limitation: upgrade handling is still coarse-grained reinstall logic, with no in-guest migration path, no named-pipe bridge lifecycle, and no Windows integration coverage yet.
