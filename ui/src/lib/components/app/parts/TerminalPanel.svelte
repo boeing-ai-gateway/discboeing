@@ -23,6 +23,7 @@
 		onToggleDockMaximized: () => void;
 		rootEnabled: boolean;
 		sessionId: string | null;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	const MIN_TERMINAL_ROWS = 20;
@@ -38,6 +39,7 @@
 		onToggleDockMaximized,
 		rootEnabled,
 		sessionId,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	let terminalHost = $state<HTMLDivElement | null>(null);
@@ -505,6 +507,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close terminal panel"
 	minimizeLabel="Minimize terminal panel"
 	{maximizeTitle}

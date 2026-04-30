@@ -76,6 +76,7 @@
 		onClose: () => void;
 		onToggleDockMaximized: () => void;
 		resolvedTheme: ResolvedTheme;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	let {
@@ -85,6 +86,7 @@
 		onClose,
 		onToggleDockMaximized,
 		resolvedTheme,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	const MONACO_THEME_PREFIX = "discobot";
@@ -936,6 +938,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close files panel"
 	minimizeLabel="Minimize files panel"
 	{maximizeTitle}

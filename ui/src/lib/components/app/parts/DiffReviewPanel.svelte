@@ -59,6 +59,7 @@
 		fileContents: Record<string, string>;
 		diffStats: SessionDiffStats;
 		resolvedTheme: ResolvedTheme;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	type SnapshotState = {
@@ -112,6 +113,7 @@
 		fileContents,
 		diffStats,
 		resolvedTheme,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	const diffStates = new SvelteMap<string, LoadedDiffState>();
@@ -907,6 +909,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close diff review panel"
 	minimizeLabel="Minimize diff review panel"
 	{maximizeTitle}

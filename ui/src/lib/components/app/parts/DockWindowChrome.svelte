@@ -5,6 +5,7 @@
 		dockMaximized: boolean;
 		onClose: () => void;
 		onToggleDockMaximized: () => void;
+		shiftWindowControlsForSidebar?: boolean;
 		closeLabel: string;
 		minimizeLabel: string;
 		maximizeTitle: string;
@@ -21,6 +22,7 @@
 		dockMaximized,
 		onClose,
 		onToggleDockMaximized,
+		shiftWindowControlsForSidebar = false,
 		closeLabel,
 		minimizeLabel,
 		maximizeTitle,
@@ -32,6 +34,24 @@
 		actions,
 		children,
 	}: Props = $props();
+
+	function handleHeaderDoubleClick(event: MouseEvent) {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) {
+			onToggleDockMaximized();
+			return;
+		}
+
+		if (
+			target.closest(
+				'button, a, input, label, select, textarea, [role="button"], [data-dock-header-double-click-ignore]',
+			)
+		) {
+			return;
+		}
+
+		onToggleDockMaximized();
+	}
 </script>
 
 <div
@@ -40,14 +60,21 @@
 		shellClass,
 	)}
 >
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class={cn(
 			"flex h-10 shrink-0 items-center justify-between gap-3 border-b border-sidebar-border px-3",
 			headerClass,
 		)}
+		ondblclick={handleHeaderDoubleClick}
 	>
 		<div class="flex min-w-0 items-center gap-2">
-			<div class="flex shrink-0 gap-1.5">
+			<div
+				class={cn(
+					"flex shrink-0 gap-1.5",
+					shiftWindowControlsForSidebar && "ml-36",
+				)}
+			>
 				<button
 					type="button"
 					onclick={onClose}

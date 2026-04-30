@@ -41,6 +41,7 @@
 		services: ServiceItem[];
 		sessionId: string;
 		streamManager: ChatStreamManager;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	type ViewMode = "preview" | "logs";
@@ -73,6 +74,7 @@
 		services,
 		sessionId,
 		streamManager,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	let isLoading = $state(true);
@@ -456,6 +458,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close service panel"
 	minimizeLabel="Minimize service panel"
 	{maximizeTitle}

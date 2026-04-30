@@ -14,6 +14,7 @@
 		desktopAvailable: boolean;
 		onClose: () => void;
 		onToggleDockMaximized: () => void;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	type ConnectionStatus =
@@ -60,6 +61,7 @@
 		dockMaximized,
 		onClose,
 		onToggleDockMaximized,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	let desktopHost = $state<HTMLDivElement | null>(null);
@@ -242,6 +244,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close desktop panel"
 	minimizeLabel="Minimize desktop panel"
 	{maximizeTitle}

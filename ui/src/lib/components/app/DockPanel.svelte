@@ -40,6 +40,9 @@
 	const sessionFileContents = $derived.by(() => session.files.contents);
 	const sessionFileDiff = $derived.by(() => session.files.diff);
 	const sessionFileDiffStats = $derived.by(() => session.files.diffStats);
+	const shiftWindowControlsForSidebar = $derived.by(
+		() => !app.ui.desktopSidebarOpen && sessionView.dockMaximized,
+	);
 	const activeDockPanelKind = $derived.by<DockPanelKind | null>(() => {
 		const { kind } = sessionView.activeView;
 		return kind === "chat" ? null : kind;
@@ -109,6 +112,7 @@ ${selectedText}
 				onRootEnabledChange={sessionView.setTerminalRootEnabled}
 				dockMaximized={sessionView.dockMaximized}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}
@@ -123,6 +127,7 @@ ${selectedText}
 				onClose={sessionView.openChat}
 				dockMaximized={sessionView.dockMaximized}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}
@@ -138,6 +143,7 @@ ${selectedText}
 				resolvedTheme={app.preferences.resolvedTheme}
 				sessionId={session.sessionId}
 				service={vscodeService}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}
@@ -151,6 +157,7 @@ ${selectedText}
 				dockMaximized={sessionView.dockMaximized}
 				colorScheme={app.preferences.colorScheme}
 				resolvedTheme={app.preferences.resolvedTheme}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}
@@ -173,6 +180,7 @@ ${selectedText}
 				fileContents={sessionFileContents}
 				diffStats={sessionFileDiffStats}
 				resolvedTheme={app.preferences.resolvedTheme}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}
@@ -192,6 +200,7 @@ ${selectedText}
 				onStart={session.services.start}
 				onStop={session.services.stop}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				{shiftWindowControlsForSidebar}
 			/>
 		</div>
 	{/if}

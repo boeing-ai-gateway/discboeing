@@ -14,6 +14,7 @@
 		resolvedTheme: ResolvedTheme;
 		sessionId: string;
 		service: ServiceItem | null;
+		shiftWindowControlsForSidebar?: boolean;
 	};
 
 	const VSCODE_THEME_FILE_PATH = ".discobot/.vscode-theme.json";
@@ -28,6 +29,7 @@
 		resolvedTheme,
 		sessionId,
 		service,
+		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	let iframeElement = $state<HTMLIFrameElement | null>(null);
@@ -173,6 +175,7 @@
 	{dockMaximized}
 	{onClose}
 	{onToggleDockMaximized}
+	{shiftWindowControlsForSidebar}
 	closeLabel="Close editor panel"
 	minimizeLabel="Minimize editor panel"
 	{maximizeTitle}
