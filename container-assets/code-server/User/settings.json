@@ -1,6 +1,7 @@
 {
 	"workbench.colorTheme": "Discobot Dark",
 	"window.commandCenter": false,
+	"window.menuBarVisibility": "toggle",
 	"workbench.activityBar.location": "top",
 	"editor.minimap.enabled": false,
 	"files.autoSave": "onFocusChange",
