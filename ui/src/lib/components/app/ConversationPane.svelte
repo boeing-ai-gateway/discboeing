@@ -317,10 +317,7 @@
 	}
 
 	function isBrowserActivityExpanded(turnId: string): boolean {
-		return (
-			isActiveStreamingTurn(turnId) ||
-			(expandedBrowserActivityMessages[turnId] ?? false)
-		);
+		return expandedBrowserActivityMessages[turnId] ?? turnId === activeTurnId;
 	}
 
 	function setBrowserActivityExpanded(messageId: string, open: boolean) {
@@ -1258,7 +1255,6 @@
 	turnId: string,
 	events: BrowserEventChunkData[],
 )}
-	{@const browserActivityStreaming = isActiveStreamingTurn(turnId)}
 	{@const browserActivityExpanded = isBrowserActivityExpanded(turnId)}
 	{@const browserActivityViewMode = getBrowserActivityViewMode(turnId)}
 	{@const browserStepCount = getBrowserActivityStepCount(events)}
@@ -1266,9 +1262,6 @@
 	<Collapsible
 		open={browserActivityExpanded}
 		onOpenChange={(open) => {
-			if (browserActivityStreaming && !open) {
-				return;
-			}
 			setBrowserActivityExpanded(turnId, open);
 			if (open) {
 				void preloadBrowserTimelineSteps(browserTimelineSteps);
