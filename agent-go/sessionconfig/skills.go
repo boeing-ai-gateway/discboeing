@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -159,23 +158,18 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 }
 
 func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool, error) {
-	var paths []string
-	for _, dir := range []string{".claude", ".discobot"} {
-		paths = append(paths, skillLookupPaths(filepath.Join(projectRoot, dir, "skills"), skillName)...)
+	dirs := []string{
+		filepath.Join(projectRoot, ".claude", "skills"),
+		filepath.Join(projectRoot, ".discobot", "skills"),
 	}
 	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
-			paths = append(paths, skillLookupPaths(filepath.Join(home, dir, "skills"), skillName)...)
+			dirs = append(dirs, filepath.Join(home, dir, "skills"))
 		}
 	}
-	for _, dir := range discobotSystemPaths("skills") {
-		paths = append(paths, skillLookupPaths(dir, skillName)...)
-	}
-	skill, ok, err := lookupFirst(skillName, paths)
-	if ok {
-		skill.Kind = "skill"
-	}
-	return skill, ok, err
+	dirs = append(dirs, discobotSystemPaths("skills")...)
+
+	return lookupInSkillIndex(skillName, dirs, "skill", false)
 }
 
 // LookupCommand searches for a legacy command by name in commands/ directories.
@@ -191,72 +185,46 @@ func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 }
 
 func lookupCommandWithHome(projectRoot, cmdName, home string) (SkillConfig, bool, error) {
-	var paths []string
-	for _, dir := range []string{".claude", ".discobot"} {
-		paths = append(paths, commandLookupPaths(filepath.Join(projectRoot, dir, "commands"), cmdName)...)
+	dirs := []string{
+		filepath.Join(projectRoot, ".claude", "commands"),
+		filepath.Join(projectRoot, ".discobot", "commands"),
 	}
 	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
-			paths = append(paths, commandLookupPaths(filepath.Join(home, dir, "commands"), cmdName)...)
+			dirs = append(dirs, filepath.Join(home, dir, "commands"))
 		}
 	}
-	for _, dir := range discobotSystemPaths("commands") {
-		paths = append(paths, commandLookupPaths(dir, cmdName)...)
+	dirs = append(dirs, discobotSystemPaths("commands")...)
+
+	return lookupInSkillIndex(cmdName, dirs, "command", true)
+}
+
+// lookupInSkillIndex builds a fresh in-memory index from parsed skill names for
+// each lookup. Skill files are small, and rebuilding keeps tool execution in
+// sync with files edited after the initial session reminder was generated.
+func lookupInSkillIndex(name string, dirs []string, kind string, includeTopLevelMarkdown bool) (SkillConfig, bool, error) {
+	index, err := buildSkillIndex(dirs, kind, includeTopLevelMarkdown)
+	if err != nil {
+		return SkillConfig{}, false, err
 	}
-	cmd, ok, err := lookupFirst(cmdName, paths)
-	if ok {
-		cmd.Kind = "command"
-	}
-	return cmd, ok, err
+	skill, ok := index[name]
+	return skill, ok, nil
 }
 
-func skillLookupPaths(skillsDir, name string) []string {
-	return lookupPaths(skillsDir, name, false)
-}
-
-func commandLookupPaths(commandsDir, name string) []string {
-	return lookupPaths(commandsDir, name, true)
-}
-
-func lookupPaths(baseDir, name string, includeTopLevelMarkdown bool) []string {
-	variants := namePathVariants(name)
-	paths := make([]string, 0, len(variants)*2)
-	for _, rel := range variants {
-		paths = append(paths, filepath.Join(baseDir, rel, "SKILL.md"))
-		if includeTopLevelMarkdown || strings.Contains(rel, string(filepath.Separator)) {
-			paths = append(paths, filepath.Join(baseDir, rel+".md"))
+func buildSkillIndex(dirs []string, kind string, includeTopLevelMarkdown bool) (map[string]SkillConfig, error) {
+	index := make(map[string]SkillConfig)
+	for _, dir := range dirs {
+		skills, _, err := loadSkillTree(dir, kind, includeTopLevelMarkdown)
+		if err != nil {
+			return nil, err
+		}
+		for _, skill := range skills {
+			if _, ok := index[skill.Name]; !ok {
+				index[skill.Name] = skill
+			}
 		}
 	}
-	return paths
-}
-
-func namePathVariants(name string) []string {
-	seen := make(map[string]struct{})
-	paths := []string{nameToPath(name)}
-	if strings.Contains(name, ":") {
-		paths = append(paths, name)
-	}
-
-	variants := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		variants = append(variants, p)
-	}
-	return variants
-}
-
-func nameToPath(name string) string {
-	parts := strings.Split(name, ":")
-	if slices.Contains(parts, "") {
-		return name
-	}
-	return filepath.Join(parts...)
+	return index, nil
 }
 
 func pathToName(rel string) string {
@@ -266,26 +234,6 @@ func pathToName(rel string) string {
 	}
 	parts := strings.Split(rel, string(filepath.Separator))
 	return strings.Join(parts, ":")
-}
-
-// lookupFirst returns the config for the first path that exists and parses successfully.
-func lookupFirst(defaultName string, paths []string) (SkillConfig, bool, error) {
-	for _, p := range paths {
-		content, err := readFileIfExists(p)
-		if err != nil {
-			return SkillConfig{}, false, fmt.Errorf("read skill file %s: %w", p, err)
-		}
-		if content == "" {
-			continue
-		}
-		skill, err := parseSkill(defaultName, content)
-		if err != nil {
-			return SkillConfig{}, false, fmt.Errorf("parse skill %s: %w", p, err)
-		}
-		skill.SourcePath = p
-		return skill, true, nil
-	}
-	return SkillConfig{}, false, nil
 }
 
 type skillFileCandidate struct {
@@ -380,7 +328,7 @@ func skillCandidateName(rootDir, path string, includeTopLevelMarkdown bool) (str
 		return "", 0, false, fmt.Errorf("get relative path for %s: %w", path, err)
 	}
 
-	if filepath.Base(rel) == "SKILL.md" {
+	if strings.EqualFold(filepath.Base(rel), "SKILL.md") {
 		relDir := filepath.Dir(rel)
 		if relDir == "." {
 			return "", 0, false, nil

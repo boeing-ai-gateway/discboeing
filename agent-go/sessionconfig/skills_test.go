@@ -42,6 +42,32 @@ Run git commit logic here.`)
 	}
 }
 
+func TestDiscoverSkills_SkillFilenameIsCaseInsensitive(t *testing.T) {
+	root := t.TempDir()
+	skillsDir := filepath.Join(root, ".claude", "skills", "commit")
+	mkdirAll(t, skillsDir)
+	writeFile(t, filepath.Join(skillsDir, "skill.md"), `---
+name: commit
+description: Commit with lowercase skill file.
+---
+
+Run git commit logic here.`)
+
+	skills, _, err := discoverSkillsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(skills))
+	}
+	if skills[0].Name != "commit" {
+		t.Errorf("name = %q, want commit", skills[0].Name)
+	}
+	if skills[0].Description != "Commit with lowercase skill file." {
+		t.Errorf("description = %q", skills[0].Description)
+	}
+}
+
 func TestDiscoverSkills_CommandsSubdir(t *testing.T) {
 	root := t.TempDir()
 	cmdDir := filepath.Join(root, ".claude", "commands", "ci")
@@ -401,6 +427,27 @@ func TestLookupSkill_FoundInNestedMarkdown(t *testing.T) {
 	}
 }
 
+func TestLookupSkill_UsesDeclaredNameIndex(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".discobot", "skills", "browser-harness")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: browser\ndescription: Browser control.\n---\nLoad the browser harness.")
+
+	skill, found, err := lookupSkillWithHome(root, "browser", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected skill to be found by declared name")
+	}
+	if skill.Name != "browser" {
+		t.Errorf("name = %q, want browser", skill.Name)
+	}
+	if skill.Body != "Load the browser harness." {
+		t.Errorf("body = %q", skill.Body)
+	}
+}
+
 func TestLookupSkill_DoesNotSearchCommands(t *testing.T) {
 	root := t.TempDir()
 	// A command in commands/ should NOT be found by LookupSkill.
@@ -538,6 +585,27 @@ func TestLookupCommand_FoundInNestedMarkdown(t *testing.T) {
 		t.Errorf("name = %q, want check:fix", cmd.Name)
 	}
 	if cmd.Body != "Run check fix." {
+		t.Errorf("body = %q", cmd.Body)
+	}
+}
+
+func TestLookupCommand_UsesDeclaredNameIndex(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".discobot", "commands", "release-helper")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: release\ndescription: Release command.\n---\nRun release.")
+
+	cmd, found, err := lookupCommandWithHome(root, "release", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected command to be found by declared name")
+	}
+	if cmd.Name != "release" {
+		t.Errorf("name = %q, want release", cmd.Name)
+	}
+	if cmd.Body != "Run release." {
 		t.Errorf("body = %q", cmd.Body)
 	}
 }
