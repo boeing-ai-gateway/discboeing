@@ -18,7 +18,16 @@ export type GlobalShortcutAction =
 			commitModifier: SwitcherCommitModifier;
 	  }
 	| {
-			id: "new-session" | "keyboard-help";
+			id:
+				| "new-session"
+				| "new-thread"
+				| "keyboard-help"
+				| "toggle-terminal"
+				| "toggle-desktop"
+				| "toggle-editor"
+				| "toggle-files"
+				| "toggle-diff-review"
+				| "toggle-services";
 	  };
 
 export function detectIsMacPlatform(): boolean {
@@ -80,8 +89,23 @@ function getTabSwitcherCommitModifier(
 		: null;
 }
 
+function getWorkspaceViewModifierLabel(isMacPlatform: boolean): string {
+	return isMacPlatform ? "Cmd" : "Alt";
+}
+
+function usesWorkspaceViewShortcutModifier(
+	event: ShortcutKeyboardEvent,
+	isMacPlatform: boolean,
+): boolean {
+	return isMacPlatform
+		? event.metaKey && !event.ctrlKey && !event.altKey
+		: event.altKey && !event.ctrlKey && !event.metaKey;
+}
+
 export function getGlobalShortcuts(isMacPlatform: boolean): GlobalShortcut[] {
 	const primaryModifierLabel = getPrimaryModifierLabel(isMacPlatform);
+	const workspaceViewModifierLabel =
+		getWorkspaceViewModifierLabel(isMacPlatform);
 
 	return [
 		{
@@ -95,9 +119,44 @@ export function getGlobalShortcuts(isMacPlatform: boolean): GlobalShortcut[] {
 			keyGroups: [[primaryModifierLabel, "N"]],
 		},
 		{
+			id: "new-thread",
+			label: "Start new thread",
+			keyGroups: [["Ctrl", "Shift", "N"]],
+		},
+		{
 			id: "keyboard-help",
 			label: "Show keyboard shortcuts",
 			keyGroups: [[primaryModifierLabel, "/"]],
+		},
+		{
+			id: "toggle-terminal",
+			label: "Toggle terminal",
+			keyGroups: [[workspaceViewModifierLabel, "T"]],
+		},
+		{
+			id: "toggle-desktop",
+			label: "Toggle desktop",
+			keyGroups: [[workspaceViewModifierLabel, "D"]],
+		},
+		{
+			id: "toggle-editor",
+			label: "Toggle editor",
+			keyGroups: [[workspaceViewModifierLabel, "E"]],
+		},
+		{
+			id: "toggle-files",
+			label: "Toggle files",
+			keyGroups: [[workspaceViewModifierLabel, "F"]],
+		},
+		{
+			id: "toggle-diff-review",
+			label: "Toggle diff editor",
+			keyGroups: [[workspaceViewModifierLabel, "Shift", "D"]],
+		},
+		{
+			id: "toggle-services",
+			label: "Toggle services",
+			keyGroups: [[workspaceViewModifierLabel, "S"]],
 		},
 	];
 }
@@ -106,7 +165,7 @@ export function matchGlobalShortcutKeydown(
 	event: ShortcutKeyboardEvent,
 	isMacPlatform: boolean,
 ): GlobalShortcutAction | null {
-	if (event.repeat || event.altKey) {
+	if (event.repeat) {
 		return null;
 	}
 
@@ -122,11 +181,39 @@ export function matchGlobalShortcutKeydown(
 		};
 	}
 
+	const key = event.key.toLowerCase();
+	if (usesWorkspaceViewShortcutModifier(event, isMacPlatform)) {
+		if (key === "t" && !event.shiftKey) {
+			return { id: "toggle-terminal" };
+		}
+		if (key === "d") {
+			return { id: event.shiftKey ? "toggle-diff-review" : "toggle-desktop" };
+		}
+		if (key === "e" && !event.shiftKey) {
+			return { id: "toggle-editor" };
+		}
+		if (key === "f" && !event.shiftKey) {
+			return { id: "toggle-files" };
+		}
+		if (key === "s" && !event.shiftKey) {
+			return { id: "toggle-services" };
+		}
+	}
+
+	if (
+		key === "n" &&
+		event.ctrlKey &&
+		event.shiftKey &&
+		!event.metaKey &&
+		!event.altKey
+	) {
+		return { id: "new-thread" };
+	}
+
 	if (!usesPrimaryShortcutModifier(event, isMacPlatform)) {
 		return null;
 	}
 
-	const key = event.key.toLowerCase();
 	if (key === "n") {
 		return { id: "new-session" };
 	}

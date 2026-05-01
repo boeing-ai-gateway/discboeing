@@ -105,3 +105,110 @@ test("matchGlobalShortcutKeydown keeps primary shortcuts platform-aware", () => 
 		{ id: "keyboard-help" },
 	);
 });
+
+test("matchGlobalShortcutKeydown starts a new thread with Control+Shift+N", () => {
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "n", ctrlKey: true, shiftKey: true }),
+			false,
+		),
+		{ id: "new-thread" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "n", ctrlKey: true, shiftKey: true }),
+			true,
+		),
+		{ id: "new-thread" },
+	);
+});
+
+test("matchGlobalShortcutKeydown uses Alt for workspace views off macOS", () => {
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "t", altKey: true }),
+			false,
+		),
+		{ id: "toggle-terminal" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "d", altKey: true }),
+			false,
+		),
+		{ id: "toggle-desktop" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "e", altKey: true }),
+			false,
+		),
+		{ id: "toggle-editor" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "d", altKey: true, shiftKey: true }),
+			false,
+		),
+		{ id: "toggle-diff-review" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "f", altKey: true }),
+			false,
+		),
+		{ id: "toggle-files" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "s", altKey: true }),
+			false,
+		),
+		{ id: "toggle-services" },
+	);
+});
+
+test("matchGlobalShortcutKeydown uses Command for workspace views on macOS", () => {
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "t", metaKey: true }),
+			true,
+		),
+		{ id: "toggle-terminal" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "d", metaKey: true }),
+			true,
+		),
+		{ id: "toggle-desktop" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "e", metaKey: true }),
+			true,
+		),
+		{ id: "toggle-editor" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "d", metaKey: true, shiftKey: true }),
+			true,
+		),
+		{ id: "toggle-diff-review" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "f", metaKey: true }),
+			true,
+		),
+		{ id: "toggle-files" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "s", metaKey: true }),
+			true,
+		),
+		{ id: "toggle-services" },
+	);
+});

@@ -6,6 +6,7 @@
 		getThreadSwitcherThreads,
 		recentThreadKey,
 	} from "$lib/app/thread-switcher";
+	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 	import {
 		detectIsMacPlatform,
 		getGlobalShortcuts,
@@ -130,10 +131,88 @@
 		}
 	}
 
+	function handleStartNewThreadShortcut() {
+		const sessionId = app.sessions.selectedId;
+		if (!sessionId) {
+			return;
+		}
+
+		closeOverlays();
+		void app.sessions.createThread(sessionId);
+		if (isMobile.current) {
+			app.ui.setMobileSidebarOpen(false);
+		}
+	}
+
 	function toggleKeyboardHelp() {
 		const nextOpen = !keyboardHelpOpen;
 		closeTabSwitcher();
 		keyboardHelpOpen = nextOpen;
+	}
+
+	function getSelectedSessionContext() {
+		const sessionId = app.sessions.selectedId;
+		if (!sessionId) {
+			return null;
+		}
+		return app.sessions.sessionContexts.get(sessionId) ?? null;
+	}
+
+	function toggleSelectedSessionView(
+		viewKind:
+			| "terminal"
+			| "desktop"
+			| "vscode"
+			| "file"
+			| "diff-review"
+			| "services",
+	) {
+		const sessionContext = getSelectedSessionContext();
+		if (!sessionContext) {
+			return;
+		}
+
+		closeOverlays();
+		const sessionView = sessionContext.ui;
+		if (sessionView.activeView.kind === viewKind) {
+			sessionView.openChat();
+			return;
+		}
+
+		if (viewKind === "terminal") {
+			sessionView.openTerminal();
+			return;
+		}
+		if (viewKind === "desktop") {
+			sessionView.openDesktop();
+			return;
+		}
+		if (viewKind === "vscode") {
+			if (
+				sessionContext.services.list.some(
+					(service) => service.id === VSCODE_SERVICE_ID,
+				)
+			) {
+				sessionView.openVSCode();
+			}
+			return;
+		}
+		if (viewKind === "file") {
+			void sessionContext.files.open();
+			return;
+		}
+		if (viewKind === "diff-review") {
+			sessionView.openDiffReview();
+			return;
+		}
+
+		const sessionServices = sessionContext.services.list.filter(
+			(service) =>
+				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
+		);
+		if (sessionServices.length > 0) {
+			sessionView.openServices();
+		}
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {
@@ -159,6 +238,34 @@
 		event.preventDefault();
 		if (shortcutAction.id === "new-session") {
 			handleStartNewSessionShortcut();
+			return;
+		}
+		if (shortcutAction.id === "new-thread") {
+			handleStartNewThreadShortcut();
+			return;
+		}
+		if (shortcutAction.id === "toggle-terminal") {
+			toggleSelectedSessionView("terminal");
+			return;
+		}
+		if (shortcutAction.id === "toggle-desktop") {
+			toggleSelectedSessionView("desktop");
+			return;
+		}
+		if (shortcutAction.id === "toggle-editor") {
+			toggleSelectedSessionView("vscode");
+			return;
+		}
+		if (shortcutAction.id === "toggle-files") {
+			toggleSelectedSessionView("file");
+			return;
+		}
+		if (shortcutAction.id === "toggle-diff-review") {
+			toggleSelectedSessionView("diff-review");
+			return;
+		}
+		if (shortcutAction.id === "toggle-services") {
+			toggleSelectedSessionView("services");
 			return;
 		}
 		toggleKeyboardHelp();
