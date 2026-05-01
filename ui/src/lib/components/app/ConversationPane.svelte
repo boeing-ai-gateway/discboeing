@@ -836,6 +836,47 @@
 		);
 	}
 
+	function getMessageElement(messageId: string) {
+		if (!viewport) {
+			return null;
+		}
+
+		return viewport.querySelector<HTMLElement>(
+			`[data-conversation-message-id="${CSS.escape(messageId)}"]`,
+		);
+	}
+
+	function scrollElementToViewportTop(target: HTMLElement) {
+		const element = viewport;
+		if (!element) {
+			return;
+		}
+
+		const styles = window.getComputedStyle(element);
+		const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+		const viewportTop = element.getBoundingClientRect().top;
+		const targetTop = target.getBoundingClientRect().top;
+		const nextScrollTop = Math.min(
+			Math.max(0, element.scrollHeight - element.clientHeight),
+			Math.max(0, element.scrollTop + targetTop - viewportTop - paddingTop),
+		);
+
+		element.scrollTo({ top: nextScrollTop, behavior: "auto" });
+		requestAnimationFrame(() => {
+			saveScrollPosition(element);
+			updateIsNearBottom();
+		});
+	}
+
+	function scrollMessageToViewportTop(messageId: string) {
+		const messageElement = getMessageElement(messageId);
+		if (!messageElement) {
+			return;
+		}
+
+		scrollElementToViewportTop(messageElement);
+	}
+
 	function captureReservedTurnHeight(turnId: string) {
 		const element = viewport;
 		const turnElement = getTurnElement(turnId);
@@ -982,9 +1023,14 @@
 			return;
 		}
 
+		const messageId = latestMessage.id;
 		const observer = new ResizeObserver(() => {
 			refreshReservedTurnHeight(turnId);
-			scrollToBottom("auto");
+			void tick().then(() => {
+				if (activeTurnId === turnId) {
+					scrollMessageToViewportTop(messageId);
+				}
+			});
 		});
 
 		observer.observe(element);
@@ -997,7 +1043,9 @@
 				return;
 			}
 			refreshReservedTurnHeight(turnId);
-			scrollToBottom("auto");
+			void tick().then(() => {
+				scrollMessageToViewportTop(messageId);
+			});
 		});
 
 		return () => {
@@ -1022,7 +1070,7 @@
 				return tick();
 			})
 			.then(() => {
-				scrollToBottom("auto");
+				scrollMessageToViewportTop(latestMessage.id);
 			});
 	});
 </script>
