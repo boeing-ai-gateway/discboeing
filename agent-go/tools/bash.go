@@ -63,7 +63,10 @@ func (e *Executor) bashLogPath(toolCtx *thread.ToolContext, toolCallID string) s
 // runBashSync runs a bash command synchronously, returns the combined output,
 // and saves it to a log file in {threadsDir}/{threadID}/bash/.
 func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart, command string, timeout time.Duration) (thread.ToolExecuteResult, error) {
-	cwd := e.getCwd(toolCtx)
+	cwd, err := e.prepareBashCwd(toolCtx)
+	if err != nil {
+		return errResult(call, fmt.Sprintf("failed to prepare working directory: %v", err)), nil
+	}
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
 	cwdPath := logPath + ".cwd"
 	shellPath, err := resolveBashCommand()
@@ -161,7 +164,10 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 // immediately with the process PID and log path so the LLM can tail or read
 // the output at any time. Output is streamed directly to the log file.
 func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message.ToolCallPart, command string) (thread.ToolExecuteResult, error) {
-	cwd := e.getCwd(toolCtx)
+	cwd, err := e.prepareBashCwd(toolCtx)
+	if err != nil {
+		return errResult(call, fmt.Sprintf("failed to prepare working directory: %v", err)), nil
+	}
 	logPath := e.bashLogPath(toolCtx, call.ToolCallID)
 	shellPath, err := resolveBashCommand()
 	if err != nil {
@@ -424,6 +430,30 @@ func buildWindowsDrivePath(drive byte, rest string) string {
 		return filepath.Clean(base)
 	}
 	return filepath.Clean(base + strings.ReplaceAll(rest, "/", `\`))
+}
+
+func (e *Executor) prepareBashCwd(toolCtx *thread.ToolContext) (string, error) {
+	cwd := e.getCwd(toolCtx)
+	if isExistingDir(cwd) {
+		return cwd, nil
+	}
+
+	fallback := strings.TrimSpace(e.cwd)
+	if !isExistingDir(fallback) {
+		return "", fmt.Errorf("current working directory %q does not exist and workspace root %q is unavailable", cwd, fallback)
+	}
+	if err := e.setCwd(toolCtx, fallback); err != nil {
+		return "", err
+	}
+	return fallback, nil
+}
+
+func isExistingDir(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // getCwd returns the current working directory for this tool execution.

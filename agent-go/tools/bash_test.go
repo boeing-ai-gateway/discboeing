@@ -646,18 +646,45 @@ func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 	}
 }
 
-func TestBash_InvalidWorkingDirReturnsError(t *testing.T) {
+func TestBash_MissingWorkingDirFallsBackToWorkspaceRoot(t *testing.T) {
 	skipIfBashUnavailable(t)
 
-	e := New(t.TempDir(), t.TempDir(), t.Name())
+	workspaceRoot := t.TempDir()
+	e := New(workspaceRoot, t.TempDir(), t.Name())
 	_ = e.setCwd(nil, filepath.Join(t.TempDir(), "missing"))
 
 	out, ok := runBash(t, e, map[string]any{"command": "pwd"})
-	if ok {
-		t.Fatalf("expected ErrorTextOutput for invalid cwd, got: %s", out)
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
 	}
-	if !strings.Contains(out, "failed to run command") {
-		t.Fatalf("expected startup error in output, got: %q", out)
+	if !strings.Contains(out, workspaceRoot) {
+		t.Fatalf("expected pwd output to include workspace root %q, got: %s", workspaceRoot, out)
+	}
+	if !sameResolvedPath(e.getCwd(nil), workspaceRoot) {
+		t.Fatalf("executor cwd = %q, want native path matching %q", e.getCwd(nil), workspaceRoot)
+	}
+}
+
+func TestBash_DeletedTempWorkingDirFallsBackToWorkspaceRoot(t *testing.T) {
+	skipIfBashUnavailable(t)
+
+	workspaceRoot := t.TempDir()
+	e := New(workspaceRoot, t.TempDir(), t.Name())
+	tempDir := t.TempDir()
+	_ = e.setCwd(nil, tempDir)
+	if err := os.RemoveAll(tempDir); err != nil {
+		t.Fatalf("RemoveAll(tempDir): %v", err)
+	}
+
+	out, ok := runBash(t, e, map[string]any{"command": "pwd"})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, workspaceRoot) {
+		t.Fatalf("expected pwd output to include workspace root %q, got: %s", workspaceRoot, out)
+	}
+	if !sameResolvedPath(e.getCwd(nil), workspaceRoot) {
+		t.Fatalf("executor cwd = %q, want native path matching %q", e.getCwd(nil), workspaceRoot)
 	}
 }
 
