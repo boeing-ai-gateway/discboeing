@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -119,6 +120,18 @@ func TestReadDevToolsURL(t *testing.T) {
 	}
 	if wsURL != "ws://127.0.0.1:41235/devtools/browser/browser-id" {
 		t.Fatalf("unexpected websocket URL %q", wsURL)
+	}
+}
+
+func TestResolveChromiumPathReportsMissingExecutable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	_, err := resolveChromiumPath()
+	if !errors.Is(err, ErrChromiumNotFound) {
+		t.Fatalf("expected ErrChromiumNotFound, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "install one of chromium") {
+		t.Fatalf("expected install guidance, got %v", err)
 	}
 }
 

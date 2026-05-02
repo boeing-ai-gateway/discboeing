@@ -51,10 +51,14 @@ func (h *Handler) ProxyBrowserCDP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("browser[%s]: accepted cdp connect thread=%q", sessionID, threadID)
-	upstreamURL, err := h.browserManager.UpstreamWebSocketURL(r.Context())
+	upstreamURL, err := h.browserManager.UpstreamWebSocketURL()
 	if err != nil {
 		log.Printf("browser[%s]: upstream websocket unavailable thread=%q: %v", sessionID, threadID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		status := http.StatusBadGateway
+		if browser.IsChromiumNotFound(err) {
+			status = http.StatusServiceUnavailable
+		}
+		http.Error(w, "Discobot browser unavailable: "+err.Error(), status)
 		return
 	}
 	upstreamConn, _, err := websocket.Dial(r.Context(), upstreamURL, &websocket.DialOptions{
@@ -62,7 +66,7 @@ func (h *Handler) ProxyBrowserCDP(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("browser[%s]: upstream websocket dial failed thread=%q upstream=%s: %v", sessionID, threadID, upstreamURL, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		http.Error(w, "Discobot browser CDP proxy failed to connect to Chromium DevTools: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	browser.ConfigureCDPConn(upstreamConn)

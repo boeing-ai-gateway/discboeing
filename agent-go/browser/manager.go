@@ -28,6 +28,9 @@ import (
 const devToolsStartupTimeout = 10 * time.Second
 const cdpReadLimit = 16 << 20
 
+// ErrChromiumNotFound indicates that no supported Chromium executable is on PATH.
+var ErrChromiumNotFound = errors.New("chromium executable not found")
+
 // Info describes the session-scoped browser runtime exposed by agent-go.
 type Info struct {
 	SessionID     string `json:"sessionId"`
@@ -136,7 +139,7 @@ func (m *Manager) TokenMatches(token string) bool {
 	return token != "" && token == m.token
 }
 
-func (m *Manager) UpstreamWebSocketURL(ctx context.Context) (string, error) {
+func (m *Manager) UpstreamWebSocketURL() (string, error) {
 	m.mu.Lock()
 	if m.cmd != nil && m.cmd.Process != nil && m.cmd.ProcessState == nil && m.upstreamWSURL != "" {
 		wsURL := m.upstreamWSURL
@@ -146,7 +149,7 @@ func (m *Manager) UpstreamWebSocketURL(ctx context.Context) (string, error) {
 	m.mu.Unlock()
 
 	log.Printf("browser[%s]: resolving upstream websocket URL", m.sessionID)
-	if err := m.ensureRunning(ctx); err != nil {
+	if err := m.ensureRunning(); err != nil {
 		log.Printf("browser[%s]: resolve upstream websocket URL failed: %v", m.sessionID, err)
 		return "", err
 	}
@@ -161,7 +164,7 @@ func (m *Manager) UpstreamWebSocketURL(ctx context.Context) (string, error) {
 
 // CaptureScreenshot captures a PNG screenshot from the active page target.
 func (m *Manager) CaptureScreenshot(ctx context.Context, _ string) ([]byte, error) {
-	wsURL, err := m.UpstreamWebSocketURL(ctx)
+	wsURL, err := m.UpstreamWebSocketURL()
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +263,7 @@ func (m *Manager) Close() error {
 	return cmd.Process.Kill()
 }
 
-func (m *Manager) ensureRunning(ctx context.Context) error {
+func (m *Manager) ensureRunning() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -298,7 +301,7 @@ func (m *Manager) ensureRunning(ctx context.Context) error {
 		launchMode = "headless"
 	}
 	log.Printf("browser[%s]: launching chromium mode=%s display=%q userDataDir=%s", m.sessionID, launchMode, os.Getenv("DISPLAY"), m.userDataDir)
-	cmd := exec.CommandContext(ctx, chromiumPath, args...) //nolint:gosec
+	cmd := exec.Command(chromiumPath, args...) //nolint:gosec
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -368,14 +371,22 @@ func prepareUserDataDirForLaunch(userDataDir string) error {
 }
 
 func resolveChromiumPath() (string, error) {
-	for _, candidate := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
+	for _, candidate := range chromiumExecutableCandidates {
 		path, err := exec.LookPath(candidate)
 		if err == nil {
 			return path, nil
 		}
 	}
-	return "", fmt.Errorf("chromium executable not found")
+	return "", fmt.Errorf("%w: install one of %s or add it to PATH (PATH=%q)",
+		ErrChromiumNotFound, strings.Join(chromiumExecutableCandidates, ", "), os.Getenv("PATH"))
 }
+
+// IsChromiumNotFound reports whether err was caused by a missing Chromium binary.
+func IsChromiumNotFound(err error) bool {
+	return errors.Is(err, ErrChromiumNotFound)
+}
+
+var chromiumExecutableCandidates = []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 
 func waitForDevToolsURL(path string) (string, error) {
 	deadline := time.Now().Add(devToolsStartupTimeout)
