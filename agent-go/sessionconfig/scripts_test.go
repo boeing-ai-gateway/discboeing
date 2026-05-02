@@ -123,3 +123,72 @@ echo ok
 		t.Fatalf("script name = %q, want release", script.Name)
 	}
 }
+
+func TestLookupScript_FindsFrontmatterNameOverride(t *testing.T) {
+	root := t.TempDir()
+	scriptsDir := filepath.Join(root, ".discobot", "scripts")
+	mkdirAll(t, scriptsDir)
+	path := filepath.Join(scriptsDir, "commit-remote")
+	writeFile(t, path, `#!/bin/sh
+#---
+# name: commit
+# description: Commit via remote
+#---
+echo ok
+`)
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	script, found, err := lookupScriptWithHome(root, "commit", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected script to be found by frontmatter name")
+	}
+	if script.Name != "commit" {
+		t.Fatalf("script name = %q, want commit", script.Name)
+	}
+}
+
+func TestDiscoverScripts_UsesDirectExecutablesOnly(t *testing.T) {
+	root := t.TempDir()
+	scriptsDir := filepath.Join(root, ".discobot", "scripts")
+
+	mkdirAll(t, scriptsDir)
+	path := filepath.Join(scriptsDir, "status.sh")
+	writeFile(t, path, `#!/bin/sh
+#---
+# description: Show git status
+#---
+echo ok
+`)
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	nestedDir := filepath.Join(scriptsDir, "nested")
+	mkdirAll(t, nestedDir)
+	nestedPath := filepath.Join(nestedDir, "deep.sh")
+	writeFile(t, nestedPath, `#!/bin/sh
+#---
+# description: Nested scripts are ignored
+#---
+echo ignored
+`)
+	if err := os.Chmod(nestedPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scripts, _, err := discoverScriptsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) != 1 {
+		t.Fatalf("expected 1 direct script, got %d", len(scripts))
+	}
+	if scripts[0].Name != "status" {
+		t.Fatalf("script name = %q, want status", scripts[0].Name)
+	}
+}

@@ -212,21 +212,55 @@ CMD ["/sbin/init"]
 # Stage 3b: Shared graphical runtime base
 FROM runtime-base AS runtime-gui-base
 
-# Install graphical packages: virtual X11 display, VNC, window manager, browser
+# Install graphical packages: virtual X11 display, VNC, window manager, browser.
+# Ubuntu's chromium package is a Snap stub and the Launchpad-hosted Chromium
+# PPAs are slow/unreliable. Debian publishes real chromium .deb packages for
+# both amd64 and arm64, so use Debian only for chromium and keep Ubuntu as the
+# source for all other packages.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    debian-archive-keyring \
     menu \
     openbox \
     pcmanfm \
     python3-xdg \
     python3-websockify \
     scrot \
-    software-properties-common \
     x11vnc \
     xdotool \
     xterm \
     xvfb \
-    && add-apt-repository -y ppa:xtradeb/apps \
-    && apt-get update && apt-get install -y --no-install-recommends chromium \
+    && printf '%s\n' \
+    'Types: deb' \
+    'URIs: https://deb.debian.org/debian' \
+    'Suites: bookworm' \
+    'Components: main' \
+    'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+    '' \
+    'Types: deb' \
+    'URIs: https://security.debian.org/debian-security' \
+    'Suites: bookworm-security' \
+    'Components: main' \
+    'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+    > /etc/apt/sources.list.d/debian-chromium.sources \
+    && printf '%s\n' \
+    'Package: *' \
+    'Pin: release n=bookworm' \
+    'Pin-Priority: 100' \
+    '' \
+    'Package: *' \
+    'Pin: release n=bookworm-security' \
+    'Pin-Priority: 100' \
+    '' \
+    'Package: chromium chromium-common chromium-sandbox' \
+    'Pin: release n=bookworm' \
+    'Pin-Priority: 990' \
+    '' \
+    'Package: chromium chromium-common chromium-sandbox' \
+    'Pin: release n=bookworm-security' \
+    'Pin-Priority: 990' \
+    > /etc/apt/preferences.d/debian-chromium \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb
 
 # Configure Openbox to autostart PCManFM in desktop mode (renders desktop icons)
@@ -314,7 +348,7 @@ COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-d
 
 # Copy container-specific agent configuration (Discobot scripts, docs, etc.)
 # into system-level Discobot directories for session config discovery.
-COPY container-assets/claude/scripts/ /opt/discobot/scripts/
+COPY container-assets/discobot/scripts/ /opt/discobot/scripts/
 COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
 
 # Stage 3d: Minimal runtime without graphical tools

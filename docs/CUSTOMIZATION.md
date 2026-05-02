@@ -77,10 +77,12 @@ Invalid lines are ignored with a warning that includes the file path and line nu
 
 ## Scripts
 
-Scripts are executable files in `.discobot/scripts/` that behave like
-user-facing slash commands. They are discovered from the workspace and from
-supported user-level script directories, but when Discobot tells the LLM about
-them, they are presented through the same `Skill` tool as markdown skills.
+Scripts are executable files directly in `.discobot/scripts/` that behave like
+user-facing slash commands. A file at `.discobot/scripts/summarize-diff.sh`
+becomes `/summarize-diff`. Discobot does not recurse into subdirectories.
+Scripts are discovered from the workspace and from supported user-level script
+directories, but when Discobot tells the LLM about them, they are presented
+through the same `Skill` tool as markdown skills.
 
 Discobot resolves executable slash commands from these locations, in order:
 
@@ -114,7 +116,7 @@ That means:
 
 Script files must:
 
-- be in `.discobot/scripts/`
+- be directly in `.discobot/scripts/`
 - be executable (`chmod +x`)
 - have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
 - include valid front matter
@@ -142,6 +144,8 @@ available to the LLM through the `Skill` tool.
 
 ### Example — Visible script
 
+Path: `.discobot/scripts/summarize-diff.sh`
+
 ```bash
 #!/bin/bash
 #---
@@ -154,6 +158,8 @@ git diff --stat -- "$1"
 ```
 
 ### Example — Hidden script
+
+Path: `.discobot/scripts/internal-refresh`
 
 ```bash
 #!/bin/bash

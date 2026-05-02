@@ -19,15 +19,15 @@ const SESSION_CONTEXT = path.resolve(
 );
 const COMMIT_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/scripts/discobot-commit",
+	"../../../../../container-assets/discobot/scripts/discobot-commit",
 );
 const COMMIT_REMOTE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/scripts/discobot-commit-remote",
+	"../../../../../container-assets/discobot/scripts/discobot-commit-remote",
 );
 const REBASE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/claude/scripts/discobot-rebase",
+	"../../../../../container-assets/discobot/scripts/discobot-rebase",
 );
 
 function readSessionToolbarSource() {

@@ -214,7 +214,15 @@ func lookupInSkillIndex(name string, dirs []string, kind string, includeTopLevel
 func buildSkillIndex(dirs []string, kind string, includeTopLevelMarkdown bool) (map[string]SkillConfig, error) {
 	index := make(map[string]SkillConfig)
 	for _, dir := range dirs {
-		skills, _, err := loadSkillTree(dir, kind, includeTopLevelMarkdown)
+		var (
+			skills []SkillConfig
+			err    error
+		)
+		if kind == "skill" {
+			skills, _, err = loadSkillsDir(dir)
+		} else {
+			skills, _, err = loadSkillTree(dir, kind, includeTopLevelMarkdown)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -242,16 +250,85 @@ type skillFileCandidate struct {
 	priority int
 }
 
-// loadSkillsDir loads all skills from a directory recursively.
-// Supports dir-based SKILL.md and nested markdown files (e.g. check/fix.md).
+// loadSkillsDir loads skills from one-level skill directories.
+// Supports <skill-name>/SKILL.md, matched case-insensitively.
 func loadSkillsDir(dir string) ([]SkillConfig, []string, error) {
-	return loadSkillTree(dir, "skill", false)
+	return loadSkillsTree(dir)
 }
 
 // loadCommandsDir loads skills from a .claude/commands directory recursively.
 // Supports subdirectory format (name/SKILL.md), flat format (name.md), and nested markdown files.
 func loadCommandsDir(dir string) ([]SkillConfig, []string, error) {
 	return loadSkillTree(dir, "command", true)
+}
+
+func loadSkillsTree(dir string) ([]SkillConfig, []string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("read skills dir %s: %w", dir, err)
+	}
+
+	skills := make([]SkillConfig, 0, len(entries))
+	warnings := make([]string, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		path, ok, err := findSkillMarkdownFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			continue
+		}
+		content, err := readFileIfExists(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read skill %s: %w", path, err)
+		}
+		if content == "" {
+			continue
+		}
+		skill, err := parseSkill(entry.Name(), content)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("parse skill %s: %v", path, err))
+			continue
+		}
+		skill.SourcePath = path
+		skill.Kind = "skill"
+		skills = append(skills, skill)
+	}
+
+	sort.Slice(skills, func(i, j int) bool {
+		return skills[i].Name < skills[j].Name
+	})
+	return skills, warnings, nil
+}
+
+func findSkillMarkdownFile(dir string) (string, bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false, fmt.Errorf("read skill dir %s: %w", dir, err)
+	}
+
+	var fallback string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if entry.Name() == "SKILL.md" {
+			return filepath.Join(dir, entry.Name()), true, nil
+		}
+		if fallback == "" && strings.EqualFold(entry.Name(), "SKILL.md") {
+			fallback = filepath.Join(dir, entry.Name())
+		}
+	}
+	if fallback == "" {
+		return "", false, nil
+	}
+	return fallback, true, nil
 }
 
 func loadSkillTree(dir, kind string, includeTopLevelMarkdown bool) ([]SkillConfig, []string, error) {

@@ -143,7 +143,7 @@ Run check fix.`)
 	}
 }
 
-func TestDiscoverSkills_SkillsNestedMarkdown(t *testing.T) {
+func TestDiscoverSkills_IgnoresSkillsNestedMarkdown(t *testing.T) {
 	root := t.TempDir()
 	skillDir := filepath.Join(root, ".claude", "skills", "check")
 	mkdirAll(t, skillDir)
@@ -157,15 +157,8 @@ Use the check fix skill.`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skills) != 1 {
-		t.Fatalf("expected 1 skill, got %d", len(skills))
-	}
-	s := skills[0]
-	if s.Name != "check:fix" {
-		t.Errorf("name = %q, want check:fix", s.Name)
-	}
-	if s.Description != "Fix checks from skill." {
-		t.Errorf("description = %q", s.Description)
+	if len(skills) != 0 {
+		t.Fatalf("expected nested skill markdown to be ignored, got %d skills", len(skills))
 	}
 }
 
@@ -406,24 +399,48 @@ func TestLookupSkill_FoundInUserAgentsSkillsDir(t *testing.T) {
 	}
 }
 
-func TestLookupSkill_FoundInNestedMarkdown(t *testing.T) {
+func TestLookupSkill_DoesNotFindNestedMarkdown(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, ".claude", "skills", "check")
 	mkdirAll(t, dir)
 	writeFile(t, filepath.Join(dir, "fix.md"), "---\nname: check:fix\n---\nUse nested skill.")
 
-	skill, found, err := LookupSkill(root, "check:fix")
+	_, found, err := LookupSkill(root, "check:fix")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !found {
-		t.Fatal("expected skill to be found")
+	if found {
+		t.Fatal("expected nested skill markdown to be ignored")
 	}
-	if skill.Name != "check:fix" {
-		t.Errorf("name = %q, want check:fix", skill.Name)
+}
+
+func TestDiscoverSkills_IgnoresNestedSkillDirectories(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".claude", "skills", "check", "fix")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: check:fix\n---\nUse nested skill.")
+
+	skills, _, err := discoverSkillsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if skill.Body != "Use nested skill." {
-		t.Errorf("body = %q", skill.Body)
+	if len(skills) != 0 {
+		t.Fatalf("expected nested skill directory to be ignored, got %d skills", len(skills))
+	}
+}
+
+func TestLookupSkill_DoesNotFindNestedDirectories(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".claude", "skills", "check", "fix")
+	mkdirAll(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: check:fix\n---\nUse nested skill.")
+
+	_, found, err := LookupSkill(root, "check/fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Fatal("expected nested skill directory lookup to be ignored")
 	}
 }
 

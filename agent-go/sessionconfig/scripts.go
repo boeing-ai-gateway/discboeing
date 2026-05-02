@@ -112,14 +112,22 @@ func lookupScriptInDir(dir, name string) (ScriptConfig, bool, error) {
 		}
 		return ScriptConfig{}, false, fmt.Errorf("read scripts dir %s: %w", dir, err)
 	}
+	normalizedName := normalizeScriptName(name)
 	for _, entry := range entries {
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		if normalizeScriptName(entry.Name()) != normalizeScriptName(name) {
+		cfg, ok, err := loadScriptFile(filepath.Join(dir, entry.Name()), entry.Name())
+		if err != nil {
+			if normalizeScriptName(entry.Name()) == normalizedName {
+				return ScriptConfig{}, false, err
+			}
 			continue
 		}
-		return loadScriptFile(filepath.Join(dir, entry.Name()), entry.Name())
+		if !ok || normalizeScriptName(cfg.Name) != normalizedName {
+			continue
+		}
+		return cfg, true, nil
 	}
 	return ScriptConfig{}, false, nil
 }

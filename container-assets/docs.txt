@@ -17,13 +17,15 @@ Invalid lines are ignored with a warning that includes the file path and line nu
 
 ## .discobot/scripts/
 
-User-facing executable slash commands.
+User-facing executable slash commands. Scripts live directly under
+`.discobot/scripts/`: for example, `.discobot/scripts/summarize-diff.sh`
+becomes `/summarize-diff`. Subdirectories are not searched.
 
 Requirements:
 - executable bit
 - shebang line
 - valid front matter
-- file lives under `.discobot/scripts/`
+- file lives directly under `.discobot/scripts/`
 
 Common front matter fields:
 - `name`: slash-command name (defaults to normalized filename)
@@ -51,6 +53,8 @@ Discovery order for script-backed slash commands:
 - system `/usr/share/discobot/scripts/`
 
 Example:
+
+Path: `.discobot/scripts/summarize-diff.sh`
 
 ```bash
 #!/bin/bash
