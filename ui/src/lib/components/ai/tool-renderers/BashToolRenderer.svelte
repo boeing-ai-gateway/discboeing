@@ -1,6 +1,8 @@
 <script lang="ts">
+	import CheckIcon from "@lucide/svelte/icons/check";
 	import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 	import CircleXIcon from "@lucide/svelte/icons/circle-x";
+	import CopyIcon from "@lucide/svelte/icons/copy";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
 	import {
 		ToolContent,
@@ -12,6 +14,7 @@
 		validateBashInput,
 		validateBashOutput,
 	} from "$lib/components/ai/tool-schemas/bash-schema";
+	import { Button } from "$lib/components/ui/button";
 	import { CollapsibleTrigger } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import type { ToolRendererComponentProps } from "./types";
@@ -24,6 +27,8 @@
 	} from "./utils";
 
 	let { toolPart, isRaw, onToggleRaw }: ToolRendererComponentProps = $props();
+	let copiedTarget = $state<"command" | "stdout" | null>(null);
+	let copyTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
 	const isStreaming = $derived.by(
 		() =>
@@ -60,6 +65,32 @@
 	const executionError = $derived.by(
 		() => toolPart.errorText || validOutput?.stderr,
 	);
+
+	async function copyToClipboard(
+		target: "command" | "stdout",
+		text: string | undefined,
+	) {
+		if (!text || typeof window === "undefined" || !navigator?.clipboard) {
+			return;
+		}
+
+		await navigator.clipboard.writeText(text);
+		copiedTarget = target;
+		if (copyTimeout) {
+			clearTimeout(copyTimeout);
+		}
+		copyTimeout = setTimeout(() => {
+			copiedTarget = null;
+		}, 2000);
+	}
+
+	$effect(() => {
+		return () => {
+			if (copyTimeout) {
+				clearTimeout(copyTimeout);
+			}
+		};
+	});
 </script>
 
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
@@ -127,9 +158,25 @@
 					class="overflow-hidden rounded-md border bg-muted/50 font-mono text-sm"
 				>
 					<div
-						class="border-border border-b bg-muted/30 px-3 py-2 text-muted-foreground text-xs"
+						class="flex items-center justify-between border-border border-b bg-muted/30 px-3 py-2 text-muted-foreground text-xs"
 					>
-						$
+						<span>$</span>
+						<Button
+							aria-label="Copy command"
+							class="h-6 gap-1 px-2 font-sans text-xs"
+							onclick={() => copyToClipboard("command", validInput?.command)}
+							size="xs"
+							title="Copy command"
+							variant="ghost"
+						>
+							{#if copiedTarget === "command"}
+								<CheckIcon class="size-3" />
+								Copied
+							{:else}
+								<CopyIcon class="size-3" />
+								Copy
+							{/if}
+						</Button>
 					</div>
 					<div class="px-3 py-2">
 						<code class="break-all text-foreground">{validInput?.command}</code>
@@ -178,7 +225,25 @@
 							class="flex items-center justify-between border-b px-3 py-2 text-muted-foreground text-xs uppercase tracking-wide"
 						>
 							<span>Stdout</span>
-							<span>{displayedLineCount} lines</span>
+							<div class="flex items-center gap-2">
+								<span>{displayedLineCount} lines</span>
+								<Button
+									aria-label="Copy stdout"
+									class="h-6 gap-1 px-2 text-xs normal-case tracking-normal"
+									onclick={() => copyToClipboard("stdout", stdout)}
+									size="xs"
+									title="Copy stdout"
+									variant="ghost"
+								>
+									{#if copiedTarget === "stdout"}
+										<CheckIcon class="size-3" />
+										Copied
+									{:else}
+										<CopyIcon class="size-3" />
+										Copy
+									{/if}
+								</Button>
+							</div>
 						</div>
 						{#if parsedStdout.isTruncated}
 							<div
