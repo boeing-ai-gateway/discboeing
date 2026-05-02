@@ -316,7 +316,6 @@ ARG BROWSER_HARNESS_REF=main
 RUN git clone --depth 1 --branch "${BROWSER_HARNESS_REF}" "${BROWSER_HARNESS_REPO}" /tmp/browser-harness \
     && mkdir -p /opt/browser-harness-skills/browser-harness \
     && cp -a /tmp/browser-harness/. /opt/browser-harness-skills/browser-harness/ \
-    && rm -f /opt/browser-harness-skills/browser-harness/install.md \
     && uv venv /opt/browser-harness \
     && uv pip install --python /opt/browser-harness/bin/python /tmp/browser-harness \
     && ln -s /opt/browser-harness/bin/browser-harness /usr/local/bin/browser-harness \
