@@ -1,16 +1,10 @@
 package sessionconfig
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-func TestMain(m *testing.M) {
-	discobotSystemRoots = nil
-	os.Exit(m.Run())
-}
 
 func TestDiscoverSkills_SkillsDir(t *testing.T) {
 	root := t.TempDir()
