@@ -87,6 +87,22 @@ func runBashWithContext(t *testing.T, e *Executor, toolCtx *thread.ToolContext, 
 	return "", false
 }
 
+func outputContainsResolvedPath(output, want string) bool {
+	if strings.Contains(output, want) {
+		return true
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		if idx := strings.Index(line, "→"); idx >= 0 {
+			line = line[idx+len("→"):]
+		}
+		line = strings.TrimSpace(line)
+		if line != "" && sameResolvedPath(line, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBash_EmptyCommand(t *testing.T) {
 	skipOnWindows(t)
 	e := New(t.TempDir(), t.TempDir(), t.Name())
@@ -657,7 +673,7 @@ func TestBash_MissingWorkingDirFallsBackToWorkspaceRoot(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
-	if !strings.Contains(out, workspaceRoot) {
+	if !outputContainsResolvedPath(out, workspaceRoot) {
 		t.Fatalf("expected pwd output to include workspace root %q, got: %s", workspaceRoot, out)
 	}
 	if !sameResolvedPath(e.getCwd(nil), workspaceRoot) {
@@ -680,7 +696,7 @@ func TestBash_DeletedTempWorkingDirFallsBackToWorkspaceRoot(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
-	if !strings.Contains(out, workspaceRoot) {
+	if !outputContainsResolvedPath(out, workspaceRoot) {
 		t.Fatalf("expected pwd output to include workspace root %q, got: %s", workspaceRoot, out)
 	}
 	if !sameResolvedPath(e.getCwd(nil), workspaceRoot) {
