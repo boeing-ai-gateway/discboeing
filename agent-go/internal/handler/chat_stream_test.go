@@ -737,6 +737,82 @@ func TestUpdateQueuedPrompt_SetsRunAfter(t *testing.T) {
 	}
 }
 
+func TestUpdateQueuedPrompt_UpdatesMessageAndPosition(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	if err := store.CreateThread("thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range []thread.QueuedPrompt{
+		{
+			ID: "queue-1",
+			Message: message.UIMessage{
+				ID:    "msg-1",
+				Role:  "user",
+				Parts: []message.UIPart{message.UITextPart{Text: "first", State: "done"}},
+			},
+		},
+		{
+			ID: "queue-2",
+			Message: message.UIMessage{
+				ID:    "msg-2",
+				Role:  "user",
+				Parts: []message.UIPart{message.UITextPart{Text: "second", State: "done"}},
+			},
+		},
+	} {
+		if _, _, err := store.AppendQueuedPrompt("thread-1", prompt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cm := agent.NewCompletionManager(&streamTestAgent{})
+	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
+	h := New("", cm, nil, nil, defaultAgent)
+	ts := newFullHandlerTestServer(t, h)
+	defer ts.Close()
+
+	position := 0
+	nextMessage := message.UIMessage{
+		ID:    "msg-2",
+		Role:  "user",
+		Parts: []message.UIPart{message.UITextPart{Text: "edited second", State: "done"}},
+	}
+	body, err := json.Marshal(api.UpdateQueuedPromptRequest{
+		Message:  &nextMessage,
+		Position: &position,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, ts.URL+"/threads/thread-1/queue/queue-2", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	cfg, err := store.LoadConfig("thread-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string{cfg.PromptQueue[0].ID, cfg.PromptQueue[1].ID}; !reflect.DeepEqual(got, []string{"queue-2", "queue-1"}) {
+		t.Fatalf("unexpected queue order: %#v", got)
+	}
+	textPart, ok := cfg.PromptQueue[0].Message.Parts[0].(message.UITextPart)
+	if !ok || textPart.Text != "edited second" {
+		t.Fatalf("expected edited prompt text, got %#v", cfg.PromptQueue[0].Message.Parts)
+	}
+}
+
 func TestUpdateQueuedPrompt_ClearRunAfterStartsQueuedPromptWhenIdle(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	if err := store.CreateThread("thread-1"); err != nil {

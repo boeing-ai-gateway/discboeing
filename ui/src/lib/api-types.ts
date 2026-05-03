@@ -915,6 +915,8 @@ export interface DeleteQueuedPromptResponse {
 export interface UpdateQueuedPromptRequest {
 	runAfter?: string;
 	clearRunAfter?: boolean;
+	message?: QueuedPromptMessage;
+	position?: number;
 }
 
 export interface UpdateQueuedPromptResponse {

@@ -1380,6 +1380,62 @@ func (s *Store) UpdateQueuedPromptRunAfter(threadID, promptID string, runAfter *
 	return cfg, true, nil
 }
 
+// QueuedPromptUpdate describes editable fields for a queued prompt.
+type QueuedPromptUpdate struct {
+	RunAfter      *time.Time
+	ClearRunAfter bool
+	Message       *message.UIMessage
+	Position      *int
+}
+
+// UpdateQueuedPrompt updates one queued prompt and optionally moves it within
+// the queue. Position is clamped to the valid queue range.
+func (s *Store) UpdateQueuedPrompt(threadID, promptID string, update QueuedPromptUpdate) (Config, bool, error) {
+	cfg, err := s.LoadConfig(threadID)
+	if err != nil {
+		return Config{}, false, err
+	}
+
+	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue))
+	var updatedPrompt QueuedPrompt
+	updated := false
+	for _, prompt := range cfg.PromptQueue {
+		if prompt.ID != promptID {
+			nextQueue = append(nextQueue, prompt)
+			continue
+		}
+		if update.ClearRunAfter {
+			prompt.RunAfter = time.Time{}
+		} else if update.RunAfter != nil {
+			prompt.RunAfter = update.RunAfter.UTC()
+		}
+		if update.Message != nil {
+			prompt.Message = *update.Message
+		}
+		updatedPrompt = prompt
+		updated = true
+		if update.Position == nil {
+			nextQueue = append(nextQueue, prompt)
+		}
+	}
+	if !updated {
+		return cfg, false, nil
+	}
+
+	if update.Position != nil {
+		position := min(max(*update.Position, 0), len(nextQueue))
+		nextQueue = append(nextQueue, QueuedPrompt{})
+		copy(nextQueue[position+1:], nextQueue[position:])
+		nextQueue[position] = updatedPrompt
+	}
+
+	cfg.PromptQueue = nextQueue
+	if err := s.SaveConfig(threadID, cfg); err != nil {
+		return Config{}, false, err
+	}
+	return cfg, true, nil
+}
+
 // FindLeaf returns the leaf message ID for a thread — the message that is not
 // a parent of any other message. Returns "" if the thread has no messages.
 func (s *Store) FindLeaf(threadID string) (string, error) {

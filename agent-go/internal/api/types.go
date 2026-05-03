@@ -197,8 +197,10 @@ type DeleteQueuedPromptResponse struct {
 
 // UpdateQueuedPromptRequest is the PATCH /threads/{id}/queue/{queueId} request body.
 type UpdateQueuedPromptRequest struct {
-	RunAfter      *string `json:"runAfter,omitempty"`
-	ClearRunAfter bool    `json:"clearRunAfter,omitempty"`
+	RunAfter      *string            `json:"runAfter,omitempty"`
+	ClearRunAfter bool               `json:"clearRunAfter,omitempty"`
+	Message       *message.UIMessage `json:"message,omitempty"`
+	Position      *int               `json:"position,omitempty"`
 }
 
 type UpdateQueuedPromptResponse struct {

@@ -1,17 +1,23 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
+	import CheckIcon from "@lucide/svelte/icons/check";
+	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+	import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
+	import PencilIcon from "@lucide/svelte/icons/pencil";
 	import PauseIcon from "@lucide/svelte/icons/pause";
 	import PlayIcon from "@lucide/svelte/icons/play";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
+	import XIcon from "@lucide/svelte/icons/x";
 	import { onMount } from "svelte";
 
-	import type { QueuedPrompt } from "$lib/api-types";
+	import type { QueuedPrompt, UpdateQueuedPromptRequest } from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
 	import {
 		Popover,
 		PopoverContent,
 		PopoverTrigger,
 	} from "$lib/components/ui/popover";
+	import { Textarea } from "$lib/components/ui/textarea";
 	import ConversationPromptSchedulePicker from "$lib/components/app/parts/ConversationPromptSchedulePicker.svelte";
 
 	type Props = {
@@ -19,7 +25,7 @@
 		onDelete: (queueId: string) => void | Promise<void>;
 		onUpdate: (
 			queueId: string,
-			payload: { runAfter?: string; clearRunAfter?: boolean },
+			payload: UpdateQueuedPromptRequest,
 		) => void | Promise<void>;
 	};
 
@@ -27,6 +33,8 @@
 
 	let schedulerOpenById = $state<Record<string, boolean>>({});
 	let savingById = $state<Record<string, boolean>>({});
+	let editingById = $state<Record<string, boolean>>({});
+	let editTextById = $state<Record<string, string>>({});
 	let runAfterOverrideById = $state<Record<string, string | null>>({});
 	let now = $state(Date.now());
 
@@ -136,6 +144,17 @@
 		savingById = { ...savingById, [entryId]: saving };
 	}
 
+	function setEditing(entry: QueuedPrompt, editing: boolean) {
+		editingById = { ...editingById, [entry.id]: editing };
+		if (editing) {
+			editTextById = { ...editTextById, [entry.id]: getPromptText(entry) };
+		}
+	}
+
+	function setEditText(entryId: string, value: string) {
+		editTextById = { ...editTextById, [entryId]: value };
+	}
+
 	function getSchedulerOpen(entryId: string): boolean {
 		return schedulerOpenById[entryId] ?? false;
 	}
@@ -175,6 +194,41 @@
 			setSaving(entryId, false);
 		}
 	}
+
+	async function savePromptText(entry: QueuedPrompt) {
+		const text = (editTextById[entry.id] ?? "").trim();
+		const fileParts = (entry.message.parts ?? []).filter(
+			(part) => part.type === "file",
+		);
+		if (text.length === 0 && fileParts.length === 0) {
+			return;
+		}
+
+		setSaving(entry.id, true);
+		try {
+			await onUpdate(entry.id, {
+				message: {
+					...entry.message,
+					parts: [
+						...(text.length > 0 ? [{ type: "text" as const, text }] : []),
+						...fileParts,
+					],
+				},
+			});
+			setEditing(entry, false);
+		} finally {
+			setSaving(entry.id, false);
+		}
+	}
+
+	async function movePrompt(entry: QueuedPrompt, position: number) {
+		setSaving(entry.id, true);
+		try {
+			await onUpdate(entry.id, { position });
+		} finally {
+			setSaving(entry.id, false);
+		}
+	}
 </script>
 
 {#if entries.length > 0}
@@ -185,14 +239,49 @@
 			Queued prompts ({entries.length})
 		</div>
 		<div class="flex flex-col gap-1 p-1">
-			{#each displayEntries as { entry, renderKey } (renderKey)}
+			{#each displayEntries as { entry, renderKey }, index (renderKey)}
 				<div
 					class="flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
 				>
 					<div class="min-w-0 flex-1">
-						<div class="truncate text-sm text-foreground">
-							{getPromptText(entry)}
-						</div>
+						{#if editingById[entry.id]}
+							<div class="space-y-2">
+								<Textarea
+									value={editTextById[entry.id] ?? ""}
+									oninput={(event) =>
+										setEditText(entry.id, event.currentTarget.value)}
+									class="min-h-20 resize-none text-sm"
+									disabled={savingById[entry.id]}
+								/>
+								<div class="flex justify-end gap-1">
+									<Button
+										variant="ghost"
+										size="sm"
+										disabled={savingById[entry.id]}
+										onclick={() => setEditing(entry, false)}
+									>
+										Cancel
+									</Button>
+									<Button
+										variant="default"
+										size="sm"
+										disabled={savingById[entry.id] ||
+											((editTextById[entry.id] ?? "").trim().length === 0 &&
+												getAttachmentCount(entry) === 0)}
+										onclick={() => {
+											void savePromptText(entry);
+										}}
+									>
+										<CheckIcon class="mr-1 size-3.5" />
+										Save
+									</Button>
+								</div>
+							</div>
+						{:else}
+							<div class="truncate text-sm text-foreground">
+								{getPromptText(entry)}
+							</div>
+						{/if}
 						<div
 							class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
 						>
@@ -219,6 +308,47 @@
 						</div>
 					</div>
 					<div class="flex shrink-0 items-start gap-1">
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							class="shrink-0"
+							title="Move queued prompt up"
+							disabled={savingById[entry.id] || index === 0}
+							onclick={() => {
+								void movePrompt(entry, index - 1);
+							}}
+						>
+							<ChevronUpIcon class="size-3.5" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							class="shrink-0"
+							title="Move queued prompt down"
+							disabled={savingById[entry.id] ||
+								index === displayEntries.length - 1}
+							onclick={() => {
+								void movePrompt(entry, index + 1);
+							}}
+						>
+							<ChevronDownIcon class="size-3.5" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							class="shrink-0"
+							title={editingById[entry.id]
+								? "Cancel editing queued prompt"
+								: "Edit queued prompt"}
+							disabled={savingById[entry.id]}
+							onclick={() => setEditing(entry, !editingById[entry.id])}
+						>
+							{#if editingById[entry.id]}
+								<XIcon class="size-3.5" />
+							{:else}
+								<PencilIcon class="size-3.5" />
+							{/if}
+						</Button>
 						{#if getDisplayedRunAfter(entry)}
 							<Popover
 								bind:open={

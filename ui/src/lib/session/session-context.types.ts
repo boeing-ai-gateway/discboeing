@@ -13,6 +13,7 @@ import type {
 	SessionDiffFileEntry,
 	SessionDiffStats,
 	Thread,
+	UpdateQueuedPromptRequest,
 } from "$lib/api-types";
 import type { ThreadStore } from "$lib/store/threads.store.svelte";
 import type { SessionViewState } from "$lib/session/view/create-session-view-state.svelte";
@@ -254,7 +255,7 @@ export type ThreadContextValue = {
 	deleteQueuedPrompt: (queueId: string) => Promise<void>;
 	updateQueuedPrompt: (
 		queueId: string,
-		payload: { runAfter?: string; clearRunAfter?: boolean },
+		payload: UpdateQueuedPromptRequest,
 	) => Promise<void>;
 	dispose: () => void;
 	editorFiles: string[];

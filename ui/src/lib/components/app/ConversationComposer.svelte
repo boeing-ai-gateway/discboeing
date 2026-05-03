@@ -36,7 +36,7 @@
 		WorkspaceSelectionResult,
 		WorkspaceSelectorHandle,
 	} from "$lib/components/app/conversation-composer.types";
-	import type { ModelInfo } from "$lib/api-types";
+	import type { ModelInfo, UpdateQueuedPromptRequest } from "$lib/api-types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import {
@@ -447,7 +447,7 @@
 
 	async function handleUpdateQueuedPrompt(
 		queueId: string,
-		payload: { runAfter?: string; clearRunAfter?: boolean },
+		payload: UpdateQueuedPromptRequest,
 	) {
 		await thread.updateQueuedPrompt(queueId, payload);
 	}

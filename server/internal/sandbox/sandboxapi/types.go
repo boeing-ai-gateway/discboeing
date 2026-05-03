@@ -183,8 +183,10 @@ type DeleteQueuedPromptResponse struct {
 }
 
 type UpdateQueuedPromptRequest struct {
-	RunAfter      *string `json:"runAfter,omitempty"`
-	ClearRunAfter bool    `json:"clearRunAfter,omitempty"`
+	RunAfter      *string    `json:"runAfter,omitempty"`
+	ClearRunAfter bool       `json:"clearRunAfter,omitempty"`
+	Message       *UIMessage `json:"message,omitempty"`
+	Position      *int       `json:"position,omitempty"`
 }
 
 type UpdateQueuedPromptResponse struct {

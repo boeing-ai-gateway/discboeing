@@ -351,13 +351,13 @@ func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.RunAfter == nil && !req.ClearRunAfter {
-		h.Error(w, http.StatusBadRequest, "runAfter or clearRunAfter is required")
+	if req.RunAfter == nil && !req.ClearRunAfter && req.Message == nil && req.Position == nil {
+		h.Error(w, http.StatusBadRequest, "update field is required")
 		return
 	}
 
 	var runAfter *time.Time
-	if !req.ClearRunAfter {
+	if req.RunAfter != nil && !req.ClearRunAfter {
 		value := strings.TrimSpace(*req.RunAfter)
 		if value == "" {
 			h.Error(w, http.StatusBadRequest, "runAfter is required")
@@ -383,7 +383,12 @@ func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.queueMu.Lock()
-	cfg, updated, err := store.UpdateQueuedPromptRunAfter(threadID, queueID, runAfter)
+	cfg, updated, err := store.UpdateQueuedPrompt(threadID, queueID, thread.QueuedPromptUpdate{
+		RunAfter:      runAfter,
+		ClearRunAfter: req.ClearRunAfter,
+		Message:       req.Message,
+		Position:      req.Position,
+	})
 	if err == nil && updated {
 		h.rescheduleQueuedPromptTimerLocked(threadID)
 		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
