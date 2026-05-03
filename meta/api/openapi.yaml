@@ -1,0 +1,2177 @@
+openapi: 3.1.0
+info:
+  title: Discobot Meta API
+  version: 0.1.0
+  summary: Central metadata, identity, authorization, and secret envelope API for Discobot.
+  description: |
+    Meta is Discobot's central metadata service. It owns organizations, users,
+    devices, groups, projects, agent sessions, encrypted secret envelopes, secret
+    bindings, and route-level authorization decisions.
+
+    This specification starts with routes only. Request and response schemas are
+    intentionally placeholders and should be replaced with shared component
+    schemas once the route surface stabilizes.
+servers:
+  - url: /
+    description: Current Meta service origin. Shortcut routes without `/v1/org/{organizationDomain}` resolve to the public organization.
+
+tags:
+  - name: OIDC
+    description: Standard OIDC discovery, authorization, token, and userinfo endpoints.
+  - name: Organizations
+    description: Top-level organization hierarchy, organization members, and organization-scoped resource roots.
+  - name: Users
+    description: Current user profile and authenticated user session management.
+  - name: Devices
+    description: User device registration, approval, and lifecycle management for secret recipient keys.
+  - name: Groups
+    description: Groups, group members, and links to external group identities.
+  - name: Projects
+    description: Projects and project membership.
+  - name: Agent Sessions
+    description: Discobot coding-agent sessions and session-specific membership.
+  - name: Tokens
+    description: OAuth-compatible token exchange and token introspection.
+  - name: Secrets
+    description: Secret metadata, encrypted versions, bindings, and recipient wraps.
+  - name: Audit
+    description: Security-sensitive activity and authorization audit events.
+
+paths:
+  /.well-known/openid-configuration:
+    get:
+      tags: [OIDC]
+      operationId: getOpenIDConfiguration
+      x-discobot-action: oidc.discovery.read
+      summary: Get OIDC discovery metadata.
+      description: |
+        Returns OIDC discovery metadata for Meta as an identity provider. Clients
+        and agents use this document to find the authorization endpoint, token
+        endpoint, JWKS URI, issuer, supported scopes, supported claims, and
+        signing algorithms.
+      responses:
+        "200":
+          description: OIDC discovery document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /.well-known/oauth-authorization-server:
+    get:
+      tags: [OIDC, Tokens]
+      operationId: getOAuthAuthorizationMetadata
+      x-discobot-action: oauth.metadata.read
+      summary: Get OAuth authorization server metadata.
+      description: |
+        Returns OAuth 2.0 Authorization Server Metadata for Meta. OAuth clients
+        use this document to find the authorization endpoint, token endpoint,
+        JWKS URI, supported grant types, supported scopes, and PKCE methods.
+      responses:
+        "200":
+          description: OAuth authorization server metadata document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /.well-known/jwks.json:
+    get:
+      tags: [OIDC]
+      operationId: getJWKS
+      x-discobot-action: oidc.jwks.read
+      summary: Get public JWT signing keys.
+      description: |
+        Returns Meta's public JSON Web Key Set. Agents cache these keys and use
+        them to validate JWT access tokens issued by Meta. Agents should refresh
+        this endpoint on unknown `kid` or cache expiry.
+      responses:
+        "200":
+          description: JSON Web Key Set.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /authorize:
+    get:
+      tags: [OIDC]
+      operationId: authorize
+      x-discobot-action: oauth.authorize
+      summary: Start or continue an OIDC authorization flow.
+      description: |
+        Browser-based OIDC authorization endpoint. The user authenticates to
+        Meta or an upstream identity provider. On success, Meta redirects back to
+        the client's redirect URI with an authorization code.
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: OAuth client ID.
+        - name: redirect_uri
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+          description: Registered redirect URI.
+        - name: response_type
+          in: query
+          required: true
+          schema: { type: string, const: code }
+          description: Must be `code` for authorization-code flow.
+        - name: scope
+          in: query
+          required: true
+          schema: { type: string }
+          description: Space-delimited OAuth/OIDC scopes.
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+          description: Client-provided CSRF/state value returned with the redirect.
+        - name: nonce
+          in: query
+          required: false
+          schema: { type: string }
+          description: OIDC nonce included in issued ID token.
+        - name: code_challenge
+          in: query
+          required: false
+          schema: { type: string }
+          description: PKCE code challenge.
+        - name: code_challenge_method
+          in: query
+          required: false
+          schema: { type: string, enum: [S256] }
+          description: PKCE code challenge method.
+      responses:
+        "302":
+          description: Redirects to the client redirect URI or upstream identity provider.
+        "400":
+          description: Invalid authorization request.
+
+  /token:
+    post:
+      tags: [OIDC, Tokens]
+      operationId: token
+      x-discobot-action: oauth.token
+      summary: Exchange OAuth tokens.
+      description: |
+        OAuth token endpoint. Supports authorization-code exchange for normal
+        login and OAuth token exchange for minting short-lived, agent-scoped
+        access tokens.
+
+        For user-to-agent communication, clients should request token exchange
+        with an audience like `agent-session:{sessionId}`. Agents then accept
+        only tokens whose audience matches their own agent session ID.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Token response containing ID/access/refresh tokens or exchanged access token.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid token request.
+        "401":
+          description: Invalid client or subject token.
+
+  /userinfo:
+    get:
+      tags: [OIDC]
+      operationId: getUserInfo
+      x-discobot-action: userinfo.read
+      summary: Get OIDC userinfo claims.
+      description: |
+        Returns user profile claims for the bearer access token. This endpoint is
+        for OIDC client compatibility. Agent API authorization should use
+        agent-scoped access tokens and local JWT validation instead.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Userinfo claims.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /logout:
+    post:
+      tags: [OIDC, Users]
+      operationId: logout
+      x-discobot-action: logout
+      summary: Revoke the current user login session.
+      description: |
+        Revokes the current user session or performs provider logout behavior.
+        Existing short-lived access tokens may remain valid until expiry unless
+        agents introspect them.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Current login session revoked.
+        "401":
+          description: Missing or invalid bearer token.
+
+
+
+  /whoami:
+    get:
+      tags: [Users]
+      operationId: whoami
+      x-discobot-action: user.whoami
+      summary: Get the current authenticated principal.
+      description: |
+        Returns the current authenticated principal. Initially this supports
+        bootstrap bearer tokens and reports the bootstrap organization context.
+        Later this route will also report normal user session context.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current principal context.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /v1/org:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      x-discobot-action: organization.list
+      summary: List organizations visible to the caller.
+      description: |
+        Lists organizations the caller belongs to. The special organization with
+        domain `public` is the default public organization used by shortcut routes
+        such as `/v1/projects`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Organizations.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      x-discobot-action: organization.create
+      summary: Create an organization.
+      description: Creates a top-level Meta organization.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Organization created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}:
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      x-discobot-action: organization.read
+      summary: Get organization metadata.
+      description: Returns metadata for an organization. `organizationDomain` is the route-facing organization domain, such as `example.com`, or the special `public` organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      x-discobot-action: organization.update
+      summary: Update organization metadata.
+      description: Updates organization metadata according to organization admin rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Organization updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}/members:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizationMembers
+      x-discobot-action: organization.member.list
+      summary: List organization members.
+      description: Lists users that belong to an organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization members.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Organizations]
+      operationId: addOrganizationMember
+      x-discobot-action: organization.member.add
+      summary: Add an organization member.
+      description: Adds a user to an organization with an organization role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Organization member added.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}/members/{userId}:
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganizationMember
+      x-discobot-action: organization.member.update
+      summary: Update organization member role.
+      description: Updates an organization member role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Organization member updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Organizations]
+      operationId: removeOrganizationMember
+      x-discobot-action: organization.member.remove
+      summary: Remove organization member.
+      description: Removes a user from an organization. Last-owner protections apply.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        "204":
+          description: Organization member removed.
+
+
+  /v1/org/{organizationDomain}/oauth-applications:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizationOAuthApplications
+      x-discobot-action: oauth_application.list
+      summary: List OAuth applications in an organization.
+      description: Lists organization-scoped OAuth/OIDC client applications. Public organization admins use this to manage the default public login surface.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization OAuth applications.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Organizations]
+      operationId: createOrganizationOAuthApplication
+      x-discobot-action: oauth_application.create
+      x-discobot-apply:
+        resource: OAuthApplication
+        listOperationId: listOrganizationOAuthApplications
+        getOperationId: getOrganizationOAuthApplication
+        updateOperationId: updateOrganizationOAuthApplication
+        scopeField: organization
+        scopeParam: organizationDomain
+        idField: id
+        idParam: oauthApplicationId
+        nameField: name
+        matchFields: [provider]
+      summary: Create an OAuth application in an organization.
+      description: Creates an organization-scoped OAuth/OIDC client application.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthApplicationCreateRequest'
+      responses:
+        "201":
+          description: OAuth application created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}/oauth-applications/{oauthApplicationId}:
+    get:
+      tags: [Organizations]
+      operationId: getOrganizationOAuthApplication
+      x-discobot-action: oauth_application.read
+      summary: Get OAuth application metadata.
+      description: Returns metadata for one organization-scoped OAuth/OIDC client application.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+        - $ref: '#/components/parameters/OAuthApplicationId'
+      responses:
+        "200":
+          description: OAuth application metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganizationOAuthApplication
+      x-discobot-action: oauth_application.update
+      summary: Update OAuth application metadata.
+      description: Updates redirect URIs, grant types, response types, scopes, auth method, name, or status for an organization-scoped OAuth application.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+        - $ref: '#/components/parameters/OAuthApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthApplicationUpdateRequest'
+      responses:
+        "200":
+          description: OAuth application updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Organizations]
+      operationId: deleteOrganizationOAuthApplication
+      x-discobot-action: oauth_application.delete
+      summary: Delete or disable an OAuth application.
+      description: Deletes or disables an organization-scoped OAuth application.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+        - $ref: '#/components/parameters/OAuthApplicationId'
+      responses:
+        "204":
+          description: OAuth application deleted or disabled.
+
+  /v1/org/{organizationDomain}/groups:
+    get:
+      tags: [Groups]
+      operationId: listOrganizationGroups
+      x-discobot-action: group.list
+      summary: List groups in an organization.
+      description: Lists groups in the selected organization. `/v1/groups` is the public-organization shortcut.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Groups]
+      operationId: createOrganizationGroup
+      x-discobot-action: group.create
+      summary: Create a group in an organization.
+      description: Creates a group under the selected organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Organization group created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}/projects:
+    get:
+      tags: [Projects]
+      operationId: listOrganizationProjects
+      x-discobot-action: project.list
+      summary: List projects in an organization.
+      description: Lists projects in the selected organization. `/v1/projects` is the public-organization shortcut.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization projects.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Projects]
+      operationId: createOrganizationProject
+      x-discobot-action: project.create
+      summary: Create a project in an organization.
+      description: Creates a project under the selected organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Organization project created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/org/{organizationDomain}/secrets:
+    get:
+      tags: [Secrets]
+      operationId: listOrganizationSecrets
+      x-discobot-action: secret.list
+      summary: List secrets in an organization.
+      description: Lists secret metadata in the selected organization. `/v1/secrets` is the public-organization shortcut.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      responses:
+        "200":
+          description: Organization secret metadata list.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Secrets]
+      operationId: createOrganizationSecret
+      x-discobot-action: secret.create
+      summary: Create an encrypted secret in an organization.
+      description: Creates secret metadata and an encrypted version under the selected organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationDomain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Organization secret created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/users/me:
+    get:
+      tags: [Users]
+      operationId: getCurrentUser
+      x-discobot-action: user.me.read
+      summary: Get the current user.
+      description: Returns the authenticated user's canonical Meta profile.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /v1/users/me/sessions:
+    get:
+      tags: [Users]
+      operationId: listCurrentUserSessions
+      x-discobot-action: user_session.list
+      summary: List current user's login sessions.
+      description: |
+        Lists authenticated user sessions across browsers, desktop shells, API
+        clients, and refresh-token contexts. This supports account/session
+        management UI.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /v1/users/me/sessions/{sessionId}:
+    delete:
+      tags: [Users]
+      operationId: revokeCurrentUserSession
+      x-discobot-action: user_session.revoke
+      summary: Revoke a user login session.
+      description: |
+        Revokes one of the current user's login sessions. This prevents that
+        session from minting new access tokens. Short-lived already-issued JWTs
+        may remain valid until expiry unless introspected.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: User cannot revoke this session.
+        "404":
+          description: Session not found.
+
+  /v1/users/me/devices:
+    get:
+      tags: [Devices]
+      operationId: listCurrentUserDevices
+      x-discobot-action: device.list
+      summary: List current user's devices.
+      description: Lists active, pending, disabled, and deleted user devices visible to the current user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Devices]
+      operationId: registerCurrentUserDevice
+      x-discobot-action: device.register
+      summary: Register a user device public key.
+      description: |
+        Registers a device and its public key. If this is the user's first
+        device, Meta can mark it active after login. Otherwise, the device starts
+        pending and must be approved by an existing active device before it can
+        unwrap existing secrets.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Device registered as active or pending.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /v1/users/me/devices/pending:
+    get:
+      tags: [Devices]
+      operationId: listPendingCurrentUserDevices
+      x-discobot-action: device.pending.list
+      summary: List pending device approvals.
+      description: |
+        Lists pending devices for the current user. Existing active devices use
+        this endpoint to show approval prompts for new devices.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+
+  /v1/users/me/devices/{deviceId}:
+    delete:
+      tags: [Devices]
+      operationId: deleteCurrentUserDevice
+      x-discobot-action: device.delete
+      summary: Disable or delete a user device.
+      description: |
+        Disables or deletes one of the current user's devices. If this is the
+        user's last active device, clients should warn that existing secrets may
+        become unrecoverable and need to be re-entered or rotated.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        "204":
+          description: Device disabled or deleted.
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: User cannot modify this device.
+        "404":
+          description: Device not found.
+
+  /v1/users/me/devices/{deviceId}/approval-plan:
+    post:
+      tags: [Devices, Secrets]
+      operationId: createDeviceApprovalPlan
+      x-discobot-action: device.approval_plan
+      summary: Plan new-device approval wraps.
+      description: |
+        Returns encrypted secret versions and wraps decryptable by the approving
+        device so the client can create recipient wraps for a pending device.
+        Meta returns ciphertext and wrapping metadata only; it does not perform
+        cryptography.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        "200":
+          description: Approval plan for pending device.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: Current device cannot approve this pending device.
+        "404":
+          description: Pending device not found.
+
+  /v1/users/me/devices/{deviceId}/approve:
+    post:
+      tags: [Devices, Secrets]
+      operationId: approveCurrentUserDevice
+      x-discobot-action: device.approve
+      summary: Approve a pending device.
+      description: |
+        Marks a pending device active after an existing active device uploads the
+        recipient wraps needed by the new device. Meta validates ownership and
+        wrap metadata but does not unwrap any keys.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Device approved.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid bearer token.
+        "403":
+          description: Current device cannot approve this pending device.
+        "404":
+          description: Pending device not found.
+
+  /v1/groups:
+    get:
+      tags: [Groups]
+      operationId: listGroups
+      x-discobot-action: group.list
+      summary: List groups visible to the caller.
+      description: Lists groups the caller belongs to or can administer.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Groups]
+      operationId: createGroup
+      x-discobot-action: group.create
+      summary: Create a group.
+      description: Creates a named user group. Detailed authorization rules are defined in the authorization design.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Group created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/groups/{groupId}:
+    get:
+      tags: [Groups]
+      operationId: getGroup
+      x-discobot-action: group.read
+      summary: Get group metadata.
+      description: Returns group metadata for callers authorized to view the group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        "200":
+          description: Group metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Groups]
+      operationId: updateGroup
+      x-discobot-action: group.update
+      summary: Update group metadata.
+      description: Updates group metadata. Group membership synchronization rules are separate.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Group updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Groups]
+      operationId: deleteGroup
+      x-discobot-action: group.delete
+      summary: Delete or disable a group.
+      description: Deletes or disables a group, subject to group administration rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        "204":
+          description: Group deleted or disabled.
+
+  /v1/groups/{groupId}/members:
+    get:
+      tags: [Groups]
+      operationId: listGroupMembers
+      x-discobot-action: group.member.list
+      summary: List group members.
+      description: Lists users in a group and their group-local roles.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        "200":
+          description: Group members.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Groups]
+      operationId: addGroupMember
+      x-discobot-action: group.member.add
+      summary: Add a group member.
+      description: Adds a user to a group unless membership is externally managed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Group member added.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/groups/{groupId}/members/{userId}:
+    patch:
+      tags: [Groups]
+      operationId: updateGroupMember
+      x-discobot-action: group.member.update
+      summary: Update a group member role.
+      description: Updates group-local membership role for manually managed membership.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Group member updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Groups]
+      operationId: removeGroupMember
+      x-discobot-action: group.member.remove
+      summary: Remove a group member.
+      description: Removes a user from a group unless membership is externally managed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        "204":
+          description: Group member removed.
+
+  /v1/groups/{groupId}/identities:
+    get:
+      tags: [Groups]
+      operationId: listGroupIdentities
+      x-discobot-action: group.identity.list
+      summary: List external group identity links.
+      description: Lists upstream identity-provider group links for a Meta group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        "200":
+          description: Group identity links.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Groups]
+      operationId: linkGroupIdentity
+      x-discobot-action: group.identity.link
+      summary: Link an external group identity.
+      description: Links a Meta group to an upstream AD/LDAP/OIDC/SAML/GitHub-team identity.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Group identity linked.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/groups/{groupId}/identities/{identityId}:
+    delete:
+      tags: [Groups]
+      operationId: unlinkGroupIdentity
+      x-discobot-action: group.identity.unlink
+      summary: Unlink an external group identity.
+      description: Removes the link between a Meta group and an upstream group identity.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/IdentityId'
+      responses:
+        "204":
+          description: Group identity unlinked.
+
+  /v1/projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      x-discobot-action: project.list
+      summary: List projects visible to the caller.
+      description: Lists projects available through direct or group membership.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Projects.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Projects]
+      operationId: createProject
+      x-discobot-action: project.create
+      summary: Create a project.
+      description: Creates a Discobot collaboration boundary.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}:
+    get:
+      tags: [Projects]
+      operationId: getProject
+      x-discobot-action: project.read
+      summary: Get project metadata.
+      description: Returns project metadata for an authorized caller.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        "200":
+          description: Project metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Projects]
+      operationId: updateProject
+      x-discobot-action: project.update
+      summary: Update project metadata.
+      description: Updates project name, slug, description, or status according to project admin rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Project updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Projects]
+      operationId: deleteProject
+      x-discobot-action: project.delete
+      summary: Delete or archive a project.
+      description: Deletes or archives a project. Only project owners should be authorized.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        "204":
+          description: Project deleted or archived.
+
+  /v1/projects/{projectId}/members:
+    get:
+      tags: [Projects]
+      operationId: listProjectMembers
+      x-discobot-action: project.member.list
+      summary: List project members.
+      description: Lists direct user and group project memberships.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        "200":
+          description: Project members.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Projects]
+      operationId: addProjectMember
+      x-discobot-action: project.member.add
+      summary: Add a project member.
+      description: Adds a user or group as a direct project member.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Project member added.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/members/{memberId}:
+    patch:
+      tags: [Projects]
+      operationId: updateProjectMember
+      x-discobot-action: project.member.update
+      summary: Update a project member role.
+      description: Updates a direct user or group project member role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MemberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Project member updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Projects]
+      operationId: removeProjectMember
+      x-discobot-action: project.member.remove
+      summary: Remove a project member.
+      description: Removes a direct user or group project member. Last-owner protections apply.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        "204":
+          description: Project member removed.
+
+  /v1/projects/{projectId}/agent-sessions:
+    get:
+      tags: [Agent Sessions]
+      operationId: listAgentSessions
+      x-discobot-action: agent_session.list
+      summary: List agent sessions in a project.
+      description: Lists agent sessions visible to the caller in the project.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        "200":
+          description: Agent sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Agent Sessions]
+      operationId: createAgentSession
+      x-discobot-action: agent_session.create
+      summary: Create an agent session.
+      description: |
+        Creates a Discobot coding-agent session in the project. The agent runtime
+        owns the private key for the returned public key; Meta stores only the
+        public key.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Agent session created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}:
+    get:
+      tags: [Agent Sessions]
+      operationId: getAgentSession
+      x-discobot-action: agent_session.read
+      summary: Get agent session metadata.
+      description: Returns agent session metadata for an authorized caller.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      responses:
+        "200":
+          description: Agent session metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Agent Sessions]
+      operationId: updateAgentSession
+      x-discobot-action: agent_session.update
+      summary: Update agent session metadata.
+      description: Updates agent session metadata or lifecycle status.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Agent session updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Agent Sessions]
+      operationId: deleteAgentSession
+      x-discobot-action: agent_session.delete
+      summary: Delete or archive an agent session.
+      description: Deletes or archives an agent session according to project/session admin rules.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      responses:
+        "204":
+          description: Agent session deleted or archived.
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/members:
+    get:
+      tags: [Agent Sessions]
+      operationId: listAgentSessionMembers
+      x-discobot-action: agent_session.member.list
+      summary: List explicit agent session members.
+      description: Lists users with explicit session-level membership.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      responses:
+        "200":
+          description: Agent session members.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Agent Sessions]
+      operationId: addAgentSessionMember
+      x-discobot-action: agent_session.member.add
+      summary: Add an explicit agent session member.
+      description: Adds a user to an agent session with a session-specific role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Agent session member added.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/members/{userId}:
+    patch:
+      tags: [Agent Sessions]
+      operationId: updateAgentSessionMember
+      x-discobot-action: agent_session.member.update
+      summary: Update an explicit agent session member role.
+      description: Updates a user's session-specific role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Agent session member updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Agent Sessions]
+      operationId: removeAgentSessionMember
+      x-discobot-action: agent_session.member.remove
+      summary: Remove an explicit agent session member.
+      description: Removes a user's explicit session membership.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        "204":
+          description: Agent session member removed.
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/token:
+    post:
+      tags: [Tokens, Agent Sessions]
+      operationId: createAgentSessionTokenConvenience
+      x-discobot-action: agent_token.mint
+      summary: Convenience wrapper for minting an agent-scoped token.
+      description: |
+        Optional convenience wrapper around OAuth token exchange. The canonical
+        flow should use `/token` with OAuth token exchange, but this route may be
+        useful for first-party clients. Tokens must use per-agent-session
+        audiences like `agent-session:{agentSessionId}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Agent-scoped access token.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/secrets:
+    get:
+      tags: [Secrets, Agent Sessions]
+      operationId: getAgentSessionSecrets
+      x-discobot-action: agent_session.secret.read
+      summary: Fetch encrypted secret envelopes for an agent session.
+      description: |
+        Returns encrypted secret payloads, recipient wraps, scopes, and
+        non-sensitive metadata for the agent runtime. Meta returns ciphertext and
+        wraps only; the agent runtime unwraps/decrypts locally.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [llm, hooks, services, tools]
+          description: Optional scope filter.
+      responses:
+        "200":
+          description: Encrypted secret envelopes for the agent session.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/secrets/bundle-plan:
+    post:
+      tags: [Secrets, Agent Sessions]
+      operationId: createAgentSessionSecretBundlePlan
+      x-discobot-action: agent_session.secret.bundle_plan
+      summary: Plan encrypted secret bundle rewraps for an agent session.
+      description: |
+        Resolves effective project and session secret bindings and returns a
+        bundle plan containing encrypted secret versions, existing device wraps,
+        target scopes, and the agent-session public key. The client uses this to
+        produce recipient wraps for the agent session without Meta seeing
+        plaintext secret values or plaintext CEKs.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Bundle plan.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/projects/{projectId}/agent-sessions/{agentSessionId}/secrets/recipient-wraps:
+    post:
+      tags: [Secrets, Agent Sessions]
+      operationId: createAgentSessionSecretRecipientWraps
+      x-discobot-action: agent_session.secret.recipient_wrap.create
+      summary: Upload recipient wraps for an agent session.
+      description: |
+        Stores recipient wraps produced by a client, agent runtime, or external
+        KMS/HSM flow. Meta validates authorization and metadata but does not
+        unwrap the keys.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AgentSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Recipient wraps accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets:
+    get:
+      tags: [Secrets]
+      operationId: listSecrets
+      x-discobot-action: secret.list
+      summary: List secrets visible to the caller.
+      description: Lists secret metadata for secrets the caller owns or can manage. Values are never returned.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Secret metadata list.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Secrets]
+      operationId: createSecret
+      x-discobot-action: secret.create
+      summary: Create an encrypted secret.
+      description: |
+        Creates secret metadata and an initial encrypted secret version. The
+        request contains ciphertext and recipient wraps created outside Meta.
+        Meta stores the submitted envelopes as-is and never receives plaintext.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Secret created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets/{secretId}:
+    get:
+      tags: [Secrets]
+      operationId: getSecret
+      x-discobot-action: secret.read
+      summary: Get secret metadata.
+      description: Returns non-sensitive secret metadata and ownership/binding summaries.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      responses:
+        "200":
+          description: Secret metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    patch:
+      tags: [Secrets]
+      operationId: updateSecret
+      x-discobot-action: secret.update
+      summary: Update secret metadata.
+      description: Updates non-sensitive secret metadata. Use versions endpoint to rotate values.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Secret metadata updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    delete:
+      tags: [Secrets]
+      operationId: deleteSecret
+      x-discobot-action: secret.delete
+      summary: Disable or delete a secret.
+      description: Disables or deletes a secret. Values are not decrypted during deletion.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      responses:
+        "204":
+          description: Secret disabled or deleted.
+
+  /v1/secrets/{secretId}/owners:
+    get:
+      tags: [Secrets]
+      operationId: listSecretOwners
+      x-discobot-action: secret.owner.list
+      summary: List secret owners.
+      description: Lists the user, group, or project owners for a secret.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      responses:
+        "200":
+          description: Secret owners.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Secrets]
+      operationId: addSecretOwner
+      x-discobot-action: secret.owner.add
+      summary: Add a secret owner.
+      description: Adds ownership for a user, group, or project if shared ownership is enabled.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Secret owner added.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets/{secretId}/owners/{ownerId}:
+    delete:
+      tags: [Secrets]
+      operationId: removeSecretOwner
+      x-discobot-action: secret.owner.remove
+      summary: Remove a secret owner.
+      description: Removes a secret owner. The service should prevent removing the last owner unless deleting the secret.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+        - $ref: '#/components/parameters/OwnerId'
+      responses:
+        "204":
+          description: Secret owner removed.
+
+  /v1/secrets/{secretId}/versions:
+    get:
+      tags: [Secrets]
+      operationId: listSecretVersions
+      x-discobot-action: secret.version.list
+      summary: List secret versions.
+      description: Lists encrypted secret versions and metadata. Ciphertext may be omitted unless needed for rewrap flows.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      responses:
+        "200":
+          description: Secret versions.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Secrets]
+      operationId: createSecretVersion
+      x-discobot-action: secret.rotate
+      summary: Rotate a secret by adding a new encrypted version.
+      description: Stores a new encrypted secret version and submitted recipient wraps. Meta does not encrypt or decrypt values.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Secret version created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets/{secretId}/versions/{versionId}:
+    patch:
+      tags: [Secrets]
+      operationId: updateSecretVersion
+      x-discobot-action: secret.version.update
+      summary: Update secret version state.
+      description: Enables, disables, or marks an encrypted secret version deleted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+        - $ref: '#/components/parameters/VersionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Secret version updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets/{secretId}/bindings:
+    get:
+      tags: [Secrets]
+      operationId: listSecretBindings
+      x-discobot-action: secret.binding.list
+      summary: List secret bindings.
+      description: Lists project and agent-session targets where a secret is available and the scopes for each binding.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      responses:
+        "200":
+          description: Secret bindings.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Secrets]
+      operationId: createSecretBinding
+      x-discobot-action: secret.bind
+      summary: Bind a secret to a project or agent session.
+      description: |
+        Creates a binding that makes a secret eligible for use by a project or
+        agent session with specific scopes. A binding does not itself make a
+        secret decryptable; recipient wraps must exist for the target agent
+        session public key.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Secret binding created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/secrets/{secretId}/bindings/{bindingId}:
+    delete:
+      tags: [Secrets]
+      operationId: deleteSecretBinding
+      x-discobot-action: secret.binding.remove
+      summary: Remove a secret binding.
+      description: Removes a project or agent-session binding from a secret.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SecretId'
+        - $ref: '#/components/parameters/BindingId'
+      responses:
+        "204":
+          description: Secret binding removed.
+
+  /v1/tokens/introspect:
+    post:
+      tags: [Tokens]
+      operationId: introspectToken
+      x-discobot-action: token.introspect
+      summary: Introspect a token.
+      description: |
+        Optional token introspection endpoint for high-risk operations, ambiguous
+        authorization cases, or long-running requests where local JWT validation
+        is not sufficient.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Token introspection result.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/audit-events:
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      x-discobot-action: audit_event.list
+      summary: List audit events.
+      description: Lists append-only audit events visible to the caller, filtered by route-level context such as project, agent session, target, action, result, or time range.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by project context.
+        - name: agentSessionId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by agent session context.
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by router-level action name.
+        - name: result
+          in: query
+          required: false
+          schema: { type: string, enum: [success, denied, error] }
+          description: Filter by event result.
+      responses:
+        "200":
+          description: Audit events.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    OAuthApplicationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [github, google]
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+        redirectUris:
+          type: array
+          items:
+            type: string
+        grantTypes:
+          type: array
+          items:
+            type: string
+        responseTypes:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        tokenEndpointAuthMethod:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled]
+        providerConfig:
+          type: object
+          additionalProperties: true
+        github:
+          type: object
+          additionalProperties: true
+        google:
+          type: object
+          additionalProperties: true
+    OAuthApplicationCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/OAuthApplicationRequest'
+      required: [name, provider, clientId]
+    OAuthApplicationUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/OAuthApplicationRequest'
+
+  parameters:
+    AgentSessionId:
+      name: agentSessionId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Agent session ID.
+    BindingId:
+      name: bindingId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Secret binding ID.
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string }
+      description: User device ID.
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Group ID.
+    IdentityId:
+      name: identityId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Group identity link ID.
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Project member row ID.
+    OwnerId:
+      name: ownerId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Secret owner row ID.
+    OAuthApplicationId:
+      name: oauthApplicationId
+      in: path
+      required: true
+      schema: { type: string }
+      description: OAuth application ID.
+    OrganizationDomain:
+      name: organizationDomain
+      in: path
+      required: true
+      schema: { type: string }
+      description: Organization domain, such as `example.com`. The special `public` value addresses the public organization.
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Project ID.
+    SecretId:
+      name: secretId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Secret ID.
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+      description: User session ID.
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+      description: User ID.
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Secret version ID.

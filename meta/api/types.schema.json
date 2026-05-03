@@ -1,0 +1,1177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.discobot.dev/meta/types.schema.json",
+  "title": "Discobot Meta API Types",
+  "description": "Reusable JSON Schema definitions for Meta API resources. These schemas describe wire objects, not encrypted plaintext secret payloads.",
+  "$defs": {
+    "ID": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable opaque identifier using Meta's prefixed ULID convention, such as `usr_01hx3z9m8w7t2k5v3q6yb4n2rc`."
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "Base64Bytes": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Base64-encoded bytes."
+    },
+    "JSONRawMessage": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary JSON object. Contents are resource-specific."
+    },
+    "UserStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    },
+    "UserSessionKind": {
+      "type": "string",
+      "enum": [
+        "browser",
+        "desktop",
+        "api_token",
+        "refresh_token"
+      ]
+    },
+    "UserSessionStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "revoked",
+        "expired"
+      ]
+    },
+    "UserDeviceStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "disabled",
+        "deleted"
+      ]
+    },
+    "GroupStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    },
+    "GroupMemberRole": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "member"
+      ]
+    },
+    "ProjectStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "deleted"
+      ]
+    },
+    "ProjectMemberType": {
+      "type": "string",
+      "enum": [
+        "user",
+        "group"
+      ]
+    },
+    "ProjectRole": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "admin",
+        "member",
+        "viewer"
+      ]
+    },
+    "AgentSessionRole": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "editor",
+        "viewer"
+      ]
+    },
+    "PublicKeyStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled",
+        "deleted"
+      ]
+    },
+    "SecretType": {
+      "type": "string",
+      "enum": [
+        "api_key",
+        "oauth",
+        "token",
+        "environment"
+      ]
+    },
+    "SecretOwnerType": {
+      "type": "string",
+      "enum": [
+        "user",
+        "group",
+        "project"
+      ]
+    },
+    "SecretVersionState": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled",
+        "deleted"
+      ]
+    },
+    "SecretRecipientType": {
+      "type": "string",
+      "enum": [
+        "user",
+        "agent_session"
+      ]
+    },
+    "SecretBindingTarget": {
+      "type": "string",
+      "enum": [
+        "project",
+        "agent_session"
+      ]
+    },
+    "SecretScope": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "hooks",
+        "services",
+        "tools"
+      ]
+    },
+    "SecretScopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SecretScope"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "AgentScope": {
+      "type": "string",
+      "enum": [
+        "agent.chat",
+        "agent.read",
+        "agent.cancel",
+        "agent.files.read",
+        "agent.terminal",
+        "agent.secrets.resolve",
+        "agent.admin"
+      ]
+    },
+    "AgentScopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AgentScope"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "AuditResult": {
+      "type": "string",
+      "enum": [
+        "success",
+        "denied",
+        "error"
+      ]
+    },
+    "User": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "primaryEmail",
+        "emailVerified",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "primaryEmail": {
+          "type": "string",
+          "format": "email"
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "status": {
+          "$ref": "#/$defs/UserStatus"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "UserIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "userId",
+        "provider",
+        "subject",
+        "email",
+        "emailVerified",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "claims": {
+          "$ref": "#/$defs/JSONRawMessage"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "UserSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "userId",
+        "kind",
+        "status",
+        "expiresAt",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/ID"
+        },
+        "kind": {
+          "$ref": "#/$defs/UserSessionKind"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "userAgent": {
+          "type": "string"
+        },
+        "ipAddress": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/UserSessionStatus"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "lastSeenAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "revokedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "revokedReason": {
+          "type": "string"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "UserDevice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "publicKeyAlgorithm",
+        "publicKey",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "publicKeyAlgorithm": {
+          "type": "string"
+        },
+        "publicKey": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "status": {
+          "$ref": "#/$defs/UserDeviceStatus"
+        },
+        "approvedByDeviceId": {
+          "$ref": "#/$defs/ID"
+        },
+        "approvedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "lastSeenAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "Group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "name",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GroupStatus"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "GroupMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "groupId",
+        "userId",
+        "role",
+        "source",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "groupId": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "role": {
+          "$ref": "#/$defs/GroupMemberRole"
+        },
+        "source": {
+          "type": "string"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "GroupIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "groupId",
+        "provider",
+        "name",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "groupId": {
+          "$ref": "#/$defs/ID"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "externalId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "claims": {
+          "$ref": "#/$defs/JSONRawMessage"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "Project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "name",
+        "slug",
+        "status",
+        "createdByUserId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatus"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "ProjectMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "projectId",
+        "memberType",
+        "memberId",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ID"
+        },
+        "memberType": {
+          "$ref": "#/$defs/ProjectMemberType"
+        },
+        "memberId": {
+          "$ref": "#/$defs/ID"
+        },
+        "role": {
+          "$ref": "#/$defs/ProjectRole"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "AgentSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "projectId",
+        "name",
+        "status",
+        "createdByUserId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "AgentSessionPublicKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "agentSessionId",
+        "algorithm",
+        "publicKey",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "agentSessionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "publicKey": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "status": {
+          "$ref": "#/$defs/PublicKeyStatus"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "AgentSessionMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "agentSessionId",
+        "userId",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "agentSessionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "role": {
+          "$ref": "#/$defs/AgentSessionRole"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "Secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "name",
+        "type",
+        "createdByUserId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SecretType"
+        },
+        "description": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JSONRawMessage"
+        },
+        "currentVersionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "SecretOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "secretId",
+        "ownerType",
+        "ownerId",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "secretId": {
+          "$ref": "#/$defs/ID"
+        },
+        "ownerType": {
+          "$ref": "#/$defs/SecretOwnerType"
+        },
+        "ownerId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "SecretVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "secretId",
+        "version",
+        "encryptedData",
+        "encryptionAlgorithm",
+        "state",
+        "createdByUserId",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "secretId": {
+          "$ref": "#/$defs/ID"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "encryptedData": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "encryptionAlgorithm": {
+          "type": "string"
+        },
+        "encryptionNonce": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/SecretVersionState"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "SecretRecipientWrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "secretVersionId",
+        "recipientType",
+        "recipientId",
+        "recipientKeyId",
+        "algorithm",
+        "wrappedKey",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "secretVersionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "recipientType": {
+          "$ref": "#/$defs/SecretRecipientType"
+        },
+        "recipientId": {
+          "$ref": "#/$defs/ID"
+        },
+        "recipientKeyId": {
+          "$ref": "#/$defs/ID"
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "encapsulatedKey": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "wrappedKey": {
+          "$ref": "#/$defs/Base64Bytes"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "SecretBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "secretId",
+        "targetType",
+        "targetId",
+        "scopes",
+        "createdByUserId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "secretId": {
+          "$ref": "#/$defs/ID"
+        },
+        "targetType": {
+          "$ref": "#/$defs/SecretBindingTarget"
+        },
+        "targetId": {
+          "$ref": "#/$defs/ID"
+        },
+        "scopes": {
+          "$ref": "#/$defs/SecretScopes"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "AuditEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "httpMethod",
+        "pathTemplate",
+        "path",
+        "action",
+        "targetType",
+        "targetId",
+        "result",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "actorUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "actorUserSessionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "actorDeviceId": {
+          "$ref": "#/$defs/ID"
+        },
+        "httpMethod": {
+          "type": "string"
+        },
+        "pathTemplate": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "query": {
+          "$ref": "#/$defs/JSONRawMessage"
+        },
+        "action": {
+          "type": "string"
+        },
+        "targetType": {
+          "type": "string"
+        },
+        "targetId": {
+          "$ref": "#/$defs/ID"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ID"
+        },
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "agentSessionId": {
+          "$ref": "#/$defs/ID"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "result": {
+          "$ref": "#/$defs/AuditResult"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JSONRawMessage"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "PageInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hasMore"
+      ],
+      "properties": {
+        "hasMore": {
+          "type": "boolean"
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "details": {
+              "$ref": "#/$defs/JSONRawMessage"
+            }
+          }
+        }
+      }
+    },
+    "OrganizationStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled"
+      ]
+    },
+    "OrganizationRole": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "admin",
+        "member"
+      ]
+    },
+    "Organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "domain",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OrganizationStatus"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "domain": {
+          "type": "string"
+        }
+      }
+    },
+    "OrganizationMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "userId",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "userId": {
+          "$ref": "#/$defs/ID"
+        },
+        "role": {
+          "$ref": "#/$defs/OrganizationRole"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "OAuthApplicationStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled",
+        "deleted"
+      ]
+    },
+    "OAuthApplication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "clientId",
+        "name",
+        "redirectUris",
+        "grantTypes",
+        "responseTypes",
+        "scopes",
+        "tokenEndpointAuthMethod",
+        "status",
+        "createdByUserId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ID"
+        },
+        "organizationId": {
+          "$ref": "#/$defs/ID"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "redirectUris": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "uniqueItems": true
+        },
+        "grantTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "responseTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "tokenEndpointAuthMethod": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OAuthApplicationStatus"
+        },
+        "createdByUserId": {
+          "$ref": "#/$defs/ID"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    }
+  }
+}
