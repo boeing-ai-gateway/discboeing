@@ -31,7 +31,11 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 		/import \{ setSessionContext \} from "\$lib\/context\/session-context\.svelte";/,
 	);
 	assert.match(source, /const app = useAppContext\(\);/);
-	assert.match(source, /setSessionContext\(untrack\(\(\) => sessionId\)\)/);
+	assert.match(
+		source,
+		/const session = app\.ensureSession\(untrack\(\(\) => sessionId\)\);/,
+	);
+	assert.match(source, /setSessionContext\(session\);/);
 	assert.match(source, /onDestroy\(\(\) => \{/);
 	assert.match(
 		source,

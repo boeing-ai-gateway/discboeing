@@ -25,8 +25,9 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /\}: Props = \$props\(\);/);
 	assert.match(
 		source,
-		/const thread = setThreadContext\(untrack\(\(\) => threadId\)\);/,
+		/const thread = session\.ensureThread\(untrack\(\(\) => threadId\)\);/,
 	);
+	assert.match(source, /setThreadContext\(thread\);/);
 	assert.match(source, /<ThreadWorkspaceActive/);
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(

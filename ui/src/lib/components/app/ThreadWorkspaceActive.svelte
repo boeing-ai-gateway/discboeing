@@ -5,7 +5,7 @@
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { setThreadContext } from "$lib/context/thread-context.svelte";
+	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
 
 	type Props = {
@@ -17,9 +17,7 @@
 	const props: Props = $props();
 
 	const session = useSessionContext();
-	const thread = setThreadContext(
-		session.threads.selectedId ?? session.sessionId,
-	);
+	const thread = useThreadContext();
 
 	$effect(() => {
 		if (!session.current) {

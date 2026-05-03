@@ -1,8 +1,8 @@
 import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
-import type { AppContext } from "$lib/context/app-context.svelte";
-import { useAppContext } from "$lib/context/app-context.svelte";
+import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
+import { createThreadContext } from "$lib/context/thread-context.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
 import { createSessionHooksDomain } from "$lib/session/domains/session-hooks.svelte";
@@ -16,11 +16,16 @@ import type {
 import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 import { createSessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 import { ThreadStore } from "$lib/store/threads.store.svelte";
+import {
+	buildUserMessageParts,
+	createUserMessage,
+} from "$lib/session/domains/session-domain.helpers";
 
 const SESSION_CONTEXT_KEY = Symbol.for("discobot-ui-session-context");
 
-function createSessionContext(
+export function createSessionContext(
 	app: AppContext,
+	startChat: StartChat,
 	sessionId: string,
 ): SessionContextValue {
 	let selectedThreadId = $state<string | null>(null);
@@ -85,15 +90,41 @@ function createSessionContext(
 		openService: ui.openService,
 	});
 
+	const threadContexts = new SvelteMap<string, ThreadContextValue>();
+	const conversationScrollTopByThreadId = new SvelteMap<string, number>();
+
+	const ensureThread: SessionContextValue["ensureThread"] = (threadId) => {
+		const existing = threadContexts.get(threadId);
+		if (existing) {
+			return existing;
+		}
+
+		const thread = createThreadContext(app, startChat, context, threadId);
+		threadContexts.set(threadId, thread);
+		return thread;
+	};
+
+	const submit: SessionContextValue["submit"] = async (text, options = {}) => {
+		const threadId = options.threadId ?? threads.selectedId ?? sessionId;
+		const thread = threadContexts.get(threadId);
+		if (thread) {
+			return thread.submit({ parts: buildUserMessageParts(text) });
+		}
+
+		return startChat({
+			sessionId,
+			threadId,
+			messages: [createUserMessage(text)],
+		});
+	};
+
 	const commands = createSessionCommandsDomain({
 		app,
 		sessionId,
 		hasSession: () => hasSession,
 		getSelectedThreadId: () => threads.selectedId ?? sessionId,
+		submit,
 	});
-
-	const threadContexts = new SvelteMap<string, ThreadContextValue>();
-	const conversationScrollTopByThreadId = new SvelteMap<string, number>();
 
 	function dispose() {
 		filesDomain.dispose();
@@ -103,7 +134,7 @@ function createSessionContext(
 		threadContexts.clear();
 	}
 
-	return {
+	const context: SessionContextValue = {
 		get sessionId() {
 			return sessionId;
 		},
@@ -114,6 +145,7 @@ function createSessionContext(
 			return current;
 		},
 		dispose,
+		ensureThread,
 		stores,
 		ui,
 		threads,
@@ -121,36 +153,22 @@ function createSessionContext(
 		files: filesDomain,
 		services,
 		commands,
+		submit,
 		threadContexts,
 		conversationScrollTopByThreadId,
 	};
-}
 
-export function ensureSessionContext(
-	app: AppContext,
-	sessionId: string,
-): SessionContextValue {
-	let context = app.sessions.sessionContexts.get(sessionId);
-	if (!context) {
-		context = createSessionContext(app, sessionId);
-		app.sessions.sessionContexts.set(sessionId, context);
-	}
 	return context;
 }
 
-export function setSessionContext(sessionId?: string): SessionContextValue {
-	const app = useAppContext();
-	const resolvedSessionId =
-		sessionId ?? app.sessions.selectedId ?? app.sessions.pendingId;
-	const context = ensureSessionContext(app, resolvedSessionId);
+export function setSessionContext(
+	context: SessionContextValue,
+): SessionContextValue {
 	setContext(SESSION_CONTEXT_KEY, context);
 	return context;
 }
 
-export function useSessionContext(sessionId?: string): SessionContextValue {
-	if (sessionId !== undefined) {
-		return setSessionContext(sessionId);
-	}
+export function useSessionContext(): SessionContextValue {
 	const context = getContext<SessionContextValue | undefined>(
 		SESSION_CONTEXT_KEY,
 	);

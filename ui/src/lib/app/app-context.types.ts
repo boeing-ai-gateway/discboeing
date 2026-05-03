@@ -37,14 +37,17 @@ import type {
 	ChatMessage,
 	Session,
 	StartChatRequest,
-	StartChatResponse,
 	StartupTask,
 	SupportInfoResponse,
 	ThemeColorScheme,
 	Workspace,
 	WorkspaceValidationResult,
 } from "$lib/api-types";
-import type { SessionContextValue } from "$lib/session/session-context.types";
+import type {
+	SessionContextValue,
+	SubmitPromptOptions,
+	SubmitPromptResult,
+} from "$lib/session/session-context.types";
 import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 import type {
 	AsyncStatus,
@@ -329,7 +332,16 @@ export type AppContext = {
 	credentials: AppCredentials;
 	supportInfo: AppSupportInfo;
 	chatStreams: ChatStreamManager;
-	chat: (data: AppChatRequest) => Promise<StartChatResponse>;
+	ensureSession: (sessionId?: string | null) => SessionContextValue;
+	/**
+	 * Convenience prompt submitter. Uses the mounted session/thread context when
+	 * available and falls back to the low-level chat transport otherwise.
+	 */
+	submit: (
+		sessionId: string,
+		text: string,
+		options?: SubmitPromptOptions,
+	) => Promise<SubmitPromptResult>;
 	refresh: () => Promise<void>;
 	connectProjectEvents: () => () => void;
 	updates: AppUpdates;

@@ -149,10 +149,7 @@ test("session commands only track submit-in-flight state locally", () => {
 
 	assert.match(source, /let isSubmitting = \$state\(false\);/);
 	assert.match(source, /const threadId = args\.getSelectedThreadId\(\);/);
-	assert.match(
-		source,
-		/await sendMessages\(threadId, \[createUserMessage\(`\/\$\{command\.name\}`\)\]\);/,
-	);
+	assert.match(source, /await args\.submit\(text, \{ threadId \}\);/);
 	assert.match(source, /isSubmitting = true;/);
 	assert.match(source, /isSubmitting = false;/);
 	assert.doesNotMatch(source, /runningName/);
@@ -168,5 +165,6 @@ test("session context no longer wires thread activity into command progress trac
 		source,
 		/getSelectedThreadId: \(\) => threads\.selectedId \?\? sessionId,/,
 	);
+	assert.match(source, /submit,/);
 	assert.doesNotMatch(source, /getThreadActivity:/);
 });

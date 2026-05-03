@@ -18,7 +18,6 @@ import {
 	parseOAuthCredentialOption,
 	preferredSourceEnvVar,
 } from "$lib/components/ai/tool-renderers/requestusercredential-helpers";
-import { createUserMessage } from "$lib/session/domains/session-domain.helpers";
 import { createResource } from "$lib/resource/create-resource.svelte";
 import type { SessionCommandsDomain } from "$lib/session/session-context.types";
 
@@ -27,6 +26,7 @@ type CreateSessionCommandsDomainArgs = {
 	sessionId: string;
 	hasSession: () => boolean;
 	getSelectedThreadId: () => string;
+	submit: (text: string, options?: { threadId?: string }) => Promise<unknown>;
 };
 
 export function createSessionCommandsDomain(
@@ -77,15 +77,8 @@ export function createSessionCommandsDomain(
 			}),
 	);
 
-	async function sendMessages(
-		threadId: string,
-		messages: ReturnType<typeof createUserMessage>[],
-	) {
-		await args.app.chat({
-			sessionId: args.sessionId,
-			threadId,
-			messages,
-		});
+	async function sendMessages(threadId: string, text: string) {
+		await args.submit(text, { threadId });
 	}
 
 	function resetCredentialDialog() {
@@ -375,9 +368,10 @@ export function createSessionCommandsDomain(
 
 	async function executeCommand(command: AgentCommand) {
 		const threadId = args.getSelectedThreadId();
+		const text = `/${command.name}`;
 		isSubmitting = true;
 		try {
-			await sendMessages(threadId, [createUserMessage(`/${command.name}`)]);
+			await sendMessages(threadId, text);
 		} finally {
 			isSubmitting = false;
 		}

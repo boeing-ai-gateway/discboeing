@@ -1,17 +1,21 @@
 import { api } from "$lib/api-client";
 import { StartChatError } from "$lib/api-client";
-import { useAppContext } from "$lib/context/app-context.svelte";
+import type { AppChatRequest } from "$lib/app/app-context.types";
 import type {
 	BrowserEventChunkData,
 	ChatMessage,
 	HooksStatusResponse,
+	StartChatResponse,
 	Thread,
 } from "$lib/api-types";
 import {
 	createChatStreamEventListeners,
 	createChatStreamState,
 } from "$lib/thread/conversation-stream";
-import type { ChatStreamSubscription } from "$lib/thread/chat-stream-manager";
+import type {
+	ChatStreamManager,
+	ChatStreamSubscription,
+} from "$lib/thread/chat-stream-manager";
 import {
 	addToolApprovalResponse,
 	createUserMessageFromParts,
@@ -26,6 +30,8 @@ type CreateConversationDomainArgs = {
 	sessionId: string;
 	hasSession: () => boolean;
 	threadId: string;
+	startChat: (data: AppChatRequest) => Promise<StartChatResponse>;
+	chatStreams: ChatStreamManager;
 	initialMessages?: ChatMessage[];
 	refreshThread: () => Promise<void>;
 	applyThreadUpdate?: (thread: Thread) => void;
@@ -145,7 +151,6 @@ export function getStartChatErrorDetails(error: unknown): {
 }
 
 export function createConversationDomain(args: CreateConversationDomainArgs) {
-	const app = useAppContext();
 	let messages = $state<ChatMessage[]>(args.initialMessages ?? []);
 	let historyReplayVersion = $state(0);
 	let streamError = $state<string | null>(null);
@@ -372,7 +377,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				}
 			},
 		});
-		const subscription = app.chatStreams.subscribe({
+		const subscription = args.chatStreams.subscribe({
 			sessionId: args.sessionId,
 			threadId: args.threadId,
 			replay: true,
@@ -552,7 +557,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 			try {
 				if (!args.hasSession()) {
-					const response = await app.chat({
+					const response = await args.startChat({
 						sessionId: args.sessionId,
 						threadId: args.threadId,
 						messages: userMessage ? getSubmitMessages(userMessage) : [],
@@ -585,7 +590,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					activeSubscriptionState: activeSubscription?.getState() ?? null,
 				});
 				ensureStream(true);
-				const response = await app.chat({
+				const response = await args.startChat({
 					sessionId: args.sessionId,
 					threadId: args.threadId,
 					messages: userMessage ? getSubmitMessages(userMessage) : [],

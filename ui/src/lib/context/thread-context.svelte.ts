@@ -9,8 +9,7 @@ import {
 	resolveComposerDraftStorageKey,
 	writeComposerDraft,
 } from "$lib/composer-draft-storage";
-import { useAppContext } from "$lib/context/app-context.svelte";
-import { useSessionContext } from "$lib/context/session-context.svelte";
+import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createConversationDomain } from "$lib/thread/conversation.svelte";
 import { getPlanEntries } from "$lib/session/domains/session-domain.helpers";
 import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
@@ -146,11 +145,12 @@ export function applyStreamedThreadUpdate({
 	void reloadSession();
 }
 
-function createThreadContext(
-	threadId: string,
+export function createThreadContext(
+	app: AppContext,
+	startChat: StartChat,
 	session: SessionContextValue,
+	threadId: string,
 ): ThreadContextValue {
-	const app = useAppContext();
 	const hasSession = $derived.by(() => session.current !== null);
 	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",
@@ -185,6 +185,8 @@ function createThreadContext(
 		sessionId: session.sessionId,
 		hasSession: () => hasSession,
 		threadId,
+		startChat,
+		chatStreams: app.chatStreams,
 		initialMessages: app.sessions.takeOptimisticMessages(
 			session.sessionId,
 			threadId,
@@ -468,19 +470,11 @@ function createThreadContext(
 	};
 }
 
-export function setThreadContext(threadId: string): ThreadContextValue {
-	const session = useSessionContext();
-
-	const existing = session.threadContexts.get(threadId);
-	if (existing) {
-		setContext(THREAD_CONTEXT_KEY, existing);
-		return existing;
-	}
-
-	const ctx = createThreadContext(threadId, session);
-	session.threadContexts.set(threadId, ctx);
-	setContext(THREAD_CONTEXT_KEY, ctx);
-	return ctx;
+export function setThreadContext(
+	context: ThreadContextValue,
+): ThreadContextValue {
+	setContext(THREAD_CONTEXT_KEY, context);
+	return context;
 }
 
 export function useThreadContext(): ThreadContextValue {

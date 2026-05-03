@@ -17,7 +17,7 @@ import { createAppSupportInfoDomain } from "$lib/app/domains/app-support-info.sv
 import { createAppUpdatesDomain } from "$lib/app/domains/app-updates.svelte";
 import { createAppWorkspacesDomain } from "$lib/app/domains/app-workspaces.svelte";
 import { createAppViewState } from "$lib/app/view/create-app-view-state.svelte";
-import type { StartupTask } from "$lib/api-types";
+import type { StartChatResponse, StartupTask } from "$lib/api-types";
 import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
 import { SessionStore } from "$lib/store/sessions.store.svelte";
 import { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
@@ -26,6 +26,8 @@ import { CredentialStore } from "$lib/store/credentials.store.svelte";
 import { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
 import { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import { UIStateStore } from "$lib/store/ui-state.store.svelte";
+import { createUserMessage } from "$lib/session/domains/session-domain.helpers";
+import { createSessionContext } from "$lib/context/session-context.svelte";
 
 export type {
 	AppContext,
@@ -37,6 +39,7 @@ export type {
 } from "$lib/app/app-context.types";
 
 const APP_CONTEXT_KEY = Symbol.for("discobot-ui-app-context");
+export type StartChat = (data: AppChatRequest) => Promise<StartChatResponse>;
 
 type ProjectEvent<TData> = {
 	id: string;
@@ -220,7 +223,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		);
 	};
 
-	const chat = async ({
+	const startChat = async ({
 		sessionId,
 		threadId,
 		workspaceId,
@@ -270,6 +273,23 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		});
 	};
 
+	const submit: AppContext["submit"] = async (
+		sessionId,
+		text,
+		options = {},
+	) => {
+		const sessionContext = sessions.sessionContexts.get(sessionId);
+		if (sessionContext) {
+			return sessionContext.submit(text, options);
+		}
+
+		return startChat({
+			sessionId,
+			threadId: options.threadId ?? sessionId,
+			messages: [createUserMessage(text)],
+		});
+	};
+
 	const context: AppContext = {
 		stores,
 		ui,
@@ -282,7 +302,21 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		credentials,
 		supportInfo,
 		chatStreams,
-		chat,
+		ensureSession: (sessionId) => {
+			const resolvedSessionId =
+				sessionId ?? sessions.selectedId ?? sessions.pendingId;
+			let sessionContext = sessions.sessionContexts.get(resolvedSessionId);
+			if (!sessionContext) {
+				sessionContext = createSessionContext(
+					context,
+					startChat,
+					resolvedSessionId,
+				);
+				sessions.sessionContexts.set(resolvedSessionId, sessionContext);
+			}
+			return sessionContext;
+		},
+		submit,
 		refresh,
 		connectProjectEvents: () => {
 			if (!stopProjectEvents) {

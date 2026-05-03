@@ -25,7 +25,7 @@
 	import { getSSHPort } from "$lib/api-config";
 	import type { AgentCommand } from "$lib/api-types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import { setSessionContext } from "$lib/context/session-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/shell";
 	import {
@@ -54,7 +54,8 @@
 	};
 	const attemptedCommandIcons = new SvelteSet<string>();
 	const preferences = app.preferences;
-	const session = useSessionContext(untrack(() => sessionId));
+	const session = app.ensureSession(untrack(() => sessionId));
+	setSessionContext(session);
 	const sessionView = session.ui;
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	const sessionServices = $derived.by(() =>

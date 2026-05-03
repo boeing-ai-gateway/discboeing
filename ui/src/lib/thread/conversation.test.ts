@@ -159,7 +159,7 @@ test("conversation loader derives running state from websocket-backed lifecycle 
 
 	assert.match(source, /completionRunning/);
 	assert.match(source, /onCompletionStatus/);
-	assert.match(source, /app\.chatStreams\.subscribe/);
+	assert.match(source, /args\.chatStreams\.subscribe/);
 	assert.match(source, /onHistoryReplayEnd/);
 	assert.doesNotMatch(source, /getThreadMessages/);
 	assert.doesNotMatch(source, /isStreamingAssistantMessage/);

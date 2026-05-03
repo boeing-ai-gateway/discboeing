@@ -25,7 +25,8 @@
 		sidebarOpen,
 	}: Props = $props();
 	const session = useSessionContext();
-	const thread = setThreadContext(untrack(() => threadId));
+	const thread = session.ensureThread(untrack(() => threadId));
+	setThreadContext(thread);
 	const hasSelectedThread = $derived.by(
 		() => session.isPending || session.threads.selectedId !== null,
 	);

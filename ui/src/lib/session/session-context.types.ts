@@ -12,6 +12,7 @@ import type {
 	SessionCredentialAssignment,
 	SessionDiffFileEntry,
 	SessionDiffStats,
+	StartChatResponse,
 	Thread,
 	UpdateQueuedPromptRequest,
 } from "$lib/api-types";
@@ -213,6 +214,12 @@ export type ThreadSubmitResult = {
 	queued?: boolean;
 };
 
+export type SubmitPromptOptions = {
+	threadId?: string | null;
+};
+
+export type SubmitPromptResult = StartChatResponse | ThreadSubmitResult | void;
+
 export type ThreadContextValue = {
 	threadId: string;
 	thread: ThreadSummary | null;
@@ -267,6 +274,7 @@ export type SessionContextValue = {
 	isPending: boolean;
 	current: Session | null;
 	dispose: () => void;
+	ensureThread: (threadId: string) => ThreadContextValue;
 	stores: SessionStores;
 	ui: SessionViewState;
 	threads: SessionThreadsService;
@@ -274,6 +282,10 @@ export type SessionContextValue = {
 	files: SessionFilesDomain;
 	services: SessionServicesDomain;
 	commands: SessionCommandsDomain;
+	submit: (
+		text: string,
+		options?: SubmitPromptOptions,
+	) => Promise<SubmitPromptResult>;
 	threadContexts: Map<string, ThreadContextValue>;
 	conversationScrollTopByThreadId: Map<string, number>;
 };

@@ -13,7 +13,8 @@
 
 	let { sessionId, visible, mainClass, reserveSidebarSpace }: Props = $props();
 	const app = useAppContext();
-	const session = setSessionContext(untrack(() => sessionId));
+	const session = app.ensureSession(untrack(() => sessionId));
+	setSessionContext(session);
 	const threadId = $derived.by(
 		() => session.threads.selectedId ?? session.sessionId,
 	);
