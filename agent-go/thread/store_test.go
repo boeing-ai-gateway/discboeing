@@ -805,6 +805,10 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		Mode:          ModeState{Value: "plan"},
 		ActiveLeafID:  "msg-active",
 		ActiveCommand: "discobot-commit",
+		CommunicatedSkillLikeEntries: []CommunicatedSkillLikeEntry{{
+			Name:        "commit",
+			Description: "Commit pending changes",
+		}},
 		PromptQueue: []QueuedPrompt{{
 			ID:        "queue-1",
 			CreatedAt: time.Date(2026, time.March, 31, 1, 0, 0, 0, time.UTC),
@@ -857,6 +861,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.ActiveCommand != cfg.ActiveCommand {
 		t.Errorf("expected activeCommand=%q, got %q", cfg.ActiveCommand, loaded.ActiveCommand)
+	}
+	if len(loaded.CommunicatedSkillLikeEntries) != 1 || loaded.CommunicatedSkillLikeEntries[0] != cfg.CommunicatedSkillLikeEntries[0] {
+		t.Errorf("expected communicatedSkillLikeEntries=%#v, got %#v", cfg.CommunicatedSkillLikeEntries, loaded.CommunicatedSkillLikeEntries)
 	}
 	if len(loaded.PromptQueue) != 1 {
 		t.Fatalf("expected 1 queued prompt, got %d", len(loaded.PromptQueue))

@@ -304,11 +304,21 @@ func (a *DefaultAgent) promptStream(
 		currentCommunicatedCredentials, credentialReminder := a.buildCredentialChangeReminder(
 			env.threadCfg.CommunicatedCredentials,
 		)
+		currentSkillLikeEntries := currentVisibleSkillLikeEntries(env.sessionCfg, env.tools)
+		addedSkills, removedSkills, changedSkills := thread.DiffCommunicatedSkillLikeEntries(
+			env.threadCfg.CommunicatedSkillLikeEntries,
+			currentSkillLikeEntries,
+		)
+		skillLikeChangeReminder := buildSkillLikeChangeReminder(addedSkills, removedSkills, changedSkills)
+		if env.threadCfg.ActiveLeafID == "" {
+			skillLikeChangeReminder = ""
+		}
 		workspaceChangeReminder := a.buildWorkspaceChangeReminder(threadID)
 		cfg.PreludeMessages = buildTurnPreludeMessages(
 			userChangedMode,
 			env.planMode,
 			credentialReminder,
+			skillLikeChangeReminder,
 			workspaceChangeReminder,
 		)
 
@@ -333,19 +343,20 @@ func (a *DefaultAgent) promptStream(
 			changedAt = time.Now().UTC()
 		}
 		cfgToSave := thread.Config{
-			Name:                    env.threadCfg.Name,
-			NameSource:              env.threadCfg.NameSource,
-			LastMessage:             lastUserPromptFromUIParts(req.UserParts),
-			Model:                   cfg.ProviderID + "/" + cfg.Model,
-			Reasoning:               cfg.Reasoning,
-			CWD:                     cwd,
-			Mode:                    thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
-			LastTurnState:           "",
-			ActiveLeafID:            effectiveLeafID,
-			ActiveCommand:           activeCommand,
-			CommunicatedCredentials: currentCommunicatedCredentials,
-			PromptQueue:             env.threadCfg.PromptQueue,
-			Metadata:                env.threadCfg.Metadata,
+			Name:                         env.threadCfg.Name,
+			NameSource:                   env.threadCfg.NameSource,
+			LastMessage:                  lastUserPromptFromUIParts(req.UserParts),
+			Model:                        cfg.ProviderID + "/" + cfg.Model,
+			Reasoning:                    cfg.Reasoning,
+			CWD:                          cwd,
+			Mode:                         thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
+			LastTurnState:                "",
+			ActiveLeafID:                 effectiveLeafID,
+			ActiveCommand:                activeCommand,
+			CommunicatedCredentials:      currentCommunicatedCredentials,
+			CommunicatedSkillLikeEntries: currentSkillLikeEntries,
+			PromptQueue:                  env.threadCfg.PromptQueue,
+			Metadata:                     env.threadCfg.Metadata,
 		}
 		if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
 			yield(nil, fmt.Errorf("save thread config: %w", err))
@@ -970,8 +981,8 @@ func lastUserPromptFromUIParts(parts []message.UIPart) string {
 	return strings.TrimSpace(strings.Join(textParts, "\n"))
 }
 
-func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder, workspaceChangeReminder string) []message.Message {
-	prelude := make([]message.Message, 0, 3)
+func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder, skillLikeChangeReminder, workspaceChangeReminder string) []message.Message {
+	prelude := make([]message.Message, 0, 4)
 	if userChangedMode {
 		prelude = append(prelude, message.Message{
 			ID:        "mode-" + agent.GenerateID(),
@@ -995,6 +1006,19 @@ func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder
 				Text: credentialReminder,
 				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
 					ReminderKind: "credentials",
+				}),
+			}},
+		})
+	}
+	if strings.TrimSpace(skillLikeChangeReminder) != "" {
+		prelude = append(prelude, message.Message{
+			ID:        "skills-" + agent.GenerateID(),
+			Role:      "user",
+			Synthetic: true,
+			Parts: []message.Part{message.TextPart{
+				Text: skillLikeChangeReminder,
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+					ReminderKind: "skills",
 				}),
 			}},
 		})

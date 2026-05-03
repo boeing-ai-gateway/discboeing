@@ -951,11 +951,89 @@ type Config struct {
 	// CommunicatedCredentials tracks which session-scoped credential and use IDs
 	// have already been reported to the LLM for this thread.
 	CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials,omitempty"`
+	// CommunicatedSkillLikeEntries tracks which visible skill-like entries have
+	// already been reported to the LLM for this thread.
+	CommunicatedSkillLikeEntries []CommunicatedSkillLikeEntry `json:"communicatedSkillLikeEntries,omitempty"`
 	// PromptQueue stores queued follow-up prompts waiting to run after the
 	// current completion finishes.
 	PromptQueue []QueuedPrompt `json:"promptQueue,omitempty"`
 	// Metadata carries thread-scoped structured data for UI features such as task threads.
 	Metadata json.RawMessage `json:"metadata,omitempty"`
+}
+
+// CommunicatedSkillLikeEntry records one visible skill-like command that has
+// been explicitly reported to the LLM.
+type CommunicatedSkillLikeEntry struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+func communicatedSkillLikeEntryKey(entry CommunicatedSkillLikeEntry) string {
+	return strings.TrimSpace(entry.Name)
+}
+
+// NormalizeCommunicatedSkillLikeEntries returns a deterministic, deduplicated
+// copy of communicated visible skill-like entries.
+func NormalizeCommunicatedSkillLikeEntries(entries []CommunicatedSkillLikeEntry) []CommunicatedSkillLikeEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	normalized := make([]CommunicatedSkillLikeEntry, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		entry.Name = strings.TrimSpace(entry.Name)
+		entry.Description = strings.TrimSpace(entry.Description)
+		if entry.Name == "" {
+			continue
+		}
+		key := communicatedSkillLikeEntryKey(entry)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, entry)
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		return normalized[i].Name < normalized[j].Name
+	})
+	return normalized
+}
+
+// DiffCommunicatedSkillLikeEntries computes added, removed, and description-only
+// changes between two communicated visible skill-like snapshots.
+func DiffCommunicatedSkillLikeEntries(
+	before []CommunicatedSkillLikeEntry,
+	after []CommunicatedSkillLikeEntry,
+) (added []CommunicatedSkillLikeEntry, removed []CommunicatedSkillLikeEntry, changed []CommunicatedSkillLikeEntry) {
+	before = NormalizeCommunicatedSkillLikeEntries(before)
+	after = NormalizeCommunicatedSkillLikeEntries(after)
+
+	beforeByName := make(map[string]CommunicatedSkillLikeEntry, len(before))
+	for _, entry := range before {
+		beforeByName[communicatedSkillLikeEntryKey(entry)] = entry
+	}
+	afterByName := make(map[string]CommunicatedSkillLikeEntry, len(after))
+	for _, entry := range after {
+		afterByName[communicatedSkillLikeEntryKey(entry)] = entry
+	}
+
+	for name, current := range afterByName {
+		previous, ok := beforeByName[name]
+		if !ok {
+			added = append(added, current)
+			continue
+		}
+		if previous.Description != current.Description {
+			changed = append(changed, current)
+		}
+	}
+	for name, previous := range beforeByName {
+		if _, ok := afterByName[name]; !ok {
+			removed = append(removed, previous)
+		}
+	}
+
+	return NormalizeCommunicatedSkillLikeEntries(added), NormalizeCommunicatedSkillLikeEntries(removed), NormalizeCommunicatedSkillLikeEntries(changed)
 }
 
 // CommunicatedCredentialBinding records one session-scoped credential binding
@@ -1187,6 +1265,7 @@ func (s *Store) SaveConfig(threadID string, cfg Config) error {
 		cfg.Mode.Value = "build"
 	}
 	cfg.CommunicatedCredentials = NormalizeCommunicatedCredentialBindings(cfg.CommunicatedCredentials)
+	cfg.CommunicatedSkillLikeEntries = NormalizeCommunicatedSkillLikeEntries(cfg.CommunicatedSkillLikeEntries)
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal thread config: %w", err)
@@ -1208,21 +1287,22 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 	}
 	// Use a raw struct for migration: old format had separate providerId + bare model.
 	var raw struct {
-		Name                    string                          `json:"name"`
-		NameSource              string                          `json:"nameSource"`
-		LastMessage             string                          `json:"lastMessage"`
-		ErrorMessage            string                          `json:"errorMessage"`
-		Model                   string                          `json:"model"`
-		ProviderID              string                          `json:"providerId"`
-		Reasoning               providers.Reasoning             `json:"reasoning"`
-		CWD                     string                          `json:"cwd"`
-		Mode                    ModeState                       `json:"mode"`
-		LastTurnState           State                           `json:"lastTurnState"`
-		ActiveLeafID            string                          `json:"activeLeafId"`
-		ActiveCommand           string                          `json:"activeCommand"`
-		CommunicatedCredentials []CommunicatedCredentialBinding `json:"communicatedCredentials"`
-		PromptQueue             []QueuedPrompt                  `json:"promptQueue"`
-		Metadata                json.RawMessage                 `json:"metadata"`
+		Name                         string                          `json:"name"`
+		NameSource                   string                          `json:"nameSource"`
+		LastMessage                  string                          `json:"lastMessage"`
+		ErrorMessage                 string                          `json:"errorMessage"`
+		Model                        string                          `json:"model"`
+		ProviderID                   string                          `json:"providerId"`
+		Reasoning                    providers.Reasoning             `json:"reasoning"`
+		CWD                          string                          `json:"cwd"`
+		Mode                         ModeState                       `json:"mode"`
+		LastTurnState                State                           `json:"lastTurnState"`
+		ActiveLeafID                 string                          `json:"activeLeafId"`
+		ActiveCommand                string                          `json:"activeCommand"`
+		CommunicatedCredentials      []CommunicatedCredentialBinding `json:"communicatedCredentials"`
+		CommunicatedSkillLikeEntries []CommunicatedSkillLikeEntry    `json:"communicatedSkillLikeEntries"`
+		PromptQueue                  []QueuedPrompt                  `json:"promptQueue"`
+		Metadata                     json.RawMessage                 `json:"metadata"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("unmarshal thread config: %w", err)
@@ -1238,20 +1318,21 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		mode = ModeState{Value: "build"}
 	}
 	return Config{
-		Name:                    raw.Name,
-		NameSource:              raw.NameSource,
-		LastMessage:             raw.LastMessage,
-		ErrorMessage:            raw.ErrorMessage,
-		Model:                   model,
-		Reasoning:               raw.Reasoning,
-		CWD:                     raw.CWD,
-		Mode:                    mode,
-		LastTurnState:           raw.LastTurnState,
-		ActiveLeafID:            raw.ActiveLeafID,
-		ActiveCommand:           strings.TrimSpace(raw.ActiveCommand),
-		CommunicatedCredentials: NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
-		PromptQueue:             raw.PromptQueue,
-		Metadata:                raw.Metadata,
+		Name:                         raw.Name,
+		NameSource:                   raw.NameSource,
+		LastMessage:                  raw.LastMessage,
+		ErrorMessage:                 raw.ErrorMessage,
+		Model:                        model,
+		Reasoning:                    raw.Reasoning,
+		CWD:                          raw.CWD,
+		Mode:                         mode,
+		LastTurnState:                raw.LastTurnState,
+		ActiveLeafID:                 raw.ActiveLeafID,
+		ActiveCommand:                strings.TrimSpace(raw.ActiveCommand),
+		CommunicatedCredentials:      NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
+		CommunicatedSkillLikeEntries: NormalizeCommunicatedSkillLikeEntries(raw.CommunicatedSkillLikeEntries),
+		PromptQueue:                  raw.PromptQueue,
+		Metadata:                     raw.Metadata,
 	}, nil
 }
 
