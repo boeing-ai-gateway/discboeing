@@ -526,7 +526,7 @@ stopped → starting → running → stopping → stopped
 - Started via the UI or API (`POST /services/:id/start`)
 - Stopped with SIGTERM, then SIGKILL after 5 seconds if still running
 - Output (stdout/stderr) is captured and available via SSE streaming
-- Output files are stored at `~/.config/discobot/services/output/{id}.out` (max 1MB, auto-truncated)
+- Output files are stored at `~/.discobot/services/{id}/output.log` (JSONL, max 1MB, auto-truncated)
 
 ### Passive Services
 

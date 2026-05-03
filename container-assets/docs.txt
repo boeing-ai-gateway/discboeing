@@ -159,6 +159,7 @@ Background processes with optional HTTP proxying.
 
 Executable scripts that Discobot starts/stops as child processes.
 Requirements: executable bit, shebang line, script body.
+Output is stored at `~/.discobot/services/{service-id}/output.log` as JSONL (max 1MB, auto-truncated).
 
 Fields: name, description, order (lower numbers appear first in the UI), http (port number), https (port number), path (URL path for preview)
 

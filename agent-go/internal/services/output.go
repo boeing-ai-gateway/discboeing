@@ -21,20 +21,20 @@ type OutputEvent struct {
 	Timestamp string `json:"timestamp"`          // ISO 8601
 }
 
-// outputDir returns the directory for service output files.
-func outputDir() string {
+// outputDir returns the output directory for a service.
+func outputDir(serviceID string) string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "discobot", "services", "output")
+	return filepath.Join(home, ".discobot", "services", serviceID)
 }
 
 // outputPath returns the path to a service's output file.
 func outputPath(serviceID string) string {
-	return filepath.Join(outputDir(), serviceID+".out")
+	return filepath.Join(outputDir(serviceID), "output.log")
 }
 
 // appendEvent appends an output event to the service's JSONL file.
 func appendEvent(serviceID string, event OutputEvent) {
-	dir := outputDir()
+	dir := outputDir(serviceID)
 	_ = os.MkdirAll(dir, 0o755)
 
 	data, err := json.Marshal(event)
@@ -81,6 +81,7 @@ func readEvents(serviceID string) []OutputEvent {
 
 // clearOutput truncates the service's output file.
 func clearOutput(serviceID string) {
+	_ = os.MkdirAll(outputDir(serviceID), 0o755)
 	path := outputPath(serviceID)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
