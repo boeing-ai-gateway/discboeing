@@ -737,6 +737,22 @@ func TestSameResolvedPathUsesFileIdentity(t *testing.T) {
 	}
 }
 
+func TestWrapShellCommandForOS_WindowsStreamsOutputBeforeExit(t *testing.T) {
+	wrapped := wrapShellCommandForOS("windows", "pwd")
+	for _, want := range []string{
+		`$script:__discobot_exit = 0`,
+		`& {`,
+		`pwd`,
+		`} | Out-String -Stream`,
+		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCOBOT_BASH_CWD_PATH -NoNewline`,
+		`exit $script:__discobot_exit`,
+	} {
+		if !strings.Contains(wrapped, want) {
+			t.Fatalf("expected wrapped windows shell command to contain %q, got: %q", want, wrapped)
+		}
+	}
+}
+
 func TestNormalizeBashWorkingDirForOS(t *testing.T) {
 	tests := []struct {
 		name string

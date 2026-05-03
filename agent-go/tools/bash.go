@@ -320,10 +320,13 @@ func wrapShellCommandForOS(goos, command string) string {
 	}
 	return strings.Join([]string{
 		`$ErrorActionPreference = "Continue"`,
+		`$script:__discobot_exit = 0`,
+		`& {`,
 		command,
-		`$__discobot_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
+		`$script:__discobot_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
+		`} | Out-String -Stream`,
 		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCOBOT_BASH_CWD_PATH -NoNewline`,
-		`exit $__discobot_exit`,
+		`exit $script:__discobot_exit`,
 	}, "\n")
 }
 
