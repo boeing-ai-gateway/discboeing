@@ -207,7 +207,7 @@
 	class="field-sizing-content max-h-48 min-h-16 transition-all"
 	value={draft}
 	{disabled}
-	placeholder="Type a message..."
+	placeholder="Type a message, @file, /command, or ↑ for history"
 	oncompositionstart={() => {
 		isComposing = true;
 	}}
