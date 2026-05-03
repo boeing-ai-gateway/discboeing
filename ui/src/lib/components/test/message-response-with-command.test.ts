@@ -59,7 +59,7 @@ test("conversation pane reads the session error directly from the active session
 
 	assert.match(
 		source,
-		/const sessionError = \$derived\.by\(\s*\(\) => sessionErrorOverride \?\? session\?\.current\?\.errorMessage \?\? null,/,
+		/const sessionError = \$derived\.by\(\(\) =>\s*getErrorMessage\(sessionErrorOverride \?\? session\?\.current\?\.errorMessage\),\s*\);/,
 	);
 	assert.doesNotMatch(source, /session\?\.current\?\.status === "error"/);
 });

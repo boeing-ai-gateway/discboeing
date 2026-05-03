@@ -65,6 +65,7 @@
 	import { getAppContextIfPresent } from "$lib/context/app-context.svelte";
 	import { getSessionContextIfPresent } from "$lib/context/session-context.svelte";
 	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
+	import { getErrorMessage } from "$lib/error-message";
 	import type { ThreadContextValue } from "$lib/session/session-context.types";
 	import { getTodoWriteEntries } from "$lib/session/domains/session-domain.helpers";
 
@@ -161,8 +162,8 @@
 	const hasMessages = $derived.by(() => conversationMessages.length > 0);
 	const isLoading = $derived.by(() => conversationStatus === "loading");
 	const isStreaming = $derived.by(() => conversationStatus === "streaming");
-	const sessionError = $derived.by(
-		() => sessionErrorOverride ?? session?.current?.errorMessage ?? null,
+	const sessionError = $derived.by(() =>
+		getErrorMessage(sessionErrorOverride ?? session?.current?.errorMessage),
 	);
 	const shouldShowSessionError = $derived.by(
 		() => !isSessionTransitioningStatus(session?.current?.status),
@@ -170,8 +171,8 @@
 	const visibleSessionError = $derived.by(() =>
 		shouldShowSessionError ? sessionError : null,
 	);
-	const threadError = $derived.by(
-		() => threadErrorOverride ?? thread?.error ?? null,
+	const threadError = $derived.by(() =>
+		getErrorMessage(threadErrorOverride ?? thread?.error),
 	);
 	const canShowComposer = $derived.by(
 		() => showComposer && Boolean(app) && Boolean(session) && Boolean(thread),
