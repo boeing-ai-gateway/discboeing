@@ -1974,7 +1974,7 @@
 				{#if pendingBulkEnvVarPaste}
 					<div class="min-w-0 space-y-3">
 						<div
-							class="min-w-0 max-w-full overflow-x-auto rounded-md border border-border bg-muted/40 p-3"
+							class="min-w-0 max-w-full overflow-x-auto overflow-y-auto max-h-[min(16rem,40vh)] rounded-md border border-border bg-muted/40 p-3"
 						>
 							<div class="mb-2 text-sm font-medium">Summary</div>
 							<ul class="w-max min-w-full space-y-1 text-sm">
