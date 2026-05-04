@@ -40,7 +40,13 @@
 <header
 	class={`desktop-drag-region relative grid h-10 items-center bg-background ${isMobile.current ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)_auto_auto]"}`}
 	data-desktop-drag-region
+	data-tauri-drag-region
 >
+	<div
+		class="absolute inset-0 pointer-events-auto"
+		data-tauri-drag-region
+	></div>
+
 	<div class="relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3">
 		{#if isMobile.current}
 			<DiscobotLogo size={24} />
@@ -64,9 +70,7 @@
 
 	<div class="relative z-20 min-w-0 px-2">
 		{#if showSessionToolbar}
-			<div class="desktop-no-drag min-w-0">
-				<SessionToolbarStack />
-			</div>
+			<SessionToolbarStack />
 		{/if}
 	</div>
 

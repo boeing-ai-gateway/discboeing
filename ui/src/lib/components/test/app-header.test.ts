@@ -27,6 +27,7 @@ test("app header preserves the toolbar grid slot even when the session toolbar i
 		source,
 		/<div class="relative z-20 min-w-0 px-2">\s*\{#if showSessionToolbar\}[\s\S]*<SessionToolbarStack \/>[\s\S]*\{\/if\}\s*<\/div>/,
 	);
+	assert.doesNotMatch(source, /class="desktop-no-drag min-w-0"/);
 });
 
 test("app header keeps window controls in a dedicated rightmost grid column on desktop", () => {
@@ -35,13 +36,16 @@ test("app header keeps window controls in a dedicated rightmost grid column on d
 	assert.match(source, /grid-cols-\[auto_minmax\(0,1fr\)_auto_auto\]/);
 	assert.match(source, /grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
 	assert.match(source, /class=\{`desktop-drag-region relative grid h-10/);
+	assert.match(source, /data-desktop-drag-region/);
+	assert.match(source, /data-tauri-drag-region/);
 	assert.match(
 		source,
 		/\{#if !isMobile\.current\}[\s\S]*class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>[\s\S]*\{\/if\}/,
 	);
 	assert.ok(source.includes("<SessionToolbarStack />"));
 	assert.ok(source.includes('{isMobile.current ? "New" : "New Session"}'));
-	assert.doesNotMatch(source, /class="absolute inset-0 pointer-events-auto"/);
+	assert.match(source, /class="absolute inset-0 pointer-events-auto"/);
+	assert.match(source, /class="absolute inset-0 pointer-events-auto"[\s\S]*data-tauri-drag-region/);
 });
 
 test("app header shows the mobile Sessions toggle to the right of the logo", () => {

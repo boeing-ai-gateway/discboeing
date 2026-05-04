@@ -366,6 +366,7 @@
 <div
 	class="flex h-full w-full min-w-0 items-center justify-end gap-2 bg-background px-2"
 	data-desktop-drag-region
+	data-tauri-drag-region
 >
 	{#if !isMobile.current}
 		<div
