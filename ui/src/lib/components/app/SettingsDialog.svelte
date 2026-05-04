@@ -230,7 +230,7 @@
 	onOpenChange={handleSettingsOpenChange}
 >
 	<Dialog.Content
-		class="sm:max-w-2xl"
+		class="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
 		onInteractOutside={handleSettingsInteractOutside}
 		onEscapeKeydown={handleSettingsEscapeKeydown}
 	>

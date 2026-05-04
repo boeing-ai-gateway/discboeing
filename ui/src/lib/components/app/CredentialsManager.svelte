@@ -664,22 +664,24 @@
 
 	type ConfiguredCredential = (typeof credentialsApi.list)[number];
 	const credentialListEntries = $derived.by(() =>
-		credentialsApi.list.map((credential) => {
-			const option = credentialProviderOption(credential);
-			const image = option ? providerOptionImage(option) : null;
-			return {
-				credential,
-				title: credentialDisplayName(credential),
-				subtitle: `${typeLabel(credential.id, credential.provider, credential.authType)} · ${
-					credential.inactive
-						? "inactive"
-						: visibilitySummary(credential.visibility)
-				} · ${credentialSummary(credential)}`,
-				image,
-				imageClass: image ? providerOptionImageClass(image) : "",
-				monogram: credentialMonogram(credential),
-			};
-		}),
+		credentialsApi.list
+			.map((credential) => {
+				const option = credentialProviderOption(credential);
+				const image = option ? providerOptionImage(option) : null;
+				return {
+					credential,
+					title: credentialDisplayName(credential),
+					subtitle: `${typeLabel(credential.id, credential.provider, credential.authType)} · ${
+						credential.inactive
+							? "inactive"
+							: visibilitySummary(credential.visibility)
+					} · ${credentialSummary(credential)}`,
+					image,
+					imageClass: image ? providerOptionImageClass(image) : "",
+					monogram: credentialMonogram(credential),
+				};
+			})
+			.sort((a, b) => a.title.localeCompare(b.title)),
 	);
 
 	function startCreate() {
