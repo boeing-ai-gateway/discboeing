@@ -29,6 +29,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/windows/virtualdisk"
 )
 
 const (
@@ -50,6 +51,7 @@ var (
 	renamePath       = os.Rename
 	removePath       = os.Remove
 	sleep            = time.Sleep
+	createDynamicVHD = virtualdisk.CreateDynamicVHDX
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, name, args...).CombinedOutput()
 	}
@@ -1020,9 +1022,6 @@ func (m *Manager) ensureBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) 
 			}
 			bridgeInfo.Port = port
 			bridgeInfo.DockerHost = fmt.Sprintf("tcp://127.0.0.1:%d", port)
-			if err := m.saveBridgeRuntimeState(bridgeInfo); err != nil {
-				return BridgeInfo{}, false, err
-			}
 		}
 
 		ready, err := m.probeBridgeReady(ctx, bridgeInfo)
@@ -1450,14 +1449,6 @@ func quoteShellEnvValue(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
-func quotePowerShellLiteral(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
-}
-
-func (m *Manager) runPowerShell(ctx context.Context, script string) (string, error) {
-	return m.runCommand(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
-}
-
 func (m *Manager) startDistro(ctx context.Context) error {
 	return m.startNamedDistro(ctx, m.mainDistro().name)
 }
@@ -1503,7 +1494,7 @@ func (m *Manager) waitForSystemdReadyInDistro(ctx context.Context, distroName st
 		if state == "running" || state == "degraded" {
 			return nil
 		}
-		if stopErr := m.checkNamedDistroUnexpectedState(ctx, distroName, "waiting for systemd readiness"); stopErr != nil {
+		if stopErr := m.checkNamedDistroStillRegistered(ctx, distroName, "waiting for systemd readiness"); stopErr != nil {
 			return stopErr
 		}
 		if err != nil {
@@ -1520,13 +1511,13 @@ func (m *Manager) waitForDockerReady(ctx context.Context) error {
 	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for docker.service readiness", func(ctx context.Context) error {
 		output, err := m.runInDistro(ctx, "systemctl", "is-active", "docker.service")
 		if err != nil {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
+			if stopErr := m.checkNamedDistroStillRegistered(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
 				return stopErr
 			}
 			return err
 		}
 		if strings.TrimSpace(output) != "active" {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
+			if stopErr := m.checkNamedDistroStillRegistered(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
 				return stopErr
 			}
 			return fmt.Errorf("docker.service state is %q", strings.TrimSpace(output))
@@ -1542,7 +1533,7 @@ func (m *Manager) waitForVarReady(ctx context.Context) error {
 func (m *Manager) waitForVarReadyInDistro(ctx context.Context, distroName string) error {
 	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for /var readiness", func(ctx context.Context) error {
 		if _, err := m.runInNamedDistro(ctx, distroName, "mountpoint", "-q", "/var"); err != nil {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, distroName, "waiting for /var readiness"); stopErr != nil {
+			if stopErr := m.checkNamedDistroStillRegistered(ctx, distroName, "waiting for /var readiness"); stopErr != nil {
 				return stopErr
 			}
 			return err
@@ -1747,6 +1738,10 @@ func (m *Manager) saveBridgeRuntimeState(bridgeInfo BridgeInfo) error {
 	})
 }
 
+func (m *Manager) clearBridgeRuntimeState() error {
+	return m.state.Clear()
+}
+
 func (m *Manager) configuredRootfsSourceRef() string {
 	if rootfsPath := strings.TrimSpace(m.cfg.WSLRootfsPath); rootfsPath != "" {
 		return rootfsPath
@@ -1842,11 +1837,7 @@ func (m *Manager) ensureVarDiskFile(ctx context.Context) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("stat WSL /var disk %q: %w", varDiskPath, err)
 	}
-	if _, err := m.runPowerShell(ctx, fmt.Sprintf(
-		"New-VHD -Path %s -Dynamic -SizeBytes %dGB | Out-Null",
-		quotePowerShellLiteral(varDiskPath),
-		m.varDiskSizeGB(),
-	)); err != nil {
+	if err := createDynamicVHD(varDiskPath, uint64(m.varDiskSizeGB())*1024*1024*1024); err != nil {
 		if shouldElevateVarDiskOperation(err) {
 			if _, helperErr := m.runWSLElevationHelper(ctx, "create-vhd", "--path", varDiskPath, "--size-gb", strconv.Itoa(m.varDiskSizeGB())); helperErr != nil {
 				return fmt.Errorf("create WSL /var disk %q with elevated helper: %w", varDiskPath, helperErr)
@@ -2032,6 +2023,17 @@ func (m *Manager) checkNamedDistroUnexpectedState(ctx context.Context, distroNam
 	return nil
 }
 
+func (m *Manager) checkNamedDistroStillRegistered(ctx context.Context, distroName string, operation string) error {
+	_, found, err := m.probeNamedDistro(ctx, distroName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("managed WSL distro %q disappeared while %s", distroName, operation)
+	}
+	return nil
+}
+
 func isUnformattedVarDiskMountError(err error) bool {
 	if err == nil {
 		return false
@@ -2082,6 +2084,15 @@ func isNoBlkidMatchError(err error) bool {
 		return true
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "exit status 2")
+}
+
+func isDistroNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "there is no distribution with the supplied name") ||
+		strings.Contains(message, "wsl_e_distro_not_found")
 }
 
 func shouldElevateVarDiskOperation(err error) bool {
@@ -2186,6 +2197,9 @@ func (m *Manager) unregisterLegacyDataDistro(ctx context.Context) error {
 
 func (m *Manager) unregisterNamedDistro(ctx context.Context, distroName string, description string) error {
 	if _, err := m.runCommand(ctx, "wsl.exe", "--unregister", distroName); err != nil {
+		if isDistroNotFoundError(err) {
+			return nil
+		}
 		return fmt.Errorf("unregister %s %q: %w", description, distroName, err)
 	}
 	return nil

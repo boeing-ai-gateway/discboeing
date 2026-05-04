@@ -342,6 +342,88 @@ func TestProviderDockerProviderForRuntimeReturnsLocalImageLoadError(t *testing.T
 	}
 }
 
+func TestProviderRequireDockerProviderRetriesAfterStaleTCPBridgeFailure(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		WSLDistroName: "discobot",
+		WSLStateDir:   t.TempDir(),
+	}
+	manager := NewManager(cfg)
+	if err := manager.state.Save(RuntimeState{
+		DistroName: cfg.WSLDistroName,
+		BridgeType: BridgeTypeTCP,
+		BridgePort: 1111,
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	refreshedRuntimeInfo := &RuntimeInfo{
+		BridgeType:       BridgeTypeTCP,
+		BridgePort:       2222,
+		BridgeDockerHost: "tcp://127.0.0.1:2222",
+		BridgeReady:      true,
+	}
+	dockerProvider := &docker.Provider{}
+	ensureRunningCalls := 0
+
+	provider := &Provider{
+		cfg:     cfg,
+		manager: manager,
+		ensureRunning: func(_ context.Context, progress progressReporter) (*RuntimeInfo, error) {
+			ensureRunningCalls++
+			progress.Update(100, "Managed WSL distro and Docker bridge are ready")
+			return refreshedRuntimeInfo, nil
+		},
+		newDockerProvider: func(cfg *config.Config) (*docker.Provider, error) {
+			switch cfg.DockerHost {
+			case "tcp://127.0.0.1:1111":
+				return nil, errors.New(`failed to connect to docker daemon: Head "http://127.0.0.1:1111/_ping": connectex: No connection could be made because the target machine actively refused it`)
+			case refreshedRuntimeInfo.BridgeDockerHost:
+				return dockerProvider, nil
+			default:
+				t.Fatalf("newDockerProvider() DockerHost = %q, want stale or refreshed host", cfg.DockerHost)
+				return nil, nil
+			}
+		},
+		ensureLocalImageLoad: func(_ context.Context, got *docker.Provider) error {
+			if got != dockerProvider {
+				t.Fatalf("ensureLocalImageLoad() provider = %p, want %p", got, dockerProvider)
+			}
+			return nil
+		},
+	}
+
+	got, err := provider.requireDockerProvider(context.Background(), &RuntimeInfo{
+		BridgeType:       BridgeTypeTCP,
+		BridgePort:       1111,
+		BridgeDockerHost: "tcp://127.0.0.1:1111",
+		BridgeReady:      true,
+	})
+	if err != nil {
+		t.Fatalf("requireDockerProvider() error = %v", err)
+	}
+	if got != dockerProvider {
+		t.Fatalf("requireDockerProvider() provider = %p, want %p", got, dockerProvider)
+	}
+	if ensureRunningCalls != 1 {
+		t.Fatalf("ensureRunning() calls = %d, want 1 retry", ensureRunningCalls)
+	}
+
+	state, err := manager.state.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if state != (RuntimeState{}) {
+		t.Fatalf("Load() = %#v, want cleared persisted state after stale bridge retry", state)
+	}
+
+	runtimeInfo := provider.loadRuntimeInfo()
+	if runtimeInfo == nil || runtimeInfo.BridgeDockerHost != refreshedRuntimeInfo.BridgeDockerHost {
+		t.Fatalf("loadRuntimeInfo() = %#v, want refreshed host %q", runtimeInfo, refreshedRuntimeInfo.BridgeDockerHost)
+	}
+}
+
 func TestProviderEnsureRuntimeInfoUsesCachedBridgeInsteadOfReenteringWSL(t *testing.T) {
 	t.Parallel()
 

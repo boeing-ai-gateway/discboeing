@@ -16,7 +16,7 @@ This module provides the sandbox runtime abstraction for managing execution envi
 | `internal/sandbox/vz/vz_vm_manager.go` | Apple Virtualization.framework VM manager (macOS) |
 | `internal/sandbox/vz/vz_docker.go` | Hybrid provider: VZ VMs with Docker containers (macOS) |
 | `internal/sandbox/vz/vsock.go` | VSOCK communication types |
-| `internal/sandbox/wsl/` | Planned Windows WSL2 provider and lifecycle management |
+| `internal/sandbox/wsl/` | Windows WSL2 provider and lifecycle management |
 | `server/docs/design/wsl2-sandbox-plan.md` | Working implementation plan for the WSL2 sandbox backend |
 | `internal/sandbox/vz/provider_stub.go` | Stub for non-darwin platforms |
 | `internal/sandbox/local/provider.go` | Local process provider (development) |
@@ -82,7 +82,11 @@ This module provides the sandbox runtime abstraction for managing execution envi
    - Interface-based design supporting multiple hypervisors
    - VZ implementation (macOS) - Apple Virtualization.framework
    - Future: KVM implementation (Linux)
-   - WSL2 is currently planned as a dedicated Windows provider layered on top of a managed shared distro rather than the current per-project VM abstraction
+   - WSL2 is implemented as a dedicated Windows provider layered on top of a
+     managed shared distro rather than the current per-project VM abstraction
+   - The WSL2 provider creates its persistent `/var` VHDX with the native
+     Windows Virtual Disk API and attaches it with `wsl.exe --mount`, so it
+     does not depend on Hyper-V PowerShell modules such as `New-VHD`
    - Project-level VMs with session reference counting
    - Configurable console logging and resource allocation
 

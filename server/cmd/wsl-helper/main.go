@@ -8,7 +8,11 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/obot-platform/discobot/server/internal/windows/virtualdisk"
 )
+
+var createDynamicVHD = virtualdisk.CreateDynamicVHDX
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -101,11 +105,7 @@ func runCreateVHD(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = runCommand(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", fmt.Sprintf(
-		"New-VHD -Path %s -Dynamic -SizeBytes %dGB | Out-Null",
-		quotePowerShellLiteral(path),
-		sizeGB,
-	))
+	err = createDynamicVHD(path, uint64(sizeGB)*1024*1024*1024)
 	if err != nil {
 		return fmt.Errorf("create VHD %q: %w", path, err)
 	}
@@ -239,10 +239,6 @@ func runCommand(ctx context.Context, name string, args ...string) (string, error
 		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, trimmed)
 	}
 	return trimmed, nil
-}
-
-func quotePowerShellLiteral(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
 func usage() string {

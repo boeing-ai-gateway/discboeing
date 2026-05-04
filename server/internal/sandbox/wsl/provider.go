@@ -870,7 +870,23 @@ func (p *Provider) requireDockerProvider(ctx context.Context, runtimeInfo *Runti
 	if !runtimeInfo.BridgeReady {
 		return nil, bridgeNotReadyError(runtimeInfo)
 	}
-	return p.dockerProviderForRuntime(ctx, runtimeInfo)
+	dockerProvider, err := p.dockerProviderForRuntime(ctx, runtimeInfo)
+	if err == nil || !shouldRetryDockerProviderForStaleBridge(runtimeInfo, err) {
+		return dockerProvider, err
+	}
+
+	p.clearRuntimeInfo()
+	if p.manager != nil {
+		if clearErr := p.manager.clearBridgeRuntimeState(); clearErr != nil {
+			log.Printf("Failed to clear persisted WSL bridge runtime state after Docker connection error on %q: %v", runtimeInfo.BridgeDockerHost, clearErr)
+		}
+	}
+
+	refreshedRuntimeInfo, refreshErr := p.ensureRuntimeInfo(ctx, progressReporter{})
+	if refreshErr != nil {
+		return nil, fmt.Errorf("%w; retrying after clearing cached WSL bridge runtime failed: %v", err, refreshErr)
+	}
+	return p.dockerProviderForRuntime(ctx, refreshedRuntimeInfo)
 }
 
 func (p *Provider) dockerProviderForRuntime(ctx context.Context, runtimeInfo *RuntimeInfo) (*docker.Provider, error) {
@@ -922,6 +938,19 @@ func (p *Provider) dockerProviderForRuntime(ctx context.Context, runtimeInfo *Ru
 
 func (p *Provider) buildDockerProvider(cfg *config.Config) (*docker.Provider, error) {
 	return docker.NewProvider(cfg, docker.SessionProjectResolver(p.sessionProjectResolver), docker.WithSystemManager(p.systemManager))
+}
+
+func shouldRetryDockerProviderForStaleBridge(runtimeInfo *RuntimeInfo, err error) bool {
+	if runtimeInfo == nil || err == nil || !strings.EqualFold(runtimeInfo.BridgeType, BridgeTypeTCP) {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "failed to connect to docker daemon") ||
+		strings.Contains(message, "failed to load image into wsl docker") ||
+		strings.Contains(message, "failed to load image into target docker") ||
+		strings.Contains(message, "connection refused") ||
+		strings.Contains(message, "connectex:")
 }
 
 func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {

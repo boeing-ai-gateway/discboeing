@@ -299,6 +299,42 @@ func TestStartTCPBridgeUsesSystemdRun(t *testing.T) {
 	}
 }
 
+func TestEnsureBridgeReadyDoesNotPersistDynamicTCPPortBeforeStartupSucceeds(t *testing.T) {
+	manager := NewManager(&config.Config{
+		WSLDistroName: "discobot",
+		WSLStateDir:   t.TempDir(),
+	})
+
+	originalRunCommandOutput := runCommandOutput
+	t.Cleanup(func() {
+		runCommandOutput = originalRunCommandOutput
+	})
+
+	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "wsl.exe" {
+			t.Fatalf("unexpected command name: %s", name)
+		}
+		wantPrefix := []string{"-d", "discobot", "--", "sh", "-lc"}
+		if len(args) != len(wantPrefix)+1 || !slices.Equal(args[:len(wantPrefix)], wantPrefix) {
+			t.Fatalf("unexpected command args: %v", args)
+		}
+		return nil, errors.New("exit status 1")
+	}
+
+	_, _, err := manager.ensureBridgeReady(context.Background(), BridgeInfo{Type: BridgeTypeTCP})
+	if err == nil {
+		t.Fatal("ensureBridgeReady() error = nil, want startup error")
+	}
+
+	state, loadErr := manager.state.Load()
+	if loadErr != nil {
+		t.Fatalf("Load() error = %v", loadErr)
+	}
+	if state != (RuntimeState{}) {
+		t.Fatalf("Load() = %#v, want zero value after failed startup", state)
+	}
+}
+
 func TestProbeBridgeReadyUsesHTTPForTCPBridge(t *testing.T) {
 	manager := NewManager(&config.Config{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +438,7 @@ func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 	}
 }
 
-func TestEnsureVarDiskFileUsesElevatedHelperWhenNewVHDNeedsPrivileges(t *testing.T) {
+func TestEnsureVarDiskFileUsesElevatedHelperWhenCreateVirtualDiskNeedsPrivileges(t *testing.T) {
 	root := t.TempDir()
 	manager := NewManager(&config.Config{
 		WSLDistroName:  "discobot",
@@ -410,20 +446,23 @@ func TestEnsureVarDiskFileUsesElevatedHelperWhenNewVHDNeedsPrivileges(t *testing
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
 	})
 
-	originalRunCommandOutput := runCommandOutput
+	originalCreateDynamicVHD := createDynamicVHD
 	originalRunElevatedWSLHelper := runElevatedWSLHelper
 	originalFindWSLElevationHelperPath := findWSLElevationHelperPath
 	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
+		createDynamicVHD = originalCreateDynamicVHD
 		runElevatedWSLHelper = originalRunElevatedWSLHelper
 		findWSLElevationHelperPath = originalFindWSLElevationHelperPath
 	})
 
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "powershell.exe" {
-			t.Fatalf("unexpected command: %s %v", name, args)
+	createDynamicVHD = func(path string, sizeBytes uint64) error {
+		if path != filepath.Join(root, "var.vhdx") {
+			t.Fatalf("createDynamicVHD() path = %q, want %q", path, filepath.Join(root, "var.vhdx"))
 		}
-		return []byte("New-VHD : You do not have the required permission to complete this task."), errors.New("exit status 1")
+		if sizeBytes != 100*1024*1024*1024 {
+			t.Fatalf("createDynamicVHD() sizeBytes = %d, want %d", sizeBytes, uint64(100*1024*1024*1024))
+		}
+		return errors.New("CreateVirtualDisk(\"C:\\\\var.vhdx\"): Access is denied.")
 	}
 
 	helperCalled := false
@@ -645,6 +684,94 @@ func TestEnsureMainDistroReadyRecoversBrokenRuntimeDistro(t *testing.T) {
 	}
 	if _, err := os.Stat(installDir); err != nil {
 		t.Fatalf("reimported install dir missing after recovery: %v", err)
+	}
+}
+
+func TestUnregisterNamedDistroIgnoresDistroNotFound(t *testing.T) {
+	manager := NewManager(&config.Config{WSLDistroName: "discobot"})
+
+	originalRunCommandOutput := runCommandOutput
+	t.Cleanup(func() {
+		runCommandOutput = originalRunCommandOutput
+	})
+
+	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "wsl.exe" {
+			t.Fatalf("unexpected command name: %s", name)
+		}
+		wantArgs := []string{"--unregister", "discobot"}
+		if !slices.Equal(args, wantArgs) {
+			t.Fatalf("runCommandOutput() args = %v, want %v", args, wantArgs)
+		}
+		return []byte("There is no distribution with the supplied name.\r\nError code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND"), errors.New("exit status 0xffffffff")
+	}
+
+	if err := manager.unregisterNamedDistro(context.Background(), "discobot", "managed WSL distro"); err != nil {
+		t.Fatalf("unregisterNamedDistro() error = %v, want nil", err)
+	}
+}
+
+func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *testing.T) {
+	root := t.TempDir()
+	varDiskPath := filepath.Join(root, "var.vhdx")
+	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	manager := NewManager(&config.Config{
+		WSLDistroName:  "discobot",
+		WSLStateDir:    root,
+		WSLVarDiskPath: varDiskPath,
+	})
+
+	type expectedCommand struct {
+		name   string
+		args   []string
+		output string
+		err    error
+	}
+	sequence := []expectedCommand{
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Stopped")},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "true"}},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, err: errors.New("exit status 1")},
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Stopped")},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
+	}
+
+	originalRunCommandOutput := runCommandOutput
+	t.Cleanup(func() {
+		runCommandOutput = originalRunCommandOutput
+	})
+
+	callIndex := 0
+	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if callIndex >= len(sequence) {
+			t.Fatalf("unexpected extra command: %s %v", name, args)
+		}
+		expected := sequence[callIndex]
+		callIndex++
+
+		if name != expected.name {
+			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
+		}
+		if !slices.Equal(args, expected.args) {
+			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
+		}
+		return []byte(expected.output), expected.err
+	}
+
+	distro, err := manager.ensureMainDistroReady(context.Background(), progressReporter{})
+	if err != nil {
+		t.Fatalf("ensureMainDistroReady() error = %v", err)
+	}
+	if distro.State != "Running" {
+		t.Fatalf("ensureMainDistroReady() distro state = %q, want %q", distro.State, "Running")
+	}
+	if callIndex != len(sequence) {
+		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
 	}
 }
 
