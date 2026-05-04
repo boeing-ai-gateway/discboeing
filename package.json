@@ -30,7 +30,7 @@
     "build:server": "node scripts/build-server.mjs",
     "build:disco": "node scripts/build-disco.mjs",
     "prepare:tauri-assets": "node scripts/prepare-tauri-assets.mjs",
-    "build:app": "pnpm prepare:tauri-assets && tauri build",
+    "build:app": "node scripts/build-app.mjs",
     "build:app:electron": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder --dir",
     "dist:app:electron": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder",
     "preview": "pnpm --dir ./ui preview",

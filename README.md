@@ -25,6 +25,24 @@ Automate session setup, enforce code quality, and run dev servers with [`.discob
 
 Download the macOS app from [Releases](https://github.com/obot-platform/discobot/releases).
 
+## Build from source
+
+```bash
+pnpm build:app
+```
+
+Useful build overrides:
+
+- `WSL_IMAGE_REF` controls the bundled Windows WSL image and defaults to
+  `ghcr.io/obot-platform/discobot-wsl:main`
+- `DISCOBOT_VERSION` controls the app/server version metadata used by the
+  build scripts
+- `DISCOBOT_TAURI_VERSION` optionally overrides the Tauri bundle version with
+  an MSI-safe value such as `0.0.0-0` or `1.2.3-4`
+
+When `DISCOBOT_TAURI_VERSION` is unset, `pnpm build:app` derives an MSI-safe
+Tauri version automatically from `DISCOBOT_VERSION` or `package.json`.
+
 ## Community
 
 Join the [#discobot channel](https://discord.gg/tHWRW6PVjP) on the Obot AI Discord.
