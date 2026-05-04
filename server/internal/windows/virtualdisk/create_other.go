@@ -4,6 +4,6 @@ package virtualdisk
 
 import "fmt"
 
-func CreateDynamicVHDX(path string, sizeBytes uint64) error {
-	return fmt.Errorf("CreateDynamicVHDX is only supported on Windows")
+func CreateDynamicVHDX(_ string, _ uint64) error {
+	return fmt.Errorf("create dynamic VHDX is only supported on Windows")
 }
