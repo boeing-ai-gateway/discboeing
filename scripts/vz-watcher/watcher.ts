@@ -71,6 +71,11 @@ interface BuildDockerTargetFilesOptions {
 	temporaryTagPrefix: string;
 }
 
+// Some Docker daemons reject `docker create` for scratch-based artifact images
+// unless an explicit command is provided. The container is never started; it is
+// created only so `docker cp` can read build artifacts back out.
+const artifactContainerCommand = ["/__discobot_artifact__"];
+
 function localDockerPath(projectRoot: string, destination: string): string {
 	// When Docker is proxied through `wsl.exe ... docker`, `docker cp` writes the
 	// destination path from the distro's view of the project checkout. Keep paths
@@ -113,7 +118,7 @@ export async function buildDockerTargetFiles(
 
 		const createResult = await options.runCommand(
 			"docker",
-			["create", imageRef],
+			["create", imageRef, ...artifactContainerCommand],
 			options.projectRoot,
 		);
 		if (createResult.exitCode !== 0) {

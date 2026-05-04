@@ -79,9 +79,9 @@ test("doBuild publishes a digest-named archive and rotates it when content chang
 	const createCalls = calls.filter((call) => call.args[0] === "create");
 	assert.equal(createCalls.length, 2, "expected one docker create per watcher build");
 	assert.deepEqual(
-		createCalls.map((call) => call.args[1]),
-		buildCalls.map((call) => call.args[4]),
-		"expected docker create to use the image built for each watcher build",
+		createCalls.map((call) => call.args.slice(1)),
+		buildCalls.map((call) => [call.args[4], "/__discobot_artifact__"]),
+		"expected docker create to use the image built for each watcher build with an explicit artifact-only command",
 	);
 
 	const cpCalls = calls.filter((call) => call.args[0] === "cp");
