@@ -677,7 +677,10 @@
 				variant="ghost"
 				size="sm"
 				class="w-full justify-start gap-2"
-				onclick={() => app.ui.openCredentialsDialog()}
+				onclick={() => {
+					dropdownOpen = false;
+					app.ui.openCredentialsDialog();
+				}}
 			>
 				<SettingsIcon class="size-3.5" />
 				Manage credentials
