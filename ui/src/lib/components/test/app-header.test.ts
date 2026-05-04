@@ -45,7 +45,10 @@ test("app header keeps window controls in a dedicated rightmost grid column on d
 	assert.ok(source.includes("<SessionToolbarStack />"));
 	assert.ok(source.includes('{isMobile.current ? "New" : "New Session"}'));
 	assert.match(source, /class="absolute inset-0 pointer-events-auto"/);
-	assert.match(source, /class="absolute inset-0 pointer-events-auto"[\s\S]*data-tauri-drag-region/);
+	assert.match(
+		source,
+		/class="absolute inset-0 pointer-events-auto"[\s\S]*data-tauri-drag-region/,
+	);
 });
 
 test("app header shows the mobile Sessions toggle to the right of the logo", () => {
