@@ -100,7 +100,7 @@ func writeResultFile(path string, contents string) error {
 	return nil
 }
 
-func runCreateVHD(ctx context.Context, args []string) error {
+func runCreateVHD(_ context.Context, args []string) error {
 	path, sizeGB, err := parseCreateVHDArgs(args)
 	if err != nil {
 		return err

@@ -462,7 +462,7 @@ func TestEnsureVarDiskFileUsesElevatedHelperWhenCreateVirtualDiskNeedsPrivileges
 		if sizeBytes != 100*1024*1024*1024 {
 			t.Fatalf("createDynamicVHD() sizeBytes = %d, want %d", sizeBytes, uint64(100*1024*1024*1024))
 		}
-		return errors.New("CreateVirtualDisk(\"C:\\\\var.vhdx\"): Access is denied.")
+		return errors.New("createvirtualdisk(\"C:\\\\var.vhdx\"): access is denied")
 	}
 
 	helperCalled := false
