@@ -406,7 +406,10 @@ that tells `init-var.sh` which label to wait for and mount onto `/var`. In WSL,
 the main distro also skips `systemd-networkd`, `systemd-networkd-wait-online`,
 `systemd-resolved`, and `systemd-timesyncd`, and relies on WSL-managed
 networking and `/etc/resolv.conf`. VZ keeps using the full guest networking
-stack and `/dev/vdb` for `/var`.
+stack and `/dev/vdb` for `/var`. The guest now runs `init-var.service` during
+`sysinit.target` after `local-fs.target`, so services that keep state under
+`/var/lib` (including `systemd-timesyncd` and `systemd-logind`) see the
+writable data disk before they start.
 
 ## Docker Bridge Design
 

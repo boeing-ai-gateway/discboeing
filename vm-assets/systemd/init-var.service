@@ -1,8 +1,11 @@
 [Unit]
 Description=Prepare persistent /var storage
-After=local-fs.target
-# Run before Docker services (don't include journald to avoid cycles)
-Before=docker.service containerd.service
+DefaultDependencies=no
+After=local-fs.target systemd-journald.socket
+# Run in sysinit before services that need writable state under /var/lib.
+Before=sysinit.target docker.service containerd.service
+Conflicts=shutdown.target
+Before=shutdown.target
 
 [Service]
 Type=oneshot
@@ -13,4 +16,4 @@ StandardOutput=journal+console
 StandardError=journal+console
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target
