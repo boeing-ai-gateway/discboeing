@@ -1232,6 +1232,71 @@ func TestSetCustomCredential_BlankValuesPreserveExistingSecrets(t *testing.T) {
 	}
 }
 
+func TestSetCustomCredential_KeyRenamePreservesSecret(t *testing.T) {
+	// When a user renames an env var key (e.g. FOO_TOKEN → FOO_NEW) but does not
+	// provide a new value, the backend should carry the existing secret over to the
+	// new key name using the OriginalKey field for the lookup.
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+
+	created, err := credSvc.SetCustomCredential(ctx, projectID, "", "", "", []SecretEnvVar{
+		{Key: "FOO_TOKEN", Value: "foo-secret"},
+		{Key: "BAR_TOKEN", Value: "bar-secret"},
+	}, CredentialVisibility{}, false)
+	if err != nil {
+		t.Fatalf("Failed to create custom credential: %v", err)
+	}
+
+	// Simulate a key rename: FOO_TOKEN → FOO_RENAMED, BAR_TOKEN unchanged.
+	// The frontend sends OriginalKey to tell the backend which stored key to read the
+	// existing secret from.
+	updated, err := credSvc.SetCustomCredential(ctx, projectID, created.ID, "", "", []SecretEnvVar{
+		{Key: "FOO_RENAMED", Value: "", OriginalKey: "FOO_TOKEN"},
+		{Key: "BAR_TOKEN", Value: ""},
+	}, CredentialVisibility{}, false)
+	if err != nil {
+		t.Fatalf("Failed to update custom credential: %v", err)
+	}
+
+	if len(updated.EnvKeys) != 2 {
+		t.Fatalf("expected 2 env keys after rename, got %v", updated.EnvKeys)
+	}
+	if updated.EnvKeys[0] != "FOO_RENAMED" {
+		t.Fatalf("expected first key to be FOO_RENAMED, got %q", updated.EnvKeys[0])
+	}
+	if updated.EnvKeys[1] != "BAR_TOKEN" {
+		t.Fatalf("expected second key to be BAR_TOKEN, got %q", updated.EnvKeys[1])
+	}
+
+	stored, err := st.GetCredentialByIDForProject(ctx, projectID, created.ID)
+	if err != nil {
+		t.Fatalf("Failed to load stored credential: %v", err)
+	}
+	data, err := credSvc.getSecretData(stored)
+	if err != nil {
+		t.Fatalf("Failed to decrypt stored credential: %v", err)
+	}
+	if len(data.EnvVars) != 2 {
+		t.Fatalf("expected 2 stored env vars, got %d", len(data.EnvVars))
+	}
+	if data.EnvVars[0].Key != "FOO_RENAMED" || data.EnvVars[0].Value != "foo-secret" {
+		t.Fatalf("expected FOO_RENAMED to carry the original foo-secret, got %#v", data.EnvVars[0])
+	}
+	if data.EnvVars[1].Key != "BAR_TOKEN" || data.EnvVars[1].Value != "bar-secret" {
+		t.Fatalf("expected BAR_TOKEN to remain bar-secret, got %#v", data.EnvVars[1])
+	}
+}
+
 func TestDirectToken_NoRefreshAttemptWhenExpired(t *testing.T) {
 	// Create in-memory store
 	st := setupTestStore(t)

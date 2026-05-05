@@ -35,6 +35,10 @@
 	type EnvVarRow = {
 		id: string;
 		key: string;
+		// originalKey tracks the key name that was stored on the server when edit mode was
+		// opened. When the user renames a key, originalKey stays as the old name so the
+		// backend can look up the existing secret value under that name.
+		originalKey: string;
 		value: string;
 		hasStoredValue: boolean;
 		replaceValue: boolean;
@@ -289,10 +293,12 @@
 		value = "",
 		hasStoredValue = false,
 		replaceValue = true,
+		originalKey = "",
 	): EnvVarRow {
 		return {
 			id: `env-var-${Date.now()}-${Math.floor(Math.random() * 10_000)}`,
 			key,
+			originalKey,
 			value,
 			hasStoredValue,
 			replaceValue,
@@ -732,7 +738,7 @@
 		replaceSecretDraft = false;
 		if (selectedProvider === CUSTOM_PROVIDER) {
 			envVarRows = credential.envKeys?.map((envKey) =>
-				makeEnvVarRow(envKey, "", true, false),
+				makeEnvVarRow(envKey, "", true, false, envKey),
 			) ?? [makeEnvVarRow()];
 		}
 	}
@@ -1122,7 +1128,15 @@
 
 	function envVarsFromRows(): CredentialEnvVar[] {
 		return envVarRows
-			.map((row) => ({ key: row.key.trim(), value: row.value }))
+			.map((row) => ({
+				key: row.key.trim(),
+				value: row.value,
+				// Only send originalKey when the key was actually renamed so the backend
+				// can look up the existing secret under the old name.
+				...(row.originalKey && row.originalKey !== row.key.trim()
+					? { originalKey: row.originalKey }
+					: {}),
+			}))
 			.filter((row) => row.key.length > 0);
 	}
 

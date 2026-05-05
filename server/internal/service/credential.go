@@ -107,8 +107,9 @@ type APIKeyCredential struct {
 
 // SecretEnvVar is a single environment variable stored in a credential.
 type SecretEnvVar struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	OriginalKey string `json:"originalKey,omitempty"`
 }
 
 // SecretCredentialData represents one or more encrypted env vars for secret-style credentials.
@@ -1507,7 +1508,7 @@ func normalizeSecretEnvVars(envVars []SecretEnvVar) []SecretEnvVar {
 			continue
 		}
 		seen[key] = struct{}{}
-		result = append(result, SecretEnvVar{Key: key, Value: envVar.Value})
+		result = append(result, SecretEnvVar{Key: key, Value: envVar.Value, OriginalKey: strings.TrimSpace(envVar.OriginalKey)})
 	}
 	return result
 }
@@ -1541,10 +1542,16 @@ func mergeSecretEnvVars(existingEnvVars, updatedEnvVars []SecretEnvVar) []Secret
 	result := make([]SecretEnvVar, 0, len(updatedEnvVars))
 	for _, envVar := range normalizeSecretEnvVars(updatedEnvVars) {
 		if strings.TrimSpace(envVar.Value) != "" {
-			result = append(result, envVar)
+			result = append(result, SecretEnvVar{Key: envVar.Key, Value: envVar.Value})
 			continue
 		}
-		if existingValue, ok := existingValues[envVar.Key]; ok {
+		// When the key was renamed, look up the existing value under the original key
+		// so the secret is preserved under the new name.
+		lookupKey := envVar.Key
+		if strings.TrimSpace(envVar.OriginalKey) != "" {
+			lookupKey = strings.TrimSpace(envVar.OriginalKey)
+		}
+		if existingValue, ok := existingValues[lookupKey]; ok {
 			result = append(result, SecretEnvVar{Key: envVar.Key, Value: existingValue})
 		}
 	}

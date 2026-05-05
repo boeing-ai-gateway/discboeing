@@ -18,8 +18,9 @@ import (
 
 // CreateCredentialRequest is the request body for creating/updating a credential
 type createCredentialEnvVarRequest struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	OriginalKey string `json:"originalKey,omitempty"`
 }
 
 type CreateCredentialRequest struct {
@@ -115,7 +116,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 
 	envVars := make([]service.SecretEnvVar, 0, len(req.EnvVars))
 	for _, envVar := range req.EnvVars {
-		envVars = append(envVars, service.SecretEnvVar{Key: envVar.Key, Value: envVar.Value})
+		envVars = append(envVars, service.SecretEnvVar{Key: envVar.Key, Value: envVar.Value, OriginalKey: envVar.OriginalKey})
 	}
 
 	if len(envVars) > 0 || req.Provider == "custom" || req.Provider == "" {

@@ -486,3 +486,147 @@ func TestSetSessionCredentialsRejectsForeignCredentialID(t *testing.T) {
 	})
 	AssertStatus(t, resp, http.StatusNotFound)
 }
+
+func TestEditCustomCredential_KeyRename_PreservesSecret(t *testing.T) {
+	// Renaming a key via the frontend sends originalKey so the backend can carry the
+	// existing secret to the new key name.
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("cred@test.com")
+	project := ts.CreateTestProject(user, "cred-project")
+
+	client := ts.AuthenticatedClient(user)
+
+	createResp := client.Post("/api/projects/"+project.ID+"/credentials", map[string]any{
+		"envVars": []map[string]string{
+			{"key": "FOO_TOKEN", "value": "foo-secret"},
+			{"key": "BAR_TOKEN", "value": "bar-secret"},
+		},
+	})
+	AssertStatus(t, createResp, http.StatusOK)
+
+	var created struct {
+		ID      string   `json:"id"`
+		EnvKeys []string `json:"envKeys"`
+	}
+	ParseJSON(t, createResp, &created)
+
+	// Rename FOO_TOKEN → FOO_RENAMED, leave BAR_TOKEN unchanged.
+	editResp := client.Post("/api/projects/"+project.ID+"/credentials", map[string]any{
+		"credentialId": created.ID,
+		"authType":     "api_key",
+		"envVars": []map[string]string{
+			{"key": "FOO_RENAMED", "value": "", "originalKey": "FOO_TOKEN"},
+			{"key": "BAR_TOKEN", "value": ""},
+		},
+	})
+	AssertStatus(t, editResp, http.StatusOK)
+
+	var edited struct {
+		EnvKeys []string `json:"envKeys"`
+	}
+	ParseJSON(t, editResp, &edited)
+
+	if len(edited.EnvKeys) != 2 {
+		t.Fatalf("expected 2 envKeys after rename, got %v", edited.EnvKeys)
+	}
+	found := map[string]bool{}
+	for _, k := range edited.EnvKeys {
+		found[k] = true
+	}
+	if !found["FOO_RENAMED"] {
+		t.Errorf("expected FOO_RENAMED in envKeys, got %v", edited.EnvKeys)
+	}
+	if !found["BAR_TOKEN"] {
+		t.Errorf("expected BAR_TOKEN in envKeys, got %v", edited.EnvKeys)
+	}
+	if found["FOO_TOKEN"] {
+		t.Error("FOO_TOKEN should no longer appear after rename")
+	}
+}
+
+func TestEditCustomCredential_FrontendEditPattern_PreservesOtherEnvVars(t *testing.T) {
+	// This test simulates the exact request the frontend sends when editing a custom
+	// credential. The frontend sends credentialId + authType but NO provider field,
+	// along with all env var rows (some with new values, others with blank values
+	// representing "keep the stored value").
+	t.Parallel()
+	ts := NewTestServer(t)
+	user := ts.CreateTestUser("cred@test.com")
+	project := ts.CreateTestProject(user, "cred-project")
+
+	client := ts.AuthenticatedClient(user)
+
+	// Step 1: create a custom credential with 3 env vars (simulates initial create)
+	createResp := client.Post("/api/projects/"+project.ID+"/credentials", map[string]any{
+		"envVars": []map[string]string{
+			{"key": "FOO_TOKEN", "value": "foo-secret"},
+			{"key": "BAR_TOKEN", "value": "bar-secret"},
+			{"key": "BAZ_TOKEN", "value": "baz-secret"},
+		},
+	})
+	AssertStatus(t, createResp, http.StatusOK)
+
+	var created struct {
+		ID       string   `json:"id"`
+		EnvKeys  []string `json:"envKeys"`
+		Provider string   `json:"provider"`
+	}
+	ParseJSON(t, createResp, &created)
+
+	if len(created.EnvKeys) != 3 {
+		t.Fatalf("expected 3 envKeys after create, got %v", created.EnvKeys)
+	}
+
+	// Step 2: simulate the frontend's edit request – only provider is absent,
+	// credentialId is set, one env var gets a new value, others are blank (stored value kept).
+	// This is the EXACT format the frontend's save() function sends for custom credentials.
+	editResp := client.Post("/api/projects/"+project.ID+"/credentials", map[string]any{
+		"credentialId": created.ID,
+		"name":         "My Creds",
+		"authType":     "api_key",
+		"envVars": []map[string]string{
+			{"key": "FOO_TOKEN", "value": "new-foo-secret"}, // updated
+			{"key": "BAR_TOKEN", "value": ""},               // blank = keep stored
+			{"key": "BAZ_TOKEN", "value": ""},               // blank = keep stored
+		},
+		"visibility": map[string]bool{
+			"tools":    false,
+			"console":  false,
+			"services": false,
+			"hooks":    false,
+		},
+		"inactive": false,
+	})
+	AssertStatus(t, editResp, http.StatusOK)
+
+	var edited struct {
+		ID      string   `json:"id"`
+		EnvKeys []string `json:"envKeys"`
+	}
+	ParseJSON(t, editResp, &edited)
+
+	// All 3 env vars must still be present after the edit.
+	if len(edited.EnvKeys) != 3 {
+		t.Fatalf("expected 3 envKeys after edit, got %v (all env vars were deleted!)", edited.EnvKeys)
+	}
+
+	// Verify from the list endpoint too.
+	listResp := client.Get("/api/projects/" + project.ID + "/credentials")
+	AssertStatus(t, listResp, http.StatusOK)
+
+	var listResult struct {
+		Credentials []struct {
+			ID      string   `json:"id"`
+			EnvKeys []string `json:"envKeys"`
+		} `json:"credentials"`
+	}
+	ParseJSON(t, listResp, &listResult)
+
+	if len(listResult.Credentials) != 1 {
+		t.Fatalf("expected 1 credential, got %d", len(listResult.Credentials))
+	}
+	if len(listResult.Credentials[0].EnvKeys) != 3 {
+		t.Fatalf("expected 3 envKeys in list, got %v", listResult.Credentials[0].EnvKeys)
+	}
+}

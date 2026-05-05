@@ -496,6 +496,10 @@ export type CredentialAuthType = "api_key" | "id" | "oauth";
 export interface CredentialEnvVar {
 	key: string;
 	value: string;
+	// originalKey is the key as it was stored before any in-form rename.
+	// When set and key !== originalKey, the backend uses originalKey to look up the
+	// existing secret value so a rename does not silently drop it.
+	originalKey?: string;
 }
 
 export interface OAuthData {
