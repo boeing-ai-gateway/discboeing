@@ -242,13 +242,6 @@ func (h *Handler) ServiceProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !svc.Passive && svc.Status != "running" && svc.Status != "starting" {
-		if _, errCode, startErr := h.serviceManager.StartService(h.agentCwd, serviceID); startErr != nil && errCode != "service_already_running" {
-			h.Error(w, http.StatusInternalServerError, startErr.Error())
-			return
-		}
-	}
-
 	// Strip the /services/{serviceId}/http prefix from the path
 	prefix := "/services/" + serviceID + "/http"
 	targetPath := strings.TrimPrefix(r.URL.Path, prefix)

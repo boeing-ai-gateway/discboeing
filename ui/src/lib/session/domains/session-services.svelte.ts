@@ -84,8 +84,11 @@ export function createSessionServicesDomain(
 			if (!args.hasSession()) {
 				return;
 			}
-			await api.startService(args.sessionId, serviceId);
-			await resource.refresh();
+			try {
+				await api.startService(args.sessionId, serviceId);
+			} finally {
+				await resource.refresh();
+			}
 		},
 		stop: async (serviceId: string) => {
 			if (!args.hasSession()) {

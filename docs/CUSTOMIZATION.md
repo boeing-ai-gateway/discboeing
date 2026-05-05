@@ -564,7 +564,7 @@ For example: `01HXYZ123456789ABCDEF-svc-ui.localhost:3000`
 The proxy:
 
 - Supports all HTTP methods and WebSocket connections
-- Auto-starts non-passive executable services on first request
+- Does not start executable services; start them explicitly from the UI or API
 - Returns an auto-refreshing page if the service isn't ready yet
 - Does not forward authentication credentials (services are considered public within the sandbox)
 

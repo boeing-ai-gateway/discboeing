@@ -14,7 +14,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/services"
 )
 
-func TestServiceProxyAutoStartsStoppedExecutableService(t *testing.T) {
+func TestServiceProxyDoesNotAutoStartStoppedExecutableService(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	servicesDir := filepath.Join(workspaceRoot, services.ServicesDir)
 	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
@@ -47,12 +47,8 @@ exec sleep 30
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusServiceUnavailable, rr.Body.String())
 	}
-	if !serviceManager.IsManaged("preview") {
-		t.Fatal("service proxy did not start the service")
-	}
-
-	if _, err := serviceManager.StopService("preview"); err != nil {
-		t.Fatalf("StopService() failed: %v", err)
+	if serviceManager.IsManaged("preview") {
+		t.Fatal("service proxy unexpectedly started the service")
 	}
 }
 
