@@ -17,6 +17,7 @@ export const SIDEBAR_ALL_OPEN_STORAGE_KEY = "sidebar.all.open";
 export const SIDEBAR_ALL_GROUPED_STORAGE_KEY = "sidebar.all.grouped";
 export const SHOW_REFRESH_BUTTON_STORAGE_KEY = "header.show.refresh.button";
 export const SHOW_EDITOR_BUTTON_STORAGE_KEY = "header.show.editor.button";
+export const AUTO_SCROLL_ON_STREAM_STORAGE_KEY = "chat.auto-scroll";
 export const RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY =
 	"recent.threads.visible.limit";
 export const PROMPT_HISTORY_STORAGE_KEY = "discobot:composer-history";
@@ -87,6 +88,9 @@ export class UIStateStore {
 	#showEditorButton = $state(
 		readBoolean(SHOW_EDITOR_BUTTON_STORAGE_KEY, false),
 	);
+	#autoScrollOnStream = $state(
+		readBoolean(AUTO_SCROLL_ON_STREAM_STORAGE_KEY, true),
+	);
 	#promptHistory = $state<string[]>(
 		readStringArray(PROMPT_HISTORY_STORAGE_KEY),
 	);
@@ -132,6 +136,10 @@ export class UIStateStore {
 
 	get showEditorButton(): boolean {
 		return this.#showEditorButton;
+	}
+
+	get autoScrollOnStream(): boolean {
+		return this.#autoScrollOnStream;
 	}
 
 	get promptHistory(): string[] {
@@ -225,6 +233,11 @@ export class UIStateStore {
 	setShowEditorButton(value: boolean): void {
 		this.#showEditorButton = value;
 		writeStorage(SHOW_EDITOR_BUTTON_STORAGE_KEY, String(value));
+	}
+
+	setAutoScrollOnStream(value: boolean): void {
+		this.#autoScrollOnStream = value;
+		writeStorage(AUTO_SCROLL_ON_STREAM_STORAGE_KEY, String(value));
 	}
 
 	ignoreUpdateVersion(version: string | null): void {

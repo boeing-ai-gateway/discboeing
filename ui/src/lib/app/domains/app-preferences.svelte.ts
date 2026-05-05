@@ -109,6 +109,9 @@ export function createAppPreferencesDomain(
 		get showEditorButton() {
 			return uiStateStore.showEditorButton;
 		},
+		get autoScrollOnStream() {
+			return uiStateStore.autoScrollOnStream;
+		},
 		setTheme: (mode) => applyThemeState(mode),
 		setColorScheme: (scheme) => {
 			if (!availableThemes.some((t) => t.id === scheme)) return;
@@ -155,6 +158,9 @@ export function createAppPreferencesDomain(
 		},
 		setShowEditorButton: (value) => {
 			uiStateStore.setShowEditorButton(value);
+		},
+		setAutoScrollOnStream: (value) => {
+			uiStateStore.setAutoScrollOnStream(value);
 		},
 	};
 }

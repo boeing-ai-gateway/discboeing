@@ -128,6 +128,7 @@ export type AppPreferences = {
 	sidebarAllGroupedByWorkspace: boolean;
 	showRefreshButton: boolean;
 	showEditorButton: boolean;
+	autoScrollOnStream: boolean;
 	setTheme: (theme: ThemeMode) => void;
 	setColorScheme: (scheme: ThemeColorScheme) => void;
 	toggleTheme: () => void;
@@ -145,6 +146,7 @@ export type AppPreferences = {
 	setSidebarAllGroupedByWorkspace: (value: boolean) => void;
 	setShowRefreshButton: (value: boolean) => void;
 	setShowEditorButton: (value: boolean) => void;
+	setAutoScrollOnStream: (value: boolean) => void;
 };
 
 export type AppEnvironment = {

@@ -489,6 +489,25 @@
 										/>
 									</ItemActions>
 								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Auto-scroll</ItemTitle>
+										<ItemDescription>
+											Automatically scroll to the bottom while the agent is
+											streaming a response.
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Switch
+											id="settings-auto-scroll"
+											checked={preferences.autoScrollOnStream}
+											onCheckedChange={(checked) => {
+												preferences.setAutoScrollOnStream(checked === true);
+											}}
+										/>
+									</ItemActions>
+								</Item>
 							</ItemGroup>
 						</CardContent>
 					</Card>
