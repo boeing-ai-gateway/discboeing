@@ -20,12 +20,21 @@ const COMPOSER_HOOKS_CONTROL_COMPONENT = path.resolve(
 	"../../components/app/parts/ConversationComposerHooksControl.svelte",
 );
 
+const SESSION_HOOKS_DOMAIN = path.resolve(
+	import.meta.dirname,
+	"../domains/session-hooks.svelte.ts",
+);
+
 function readConversationHooksPanelSource() {
 	return readFileSync(CONVERSATION_HOOKS_PANEL_COMPONENT, "utf-8");
 }
 
 function readComposerHooksControlSource() {
 	return readFileSync(COMPOSER_HOOKS_CONTROL_COMPONENT, "utf-8");
+}
+
+function readSessionHooksDomainSource() {
+	return readFileSync(SESSION_HOOKS_DOMAIN, "utf-8");
 }
 
 const hooksStatusResponse: HooksStatusResponse = {
@@ -106,6 +115,15 @@ test("composer hooks control resolves failures through shared hook display state
 		source,
 		/getHookDisplayState\(hook, pendingHookSet\(\)\) === "failure"/,
 	);
+});
+
+test("session hooks domain polls while hooks are pending or running", () => {
+	const source = readSessionHooksDomainSource();
+
+	assert.match(source, /HOOK_STATUS_POLL_MS/);
+	assert.match(source, /status\.pendingHookIds\.length === 0/);
+	assert.match(source, /hook\.lastResult === "running"/);
+	assert.match(source, /void refresh\(\)/);
 });
 
 test("mergeHookOutput replaces the latest output for the given hook", () => {

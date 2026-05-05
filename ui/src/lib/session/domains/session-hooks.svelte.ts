@@ -10,6 +10,8 @@ import type {
 	SessionHooksService,
 } from "$lib/session/session-context.types";
 
+const HOOK_STATUS_POLL_MS = 2_000;
+
 type CreateSessionHooksDomainArgs = {
 	sessionId: string;
 	hasSession: () => boolean;
@@ -64,6 +66,25 @@ export function createSessionHooksDomain(
 					lastResult: "running" as const,
 				};
 			}),
+		};
+	});
+
+	$effect(() => {
+		if (
+			!args.hasSession() ||
+			resource.isRefreshing ||
+			(status.pendingHookIds.length === 0 &&
+				!status.hooks.some((hook) => hook.lastResult === "running"))
+		) {
+			return;
+		}
+
+		const timeout = window.setTimeout(() => {
+			void refresh();
+		}, HOOK_STATUS_POLL_MS);
+
+		return () => {
+			window.clearTimeout(timeout);
 		};
 	});
 
