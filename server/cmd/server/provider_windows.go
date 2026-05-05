@@ -20,6 +20,12 @@ func registerPrimarySandboxProvider(
 	_ vm.ProjectResourceResolver,
 	systemManager *startup.SystemManager,
 ) {
+	if cfg.WSLRootfsPath != "" {
+		log.Printf("WSL runtime rootfs source: local archive %s", cfg.WSLRootfsPath)
+	} else {
+		log.Printf("WSL runtime rootfs source: image %s", cfg.WSLImageRef)
+	}
+
 	wslProvider, err := wsl.NewProvider(cfg, sessionProjectResolver, systemManager)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize WSL sandbox provider: %v", err)
