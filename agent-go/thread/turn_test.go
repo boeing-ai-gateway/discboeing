@@ -1057,6 +1057,74 @@ func TestResumeTurn_CrashedAfterStreamingNoTools(t *testing.T) {
 	}
 }
 
+func TestSaveAssistantStepMessage_ExistingMessageIsIdempotent(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread1"
+	turnID := "turn1"
+	userMsgID := "user-msg-1"
+	assistantMsgID := "assistant-msg-1"
+
+	if err := store.SaveMessage(threadID, StoredMessage{
+		ID:      userMsgID,
+		Message: message.Message{Role: "user", Parts: []message.Part{message.TextPart{Text: "hi"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveMessage(threadID, StoredMessage{
+		ID:       assistantMsgID,
+		ParentID: userMsgID,
+		Message: message.Message{
+			ID:    assistantMsgID,
+			Role:  "assistant",
+			Parts: []message.Part{message.TextPart{Text: "hello!"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sf, err := store.CreateStepFile(threadID, turnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sf.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	turnState := &TurnState{
+		ID:        turnID,
+		ThreadID:  threadID,
+		LeafMsgID: userMsgID,
+		Config:    TurnConfig{Model: "test-model"},
+	}
+	stepResult := &StepResult{
+		AssistantMessage: message.Message{
+			ID:    assistantMsgID,
+			Role:  "assistant",
+			Parts: []message.Part{message.TextPart{Text: "hello!"}},
+		},
+	}
+
+	msg, err := saveAssistantStepMessage(store, threadID, turnID, turnState, turnState.Config, 0, stepResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stepResult.AssistantMessageID != assistantMsgID {
+		t.Fatalf("expected assistant message id %q, got %q", assistantMsgID, stepResult.AssistantMessageID)
+	}
+	if turnState.LeafMsgID != assistantMsgID {
+		t.Fatalf("expected leaf %q, got %q", assistantMsgID, turnState.LeafMsgID)
+	}
+	if msg.ID != assistantMsgID {
+		t.Fatalf("expected returned message id %q, got %q", assistantMsgID, msg.ID)
+	}
+	loaded, err := store.LoadStepResult(threadID, turnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded == nil || loaded.AssistantMessageID != assistantMsgID {
+		t.Fatalf("expected saved step result assistant id %q, got %#v", assistantMsgID, loaded)
+	}
+}
+
 // TestResumeTurn_CrashedAfterCompletionBeforeToolExecution tests scenario #2:
 // The LLM completion finished and step-result.json was saved (with tool calls),
 // but we crashed before any tools were executed (no tool-results.json).

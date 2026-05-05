@@ -3,6 +3,7 @@ package thread
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"log"
@@ -1244,12 +1245,23 @@ func saveAssistantStepMessage(
 	assistantMsg := stepResult.AssistantMessage
 	assistantMsg.Metadata = buildMessageMetadata(cfg, turnState.ID, turnState.StartedAt, nil)
 	assistantMsgID := resolveMessageID(assistantMsg)
-	if err := store.SaveMessage(threadID, StoredMessage{
+	stored := StoredMessage{
 		ID:       assistantMsgID,
 		ParentID: turnState.LeafMsgID,
 		Message:  assistantMsg,
-	}); err != nil {
-		return message.Message{}, fmt.Errorf("save assistant message: %w", err)
+	}
+	if err := store.SaveMessage(threadID, stored); err != nil {
+		if !errors.Is(err, ErrMessageExists) {
+			return message.Message{}, fmt.Errorf("save assistant message: %w", err)
+		}
+		existing, loadErr := store.LoadMessage(threadID, assistantMsgID)
+		if loadErr != nil {
+			return message.Message{}, fmt.Errorf("load existing assistant message: %w", loadErr)
+		}
+		if existing.ParentID != stored.ParentID || existing.Message.Role != "assistant" {
+			return message.Message{}, fmt.Errorf("save assistant message: %w", err)
+		}
+		stored = existing
 	}
 	turnState.LeafMsgID = assistantMsgID
 	if stepIndex == 0 && turnState.AssistantMsgID == "" {
@@ -1259,7 +1271,7 @@ func saveAssistantStepMessage(
 	if err := store.SaveStepResult(threadID, turnID, stepIndex, *stepResult); err != nil {
 		return message.Message{}, fmt.Errorf("save step result assistant message id: %w", err)
 	}
-	return assistantMsg, nil
+	return stored.Message, nil
 }
 
 func loadStepAssistantMessage(store *Store, threadID string, stepResult *StepResult) (message.Message, error) {
