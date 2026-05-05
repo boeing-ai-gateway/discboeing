@@ -363,9 +363,14 @@ export function isAssistantToolPartQueued(
 		return false;
 	}
 
-	return parts.slice(0, partIndex).some((candidate) => {
-		return (
-			candidate.type === "dynamic-tool" && isToolRunningState(candidate.state)
-		);
-	});
+	for (let index = 0; index < partIndex; index += 1) {
+		const candidate = parts[index];
+		if (
+			candidate?.type === "dynamic-tool" &&
+			isToolRunningState(candidate.state)
+		) {
+			return true;
+		}
+	}
+	return false;
 }

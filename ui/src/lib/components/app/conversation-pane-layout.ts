@@ -33,12 +33,9 @@ export function groupMessagesIntoTurns(
 				turns.push(currentTurn);
 			}
 			if (message.role === "user") {
-				currentTurn.userMessages = [...currentTurn.userMessages, message];
+				currentTurn.userMessages.push(message);
 			} else {
-				currentTurn.assistantMessages = [
-					...currentTurn.assistantMessages,
-					message,
-				];
+				currentTurn.assistantMessages.push(message);
 			}
 			continue;
 		}
@@ -54,7 +51,7 @@ export function groupMessagesIntoTurns(
 				continue;
 			}
 
-			currentTurn.userMessages = [...currentTurn.userMessages, message];
+			currentTurn.userMessages.push(message);
 			continue;
 		}
 
@@ -68,7 +65,7 @@ export function groupMessagesIntoTurns(
 			continue;
 		}
 
-		currentTurn.assistantMessages = [...currentTurn.assistantMessages, message];
+		currentTurn.assistantMessages.push(message);
 	}
 
 	return turns;

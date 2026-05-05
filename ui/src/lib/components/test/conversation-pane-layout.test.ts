@@ -113,6 +113,20 @@ test("groupMessagesIntoTurns keeps multiple assistant messages in one turn", () 
 	]);
 });
 
+test("groupMessagesIntoTurns handles long grouped turns", () => {
+	const messages = [
+		makeUserMessage("user-1", "prompt"),
+		...Array.from({ length: 5000 }, (_, index) =>
+			makeAssistantMessage(`assistant-${index}`, `step ${index}`),
+		),
+	];
+	const turns = groupMessagesIntoTurns(messages);
+
+	assert.equal(turns.length, 1);
+	assert.equal(turns[0]?.assistantMessages.length, 5000);
+	assert.equal(turns[0]?.assistantMessages.at(-1)?.id, "assistant-4999");
+});
+
 test("groupMessagesIntoTurns prefers stable backend turn ids from message metadata", () => {
 	const turns = groupMessagesIntoTurns([
 		withTurnId(makeUserMessage("user-1", "prompt"), "turn-a"),
