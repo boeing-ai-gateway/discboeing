@@ -1072,12 +1072,12 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 		"      {\n" +
 		"        \"guid\": \"{one}\",\n" +
 		"        \"hidden\": false,\n" +
-		"        \"name\": \"discobot\",\n" +
+		"        \"name\": \"Discobot\",\n" +
 		"        \"source\": \"Microsoft.WSL\"\n" +
 		"      },\n" +
 		"      {\n" +
 		"        \"guid\": \"{two}\",\n" +
-		"        \"name\": \"discobot\",\n" +
+		"        \"name\": \"Discobot\",\n" +
 		"        \"source\": \"Windows.Terminal.Wsl\"\n" +
 		"      },\n" +
 		"      {\n" +
@@ -1090,7 +1090,7 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 		"  }\n" +
 		"}\n")
 
-	updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(settings, "discobot")
+	updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(settings, "Discobot", `C:\Program Files\Discobot\icon.ico`)
 	if err != nil {
 		t.Fatalf("hideWindowsTerminalWSLProfilesInSettings() error = %v", err)
 	}
@@ -1099,14 +1099,17 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 	}
 
 	updatedText := string(updated)
-	if strings.Count(updatedText, `"name": "discobot"`) != 2 {
+	if strings.Count(updatedText, `"name": "Discobot"`) != 2 {
 		t.Fatalf("updated settings missing discobot profiles:\n%s", updatedText)
 	}
 	if strings.Count(updatedText, `"hidden": true`) != 2 {
 		t.Fatalf("updated settings hidden=true count = %d, want 2\n%s", strings.Count(updatedText, `"hidden": true`), updatedText)
 	}
-	if strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"discobot\"") {
+	if strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"Discobot\"") {
 		t.Fatalf("updated settings still contain visible discobot profile:\n%s", updatedText)
+	}
+	if strings.Count(updatedText, `"icon": "C:\\Program Files\\Discobot\\icon.ico"`) != 2 {
+		t.Fatalf("updated settings icon count = %d, want 2\n%s", strings.Count(updatedText, `"icon": "C:\\Program Files\\Discobot\\icon.ico"`), updatedText)
 	}
 	if !strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"Ubuntu-24.04\"") {
 		t.Fatalf("updated settings changed non-discobot WSL profile unexpectedly:\n%s", updatedText)
@@ -1127,7 +1130,7 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 		"      {\n" +
 		"        \"guid\": \"{one}\",\n" +
 		"        \"hidden\": false,\n" +
-		"        \"name\": \"discobot\",\n" +
+		"        \"name\": \"Discobot\",\n" +
 		"        \"source\": \"Microsoft.WSL\"\n" +
 		"      }\n" +
 		"    ]\n" +
@@ -1138,8 +1141,9 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 	}
 
 	manager := NewManager(&config.Config{
-		WSLDistroName: "discobot",
-		WSLStateDir:   t.TempDir(),
+		WSLDistroName:   "Discobot",
+		WSLStateDir:     t.TempDir(),
+		DesktopIconPath: filepath.Join(root, "Discobot", "icon.ico"),
 	})
 	if err := manager.hideWindowsTerminalWSLProfiles(); err != nil {
 		t.Fatalf("hideWindowsTerminalWSLProfiles() error = %v", err)
@@ -1151,6 +1155,9 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 	}
 	if !strings.Contains(string(updated), `"hidden": true`) {
 		t.Fatalf("updated settings missing hidden=true:\n%s", string(updated))
+	}
+	if !strings.Contains(string(updated), `"icon": `) {
+		t.Fatalf("updated settings missing icon:\n%s", string(updated))
 	}
 }
 

@@ -153,6 +153,7 @@ func TestLoadSessionSandboxCleanupDelayFromEnv(t *testing.T) {
 func TestLoadDesktopShellSettingsFromGenericEnv(t *testing.T) {
 	t.Setenv("DISCOBOT_DESKTOP_RUNTIME", "electron")
 	t.Setenv("DISCOBOT_DESKTOP_SECRET", "desktop-secret")
+	t.Setenv("DISCOBOT_DESKTOP_ICON_PATH", `C:\Program Files\Discobot\icon.ico`)
 
 	cfg, err := Load()
 	if err != nil {
@@ -166,6 +167,19 @@ func TestLoadDesktopShellSettingsFromGenericEnv(t *testing.T) {
 	}
 	if cfg.DesktopSecret != "desktop-secret" {
 		t.Fatalf("expected DesktopSecret desktop-secret, got %q", cfg.DesktopSecret)
+	}
+	if cfg.DesktopIconPath != `C:\Program Files\Discobot\icon.ico` {
+		t.Fatalf("expected DesktopIconPath to be loaded, got %q", cfg.DesktopIconPath)
+	}
+}
+
+func TestLoadWSLDistroNameDefaultsToDisplayName(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.WSLDistroName != "Discobot" {
+		t.Fatalf("expected WSLDistroName Discobot, got %q", cfg.WSLDistroName)
 	}
 }
 

@@ -159,9 +159,10 @@ type Config struct {
 	ValidateAPIKeys      bool   // Validate provider API keys when saving secret credentials (VALIDATE_API_KEYS)
 
 	// Desktop shell settings
-	DesktopMode    bool   // Running inside a desktop shell
-	DesktopRuntime string // Desktop shell runtime (for example: tauri, electron)
-	DesktopSecret  string // Shared secret for desktop shell auth
+	DesktopMode     bool   // Running inside a desktop shell
+	DesktopRuntime  string // Desktop shell runtime (for example: tauri, electron)
+	DesktopSecret   string // Shared secret for desktop shell auth
+	DesktopIconPath string // Path to the desktop app icon, when available
 }
 
 // Load reads configuration from environment variables
@@ -260,7 +261,7 @@ func Load() (*Config, error) {
 	// WSL-specific settings (Windows Subsystem for Linux)
 	// WSL state defaults to XDG_STATE_HOME/discobot/wsl so development builds keep
 	// all runtime-managed state under the same application directory structure.
-	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", appName)
+	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", "Discobot")
 	cfg.WSLInstallDir = getEnv("WSL_INSTALL_DIR", filepath.Join(xdg.StateHome, appName, "wsl", "distro"))
 	cfg.WSLStateDir = getEnv("WSL_STATE_DIR", filepath.Join(xdg.StateHome, appName, "wsl"))
 	cfg.WSLVarDiskPath = getEnv("WSL_VAR_DISK_PATH", filepath.Join(xdg.StateHome, appName, "wsl", "var.vhdx"))
@@ -332,6 +333,7 @@ func Load() (*Config, error) {
 	if cfg.DesktopMode && cfg.DesktopSecret == "" {
 		return nil, fmt.Errorf("DISCOBOT_DESKTOP_SECRET (or DISCOBOT_SECRET) is required when DISCOBOT_DESKTOP_RUNTIME is set")
 	}
+	cfg.DesktopIconPath = getEnv("DISCOBOT_DESKTOP_ICON_PATH", "")
 
 	return cfg, nil
 }

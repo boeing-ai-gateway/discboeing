@@ -259,7 +259,7 @@ func (m *Manager) hideWindowsTerminalWSLProfiles() error {
 			return fmt.Errorf("read Windows Terminal settings %q: %w", settingsPath, err)
 		}
 
-		updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(data, distroName)
+		updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(data, distroName, m.cfg.DesktopIconPath)
 		if err != nil {
 			return fmt.Errorf("update Windows Terminal settings %q: %w", settingsPath, err)
 		}
@@ -293,7 +293,7 @@ func windowsTerminalSettingsPaths() []string {
 	}
 }
 
-func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string) ([]byte, bool, error) {
+func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string, iconPath string) ([]byte, bool, error) {
 	if strings.TrimSpace(distroName) == "" {
 		return data, false, nil
 	}
@@ -312,7 +312,7 @@ func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string) ([
 	var replacements []replacement
 	for _, span := range spans {
 		objectData := data[span.start:span.end]
-		updatedObject, changed := hideWindowsTerminalWSLProfileObject(objectData, distroName)
+		updatedObject, changed := hideWindowsTerminalWSLProfileObject(objectData, distroName, iconPath)
 		if !changed {
 			continue
 		}
@@ -334,12 +334,12 @@ func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string) ([
 	return updated, true, nil
 }
 
-func hideWindowsTerminalWSLProfileObject(objectData []byte, distroName string) ([]byte, bool) {
+func hideWindowsTerminalWSLProfileObject(objectData []byte, distroName string, iconPath string) ([]byte, bool) {
 	properties, err := topLevelJSONStringProperties(objectData)
 	if err != nil {
 		return objectData, false
 	}
-	if properties["name"] != distroName {
+	if !strings.EqualFold(properties["name"], distroName) {
 		return objectData, false
 	}
 	if properties["source"] != "Microsoft.WSL" && properties["source"] != "Windows.Terminal.Wsl" {
@@ -347,28 +347,59 @@ func hideWindowsTerminalWSLProfileObject(objectData []byte, distroName string) (
 	}
 
 	objectText := string(objectData)
+	changed := false
 	hiddenPattern := regexp.MustCompile(`(?m)("hidden"\s*:\s*)(true|false)`)
 	if hiddenPattern.MatchString(objectText) {
 		updated := hiddenPattern.ReplaceAllString(objectText, `${1}true`)
-		return []byte(updated), updated != objectText
+		if updated != objectText {
+			objectText = updated
+			changed = true
+		}
+	} else {
+		updated := insertJSONProperty(objectText, "hidden", "true")
+		if updated != objectText {
+			objectText = updated
+			changed = true
+		}
 	}
 
+	if strings.TrimSpace(iconPath) != "" {
+		updated := upsertJSONStringProperty(objectText, "icon", iconPath)
+		if updated != objectText {
+			objectText = updated
+			changed = true
+		}
+	}
+
+	return []byte(objectText), changed
+}
+
+func upsertJSONStringProperty(objectText string, propertyName string, value string) string {
+	propertyPattern := regexp.MustCompile(`(?m)("` + regexp.QuoteMeta(propertyName) + `"\s*:\s*)("(?:\\.|[^"\\])*")`)
+	if loc := propertyPattern.FindStringSubmatchIndex(objectText); loc != nil {
+		return objectText[:loc[4]] + strconv.Quote(value) + objectText[loc[5]:]
+	}
+	return insertJSONProperty(objectText, propertyName, strconv.Quote(value))
+}
+
+func insertJSONProperty(objectText string, propertyName string, rawValue string) string {
 	propertyIndent := "\t"
 	if matches := regexp.MustCompile(`(?m)^([ \t]+)"[^"]+"\s*:`).FindStringSubmatch(objectText); len(matches) == 2 {
 		propertyIndent = matches[1]
 	}
 
+	property := strconv.Quote(propertyName) + ": " + rawValue + ","
 	rest := objectText[1:]
 	if strings.HasPrefix(rest, "\r\n") {
 		rest = rest[2:]
-		return []byte("{" + "\r\n" + propertyIndent + `"hidden": true,` + "\r\n" + rest), true
+		return "{" + "\r\n" + propertyIndent + property + "\r\n" + rest
 	}
 	if strings.HasPrefix(rest, "\n") {
 		rest = rest[1:]
-		return []byte("{" + "\n" + propertyIndent + `"hidden": true,` + "\n" + rest), true
+		return "{" + "\n" + propertyIndent + property + "\n" + rest
 	}
 
-	return []byte(`{"hidden": true, ` + strings.TrimLeft(rest, " \t")), true
+	return "{" + property + " " + strings.TrimLeft(rest, " \t")
 }
 
 func topLevelJSONStringProperties(objectData []byte) (map[string]string, error) {

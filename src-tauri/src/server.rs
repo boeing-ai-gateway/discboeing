@@ -126,6 +126,7 @@ fn start_server(
         if let Ok(resource_dir) = app.path().resource_dir() {
             let wsl_dir = resource_dir.join("wsl");
             let rootfs_path = wsl_dir.join("discobot-rootfs.tar.zst");
+            let icon_path = resource_dir.join("icon.ico");
 
             if rootfs_path.exists() {
                 println!("Found bundled WSL resources:");
@@ -137,6 +138,12 @@ fn start_server(
                 );
             } else {
                 println!("No bundled WSL resources found, will download from registry");
+            }
+            if icon_path.exists() {
+                sidecar = sidecar.env(
+                    "DISCOBOT_DESKTOP_ICON_PATH",
+                    icon_path.to_string_lossy().to_string(),
+                );
             }
         }
     }
