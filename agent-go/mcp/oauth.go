@@ -141,12 +141,11 @@ func buildAuthorizationCodeHandler(
 			URL: cfg.ClientMetadataURI,
 		}
 	} else if cfg != nil && cfg.ClientID != "" {
-		handlerCfg.PreregisteredClientConfig = &sdkauth.PreregisteredClientConfig{
-			ClientSecretAuthConfig: &sdkauth.ClientSecretAuthConfig{
-				ClientID:     cfg.ClientID,
-				ClientSecret: cfg.ClientSecret,
-			},
+		client := &oauthex.ClientCredentials{ClientID: cfg.ClientID}
+		if cfg.ClientSecret != "" {
+			client.ClientSecretAuth = &oauthex.ClientSecretAuth{ClientSecret: cfg.ClientSecret}
 		}
+		handlerCfg.PreregisteredClient = client
 	} else {
 		// Default: dynamic client registration.
 		handlerCfg.DynamicClientRegistrationConfig = &sdkauth.DynamicClientRegistrationConfig{
