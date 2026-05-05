@@ -188,6 +188,7 @@
 	});
 
 	let viewport = $state<HTMLDivElement | null>(null);
+	let contentEl = $state<HTMLDivElement | null>(null);
 	let composerContainer = $state<HTMLDivElement | null>(null);
 	let hasInitialBottomScroll = $state(false);
 	let isNearBottom = $state(true);
@@ -1075,6 +1076,32 @@
 				scrollMessageToViewportTop(latestMessage.id);
 			});
 	});
+
+	// Auto-scroll to bottom during streaming when the user is near the bottom.
+	// Uses a ResizeObserver on the content div so it fires as streamed text
+	// grows the layout, not just when the messages array reference changes.
+	// Scrolling up pauses auto-scroll; scrolling back to the bottom resumes it.
+	// Disabled when the autoScrollOnStream preference is off.
+	$effect(() => {
+		const element = contentEl;
+		const autoScroll = app?.preferences.autoScrollOnStream ?? true;
+
+		if (!element || !autoScroll) {
+			return;
+		}
+
+		const observer = new ResizeObserver(() => {
+			if (isStreaming && isNearBottom) {
+				scrollToBottom("auto");
+			}
+		});
+
+		observer.observe(element);
+
+		return () => {
+			observer.disconnect();
+		};
+	});
 </script>
 
 {#snippet renderUserMessageParts(
@@ -1637,6 +1664,7 @@
 				>
 					<div
 						class={`w-full min-w-0 space-y-4 ${effectiveChatWidthMode === "constrained" ? "mx-auto max-w-3xl" : ""}`}
+						bind:this={contentEl}
 					>
 						{#each conversationTurns as turn, index (turn.id)}
 							<div
