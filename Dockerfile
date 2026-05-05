@@ -89,7 +89,7 @@ ENV container=docker
 # docker.io provides dockerd daemon and docker CLI (runs inside container with privileged mode)
 # docker-buildx is needed for multi-arch builds and advanced build features
 # docker-compose-v2 provides the Docker Compose v2 CLI plugin
-# iptables is needed by dockerd for network management
+# iptables and iproute2 are needed by dockerd and runtime diagnostics for network management
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -100,6 +100,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     docker-compose-v2 \
     docker.io \
     git \
+    iproute2 \
     iptables \
     jq \
     less \
