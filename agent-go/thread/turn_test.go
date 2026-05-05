@@ -264,6 +264,73 @@ func TestRunTurn_WithToolCall(t *testing.T) {
 	}
 }
 
+func TestRunTurn_MaxStepsPersistsAssistantMessage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-max-steps"
+	toolCallID := "tc1"
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.ToolCallChunk{
+					ToolCallID: toolCallID,
+					ToolName:   "read_file",
+					Input:      `{"path":"test.txt"}`,
+				},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "tool-calls"}},
+			},
+		},
+	}
+	executor := &mockExecutor{
+		results: map[string]message.ToolResultPart{
+			toolCallID: {
+				ToolCallID: toolCallID,
+				ToolName:   "read_file",
+				Output:     message.TextOutput{Value: "hello"},
+			},
+		},
+	}
+
+	collectChunks(t, RunTurn(
+		context.Background(), prov, executor, store,
+		threadID, "", TurnConfig{
+			Model:     "test-model",
+			UserParts: []message.Part{message.TextPart{Text: "read test.txt"}},
+			Tools:     []providers.ToolDefinition{{Name: "read_file"}},
+			MaxSteps:  1,
+		},
+	))
+
+	if prov.callIndex != 1 {
+		t.Fatalf("expected 1 provider call, got %d", prov.callIndex)
+	}
+	state, err := store.LoadTurnState(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != nil {
+		t.Fatal("expected turn state to be deleted after max steps completion")
+	}
+	leafID, err := store.FindLeaf(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.BuildHistory(threadID, leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) == 0 || history[len(history)-1].Role != "assistant" {
+		t.Fatalf("expected final assistant max steps message, got %#v", history)
+	}
+	part, ok := history[len(history)-1].Parts[0].(message.TextPart)
+	if !ok {
+		t.Fatalf("expected final text part, got %#v", history[len(history)-1].Parts)
+	}
+	if !strings.Contains(part.Text, "maximum number of steps (1) was reached") {
+		t.Fatalf("expected max steps message, got %q", part.Text)
+	}
+}
+
 func TestRunTurn_RefreshesToolsAndInjectsReminderMidTurn(t *testing.T) {
 	store := NewStore(t.TempDir())
 	threadID := "thread-refresh-tools"

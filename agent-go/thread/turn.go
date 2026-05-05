@@ -417,6 +417,9 @@ func executeLoop(
 func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 	stepIndex := lc.turnState.CurrentStep
 	if cfg.MaxSteps > 0 && stepIndex >= cfg.MaxSteps {
+		if !lc.materializeMaxStepsMessage(cfg, stepIndex) {
+			return loopStepStop
+		}
 		return loopStepDone
 	}
 	if !lc.refreshTurnTools(cfg) {
@@ -510,6 +513,34 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 		return loopStepStop
 	}
 	return loopStepContinue
+}
+
+func (lc *loopContext) materializeMaxStepsMessage(cfg *TurnConfig, stepIndex int) bool {
+	stepResult, err := lc.store.LoadStepResult(lc.threadID, lc.turnID, stepIndex)
+	if err != nil {
+		lc.yield(nil, fmt.Errorf("load max steps result: %w", err))
+		return false
+	}
+	if stepResult == nil {
+		stepResult = &StepResult{
+			AssistantMessage: message.Message{
+				Role: "assistant",
+				Parts: []message.Part{message.TextPart{Text: fmt.Sprintf(
+					"Stopped because the maximum number of steps (%d) was reached before the task completed.",
+					cfg.MaxSteps,
+				)}},
+			},
+		}
+		if err := lc.store.SaveStepResult(lc.threadID, lc.turnID, stepIndex, *stepResult); err != nil {
+			lc.yield(nil, fmt.Errorf("save max steps result: %w", err))
+			return false
+		}
+	}
+	if _, err := saveAssistantStepMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, *cfg, stepIndex, stepResult); err != nil {
+		lc.yield(nil, err)
+		return false
+	}
+	return true
 }
 
 func (lc *loopContext) refreshTurnTools(cfg *TurnConfig) bool {
