@@ -1,51 +1,45 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
-type threadStoreOwner interface {
-	Store() *thread.Store
-}
-
 func persistToolContextPlanMode(toolCtx *thread.ToolContext) {
 	if toolCtx == nil || toolCtx.Agent == nil || strings.TrimSpace(toolCtx.ThreadID) == "" {
 		return
 	}
-	owner, ok := toolCtx.Agent.(threadStoreOwner)
-	if !ok || owner.Store() == nil {
-		return
-	}
-	cfg, err := owner.Store().LoadConfig(toolCtx.ThreadID)
-	if err != nil {
-		return
-	}
-	// Update canonical Mode state.
 	newVal := "build"
 	if toolCtx.PlanMode {
 		newVal = "plan"
 	}
-	if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), newVal) {
+	info, err := toolCtx.Agent.GetThreadInfo(toolCtx.ThreadID)
+	if err == nil && strings.EqualFold(strings.TrimSpace(info.Mode), newVal) {
 		return
 	}
-	cfg.Mode.Value = newVal
-	cfg.Mode.SetBy = "llm"
-	if cfg.Mode.ChangedAt.IsZero() {
-		cfg.Mode.ChangedAt = time.Now().UTC()
-	} else {
-		// Always bump change time on explicit tool change.
-		cfg.Mode.ChangedAt = time.Now().UTC()
+	updated, err := toolCtx.Agent.UpdateThread(context.Background(), toolCtx.ThreadID, agent.UpdateThreadRequest{
+		Mode:      newVal,
+		ModeSetBy: "llm",
+	})
+	if err == nil || strings.TrimSpace(updated.ID) != "" {
+		return
 	}
-	_ = owner.Store().SaveConfig(toolCtx.ThreadID, cfg)
+	_, _ = toolCtx.Agent.CreateThread(context.Background(), agent.CreateThreadRequest{
+		ID: toolCtx.ThreadID,
+	})
+	_, _ = toolCtx.Agent.UpdateThread(context.Background(), toolCtx.ThreadID, agent.UpdateThreadRequest{
+		Mode:      newVal,
+		ModeSetBy: "llm",
+	})
 }
 
 // AskUserQuestion — pauses the turn and presents questions to the user.
@@ -306,10 +300,8 @@ func (e *Executor) executeExitPlanMode(toolCtx *thread.ToolContext, call message
 	// require approval iff the user put the thread in plan mode.
 	requireApproval := false
 	if toolCtx != nil && toolCtx.Agent != nil && strings.TrimSpace(toolCtx.ThreadID) != "" {
-		if owner, ok := toolCtx.Agent.(threadStoreOwner); ok && owner.Store() != nil {
-			if cfg, loadErr := owner.Store().LoadConfig(toolCtx.ThreadID); loadErr == nil {
-				requireApproval = strings.EqualFold(cfg.Mode.SetBy, "user") && strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan")
-			}
+		if info, loadErr := toolCtx.Agent.GetThreadInfo(toolCtx.ThreadID); loadErr == nil {
+			requireApproval = strings.EqualFold(info.ModeSetBy, "user") && strings.EqualFold(strings.TrimSpace(info.Mode), "plan")
 		}
 	}
 

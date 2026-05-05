@@ -115,6 +115,7 @@ func TestLoadCORSOriginsExpandsPortTemplates(t *testing.T) {
 
 func TestLoadCORSOriginsDropsHTTPSPlaceholdersWhenDisabled(t *testing.T) {
 	t.Setenv("PORT", "3007")
+	t.Setenv("HTTPS_PORT", "0")
 	t.Setenv("CORS_ORIGINS", "http://localhost:{HTTP_PORT},https://localhost:{HTTPS_PORT}")
 
 	cfg, err := Load()
@@ -129,6 +130,8 @@ func TestLoadCORSOriginsDropsHTTPSPlaceholdersWhenDisabled(t *testing.T) {
 }
 
 func TestLoadDefaultsSessionSandboxCleanupDelay(t *testing.T) {
+	t.Setenv("SESSION_SANDBOX_CLEANUP_DELAY", "")
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)

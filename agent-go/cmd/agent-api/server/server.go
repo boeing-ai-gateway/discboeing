@@ -29,6 +29,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/services"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -116,6 +117,8 @@ func Run(cfg *config.Config) {
 	if err != nil {
 		log.Fatalf("browser manager: %v", err)
 	}
+	browserMgr.SetStore(browser.NewStore(cfg.ThreadsDir))
+	browserMgr.SetCurrentTurnLoader(store.LoadTurnState)
 	exec.SetEnvForThread(browserMgr.EnvForThread)
 	exec.SetEnvSnapshot(func() map[string]string {
 		env := visibleEnvSnapshot(cfg.AgentCwd, credMgr.Snapshot)
@@ -148,8 +151,18 @@ func Run(cfg *config.Config) {
 	)
 	a := agentimpl.NewDefaultAgent(store, reg, exec, cfg.AgentCwd, mcpCfg)
 
-	// ── CompletionManager ────────────────────────────────────────────────────
-	completions := agent.NewCompletionManager(a)
+	// ── ConversationManager ────────────────────────────────────────────────────
+	conversations := agent.NewConversationManager(a)
+
+	queueStore := promptqueue.NewStore(cfg.ThreadsDir)
+	promptQueue := promptqueue.NewManager(queueStore, conversations, nil)
+	promptQueue.SetChangeFunc(func(threadID string, queue []promptqueue.Prompt) {
+		info, err := a.GetThreadInfo(threadID)
+		if err != nil {
+			return
+		}
+		conversations.EmitChunkIfActive(threadID, threadUpdateChunk(conversations, info, queue))
+	})
 
 	// ── Hook manager ─────────────────────────────────────────────────────────
 	var hookMgr *hooks.Manager
@@ -161,6 +174,10 @@ func Run(cfg *config.Config) {
 		hookMgr.SetEnvSnapshot(func() map[string]string {
 			return credMgr.HooksSnapshot()
 		})
+		hookMgr.SetChunkEmitter(func(chunk message.MessageChunk) {
+			conversations.EmitEphemeralChunk("hooks-status", chunk)
+		})
+		hookMgr.SetRepromptRunner(conversations, promptQueue)
 		// The HTTP handler owns post-completion hook evaluation so hook-failure
 		// re-prompts preserve structured metadata for optimized UI rendering.
 	}
@@ -172,7 +189,7 @@ func Run(cfg *config.Config) {
 	})
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
-	h := handler.New(cfg.AgentCwd, completions, hookMgr, svcMgr, a, browserMgr)
+	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -196,7 +213,7 @@ func Run(cfg *config.Config) {
 	authed.Use(middleware.Auth(cfg.SecretHash))
 
 	// Credentials: applies X-Discobot-Credentials env vars and git user config.
-	authed.Use(middleware.Credentials(credMgr, h.EnableQueuedPromptTimers))
+	authed.Use(middleware.Credentials(credMgr, promptQueue.EnableTimers))
 
 	// Register all agent API routes (also populates the global routes registry).
 	h.RegisterRoutes(authed)
@@ -220,14 +237,6 @@ func Run(cfg *config.Config) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(routes.All())
 	})
-
-	// ── Idle timeout ─────────────────────────────────────────────────────────
-	// Exit the process after IdleTimeout with no active completions.
-	// This lets the container orchestrator restart a fresh instance rather than
-	// keeping a stale one alive indefinitely.
-	if cfg.IdleTimeout > 0 {
-		go watchIdle(completions, cfg.IdleTimeout)
-	}
 
 	// ── HTTP server ──────────────────────────────────────────────────────────
 	srv := &http.Server{
@@ -268,35 +277,37 @@ func Run(cfg *config.Config) {
 	log.Println("agent-api: stopped")
 }
 
-// watchIdle exits the process after idleTimeout elapses with no active completions.
-func watchIdle(completions *agent.CompletionManager, idleTimeout time.Duration) {
-	ticker := time.NewTicker(idleTimeout / 2)
-	defer ticker.Stop()
+func threadUpdateChunk(conversations *agent.ConversationManager, info agent.ThreadInfo, queue []promptqueue.Prompt) message.ThreadUpdateChunk {
+	applyThreadStateOverlay(conversations, &info)
+	chunk := message.ThreadUpdateChunk{
+		Data: message.ThreadUpdateData{
+			Thread: message.ThreadUpdateInfo{
+				ID:            info.ID,
+				Name:          info.Name,
+				CWD:           info.CWD,
+				LastMessage:   info.LastMessage,
+				ErrorMessage:  info.ErrorMessage,
+				Model:         info.Model,
+				Reasoning:     info.Reasoning,
+				Mode:          info.Mode,
+				State:         string(info.State),
+				ActiveCommand: info.ActiveCommand,
+				Metadata:      info.Metadata,
+			},
+		},
+	}
+	chunk.Data.Thread.PromptQueue = promptqueue.ToThreadUpdateInfo(queue)
+	return chunk
+}
 
-	lastActive := time.Now()
-
-	for range ticker.C {
-		threads, err := completions.ListThreads()
-		if err != nil {
-			continue
-		}
-
-		active := false
-		for _, threadID := range threads {
-			if completions.ActiveCompletionID(threadID) != "" {
-				active = true
-				break
-			}
-		}
-
-		if active {
-			lastActive = time.Now()
-			continue
-		}
-
-		if time.Since(lastActive) >= idleTimeout {
-			log.Printf("agent-api: idle timeout (%s) reached, exiting", idleTimeout)
-			os.Exit(0)
-		}
+func applyThreadStateOverlay(conversations *agent.ConversationManager, info *agent.ThreadInfo) {
+	if info == nil || conversations == nil || strings.TrimSpace(info.ID) == "" {
+		return
+	}
+	if conversations.ActiveCompletionID(info.ID) != "" {
+		return
+	}
+	if interrupted, err := conversations.HasInterruptedTurn(info.ID); err == nil && interrupted {
+		info.State = agent.ThreadStateInterrupted
 	}
 }

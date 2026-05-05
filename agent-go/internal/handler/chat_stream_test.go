@@ -22,6 +22,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
@@ -63,6 +64,40 @@ func (m *streamTestAgent) ListThreads() ([]string, error) {
 	}
 	return nil, nil
 }
+func (m *streamTestAgent) ListThreadInfos() ([]agent.ThreadInfo, error) {
+	threadIDs, err := m.ListThreads()
+	if err != nil {
+		return nil, err
+	}
+	infos := make([]agent.ThreadInfo, 0, len(threadIDs))
+	for _, threadID := range threadIDs {
+		infos = append(infos, agent.ThreadInfo{ID: threadID})
+	}
+	return infos, nil
+}
+func (m *streamTestAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: threadID}, nil
+}
+func (m *streamTestAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
+}
+func (m *streamTestAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	if req.Name != nil {
+		info.Name = *req.Name
+	}
+	if req.CWD != nil {
+		info.CWD = *req.CWD
+	}
+	if req.LastMessage != nil {
+		info.LastMessage = *req.LastMessage
+	}
+	if req.ErrorMessage != nil {
+		info.ErrorMessage = *req.ErrorMessage
+	}
+	return info, nil
+}
+func (m *streamTestAgent) DeleteThread(context.Context, string) error { return nil }
 func (m *streamTestAgent) HasInterruptedTurn(threadID string) (bool, error) {
 	if m.hasInterruptedTurnFn != nil {
 		return m.hasInterruptedTurnFn(threadID)
@@ -100,7 +135,7 @@ func TestListMessages_ReturnsProjectedHistory(t *testing.T) {
 			}}, nil
 		},
 	}
-	h := New("", agent.NewCompletionManager(ma), nil, nil, nil)
+	h := New("", agent.NewConversationManager(ma), nil, nil, nil)
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 
@@ -205,7 +240,7 @@ func yieldChunksAndBlock(chunks ...message.MessageChunk) func(context.Context, s
 	}
 }
 
-func cleanupCompletion(t *testing.T, cm *agent.CompletionManager, threadID string) {
+func cleanupCompletion(t *testing.T, cm *agent.ConversationManager, threadID string) {
 	t.Helper()
 
 	t.Cleanup(func() {
@@ -222,7 +257,7 @@ func cleanupCompletion(t *testing.T, cm *agent.CompletionManager, threadID strin
 	})
 }
 
-func waitForCompletionOffset(t *testing.T, cm *agent.CompletionManager, threadID string, offset int) *agent.PollResult {
+func waitForCompletionOffset(t *testing.T, cm *agent.ConversationManager, threadID string, offset int) *agent.PollResult {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -238,7 +273,7 @@ func waitForCompletionOffset(t *testing.T, cm *agent.CompletionManager, threadID
 	return nil
 }
 
-func waitForCompletionDone(t *testing.T, cm *agent.CompletionManager, threadID string) *agent.PollResult {
+func waitForCompletionDone(t *testing.T, cm *agent.ConversationManager, threadID string) *agent.PollResult {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -385,7 +420,7 @@ func newAnswerTestServer(t *testing.T, h *Handler) *httptest.Server {
 
 func TestPostChat_RejectsEmptyMessages(t *testing.T) {
 	ma := &streamTestAgent{}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -414,7 +449,7 @@ func TestPostChat_AcceptsSingleUserMessage(t *testing.T) {
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	cleanupCompletion(t, cm, "thread-1")
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
@@ -464,7 +499,7 @@ func TestPostChat_StartsCompletion(t *testing.T) {
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -515,7 +550,8 @@ func TestPostChat_StartsCompletion(t *testing.T) {
 }
 
 func TestPostChat_QueuesPromptWhileCompletionIsActive(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -526,10 +562,11 @@ func TestPostChat_QueuesPromptWhileCompletionIsActive(t *testing.T) {
 	ma := &streamTestAgent{
 		promptFn: yieldChunksAndBlock(message.StartChunk{MessageID: "assistant-1"}),
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	cleanupCompletion(t, cm, "thread-1")
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	queueStore := promptqueue.NewStore(threadDir)
+	h := New("", cm, nil, nil, defaultAgent, queueStore)
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -596,7 +633,8 @@ func TestPostChat_QueuesPromptWhileCompletionIsActive(t *testing.T) {
 }
 
 func TestPostChat_QueuesScheduledPromptWhileIdle(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -606,14 +644,16 @@ func TestPostChat_QueuesScheduledPromptWhileIdle(t *testing.T) {
 
 	reqCh := make(chan agent.PromptRequest, 1)
 	ma := &streamTestAgent{
+		listThreadsFn: store.ListThreads,
 		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			reqCh <- req
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	queueStore := promptqueue.NewStore(threadDir)
+	h := New("", cm, nil, nil, defaultAgent, queueStore)
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -656,24 +696,26 @@ func TestPostChat_QueuesScheduledPromptWhileIdle(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	cfg, err := store.LoadConfig("thread-1")
+	queue, err := queueStore.List("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.PromptQueue) != 1 {
-		t.Fatalf("expected 1 queued prompt, got %#v", cfg.PromptQueue)
+	if len(queue) != 1 {
+		t.Fatalf("expected 1 queued prompt, got %#v", queue)
 	}
-	if cfg.PromptQueue[0].RunAfter.IsZero() {
-		t.Fatalf("expected queued prompt runAfter to be set, got %#v", cfg.PromptQueue[0])
+	if queue[0].RunAfter.IsZero() {
+		t.Fatalf("expected queued prompt runAfter to be set, got %#v", queue[0])
 	}
 }
 
 func TestUpdateQueuedPrompt_SetsRunAfter(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
-	_, queued, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	_, queued, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		ID:       "queue-1",
 		RunAfter: time.Now().UTC().Add(time.Hour),
 		Message: message.UIMessage{
@@ -686,9 +728,9 @@ func TestUpdateQueuedPrompt_SetsRunAfter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cm := agent.NewCompletionManager(&streamTestAgent{})
+	cm := agent.NewConversationManager(&streamTestAgent{})
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	h := New("", cm, nil, nil, defaultAgent, queueStore)
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -725,24 +767,26 @@ func TestUpdateQueuedPrompt_SetsRunAfter(t *testing.T) {
 		t.Fatalf("expected updated queued prompt runAfter, got %#v", updated.Queue)
 	}
 
-	cfg, err := store.LoadConfig("thread-1")
+	queue, err := queueStore.List("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.PromptQueue) != 1 {
-		t.Fatalf("expected 1 queued prompt, got %#v", cfg.PromptQueue)
+	if len(queue) != 1 {
+		t.Fatalf("expected 1 queued prompt, got %#v", queue)
 	}
-	if cfg.PromptQueue[0].RunAfter.IsZero() {
-		t.Fatalf("expected stored runAfter to be set, got %#v", cfg.PromptQueue[0])
+	if queue[0].RunAfter.IsZero() {
+		t.Fatalf("expected stored runAfter to be set, got %#v", queue[0])
 	}
 }
 
 func TestUpdateQueuedPrompt_UpdatesMessageAndPosition(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
-	for _, prompt := range []thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	for _, prompt := range []promptqueue.Prompt{
 		{
 			ID: "queue-1",
 			Message: message.UIMessage{
@@ -760,14 +804,14 @@ func TestUpdateQueuedPrompt_UpdatesMessageAndPosition(t *testing.T) {
 			},
 		},
 	} {
-		if _, _, err := store.AppendQueuedPrompt("thread-1", prompt); err != nil {
+		if _, _, err := queueStore.Append("thread-1", prompt); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	cm := agent.NewCompletionManager(&streamTestAgent{})
+	cm := agent.NewConversationManager(&streamTestAgent{})
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	h := New("", cm, nil, nil, defaultAgent, queueStore)
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -800,28 +844,30 @@ func TestUpdateQueuedPrompt_UpdatesMessageAndPosition(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
 
-	cfg, err := store.LoadConfig("thread-1")
+	queue, err := queueStore.List("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := []string{cfg.PromptQueue[0].ID, cfg.PromptQueue[1].ID}; !reflect.DeepEqual(got, []string{"queue-2", "queue-1"}) {
+	if got := []string{queue[0].ID, queue[1].ID}; !reflect.DeepEqual(got, []string{"queue-2", "queue-1"}) {
 		t.Fatalf("unexpected queue order: %#v", got)
 	}
-	textPart, ok := cfg.PromptQueue[0].Message.Parts[0].(message.UITextPart)
+	textPart, ok := queue[0].Message.Parts[0].(message.UITextPart)
 	if !ok || textPart.Text != "edited second" {
-		t.Fatalf("expected edited prompt text, got %#v", cfg.PromptQueue[0].Message.Parts)
+		t.Fatalf("expected edited prompt text, got %#v", queue[0].Message.Parts)
 	}
 }
 
 func TestUpdateQueuedPrompt_ClearRunAfterStartsQueuedPromptWhenIdle(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
 		t.Fatal(err)
 	}
-	_, queued, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	_, queued, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		ID:       "queue-1",
 		RunAfter: time.Now().UTC().Add(time.Hour),
 		Message: message.UIMessage{
@@ -836,15 +882,17 @@ func TestUpdateQueuedPrompt_ClearRunAfterStartsQueuedPromptWhenIdle(t *testing.T
 
 	reqCh := make(chan agent.PromptRequest, 1)
 	ma := &streamTestAgent{
+		listThreadsFn: store.ListThreads,
 		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			reqCh <- req
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
-	h.EnableQueuedPromptTimers()
+	promptQueue := promptqueue.NewManager(queueStore, cm, nil)
+	h := New("", cm, nil, nil, defaultAgent, promptQueue)
+	promptQueue.EnableTimers()
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -880,14 +928,16 @@ func TestUpdateQueuedPrompt_ClearRunAfterStartsQueuedPromptWhenIdle(t *testing.T
 }
 
 func TestQueuedPromptTimer_WaitsForCredentialsBeforeStarting(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	_, _, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		ID:       "queue-1",
 		RunAfter: time.Now().UTC().Add(150 * time.Millisecond),
 		Message: message.UIMessage{
@@ -902,14 +952,15 @@ func TestQueuedPromptTimer_WaitsForCredentialsBeforeStarting(t *testing.T) {
 
 	reqCh := make(chan agent.PromptRequest, 1)
 	ma := &streamTestAgent{
+		listThreadsFn: store.ListThreads,
 		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			reqCh <- req
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	_ = New("", cm, nil, nil, defaultAgent)
+	_ = New("", cm, nil, nil, defaultAgent, queueStore)
 
 	select {
 	case promptReq := <-reqCh:
@@ -923,14 +974,16 @@ func TestQueuedPromptTimer_WaitsForCredentialsBeforeStarting(t *testing.T) {
 }
 
 func TestQueuedPromptTimer_StartsPromptAfterCredentialsArrive(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	_, _, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		ID:       "queue-1",
 		RunAfter: time.Now().UTC().Add(150 * time.Millisecond),
 		Message: message.UIMessage{
@@ -945,17 +998,19 @@ func TestQueuedPromptTimer_StartsPromptAfterCredentialsArrive(t *testing.T) {
 
 	reqCh := make(chan agent.PromptRequest, 1)
 	ma := &streamTestAgent{
+		listThreadsFn: store.ListThreads,
 		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			reqCh <- req
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-1"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	promptQueue := promptqueue.NewManager(queueStore, cm, nil)
+	_ = New("", cm, nil, nil, defaultAgent, promptQueue)
 
 	time.Sleep(50 * time.Millisecond)
-	h.EnableQueuedPromptTimers()
+	promptQueue.EnableTimers()
 
 	select {
 	case promptReq := <-reqCh:
@@ -969,7 +1024,8 @@ func TestQueuedPromptTimer_StartsPromptAfterCredentialsArrive(t *testing.T) {
 }
 
 func TestOnTurnComplete_StartsNextQueuedPrompt(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -1002,9 +1058,9 @@ func TestOnTurnComplete_StartsNextQueuedPrompt(t *testing.T) {
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-2"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	h := New("", cm, nil, nil, defaultAgent, promptqueue.NewStore(threadDir))
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -1061,7 +1117,8 @@ func TestOnTurnComplete_StartsNextQueuedPrompt(t *testing.T) {
 }
 
 func TestOnTurnComplete_StartsNextQueuedPromptAfterError(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -1092,9 +1149,9 @@ func TestOnTurnComplete_StartsNextQueuedPromptAfterError(t *testing.T) {
 			return yieldChunksAndFinish(message.StartChunk{MessageID: "assistant-2"})(ctx, "thread-1", req)
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	h := New("", cm, nil, nil, defaultAgent, promptqueue.NewStore(threadDir))
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
@@ -1158,7 +1215,8 @@ func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
 		req      agent.PromptRequest
 	}
 
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -1169,7 +1227,8 @@ func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	queueStore := promptqueue.NewStore(threadDir)
+	if _, _, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		Message: message.UIMessage{
 			Role:  "user",
 			Parts: []message.UIPart{message.UITextPart{Text: "queued follow-up"}},
@@ -1187,7 +1246,7 @@ func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
 			return true, nil
 		},
 		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
-			t.Fatal("startNextQueuedPrompt should resume interrupted turns")
+			t.Fatal("prompt queue should resume interrupted turns")
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
@@ -1195,19 +1254,16 @@ func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
 			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
+	h := New("", cm, nil, nil, defaultAgent, queueStore)
 
-	h.startNextQueuedPrompt("thread-1")
+	h.promptQueue.StartNext("thread-1")
 
 	select {
 	case call := <-resumeCh:
 		if call.threadID != "thread-1" {
 			t.Fatalf("expected resume for thread-1, got %q", call.threadID)
-		}
-		if call.req.LeafID != "leaf-active" {
-			t.Fatalf("expected queued prompt leaf %q, got %#v", "leaf-active", call.req)
 		}
 		part, ok := call.req.UserParts[0].(message.UITextPart)
 		if !ok || part.Text != "queued follow-up" {
@@ -1217,12 +1273,12 @@ func TestStartNextQueuedPrompt_UsesResumeForInterruptedTurn(t *testing.T) {
 		t.Fatal("timed out waiting for queued prompt resume")
 	}
 
-	cfg, err := store.LoadConfig("thread-1")
+	queue, err := queueStore.List("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.PromptQueue) != 0 {
-		t.Fatalf("expected empty prompt queue after resume, got %#v", cfg.PromptQueue)
+	if len(queue) != 0 {
+		t.Fatalf("expected empty prompt queue after resume, got %#v", queue)
 	}
 
 	waitForCompletionDone(t, cm, "thread-1")
@@ -1237,7 +1293,7 @@ func TestPostChat_ReturnsPendingQuestionConflict(t *testing.T) {
 			return &agent.PendingQuestion{ApprovalID: "approval-123"}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -1298,7 +1354,7 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1360,7 +1416,7 @@ func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
 	registry.Add(provider)
 
 	agentImpl := agentimpl.NewDefaultAgent(store, registry, nil, t.TempDir(), agentimpl.MCPConfig{})
-	cm := agent.NewCompletionManager(agentImpl)
+	cm := agent.NewConversationManager(agentImpl)
 	h := New("", cm, nil, nil, agentImpl)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -1529,7 +1585,7 @@ func TestPostChat_InterruptedTurnWithPromptStartsFreshCompletion(t *testing.T) {
 func TestRegisterRoutes_GetThreadMatchesListThreads(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1584,7 +1640,7 @@ func TestRegisterRoutes_GetThreadMatchesListThreads(t *testing.T) {
 func TestRegisterRoutes_ThreadModeIncludesPlanAndBuild(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1632,7 +1688,7 @@ func TestRegisterRoutes_ThreadModeIncludesPlanAndBuild(t *testing.T) {
 func TestRegisterRoutes_ThreadIncludesLastUserPrompt(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1691,7 +1747,7 @@ func TestRegisterRoutes_ThreadIncludesLastUserPrompt(t *testing.T) {
 func TestRegisterRoutes_ThreadIncludesCancelledState(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1732,7 +1788,7 @@ func TestRegisterRoutes_ThreadIncludesInterruptedState(t *testing.T) {
 		listThreadsFn:        store.ListThreads,
 		hasInterruptedTurnFn: func(threadID string) (bool, error) { return threadID == "thread-1", nil },
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1766,7 +1822,7 @@ func TestRegisterRoutes_ThreadIncludesInterruptedState(t *testing.T) {
 func TestRegisterRoutes_ThreadIncludesPersistedError(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1801,116 +1857,6 @@ func TestRegisterRoutes_ThreadIncludesPersistedError(t *testing.T) {
 	}
 }
 
-func TestOnTurnStart_ClearsPersistedThreadError(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
-	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(), listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
-	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	_ = New("", cm, nil, nil, defaultAgent)
-
-	if err := store.CreateThread("thread-1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveConfig("thread-1", thread.Config{
-		Name:         "Thread 1",
-		NameSource:   thread.ThreadNameSourceUser,
-		ErrorMessage: "invalid model",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	completionID, err := cm.Chat("thread-1", agent.PromptRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cm.Cancel("thread-1")
-	if completionID == "" {
-		t.Fatal("expected completion id")
-	}
-
-	cfg, err := store.LoadConfig("thread-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ErrorMessage != "" {
-		t.Fatalf("expected persisted error to clear on turn start, got %+v", cfg)
-	}
-
-	var update message.ThreadUpdateChunk
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		result := cm.PollChunks("thread-1", 0)
-		if result != nil && len(result.Chunks) > 0 {
-			threadUpdate, ok := result.Chunks[0].(message.ThreadUpdateChunk)
-			if ok {
-				update = threadUpdate
-				break
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("expected start-time thread update chunk")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if update.Data.Thread.ErrorMessage != "" {
-		t.Fatalf("expected cleared error in update chunk, got %+v", update.Data.Thread)
-	}
-}
-
-func TestOnTurnComplete_PersistsThreadError(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
-	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
-	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
-
-	if err := store.CreateThread("thread-1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveConfig("thread-1", thread.Config{Name: "Thread 1", NameSource: thread.ThreadNameSourceUser}); err != nil {
-		t.Fatal(err)
-	}
-
-	h.OnTurnComplete("thread-1", errors.New("invalid model"))
-
-	cfg, err := store.LoadConfig("thread-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ErrorMessage != "invalid model" {
-		t.Fatalf("expected persisted error message, got %+v", cfg)
-	}
-}
-
-func TestOnTurnComplete_IgnoresCanceledErrors(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
-	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewCompletionManager(ma)
-	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
-
-	if err := store.CreateThread("thread-1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveConfig("thread-1", thread.Config{
-		Name:         "Thread 1",
-		NameSource:   thread.ThreadNameSourceUser,
-		ErrorMessage: "keep me",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	h.OnTurnComplete("thread-1", context.Canceled)
-
-	cfg, err := store.LoadConfig("thread-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ErrorMessage != "keep me" {
-		t.Fatalf("expected canceled completion to leave existing error intact, got %+v", cfg)
-	}
-}
-
 func TestRegisterRoutes_ActiveCompletionDoesNotMarkThreadInterrupted(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	ma := &streamTestAgent{
@@ -1918,7 +1864,7 @@ func TestRegisterRoutes_ActiveCompletionDoesNotMarkThreadInterrupted(t *testing.
 		hasInterruptedTurnFn: func(threadID string) (bool, error) { return threadID == "thread-1", nil },
 		promptFn:             yieldChunksAndBlock(message.StartChunk{MessageID: "assistant-1"}),
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	h := New("", cm, nil, nil, defaultAgent)
 	ts := newFullHandlerTestServer(t, h)
@@ -1966,7 +1912,7 @@ func TestPostChat_AcceptsMultipleUserMessages(t *testing.T) {
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -1997,9 +1943,6 @@ func TestPostChat_AcceptsMultipleUserMessages(t *testing.T) {
 		if !ok || part.Text != "two" {
 			t.Fatalf("expected last user message text %q, got %q", "two", part.Text)
 		}
-		if req.LeafID != "" {
-			t.Fatalf("expected empty LeafID, got %q", req.LeafID)
-		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for Prompt request")
 	}
@@ -2007,7 +1950,7 @@ func TestPostChat_AcceptsMultipleUserMessages(t *testing.T) {
 
 func TestPostChat_RejectsNoUserMessageAfterAssistant(t *testing.T) {
 	ma := &streamTestAgent{}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newChatTestServer(t, h)
 	defer ts.Close()
@@ -2062,7 +2005,7 @@ func TestPostAnswer_UsesResumeWithoutCachedCompletion(t *testing.T) {
 			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	ts := newAnswerTestServer(t, h)
 	defer ts.Close()
@@ -2108,7 +2051,7 @@ func TestPostAnswer_UsesResumeWhenOnlyDoneCachedCompletionExists(t *testing.T) {
 			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-1", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "seed"}},
 	}); err != nil {
@@ -2223,7 +2166,7 @@ func TestChatStream_PendingQuestionConnectionContinuesAfterAnswer(t *testing.T) 
 			}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = time.Second
 	ts := newFullHandlerTestServer(t, h)
@@ -2318,9 +2261,8 @@ func TestChatStream_FreshRequest_ReplaysHistoryThenCachedDeltas(t *testing.T) {
 			return []message.UIMessage{historyMsg}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	completionID, err := cm.Chat("thread-1", agent.PromptRequest{
-		LeafID:    "leaf-before",
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	})
 	if err != nil {
@@ -2378,7 +2320,7 @@ func TestChatStream_FreshRequest_DoesNotReplayCompletedSnapshot(t *testing.T) {
 			return []message.UIMessage{historyMsg}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-done", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	}); err != nil {
@@ -2462,7 +2404,7 @@ func TestChatStream_FreshRequest_SkipsCachedSnapshotForPendingQuestion(t *testin
 			}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-pending", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	}); err != nil {
@@ -2543,7 +2485,7 @@ func TestChatStream_FreshRequest_WithPendingQuestionAndNoSnapshot_ReplaysHistory
 			}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = 10 * time.Millisecond
 	ts := newStreamTestServer(t, h)
@@ -2607,7 +2549,7 @@ func TestChatStream_FreshRequest_StartsInterruptedTurnRecovery(t *testing.T) {
 			return threadID == "thread-recover", nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = time.Second
 	ts := newStreamTestServer(t, h)
@@ -2657,7 +2599,7 @@ func TestChatStream_ValidLastEventID_ResumesWithoutHistory(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(chunk1, chunk2)}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	completionID, err := cm.Chat("thread-2", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	})
@@ -2705,7 +2647,7 @@ func TestChatStream_FreshRequest_CoalescesCachedDeltaBatch(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(chunk1, chunk2)}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	completionID, err := cm.Chat("thread-coalesce", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	})
@@ -2757,7 +2699,7 @@ func TestChatStream_ForwardsThreadUpdateChunk(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(threadUpdateChunk)}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-name", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	}); err != nil {
@@ -2797,7 +2739,7 @@ func TestChatStream_ForwardsThreadUpdateChunk(t *testing.T) {
 }
 
 func TestChatStream_DoesNotReplayPastEphemeralChunk(t *testing.T) {
-	cm := agent.NewCompletionManager(&streamTestAgent{})
+	cm := agent.NewConversationManager(&streamTestAgent{})
 	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{
 		DataType: "hooks-status",
 		Data:     []byte(`{"hooks":{"go-check":{"hookId":"go-check"}}}`),
@@ -2840,7 +2782,7 @@ func TestChatStream_ForwardsLiveEphemeralChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cm := agent.NewCompletionManager(&streamTestAgent{})
+	cm := agent.NewConversationManager(&streamTestAgent{})
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = 25 * time.Millisecond
 	ts := newStreamTestServer(t, h)
@@ -2894,7 +2836,7 @@ func TestChatStream_InvalidLastEventID_TreatedAsFreshRequest(t *testing.T) {
 			return []message.UIMessage{historyMsg}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-3", agent.PromptRequest{UserParts: []message.UIPart{message.UITextPart{Text: "hi"}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -2939,7 +2881,7 @@ func TestChatStream_FreshRequestWithoutActiveCompletion_ReplaysHistoryAndPing(t 
 			return []message.UIMessage{historyMsg}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = 10 * time.Millisecond
 	ts := newStreamTestServer(t, h)
@@ -2979,7 +2921,7 @@ func TestChatStream_CompletionEndDoesNotCloseStream(t *testing.T) {
 	}
 
 	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(liveChunk)}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	if _, err := cm.Chat("thread-5", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	}); err != nil {
@@ -3040,7 +2982,7 @@ func TestChatStream_ContinuesIntoLaterCompletionOnSameConnection(t *testing.T) {
 	// Use yieldChunksAndBlock so the completion is always in-progress when
 	// WaitNextCompletion returns, making the test deterministic.
 	ma := &streamTestAgent{promptFn: yieldChunksAndBlock(nextChunk)}
-	cm := agent.NewCompletionManager(ma)
+	cm := agent.NewConversationManager(ma)
 	cleanupCompletion(t, cm, "thread-6")
 	h := New("", cm, nil, nil, nil)
 	h.chatPingEvery = 25 * time.Millisecond

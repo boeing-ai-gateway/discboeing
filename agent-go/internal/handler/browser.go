@@ -126,10 +126,12 @@ func (h *Handler) validBrowserSession(sessionID string) bool {
 
 type browserCDPTracker struct {
 	threadID string
-	store    *thread.Store
 
 	captureScreenshot func(context.Context, string) ([]byte, error)
 	emitChunk         func(message.MessageChunk)
+	currentTurn       func(string) (*thread.TurnState, error)
+	appendEvent       func(string, string, int, thread.BrowserEvent) error
+	saveScreenshot    func(string, string, int, string, []byte) (thread.BrowserEventFile, error)
 
 	mu                       sync.Mutex
 	pendingByID              map[string]browserPendingApproval
@@ -153,12 +155,11 @@ type browserCDPMessage struct {
 }
 
 func (h *Handler) newBrowserCDPTracker(threadID string) *browserCDPTracker {
-	if threadID == "" || h.defaultAgent == nil || h.defaultAgent.Store() == nil {
+	if threadID == "" || h.browserManager == nil {
 		return &browserCDPTracker{}
 	}
 	return &browserCDPTracker{
 		threadID: threadID,
-		store:    h.defaultAgent.Store(),
 		captureScreenshot: func(ctx context.Context, threadID string) ([]byte, error) {
 			if h.browserManager == nil {
 				return nil, fmt.Errorf("browser manager unavailable")
@@ -166,24 +167,27 @@ func (h *Handler) newBrowserCDPTracker(threadID string) *browserCDPTracker {
 			return h.browserManager.CaptureScreenshot(ctx, threadID)
 		},
 		emitChunk: func(chunk message.MessageChunk) {
-			if h.completions == nil {
+			if h.conversations == nil {
 				return
 			}
-			h.completions.EmitChunkIfActive(threadID, chunk)
+			h.conversations.EmitChunkIfActive(threadID, chunk)
 		},
-		pendingByID: map[string]browserPendingApproval{},
+		currentTurn:    h.browserManager.CurrentTurn,
+		appendEvent:    h.browserManager.AppendEvent,
+		saveScreenshot: h.browserManager.SaveScreenshot,
+		pendingByID:    map[string]browserPendingApproval{},
 	}
 }
 
 func (t *browserCDPTracker) onClientMessage(payload []byte) {
-	if t.store == nil || t.threadID == "" {
+	if t.currentTurn == nil || t.appendEvent == nil || t.threadID == "" {
 		return
 	}
 	msgID, method := parseBrowserCDPRequest(payload)
 	if msgID == "" {
 		return
 	}
-	turnState, err := t.store.LoadTurnState(t.threadID)
+	turnState, err := t.currentTurn(t.threadID)
 	if err != nil || turnState == nil {
 		return
 	}
@@ -195,7 +199,7 @@ func (t *browserCDPTracker) onClientMessage(payload []byte) {
 		Direction: "request",
 		Payload:   json.RawMessage(payload),
 	}
-	if err := t.store.AppendBrowserEvent(t.threadID, turnState.ID, turnState.CurrentStep, event); err != nil {
+	if err := t.appendEvent(t.threadID, turnState.ID, turnState.CurrentStep, event); err != nil {
 		return
 	}
 	t.emitBrowserEvent(turnState.ID, strings.TrimSpace(turnState.AssistantMsgID), turnState.CurrentStep, event)
@@ -212,7 +216,7 @@ func (t *browserCDPTracker) onClientMessage(payload []byte) {
 }
 
 func (t *browserCDPTracker) onServerMessage(payload []byte) {
-	if t.store == nil || t.threadID == "" {
+	if t.appendEvent == nil || t.threadID == "" {
 		return
 	}
 	msgID, hasError := parseBrowserCDPResponse(payload)
@@ -253,7 +257,7 @@ func (t *browserCDPTracker) onServerMessage(payload []byte) {
 			event.Files = append(event.Files, screenshot)
 		}
 	}
-	if err := t.store.AppendBrowserEvent(t.threadID, pending.turnID, pending.stepIndex, event); err != nil {
+	if err := t.appendEvent(t.threadID, pending.turnID, pending.stepIndex, event); err != nil {
 		return
 	}
 	t.emitBrowserEvent(pending.turnID, pending.assistantMessageID, pending.stepIndex, event)
@@ -366,7 +370,7 @@ func isDocumentReadyStateRequest(payload json.RawMessage) bool {
 }
 
 func (t *browserCDPTracker) captureScreenshotForEvent(pending browserPendingApproval) (thread.BrowserEventFile, error) {
-	if t.captureScreenshot == nil || t.store == nil {
+	if t.captureScreenshot == nil || t.saveScreenshot == nil {
 		return thread.BrowserEventFile{}, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -378,7 +382,7 @@ func (t *browserCDPTracker) captureScreenshotForEvent(pending browserPendingAppr
 	if len(png) == 0 {
 		return thread.BrowserEventFile{}, nil
 	}
-	return t.store.SaveBrowserScreenshot(t.threadID, pending.turnID, pending.stepIndex, pending.eventID, png)
+	return t.saveScreenshot(t.threadID, pending.turnID, pending.stepIndex, pending.eventID, png)
 }
 
 func (t *browserCDPTracker) markScreenshotCaptured() {

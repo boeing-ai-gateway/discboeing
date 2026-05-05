@@ -3,6 +3,7 @@ package hooks
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,8 +18,10 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 )
 
 const (
@@ -30,7 +33,15 @@ const (
 	HookOutputInlineMaxBytes = 200 * 1024
 	// TruncatedOutputTailLines is the number of trailing lines to show for large hook output.
 	TruncatedOutputTailLines = 15
+	maxHookRetries           = 3
 )
+
+// Conversation starts and resumes hook failure follow-up turns.
+type Conversation interface {
+	Chat(threadID string, req agent.PromptRequest) (string, error)
+	Resume(threadID string, req agent.PromptRequest) (string, error)
+	HasInterruptedTurn(threadID string) (bool, error)
+}
 
 // HookFailureMessageMetadata carries structured hook-failure details for UI rendering.
 type HookFailureMessageMetadata struct {
@@ -74,15 +85,31 @@ type Manager struct {
 	initialized    bool
 	chunkEmitter   func(message.MessageChunk)
 	envSnapshot    func() map[string]string
+	conversations  Conversation
+	promptQueue    *promptqueue.Manager
+
+	hookRetryCount     map[string]int
+	hookNotificationTo map[string]string
 }
 
 // NewManager creates a new HookManager.
 func NewManager(workspaceRoot, sessionID string) *Manager {
 	return &Manager{
-		workspaceRoot: workspaceRoot,
-		sessionID:     sessionID,
-		hooksDataDir:  GetHooksDataDir(sessionID),
+		workspaceRoot:      workspaceRoot,
+		sessionID:          sessionID,
+		hooksDataDir:       GetHooksDataDir(sessionID),
+		hookRetryCount:     make(map[string]int),
+		hookNotificationTo: make(map[string]string),
 	}
+}
+
+// SetRepromptRunner configures how failed hook notifications start follow-up
+// prompts.
+func (m *Manager) SetRepromptRunner(conversations Conversation, promptQueue *promptqueue.Manager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.conversations = conversations
+	m.promptQueue = promptQueue
 }
 
 // SetEnvSnapshot sets an optional function that returns request-scoped
@@ -481,6 +508,145 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 
 	// All pending hooks cleared
 	return FileHookEvalResult{Evaluated: true}
+}
+
+// OnTurnComplete schedules post-turn hook evaluation and any needed re-prompt.
+func (m *Manager) OnTurnComplete(threadID string) {
+	if m == nil || !m.HasFileHooks() {
+		return
+	}
+	go m.scheduleEvaluation(threadID)
+}
+
+// StartFailureReprompt sends or queues a hook-failure follow-up message to the
+// LLM.
+func (m *Manager) StartFailureReprompt(threadID string, result FileHookEvalResult) error {
+	req := hookFailurePromptRequest(result)
+	m.mu.Lock()
+	conversations := m.conversations
+	promptQueue := m.promptQueue
+	m.mu.Unlock()
+	if promptQueue != nil {
+		_, err := promptQueue.StartOrQueue(threadID, req, HookFailureQueuedPrompt(result))
+		return err
+	}
+	if conversations == nil {
+		return errors.New("hooks: reprompt runner unavailable")
+	}
+	interrupted, err := conversations.HasInterruptedTurn(threadID)
+	if err != nil {
+		return err
+	}
+	if interrupted {
+		_, err = conversations.Resume(threadID, req)
+		return err
+	}
+	_, err = conversations.Chat(threadID, req)
+	return err
+}
+
+// HookFailureQueuedPrompt builds the queued prompt for a hook-failure
+// re-prompt.
+func HookFailureQueuedPrompt(result FileHookEvalResult) promptqueue.Prompt {
+	req := hookFailurePromptRequest(result)
+	return promptqueue.Prompt{
+		Message: message.UIMessage{
+			Role:     "user",
+			Parts:    req.UserParts,
+			Metadata: req.Metadata,
+		},
+	}
+}
+
+func hookFailurePromptRequest(result FileHookEvalResult) agent.PromptRequest {
+	return agent.PromptRequest{
+		Metadata: func() json.RawMessage {
+			if result.HookFailure == nil {
+				return nil
+			}
+			data, err := json.Marshal(map[string]any{
+				"discobot": result.HookFailure,
+			})
+			if err != nil {
+				return nil
+			}
+			return data
+		}(),
+		UserParts: []message.UIPart{
+			message.UITextPart{Text: result.LLMMessage},
+		},
+	}
+}
+
+func (m *Manager) scheduleEvaluation(threadID string) {
+	// 200ms grace period to let SSE flush.
+	time.Sleep(200 * time.Millisecond)
+
+	result := m.EvaluateFileHooks()
+	m.reconcileNotificationState()
+	if !result.ShouldReprompt {
+		return
+	}
+
+	hookID := ""
+	if result.FailedResult != nil {
+		hookID = strings.TrimSpace(result.FailedResult.Hook.ID)
+	}
+	if hookID == "" {
+		hookID = threadID
+	}
+
+	count, shouldNotify := m.claimNotificationThread(hookID, threadID)
+	if !shouldNotify {
+		return
+	}
+	if count >= maxHookRetries {
+		log.Printf("hooks: max retries (%d) reached for hook %q, not re-prompting", maxHookRetries, hookID)
+		return
+	}
+
+	if err := m.StartFailureReprompt(threadID, result); err != nil {
+		log.Printf("hooks: failed to start re-prompt: %v", err)
+	}
+}
+
+func (m *Manager) reconcileNotificationState() {
+	status := m.GetStatus()
+	pending := make(map[string]struct{}, len(status.PendingHooks))
+	for _, hookID := range status.PendingHooks {
+		pending[hookID] = struct{}{}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for hookID := range m.hookNotificationTo {
+		if _, ok := pending[hookID]; !ok {
+			delete(m.hookNotificationTo, hookID)
+			delete(m.hookRetryCount, hookID)
+		}
+	}
+	for hookID := range m.hookRetryCount {
+		if _, ok := pending[hookID]; !ok {
+			delete(m.hookRetryCount, hookID)
+		}
+	}
+}
+
+func (m *Manager) claimNotificationThread(hookID, threadID string) (int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	owner := m.hookNotificationTo[hookID]
+	if owner == "" {
+		m.hookNotificationTo[hookID] = threadID
+		owner = threadID
+	}
+	if owner != threadID {
+		return 0, false
+	}
+
+	m.hookRetryCount[hookID]++
+	return m.hookRetryCount[hookID], true
 }
 
 // DirtyFiles returns all dirty files in the workspace (staged, unstaged, untracked).

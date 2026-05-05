@@ -14,7 +14,7 @@ import (
 
 func TestHealth_ReturnsHealthyWhenRuntimeDependenciesExist(t *testing.T) {
 	h := &Handler{
-		completions:    &agent.CompletionManager{},
+		conversations:  &agent.ConversationManager{},
 		serviceManager: &services.Manager{},
 		defaultAgent:   &agentimpl.DefaultAgent{},
 	}

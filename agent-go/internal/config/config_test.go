@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestLoadUsesDiscobotEnvVars(t *testing.T) {
@@ -20,7 +19,6 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_THREADS_DIR", "/tmp/discobot-threads")
 	t.Setenv("DISCOBOT_HOOKS_ENABLED", "true")
 	t.Setenv("DISCOBOT_SESSION_ID", "session-123")
-	t.Setenv("DISCOBOT_IDLE_TIMEOUT", "45s")
 	t.Setenv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "http://127.0.0.1:9999")
 	t.Setenv("DISCOBOT_SERVER_URL", "http://127.0.0.1:3001")
 	t.Setenv("DISCOBOT_PROJECT_ID", "project-123")
@@ -54,9 +52,6 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	if cfg.SessionID != "session-123" {
 		t.Fatalf("expected session ID to load from DISCOBOT_SESSION_ID, got %q", cfg.SessionID)
 	}
-	if cfg.IdleTimeout != 45*time.Second {
-		t.Fatalf("expected idle timeout 45s, got %s", cfg.IdleTimeout)
-	}
 	if cfg.MCPOAuthRedirectBase != "http://127.0.0.1:9999" {
 		t.Fatalf("expected MCP OAuth redirect base to load from DISCOBOT_MCP_OAUTH_REDIRECT_BASE, got %q", cfg.MCPOAuthRedirectBase)
 	}
@@ -79,7 +74,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("DATA_DIR", "/tmp/discobot-data")
 	t.Setenv("THREADS_DIR", "/tmp/discobot-threads")
 	t.Setenv("SESSION_ID", "session-123")
-	t.Setenv("IDLE_TIMEOUT", "45s")
 	t.Setenv("MCP_OAUTH_REDIRECT_BASE", "http://127.0.0.1:9999")
 
 	t.Setenv("DISCOBOT_PORT", "")
@@ -89,7 +83,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_DATA_DIR", "")
 	t.Setenv("DISCOBOT_THREADS_DIR", "")
 	t.Setenv("DISCOBOT_SESSION_ID", "")
-	t.Setenv("DISCOBOT_IDLE_TIMEOUT", "")
 	t.Setenv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "")
 
 	cfg := Load()
@@ -118,9 +111,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	}
 	if cfg.SessionID != "default" {
 		t.Fatalf("expected default session ID when DISCOBOT_SESSION_ID is unset, got %q", cfg.SessionID)
-	}
-	if cfg.IdleTimeout != 0 {
-		t.Fatalf("expected idle timeout 0 when DISCOBOT_IDLE_TIMEOUT is unset, got %s", cfg.IdleTimeout)
 	}
 	if cfg.MCPOAuthRedirectBase != "" {
 		t.Fatalf("expected empty MCP OAuth redirect base when DISCOBOT_MCP_OAUTH_REDIRECT_BASE is unset, got %q", cfg.MCPOAuthRedirectBase)

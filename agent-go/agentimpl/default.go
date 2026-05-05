@@ -83,11 +83,6 @@ type promptEnvironment struct {
 	maxSteps         int
 }
 
-// Store returns the underlying thread store.
-func (a *DefaultAgent) Store() *thread.Store {
-	return a.store
-}
-
 func (a *DefaultAgent) resolveThreadCWD(cwd string) string {
 	cwd = strings.TrimSpace(cwd)
 	if cwd == "" {
@@ -203,15 +198,27 @@ func (a *DefaultAgent) Close() {
 // If the user message is exactly "/compact", compaction is forced immediately
 // without running a normal LLM turn.
 func (a *DefaultAgent) Prompt(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+	thread.ClearError(a.store, threadID)
 	if isCompactCommand(req.UserParts) {
-		return a.handleCompactCommand(ctx, threadID, req)
+		return a.withThreadErrorPersistence(threadID, a.handleCompactCommand(ctx, threadID, req))
 	}
 
 	env, err := a.resolvePromptEnvironment(ctx, threadID, req)
 	if err != nil {
-		return errorIter(err)
+		return a.withThreadErrorPersistence(threadID, errorIter(err))
 	}
-	return a.promptStream(ctx, threadID, req, env)
+	return a.withThreadErrorPersistence(threadID, a.promptStream(ctx, threadID, req, env))
+}
+
+func (a *DefaultAgent) withThreadErrorPersistence(threadID string, seq iter.Seq2[message.MessageChunk, error]) iter.Seq2[message.MessageChunk, error] {
+	return func(yield func(message.MessageChunk, error) bool) {
+		for chunk, err := range seq {
+			thread.PersistError(a.store, threadID, err)
+			if !yield(chunk, err) {
+				return
+			}
+		}
+	}
 }
 
 func (a *DefaultAgent) promptStream(
@@ -235,7 +242,7 @@ func (a *DefaultAgent) promptStream(
 	resolvedUserParts, originalText, activeCommand, slashCommand := resolveSlashCommand(a.cwd, req.UserParts)
 
 	return func(yield func(message.MessageChunk, error) bool) {
-		effectiveLeafID, err := a.resolveEffectiveLeafID(threadID, req.LeafID, req.FreshContext, env.systemPrompt, env.displayName, env.sessionCfg, env.subAgentCfg, env.tools)
+		effectiveLeafID, err := a.resolveEffectiveLeafID(threadID, req.FreshContext, env.systemPrompt, env.displayName, env.sessionCfg, env.subAgentCfg, env.tools)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -355,7 +362,6 @@ func (a *DefaultAgent) promptStream(
 			ActiveCommand:                activeCommand,
 			CommunicatedCredentials:      currentCommunicatedCredentials,
 			CommunicatedSkillLikeEntries: currentSkillLikeEntries,
-			PromptQueue:                  env.threadCfg.PromptQueue,
 			Metadata:                     env.threadCfg.Metadata,
 		}
 		if err := a.store.SaveConfig(threadID, cfgToSave); err != nil {
@@ -448,6 +454,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 			return agent.ResumeResult{}, agent.ErrPendingQuestionRequiresAnswer
 		}
 	}
+	thread.ClearError(a.store, threadID)
 	if len(req.UserParts) > 0 {
 		var env *promptEnvironment
 		if !isCompactCommand(req.UserParts) {
@@ -460,16 +467,15 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		if err != nil {
 			return agent.ResumeResult{}, err
 		}
-		req.LeafID = replayLeafID
 		if isCompactCommand(req.UserParts) {
 			return agent.ResumeResult{
 				ReplayLeafID: replayLeafID,
-				Stream:       a.handleCompactCommand(ctx, threadID, req),
+				Stream:       a.withThreadErrorPersistence(threadID, a.handleCompactCommand(ctx, threadID, req)),
 			}, nil
 		}
 		return agent.ResumeResult{
 			ReplayLeafID: replayLeafID,
-			Stream:       a.promptStream(ctx, threadID, req, env),
+			Stream:       a.withThreadErrorPersistence(threadID, a.promptStream(ctx, threadID, req, env)),
 		}, nil
 	}
 
@@ -518,7 +524,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 
 	return agent.ResumeResult{
 		ReplayLeafID: replayLeafID,
-		Stream: func(yield func(message.MessageChunk, error) bool) {
+		Stream: a.withThreadErrorPersistence(threadID, func(yield func(message.MessageChunk, error) bool) {
 			log.Printf("agent: resuming interrupted turn %s for thread %s (step %d, phase %s)",
 				state.ID, threadID, state.CurrentStep, state.Phase)
 
@@ -566,7 +572,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 				return
 			}
 			a.persistActiveLeaf(threadID)
-		},
+		}),
 	}, nil
 }
 
@@ -1624,7 +1630,6 @@ func (a *DefaultAgent) FinalResponse(threadID string) (string, error) {
 
 func (a *DefaultAgent) resolveEffectiveLeafID(
 	threadID string,
-	requestedLeafID string,
 	startFresh bool,
 	systemPrompt string,
 	displayName string,
@@ -1632,18 +1637,7 @@ func (a *DefaultAgent) resolveEffectiveLeafID(
 	subAgentCfg *sessionconfig.SubAgentConfig,
 	tools []providers.ToolDefinition,
 ) (string, error) {
-	effectiveLeafID := requestedLeafID
-	if effectiveLeafID != "" {
-		valid, err := a.store.IsLeaf(threadID, effectiveLeafID)
-		if err != nil {
-			return "", fmt.Errorf("validate requested leaf: %w", err)
-		}
-		if !valid {
-			return "", fmt.Errorf("message %q is not a valid leaf in this thread; the thread may have diverged", effectiveLeafID)
-		}
-	}
-
-	if effectiveLeafID == "" && hasStartupBootstrapContent(systemPrompt, displayName, sessionCfg, subAgentCfg, tools) {
+	if hasStartupBootstrapContent(systemPrompt, displayName, sessionCfg, subAgentCfg, tools) {
 		leaf, err := a.resolveExistingLeafForPrompt(threadID, startFresh)
 		if err != nil {
 			return "", fmt.Errorf("resolve current leaf: %w", err)
@@ -1654,15 +1648,15 @@ func (a *DefaultAgent) resolveEffectiveLeafID(
 		return a.bootstrapNewThreadMessages(threadID, systemPrompt, displayName, sessionCfg, subAgentCfg, tools)
 	}
 
-	if effectiveLeafID == "" && !startFresh {
+	if !startFresh {
 		leaf, err := a.resolveCurrentLeaf(threadID)
 		if err != nil {
 			return "", fmt.Errorf("resolve current leaf: %w", err)
 		}
-		effectiveLeafID = leaf
+		return leaf, nil
 	}
 
-	return effectiveLeafID, nil
+	return "", nil
 }
 
 func hasStartupBootstrapContent(
@@ -2041,6 +2035,65 @@ func (a *DefaultAgent) persistUserOnlyTurn(
 // ListThreads returns all thread IDs.
 func (a *DefaultAgent) ListThreads() ([]string, error) {
 	return a.store.ListThreads()
+}
+
+func (a *DefaultAgent) ListThreadInfos() ([]agent.ThreadInfo, error) {
+	infos, err := a.store.ListThreadInfos()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]agent.ThreadInfo, 0, len(infos))
+	for _, info := range infos {
+		result = append(result, threadInfoToAgent(info))
+	}
+	return result, nil
+}
+
+func (a *DefaultAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	info, err := a.store.GetThreadInfo(threadID)
+	if err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	return threadInfoToAgent(info), nil
+}
+
+func (a *DefaultAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	info, err := a.store.CreateThreadInfo(a.cwd, thread.CreateThreadRequest(req))
+	if err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	return threadInfoToAgent(info), nil
+}
+
+func (a *DefaultAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	info, err := a.store.UpdateThreadInfo(threadID, thread.UpdateThreadRequest(req))
+	if err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	return threadInfoToAgent(info), nil
+}
+
+func threadInfoToAgent(info thread.Info) agent.ThreadInfo {
+	return agent.ThreadInfo{
+		ID:              info.ID,
+		Name:            info.Name,
+		CWD:             info.CWD,
+		LastMessage:     info.LastMessage,
+		ErrorMessage:    info.ErrorMessage,
+		Model:           info.Model,
+		Reasoning:       info.Reasoning,
+		Mode:            info.Mode,
+		ModeSetBy:       info.ModeSetBy,
+		State:           agent.ThreadState(info.State),
+		PendingQuestion: info.PendingQuestion,
+		ActiveCommand:   info.ActiveCommand,
+		Metadata:        info.Metadata,
+	}
+}
+
+func (a *DefaultAgent) DeleteThread(_ context.Context, threadID string) error {
+	a.Cancel(threadID)
+	return a.store.DeleteThreadInfo(threadID)
 }
 
 // HasInterruptedTurn reports whether threadID has an unfinished turn.

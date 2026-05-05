@@ -18,7 +18,7 @@ func (h *Handler) Root(w http.ResponseWriter, _ *http.Request) {
 
 // Health handles GET /health — detailed health status.
 func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
-	healthy := h.completions != nil && h.serviceManager != nil
+	healthy := h.conversations != nil && h.serviceManager != nil
 	connected := healthy && h.defaultAgent != nil
 
 	h.JSON(w, http.StatusOK, api.HealthResponse{

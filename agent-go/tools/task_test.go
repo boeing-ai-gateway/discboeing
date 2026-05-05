@@ -39,7 +39,25 @@ func (m *mockSubAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest
 func (m *mockSubAgent) Cancel(_ string) bool                              { return false }
 func (m *mockSubAgent) Messages(_, _ string) ([]message.UIMessage, error) { return nil, nil }
 func (m *mockSubAgent) ListThreads() ([]string, error)                    { return nil, nil }
-func (m *mockSubAgent) HasInterruptedTurn(string) (bool, error)           { return false, nil }
+func (m *mockSubAgent) ListThreadInfos() ([]agent.ThreadInfo, error)      { return nil, nil }
+func (m *mockSubAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: threadID}, nil
+}
+func (m *mockSubAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
+}
+func (m *mockSubAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	if req.Name != nil {
+		info.Name = *req.Name
+	}
+	if req.ErrorMessage != nil {
+		info.ErrorMessage = *req.ErrorMessage
+	}
+	return info, nil
+}
+func (m *mockSubAgent) DeleteThread(context.Context, string) error { return nil }
+func (m *mockSubAgent) HasInterruptedTurn(string) (bool, error)    { return false, nil }
 func (m *mockSubAgent) PendingQuestion(threadID string) (*agent.PendingQuestion, error) {
 	if m.pendingQuestionFn != nil {
 		return m.pendingQuestionFn(threadID)
@@ -71,8 +89,39 @@ type storeBackedMockSubAgent struct {
 	store *thread.Store
 }
 
-func (m *storeBackedMockSubAgent) Store() *thread.Store {
-	return m.store
+func (m *storeBackedMockSubAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	if err := m.store.CreateThread(req.ID); err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	cfg, err := m.store.LoadConfig(req.ID)
+	if err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	cfg.Name = req.Name
+	cfg.LastMessage = req.LastMessage
+	if len(req.Metadata) > 0 {
+		if err := json.Unmarshal(req.Metadata, &cfg.Metadata); err != nil {
+			return agent.ThreadInfo{}, err
+		}
+	}
+	if err := m.store.SaveConfig(req.ID, cfg); err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	return agent.ThreadInfo{ID: req.ID, Name: cfg.Name, LastMessage: cfg.LastMessage, Metadata: cfg.Metadata.RawMessage()}, nil
+}
+
+func (m *storeBackedMockSubAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	cfg, err := m.store.LoadConfig(threadID)
+	if err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	if req.ErrorMessage != nil {
+		cfg.ErrorMessage = *req.ErrorMessage
+	}
+	if err := m.store.SaveConfig(threadID, cfg); err != nil {
+		return agent.ThreadInfo{}, err
+	}
+	return agent.ThreadInfo{ID: threadID, ErrorMessage: cfg.ErrorMessage, Metadata: cfg.Metadata.RawMessage()}, nil
 }
 
 type recursiveTaskState struct {
@@ -208,7 +257,22 @@ func (a *recursiveTaskAgent) Resume(_ context.Context, _ string, _ agent.PromptR
 func (a *recursiveTaskAgent) Cancel(_ string) bool                              { return false }
 func (a *recursiveTaskAgent) Messages(_, _ string) ([]message.UIMessage, error) { return nil, nil }
 func (a *recursiveTaskAgent) ListThreads() ([]string, error)                    { return nil, nil }
-func (a *recursiveTaskAgent) HasInterruptedTurn(string) (bool, error)           { return false, nil }
+func (a *recursiveTaskAgent) ListThreadInfos() ([]agent.ThreadInfo, error)      { return nil, nil }
+func (a *recursiveTaskAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: threadID}, nil
+}
+func (a *recursiveTaskAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
+}
+func (a *recursiveTaskAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	if req.ErrorMessage != nil {
+		info.ErrorMessage = *req.ErrorMessage
+	}
+	return info, nil
+}
+func (a *recursiveTaskAgent) DeleteThread(context.Context, string) error { return nil }
+func (a *recursiveTaskAgent) HasInterruptedTurn(string) (bool, error)    { return false, nil }
 func (a *recursiveTaskAgent) PendingQuestion(threadID string) (*agent.PendingQuestion, error) {
 	return a.state(threadID).pending, nil
 }
@@ -1164,18 +1228,14 @@ func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
 	if cfg.LastMessage != "inspect the child thread" {
 		t.Fatalf("lastMessage = %q", cfg.LastMessage)
 	}
-	var metadata map[string]any
-	if err := json.Unmarshal(cfg.Metadata, &metadata); err != nil {
-		t.Fatalf("unmarshal metadata: %v", err)
+	if cfg.Metadata.Type != "task" {
+		t.Fatalf("metadata type = %#v", cfg.Metadata.Type)
 	}
-	if metadata["type"] != "task" {
-		t.Fatalf("metadata type = %#v", metadata["type"])
+	if cfg.Metadata.Prompt != "inspect the child thread" {
+		t.Fatalf("metadata prompt = %#v", cfg.Metadata.Prompt)
 	}
-	if metadata["prompt"] != "inspect the child thread" {
-		t.Fatalf("metadata prompt = %#v", metadata["prompt"])
-	}
-	if metadata["model"] != "sonnet" {
-		t.Fatalf("metadata model = %#v", metadata["model"])
+	if cfg.Metadata.Model != "sonnet" {
+		t.Fatalf("metadata model = %#v", cfg.Metadata.Model)
 	}
 	if len(emitted) == 0 {
 		t.Fatal("expected a thread update chunk for the new task thread")

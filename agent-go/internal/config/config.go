@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Config holds all configuration for the agent-go process.
@@ -26,9 +25,6 @@ type Config struct {
 	// Hooks
 	HooksEnabled bool   // Enable file hooks (DISCOBOT_HOOKS_ENABLED)
 	SessionID    string // Session ID for hooks (DISCOBOT_SESSION_ID, default: "default")
-
-	// Idle timeout
-	IdleTimeout time.Duration // Exit after idle period with no active completions (DISCOBOT_IDLE_TIMEOUT, 0 = disabled)
 
 	// MCP OAuth settings
 	MCPOAuthRedirectBase string // Base URL for OAuth callbacks (DISCOBOT_MCP_OAUTH_REDIRECT_BASE)
@@ -63,9 +59,6 @@ func Load() *Config {
 	// Hooks
 	cfg.HooksEnabled = getEnvBool("DISCOBOT_HOOKS_ENABLED", false)
 	cfg.SessionID = getEnv("DISCOBOT_SESSION_ID", "default")
-
-	// Idle timeout
-	cfg.IdleTimeout = getEnvDuration("DISCOBOT_IDLE_TIMEOUT", 0)
 
 	// MCP OAuth
 	cfg.MCPOAuthRedirectBase = getEnv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "")
@@ -121,15 +114,6 @@ func getEnvBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if b, err := strconv.ParseBool(value); err == nil {
 			return b
-		}
-	}
-	return defaultValue
-}
-
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value := os.Getenv(key); value != "" {
-		if d, err := time.ParseDuration(value); err == nil {
-			return d
 		}
 	}
 	return defaultValue

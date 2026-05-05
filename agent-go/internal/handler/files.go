@@ -91,8 +91,8 @@ func (h *Handler) ReadThreadArtifact(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "thread ID is required")
 		return
 	}
-	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
-		h.Error(w, http.StatusServiceUnavailable, "thread store unavailable")
+	if h.browserManager == nil {
+		h.Error(w, http.StatusServiceUnavailable, "browser manager unavailable")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) ReadThreadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, fileErr := files.ReadFile(artifactPath, h.defaultAgent.Store().ThreadDir(threadID))
+	result, fileErr := h.browserManager.ReadThreadArtifact(threadID, artifactPath)
 	if fileErr != nil {
 		h.Error(w, fileErr.Status, fileErr.Message)
 		return

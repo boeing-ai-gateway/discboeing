@@ -35,19 +35,6 @@ type taskContinuation struct {
 	SubThreadID string `json:"subThreadId"`
 }
 
-type taskThreadMetadata struct {
-	Type            string    `json:"type"`
-	TaskID          string    `json:"taskId"`
-	ParentThreadID  string    `json:"parentThreadId,omitempty"`
-	ParentTaskID    string    `json:"parentTaskId,omitempty"`
-	SubagentType    string    `json:"subagentType,omitempty"`
-	Description     string    `json:"description,omitempty"`
-	Prompt          string    `json:"prompt,omitempty"`
-	Model           string    `json:"model,omitempty"`
-	RunInBackground bool      `json:"runInBackground,omitempty"`
-	StartedAt       time.Time `json:"startedAt"`
-}
-
 // taskRecord tracks an in-progress or completed Task.
 type taskRecord struct {
 	taskID  string
@@ -66,10 +53,6 @@ type taskRecord struct {
 	mu     sync.Mutex
 	done   chan struct{}
 	cancel context.CancelFunc // non-nil for Task/Agent sub-agent tasks; called by TaskStop
-}
-
-type threadStoreCarrier interface {
-	Store() *thread.Store
 }
 
 type subagentTypeValidator interface {
@@ -156,7 +139,7 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 	globalTasks.tasks[subThreadID] = rec
 	globalTasks.mu.Unlock()
 
-	bootstrapTaskThread(toolCtx, subThreadID, taskThreadMetadata{
+	bootstrapTaskThread(toolCtx, subThreadID, thread.ConfigMetadata{
 		Type:            "task",
 		TaskID:          rec.taskID,
 		ParentThreadID:  currentThreadID,
@@ -368,51 +351,50 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 	return thread.ToolExecuteResult{Async: taskHandle(call, rec, subThreadID)}, nil
 }
 
-func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata taskThreadMetadata) {
+func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata thread.ConfigMetadata) {
 	if toolCtx == nil || toolCtx.Agent == nil {
 		return
 	}
-	storeAgent, ok := toolCtx.Agent.(threadStoreCarrier)
-	if !ok || storeAgent.Store() == nil {
-		return
-	}
-
-	store := storeAgent.Store()
-	if err := store.CreateThread(threadID); err != nil {
-		return
-	}
-	cfg, err := store.LoadConfig(threadID)
+	info, err := toolCtx.Agent.CreateThread(context.Background(), agent.CreateThreadRequest{
+		ID:          threadID,
+		Name:        taskThreadName(metadata),
+		LastMessage: metadata.Prompt,
+		Metadata:    metadata.RawMessage(),
+	})
 	if err != nil {
 		return
 	}
-	if strings.TrimSpace(cfg.Name) == "" {
-		cfg.Name = taskThreadName(metadata)
-	}
-	cfg.LastMessage = metadata.Prompt
-	cfg.Metadata = mustMarshalJSON(metadata)
-	if err := store.SaveConfig(threadID, cfg); err != nil {
-		return
-	}
 	if toolCtx.EmitChunk != nil {
-		toolCtx.EmitChunk(thread.UpdateChunkFromConfig(threadID, cfg), nil)
+		toolCtx.EmitChunk(threadUpdateChunkFromInfo(info), nil)
 	}
 }
 
 func persistTaskThreadError(subAgent agent.Agent, threadID, message string) {
-	storeAgent, ok := subAgent.(threadStoreCarrier)
-	if !ok || storeAgent.Store() == nil {
-		return
-	}
-	store := storeAgent.Store()
-	cfg, err := store.LoadConfig(threadID)
-	if err != nil {
-		return
-	}
-	cfg.ErrorMessage = strings.TrimSpace(message)
-	_ = store.SaveConfig(threadID, cfg)
+	trimmed := strings.TrimSpace(message)
+	_, _ = subAgent.UpdateThread(context.Background(), threadID, agent.UpdateThreadRequest{ErrorMessage: &trimmed})
 }
 
-func taskThreadName(metadata taskThreadMetadata) string {
+func threadUpdateChunkFromInfo(info agent.ThreadInfo) message.ThreadUpdateChunk {
+	return message.ThreadUpdateChunk{
+		Data: message.ThreadUpdateData{
+			Thread: message.ThreadUpdateInfo{
+				ID:            info.ID,
+				Name:          info.Name,
+				CWD:           info.CWD,
+				LastMessage:   info.LastMessage,
+				ErrorMessage:  info.ErrorMessage,
+				Model:         info.Model,
+				Reasoning:     info.Reasoning,
+				Mode:          info.Mode,
+				State:         string(info.State),
+				ActiveCommand: info.ActiveCommand,
+				Metadata:      info.Metadata,
+			},
+		},
+	}
+}
+
+func taskThreadName(metadata thread.ConfigMetadata) string {
 	if title := strings.TrimSpace(metadata.Description); title != "" {
 		return title
 	}

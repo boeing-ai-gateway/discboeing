@@ -15,6 +15,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
@@ -29,10 +30,11 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
-	h := New("", cm, nil, nil, nil)
+	cm := agent.NewConversationManager(ma)
+	hookManager := hooks.NewManager(t.TempDir(), "session-123")
+	hookManager.SetRepromptRunner(cm, nil)
 
-	err := h.startHookFailureReprompt("thread-1", hooks.FileHookEvalResult{
+	err := hookManager.StartFailureReprompt("thread-1", hooks.FileHookEvalResult{
 		ShouldReprompt: true,
 		LLMMessage:     "### Hook failed: Go Check",
 		HookFailure: &hooks.HookFailureMessageMetadata{
@@ -42,7 +44,7 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("startHookFailureReprompt() failed: %v", err)
+		t.Fatalf("StartFailureReprompt() failed: %v", err)
 	}
 
 	select {
@@ -81,12 +83,11 @@ func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 		req      agent.PromptRequest
 	}
 
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
-	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-
 	resumeCh := make(chan resumeCall, 1)
 	ma := &streamTestAgent{
 		hasInterruptedTurnFn: func(threadID string) (bool, error) {
@@ -96,7 +97,7 @@ func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 			return true, nil
 		},
 		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
-			t.Fatal("startHookFailureReprompt should resume interrupted turns")
+			t.Fatal("StartFailureReprompt should resume interrupted turns")
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 		resumeFn: func(_ context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
@@ -104,10 +105,11 @@ func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
-	h := New("", cm, nil, nil, defaultAgent)
+	cm := agent.NewConversationManager(ma)
+	hookManager := hooks.NewManager(t.TempDir(), "session-123")
+	hookManager.SetRepromptRunner(cm, nil)
 
-	err := h.startHookFailureReprompt("thread-1", hooks.FileHookEvalResult{
+	err := hookManager.StartFailureReprompt("thread-1", hooks.FileHookEvalResult{
 		ShouldReprompt: true,
 		LLMMessage:     "### Hook failed: Go Check",
 		HookFailure: &hooks.HookFailureMessageMetadata{
@@ -117,7 +119,7 @@ func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("startHookFailureReprompt() failed: %v", err)
+		t.Fatalf("StartFailureReprompt() failed: %v", err)
 	}
 
 	select {
@@ -143,14 +145,16 @@ func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 }
 
 func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
+	queueStore := promptqueue.NewStore(threadDir)
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, defaultAgent)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, defaultAgent, queueStore)
 
-	if _, _, err := store.AppendQueuedPrompt("thread-1", thread.QueuedPrompt{
+	if _, _, err := queueStore.Append("thread-1", promptqueue.Prompt{
 		Message: message.UIMessage{
 			ID:    "user-queued",
 			Role:  "user",
@@ -169,19 +173,19 @@ func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.
 			ExitCode: 1,
 		},
 	}
-	if err := h.enqueueHookFailureReprompt("thread-1", result); err != nil {
-		t.Fatalf("enqueueHookFailureReprompt() failed: %v", err)
+	if _, err := h.promptQueue.Prepend("thread-1", hooks.HookFailureQueuedPrompt(result)); err != nil {
+		t.Fatalf("Prepend() failed: %v", err)
 	}
 
-	cfg, err := store.LoadConfig("thread-1")
+	queue, err := queueStore.List("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.PromptQueue) != 2 {
-		t.Fatalf("prompt queue length = %d, want 2", len(cfg.PromptQueue))
+	if len(queue) != 2 {
+		t.Fatalf("prompt queue length = %d, want 2", len(queue))
 	}
 
-	first := cfg.PromptQueue[0]
+	first := queue[0]
 	if first.ID == "" {
 		t.Fatal("expected queued hook re-prompt id")
 	}
@@ -206,7 +210,7 @@ func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.
 		t.Fatalf("hook name = %q, want %q", meta.Discobot.HookName, "Go Check")
 	}
 
-	second := cfg.PromptQueue[1]
+	second := queue[1]
 	secondPart, ok := second.Message.Parts[0].(message.UITextPart)
 	if !ok {
 		t.Fatalf("expected second UITextPart, got %T", second.Message.Parts[0])
@@ -262,9 +266,9 @@ exit 1
 			return func(_ func(message.MessageChunk, error) bool) {}
 		},
 	}
-	h := New("", agent.NewCompletionManager(ma), hookManager, nil, nil)
+	_ = New("", agent.NewConversationManager(ma), hookManager, nil, nil)
 
-	h.scheduleHookEvaluation("thread-1")
+	hookManager.OnTurnComplete("thread-1")
 	select {
 	case got := <-reqThreadCh:
 		if got != "thread-1" {
@@ -279,7 +283,7 @@ exit 1
 		t.Fatal(err)
 	}
 
-	h.scheduleHookEvaluation("thread-2")
+	hookManager.OnTurnComplete("thread-2")
 	select {
 	case got := <-reqThreadCh:
 		t.Fatalf("unexpected hook notification for %q; wanted original thread only", got)
@@ -325,7 +329,8 @@ exit 1
 		t.Fatal(err)
 	}
 
-	store := thread.NewStore(t.TempDir())
+	threadDir := t.TempDir()
+	store := thread.NewStore(threadDir)
 	if err := store.CreateThread("thread-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -347,8 +352,9 @@ exit 1
 			}
 		},
 	}
-	cm := agent.NewCompletionManager(ma)
-	h := New("", cm, hookManager, nil, defaultAgent)
+	cm := agent.NewConversationManager(ma)
+	queueStore := promptqueue.NewStore(threadDir)
+	_ = New("", cm, hookManager, nil, defaultAgent, queueStore)
 
 	if _, err := cm.Chat("thread-1", agent.PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "active turn"}},
@@ -361,18 +367,26 @@ exit 1
 		t.Fatal("timed out waiting for active turn")
 	}
 
-	h.scheduleHookEvaluation("thread-1")
+	hookManager.OnTurnComplete("thread-1")
 
-	cfg, err := store.LoadConfig("thread-1")
-	if err != nil {
-		t.Fatal(err)
+	var queue []promptqueue.Prompt
+	var err error
+	for range 20 {
+		queue, err = queueStore.List("thread-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(queue) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	if len(cfg.PromptQueue) != 1 {
-		t.Fatalf("prompt queue length = %d, want 1", len(cfg.PromptQueue))
+	if len(queue) != 1 {
+		t.Fatalf("prompt queue length = %d, want 1", len(queue))
 	}
-	part, ok := cfg.PromptQueue[0].Message.Parts[0].(message.UITextPart)
+	part, ok := queue[0].Message.Parts[0].(message.UITextPart)
 	if !ok {
-		t.Fatalf("expected queued UITextPart, got %T", cfg.PromptQueue[0].Message.Parts[0])
+		t.Fatalf("expected queued UITextPart, got %T", queue[0].Message.Parts[0])
 	}
 	if !strings.Contains(part.Text, "### Hook failed: Go Check") {
 		t.Fatalf("queued prompt text = %q, want hook failure prompt", part.Text)

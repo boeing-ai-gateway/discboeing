@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/obot-platform/discobot/agent-go/internal/files"
+	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 const devToolsStartupTimeout = 10 * time.Second
@@ -30,6 +33,9 @@ const cdpReadLimit = 16 << 20
 
 // ErrChromiumNotFound indicates that no supported Chromium executable is on PATH.
 var ErrChromiumNotFound = errors.New("chromium executable not found")
+
+// ErrStoreUnavailable indicates browser persistence is not configured.
+var ErrStoreUnavailable = errors.New("browser store unavailable")
 
 // Info describes the session-scoped browser runtime exposed by agent-go.
 type Info struct {
@@ -55,6 +61,8 @@ type Manager struct {
 	cmd           *exec.Cmd
 	upstreamWSURL string
 	lastError     string
+	store         *Store
+	currentTurn   func(threadID string) (*thread.TurnState, error)
 }
 
 const (
@@ -87,6 +95,38 @@ func NewManager(sessionID string, dataDir string, port int) (*Manager, error) {
 
 func (m *Manager) SessionID() string {
 	return m.sessionID
+}
+
+// SetStore configures thread-local browser event and artifact storage.
+func (m *Manager) SetStore(store *Store) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.store = store
+}
+
+// SetCurrentTurnLoader configures active turn lookup for browser event attribution.
+func (m *Manager) SetCurrentTurnLoader(loader func(threadID string) (*thread.TurnState, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.currentTurn = loader
+}
+
+func (m *Manager) browserStore() *Store {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.store
+}
+
+func (m *Manager) currentTurnLoader() func(threadID string) (*thread.TurnState, error) {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentTurn
 }
 
 func (m *Manager) WebSocketPath() string {
@@ -228,6 +268,53 @@ func (m *Manager) CaptureScreenshot(ctx context.Context, _ string) ([]byte, erro
 		return nil, nil
 	}
 	return data, nil
+}
+
+// ReadThreadArtifact reads a browser artifact from a thread-local artifact URI
+// path.
+func (m *Manager) ReadThreadArtifact(threadID, artifactPath string) (*files.ReadResult, *files.Error) {
+	store := m.browserStore()
+	if store == nil {
+		return nil, &files.Error{Message: ErrStoreUnavailable.Error(), Status: http.StatusServiceUnavailable}
+	}
+	return store.readThreadArtifact(threadID, artifactPath)
+}
+
+// CurrentTurn returns the active turn state used to attribute browser events.
+func (m *Manager) CurrentTurn(threadID string) (*thread.TurnState, error) {
+	loader := m.currentTurnLoader()
+	if loader == nil {
+		return nil, ErrStoreUnavailable
+	}
+	return loader(threadID)
+}
+
+// AppendEvent persists a browser event under a thread turn step.
+func (m *Manager) AppendEvent(threadID, turnID string, stepIndex int, event thread.BrowserEvent) error {
+	store := m.browserStore()
+	if store == nil {
+		return ErrStoreUnavailable
+	}
+	return store.appendBrowserEvent(threadID, turnID, stepIndex, event)
+}
+
+// SaveScreenshot saves a browser screenshot artifact and returns its event file
+// reference.
+func (m *Manager) SaveScreenshot(threadID, turnID string, stepIndex int, eventID string, png []byte) (thread.BrowserEventFile, error) {
+	store := m.browserStore()
+	if store == nil {
+		return thread.BrowserEventFile{}, ErrStoreUnavailable
+	}
+	return store.saveBrowserScreenshot(threadID, turnID, stepIndex, eventID, png)
+}
+
+// EventEntries loads all persisted browser event entries for a thread.
+func (m *Manager) EventEntries(threadID string) ([]thread.BrowserEventEntry, error) {
+	store := m.browserStore()
+	if store == nil {
+		return nil, ErrStoreUnavailable
+	}
+	return store.loadAllBrowserEventEntries(threadID)
 }
 
 func isUniformColorPNG(data []byte) (bool, error) {

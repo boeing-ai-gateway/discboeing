@@ -34,7 +34,7 @@ exec sleep 30
 	}
 
 	serviceManager := services.NewManager()
-	h := New(workspaceRoot, agent.NewCompletionManager(&streamTestAgent{}), nil, serviceManager, nil)
+	h := New(workspaceRoot, agent.NewConversationManager(&streamTestAgent{}), nil, serviceManager, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/services/preview/http/health", nil)
 	rctx := chi.NewRouteContext()

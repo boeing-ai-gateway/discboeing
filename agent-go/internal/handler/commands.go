@@ -9,7 +9,7 @@ import (
 
 // ListCommands handles GET /commands.
 func (h *Handler) ListCommands(w http.ResponseWriter, _ *http.Request) {
-	commands, err := h.completions.ListCommands()
+	commands, err := h.conversations.ListCommands()
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "failed to list commands: "+err.Error())
 		return

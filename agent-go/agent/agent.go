@@ -124,6 +124,21 @@ type Agent interface {
 	// ListThreads returns all thread IDs.
 	ListThreads() ([]string, error)
 
+	// ListThreadInfos returns metadata for all threads.
+	ListThreadInfos() ([]ThreadInfo, error)
+
+	// GetThreadInfo returns metadata for a single thread.
+	GetThreadInfo(threadID string) (ThreadInfo, error)
+
+	// CreateThread creates a thread and returns its metadata.
+	CreateThread(ctx context.Context, req CreateThreadRequest) (ThreadInfo, error)
+
+	// UpdateThread updates thread metadata and returns the updated metadata.
+	UpdateThread(ctx context.Context, threadID string, req UpdateThreadRequest) (ThreadInfo, error)
+
+	// DeleteThread deletes a thread.
+	DeleteThread(ctx context.Context, threadID string) error
+
 	// HasInterruptedTurn reports whether threadID has an unfinished turn from a
 	// previous crash. Threads paused for AskUserQuestion return false.
 	HasInterruptedTurn(threadID string) (bool, error)
@@ -146,6 +161,53 @@ type Agent interface {
 	ListCommands() ([]Command, error)
 }
 
+type ThreadInfo struct {
+	ID              string
+	Name            string
+	CWD             string
+	LastMessage     string
+	ErrorMessage    string
+	Model           string
+	Reasoning       string
+	Mode            string
+	ModeSetBy       string
+	State           ThreadState
+	PendingQuestion bool
+	ActiveCommand   string
+	Metadata        json.RawMessage
+}
+
+// ThreadState is the user-visible terminal state shown for a thread.
+type ThreadState string
+
+const (
+	// ThreadStateNone means the thread has no special terminal state.
+	ThreadStateNone ThreadState = ""
+	// ThreadStateInterrupted means a previous turn stopped before completion and can be resumed.
+	ThreadStateInterrupted ThreadState = "interrupted"
+	// ThreadStateCancelled means the last turn was cancelled.
+	ThreadStateCancelled ThreadState = "cancelled"
+)
+
+type CreateThreadRequest struct {
+	ID          string
+	Name        string
+	CWD         string
+	LastMessage string
+	Metadata    json.RawMessage
+}
+
+type UpdateThreadRequest struct {
+	Name              *string
+	CWD               *string
+	LastMessage       *string
+	ErrorMessage      *string
+	ClearErrorMessage bool
+	Metadata          json.RawMessage
+	Mode              string
+	ModeSetBy         string
+}
+
 // ResumeResult describes a prepared resumed completion.
 type ResumeResult struct {
 	// ReplayLeafID is the highest persisted message that should be replayed as
@@ -158,9 +220,6 @@ type ResumeResult struct {
 
 // PromptRequest holds the parameters for a Prompt call.
 type PromptRequest struct {
-	// LeafID is the parent message to branch from. Empty for new conversations.
-	LeafID string
-
 	// UserParts is the user message content in UI message format.
 	UserParts []message.UIPart
 

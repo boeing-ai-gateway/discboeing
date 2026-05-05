@@ -5,7 +5,6 @@ import (
 	"io"
 	"iter"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,14 +13,12 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 func TestSelectInitialThreadID_ForceNewThread(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
 	cfg := &config.Config{SessionID: "explicit-session"}
 
-	threadID := selectInitialThreadID(store, cfg, true, "")
+	threadID := selectInitialThreadID(cfg, true, "")
 	if threadID == cfg.SessionID {
 		t.Fatalf("expected force-new to ignore explicit session id, got %q", threadID)
 	}
@@ -31,38 +28,27 @@ func TestSelectInitialThreadID_ForceNewThread(t *testing.T) {
 }
 
 func TestSelectInitialThreadID_UsesExplicitSessionIDByDefault(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
 	cfg := &config.Config{SessionID: "explicit-session"}
 
-	threadID := selectInitialThreadID(store, cfg, false, "")
+	threadID := selectInitialThreadID(cfg, false, "")
 	if threadID != cfg.SessionID {
 		t.Fatalf("expected explicit session id %q, got %q", cfg.SessionID, threadID)
 	}
 }
 
 func TestSelectInitialThreadID_UsesResumeFlagBeforeSessionID(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
 	cfg := &config.Config{SessionID: "explicit-session"}
 
-	threadID := selectInitialThreadID(store, cfg, false, "resumed-thread")
+	threadID := selectInitialThreadID(cfg, false, "resumed-thread")
 	if threadID != "resumed-thread" {
 		t.Fatalf("expected resume flag thread id %q, got %q", "resumed-thread", threadID)
 	}
 }
 
 func TestSelectInitialThreadID_DefaultsToFreshThread(t *testing.T) {
-	baseDir := t.TempDir()
-	store := thread.NewStore(baseDir)
 	cfg := &config.Config{SessionID: "default"}
 
-	if err := os.MkdirAll(filepath.Join(baseDir, "thread-existing"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	threadID := selectInitialThreadID(store, cfg, false, "")
-	if threadID == "thread-existing" {
-		t.Fatalf("expected a fresh thread id, got existing thread %q", threadID)
-	}
+	threadID := selectInitialThreadID(cfg, false, "")
 	if !strings.HasPrefix(threadID, "thread-") {
 		t.Fatalf("expected generated thread ID with prefix thread-, got %q", threadID)
 	}

@@ -16,7 +16,6 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/clisession"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 // threadSummary holds display metadata for a single thread.
@@ -78,7 +77,7 @@ func startupCommandHints(ctx context.Context, session clisession.Session, thread
 	return showResume, showHistory
 }
 
-func selectInitialThreadID(_ *thread.Store, cfg *config.Config, forceNew bool, resumeID string) string {
+func selectInitialThreadID(cfg *config.Config, forceNew bool, resumeID string) string {
 	if forceNew {
 		return "thread-" + agent.GenerateID()
 	}

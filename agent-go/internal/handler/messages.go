@@ -19,7 +19,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.completions.Messages(threadID, strings.TrimSpace(r.URL.Query().Get("leafId")))
+	messages, err := h.conversations.Messages(threadID, strings.TrimSpace(r.URL.Query().Get("leafId")))
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return

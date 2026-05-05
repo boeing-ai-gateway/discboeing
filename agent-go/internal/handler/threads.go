@@ -8,56 +8,64 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 )
 
-func (h *Handler) requireThreadStore(w http.ResponseWriter) bool {
-	if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
-		h.Error(w, http.StatusNotImplemented, "thread store unavailable")
+func (h *Handler) requireConversations(w http.ResponseWriter) bool {
+	if h.threadManager == nil {
+		h.Error(w, http.StatusNotImplemented, "thread manager unavailable")
 		return false
 	}
 	return true
 }
 
-func (h *Handler) threadResponse(threadID string, cfg thread.Config) api.Thread {
-	name := strings.TrimSpace(cfg.Name)
-
-	mode := "build"
-	if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan") {
-		mode = "plan"
-	}
-
-	pendingQuestion := false
-	if state, err := h.defaultAgent.Store().LoadTurnState(threadID); err == nil && state != nil {
-		pendingQuestion = state.Phase == thread.PhaseWaitingForAnswer
-	}
-
-	state := string(cfg.LastTurnState)
-	if h.completions.ActiveCompletionID(threadID) == "" {
-		if interrupted, err := h.completions.HasInterruptedTurn(threadID); err == nil && interrupted {
-			state = string(thread.StateInterrupted)
-		}
-	}
+func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
+	h.applyThreadStateOverlay(&info)
+	queue := h.loadPromptQueue(info.ID)
 
 	return api.Thread{
-		ID:              threadID,
-		Name:            name,
-		CWD:             strings.TrimSpace(cfg.CWD),
-		LastMessage:     strings.TrimSpace(cfg.LastMessage),
-		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
-		Model:           cfg.Model,
-		Reasoning:       string(cfg.Reasoning),
-		Mode:            mode,
-		State:           state,
-		PendingQuestion: pendingQuestion,
-		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
-		PromptQueue:     queuedPromptResponse(cfg.PromptQueue),
-		Metadata:        cfg.Metadata,
+		ID:              info.ID,
+		Name:            strings.TrimSpace(info.Name),
+		CWD:             strings.TrimSpace(info.CWD),
+		LastMessage:     strings.TrimSpace(info.LastMessage),
+		ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
+		Model:           info.Model,
+		Reasoning:       info.Reasoning,
+		Mode:            info.Mode,
+		State:           string(info.State),
+		PendingQuestion: info.PendingQuestion,
+		ActiveCommand:   strings.TrimSpace(info.ActiveCommand),
+		PromptQueue:     queuedPromptResponse(queue),
+		Metadata:        info.Metadata,
 	}
 }
 
-func queuedPromptResponse(queue []thread.QueuedPrompt) []api.QueuedPrompt {
+func (h *Handler) applyThreadStateOverlay(info *agent.ThreadInfo) {
+	if info == nil || h.conversations == nil || strings.TrimSpace(info.ID) == "" {
+		return
+	}
+	if h.conversations.ActiveCompletionID(info.ID) != "" {
+		return
+	}
+	if interrupted, err := h.conversations.HasInterruptedTurn(info.ID); err == nil && interrupted {
+		info.State = agent.ThreadStateInterrupted
+	}
+}
+
+func (h *Handler) loadPromptQueue(threadID string) []promptqueue.Prompt {
+	if h.promptQueue == nil {
+		return nil
+	}
+	queue, err := h.promptQueue.List(threadID)
+	if err != nil {
+		return nil
+	}
+	return queue
+}
+
+func queuedPromptResponse(queue []promptqueue.Prompt) []api.QueuedPrompt {
 	if len(queue) == 0 {
 		return nil
 	}
@@ -82,25 +90,20 @@ func queuedPromptResponse(queue []thread.QueuedPrompt) []api.QueuedPrompt {
 
 // ListThreads handles GET /threads — lists all threads.
 func (h *Handler) ListThreads(w http.ResponseWriter, _ *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
 		return
 	}
 
-	threadIDs, err := h.completions.ListThreads()
+	infos, err := h.threadManager.ListThreadInfos()
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if threadIDs == nil {
-		threadIDs = []string{}
-	}
-	sort.Strings(threadIDs)
+	sort.Slice(infos, func(i, j int) bool { return infos[i].ID < infos[j].ID })
 
-	threads := make([]api.Thread, 0, len(threadIDs))
-	store := h.defaultAgent.Store()
-	for _, threadID := range threadIDs {
-		cfg, _ := store.LoadConfig(threadID)
-		threads = append(threads, h.threadResponse(threadID, cfg))
+	threads := make([]api.Thread, 0, len(infos))
+	for _, info := range infos {
+		threads = append(threads, h.threadResponse(info))
 	}
 
 	h.JSON(w, http.StatusOK, api.ListThreadsResponse{Threads: threads})
@@ -108,7 +111,7 @@ func (h *Handler) ListThreads(w http.ResponseWriter, _ *http.Request) {
 
 // CreateThread handles POST /threads — creates a new thread.
 func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
 		return
 	}
 
@@ -122,49 +125,26 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(req.ID)
+	info, err := h.threadManager.CreateThread(r.Context(), agent.CreateThreadRequest{
+		ID:   req.ID,
+		Name: req.Name,
+		CWD:  req.CWD,
+	})
 	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if exists {
-		h.Error(w, http.StatusConflict, "thread already exists")
-		return
-	}
-
-	if err := store.CreateThread(req.ID); err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	cfg, err := store.LoadConfig(req.ID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if trimmedCWD := strings.TrimSpace(req.CWD); trimmedCWD != "" {
-		cfg.CWD = trimmedCWD
-	} else if strings.TrimSpace(cfg.CWD) == "" {
-		cfg.CWD = strings.TrimSpace(h.agentCwd)
-	}
-	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
-		cfg.Name = trimmedName
-		cfg.NameSource = thread.ThreadNameSourceUser
-	}
-	if strings.TrimSpace(cfg.CWD) != "" || strings.TrimSpace(req.Name) != "" {
-		if err := store.SaveConfig(req.ID, cfg); err != nil {
-			h.Error(w, http.StatusInternalServerError, err.Error())
+		if strings.Contains(err.Error(), "already exists") {
+			h.Error(w, http.StatusConflict, "thread already exists")
 			return
 		}
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	h.JSON(w, http.StatusCreated, h.threadResponse(req.ID, cfg))
+	h.JSON(w, http.StatusCreated, h.threadResponse(info))
 }
 
 // GetThread handles GET /threads/{id} — returns thread metadata.
 func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
 		return
 	}
 
@@ -174,29 +154,18 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(threadID)
+	info, err := h.threadManager.GetThreadInfo(threadID)
 	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !exists {
 		h.Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
 
-	cfg, err := store.LoadConfig(threadID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg))
+	h.JSON(w, http.StatusOK, h.threadResponse(info))
 }
 
 // UpdateThread handles PUT/PATCH /threads/{id} — updates thread metadata.
 func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
 		return
 	}
 
@@ -211,45 +180,24 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" && strings.TrimSpace(req.CWD) == "" {
-		h.Error(w, http.StatusBadRequest, "name or cwd is required")
+	if strings.TrimSpace(req.Name) == "" {
+		h.Error(w, http.StatusBadRequest, "name is required")
 		return
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(threadID)
+	name := strings.TrimSpace(req.Name)
+	info, err := h.threadManager.UpdateThread(r.Context(), threadID, agent.UpdateThreadRequest{Name: &name})
 	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !exists {
 		h.Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
 
-	cfg, err := store.LoadConfig(threadID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
-		cfg.Name = trimmedName
-		cfg.NameSource = thread.ThreadNameSourceUser
-	}
-	if trimmedCWD := strings.TrimSpace(req.CWD); trimmedCWD != "" {
-		cfg.CWD = trimmedCWD
-	}
-	if err := store.SaveConfig(threadID, cfg); err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.JSON(w, http.StatusOK, h.threadResponse(threadID, cfg))
+	h.JSON(w, http.StatusOK, h.threadResponse(info))
 }
 
 // DeleteThread handles DELETE /threads/{id} — removes a thread.
 func (h *Handler) DeleteThread(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
 		return
 	}
 
@@ -259,23 +207,12 @@ func (h *Handler) DeleteThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(threadID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
+	if h.promptQueue != nil {
+		h.promptQueue.ClearTimer(threadID)
 	}
-	if !exists {
+
+	if err := h.threadManager.DeleteThread(r.Context(), threadID); err != nil {
 		h.Error(w, http.StatusNotFound, "thread not found")
-		return
-	}
-
-	// Best-effort cancel if a completion is currently active for this thread.
-	h.completions.Cancel(threadID)
-	h.clearQueuedPromptTimer(threadID)
-
-	if err := store.DeleteThread(threadID); err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -284,7 +221,11 @@ func (h *Handler) DeleteThread(w http.ResponseWriter, r *http.Request) {
 
 // DeleteQueuedPrompt handles DELETE /threads/{id}/queue/{queueId} — removes a queued prompt.
 func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
+		return
+	}
+	if h.promptQueue == nil {
+		h.Error(w, http.StatusNotImplemented, "prompt queue unavailable")
 		return
 	}
 
@@ -299,24 +240,12 @@ func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(threadID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !exists {
+	if _, err := h.threadManager.GetThreadInfo(threadID); err != nil {
 		h.Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
 
-	h.queueMu.Lock()
-	cfg, removed, err := store.DeleteQueuedPrompt(threadID, queueID)
-	if err == nil && removed {
-		h.rescheduleQueuedPromptTimerLocked(threadID)
-		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
-	}
-	h.queueMu.Unlock()
+	_, removed, err := h.promptQueue.Delete(threadID, queueID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -331,7 +260,11 @@ func (h *Handler) DeleteQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 
 // UpdateQueuedPrompt handles PATCH /threads/{id}/queue/{queueId} — updates a queued prompt.
 func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
-	if !h.requireThreadStore(w) {
+	if !h.requireConversations(w) {
+		return
+	}
+	if h.promptQueue == nil {
+		h.Error(w, http.StatusNotImplemented, "prompt queue unavailable")
 		return
 	}
 
@@ -371,29 +304,17 @@ func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 		runAfter = &parsed
 	}
 
-	store := h.defaultAgent.Store()
-	exists, err := store.ThreadExists(threadID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !exists {
+	if _, err := h.threadManager.GetThreadInfo(threadID); err != nil {
 		h.Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
 
-	h.queueMu.Lock()
-	cfg, updated, err := store.UpdateQueuedPrompt(threadID, queueID, thread.QueuedPromptUpdate{
+	queue, updated, err := h.promptQueue.UpdatePrompt(threadID, queueID, promptqueue.Update{
 		RunAfter:      runAfter,
 		ClearRunAfter: req.ClearRunAfter,
 		Message:       req.Message,
 		Position:      req.Position,
 	})
-	if err == nil && updated {
-		h.rescheduleQueuedPromptTimerLocked(threadID)
-		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
-	}
-	h.queueMu.Unlock()
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -404,7 +325,7 @@ func (h *Handler) UpdateQueuedPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var queued *api.QueuedPrompt
-	for _, item := range queuedPromptResponse(cfg.PromptQueue) {
+	for _, item := range queuedPromptResponse(queue) {
 		if item.ID == queueID {
 			copyItem := item
 			queued = &copyItem

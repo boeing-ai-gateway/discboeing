@@ -192,7 +192,7 @@ func Run(cfg *config.Config, flags *Flags) {
 	}
 
 	// ── Startup recovery ──────────────────────────────────────────────────────
-	threadID := selectInitialThreadID(store, cfg, *flags.newThread, *flags.resume)
+	threadID := selectInitialThreadID(cfg, *flags.newThread, *flags.resume)
 
 	// Load persisted command history from .discobot/history (sibling of ThreadsDir).
 	hist := loadCmdHistory(filepath.Join(filepath.Dir(cfg.ThreadsDir), "history"))

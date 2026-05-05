@@ -33,7 +33,7 @@ func TestGetBrowserSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer browserMgr.Close()
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
 
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
@@ -70,7 +70,7 @@ func TestGetBrowserSession_WrongSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer browserMgr.Close()
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
 
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
@@ -96,7 +96,7 @@ func TestBrowserCDPRouteSkipsBearerAuthButBrowserInfoDoesNot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer browserMgr.Close()
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, nil, browserMgr)
 
 	r := chi.NewRouter()
 	r.Get("/sessions/{sessionId}/browser/cdp", h.ProxyBrowserCDP)
@@ -137,7 +137,8 @@ func TestBrowserCDPRouteSkipsBearerAuthButBrowserInfoDoesNot(t *testing.T) {
 func TestReadThreadArtifact(t *testing.T) {
 	t.Parallel()
 
-	store := thread.NewStore(t.TempDir())
+	baseDir := t.TempDir()
+	store := thread.NewStore(baseDir)
 	agentImpl := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	if err := os.MkdirAll(filepath.Join(store.ThreadDir("thread-1"), "artifacts", "browser", "sha256"), 0o755); err != nil {
 		t.Fatal(err)
@@ -146,7 +147,12 @@ func TestReadThreadArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, agentImpl)
+	browserMgr, err := browser.NewManager("session-1", t.TempDir(), 3002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserMgr.SetStore(browser.NewStore(baseDir))
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 	ts := httptest.NewServer(r)
@@ -178,9 +184,15 @@ func TestReadThreadArtifact(t *testing.T) {
 func TestReadThreadArtifact_RejectsTraversal(t *testing.T) {
 	t.Parallel()
 
-	store := thread.NewStore(t.TempDir())
+	baseDir := t.TempDir()
+	store := thread.NewStore(baseDir)
 	agentImpl := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, agentImpl)
+	browserMgr, err := browser.NewManager("session-1", t.TempDir(), 3002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserMgr.SetStore(browser.NewStore(baseDir))
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	r := chi.NewRouter()
 	h.RegisterRoutes(r)
 	ts := httptest.NewServer(r)
@@ -209,7 +221,8 @@ func testSecretHash(token string) string {
 func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
-	store := thread.NewStore(t.TempDir())
+	baseDir := t.TempDir()
+	store := thread.NewStore(baseDir)
 	agentImpl := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 	if err := store.SaveTurnState("thread-1", thread.TurnState{
 		ID:          "turn-1",
@@ -219,19 +232,27 @@ func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, agentImpl)
+	browserMgr, err := browser.NewManager("session-1", t.TempDir(), 3002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserStore := browser.NewStore(baseDir)
+	browserMgr.SetStore(browserStore)
+	browserMgr.SetCurrentTurnLoader(store.LoadTurnState)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	tracker := h.newBrowserCDPTracker("thread-1")
 
 	tracker.onClientMessage([]byte(`{"id":7,"method":"Page.navigate","params":{"url":"https://example.com"}}`))
 	tracker.onServerMessage([]byte(`{"id":7,"result":{"frameId":"f1"}}`))
 
-	events, err := store.LoadBrowserEvents("thread-1", "turn-1", 2)
+	entries, err := browserMgr.EventEntries("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 browser events, got %d", len(events))
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 browser events, got %d", len(entries))
 	}
+	events := []thread.BrowserEvent{entries[0].Event, entries[1].Event}
 	if events[0].Direction != "request" || events[0].Method != "Page.navigate" {
 		t.Fatalf("unexpected request event %#v", events[0])
 	}
@@ -249,7 +270,8 @@ func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 func TestBrowserCDPTrackerCapturesScreenshotAndEmitsChunk(t *testing.T) {
 	t.Parallel()
 
-	store := thread.NewStore(t.TempDir())
+	baseDir := t.TempDir()
+	store := thread.NewStore(baseDir)
 	if err := store.SaveTurnState("thread-1", thread.TurnState{
 		ID:          "turn-1",
 		ThreadID:    "thread-1",
@@ -259,11 +281,16 @@ func TestBrowserCDPTrackerCapturesScreenshotAndEmitsChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	browserMgr, err := browser.NewManager("session-1", t.TempDir(), 3002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserMgr.SetStore(browser.NewStore(baseDir))
+
 	var emitted []message.MessageChunk
 	var capturedThreadID string
 	tracker := &browserCDPTracker{
 		threadID: "thread-1",
-		store:    store,
 		captureScreenshot: func(_ context.Context, threadID string) ([]byte, error) {
 			capturedThreadID = threadID
 			return []byte("\x89PNG\r\n\x1a\nbrowser-test"), nil
@@ -271,19 +298,23 @@ func TestBrowserCDPTrackerCapturesScreenshotAndEmitsChunk(t *testing.T) {
 		emitChunk: func(chunk message.MessageChunk) {
 			emitted = append(emitted, chunk)
 		},
-		pendingByID: map[string]browserPendingApproval{},
+		currentTurn:    store.LoadTurnState,
+		appendEvent:    browserMgr.AppendEvent,
+		saveScreenshot: browserMgr.SaveScreenshot,
+		pendingByID:    map[string]browserPendingApproval{},
 	}
 
 	tracker.onClientMessage([]byte(`{"id":7,"method":"Input.dispatchMouseEvent","params":{"type":"mousePressed"}}`))
 	tracker.onServerMessage([]byte(`{"id":7,"result":{}}`))
 
-	events, err := store.LoadBrowserEvents("thread-1", "turn-1", 2)
+	entries, err := browserMgr.EventEntries("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 browser events, got %d", len(events))
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 browser events, got %d", len(entries))
 	}
+	events := []thread.BrowserEvent{entries[0].Event, entries[1].Event}
 	if len(events[1].Files) != 1 {
 		t.Fatalf("expected response event screenshot file, got %#v", events[1].Files)
 	}
@@ -330,7 +361,8 @@ func TestBrowserCDPTrackerCapturesScreenshotAndEmitsChunk(t *testing.T) {
 func TestBrowserCDPTrackerCapturesScreenshotEveryFiveCalls(t *testing.T) {
 	t.Parallel()
 
-	store := thread.NewStore(t.TempDir())
+	baseDir := t.TempDir()
+	store := thread.NewStore(baseDir)
 	if err := store.SaveTurnState("thread-1", thread.TurnState{
 		ID:          "turn-1",
 		ThreadID:    "thread-1",
@@ -340,15 +372,23 @@ func TestBrowserCDPTrackerCapturesScreenshotEveryFiveCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	browserMgr, err := browser.NewManager("session-1", t.TempDir(), 3002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserMgr.SetStore(browser.NewStore(baseDir))
+
 	captureCount := 0
 	tracker := &browserCDPTracker{
 		threadID: "thread-1",
-		store:    store,
 		captureScreenshot: func(_ context.Context, _ string) ([]byte, error) {
 			captureCount++
 			return []byte("\x89PNG\r\n\x1a\nbrowser-test"), nil
 		},
-		pendingByID: map[string]browserPendingApproval{},
+		currentTurn:    store.LoadTurnState,
+		appendEvent:    browserMgr.AppendEvent,
+		saveScreenshot: browserMgr.SaveScreenshot,
+		pendingByID:    map[string]browserPendingApproval{},
 	}
 
 	for i := range 5 {
@@ -361,15 +401,15 @@ func TestBrowserCDPTrackerCapturesScreenshotEveryFiveCalls(t *testing.T) {
 		t.Fatalf("expected one periodic screenshot after five calls, got %d", captureCount)
 	}
 
-	events, err := store.LoadBrowserEvents("thread-1", "turn-1", 2)
+	entries, err := browserMgr.EventEntries("thread-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 10 {
-		t.Fatalf("expected 10 browser events, got %d", len(events))
+	if len(entries) != 10 {
+		t.Fatalf("expected 10 browser events, got %d", len(entries))
 	}
-	if len(events[9].Files) != 1 {
-		t.Fatalf("expected fifth response event to include screenshot, got %#v", events[9].Files)
+	if len(entries[9].Event.Files) != 1 {
+		t.Fatalf("expected fifth response event to include screenshot, got %#v", entries[9].Event.Files)
 	}
 }
 

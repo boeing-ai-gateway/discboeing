@@ -17,13 +17,13 @@ type CompletionListener interface {
 	OnTurnComplete(threadID string, err error)
 }
 
-// CompletionManager wraps an Agent with goroutine management, chunk caching,
+// ConversationManager wraps an Agent with goroutine management, chunk caching,
 // and SSE polling. It bridges the synchronous streaming Agent interface to
 // the async HTTP handler world.
 //
 // All critical state is persisted to disk by the underlying Agent; the
 // in-memory event cache is non-authoritative and can be rebuilt after a crash.
-type CompletionManager struct {
+type ConversationManager struct {
 	agent Agent
 
 	mu                      sync.Mutex
@@ -47,9 +47,9 @@ type activeCompletion struct {
 	leafMsg string // tracks the leaf message ID as messages are saved
 }
 
-// NewCompletionManager creates a CompletionManager wrapping the given Agent.
-func NewCompletionManager(agent Agent) *CompletionManager {
-	cm := &CompletionManager{
+// NewConversationManager creates a ConversationManager wrapping the given Agent.
+func NewConversationManager(agent Agent) *ConversationManager {
+	cm := &ConversationManager{
 		agent:                agent,
 		active:               make(map[string]*activeCompletion),
 		ephemeralSubscribers: make(map[int]chan message.MessageChunk),
@@ -61,14 +61,66 @@ func NewCompletionManager(agent Agent) *CompletionManager {
 // Chat starts a new turn for the given thread. It returns the completion ID
 // or an error if a completion is already running for this thread.
 // The turn runs in a background goroutine; chunks are cached for SSE replay.
-func (cm *CompletionManager) Chat(threadID string, req PromptRequest) (string, error) {
+func (cm *ConversationManager) Chat(threadID string, req PromptRequest) (string, error) {
 	return cm.startCompletion(threadID, func(ctx context.Context) (string, iter.Seq2[message.MessageChunk, error], error) {
-		return req.LeafID, cm.agent.Prompt(ctx, threadID, req), nil
+		return "", cm.agent.Prompt(ctx, threadID, req), nil
 	})
 }
 
+func (cm *ConversationManager) ListThreadInfos() ([]ThreadInfo, error) {
+	infos, err := cm.agent.ListThreadInfos()
+	if err != nil {
+		return nil, err
+	}
+	for i := range infos {
+		cm.applyActiveThreadState(&infos[i])
+	}
+	return infos, nil
+}
+
+func (cm *ConversationManager) GetThreadInfo(threadID string) (ThreadInfo, error) {
+	info, err := cm.agent.GetThreadInfo(threadID)
+	if err != nil {
+		return ThreadInfo{}, err
+	}
+	cm.applyActiveThreadState(&info)
+	return info, nil
+}
+
+func (cm *ConversationManager) CreateThread(ctx context.Context, req CreateThreadRequest) (ThreadInfo, error) {
+	info, err := cm.agent.CreateThread(ctx, req)
+	if err != nil {
+		return ThreadInfo{}, err
+	}
+	cm.applyActiveThreadState(&info)
+	return info, nil
+}
+
+func (cm *ConversationManager) UpdateThread(ctx context.Context, threadID string, req UpdateThreadRequest) (ThreadInfo, error) {
+	info, err := cm.agent.UpdateThread(ctx, threadID, req)
+	if err != nil {
+		return ThreadInfo{}, err
+	}
+	cm.applyActiveThreadState(&info)
+	return info, nil
+}
+
+func (cm *ConversationManager) DeleteThread(ctx context.Context, threadID string) error {
+	cm.Cancel(threadID)
+	return cm.agent.DeleteThread(ctx, threadID)
+}
+
+func (cm *ConversationManager) applyActiveThreadState(info *ThreadInfo) {
+	if info == nil || cm.ActiveCompletionID(info.ID) != "" {
+		return
+	}
+	if interrupted, err := cm.HasInterruptedTurn(info.ID); err == nil && interrupted {
+		info.State = ThreadStateInterrupted
+	}
+}
+
 // Resume starts a background completion that resumes an interrupted turn.
-func (cm *CompletionManager) Resume(threadID string, req PromptRequest) (string, error) {
+func (cm *ConversationManager) Resume(threadID string, req PromptRequest) (string, error) {
 	return cm.startCompletion(threadID, func(ctx context.Context) (string, iter.Seq2[message.MessageChunk, error], error) {
 		result, err := cm.agent.Resume(ctx, threadID, req)
 		if err != nil {
@@ -78,7 +130,7 @@ func (cm *CompletionManager) Resume(threadID string, req PromptRequest) (string,
 	})
 }
 
-func (cm *CompletionManager) startCompletion(
+func (cm *ConversationManager) startCompletion(
 	threadID string,
 	prepare func(context.Context) (string, iter.Seq2[message.MessageChunk, error], error),
 ) (string, error) {
@@ -129,7 +181,7 @@ func (cm *CompletionManager) startCompletion(
 }
 
 // runCompletion drives a completion iterator in a goroutine, caching chunks.
-func (cm *CompletionManager) runCompletion(ctx context.Context, comp *activeCompletion, threadID string, seq iter.Seq2[message.MessageChunk, error]) {
+func (cm *ConversationManager) runCompletion(ctx context.Context, comp *activeCompletion, threadID string, seq iter.Seq2[message.MessageChunk, error]) {
 	sawStart := false
 	for chunk, err := range seq {
 		comp.mu.Lock()
@@ -181,7 +233,7 @@ type PollResult struct {
 }
 
 // EmitEphemeralChunk publishes a global ephemeral chunk to current subscribers only.
-func (cm *CompletionManager) EmitEphemeralChunk(_ string, chunk message.MessageChunk) {
+func (cm *ConversationManager) EmitEphemeralChunk(_ string, chunk message.MessageChunk) {
 	cm.mu.Lock()
 	subscribers := make([]chan message.MessageChunk, 0, len(cm.ephemeralSubscribers))
 	for _, ch := range cm.ephemeralSubscribers {
@@ -198,7 +250,7 @@ func (cm *CompletionManager) EmitEphemeralChunk(_ string, chunk message.MessageC
 }
 
 // SubscribeEphemeral subscribes to live ephemeral chunks until the caller unsubscribes.
-func (cm *CompletionManager) SubscribeEphemeral() (<-chan message.MessageChunk, func()) {
+func (cm *ConversationManager) SubscribeEphemeral() (<-chan message.MessageChunk, func()) {
 	ch := make(chan message.MessageChunk, 16)
 
 	cm.mu.Lock()
@@ -218,7 +270,7 @@ func (cm *CompletionManager) SubscribeEphemeral() (<-chan message.MessageChunk, 
 // active completion. Returns nil if no active completion exists.
 // The event cache is non-authoritative; on crash recovery, events are
 // replayed from the step JSONL files on disk.
-func (cm *CompletionManager) PollChunks(threadID string, offset int) *PollResult {
+func (cm *ConversationManager) PollChunks(threadID string, offset int) *PollResult {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -259,7 +311,7 @@ func (cm *CompletionManager) PollChunks(threadID string, offset int) *PollResult
 // apply a stale offset from the previous completion to the new one.
 //
 // Unblocks immediately if ctx is cancelled.
-func (cm *CompletionManager) WaitChunks(ctx context.Context, threadID, expectedCompletionID string, offset int) *PollResult {
+func (cm *ConversationManager) WaitChunks(ctx context.Context, threadID, expectedCompletionID string, offset int) *PollResult {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -305,10 +357,10 @@ func (cm *CompletionManager) WaitChunks(ctx context.Context, threadID, expectedC
 
 // WaitNextCompletion blocks until threadID has a completion whose ID differs
 // from afterCompletionID, then returns its current cached chunks and done state.
-// This lets SSE consumers observe both new active completions and completions
+// This lets SSE consumers observe both new active conversations and conversations
 // that started and finished between polls.
 // Returns nil if ctx is cancelled first.
-func (cm *CompletionManager) WaitNextCompletion(ctx context.Context, threadID, afterCompletionID string) *PollResult {
+func (cm *ConversationManager) WaitNextCompletion(ctx context.Context, threadID, afterCompletionID string) *PollResult {
 	stop := context.AfterFunc(ctx, func() {
 		cm.mu.Lock()
 		cm.cond.Broadcast()
@@ -347,7 +399,7 @@ func (cm *CompletionManager) WaitNextCompletion(ctx context.Context, threadID, a
 // Cancel cancels the active completion for a thread.
 // Returns the completion ID and true if there was an active completion,
 // or empty string and false if no active completion exists.
-func (cm *CompletionManager) Cancel(threadID string) (string, bool) {
+func (cm *ConversationManager) Cancel(threadID string) (string, bool) {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -370,7 +422,7 @@ func (cm *CompletionManager) Cancel(threadID string) (string, bool) {
 // EmitChunkIfActive appends a non-provider chunk to the current active
 // completion for threadID so connected SSE clients observe thread-scoped updates
 // such as prompt queue changes immediately.
-func (cm *CompletionManager) EmitChunkIfActive(threadID string, chunk message.MessageChunk) bool {
+func (cm *ConversationManager) EmitChunkIfActive(threadID string, chunk message.MessageChunk) bool {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -390,7 +442,7 @@ func (cm *CompletionManager) EmitChunkIfActive(threadID string, chunk message.Me
 
 // ActiveCompletionID returns the active completion ID for a thread,
 // or empty string if none is active.
-func (cm *CompletionManager) ActiveCompletionID(threadID string) string {
+func (cm *ConversationManager) ActiveCompletionID(threadID string) string {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -409,7 +461,7 @@ func (cm *CompletionManager) ActiveCompletionID(threadID string) string {
 // If a completion is currently running and no leafID was specified, the result
 // is clamped to the completion's starting leaf so that in-progress messages
 // are not returned (they arrive via the SSE stream instead).
-func (cm *CompletionManager) Messages(threadID, leafID string) ([]message.UIMessage, error) {
+func (cm *ConversationManager) Messages(threadID, leafID string) ([]message.UIMessage, error) {
 	if leafID == "" {
 		if startLeaf := cm.activeCompletionLeafID(threadID); startLeaf != "" {
 			leafID = startLeaf
@@ -420,7 +472,7 @@ func (cm *CompletionManager) Messages(threadID, leafID string) ([]message.UIMess
 
 // activeCompletionLeafID returns the pre-completion leaf ID for the active
 // (not yet done) completion on threadID, or "" if none is running.
-func (cm *CompletionManager) activeCompletionLeafID(threadID string) string {
+func (cm *ConversationManager) activeCompletionLeafID(threadID string) string {
 	cm.mu.Lock()
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
@@ -436,25 +488,25 @@ func (cm *CompletionManager) activeCompletionLeafID(threadID string) string {
 }
 
 // ListThreads returns all thread IDs.
-func (cm *CompletionManager) ListThreads() ([]string, error) {
+func (cm *ConversationManager) ListThreads() ([]string, error) {
 	return cm.agent.ListThreads()
 }
 
 // ListCommands returns all available slash commands.
-func (cm *CompletionManager) ListCommands() ([]Command, error) {
+func (cm *ConversationManager) ListCommands() ([]Command, error) {
 	return cm.agent.ListCommands()
 }
 
 // AddCompletionListener registers a completion lifecycle listener.
-func (cm *CompletionManager) AddCompletionListener(listener CompletionListener) {
+func (cm *ConversationManager) AddCompletionListener(listener CompletionListener) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.listeners = append(cm.listeners, listener)
 }
 
-// ResumeInterruptedTurns starts resume completions for any interrupted threads
+// ResumeInterruptedTurns starts resume conversations for any interrupted threads
 // that are not already running.
-func (cm *CompletionManager) ResumeInterruptedTurns() error {
+func (cm *ConversationManager) ResumeInterruptedTurns() error {
 	threads, err := cm.ListThreads()
 	if err != nil {
 		return err
@@ -475,21 +527,21 @@ func (cm *CompletionManager) ResumeInterruptedTurns() error {
 }
 
 // HasInterruptedTurn reports whether threadID has an unfinished turn.
-func (cm *CompletionManager) HasInterruptedTurn(threadID string) (bool, error) {
+func (cm *ConversationManager) HasInterruptedTurn(threadID string) (bool, error) {
 	return cm.agent.HasInterruptedTurn(threadID)
 }
 
 // PendingQuestion returns the pending AskUserQuestion for a thread, or nil.
-func (cm *CompletionManager) PendingQuestion(threadID string) (*PendingQuestion, error) {
+func (cm *ConversationManager) PendingQuestion(threadID string) (*PendingQuestion, error) {
 	return cm.agent.PendingQuestion(threadID)
 }
 
 // SubmitAnswer persists the user's response for a pending approval.
-func (cm *CompletionManager) SubmitAnswer(threadID, approvalID string, req api.AnswerQuestionRequest) error {
+func (cm *ConversationManager) SubmitAnswer(threadID, approvalID string, req api.AnswerQuestionRequest) error {
 	return cm.agent.SubmitAnswer(threadID, approvalID, req)
 }
 
-func (cm *CompletionManager) notifyTurnComplete(threadID string, err error) {
+func (cm *ConversationManager) notifyTurnComplete(threadID string, err error) {
 	cm.mu.Lock()
 	listeners := append([]CompletionListener(nil), cm.listeners...)
 	cm.mu.Unlock()

@@ -26,7 +26,7 @@ func newThreadsTestServer(t *testing.T, h *Handler) *httptest.Server {
 func TestCreateThread_DoesNotReturnThreadIDAsNameFallback(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", agent.NewCompletionManager(&streamTestAgent{}), nil, nil, defaultAgent)
+	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, defaultAgent)
 	ts := newThreadsTestServer(t, h)
 	defer ts.Close()
 
@@ -59,7 +59,7 @@ func TestCreateThread_DefaultsCWDToHandlerRoot(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	root := t.TempDir()
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, root, agentimpl.MCPConfig{})
-	h := New(root, agent.NewCompletionManager(&streamTestAgent{}), nil, nil, defaultAgent)
+	h := New(root, agent.NewConversationManager(&streamTestAgent{}), nil, nil, defaultAgent)
 	ts := newThreadsTestServer(t, h)
 	defer ts.Close()
 

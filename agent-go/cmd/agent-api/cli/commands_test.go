@@ -47,9 +47,6 @@ func (s *testSession) UpdateThread(_ context.Context, id string, req api.UpdateT
 	if req.Name != "" {
 		thread.Name = req.Name
 	}
-	if req.CWD != "" {
-		thread.CWD = req.CWD
-	}
 	s.threads[id] = thread
 	return thread, nil
 }

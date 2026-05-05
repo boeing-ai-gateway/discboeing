@@ -57,6 +57,48 @@ func (m *mockAgent) ListThreads() ([]string, error) {
 	return m.threads, nil
 }
 
+func (m *mockAgent) ListThreadInfos() ([]ThreadInfo, error) {
+	infos := make([]ThreadInfo, 0, len(m.threads))
+	for _, threadID := range m.threads {
+		infos = append(infos, ThreadInfo{ID: threadID})
+	}
+	return infos, nil
+}
+
+func (m *mockAgent) GetThreadInfo(threadID string) (ThreadInfo, error) {
+	return ThreadInfo{ID: threadID}, nil
+}
+
+func (m *mockAgent) CreateThread(_ context.Context, req CreateThreadRequest) (ThreadInfo, error) {
+	m.threads = append(m.threads, req.ID)
+	return ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
+}
+
+func (m *mockAgent) UpdateThread(_ context.Context, threadID string, req UpdateThreadRequest) (ThreadInfo, error) {
+	info := ThreadInfo{ID: threadID}
+	if req.Name != nil {
+		info.Name = *req.Name
+	}
+	if req.CWD != nil {
+		info.CWD = *req.CWD
+	}
+	if req.LastMessage != nil {
+		info.LastMessage = *req.LastMessage
+	}
+	if req.ErrorMessage != nil {
+		info.ErrorMessage = *req.ErrorMessage
+	}
+	info.Metadata = req.Metadata
+	info.Mode = req.Mode
+	info.ModeSetBy = req.ModeSetBy
+	return info, nil
+}
+
+func (m *mockAgent) DeleteThread(_ context.Context, threadID string) error {
+	m.threads = slices.DeleteFunc(m.threads, func(id string) bool { return id == threadID })
+	return nil
+}
+
 func (m *mockAgent) HasInterruptedTurn(threadID string) (bool, error) {
 	if slices.Contains(m.interruptedThreads, threadID) {
 		return true, nil
@@ -119,7 +161,7 @@ func blockingPromptFn() func(context.Context, string, PromptRequest) iter.Seq2[m
 	}
 }
 
-func waitForDone(t *testing.T, cm *CompletionManager, threadID string) {
+func waitForDone(t *testing.T, cm *ConversationManager, threadID string) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
 	for {
@@ -138,7 +180,7 @@ func waitForDone(t *testing.T, cm *CompletionManager, threadID string) {
 
 // --- Tests ---
 
-func TestCompletionManager_Chat_SimpleCompletion(t *testing.T) {
+func TestConversationManager_Chat_SimpleCompletion(t *testing.T) {
 	chunks := []message.MessageChunk{
 		message.StreamStartChunk{},
 		message.TextStartChunk{ID: "t1"},
@@ -148,7 +190,7 @@ func TestCompletionManager_Chat_SimpleCompletion(t *testing.T) {
 	}
 
 	agent := &mockAgent{promptFn: simplePromptFn(chunks)}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	completionID, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -185,7 +227,7 @@ func TestCompletionManager_Chat_SimpleCompletion(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_Chat_PrependsStartBeforeEarlyError(t *testing.T) {
+func TestConversationManager_Chat_PrependsStartBeforeEarlyError(t *testing.T) {
 	agent := &mockAgent{
 		promptFn: func(_ context.Context, _ string, _ PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			return func(yield func(message.MessageChunk, error) bool) {
@@ -193,7 +235,7 @@ func TestCompletionManager_Chat_PrependsStartBeforeEarlyError(t *testing.T) {
 			}
 		},
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -228,9 +270,9 @@ func TestCompletionManager_Chat_PrependsStartBeforeEarlyError(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_Chat_ConflictWhenActive(t *testing.T) {
+func TestConversationManager_Chat_ConflictWhenActive(t *testing.T) {
 	agent := &mockAgent{promptFn: blockingPromptFn()}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -255,7 +297,7 @@ func TestCompletionManager_Chat_ConflictWhenActive(t *testing.T) {
 	waitForDone(t, cm, "thread1")
 }
 
-func TestCompletionManager_Chat_DifferentThreadsIndependent(t *testing.T) {
+func TestConversationManager_Chat_DifferentThreadsIndependent(t *testing.T) {
 	callCount := 0
 	agent := &mockAgent{
 		promptFn: func(_ context.Context, _ string, _ PromptRequest) iter.Seq2[message.MessageChunk, error] {
@@ -265,7 +307,7 @@ func TestCompletionManager_Chat_DifferentThreadsIndependent(t *testing.T) {
 			}
 		},
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, err1 := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "a"}},
@@ -285,9 +327,9 @@ func TestCompletionManager_Chat_DifferentThreadsIndependent(t *testing.T) {
 	waitForDone(t, cm, "thread2")
 }
 
-func TestCompletionManager_Cancel(t *testing.T) {
+func TestConversationManager_Cancel(t *testing.T) {
 	agent := &mockAgent{promptFn: blockingPromptFn()}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	completionID, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -309,9 +351,9 @@ func TestCompletionManager_Cancel(t *testing.T) {
 	waitForDone(t, cm, "thread1")
 }
 
-func TestCompletionManager_Cancel_NoActive(t *testing.T) {
+func TestConversationManager_Cancel_NoActive(t *testing.T) {
 	agent := &mockAgent{}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, ok := cm.Cancel("thread1")
 	if ok {
@@ -319,7 +361,7 @@ func TestCompletionManager_Cancel_NoActive(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_Cancel_DelegatesForPausedTurn(t *testing.T) {
+func TestConversationManager_Cancel_DelegatesForPausedTurn(t *testing.T) {
 	agent := &mockAgent{
 		promptFn: simplePromptFn([]message.MessageChunk{
 			message.TextDeltaChunk{ID: "t1", Delta: "paused"},
@@ -328,7 +370,7 @@ func TestCompletionManager_Cancel_DelegatesForPausedTurn(t *testing.T) {
 			return threadID == "thread1"
 		},
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	completionID, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -347,9 +389,9 @@ func TestCompletionManager_Cancel_DelegatesForPausedTurn(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_PollChunks_NoActiveCompletion(t *testing.T) {
+func TestConversationManager_PollChunks_NoActiveCompletion(t *testing.T) {
 	agent := &mockAgent{}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	result := cm.PollChunks("thread1", 0)
 	if result != nil {
@@ -357,7 +399,7 @@ func TestCompletionManager_PollChunks_NoActiveCompletion(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_PollChunks_WithOffset(t *testing.T) {
+func TestConversationManager_PollChunks_WithOffset(t *testing.T) {
 	chunks := []message.MessageChunk{
 		message.StreamStartChunk{},
 		message.TextStartChunk{ID: "t1"},
@@ -367,7 +409,7 @@ func TestCompletionManager_PollChunks_WithOffset(t *testing.T) {
 	}
 
 	agent := &mockAgent{promptFn: simplePromptFn(chunks)}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -397,7 +439,7 @@ func TestCompletionManager_PollChunks_WithOffset(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_PollChunks_CoalescesConsecutiveDeltaChunks(t *testing.T) {
+func TestConversationManager_PollChunks_CoalescesConsecutiveDeltaChunks(t *testing.T) {
 	chunks := []message.MessageChunk{
 		message.TextDeltaChunk{ID: "t1", Delta: "hel"},
 		message.TextDeltaChunk{ID: "t1", Delta: "lo"},
@@ -408,7 +450,7 @@ func TestCompletionManager_PollChunks_CoalescesConsecutiveDeltaChunks(t *testing
 	}
 
 	agent := &mockAgent{promptFn: simplePromptFn(chunks)}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	if _, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -465,7 +507,7 @@ func TestCompletionManager_PollChunks_CoalescesConsecutiveDeltaChunks(t *testing
 	}
 }
 
-func TestCompletionManager_PollChunks_CoalescesOnlyUnreadBatch(t *testing.T) {
+func TestConversationManager_PollChunks_CoalescesOnlyUnreadBatch(t *testing.T) {
 	chunks := []message.MessageChunk{
 		message.TextDeltaChunk{ID: "t1", Delta: "a"},
 		message.TextDeltaChunk{ID: "t1", Delta: "b"},
@@ -473,7 +515,7 @@ func TestCompletionManager_PollChunks_CoalescesOnlyUnreadBatch(t *testing.T) {
 	}
 
 	agent := &mockAgent{promptFn: simplePromptFn(chunks)}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	if _, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -503,9 +545,9 @@ func TestCompletionManager_PollChunks_CoalescesOnlyUnreadBatch(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_ActiveCompletionID(t *testing.T) {
+func TestConversationManager_ActiveCompletionID(t *testing.T) {
 	agent := &mockAgent{promptFn: blockingPromptFn()}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	// No active completion.
 	if id := cm.ActiveCompletionID("thread1"); id != "" {
@@ -529,7 +571,7 @@ func TestCompletionManager_ActiveCompletionID(t *testing.T) {
 	waitForDone(t, cm, "thread1")
 }
 
-func TestCompletionManager_ChatAfterDone(t *testing.T) {
+func TestConversationManager_ChatAfterDone(t *testing.T) {
 	callCount := 0
 	agent := &mockAgent{
 		promptFn: func(_ context.Context, _ string, _ PromptRequest) iter.Seq2[message.MessageChunk, error] {
@@ -539,7 +581,7 @@ func TestCompletionManager_ChatAfterDone(t *testing.T) {
 			}
 		},
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	_, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
@@ -561,13 +603,13 @@ func TestCompletionManager_ChatAfterDone(t *testing.T) {
 	waitForDone(t, cm, "thread1")
 }
 
-func TestCompletionManager_AddListener_ReceivesLifecycleEvents(t *testing.T) {
+func TestConversationManager_AddListener_ReceivesLifecycleEvents(t *testing.T) {
 	chunks := []message.MessageChunk{
 		message.TextDeltaChunk{ID: "t1", Delta: "done"},
 	}
 
 	agent := &mockAgent{promptFn: simplePromptFn(chunks)}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 	listener := &mockCompletionListener{
 		startCh:    make(chan string, 1),
 		completeCh: make(chan string, 1),
@@ -600,13 +642,13 @@ func TestCompletionManager_AddListener_ReceivesLifecycleEvents(t *testing.T) {
 	}
 }
 
-func TestCompletionManager_WaitNextCompletion_ReturnsFinishedNewCompletion(t *testing.T) {
+func TestConversationManager_WaitNextCompletion_ReturnsFinishedNewCompletion(t *testing.T) {
 	agent := &mockAgent{
 		promptFn: simplePromptFn([]message.MessageChunk{
 			message.TextDeltaChunk{ID: "t1", Delta: "done"},
 		}),
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 
 	firstCompletionID, err := cm.Chat("thread1", PromptRequest{
 		UserParts: []message.UIPart{message.UITextPart{Text: "first"}},
@@ -646,8 +688,8 @@ func TestCompletionManager_WaitNextCompletion_ReturnsFinishedNewCompletion(t *te
 	}
 }
 
-func TestCompletionManager_WaitChunks_SwitchesToNewCompletionWithoutReusingOffset(t *testing.T) {
-	cm := NewCompletionManager(&mockAgent{})
+func TestConversationManager_WaitChunks_SwitchesToNewCompletionWithoutReusingOffset(t *testing.T) {
+	cm := NewConversationManager(&mockAgent{})
 
 	newCompletion := &activeCompletion{
 		id:       "completion-new",
@@ -692,8 +734,8 @@ func TestCompletionManager_WaitChunks_SwitchesToNewCompletionWithoutReusingOffse
 	}
 }
 
-func TestCompletionManager_SubscribeEphemeral_ReceivesFutureChunk(t *testing.T) {
-	cm := NewCompletionManager(&mockAgent{})
+func TestConversationManager_SubscribeEphemeral_ReceivesFutureChunk(t *testing.T) {
+	cm := NewConversationManager(&mockAgent{})
 	ch, unsubscribe := cm.SubscribeEphemeral()
 	defer unsubscribe()
 
@@ -716,8 +758,8 @@ func TestCompletionManager_SubscribeEphemeral_ReceivesFutureChunk(t *testing.T) 
 	}
 }
 
-func TestCompletionManager_SubscribeEphemeral_DoesNotReplayPastChunk(t *testing.T) {
-	cm := NewCompletionManager(&mockAgent{})
+func TestConversationManager_SubscribeEphemeral_DoesNotReplayPastChunk(t *testing.T) {
+	cm := NewConversationManager(&mockAgent{})
 	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":1}`)})
 
 	ch, unsubscribe := cm.SubscribeEphemeral()
@@ -730,8 +772,8 @@ func TestCompletionManager_SubscribeEphemeral_DoesNotReplayPastChunk(t *testing.
 	}
 }
 
-func TestCompletionManager_SubscribeEphemeral_ReceivesMultipleLiveChunks(t *testing.T) {
-	cm := NewCompletionManager(&mockAgent{})
+func TestConversationManager_SubscribeEphemeral_ReceivesMultipleLiveChunks(t *testing.T) {
+	cm := NewConversationManager(&mockAgent{})
 	ch, unsubscribe := cm.SubscribeEphemeral()
 	defer unsubscribe()
 
@@ -754,7 +796,7 @@ func TestCompletionManager_SubscribeEphemeral_ReceivesMultipleLiveChunks(t *test
 	}
 }
 
-func TestCompletionManager_ResumeInterruptedTurns(t *testing.T) {
+func TestConversationManager_ResumeInterruptedTurns(t *testing.T) {
 	resumeCh := make(chan string, 2)
 	agent := &mockAgent{
 		threads:            []string{"thread-a", "thread-b"},
@@ -766,7 +808,7 @@ func TestCompletionManager_ResumeInterruptedTurns(t *testing.T) {
 			return ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
 	}
-	cm := NewCompletionManager(agent)
+	cm := NewConversationManager(agent)
 	if err := cm.ResumeInterruptedTurns(); err != nil {
 		t.Fatal(err)
 	}
@@ -780,11 +822,9 @@ func TestCompletionManager_ResumeInterruptedTurns(t *testing.T) {
 	}
 }
 
-// TestCompletionManager_Messages_ClampsToStartLeaf verifies that while a
-// completion is in progress, Messages() passes the completion's starting
-// leafID to the underlying agent so that in-progress messages are not
-// returned (they arrive via SSE instead).
-func TestCompletionManager_Messages_ClampsToStartLeaf(t *testing.T) {
+// TestConversationManager_Messages_PassesExplicitLeaf verifies that Messages()
+// still passes caller-supplied leaf IDs through to the underlying agent.
+func TestConversationManager_Messages_PassesExplicitLeaf(t *testing.T) {
 	var capturedLeafID string
 
 	ma := &mockAgent{
@@ -794,12 +834,9 @@ func TestCompletionManager_Messages_ClampsToStartLeaf(t *testing.T) {
 			return nil, nil
 		},
 	}
-	cm := NewCompletionManager(ma)
-
-	startingLeaf := "leaf-before-completion"
+	cm := NewConversationManager(ma)
 
 	_, err := cm.Chat("thread1", PromptRequest{
-		LeafID:    startingLeaf,
 		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
 	})
 	if err != nil {
@@ -809,26 +846,17 @@ func TestCompletionManager_Messages_ClampsToStartLeaf(t *testing.T) {
 	// Give the goroutine time to block inside Prompt.
 	time.Sleep(20 * time.Millisecond)
 
-	// ListMessages with no explicit leafID — should be clamped to the
-	// completion's starting leaf so SSE and list-messages don't overlap.
 	_, _ = cm.Messages("thread1", "")
-	if capturedLeafID != startingLeaf {
-		t.Errorf("expected leafID %q, got %q", startingLeaf, capturedLeafID)
+	if capturedLeafID != "" {
+		t.Errorf("expected empty leafID, got %q", capturedLeafID)
 	}
 
-	// An explicit caller-supplied leafID should pass through unchanged.
 	callerLeaf := "explicit-leaf"
 	_, _ = cm.Messages("thread1", callerLeaf)
 	if capturedLeafID != callerLeaf {
 		t.Errorf("explicit leafID: expected %q, got %q", callerLeaf, capturedLeafID)
 	}
 
-	// After the completion finishes, no clamping should happen.
 	cm.Cancel("thread1")
 	waitForDone(t, cm, "thread1")
-
-	_, _ = cm.Messages("thread1", "")
-	if capturedLeafID != "" {
-		t.Errorf("after completion done: expected empty leafID, got %q", capturedLeafID)
-	}
 }

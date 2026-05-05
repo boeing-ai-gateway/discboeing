@@ -2,7 +2,6 @@ package thread
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -60,8 +58,7 @@ type StoredMessage struct {
 // Each thread is a directory under baseDir containing message files and
 // step JSONL files for replay/recovery.
 type Store struct {
-	baseDir         string
-	browserEventsMu sync.Mutex
+	baseDir string
 }
 
 var ErrMessageExists = errors.New("message already exists")
@@ -543,11 +540,6 @@ func (s *Store) stepEventsPath(threadID, turnID string, step int) string {
 	return filepath.Join(s.turnsDir(threadID), turnID, fmt.Sprintf("step-%03d-events.json", step))
 }
 
-// browserEventsPath returns the path to the append-only browser event log for a step.
-func (s *Store) browserEventsPath(threadID, turnID string, step int) string {
-	return filepath.Join(s.turnsDir(threadID), turnID, fmt.Sprintf("step-%03d-browser.jsonl", step))
-}
-
 // SaveAsyncContinuations persists async continuation metadata for a step.
 func (s *Store) SaveAsyncContinuations(threadID, turnID string, step int, continuations StepAsyncContinuations) error {
 	dir := filepath.Join(s.turnsDir(threadID), turnID)
@@ -606,200 +598,6 @@ func (s *Store) LoadStepEventMessages(threadID, turnID string, step int) (StepEv
 		return StepEventMessages{}, fmt.Errorf("unmarshal step event messages: %w", err)
 	}
 	return events, nil
-}
-
-// AppendBrowserEvent appends one browser event record to the per-step browser log.
-func (s *Store) AppendBrowserEvent(threadID, turnID string, step int, event BrowserEvent) error {
-	dir := filepath.Join(s.turnsDir(threadID), turnID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create turn dir: %w", err)
-	}
-	if event.EventID == "" {
-		event.EventID = generateID()
-	}
-	event.StepIndex = step
-	if event.RecordedAt == nil {
-		now := time.Now().UTC()
-		event.RecordedAt = &now
-	}
-	data, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("marshal browser event: %w", err)
-	}
-	data = append(data, '\n')
-
-	s.browserEventsMu.Lock()
-	defer s.browserEventsMu.Unlock()
-
-	f, err := os.OpenFile(s.browserEventsPath(threadID, turnID, step), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return fmt.Errorf("open browser event log: %w", err)
-	}
-	defer f.Close()
-	if _, err := f.Write(data); err != nil {
-		return fmt.Errorf("append browser event: %w", err)
-	}
-	return nil
-}
-
-// LoadBrowserEvents loads append-only browser event records for a step.
-func (s *Store) LoadBrowserEvents(threadID, turnID string, step int) ([]BrowserEvent, error) {
-	f, err := os.Open(s.browserEventsPath(threadID, turnID, step))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("open browser event log: %w", err)
-	}
-	defer f.Close()
-
-	var events []BrowserEvent
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var event BrowserEvent
-		if err := json.Unmarshal(line, &event); err != nil {
-			continue
-		}
-		events = append(events, event)
-	}
-	if err := scanner.Err(); err != nil {
-		return events, fmt.Errorf("scan browser event log: %w", err)
-	}
-	return events, nil
-}
-
-// LoadAllBrowserEventEntries loads browser events across all persisted turns in
-// a thread so stream reconnects can replay browser activity in the UI.
-func (s *Store) LoadAllBrowserEventEntries(threadID string) ([]BrowserEventEntry, error) {
-	turnsDir := s.turnsDir(threadID)
-	entries, err := os.ReadDir(turnsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read turns dir: %w", err)
-	}
-
-	type turnDirInfo struct {
-		name    string
-		modTime time.Time
-	}
-	turnDirs := make([]turnDirInfo, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return nil, fmt.Errorf("stat turn dir %s: %w", entry.Name(), err)
-		}
-		turnDirs = append(turnDirs, turnDirInfo{
-			name:    entry.Name(),
-			modTime: info.ModTime(),
-		})
-	}
-	sort.Slice(turnDirs, func(i, j int) bool {
-		if turnDirs[i].modTime.Equal(turnDirs[j].modTime) {
-			return turnDirs[i].name < turnDirs[j].name
-		}
-		return turnDirs[i].modTime.Before(turnDirs[j].modTime)
-	})
-
-	var out []BrowserEventEntry
-	for _, turnDir := range turnDirs {
-		pattern := filepath.Join(turnsDir, turnDir.name, "step-*-browser.jsonl")
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("glob browser event logs for turn %s: %w", turnDir.name, err)
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			base := filepath.Base(match)
-			var step int
-			if _, err := fmt.Sscanf(base, "step-%03d-browser.jsonl", &step); err != nil {
-				continue
-			}
-			events, err := s.LoadBrowserEvents(threadID, turnDir.name, step)
-			if err != nil {
-				return nil, err
-			}
-			if len(events) == 0 {
-				continue
-			}
-			result, err := s.LoadStepResult(threadID, turnDir.name, step)
-			if err != nil {
-				return nil, err
-			}
-			assistantMessageID := ""
-			if result != nil {
-				assistantMessageID = strings.TrimSpace(result.AssistantMessageID)
-			}
-			for _, event := range events {
-				out = append(out, BrowserEventEntry{
-					TurnID:             turnDir.name,
-					AssistantMessageID: assistantMessageID,
-					StepIndex:          step,
-					Event:              event,
-				})
-			}
-		}
-	}
-	return out, nil
-}
-
-func (s *Store) browserArtifactDir(threadID string) string {
-	return filepath.Join(s.threadDir(threadID), "artifacts", "browser", "sha256")
-}
-
-// BrowserArtifactURI returns the canonical artifacts:// URI for a thread-local
-// browser artifact path.
-func BrowserArtifactURI(path string) string {
-	path = strings.TrimSpace(filepath.ToSlash(path))
-	path = strings.TrimPrefix(path, "/")
-	if path == "" {
-		return "artifacts://"
-	}
-	return "artifacts://" + path
-}
-
-// SaveBrowserScreenshot stores a screenshot file for one browser event and
-// returns the persisted file reference relative to the thread directory.
-func (s *Store) SaveBrowserScreenshot(threadID, turnID string, step int, eventID string, png []byte) (BrowserEventFile, error) {
-	_ = turnID
-	_ = step
-	_ = eventID
-	if len(png) == 0 {
-		return BrowserEventFile{}, fmt.Errorf("browser screenshot is empty")
-	}
-	dir := s.browserArtifactDir(threadID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return BrowserEventFile{}, fmt.Errorf("create browser artifact dir: %w", err)
-	}
-	sum := sha256.Sum256(png)
-	filename := fmt.Sprintf("%x.png", sum)
-	path := filepath.Join(dir, filename)
-	if _, err := os.Stat(path); err != nil {
-		if !os.IsNotExist(err) {
-			return BrowserEventFile{}, fmt.Errorf("stat browser screenshot: %w", err)
-		}
-		if err := WriteFileAtomic(path, png, 0o644); err != nil {
-			return BrowserEventFile{}, fmt.Errorf("write browser screenshot: %w", err)
-		}
-	}
-	relPath, err := filepath.Rel(s.threadDir(threadID), path)
-	if err != nil {
-		return BrowserEventFile{}, fmt.Errorf("make browser screenshot path relative: %w", err)
-	}
-	return BrowserEventFile{
-		Path:      filepath.ToSlash(relPath),
-		URI:       BrowserArtifactURI(relPath),
-		MediaType: "image/png",
-		Filename:  filename,
-	}, nil
 }
 
 // --- Question/Answer Persistence ---
@@ -954,11 +752,73 @@ type Config struct {
 	// CommunicatedSkillLikeEntries tracks which visible skill-like entries have
 	// already been reported to the LLM for this thread.
 	CommunicatedSkillLikeEntries []CommunicatedSkillLikeEntry `json:"communicatedSkillLikeEntries,omitempty"`
-	// PromptQueue stores queued follow-up prompts waiting to run after the
-	// current completion finishes.
-	PromptQueue []QueuedPrompt `json:"promptQueue,omitempty"`
 	// Metadata carries thread-scoped structured data for UI features such as task threads.
-	Metadata json.RawMessage `json:"metadata,omitempty"`
+	Metadata ConfigMetadata `json:"metadata,omitzero"`
+}
+
+// ConfigMetadata stores durable typed metadata for a thread.
+type ConfigMetadata struct {
+	Type            string             `json:"type,omitempty"`
+	TaskID          string             `json:"taskId,omitempty"`
+	ParentThreadID  string             `json:"parentThreadId,omitempty"`
+	ParentTaskID    string             `json:"parentTaskId,omitempty"`
+	SubagentType    string             `json:"subagentType,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	Prompt          string             `json:"prompt,omitempty"`
+	Model           string             `json:"model,omitempty"`
+	RunInBackground bool               `json:"runInBackground,omitempty"`
+	StartedAt       time.Time          `json:"startedAt,omitzero"`
+	ACPSession      ACPSessionMetadata `json:"acpSession,omitzero"`
+}
+
+// ACPSessionMetadata stores the ACP session state mapped to this Discobot
+// thread. It mirrors ACP's session info without making the core thread package
+// depend on the ACP protocol package.
+type ACPSessionMetadata struct {
+	Meta          map[string]any    `json:"_meta,omitempty"`
+	CWD           string            `json:"cwd,omitempty"`
+	SessionID     string            `json:"sessionId,omitempty"`
+	Title         *string           `json:"title,omitempty"`
+	UpdatedAt     *string           `json:"updatedAt,omitempty"`
+	ResponseMeta  map[string]any    `json:"responseMeta,omitempty"`
+	ConfigOptions []json.RawMessage `json:"configOptions,omitempty"`
+	Modes         json.RawMessage   `json:"modes,omitempty"`
+}
+
+func (m ACPSessionMetadata) IsZero() bool {
+	return len(m.Meta) == 0 &&
+		strings.TrimSpace(m.CWD) == "" &&
+		strings.TrimSpace(m.SessionID) == "" &&
+		m.Title == nil &&
+		m.UpdatedAt == nil &&
+		len(m.ResponseMeta) == 0 &&
+		len(m.ConfigOptions) == 0 &&
+		len(m.Modes) == 0
+}
+
+func (m ConfigMetadata) IsZero() bool {
+	return strings.TrimSpace(m.Type) == "" &&
+		strings.TrimSpace(m.TaskID) == "" &&
+		strings.TrimSpace(m.ParentThreadID) == "" &&
+		strings.TrimSpace(m.ParentTaskID) == "" &&
+		strings.TrimSpace(m.SubagentType) == "" &&
+		strings.TrimSpace(m.Description) == "" &&
+		strings.TrimSpace(m.Prompt) == "" &&
+		strings.TrimSpace(m.Model) == "" &&
+		!m.RunInBackground &&
+		m.StartedAt.IsZero() &&
+		m.ACPSession.IsZero()
+}
+
+func (m ConfigMetadata) RawMessage() json.RawMessage {
+	if m.IsZero() {
+		return nil
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 // CommunicatedSkillLikeEntry records one visible skill-like command that has
@@ -1211,17 +1071,6 @@ func DiffCommunicatedCredentialBindings(
 	return NormalizeCommunicatedCredentialBindings(added), NormalizeCommunicatedCredentialBindings(removed)
 }
 
-// QueuedPrompt stores one queued user submission for a thread.
-type QueuedPrompt struct {
-	ID        string            `json:"id"`
-	CreatedAt time.Time         `json:"createdAt,omitzero"`
-	RunAfter  time.Time         `json:"runAfter,omitzero"`
-	Message   message.UIMessage `json:"message"`
-	Model     string            `json:"model,omitempty"`
-	Reasoning string            `json:"reasoning,omitempty"`
-	Mode      string            `json:"mode,omitempty"`
-}
-
 const (
 	ThreadNameSourceUser      = "user"
 	ThreadNameSourceGenerated = "generated"
@@ -1230,6 +1079,7 @@ const (
 type State string
 
 const (
+	StateNone        State = ""
 	StateInterrupted State = "interrupted"
 	StateCancelled   State = "cancelled"
 )
@@ -1254,11 +1104,6 @@ func (s *Store) SaveConfig(threadID string, cfg Config) error {
 	dir := filepath.Join(s.baseDir, threadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create thread dir: %w", err)
-	}
-	if cfg.PromptQueue == nil {
-		if existing, err := s.LoadConfig(threadID); err == nil {
-			cfg.PromptQueue = existing.PromptQueue
-		}
 	}
 	// Ensure Mode.Value is always set; default to build if empty.
 	if strings.TrimSpace(cfg.Mode.Value) == "" {
@@ -1301,8 +1146,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ActiveCommand                string                          `json:"activeCommand"`
 		CommunicatedCredentials      []CommunicatedCredentialBinding `json:"communicatedCredentials"`
 		CommunicatedSkillLikeEntries []CommunicatedSkillLikeEntry    `json:"communicatedSkillLikeEntries"`
-		PromptQueue                  []QueuedPrompt                  `json:"promptQueue"`
-		Metadata                     json.RawMessage                 `json:"metadata"`
+		Metadata                     ConfigMetadata                  `json:"metadata"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("unmarshal thread config: %w", err)
@@ -1331,190 +1175,8 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ActiveCommand:                strings.TrimSpace(raw.ActiveCommand),
 		CommunicatedCredentials:      NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),
 		CommunicatedSkillLikeEntries: NormalizeCommunicatedSkillLikeEntries(raw.CommunicatedSkillLikeEntries),
-		PromptQueue:                  raw.PromptQueue,
 		Metadata:                     raw.Metadata,
 	}, nil
-}
-
-// AppendQueuedPrompt adds a queued prompt to the end of the thread queue.
-func (s *Store) AppendQueuedPrompt(threadID string, prompt QueuedPrompt) (Config, QueuedPrompt, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, QueuedPrompt{}, err
-	}
-	if prompt.ID == "" {
-		prompt.ID = generateID()
-	}
-	if prompt.CreatedAt.IsZero() {
-		prompt.CreatedAt = time.Now().UTC()
-	}
-	cfg.PromptQueue = append(append([]QueuedPrompt{}, cfg.PromptQueue...), prompt)
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, QueuedPrompt{}, err
-	}
-	return cfg, prompt, nil
-}
-
-// DeleteQueuedPrompt removes one queued prompt by ID.
-func (s *Store) DeleteQueuedPrompt(threadID, promptID string) (Config, bool, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, false, err
-	}
-	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue))
-	removed := false
-	for _, prompt := range cfg.PromptQueue {
-		if prompt.ID == promptID {
-			removed = true
-			continue
-		}
-		nextQueue = append(nextQueue, prompt)
-	}
-	if !removed {
-		return cfg, false, nil
-	}
-	cfg.PromptQueue = nextQueue
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, false, err
-	}
-	return cfg, true, nil
-}
-
-// PopQueuedPrompt removes and returns the next eligible queued prompt.
-// Prompts with RunAfter in the future remain queued and are skipped.
-func (s *Store) PopQueuedPrompt(threadID string) (Config, *QueuedPrompt, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, nil, err
-	}
-	if len(cfg.PromptQueue) == 0 {
-		return cfg, nil, nil
-	}
-
-	now := time.Now().UTC()
-	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue)-1)
-	var prompt *QueuedPrompt
-	for _, queued := range cfg.PromptQueue {
-		if prompt == nil && (queued.RunAfter.IsZero() || !queued.RunAfter.After(now)) {
-			copyPrompt := queued
-			prompt = &copyPrompt
-			continue
-		}
-		nextQueue = append(nextQueue, queued)
-	}
-	if prompt == nil {
-		return cfg, nil, nil
-	}
-	cfg.PromptQueue = nextQueue
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, nil, err
-	}
-	return cfg, prompt, nil
-}
-
-// PrependQueuedPrompt pushes a prompt onto the front of the queue.
-func (s *Store) PrependQueuedPrompt(threadID string, prompt QueuedPrompt) (Config, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, err
-	}
-	if prompt.ID == "" {
-		prompt.ID = generateID()
-	}
-	if prompt.CreatedAt.IsZero() {
-		prompt.CreatedAt = time.Now().UTC()
-	}
-	cfg.PromptQueue = append([]QueuedPrompt{prompt}, cfg.PromptQueue...)
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
-}
-
-// UpdateQueuedPromptRunAfter updates the RunAfter time for one queued prompt.
-// A nil runAfter clears the later schedule.
-func (s *Store) UpdateQueuedPromptRunAfter(threadID, promptID string, runAfter *time.Time) (Config, bool, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, false, err
-	}
-	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue))
-	updated := false
-	for _, prompt := range cfg.PromptQueue {
-		if prompt.ID == promptID {
-			if runAfter == nil {
-				prompt.RunAfter = time.Time{}
-			} else {
-				prompt.RunAfter = runAfter.UTC()
-			}
-			updated = true
-		}
-		nextQueue = append(nextQueue, prompt)
-	}
-	if !updated {
-		return cfg, false, nil
-	}
-	cfg.PromptQueue = nextQueue
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, false, err
-	}
-	return cfg, true, nil
-}
-
-// QueuedPromptUpdate describes editable fields for a queued prompt.
-type QueuedPromptUpdate struct {
-	RunAfter      *time.Time
-	ClearRunAfter bool
-	Message       *message.UIMessage
-	Position      *int
-}
-
-// UpdateQueuedPrompt updates one queued prompt and optionally moves it within
-// the queue. Position is clamped to the valid queue range.
-func (s *Store) UpdateQueuedPrompt(threadID, promptID string, update QueuedPromptUpdate) (Config, bool, error) {
-	cfg, err := s.LoadConfig(threadID)
-	if err != nil {
-		return Config{}, false, err
-	}
-
-	nextQueue := make([]QueuedPrompt, 0, len(cfg.PromptQueue))
-	var updatedPrompt QueuedPrompt
-	updated := false
-	for _, prompt := range cfg.PromptQueue {
-		if prompt.ID != promptID {
-			nextQueue = append(nextQueue, prompt)
-			continue
-		}
-		if update.ClearRunAfter {
-			prompt.RunAfter = time.Time{}
-		} else if update.RunAfter != nil {
-			prompt.RunAfter = update.RunAfter.UTC()
-		}
-		if update.Message != nil {
-			prompt.Message = *update.Message
-		}
-		updatedPrompt = prompt
-		updated = true
-		if update.Position == nil {
-			nextQueue = append(nextQueue, prompt)
-		}
-	}
-	if !updated {
-		return cfg, false, nil
-	}
-
-	if update.Position != nil {
-		position := min(max(*update.Position, 0), len(nextQueue))
-		nextQueue = append(nextQueue, QueuedPrompt{})
-		copy(nextQueue[position+1:], nextQueue[position:])
-		nextQueue[position] = updatedPrompt
-	}
-
-	cfg.PromptQueue = nextQueue
-	if err := s.SaveConfig(threadID, cfg); err != nil {
-		return Config{}, false, err
-	}
-	return cfg, true, nil
 }
 
 // FindLeaf returns the leaf message ID for a thread — the message that is not

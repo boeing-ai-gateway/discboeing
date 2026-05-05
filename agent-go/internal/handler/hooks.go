@@ -116,7 +116,7 @@ func (h *Handler) RerunHook(w http.ResponseWriter, r *http.Request) {
 
 	if result.Eval.ShouldReprompt {
 		threadID := chi.URLParam(r, "id")
-		if err := h.startHookFailureReprompt(threadID, result.Eval); err != nil {
+		if err := h.hookManager.StartFailureReprompt(threadID, result.Eval); err != nil {
 			log.Printf("hooks: failed to start re-prompt for manual rerun: %v", err)
 		}
 	}

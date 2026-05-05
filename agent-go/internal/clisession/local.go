@@ -30,37 +30,25 @@ func (s *Local) ListCommands(_ context.Context) ([]agent.Command, error) {
 }
 
 func (s *Local) ListThreads(_ context.Context) ([]api.Thread, error) {
-	threadIDs, err := s.agent.ListThreads()
+	infos, err := s.agent.ListThreadInfos()
 	if err != nil {
 		return nil, err
 	}
-	threads := make([]api.Thread, 0, len(threadIDs))
-	for _, threadID := range threadIDs {
-		cfg, _ := s.store.LoadConfig(threadID)
-		pending := false
-		if state, err := s.store.LoadTurnState(threadID); err == nil && state != nil {
-			pending = state.Phase == thread.PhaseWaitingForAnswer
-		}
-		mode := "build"
-		if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan") {
-			mode = "plan"
-		}
-		state := string(cfg.LastTurnState)
-		if interrupted, err := s.agent.HasInterruptedTurn(threadID); err == nil && interrupted {
-			state = string(thread.StateInterrupted)
-		}
+	threads := make([]api.Thread, 0, len(infos))
+	for _, info := range infos {
 		threads = append(threads, api.Thread{
-			ID:              threadID,
-			Name:            strings.TrimSpace(cfg.Name),
-			CWD:             strings.TrimSpace(cfg.CWD),
-			LastMessage:     strings.TrimSpace(cfg.LastMessage),
-			ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
-			Model:           cfg.Model,
-			Reasoning:       string(cfg.Reasoning),
-			Mode:            mode,
-			State:           state,
-			PendingQuestion: pending,
-			ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
+			ID:              info.ID,
+			Name:            strings.TrimSpace(info.Name),
+			CWD:             strings.TrimSpace(info.CWD),
+			LastMessage:     strings.TrimSpace(info.LastMessage),
+			ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
+			Model:           info.Model,
+			Reasoning:       info.Reasoning,
+			Mode:            info.Mode,
+			State:           string(info.State),
+			PendingQuestion: info.PendingQuestion,
+			ActiveCommand:   strings.TrimSpace(info.ActiveCommand),
+			Metadata:        info.Metadata,
 		})
 	}
 	return threads, nil
@@ -80,18 +68,8 @@ func (s *Local) GetThread(ctx context.Context, threadID string) (api.Thread, err
 }
 
 func (s *Local) UpdateThread(_ context.Context, threadID string, req api.UpdateThreadRequest) (api.Thread, error) {
-	cfg, err := s.store.LoadConfig(threadID)
-	if err != nil {
-		return api.Thread{}, err
-	}
-	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
-		cfg.Name = trimmedName
-		cfg.NameSource = thread.ThreadNameSourceUser
-	}
-	if trimmedCWD := strings.TrimSpace(req.CWD); trimmedCWD != "" {
-		cfg.CWD = trimmedCWD
-	}
-	if err := s.store.SaveConfig(threadID, cfg); err != nil {
+	name := strings.TrimSpace(req.Name)
+	if _, err := s.agent.UpdateThread(context.Background(), threadID, agent.UpdateThreadRequest{Name: &name}); err != nil {
 		return api.Thread{}, err
 	}
 	return s.GetThread(context.Background(), threadID)

@@ -17,7 +17,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/obot-platform/discobot/agent-go/promptqueue"
 )
 
 const defaultChatStreamPingInterval = 15 * time.Second
@@ -33,7 +33,7 @@ func completionIDFromInProgressError(err error) string {
 	return ""
 }
 
-// PostChat handles POST /threads/{id}/chat — starts a completion and streams the response via SSE.
+// PostChat handles POST /threads/{id}/chat — starts or queues a completion and returns its status.
 func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 
@@ -52,14 +52,13 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		runAfter = parsedRunAfter.UTC()
 	}
 
-	leafID, userMessage, err := resolveLeafAndUserMessage(req.Messages)
+	_, userMessage, err := resolveLeafAndUserMessage(req.Messages)
 	if err != nil {
 		h.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	promptReq := agent.PromptRequest{
-		LeafID:       leafID,
 		Model:        req.Model,
 		Reasoning:    req.Reasoning,
 		Mode:         req.Mode,
@@ -70,46 +69,56 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		Metadata:     userMessage.Metadata,
 	}
 
-	// Check for active completion.
-	if activeID := h.completions.ActiveCompletionID(threadID); activeID != "" {
-		if h.defaultAgent == nil || h.defaultAgent.Store() == nil {
-			h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
-				Error:        "completion_in_progress",
-				CompletionID: activeID,
+	if h.promptQueue != nil {
+		result, err := h.promptQueue.StartOrQueue(threadID, promptReq, promptqueue.FromMessage(userMessage, req.Model, req.Reasoning, req.Mode, runAfter))
+		if err != nil {
+			if h.writeChatStartError(w, err) {
+				return
+			}
+			if errors.Is(err, agent.ErrPendingQuestionRequiresAnswer) {
+				questionID := ""
+				pending, pendingErr := h.conversations.PendingQuestion(threadID)
+				if pendingErr != nil {
+					h.Error(w, http.StatusInternalServerError, pendingErr.Error())
+					return
+				}
+				if pending != nil {
+					questionID = pending.ApprovalID
+				}
+				h.JSON(w, http.StatusConflict, api.ChatTurnStateConflictResponse{
+					Error:      "pending_question_requires_answer",
+					Message:    "This thread is waiting for an answer to an earlier question before sending a new message.",
+					QuestionID: questionID,
+				})
+				return
+			}
+			h.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if result.Status == "queued" {
+			h.JSON(w, http.StatusAccepted, api.ChatStartedResponse{
+				Status:         "queued",
+				QueuedPromptID: result.QueuedPromptID,
 			})
 			return
 		}
-
-		cfg, queuedPrompt, queueErr := h.enqueuePrompt(threadID, queuedPromptFromRequest(userMessage, req.Model, req.Reasoning, req.Mode, runAfter))
-		if queueErr != nil {
-			h.Error(w, http.StatusInternalServerError, queueErr.Error())
-			return
-		}
-		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
-
-		h.JSON(w, http.StatusAccepted, api.ChatStartedResponse{
-			Status:         "queued",
-			QueuedPromptID: queuedPrompt.ID,
-		})
+		h.writeChatStarted(w, result.CompletionID)
 		return
 	}
 
+	// Queue support is optional in tests; without it, preserve the direct start path.
+	if activeID := h.conversations.ActiveCompletionID(threadID); activeID != "" {
+		h.JSON(w, http.StatusConflict, api.ChatConflictResponse{
+			Error:        "completion_in_progress",
+			CompletionID: activeID,
+		})
+		return
+	}
 	if !runAfter.IsZero() {
-		cfg, queuedPrompt, queueErr := h.enqueuePrompt(threadID, queuedPromptFromRequest(userMessage, req.Model, req.Reasoning, req.Mode, runAfter))
-		if queueErr != nil {
-			h.Error(w, http.StatusInternalServerError, queueErr.Error())
-			return
-		}
-		h.completions.EmitChunkIfActive(threadID, thread.UpdateChunkFromConfig(threadID, cfg))
-		h.JSON(w, http.StatusAccepted, api.ChatStartedResponse{
-			Status:         "queued",
-			QueuedPromptID: queuedPrompt.ID,
-		})
+		h.Error(w, http.StatusNotImplemented, "prompt queue unavailable")
 		return
 	}
-
-	// Check for persisted turn state that blocks new prompts.
-	pendingQuestion, err := h.completions.PendingQuestion(threadID)
+	pendingQuestion, err := h.conversations.PendingQuestion(threadID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -122,62 +131,28 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	interrupted, err := h.completions.HasInterruptedTurn(threadID)
+	interrupted, err := h.conversations.HasInterruptedTurn(threadID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if interrupted {
-		completionID, resumeErr := h.completions.Resume(threadID, promptReq)
+		completionID, resumeErr := h.conversations.Resume(threadID, promptReq)
 		if resumeErr != nil {
-			if h.writeChatStartError(w, resumeErr) {
-				return
-			}
 			h.Error(w, http.StatusInternalServerError, resumeErr.Error())
 			return
 		}
 		h.writeChatStarted(w, completionID)
 		return
 	}
-
-	completionID, err := h.completions.Chat(threadID, promptReq)
+	completionID, err := h.conversations.Chat(threadID, promptReq)
 	if err != nil {
 		if h.writeChatStartError(w, err) {
-			return
-		}
-		if errors.Is(err, agent.ErrInterruptedTurnRequiresResume) {
-			completionID, resumeErr := h.completions.Resume(threadID, promptReq)
-			if resumeErr != nil {
-				if h.writeChatStartError(w, resumeErr) {
-					return
-				}
-				h.Error(w, http.StatusInternalServerError, resumeErr.Error())
-				return
-			}
-			h.writeChatStarted(w, completionID)
-			return
-		}
-		if errors.Is(err, agent.ErrPendingQuestionRequiresAnswer) {
-			questionID := ""
-			pending, pendingErr := h.completions.PendingQuestion(threadID)
-			if pendingErr != nil {
-				h.Error(w, http.StatusInternalServerError, pendingErr.Error())
-				return
-			}
-			if pending != nil {
-				questionID = pending.ApprovalID
-			}
-			h.JSON(w, http.StatusConflict, api.ChatTurnStateConflictResponse{
-				Error:      "pending_question_requires_answer",
-				Message:    "This thread is waiting for an answer to an earlier question before sending a new message.",
-				QuestionID: questionID,
-			})
 			return
 		}
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
 	h.writeChatStarted(w, completionID)
 }
 
@@ -210,25 +185,25 @@ func (h *Handler) writeChatStartError(w http.ResponseWriter, err error) bool {
 //   - ping while the stream is otherwise idle
 //
 // Unlike the previous one-completion model, this endpoint stays connected until
-// the client disconnects so later completions on the same thread can arrive on
+// the client disconnects so later conversations on the same thread can arrive on
 // the same SSE connection. There is no terminal "done" event; completion
 // boundaries are internal and the connection remains reusable for later turns.
 func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 
-	snapshot := h.completions.PollChunks(threadID, 0)
+	snapshot := h.conversations.PollChunks(threadID, 0)
 	if snapshot == nil {
-		interrupted, err := h.completions.HasInterruptedTurn(threadID)
+		interrupted, err := h.conversations.HasInterruptedTurn(threadID)
 		if err != nil {
 			h.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if interrupted {
-			if _, err := h.completions.Resume(threadID, agent.PromptRequest{}); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
+			if _, err := h.conversations.Resume(threadID, agent.PromptRequest{}); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
 				h.Error(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			snapshot = h.completions.PollChunks(threadID, 0)
+			snapshot = h.conversations.PollChunks(threadID, 0)
 		}
 	}
 	freshRequest := false
@@ -249,7 +224,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	var historyMessages []message.UIMessage
 	if freshRequest {
 		var err error
-		historyMessages, err = h.completions.Messages(threadID, "")
+		historyMessages, err = h.conversations.Messages(threadID, "")
 		if err != nil {
 			h.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -279,7 +254,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	ephemeralCh, unsubscribeEphemeral := h.completions.SubscribeEphemeral()
+	ephemeralCh, unsubscribeEphemeral := h.conversations.SubscribeEphemeral()
 	defer unsubscribeEphemeral()
 
 	currentCompletionID := ""
@@ -302,8 +277,8 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeEvent("", "history-end", json.RawMessage(`{}`))
-		if h.defaultAgent != nil && h.defaultAgent.Store() != nil {
-			browserEvents, err := h.defaultAgent.Store().LoadAllBrowserEventEntries(threadID)
+		if h.browserManager != nil {
+			browserEvents, err := h.browserManager.EventEntries(threadID)
 			if err == nil {
 				for _, entry := range browserEvents {
 					data, err := json.Marshal(browserEventChunkPayload{
@@ -358,7 +333,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		if currentCompletionID == "" {
 			waitCtx, cancel := context.WithTimeout(r.Context(), h.chatPingEvery)
-			result := h.completions.WaitNextCompletion(waitCtx, threadID, lastSeenCompletionID)
+			result := h.conversations.WaitNextCompletion(waitCtx, threadID, lastSeenCompletionID)
 			timedOut := errors.Is(waitCtx.Err(), context.DeadlineExceeded)
 			cancel()
 
@@ -393,7 +368,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		waitCtx, cancel := context.WithTimeout(r.Context(), h.chatPingEvery)
-		result := h.completions.WaitChunks(waitCtx, threadID, currentCompletionID, offset)
+		result := h.conversations.WaitChunks(waitCtx, threadID, currentCompletionID, offset)
 		timedOut := errors.Is(waitCtx.Err(), context.DeadlineExceeded)
 		cancel()
 
@@ -518,7 +493,7 @@ func parseSSEEventID(id string) (completionID string, offset int, ok bool) {
 // Unlike ChatStream, this never opens an SSE connection; it is safe to poll frequently.
 func (h *Handler) ChatStatus(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
-	isRunning := h.completions.ActiveCompletionID(threadID) != ""
+	isRunning := h.conversations.ActiveCompletionID(threadID) != ""
 	h.JSON(w, http.StatusOK, api.ChatStatusResponse{IsRunning: isRunning})
 }
 
@@ -526,7 +501,7 @@ func (h *Handler) ChatStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CancelChat(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 
-	completionID, ok := h.completions.Cancel(threadID)
+	completionID, ok := h.conversations.Cancel(threadID)
 	if !ok {
 		h.JSON(w, http.StatusConflict, api.NoActiveCompletionResponse{
 			Error: "no_active_completion",
@@ -546,7 +521,7 @@ func (h *Handler) GetQuestion(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 	questionID := chi.URLParam(r, "questionId")
 
-	pending, err := h.completions.PendingQuestion(threadID)
+	pending, err := h.conversations.PendingQuestion(threadID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -588,7 +563,7 @@ func (h *Handler) GetQuestion(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetPendingQuestion(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 
-	pending, err := h.completions.PendingQuestion(threadID)
+	pending, err := h.conversations.PendingQuestion(threadID)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -630,7 +605,7 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Persist the answer.
-	if err := h.completions.SubmitAnswer(threadID, questionID, req); err != nil {
+	if err := h.conversations.SubmitAnswer(threadID, questionID, req); err != nil {
 		h.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -641,7 +616,7 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 	h.answeredMu.Unlock()
 
 	// Resume the interrupted turn.
-	completionID, chatErr := h.completions.Resume(threadID, agent.PromptRequest{})
+	completionID, chatErr := h.conversations.Resume(threadID, agent.PromptRequest{})
 	if chatErr != nil {
 		if existingID := completionIDFromInProgressError(chatErr); existingID != "" {
 			completionID = existingID
