@@ -143,6 +143,7 @@ RUN sed -i \
     # Seed bundled code-server extensions
     && mkdir -p /opt/discobot/code-server-defaults/extensions \
     && code-server --install-extension vscodevim.vim --extensions-dir /opt/discobot/code-server-defaults/extensions \
+    && rm -f /opt/discobot/code-server-defaults/extensions/extensions.json \
     # Install Claude Code CLI and OpenCode CLI
     && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp pnpm opencode-ai \
     # Install latest stable Go

@@ -16,13 +16,30 @@ function log(...args) {
 	console.log("[discobot-theme]", ...args);
 }
 
+function getWorkspaceFolder() {
+	return vscode.workspace.workspaceFolders?.[0] ?? null;
+}
+
 function getThemeSyncUri() {
-	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+	const workspaceFolder = getWorkspaceFolder();
 	if (!workspaceFolder) {
 		return null;
 	}
 
 	return vscode.Uri.joinPath(workspaceFolder.uri, themeSyncFilePath);
+}
+
+function getThemeSyncPattern() {
+	const workspaceFolder = getWorkspaceFolder();
+	if (!workspaceFolder) {
+		return themeSyncFilePath;
+	}
+
+	return new vscode.RelativePattern(workspaceFolder, themeSyncFilePath);
+}
+
+function delay(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function activate(context) {
@@ -82,23 +99,32 @@ function activate(context) {
 		await applyTheme(payload.theme);
 	};
 
-	const watcher = vscode.workspace.createFileSystemWatcher(themeSyncFilePath);
-	watcher.onDidCreate(() => {
+	const watcher = vscode.workspace.createFileSystemWatcher(getThemeSyncPattern());
+	watcher.onDidCreate((uri) => {
+		log("theme sync file created", uri.toString());
 		void syncThemeFromFile().catch((error) => {
 			console.error("[discobot-theme] failed to sync created theme file", error);
 		});
 	});
-	watcher.onDidChange(() => {
+	watcher.onDidChange((uri) => {
+		log("theme sync file changed", uri.toString());
 		void syncThemeFromFile().catch((error) => {
 			console.error("[discobot-theme] failed to sync changed theme file", error);
 		});
 	});
-	watcher.onDidDelete(() => {
-		log("theme sync file deleted");
+	watcher.onDidDelete((uri) => {
+		log("theme sync file deleted", uri.toString());
 	});
 	context.subscriptions.push(watcher);
 
-	void syncThemeFromFile().catch((error) => {
+	void (async () => {
+		for (const retryDelay of [0, 250, 1000, 2500]) {
+			if (retryDelay > 0) {
+				await delay(retryDelay);
+			}
+			await syncThemeFromFile();
+		}
+	})().catch((error) => {
 		console.error("[discobot-theme] initial theme sync failed", error);
 	});
 }
