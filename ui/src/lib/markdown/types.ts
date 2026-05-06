@@ -18,10 +18,12 @@ export type HighlightResult = {
 	tokens: HighlightToken[][];
 };
 
+export type CodeTheme = string | object;
+
 export type HighlightOptions = {
 	code: string;
 	language: any;
-	themes: [string, string];
+	themes: [CodeTheme, CodeTheme];
 };
 
 export type MathPlugin = {
@@ -42,11 +44,11 @@ export type CjkPlugin = {
 
 export type CodeHighlighterPlugin = {
 	getSupportedLanguages?: () => string[];
-	getThemes?: () => [string, string];
-	highlight: (
+	getThemes?: () => [CodeTheme, CodeTheme];
+	highlight(
 		options: HighlightOptions,
 		callback?: (result: HighlightResult) => void,
-	) => HighlightResult | null;
+	): HighlightResult | null;
 	name: "shiki";
 	supportsLanguage?: (language: any) => boolean;
 	type: "code-highlighter";

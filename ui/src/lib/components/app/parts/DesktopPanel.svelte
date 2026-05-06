@@ -199,7 +199,7 @@
 			}
 		};
 
-		void import("@novnc/novnc/lib/rfb")
+		void import("@novnc/novnc")
 			.then((module) => {
 				if (disposed || reconnectAttempt !== reconnectVersion) {
 					return;

@@ -4,11 +4,11 @@
 	import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
-	import GithubIcon from "@lucide/svelte/icons/github";
 	import PackageIcon from "@lucide/svelte/icons/package";
 	import { onDestroy, onMount, tick } from "svelte";
 	import type { Workspace } from "$lib/api-types";
 	import type { WorkspaceSelectionResult } from "$lib/components/app/conversation-composer.types";
+	import GithubIcon from "$lib/components/ui/icons/GithubIcon.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { isDesktopShell, pickDirectory } from "$lib/shell";
@@ -41,6 +41,7 @@
 	let workspaceValidationRequestId = 0;
 	let workspaceSuggestionsCloseTimeout: ReturnType<typeof setTimeout> | null =
 		null;
+	let destroyed = false;
 
 	const availableWorkspaces = $derived.by(() => workspaces.list);
 	const loadingWorkspaces = $derived.by(() => workspaces.status === "loading");
@@ -255,6 +256,7 @@
 			return;
 		}
 
+		const currentSourceType = workspaceSourceType;
 		clearWorkspaceValidationDebounce();
 		sessionView.setPendingWorkspaceValidating(true);
 		const requestId = workspaceValidationRequestId + 1;
@@ -264,22 +266,22 @@
 			try {
 				const result = await workspaces.validate(
 					currentInput,
-					workspaceSourceType,
+					currentSourceType,
 				);
 
-				if (workspaceValidationRequestId !== requestId) {
+				if (destroyed || workspaceValidationRequestId !== requestId) {
 					return;
 				}
 
 				sessionView.setPendingWorkspaceValidation(result);
 			} catch (error) {
-				if (workspaceValidationRequestId !== requestId) {
+				if (destroyed || workspaceValidationRequestId !== requestId) {
 					return;
 				}
 
 				sessionView.setPendingWorkspaceValidation({
 					path: currentInput,
-					sourceType: workspaceSourceType,
+					sourceType: currentSourceType,
 					valid: false,
 					classification: "invalid",
 					error:
@@ -289,7 +291,7 @@
 					suggestions: [],
 				});
 			} finally {
-				if (workspaceValidationRequestId === requestId) {
+				if (!destroyed && workspaceValidationRequestId === requestId) {
 					sessionView.setPendingWorkspaceValidating(false);
 				}
 			}
@@ -590,6 +592,9 @@
 		void (async () => {
 			if (workspaces.status === "idle") {
 				await workspaces.refresh();
+				if (destroyed) {
+					return;
+				}
 			}
 			syncPendingWorkspaceSelection();
 			syncPendingWorkspaceBranch();
@@ -636,6 +641,7 @@
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		clearWorkspaceValidationDebounce();
 		clearWorkspaceSuggestionsCloseTimeout();
 	});

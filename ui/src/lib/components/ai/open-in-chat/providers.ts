@@ -2,8 +2,8 @@ import type { Component } from "svelte";
 import BotMessageSquareIcon from "@lucide/svelte/icons/bot-message-square";
 import BracesIcon from "@lucide/svelte/icons/braces";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
-import GithubIcon from "@lucide/svelte/icons/github";
 import SparklesIcon from "@lucide/svelte/icons/sparkles";
+import CursorIcon from "$lib/components/ui/icons/CursorIcon.svelte";
 
 export type OpenInProvider =
 	| "chatgpt"
@@ -48,7 +48,7 @@ export const providers: Record<OpenInProvider, ProviderMeta> = {
 	},
 	cursor: {
 		title: "Open in Cursor",
-		icon: GithubIcon,
+		icon: CursorIcon,
 		createUrl: (text) => {
 			const url = new URL("https://cursor.com/link/prompt");
 			url.searchParams.set("text", text);

@@ -1,6 +1,4 @@
-import "../../../../test/setup.js";
-import assert from "node:assert/strict";
-import test from "node:test";
+import { expect, test } from "vitest";
 
 import { parseMarkdownToHast } from "./pipeline";
 import { renderMarkdownTree } from "./render-dom";
@@ -23,21 +21,21 @@ test("renderMarkdownTree keeps loose ordered and unordered list markers outside 
 `);
 
 	const orderedList = container.querySelector("ol");
-	assert.ok(orderedList);
-	assert.match(orderedList.className, /list-outside/);
-	assert.match(orderedList.className, /list-decimal/);
-	assert.match(orderedList.className, /pl-6/);
-	assert.doesNotMatch(orderedList.className, /list-inside/);
+	expect(orderedList).toBeTruthy();
+	expect(orderedList!.className).toMatch(/list-outside/);
+	expect(orderedList!.className).toMatch(/list-decimal/);
+	expect(orderedList!.className).toMatch(/pl-6/);
+	expect(orderedList!.className).not.toMatch(/list-inside/);
 
 	const unorderedList = container.querySelector("ul");
-	assert.ok(unorderedList);
-	assert.match(unorderedList.className, /list-outside/);
-	assert.match(unorderedList.className, /list-disc/);
-	assert.match(unorderedList.className, /pl-6/);
-	assert.doesNotMatch(unorderedList.className, /list-inside/);
+	expect(unorderedList).toBeTruthy();
+	expect(unorderedList!.className).toMatch(/list-outside/);
+	expect(unorderedList!.className).toMatch(/list-disc/);
+	expect(unorderedList!.className).toMatch(/pl-6/);
+	expect(unorderedList!.className).not.toMatch(/list-inside/);
 
-	const orderedListItem = orderedList.querySelector("li");
-	assert.ok(orderedListItem?.querySelector("p"));
+	const orderedListItem = orderedList!.querySelector("li");
+	expect(orderedListItem?.querySelector("p")).toBeTruthy();
 });
 
 test("renderMarkdownTree omits the default text label for unlabeled code fences", () => {
@@ -46,8 +44,8 @@ test("renderMarkdownTree omits the default text label for unlabeled code fences"
 		'[data-streamdown="code-block-header"]',
 	);
 
-	assert.ok(header);
-	assert.equal(header?.textContent?.trim(), "");
+	expect(header).toBeTruthy();
+	expect(header?.textContent?.trim()).toBe("");
 });
 
 test("renderMarkdownTree shows explicit code fence languages", () => {
@@ -56,8 +54,8 @@ test("renderMarkdownTree shows explicit code fence languages", () => {
 		'[data-streamdown="code-block-header"]',
 	);
 
-	assert.ok(header);
-	assert.equal(header?.textContent?.trim(), "yaml");
+	expect(header).toBeTruthy();
+	expect(header?.textContent?.trim()).toBe("yaml");
 });
 
 test("renderMarkdownTree renders YAML front matter as a table", () => {
@@ -74,7 +72,7 @@ metadata:
 # Hello`);
 
 	const table = container.querySelector("table");
-	assert.ok(table);
+	expect(table).toBeTruthy();
 
 	const rows = Array.from(table?.querySelectorAll("tr") ?? []).map((row) =>
 		Array.from(row.querySelectorAll("th, td")).map(
@@ -82,7 +80,7 @@ metadata:
 		),
 	);
 
-	assert.deepEqual(rows, [
+	expect(rows).toEqual([
 		["Field", "Value"],
 		["title", "Release notes"],
 		["draft", "false"],
@@ -91,8 +89,8 @@ metadata:
 	]);
 
 	const heading = container.querySelector("h1");
-	assert.ok(heading);
-	assert.equal(heading?.textContent?.trim(), "Hello");
+	expect(heading).toBeTruthy();
+	expect(heading?.textContent?.trim()).toBe("Hello");
 });
 
 test("renderMarkdownTree falls back to a YAML code block for invalid front matter", () => {
@@ -106,10 +104,10 @@ title: [broken
 		'[data-streamdown="code-block-body"]',
 	);
 
-	assert.ok(header);
-	assert.equal(header?.textContent?.trim(), "yaml");
-	assert.ok(codeBlock);
-	assert.match(codeBlock?.textContent ?? "", /title: \[broken/);
+	expect(header).toBeTruthy();
+	expect(header?.textContent?.trim()).toBe("yaml");
+	expect(codeBlock).toBeTruthy();
+	expect(codeBlock?.textContent ?? "").toMatch(/title: \[broken/);
 });
 
 test("renderMarkdownTree falls back to plain text for unsupported code fence languages", () => {
@@ -136,9 +134,9 @@ test("renderMarkdownTree falls back to plain text for unsupported code fence lan
 		'[data-streamdown="code-block-body"]',
 	);
 
-	assert.ok(header);
-	assert.equal(header?.textContent?.trim(), "gitignore");
-	assert.ok(codeBlock);
-	assert.match(codeBlock?.textContent ?? "", /dist\//);
-	assert.match(codeBlock?.textContent ?? "", /\.env/);
+	expect(header).toBeTruthy();
+	expect(header?.textContent?.trim()).toBe("gitignore");
+	expect(codeBlock).toBeTruthy();
+	expect(codeBlock?.textContent ?? "").toMatch(/dist\//);
+	expect(codeBlock?.textContent ?? "").toMatch(/\.env/);
 });

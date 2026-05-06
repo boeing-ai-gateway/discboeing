@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import devtoolsJson from "vite-plugin-devtools-json";
 import tailwindcss from "@tailwindcss/vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, type Plugin } from "vite";
@@ -85,16 +84,10 @@ function trackSSRBuild(): Plugin {
 }
 
 export default defineConfig(() => ({
-	plugins: [
-		trackSSRBuild(),
-		fixNoVncCjs(),
-		sveltekit(),
-		tailwindcss(),
-		devtoolsJson(),
-	],
+	plugins: [trackSSRBuild(), fixNoVncCjs(), sveltekit(), tailwindcss()],
 	test: {
 		environment: "jsdom",
-		include: ["src/lib/**/*.vitest.ts"],
+		include: ["src/lib/**/*.vitest.ts", "src/lib/markdown/render-dom.test.ts"],
 	},
 	server: { port: 3100, strictPort: true },
 	preview: { port: 3100, strictPort: true },
@@ -107,34 +100,15 @@ export default defineConfig(() => ({
 		// Increase chunk size warning limit for the Svelte UI bundle.
 		chunkSizeWarningLimit: 4000,
 		rollupOptions: {
-			// Limit parallel file reads to reduce peak memory during the build.
-			maxParallelFileOps: 20,
 			onwarn(warning, defaultHandler) {
 				defaultHandler(warning);
 			},
 		},
 	},
 	optimizeDeps: {
-		include: ["@novnc/novnc/lib/rfb"],
-		esbuildOptions: {
-			plugins: [
-				{
-					name: "fix-novnc-cjs",
-					setup(build) {
-						build.onLoad(
-							{ filter: /browser\.js$/, namespace: "file" },
-							(args) => {
-								if (!isNoVncBrowserModule(args.path)) return;
-								const code = readFileSync(args.path, "utf-8");
-								return {
-									contents: patchNoVncBrowserCode(code),
-									loader: "js",
-								};
-							},
-						);
-					},
-				},
-			],
+		include: ["@novnc/novnc"],
+		rolldownOptions: {
+			plugins: [fixNoVncCjs()],
 		},
 	},
 }));
