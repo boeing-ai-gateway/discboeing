@@ -3,7 +3,10 @@
 	import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 	import CircleXIcon from "@lucide/svelte/icons/circle-x";
 	import CopyIcon from "@lucide/svelte/icons/copy";
+	import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
+	import { api } from "$lib/api-client";
+	import type { SessionCredentialAssignment } from "$lib/api-types";
 	import {
 		ToolContent,
 		ToolHeaderControls,
@@ -26,9 +29,15 @@
 		shortenPath,
 	} from "./utils";
 
-	let { toolPart, isRaw, onToggleRaw }: ToolRendererComponentProps = $props();
+	let {
+		toolPart,
+		sessionId = null,
+		isRaw,
+		onToggleRaw,
+	}: ToolRendererComponentProps = $props();
 	let copiedTarget = $state<"command" | "stdout" | null>(null);
 	let copyTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
+	let sessionAssignments = $state<SessionCredentialAssignment[]>([]);
 
 	const isStreaming = $derived.by(
 		() =>
@@ -65,6 +74,51 @@
 	const executionError = $derived.by(
 		() => toolPart.errorText || validOutput?.stderr,
 	);
+	const credentialUses = $derived.by(() => validInput?.credentialUses ?? []);
+	const hasCredentialUses = $derived.by(() => credentialUses.length > 0);
+	const credentialUseDetails = $derived.by(() =>
+		credentialUses.map((binding) => {
+			const assignment = sessionAssignments.find(
+				(item) => item.sessionCredentialId === binding.credentialId,
+			);
+			const approvedUse = assignment?.uses?.find(
+				(use) => use.id === binding.useId,
+			);
+			return {
+				...binding,
+				credentialName:
+					assignment?.credential.name ??
+					assignment?.credentialId ??
+					binding.credentialId,
+				useDescription: approvedUse?.description,
+			};
+		}),
+	);
+
+	$effect(() => {
+		if (!sessionId || !hasCredentialUses) {
+			sessionAssignments = [];
+			return;
+		}
+
+		let cancelled = false;
+		api
+			.getSessionCredentials(sessionId)
+			.then((response) => {
+				if (!cancelled) {
+					sessionAssignments = response.credentials;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					sessionAssignments = [];
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	async function copyToClipboard(
 		target: "command" | "stdout",
@@ -95,14 +149,30 @@
 
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
 	<CollapsibleTrigger
-		class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground"
+		class={cn(
+			"flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground",
+			hasCredentialUses && "text-amber-700 dark:text-amber-300",
+		)}
 	>
-		<TerminalIcon class="size-4 shrink-0 text-muted-foreground" />
+		<TerminalIcon
+			class={cn(
+				"size-4 shrink-0 text-muted-foreground",
+				hasCredentialUses && "text-amber-600 dark:text-amber-300",
+			)}
+		/>
 		<span class="truncate font-medium text-sm">
 			{headerDescription ||
 				headerCommand ||
 				(isStreaming ? "Loading command details..." : "Command")}
 		</span>
+		{#if hasCredentialUses}
+			<span
+				class="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700 text-xs dark:text-amber-300"
+			>
+				<KeyRoundIcon class="size-3" />
+				Credential
+			</span>
+		{/if}
 		<ToolHeaderStatus state={toolPart.state} />
 	</CollapsibleTrigger>
 	<ToolHeaderControls {isRaw} {onToggleRaw} />
@@ -133,6 +203,41 @@
 		</div>
 	{:else}
 		<div class="space-y-4 p-4 pt-3">
+			{#if hasCredentialUses}
+				<div
+					class="space-y-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-950 text-sm dark:text-amber-100"
+				>
+					<div class="flex items-center gap-2 font-medium">
+						<KeyRoundIcon class="size-4" />
+						<span>Credential access used</span>
+					</div>
+					<ul class="space-y-2">
+						{#each credentialUseDetails as binding (`${binding.credentialId}:${binding.useId}:${binding.envVar}`)}
+							<li class="space-y-1 rounded-md bg-background/60 p-2">
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="font-medium">{binding.credentialName}</span>
+									<span class="font-mono text-xs text-current/70">
+										→ {binding.envVar}
+									</span>
+								</div>
+								<div class="text-current/80 text-xs">
+									{#if binding.useDescription}
+										Used for: {binding.useDescription}
+									{:else}
+										Approved use ID: <span class="font-mono"
+											>{binding.useId}</span
+										>
+									{/if}
+								</div>
+								<div class="font-mono text-current/60 text-[11px]">
+									Credential ID: {binding.credentialId}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+
 			<div class="space-y-2">
 				<div class="flex flex-wrap items-center gap-2">
 					{#if validInput?.run_in_background}

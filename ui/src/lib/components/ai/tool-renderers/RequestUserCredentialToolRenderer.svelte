@@ -251,13 +251,58 @@
 		return "";
 	});
 	const wasRejected = $derived.by(() => rejectionSummary !== null);
+	const grantedCredentialDetails = $derived.by(() =>
+		grantedCredentials.map((granted) => {
+			const assignment = sessionAssignments.find(
+				(item) => item.sessionCredentialId === granted.credentialId,
+			);
+			const request = requestedCredentials.find(
+				(item) => item.envVar === granted.envVar,
+			);
+			return {
+				...granted,
+				credentialName:
+					assignment?.credential.name ??
+					assignment?.credentialId ??
+					granted.name ??
+					granted.credentialId,
+				justification: request?.justification.trim() ?? "",
+				uses: granted.approvedUses.map((use) => {
+					const assignedUse = assignment?.uses?.find(
+						(item) => item.id === use.id,
+					);
+					return {
+						...use,
+						expiresAt: assignedUse?.expiresAt,
+						createdAt: assignedUse?.createdAt,
+					};
+				}),
+			};
+		}),
+	);
+
+	function formatCredentialTimeframe(expiresAt: string | undefined): string {
+		if (!expiresAt) {
+			return "No expiration recorded";
+		}
+		const expiresTime = new Date(expiresAt).getTime();
+		if (!Number.isFinite(expiresTime)) {
+			return "Expiration unavailable";
+		}
+		if (expiresAt.startsWith("9999-12-31")) {
+			return "Never expires";
+		}
+		return `Valid until ${new Intl.DateTimeFormat(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		}).format(new Date(expiresAt))}`;
+	}
+
 	$effect(() => {
 		if (toolPart.state !== "approval-requested") {
 			approvalStatus = "idle";
 			approvalError = null;
 			pendingCredentialRequest = null;
-			sessionAssignments = [];
-			localGrantedCredentials = [];
 			credentialTypes = [];
 			rejectionReason = "";
 			showRejectionForm = false;
@@ -343,6 +388,29 @@
 					error instanceof Error
 						? error.message
 						: "Failed to load credential request";
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
+	$effect(() => {
+		if (!sessionId || grantedCredentials.length === 0) {
+			return;
+		}
+
+		let cancelled = false;
+		api
+			.getSessionCredentials(sessionId)
+			.then((response) => {
+				if (!cancelled) {
+					sessionAssignments = response.credentials;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					sessionAssignments = [];
+				}
 			});
 
 		return () => {
@@ -570,18 +638,81 @@
 
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
 	<CollapsibleTrigger
-		class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground"
-		disabled={true}
+		class="flex min-w-0 flex-1 items-center gap-2 text-left text-amber-700 dark:text-amber-300"
 	>
-		<KeyRoundIcon class="size-4 shrink-0 text-muted-foreground" />
+		<KeyRoundIcon class="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
 		<span class="truncate font-medium text-sm">Credential request</span>
 		<ToolHeaderStatus state={toolPart.state} />
 	</CollapsibleTrigger>
-	<ToolHeaderControls {isRaw} {onToggleRaw} canCollapse={false} />
+	<ToolHeaderControls {isRaw} {onToggleRaw} />
 </div>
 
 <ToolContent>
-	{#if toolPart.state === "approval-requested"}
+	{#if wasRejected}
+		<div class="space-y-4 p-4 pt-3">
+			<div class="space-y-1">
+				<p class="font-medium text-sm">Credential request rejected</p>
+				{#if rejectionSummary}
+					<p class="text-muted-foreground text-sm">{rejectionSummary}</p>
+				{/if}
+			</div>
+		</div>
+	{:else if grantedCredentialDetails.length > 0}
+		<div class="space-y-4 p-4 pt-3">
+			<div class="space-y-1">
+				<p class="font-medium text-sm">Credential access granted</p>
+				<p class="text-muted-foreground text-sm">
+					The agent can use these credentials for the approved purposes below.
+				</p>
+			</div>
+			{#each grantedCredentialDetails as granted}
+				<div class="space-y-3 rounded-md border border-amber-500/30 p-3">
+					<div class="space-y-1">
+						<p class="font-medium text-sm">{granted.credentialName}</p>
+						<p class="font-mono text-xs text-muted-foreground">
+							{granted.envVar} → {granted.credentialId}
+						</p>
+					</div>
+					{#if granted.justification}
+						<div class="space-y-1 rounded-md bg-muted/30 p-2">
+							<p
+								class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+							>
+								Purpose
+							</p>
+							<p class="text-sm">{granted.justification}</p>
+						</div>
+					{/if}
+					{#if granted.uses.length > 0}
+						<div class="space-y-2">
+							<p
+								class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+							>
+								Approved uses
+							</p>
+							<ul class="space-y-2">
+								{#each granted.uses as use}
+									<li class="space-y-1 rounded-md bg-muted/30 p-2">
+										<p class="text-sm">{use.description}</p>
+										<p class="text-muted-foreground text-xs">
+											{formatCredentialTimeframe(use.expiresAt)}
+										</p>
+										<p class="font-mono text-muted-foreground text-[11px]">
+											Use ID: {use.id}
+										</p>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{:else}
+						<p class="text-muted-foreground text-sm">
+							No approved-use details were recorded.
+						</p>
+					{/if}
+				</div>
+			{/each}
+		</div>
+	{:else if toolPart.state === "approval-requested"}
 		<div class="space-y-4 p-4 pt-3">
 			{#if approvalStatus === "loading"}
 				<p class="text-muted-foreground text-sm">
@@ -592,41 +723,9 @@
 					{approvalError ?? "Failed to load credential request"}
 				</p>
 			{:else if approvalStatus === "answered"}
-				{#if wasRejected}
-					<div class="space-y-1">
-						<p class="font-medium text-sm">Credential request rejected</p>
-						{#if rejectionSummary}
-							<p class="text-muted-foreground text-sm">{rejectionSummary}</p>
-						{/if}
-					</div>
-				{:else if grantedCredentials.length > 0}
-					<div class="space-y-3">
-						{#each grantedCredentials as granted}
-							<div class="space-y-1">
-								<p class="font-medium text-sm">{granted.name}</p>
-								<p class="font-mono text-xs text-muted-foreground">
-									{granted.envVar} → {granted.credentialId}
-								</p>
-								{#if granted.approvedUses && granted.approvedUses.length > 0}
-									<ul
-										class="list-disc space-y-1 pl-5 text-muted-foreground text-sm"
-									>
-										{#each granted.approvedUses as use}
-											<li>
-												{use.description}
-												<span class="font-mono text-xs">({use.id})</span>
-											</li>
-										{/each}
-									</ul>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				{:else}
-					<p class="text-muted-foreground text-sm">
-						Credential request answered.
-					</p>
-				{/if}
+				<p class="text-muted-foreground text-sm">
+					Credential request answered.
+				</p>
 			{:else if pendingCredentialRequest}
 				<div class="space-y-4 rounded-lg border bg-card p-4">
 					<div>
