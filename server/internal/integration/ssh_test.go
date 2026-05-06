@@ -1,10 +1,12 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -815,6 +817,145 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 			t.Errorf("forwarded input = %q, want %q", string(input), "PING")
 		}
 	}
+}
+
+func TestSSHServer_Integration_OpenSSHLocalForward(t *testing.T) {
+	SkipIfShort(t) // SSH integration test
+	if _, err := exec.LookPath("ssh"); err != nil {
+		t.Skip("OpenSSH client not available")
+	}
+
+	provider := mock.NewProvider()
+	ctx := context.Background()
+
+	sessionID := "openssh-local-forward-session"
+	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	if err := provider.Start(ctx, sessionID); err != nil {
+		t.Fatalf("failed to start sandbox: %v", err)
+	}
+
+	var testStreamInstance *testStream
+	var socatCommand []string
+	provider.ExecStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+		if sid != sessionID {
+			return nil, sandbox.ErrNotFound
+		}
+		socatCommand = append([]string(nil), cmd...)
+		testStreamInstance = newTestStream([]byte("PONG"), 0)
+		return testStreamInstance, nil
+	}
+
+	sshServer, err := ssh.New(&ssh.Config{
+		Address:         "127.0.0.1:0",
+		SandboxProvider: provider,
+	})
+	if err != nil {
+		t.Fatalf("failed to create SSH server: %v", err)
+	}
+
+	go sshServer.Start()
+	defer sshServer.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	localListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve local port: %v", err)
+	}
+	localAddr := localListener.Addr().String()
+	if err := localListener.Close(); err != nil {
+		t.Fatalf("failed to close local port reservation: %v", err)
+	}
+
+	serverHost, serverPort, err := net.SplitHostPort(sshServer.Addr())
+	if err != nil {
+		t.Fatalf("failed to parse SSH server address: %v", err)
+	}
+	_, localPort, err := net.SplitHostPort(localAddr)
+	if err != nil {
+		t.Fatalf("failed to parse local forward address: %v", err)
+	}
+
+	cmdCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(cmdCtx, "ssh",
+		"-N",
+		"-L", "127.0.0.1:"+localPort+":localhost:8080",
+		"-p", serverPort,
+		"-o", "BatchMode=yes",
+		"-o", "ExitOnForwardFailure=yes",
+		"-o", "PreferredAuthentications=none",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		sessionID+"@"+serverHost,
+	)
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start ssh -L: %v", err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+	}()
+
+	conn, err := dialWithRetry("tcp", "127.0.0.1:"+localPort, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect to forwarded port: %v\nssh stderr:\n%s", err, stderr.String())
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte("PING")); err != nil {
+		t.Fatalf("failed to write to forwarded port: %v", err)
+	}
+
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("failed to read from forwarded port: %v\nssh stderr:\n%s", err, stderr.String())
+	}
+	if string(buf) != "PONG" {
+		t.Fatalf("forwarded response = %q, want PONG", string(buf))
+	}
+
+	if got, want := fmt.Sprint(socatCommand), "[socat - TCP4:127.0.0.1:8080]"; got != want {
+		t.Fatalf("socat command = %s, want %s", got, want)
+	}
+	if testStreamInstance == nil {
+		t.Fatal("expected SSH direct-tcpip channel to start a stream")
+	}
+	if input := waitForStreamInput(testStreamInstance, "PING", time.Second); input != "PING" {
+		t.Fatalf("forwarded input = %q, want PING", input)
+	}
+}
+
+func waitForStreamInput(stream *testStream, want string, timeout time.Duration) string {
+	deadline := time.Now().Add(timeout)
+	var input string
+	for time.Now().Before(deadline) {
+		input = string(stream.GetInput())
+		if input == want {
+			return input
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return input
+}
+
+func dialWithRetry(network, address string, timeout time.Duration) (net.Conn, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout(network, address, 100*time.Millisecond)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		time.Sleep(50 * time.Millisecond)
+	}
+	return nil, lastErr
 }
 
 func TestSSHServer_Integration_SFTP(t *testing.T) {

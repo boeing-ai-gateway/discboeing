@@ -493,6 +493,21 @@ func TestParseDirectTCPIPData(t *testing.T) {
 	}
 }
 
+func TestDirectTCPIPCommandPrefersIPv4Localhost(t *testing.T) {
+	t.Parallel()
+
+	cmd := directTCPIPCommand("localhost", 8080)
+	want := []string{"socat", "-", "TCP4:127.0.0.1:8080"}
+	if len(cmd) != len(want) {
+		t.Fatalf("command length = %d, want %d: %v", len(cmd), len(want), cmd)
+	}
+	for i := range want {
+		if cmd[i] != want[i] {
+			t.Fatalf("command = %v, want %v", cmd, want)
+		}
+	}
+}
+
 func TestServer_Stop(t *testing.T) {
 	provider := mock.NewProvider()
 

@@ -725,9 +725,10 @@ func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
 	// Get user for this session (uid:gid format)
 	user := h.getUser(ctx)
 
-	// Use socat to forward the connection inside the container
-	// socat reads from stdin, writes to TCP; reads from TCP, writes to stdout
-	cmd := []string{"socat", "-", fmt.Sprintf("TCP:%s:%d", destHost, destPort)}
+	// Use socat to forward the connection inside the container. OpenSSH -L
+	// commonly uses "localhost" as the destination; prefer IPv4 loopback so
+	// services bound to 127.0.0.1 work even when localhost resolves to ::1 first.
+	cmd := directTCPIPCommand(destHost, destPort)
 	stream, err := h.provider.ExecStream(ctx, h.sessionID, cmd, sandbox.ExecStreamOptions{
 		User: user,
 	})
@@ -757,6 +758,23 @@ func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
 
 	// Wait for output to drain
 	<-outputDone
+}
+
+func directTCPIPCommand(host string, port uint32) []string {
+	network := "TCP"
+	targetHost := host
+	if host == "localhost" {
+		network = "TCP4"
+		targetHost = "127.0.0.1"
+	} else if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() != nil {
+			network = "TCP4"
+		} else {
+			network = "TCP6"
+			targetHost = "[" + host + "]"
+		}
+	}
+	return []string{"socat", "-", fmt.Sprintf("%s:%s:%d", network, targetHost, port)}
 }
 
 // sendExitStatus sends the exit-status request to signal command completion.
