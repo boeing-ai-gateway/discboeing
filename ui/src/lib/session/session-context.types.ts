@@ -99,6 +99,7 @@ export type SessionFilesDomain = {
 	searchable: string[];
 	diff: SessionDiffFileEntry[];
 	diffStats: SessionDiffStats;
+	diffTarget: string;
 	contents: Record<string, string>;
 	selected: string;
 	activePath: string;
@@ -113,6 +114,7 @@ export type SessionFilesDomain = {
 	open: (file?: string) => Promise<void>;
 	close: (file: string) => void;
 	refresh: () => Promise<void>;
+	setDiffTarget: (target: string) => Promise<void>;
 	toggleChangedOnly: () => Promise<void>;
 	toggleDirectory: (path: string) => Promise<void>;
 	expandAll: () => Promise<void>;

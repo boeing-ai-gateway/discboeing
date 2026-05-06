@@ -512,10 +512,11 @@ class ApiClient {
 	 * @param sessionId Session ID
 	 * @param options.path Single file path for file-specific diff
 	 * @param options.format "files" for file list only, undefined for full diff
+	 * @param options.target Commit/ref to diff against; empty uses merge-base HEAD
 	 */
 	async getSessionDiff(
 		sessionId: string,
-		options?: { path?: string; format?: "files" },
+		options?: { path?: string; format?: "files"; target?: string },
 	): Promise<
 		| SessionDiffResponse
 		| SessionDiffFilesResponse
@@ -524,6 +525,7 @@ class ApiClient {
 		const params = new URLSearchParams();
 		if (options?.path) params.set("path", options.path);
 		if (options?.format) params.set("format", options.format);
+		if (options?.target?.trim()) params.set("target", options.target.trim());
 		const query = params.toString();
 		return this.fetch(`/sessions/${sessionId}/diff${query ? `?${query}` : ""}`);
 	}

@@ -581,7 +581,7 @@ func (c *ChatService) RenameFile(ctx context.Context, projectID, sessionID strin
 // Normal session diffs are resolved entirely inside the sandbox so they remain
 // anchored to sandbox-local git state.
 // The sandbox is automatically reconciled if not running.
-func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, format string) (any, error) {
+func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, format, targetCommit string) (any, error) {
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, f
 	if err != nil {
 		return nil, err
 	}
-	return client.GetDiff(ctx, path, format, "")
+	return client.GetDiff(ctx, path, format, targetCommit)
 }
 
 // ============================================================================

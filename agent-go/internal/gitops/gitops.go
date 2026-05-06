@@ -278,10 +278,6 @@ func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 		target = defaultDiffTarget(workspaceRoot)
 	}
 
-	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {
-		return DiffResult{}, fmt.Errorf("target %q does not exist in repository", target)
-	}
-
 	// Build git diff command
 	args := []string{"diff", "--no-color", target}
 	if singlePath != "" {

@@ -171,12 +171,14 @@ ${selectedText}
 			<DiffReviewPanel
 				dockMaximized={sessionView.dockMaximized}
 				onClose={sessionView.openChat}
+				onDiffTargetChange={session.files.setDiffTarget}
 				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
 				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				sessionId={session.sessionId}
 				diff={sessionFileDiff}
+				diffTarget={session.files.diffTarget}
 				fileContents={sessionFileContents}
 				diffStats={sessionFileDiffStats}
 				resolvedTheme={app.preferences.resolvedTheme}

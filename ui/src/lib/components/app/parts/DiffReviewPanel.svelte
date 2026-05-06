@@ -17,6 +17,14 @@
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { Checkbox } from "$lib/components/ui/checkbox";
+	import {
+		DropdownMenu,
+		DropdownMenuContent,
+		DropdownMenuItem,
+		DropdownMenuSeparator,
+		DropdownMenuTrigger,
+	} from "$lib/components/ui/dropdown-menu";
+	import { Input } from "$lib/components/ui/input";
 	import { Textarea } from "$lib/components/ui/textarea";
 	import {
 		buildDiffFileContents,
@@ -46,6 +54,7 @@
 	type Props = {
 		dockMaximized: boolean;
 		onClose: () => void;
+		onDiffTargetChange: (target: string) => Promise<void> | void;
 		onOpenFile: (path: string) => Promise<void> | void;
 		onRefresh: () => Promise<void> | void;
 		onSubmitSelectionComment: (payload: {
@@ -56,6 +65,7 @@
 		onToggleDockMaximized: () => void;
 		sessionId: string;
 		diff: SessionDiffFileEntry[];
+		diffTarget: string;
 		fileContents: Record<string, string>;
 		diffStats: SessionDiffStats;
 		resolvedTheme: ResolvedTheme;
@@ -104,12 +114,14 @@
 	let {
 		dockMaximized,
 		onClose,
+		onDiffTargetChange,
 		onOpenFile,
 		onRefresh,
 		onSubmitSelectionComment,
 		onToggleDockMaximized,
 		sessionId,
 		diff,
+		diffTarget,
 		fileContents,
 		diffStats,
 		resolvedTheme,
@@ -122,6 +134,7 @@
 	let listReady = $state(false);
 	let expandedPath = $state<string | null>(null);
 	let refreshing = $state(false);
+	let diffTargetDraft = $state("");
 	let loadGeneration = 0;
 	let diffStyle = $state<DiffStyle>("unified");
 	let ignoreWhitespaceByPath = $state<Record<string, boolean>>({});
@@ -149,6 +162,18 @@
 	const allApproved = $derived.by(
 		() => diffCount > 0 && approvedCount === diffCount,
 	);
+	const customDiffTargetActive = $derived.by(
+		() => diffTarget !== "" && diffTarget !== "HEAD",
+	);
+	const diffTargetLabel = $derived.by(() => {
+		if (diffTarget === "") {
+			return "Merge base";
+		}
+		if (diffTarget === "HEAD") {
+			return "HEAD";
+		}
+		return diffTarget;
+	});
 	const maximizeTitle = $derived.by(() =>
 		dockMaximized ? "Restore split view" : "Maximize diff review panel",
 	);
@@ -156,6 +181,7 @@
 	onMount(() => {
 		approvedBySession = readApprovalState();
 		diffStyle = readDiffStyle();
+		diffTargetDraft = diffTarget === "HEAD" ? "" : diffTarget;
 		storageLoaded = true;
 
 		const frameId = requestAnimationFrame(() => {
@@ -165,6 +191,10 @@
 		return () => {
 			cancelAnimationFrame(frameId);
 		};
+	});
+
+	$effect(() => {
+		diffTargetDraft = diffTarget === "HEAD" ? "" : diffTarget;
 	});
 
 	$effect(() => {
@@ -184,7 +214,9 @@
 	$effect(() => {
 		const currentSessionId = sessionId;
 		const currentEntries = diff;
+		const currentDiffTarget = diffTarget;
 		void currentEntries;
+		void currentDiffTarget;
 
 		loadGeneration += 1;
 		clearDiffStates();
@@ -207,6 +239,7 @@
 	$effect(() => {
 		const currentExpandedPath = expandedPath;
 		const currentSessionId = sessionId;
+		const currentDiffTarget = diffTarget;
 		const generation = loadGeneration;
 		if (!currentExpandedPath || !currentSessionId) {
 			return;
@@ -214,6 +247,7 @@
 		void ensureExpandedDiffReady(
 			currentExpandedPath,
 			currentSessionId,
+			currentDiffTarget,
 			generation,
 		);
 	});
@@ -222,6 +256,7 @@
 		const ready = listReady;
 		const currentEntries = sortedDiff;
 		const currentSessionId = sessionId;
+		const currentDiffTarget = diffTarget;
 		const generation = loadGeneration;
 		if (!ready || !currentSessionId || currentEntries.length === 0) {
 			return;
@@ -237,7 +272,12 @@
 				if (!nextPath) {
 					return;
 				}
-				await loadDiffEntry(nextPath, currentSessionId, generation);
+				await loadDiffEntry(
+					nextPath,
+					currentSessionId,
+					currentDiffTarget,
+					generation,
+				);
 				if (
 					cancelled ||
 					generation !== loadGeneration ||
@@ -364,6 +404,7 @@
 	async function loadDiffEntry(
 		path: string,
 		currentSessionId: string,
+		currentDiffTarget: string,
 		generation: number,
 	) {
 		const state = getDiffState(path);
@@ -379,6 +420,7 @@
 		try {
 			const response = (await api.getSessionDiff(currentSessionId, {
 				path,
+				target: currentDiffTarget,
 			})) as SessionSingleFileDiffResponse;
 			const patchHash = response.patch
 				? await hashString(response.patch)
@@ -409,9 +451,10 @@
 	async function ensureExpandedDiffReady(
 		path: string,
 		currentSessionId: string,
+		currentDiffTarget: string,
 		generation: number,
 	) {
-		await loadDiffEntry(path, currentSessionId, generation);
+		await loadDiffEntry(path, currentSessionId, currentDiffTarget, generation);
 		if (generation !== loadGeneration || currentSessionId !== sessionId) {
 			return;
 		}
@@ -903,6 +946,17 @@
 			refreshing = false;
 		}
 	}
+
+	async function applyDiffTarget(target: string) {
+		const nextTarget = target.trim();
+		diffTargetDraft = nextTarget === "HEAD" ? "" : nextTarget;
+		refreshing = true;
+		try {
+			await onDiffTargetChange(nextTarget);
+		} finally {
+			refreshing = false;
+		}
+	}
 </script>
 
 <DockWindowChrome
@@ -937,7 +991,52 @@
 	{/snippet}
 
 	{#snippet actions()}
-		<div class="flex items-center gap-2">
+		<div class="flex flex-wrap items-center gap-2">
+			<DropdownMenu>
+				<DropdownMenuTrigger>
+					<Button variant="outline" size="sm" class="h-8 max-w-48">
+						<span class="truncate">{diffTargetLabel}</span>
+						<ChevronDownIcon class="size-4" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" class="w-72">
+					<DropdownMenuItem onclick={() => void applyDiffTarget("")}>
+						<span class={diffTarget === "" ? "font-medium" : ""}
+							>Merge base</span
+						>
+					</DropdownMenuItem>
+					<DropdownMenuItem onclick={() => void applyDiffTarget("HEAD")}>
+						<span class={diffTarget === "HEAD" ? "font-medium" : ""}>HEAD</span>
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
+					<div class="space-y-2 p-2">
+						<div class="flex items-center gap-2">
+							<Input
+								class="h-8 min-w-0 flex-1 text-xs"
+								placeholder="Commit, tag, branch, or range"
+								value={diffTargetDraft}
+								onkeydown={(event) => {
+									event.stopPropagation();
+									if (event.key === "Enter") {
+										void applyDiffTarget(diffTargetDraft);
+									}
+								}}
+								oninput={(event) => {
+									diffTargetDraft = event.currentTarget.value;
+								}}
+							/>
+							<Button
+								variant={customDiffTargetActive ? "secondary" : "outline"}
+								size="sm"
+								class="h-8"
+								onclick={() => void applyDiffTarget(diffTargetDraft)}
+							>
+								Apply
+							</Button>
+						</div>
+					</div>
+				</DropdownMenuContent>
+			</DropdownMenu>
 			<div
 				class="inline-flex rounded-md border border-border bg-background p-0.5"
 			>

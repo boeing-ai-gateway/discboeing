@@ -1188,6 +1188,7 @@ func main() {
 								{Name: "sessionId", Example: "abc123"},
 								{Name: "path", In: "query", Example: "README.md"},
 								{Name: "format", In: "query", Example: "files"},
+								{Name: "target", In: "query", Example: "main"},
 							},
 						},
 					})

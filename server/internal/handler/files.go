@@ -435,7 +435,7 @@ func (h *Handler) RenameSessionFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSessionDiff returns diff information for a session's workspace.
-// GET /api/projects/{projectId}/sessions/{sessionId}/diff?format=files&path=...
+// GET /api/projects/{projectId}/sessions/{sessionId}/diff?format=files&path=...&target=...
 func (h *Handler) GetSessionDiff(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	projectID := middleware.GetProjectID(ctx)
@@ -448,8 +448,9 @@ func (h *Handler) GetSessionDiff(w http.ResponseWriter, r *http.Request) {
 
 	path := r.URL.Query().Get("path")
 	format := r.URL.Query().Get("format")
+	target := r.URL.Query().Get("target")
 
-	result, err := h.chatService.GetDiff(ctx, projectID, sessionID, path, format)
+	result, err := h.chatService.GetDiff(ctx, projectID, sessionID, path, format, target)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "not found") {

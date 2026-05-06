@@ -388,6 +388,7 @@ export function createSessionFilesDomain(
 	let expandedPaths = $state<string[]>(["."]);
 	let loadingPaths = $state<string[]>([]);
 	let showChangedOnly = $state(false);
+	let diffTarget = $state("");
 	let expandAllController = $state<AbortController | null>(null);
 	let refreshPromise = $state<Promise<void> | null>(null);
 	let loadScheduled = false;
@@ -399,7 +400,10 @@ export function createSessionFilesDomain(
 		retry: { mode: "background" },
 		load: async () => {
 			const [diffResult, searchResult, rootResult] = await Promise.allSettled([
-				api.getSessionDiff(args.sessionId, { format: "files" }),
+				api.getSessionDiff(args.sessionId, {
+					format: "files",
+					target: diffTarget,
+				}),
 				api.searchSessionFiles(args.sessionId, "", 200),
 				api.listSessionFiles(args.sessionId, "."),
 			]);
@@ -685,6 +689,16 @@ export function createSessionFilesDomain(
 		await ensureLoaded(true);
 	}
 
+	async function setDiffTarget(target: string) {
+		const nextTarget = target.trim();
+		if (nextTarget === diffTarget) {
+			return;
+		}
+		diffTarget = nextTarget;
+		metadataResource.reset();
+		await refresh();
+	}
+
 	function discard(path: string) {
 		const current = buffers[path];
 		if (!current) {
@@ -884,6 +898,9 @@ export function createSessionFilesDomain(
 			scheduleEnsureLoaded();
 			return diffStats;
 		},
+		get diffTarget() {
+			return diffTarget;
+		},
 		get contents() {
 			scheduleEnsureLoaded();
 			return contents;
@@ -941,6 +958,7 @@ export function createSessionFilesDomain(
 			releaseClosedFileState(file);
 		},
 		refresh,
+		setDiffTarget,
 		toggleChangedOnly: async () => {
 			showChangedOnly = !showChangedOnly;
 			await refresh();
