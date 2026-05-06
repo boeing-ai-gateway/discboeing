@@ -1,6 +1,7 @@
 <script lang="ts">
 	import EyeIcon from "@lucide/svelte/icons/eye";
 	import FileTextIcon from "@lucide/svelte/icons/file-text";
+	import ImageIcon from "@lucide/svelte/icons/image";
 	import {
 		ToolContent,
 		ToolHeaderControls,
@@ -47,8 +48,38 @@
 			? (outputValidation.data as ReadToolOutput)
 			: undefined,
 	);
+	type ReadImageItem = {
+		type: "image-data" | "image-url" | "file-data" | "media";
+		data?: string;
+		url?: string;
+		mediaType?: string;
+		filename?: string;
+	};
+	const richContentItems = $derived.by(() => validOutput?.value ?? []);
+	const richTextContent = $derived.by(() =>
+		richContentItems
+			.filter((item) => item.type === "text" && item.text)
+			.map((item) => (item.type === "text" ? item.text : ""))
+			.join("\n"),
+	);
+	const imageItems = $derived.by(() =>
+		richContentItems.filter((item): item is ReadImageItem => {
+			if (item.type === "image-data" || item.type === "image-url") {
+				return true;
+			}
+			return (
+				(item.type === "file-data" || item.type === "media") &&
+				item.mediaType?.startsWith("image/") === true
+			);
+		}),
+	);
+	const hasImageItems = $derived.by(() => imageItems.length > 0);
 	const content = $derived.by(
-		() => validOutput?.content || validOutput?.lines?.join("\n") || "",
+		() =>
+			validOutput?.content ||
+			validOutput?.lines?.join("\n") ||
+			richTextContent ||
+			"",
 	);
 	const parsedContent = $derived.by(() => parseNumberedToolOutput(content));
 	const hasParsedContentLines = $derived.by(
@@ -65,18 +96,46 @@
 	});
 	const readError = $derived.by(() => toolPart.errorText || validOutput?.error);
 	const rawOutputText = $derived.by(() => renderToolValue(toolPart.output));
+	const headerImageSrc = $derived.by(() => {
+		const firstImage = imageItems[0];
+		return firstImage ? imageItemSrc(firstImage) : undefined;
+	});
+
+	function imageItemSrc(item: ReadImageItem): string | undefined {
+		if (item.type === "image-url") {
+			return item.url;
+		}
+		if (!item.data) {
+			return undefined;
+		}
+		if (item.data.startsWith("data:") || item.data.startsWith("http")) {
+			return item.data;
+		}
+		return `data:${item.mediaType || "image/png"};base64,${item.data}`;
+	}
 </script>
 
-<div class="flex items-center justify-between gap-4 px-4 pt-4">
-	<CollapsibleTrigger
-		class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground"
-	>
-		<FileTextIcon class="size-4 shrink-0 text-muted-foreground" />
-		<span class="truncate font-medium text-sm">
-			{headerFileName ||
-				(isStreaming ? "Loading file details..." : "Reading file")}
-		</span>
-		<ToolHeaderStatus state={toolPart.state} />
+<div class="flex items-start justify-between gap-4 px-4 pt-4">
+	<CollapsibleTrigger class="min-w-0 flex-1 text-left text-muted-foreground">
+		{#if headerImageSrc}
+			<img
+				src={headerImageSrc}
+				alt={headerFileName || "Read image"}
+				class="max-h-40 max-w-full rounded object-contain"
+			/>
+		{/if}
+		<div
+			class={headerImageSrc
+				? "mt-2 flex min-w-0 items-center gap-2"
+				: "flex min-w-0 items-center gap-2"}
+		>
+			<FileTextIcon class="size-4 shrink-0 text-muted-foreground" />
+			<span class="truncate font-medium text-sm">
+				{headerFileName ||
+					(isStreaming ? "Loading file details..." : "Reading file")}
+			</span>
+			<ToolHeaderStatus state={toolPart.state} />
+		</div>
 	</CollapsibleTrigger>
 	<ToolHeaderControls {isRaw} {onToggleRaw} />
 </div>
@@ -192,6 +251,43 @@
 					class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm"
 				>
 					Read completed without file content.
+				</div>
+			{/if}
+
+			{#if hasImageItems}
+				<div class="space-y-2">
+					<div class="flex items-center gap-2">
+						<ImageIcon class="size-4 text-muted-foreground" />
+						<h4
+							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+						>
+							Image
+						</h4>
+						{#if imageItems.length > 1}
+							<span class="text-muted-foreground text-xs"
+								>{imageItems.length} images</span
+							>
+						{/if}
+					</div>
+					<div class="grid gap-3">
+						{#each imageItems as imageItem}
+							{@const src = imageItemSrc(imageItem)}
+							{#if src}
+								<div class="overflow-hidden rounded-md border bg-muted/30 p-2">
+									<img
+										{src}
+										alt={imageItem.filename || fileName || "Read image"}
+										class="max-h-96 max-w-full rounded object-contain"
+									/>
+									{#if imageItem.mediaType || imageItem.filename}
+										<div class="mt-2 text-muted-foreground text-xs">
+											{imageItem.filename || imageItem.mediaType}
+										</div>
+									{/if}
+								</div>
+							{/if}
+						{/each}
+					</div>
 				</div>
 			{/if}
 

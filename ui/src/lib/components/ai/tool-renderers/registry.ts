@@ -28,6 +28,7 @@ const TOOL_RENDERERS: Record<string, RendererComponent> = {
 	Bash: BashToolRenderer,
 	PowerShell: BashToolRenderer,
 	Read: ReadToolRenderer,
+	read: ReadToolRenderer,
 	RequestCommitPull: RequestCommitPullToolRenderer,
 	Write: WriteToolRenderer,
 	Edit: EditToolRenderer,
@@ -84,12 +85,13 @@ export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 		}
 
 		case "Read":
+		case "read":
 		case "Write":
 		case "Edit": {
 			const filePath = safeInput.file_path;
 			if (typeof filePath === "string") {
 				const fileName = getPathBasename(filePath);
-				return `${toolName}: ${fileName}`;
+				return `${toolName === "read" ? "Read" : toolName}: ${fileName}`;
 			}
 			break;
 		}

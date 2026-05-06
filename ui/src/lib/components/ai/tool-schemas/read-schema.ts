@@ -20,6 +20,43 @@ export const ReadToolInputSchema = z.object({
  */
 export type ReadToolInput = z.infer<typeof ReadToolInputSchema>;
 
+const ReadToolContentItemSchema = z.discriminatedUnion("type", [
+	z
+		.object({
+			type: z.literal("text"),
+			text: z.string().optional(),
+		})
+		.passthrough(),
+	z
+		.object({
+			type: z.literal("image-data"),
+			data: z.string().optional(),
+			mediaType: z.string().optional(),
+		})
+		.passthrough(),
+	z
+		.object({
+			type: z.literal("image-url"),
+			url: z.string().optional(),
+		})
+		.passthrough(),
+	z
+		.object({
+			type: z.literal("file-data"),
+			data: z.string().optional(),
+			mediaType: z.string().optional(),
+			filename: z.string().optional(),
+		})
+		.passthrough(),
+	z
+		.object({
+			type: z.literal("media"),
+			data: z.string().optional(),
+			mediaType: z.string().optional(),
+		})
+		.passthrough(),
+]);
+
 /**
  * Read tool output schema (Zod)
  */
@@ -28,6 +65,9 @@ export const ReadToolOutputSchema = z.object({
 	content: z.string().optional(),
 	/** File content as array of lines */
 	lines: z.array(z.string()).optional(),
+	/** Rich content output from multimodal file reads */
+	type: z.literal("content").optional(),
+	value: z.array(ReadToolContentItemSchema).optional(),
 	/** Error message if read failed */
 	error: z.string().optional(),
 });
