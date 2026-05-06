@@ -1,0 +1,119 @@
+//go:build !windows
+
+package processes
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestManagerUsesConfiguredDefaultWorkDir(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	mgr := NewManager(workDir)
+	session, err := mgr.Start(context.Background(), CreateRequest{
+		Cmd: []string{"/bin/pwd"},
+	})
+	if err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	if session.WorkDir != workDir {
+		t.Fatalf("session WorkDir = %q, want %q", session.WorkDir, workDir)
+	}
+
+	waitForProcessStatus(t, mgr, session.ID, StatusExited)
+	events, err := mgr.Output(session.ID)
+	if err != nil {
+		t.Fatalf("Output() failed: %v", err)
+	}
+	var output strings.Builder
+	for _, event := range events {
+		if event.Type == "stdout" {
+			output.WriteString(event.Data)
+		}
+	}
+	if got := strings.TrimSpace(output.String()); got != workDir {
+		t.Fatalf("pwd output = %q, want %q", got, workDir)
+	}
+}
+
+func TestManagerEventsSupportSequenceAndFilters(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	mgr := NewManager(workDir)
+	session, err := mgr.Start(context.Background(), CreateRequest{
+		Cmd: []string{"/bin/sh", "-c", "printf one; printf two >&2"},
+	})
+	if err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	waitForProcessStatus(t, mgr, session.ID, StatusExited)
+
+	events, err := mgr.Events(session.ID, EventQuery{})
+	if err != nil {
+		t.Fatalf("Events() failed: %v", err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("got %d events, want at least stdout, stderr, and exit: %#v", len(events), events)
+	}
+	for i, event := range events {
+		want := int64(i + 1)
+		if event.Seq != want {
+			t.Fatalf("event %d seq = %d, want %d; events=%#v", i, event.Seq, want, events)
+		}
+	}
+
+	after := events[0].Seq
+	afterEvents, err := mgr.Events(session.ID, EventQuery{After: &after})
+	if err != nil {
+		t.Fatalf("Events(after) failed: %v", err)
+	}
+	if len(afterEvents) != len(events)-1 || afterEvents[0].Seq <= after {
+		t.Fatalf("after events = %#v, want events after seq %d", afterEvents, after)
+	}
+
+	limited, err := mgr.Events(session.ID, EventQuery{Limit: 1})
+	if err != nil {
+		t.Fatalf("Events(limit) failed: %v", err)
+	}
+	if len(limited) != 1 || limited[0].Seq != events[len(events)-1].Seq {
+		t.Fatalf("limited events = %#v, want latest event %#v", limited, events[len(events)-1])
+	}
+
+	since := events[0].Timestamp.Add(-time.Nanosecond)
+	sinceEvents, err := mgr.Events(session.ID, EventQuery{Since: &since})
+	if err != nil {
+		t.Fatalf("Events(since) failed: %v", err)
+	}
+	if len(sinceEvents) != len(events) {
+		t.Fatalf("since events = %d, want %d", len(sinceEvents), len(events))
+	}
+}
+
+func waitForProcessStatus(t *testing.T, mgr *Manager, id string, status Status) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-deadline:
+			session, _ := mgr.Get(id)
+			t.Fatalf("timed out waiting for status %q; session=%+v", status, session)
+		case <-tick.C:
+			session, err := mgr.Get(id)
+			if err != nil {
+				t.Fatalf("Get() failed: %v", err)
+			}
+			if session.Status == status {
+				return
+			}
+		}
+	}
+}

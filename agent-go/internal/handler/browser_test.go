@@ -151,6 +151,7 @@ func TestReadThreadArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer browserMgr.Close()
 	browserMgr.SetStore(browser.NewStore(baseDir))
 	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	r := chi.NewRouter()
@@ -191,6 +192,7 @@ func TestReadThreadArtifact_RejectsTraversal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer browserMgr.Close()
 	browserMgr.SetStore(browser.NewStore(baseDir))
 	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	r := chi.NewRouter()
@@ -236,6 +238,7 @@ func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer browserMgr.Close()
 	browserStore := browser.NewStore(baseDir)
 	browserMgr.SetStore(browserStore)
 	browserMgr.SetCurrentTurnLoader(store.LoadTurnState)
@@ -285,6 +288,7 @@ func TestBrowserCDPTrackerCapturesScreenshotAndEmitsChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer browserMgr.Close()
 	browserMgr.SetStore(browser.NewStore(baseDir))
 
 	var emitted []message.MessageChunk
@@ -376,6 +380,7 @@ func TestBrowserCDPTrackerCapturesScreenshotEveryFiveCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer browserMgr.Close()
 	browserMgr.SetStore(browser.NewStore(baseDir))
 
 	captureCount := 0

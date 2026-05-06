@@ -14,7 +14,9 @@ require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charlievieth/fastwalk v1.0.14
+	github.com/charmbracelet/x/conpty v0.2.0
 	github.com/coder/websocket v1.8.14
+	github.com/creack/pty v1.1.24
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.6.0

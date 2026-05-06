@@ -13,6 +13,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/browser"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
+	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
 	"github.com/obot-platform/discobot/agent-go/promptqueue"
@@ -25,6 +26,7 @@ type Handler struct {
 	threadManager  threadManager
 	hookManager    *hooks.Manager          // nil if hooks are disabled
 	serviceManager *services.Manager       // always initialized
+	processManager *processes.Manager      // owns agent-side exec sessions
 	defaultAgent   *agentimpl.DefaultAgent // for MCP manager access; may be nil
 	browserManager *browser.Manager
 	promptQueue    *promptqueue.Manager
@@ -47,6 +49,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	var bm *browser.Manager
 	var pq *promptqueue.Store
 	var promptQueue *promptqueue.Manager
+	processManager := processes.NewManager(agentCwd)
 	for _, option := range options {
 		switch value := option.(type) {
 		case *browser.Manager:
@@ -55,6 +58,8 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 			pq = value
 		case *promptqueue.Manager:
 			promptQueue = value
+		case *processes.Manager:
+			processManager = value
 		}
 	}
 	h := &Handler{
@@ -63,6 +68,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		threadManager:     conversations,
 		hookManager:       hookManager,
 		serviceManager:    serviceManager,
+		processManager:    processManager,
 		defaultAgent:      defaultAgent,
 		browserManager:    bm,
 		chatPingEvery:     defaultChatStreamPingInterval,
@@ -258,6 +264,27 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Hooks", Description: "Manually rerun a hook"}})
 
 	// Service routes
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/capabilities", Handler: h.ExecCapabilities,
+		Meta: routes.Meta{Group: "Exec", Description: "Get exec supervisor capabilities"}})
+	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec", Handler: h.CreateExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Create an exec session"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec", Handler: h.ListExec,
+		Meta: routes.Meta{Group: "Exec", Description: "List exec sessions"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/{id}", Handler: h.GetExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Get exec session metadata"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/{id}/output", Handler: h.ExecOutput,
+		Meta: routes.Meta{Group: "Exec", Description: "Get persisted exec output events"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/{id}/events", Handler: h.ExecEvents,
+		Meta: routes.Meta{Group: "Exec", Description: "Get or follow exec events"}})
+	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec/{id}/resize", Handler: h.ResizeExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Resize an exec TTY"}})
+	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec/{id}/kill", Handler: h.KillExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Kill an exec session"}})
+	reg.Register(r, routes.Route{Method: "DELETE", Pattern: "/exec/{id}", Handler: h.DeleteExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Kill an exec session"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/{id}/attach", Handler: h.AttachExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Attach to an exec session over WebSocket"}})
+
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/services", Handler: h.ListServices,
 		Meta: routes.Meta{Group: "Services", Description: "List all services with status"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/services/{serviceId}/start", Handler: h.StartService,
