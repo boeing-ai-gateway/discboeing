@@ -38,6 +38,10 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 	if err := e.authorizeCredentialUses(ctx, currentProviderID, call.ToolCallID, input.Command, input.Description, input.CredentialUses); err != nil {
 		return errResult(call, err.Error()), nil
 	}
+	credentialEnv, err := e.envForCredentialUses(input.CredentialUses)
+	if err != nil {
+		return errResult(call, err.Error()), nil
+	}
 
 	timeout := 120 * time.Second
 	if input.Timeout > 0 {
@@ -46,9 +50,9 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 	}
 
 	if input.RunInBackground {
-		return e.startBashBackground(toolCtx, call, input.Command)
+		return e.startBashBackground(toolCtx, call, input.Command, credentialEnv)
 	}
-	return e.runBashSync(ctx, toolCtx, call, input.Command, timeout)
+	return e.runBashSync(ctx, toolCtx, call, input.Command, timeout, credentialEnv)
 }
 
 // bashLogPath returns the path for the log file for a bash call.
@@ -62,7 +66,7 @@ func (e *Executor) bashLogPath(toolCtx *thread.ToolContext, toolCallID string) s
 
 // runBashSync runs a bash command synchronously, returns the combined output,
 // and saves it to a log file in {threadsDir}/{threadID}/bash/.
-func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart, command string, timeout time.Duration) (thread.ToolExecuteResult, error) {
+func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart, command string, timeout time.Duration, credentialEnv map[string]string) (thread.ToolExecuteResult, error) {
 	cwd, err := e.prepareBashCwd(toolCtx)
 	if err != nil {
 		return errResult(call, fmt.Sprintf("failed to prepare working directory: %v", err)), nil
@@ -89,7 +93,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	wrapped := wrapShellCommandForOS(runtime.GOOS, command)
 	cmd := exec.CommandContext(cmdCtx, shellPath, shellCommandArgsForOS(runtime.GOOS, wrapped)...)
 	cmd.Dir = cwd
-	cmd.Env = append(e.bashEnvForTool(toolCtx), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
+	cmd.Env = append(applyCredentialEnv(e.bashEnvForTool(toolCtx), credentialEnv), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
 	processGroup := newProcessGroupController()
 	processGroup.configure(cmd)
 	cmd.Cancel = func() error {
@@ -163,7 +167,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 // startBashBackground launches a bash command in the background. It returns
 // immediately with the process PID and log path so the LLM can tail or read
 // the output at any time. Output is streamed directly to the log file.
-func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message.ToolCallPart, command string) (thread.ToolExecuteResult, error) {
+func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message.ToolCallPart, command string, credentialEnv map[string]string) (thread.ToolExecuteResult, error) {
 	cwd, err := e.prepareBashCwd(toolCtx)
 	if err != nil {
 		return errResult(call, fmt.Sprintf("failed to prepare working directory: %v", err)), nil
@@ -185,7 +189,7 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 
 	cmd := exec.Command(shellPath, shellCommandArgsForOS(runtime.GOOS, command)...) //nolint:gosec
 	cmd.Dir = cwd
-	cmd.Env = e.bashEnvForTool(toolCtx)
+	cmd.Env = applyCredentialEnv(e.bashEnvForTool(toolCtx), credentialEnv)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
@@ -207,6 +211,31 @@ func (e *Executor) startBashBackground(toolCtx *thread.ToolContext, call message
 		"Background process started.\nPID: %d\nOutput: %s\n\nUse `%s` to follow the output, or `%s` to stop it.",
 		pid, logPath, followCommand, stopCommand,
 	)), nil
+}
+
+func applyCredentialEnv(env []string, credentialEnv map[string]string) []string {
+	if len(credentialEnv) == 0 {
+		return env
+	}
+	out := make([]string, 0, len(env)+len(credentialEnv))
+	for _, entry := range env {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			out = append(out, entry)
+			continue
+		}
+		if _, override := credentialEnv[key]; override {
+			continue
+		}
+		out = append(out, entry)
+	}
+	for key, value := range credentialEnv {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		out = append(out, key+"="+value)
+	}
+	return out
 }
 
 func resolveBashCommand() (string, error) {

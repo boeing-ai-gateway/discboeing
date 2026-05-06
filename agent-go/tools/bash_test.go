@@ -611,6 +611,59 @@ func TestBash_RequestScopedEnvOverridesProcessEnv(t *testing.T) {
 	}
 }
 
+func TestBash_CredentialUsesOverrideSnapshotEnvByID(t *testing.T) {
+	skipOnWindows(t)
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	e.SetEnvSnapshot(func() map[string]string {
+		return map[string]string{"DISCOBOT_BASH_ENV_TEST_CREDENTIAL": "old-value"}
+	})
+	e.SetCredentialUseEnv(func(uses []CredentialUseBinding) (map[string]string, error) {
+		if len(uses) != 1 {
+			t.Fatalf("expected 1 credential use, got %#v", uses)
+		}
+		if uses[0].CredentialID != "cred_s_new" || uses[0].EnvVar != "DISCOBOT_BASH_ENV_TEST_CREDENTIAL" {
+			t.Fatalf("unexpected credential use: %#v", uses[0])
+		}
+		return map[string]string{"DISCOBOT_BASH_ENV_TEST_CREDENTIAL": "new-value"}, nil
+	})
+
+	out, ok := runBash(t, e, map[string]any{
+		"command": "echo \"${DISCOBOT_BASH_ENV_TEST_CREDENTIAL}\"",
+		"credentialUses": []map[string]string{{
+			"credentialId": "cred_s_new",
+			"useId":        "use_s_123",
+			"envVar":       "DISCOBOT_BASH_ENV_TEST_CREDENTIAL",
+		}},
+	})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "→new-value") {
+		t.Fatalf("expected credential use env value to override snapshot, got: %q", out)
+	}
+}
+
+func TestBash_CredentialUsesRequireEnvResolver(t *testing.T) {
+	skipOnWindows(t)
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	out, ok := runBash(t, e, map[string]any{
+		"command": "true",
+		"credentialUses": []map[string]string{{
+			"credentialId": "cred_s_new",
+			"useId":        "use_s_123",
+			"envVar":       "DISCOBOT_BASH_ENV_TEST_CREDENTIAL",
+		}},
+	})
+	if ok {
+		t.Fatalf("expected credential resolver error, got success: %s", out)
+	}
+	if !strings.Contains(out, "credential environment resolver is not configured") {
+		t.Fatalf("expected resolver error, got: %q", out)
+	}
+}
+
 func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 	skipOnWindows(t)
 

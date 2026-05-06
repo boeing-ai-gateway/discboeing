@@ -84,6 +84,7 @@ type Executor struct {
 	envForThread func(threadID string) map[string]string
 
 	credentialUseAuthorizer func(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error
+	credentialUseEnv        func(uses []CredentialUseBinding) (map[string]string, error)
 }
 
 type CredentialUseBinding struct {
@@ -211,11 +212,25 @@ func (e *Executor) SetCredentialUseAuthorizer(fn func(ctx context.Context, curre
 	e.credentialUseAuthorizer = fn
 }
 
+func (e *Executor) SetCredentialUseEnv(fn func(uses []CredentialUseBinding) (map[string]string, error)) {
+	e.credentialUseEnv = fn
+}
+
 func (e *Executor) authorizeCredentialUses(ctx context.Context, currentProviderID, toolCallID, command, description string, uses []CredentialUseBinding) error {
 	if len(uses) == 0 || e.credentialUseAuthorizer == nil {
 		return nil
 	}
 	return e.credentialUseAuthorizer(ctx, currentProviderID, toolCallID, command, description, uses)
+}
+
+func (e *Executor) envForCredentialUses(uses []CredentialUseBinding) (map[string]string, error) {
+	if len(uses) == 0 {
+		return nil, nil
+	}
+	if e.credentialUseEnv == nil {
+		return nil, fmt.Errorf("credential environment resolver is not configured")
+	}
+	return e.credentialUseEnv(uses)
 }
 
 // getenv returns the value of the environment variable named by key.
