@@ -118,6 +118,14 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 	}, nil
 }
 
+// AcquireHTTPClient returns a leased HTTP client for the session's agent API.
+func (s *SandboxService) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	return sandbox.AcquireHTTPClient(ctx, s.provider, sessionID)
+}
+
 // EnsureSandboxReady checks the session state from the database and ensures
 // the sandbox is ready. For states like "stopped" or "error", it triggers reconciliation.
 // For "initializing" states, it waits briefly then reconciles if still not ready.
