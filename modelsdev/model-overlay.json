@@ -112,6 +112,7 @@
 			"name": "Codex Auto Review",
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -262,6 +263,7 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -307,6 +309,7 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -320,12 +323,10 @@
 			},
 			"contextWindow": 128000,
 			"customTools": true,
-			"defaultReasonLevel": "medium",
+			"defaultReasonLevel": "high",
 			"family": "gpt-codex-spark",
 			"inputModalities": [
-				"text",
-				"image",
-				"pdf"
+				"text"
 			],
 			"maxOutputTokens": 32000,
 			"name": "GPT-5.3 Codex Spark",
@@ -334,7 +335,6 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
-				"none",
 				"low",
 				"medium",
 				"high",
@@ -358,6 +358,7 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -381,6 +382,7 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -404,6 +406,7 @@
 			],
 			"reasoning": true,
 			"reasoningLevels": [
+				"none",
 				"low",
 				"medium",
 				"high",
@@ -422,6 +425,12 @@
 		}
 	},
 	"openai": {
+		"chat-latest": {
+			"reasoning": true,
+			"reasoningLevels": [
+				"medium"
+			]
+		},
 		"computer-use-preview": {
 			"reasoning": true,
 			"reasoningLevels": [

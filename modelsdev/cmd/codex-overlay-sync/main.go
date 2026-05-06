@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -19,6 +20,10 @@ const (
 	sourceProviderID  = "openai"
 	defaultBaseURL    = "https://chatgpt.com/backend-api/codex"
 	defaultCatalogURL = "https://raw.githubusercontent.com/openai/codex/main/codex-rs/models-manager/models.json"
+	// The authenticated Codex models endpoint requires a client_version query
+	// parameter. The sync tool is not tied to a bundled Codex CLI version, so
+	// use a stable placeholder unless callers provide CODEX_CLIENT_VERSION.
+	defaultClientVersion = "0.0.0"
 )
 
 var defaultReasoningLevelOverrides = map[string]string{
@@ -83,30 +88,33 @@ type codexReasoningLevel struct {
 }
 
 type config struct {
-	OverlayPath string
-	BasePath    string
-	BaseURL     string
-	CatalogURL  string
-	Token       string
-	AccountID   string
-	Mode        string
+	OverlayPath   string
+	BasePath      string
+	BaseURL       string
+	CatalogURL    string
+	ClientVersion string
+	Token         string
+	AccountID     string
+	Mode          string
 }
 
 func main() {
 	cfg := config{
-		OverlayPath: defaultOverlayPath(),
-		BasePath:    defaultBasePath(),
-		BaseURL:     strings.TrimRight(envOr("CODEX_API_BASE", defaultBaseURL), "/"),
-		CatalogURL:  envOr("CODEX_MODELS_CATALOG_URL", defaultCatalogURL),
-		Token:       strings.TrimSpace(os.Getenv("CODEX_TOKEN")),
-		AccountID:   strings.TrimSpace(os.Getenv("CHATGPT_ACCOUNT_ID")),
-		Mode:        "refresh",
+		OverlayPath:   defaultOverlayPath(),
+		BasePath:      defaultBasePath(),
+		BaseURL:       strings.TrimRight(envOr("CODEX_API_BASE", defaultBaseURL), "/"),
+		CatalogURL:    envOr("CODEX_MODELS_CATALOG_URL", defaultCatalogURL),
+		ClientVersion: envOr("CODEX_CLIENT_VERSION", defaultClientVersion),
+		Token:         strings.TrimSpace(os.Getenv("CODEX_TOKEN")),
+		AccountID:     strings.TrimSpace(os.Getenv("CHATGPT_ACCOUNT_ID")),
+		Mode:          "refresh",
 	}
 
 	flag.StringVar(&cfg.OverlayPath, "overlay", cfg.OverlayPath, "Path to model-overlay.json")
 	flag.StringVar(&cfg.BasePath, "base", cfg.BasePath, "Path to models-dev-api.json")
 	flag.StringVar(&cfg.BaseURL, "base-url", cfg.BaseURL, "Codex API base URL")
 	flag.StringVar(&cfg.CatalogURL, "catalog-url", cfg.CatalogURL, "Fallback URL for Codex bundled models.json")
+	flag.StringVar(&cfg.ClientVersion, "client-version", cfg.ClientVersion, "Codex client version sent to the authenticated models endpoint (defaults to CODEX_CLIENT_VERSION)")
 	flag.StringVar(&cfg.Token, "token", cfg.Token, "Codex token (defaults to CODEX_TOKEN)")
 	flag.StringVar(&cfg.AccountID, "account-id", cfg.AccountID, "ChatGPT account ID (defaults to CHATGPT_ACCOUNT_ID)")
 	flag.StringVar(&cfg.Mode, "mode", cfg.Mode, "Sync mode: missing or refresh")
@@ -134,7 +142,11 @@ func main() {
 		fatalf("fetch codex models: %v", err)
 	}
 
-	syncCodexOverlay(overlay, base, models, cfg.Mode)
+	var reasoningNoneSupport map[string]bool
+	if source == "api" {
+		reasoningNoneSupport = probeReasoningNoneSupport(client, cfg, models)
+	}
+	syncCodexOverlay(overlay, base, models, cfg.Mode, reasoningNoneSupport)
 	if err := writeOverlay(cfg.OverlayPath, overlay); err != nil {
 		fatalf("write overlay: %v", err)
 	}
@@ -242,10 +254,12 @@ func fetchCodexModelsFromAPI(client *http.Client, cfg config) ([]codexModel, err
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+cfg.Token)
-	if cfg.AccountID != "" {
-		req.Header.Set("ChatGPT-Account-Id", cfg.AccountID)
+	if cfg.ClientVersion != "" {
+		query := req.URL.Query()
+		query.Set("client_version", cfg.ClientVersion)
+		req.URL.RawQuery = query.Encode()
 	}
+	setCodexHeaders(req, cfg)
 	return doModelsRequest(client, req)
 }
 
@@ -273,7 +287,72 @@ func doModelsRequest(client *http.Client, req *http.Request) ([]codexModel, erro
 	return parsed.Models, nil
 }
 
-func syncCodexOverlay(overlay overlayFile, base rawData, models []codexModel, mode string) {
+func probeReasoningNoneSupport(client *http.Client, cfg config, models []codexModel) map[string]bool {
+	if cfg.Token == "" {
+		return nil
+	}
+	support := make(map[string]bool)
+	for _, model := range models {
+		if strings.TrimSpace(model.Slug) == "" || hasReasoningLevel(model, "none") {
+			continue
+		}
+		ok, err := probeReasoningNone(client, cfg, model.Slug)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: probe reasoning none for %s failed: %v\n", model.Slug, err)
+			continue
+		}
+		if ok {
+			support[model.Slug] = true
+		}
+	}
+	return support
+}
+
+func probeReasoningNone(client *http.Client, cfg config, modelID string) (bool, error) {
+	payload := map[string]any{
+		"model":        modelID,
+		"instructions": "You are a helpful assistant.",
+		"input": []map[string]any{{
+			"role": "user",
+			"content": []map[string]string{{
+				"type": "input_text",
+				"text": "Reply with ok.",
+			}},
+		}},
+		"store":  false,
+		"stream": true,
+		"reasoning": map[string]any{
+			"effort": "none",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+	req, err := http.NewRequest(http.MethodPost, cfg.BaseURL+"/responses", bytes.NewReader(data))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setCodexHeaders(req, cfg)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
+}
+
+func setCodexHeaders(req *http.Request, cfg config) {
+	if cfg.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	}
+	if cfg.AccountID != "" {
+		req.Header.Set("ChatGPT-Account-Id", cfg.AccountID)
+	}
+}
+
+func syncCodexOverlay(overlay overlayFile, base rawData, models []codexModel, mode string, reasoningNoneSupport map[string]bool) {
 	if overlay[targetProviderID] == nil {
 		overlay[targetProviderID] = map[string]map[string]any{}
 	}
@@ -300,7 +379,7 @@ func syncCodexOverlay(overlay overlayFile, base rawData, models []codexModel, mo
 		if !ok {
 			continue
 		}
-		codexOverlay[modelID] = syncedEntry(existing, remote, baseModels[modelID])
+		codexOverlay[modelID] = syncedEntry(existing, remote, baseModels[modelID], reasoningNoneSupport[modelID])
 	}
 
 	if mode == "refresh" {
@@ -358,8 +437,11 @@ func isRemoved(entry map[string]any) bool {
 	return removed
 }
 
-func syncedEntry(existing map[string]any, remote codexModel, baseModel modelMetadata) map[string]any {
+func syncedEntry(existing map[string]any, remote codexModel, baseModel modelMetadata, supportsReasoningNone bool) map[string]any {
 	levels := supportedReasoningLevels(remote)
+	if supportsReasoningNone {
+		levels = appendReasoningLevel(levels, "none")
+	}
 	contextWindow := resolvedContextWindow(remote)
 	entry := map[string]any{
 		"customTools":     supportsTools(remote),
@@ -436,6 +518,27 @@ func supportedReasoningLevels(remote codexModel) []string {
 		levels = append(levels, effort)
 	}
 	return levels
+}
+
+func appendReasoningLevel(levels []string, level string) []string {
+	for _, existing := range levels {
+		if existing == level {
+			return levels
+		}
+	}
+	if level == "none" {
+		return append([]string{level}, levels...)
+	}
+	return append(levels, level)
+}
+
+func hasReasoningLevel(remote codexModel, level string) bool {
+	for _, candidate := range remote.SupportedReasoningLevels {
+		if strings.TrimSpace(candidate.Effort) == level {
+			return true
+		}
+	}
+	return false
 }
 
 func supportsReasoning(remote codexModel, levels []string) bool {
