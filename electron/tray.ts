@@ -2,12 +2,11 @@ import { nativeImage, type BrowserWindow, Menu, Tray, app } from "electron";
 import path from "node:path";
 
 function trayIconPath(): string {
-  return path.join(
-    app.getAppPath(),
-    "src-tauri",
-    "icons",
-    "tray-icon.png",
-  );
+  const iconsDir = path.join(app.getAppPath(), "src-tauri", "icons");
+  if (process.platform === "win32") {
+    return path.join(iconsDir, "icon.ico");
+  }
+  return path.join(iconsDir, "tray-icon.png");
 }
 
 function trayIcon(): Electron.NativeImage {
@@ -19,9 +18,6 @@ function trayIcon(): Electron.NativeImage {
   }
   if (process.platform === "linux") {
     return icon.resize({ width: 22, height: 22 });
-  }
-  if (process.platform === "win32") {
-    return icon.resize({ width: 16, height: 16 });
   }
   return icon;
 }

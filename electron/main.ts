@@ -221,6 +221,17 @@ function setupDevContextMenu(window: BrowserWindow): void {
   });
 }
 
+function appIconPath(): string {
+  const iconsDir = path.join(app.getAppPath(), "src-tauri", "icons");
+  if (process.platform === "win32") {
+    return path.join(iconsDir, "icon.ico");
+  }
+  if (process.platform === "darwin") {
+    return path.join(iconsDir, "icon.icns");
+  }
+  return path.join(iconsDir, "icon.png");
+}
+
 async function createMainWindow(): Promise<BrowserWindow> {
   const windowState = await loadWindowState();
   const window = new BrowserWindow(
@@ -229,6 +240,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
         show: false,
         autoHideMenuBar: true,
         title: "Discobot",
+        icon: appIconPath(),
         backgroundColor: "#0b0b0d",
         titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
         frame: process.platform === "darwin",

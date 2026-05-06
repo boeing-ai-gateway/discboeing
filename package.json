@@ -114,6 +114,14 @@
       "entitlements": "src-tauri/entitlements.plist",
       "entitlementsInherit": "src-tauri/entitlements.plist"
     },
+    "win": {
+      "icon": "src-tauri/icons/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
     "publish": [
       {
         "provider": "github"
