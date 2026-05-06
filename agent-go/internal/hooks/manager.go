@@ -19,6 +19,7 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/promptqueue"
@@ -78,6 +79,7 @@ type Manager struct {
 	workspaceRoot string
 	sessionID     string
 	hooksDataDir  string
+	processes     *processes.Manager
 
 	mu             sync.Mutex
 	fileHooks      []Hook
@@ -93,11 +95,16 @@ type Manager struct {
 }
 
 // NewManager creates a new HookManager.
-func NewManager(workspaceRoot, sessionID string) *Manager {
+func NewManager(workspaceRoot, sessionID string, processManager ...*processes.Manager) *Manager {
+	procMgr := processes.NewManager(workspaceRoot)
+	if len(processManager) > 0 && processManager[0] != nil {
+		procMgr = processManager[0]
+	}
 	return &Manager{
 		workspaceRoot:      workspaceRoot,
 		sessionID:          sessionID,
 		hooksDataDir:       GetHooksDataDir(sessionID),
+		processes:          procMgr,
 		hookRetryCount:     make(map[string]int),
 		hookNotificationTo: make(map[string]string),
 	}
@@ -390,6 +397,7 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 		ChangedFiles: matching,
 		SessionID:    m.sessionID,
 		OutputPath:   outputPath,
+		Processes:    m.processes,
 	})
 
 	eval := FileHookEvalResult{}
@@ -491,6 +499,7 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 			ChangedFiles: matching,
 			SessionID:    m.sessionID,
 			OutputPath:   outputPath,
+			Processes:    m.processes,
 		})
 
 		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)

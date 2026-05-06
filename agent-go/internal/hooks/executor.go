@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 )
 
@@ -35,10 +37,15 @@ type ExecuteOptions struct {
 	ChangedFiles []string
 	SessionID    string
 	OutputPath   string
+	Processes    *processes.Manager
 }
 
 // ExecuteHook runs a hook script and returns the result.
 func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
+	if opts.Processes != nil {
+		return executeHookProcess(hook, opts)
+	}
+
 	start := time.Now()
 
 	timeout := opts.Timeout
@@ -121,6 +128,110 @@ func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
 	return result
 }
 
+func executeHookProcess(hook Hook, opts ExecuteOptions) HookResult {
+	start := time.Now()
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+
+	command, args := buildHookCommand(hook.Path)
+	env := hookEnv(hook, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	writeOutputFile(opts.OutputPath, "")
+
+	session, err := opts.Processes.Start(ctx, processes.CreateRequest{
+		Kind:    processes.KindHook,
+		Name:    hook.Name,
+		Cmd:     append([]string{command}, args...),
+		WorkDir: opts.Cwd,
+		Env:     env,
+		LogDir:  processSidecarDir(opts.OutputPath),
+		LogPath: opts.OutputPath,
+		Metadata: map[string]string{
+			"hookId": hook.ID,
+			"type":   string(hook.Type),
+		},
+	})
+	if err != nil {
+		result := HookResult{
+			Success:    false,
+			ExitCode:   127,
+			Output:     err.Error(),
+			Hook:       hook,
+			DurationMs: time.Since(start).Milliseconds(),
+		}
+		writeOutputFile(opts.OutputPath, result.Output)
+		return result
+	}
+
+	_, unsubscribe, done, err := opts.Processes.Subscribe(session.ID)
+	if err != nil {
+		_ = opts.Processes.Kill(session.ID)
+		result := HookResult{
+			Success:    false,
+			ExitCode:   126,
+			Output:     err.Error(),
+			Hook:       hook,
+			DurationMs: time.Since(start).Milliseconds(),
+		}
+		writeOutputFile(opts.OutputPath, result.Output)
+		return result
+	}
+	defer unsubscribe()
+
+	timedOut := false
+	timer := time.NewTimer(timeout)
+	select {
+	case <-done:
+	case <-timer.C:
+		timedOut = true
+		_ = opts.Processes.Kill(session.ID)
+		<-done
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+
+	output := readOutputFile(opts.OutputPath)
+	exitCode := 0
+	if timedOut {
+		exitCode = 124
+		timeoutMessage := fmt.Sprintf("\n[Hook timed out after %ds and was killed]\n", int(timeout.Seconds()))
+		output += timeoutMessage
+		appendOutputFile(opts.OutputPath, timeoutMessage)
+	} else if session, err := opts.Processes.Get(session.ID); err == nil && session.ExitCode != nil {
+		exitCode = *session.ExitCode
+	}
+
+	return HookResult{
+		Success:    exitCode == 0,
+		ExitCode:   exitCode,
+		Output:     output,
+		Hook:       hook,
+		DurationMs: time.Since(start).Milliseconds(),
+	}
+}
+
+func hookEnv(hook Hook, opts ExecuteOptions) map[string]string {
+	env := workspaceenv.MergeProcessSnapshot(opts.Env)
+	env["DISCOBOT_HOOK_TYPE"] = string(hook.Type)
+	if opts.SessionID != "" {
+		env["DISCOBOT_SESSION_ID"] = opts.SessionID
+	}
+	if opts.Cwd != "" {
+		env["DISCOBOT_WORKSPACE"] = opts.Cwd
+	}
+	if len(opts.ChangedFiles) > 0 {
+		env["DISCOBOT_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
+	}
+	return env
+}
+
 // GetHookOutputPath returns the path to a hook's output log file.
 func GetHookOutputPath(hooksDataDir, hookID string) string {
 	return filepath.Join(hooksDataDir, "output", hookID+".log")
@@ -133,6 +244,34 @@ func writeOutputFile(path, output string) {
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	_ = os.WriteFile(path, []byte(output), 0o644)
+}
+
+func appendOutputFile(path, output string) {
+	if path == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = io.WriteString(f, output)
+}
+
+func readOutputFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func processSidecarDir(outputPath string) string {
+	if outputPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(outputPath), "."+filepath.Base(outputPath)+".process")
 }
 
 func buildHookCommand(path string) (string, []string) {

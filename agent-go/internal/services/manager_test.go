@@ -28,7 +28,7 @@ func TestGetServicesIncludesBuiltInVSCodeWhenAvailable(t *testing.T) {
 		lookPath = originalLookPath
 	})
 
-	mgr := NewManager()
+	mgr := NewManager(workspaceRoot)
 	services, err := mgr.GetServices(workspaceRoot)
 	if err != nil {
 		t.Fatalf("GetServices() failed: %v", err)
@@ -66,7 +66,7 @@ func TestGetServiceReturnsBuiltInVSCodeWhenAvailable(t *testing.T) {
 		lookPath = originalLookPath
 	})
 
-	mgr := NewManager()
+	mgr := NewManager(workspaceRoot)
 	svc, err := mgr.GetService(workspaceRoot, vscodeService.ID)
 	if err != nil {
 		t.Fatalf("GetService() failed: %v", err)
@@ -123,7 +123,7 @@ wait
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
 
-	mgr := NewManager()
+	mgr := NewManager(workspaceRoot)
 	if _, code, err := mgr.StartService(workspaceRoot, serviceID); err != nil {
 		t.Fatalf("StartService() failed: code=%q err=%v", code, err)
 	}
@@ -135,7 +135,7 @@ wait
 	waitForProcessesAlive(t, parentPID, childPID, grandchildPID)
 
 	t.Cleanup(func() {
-		_ = killProcessGroup(parentPID, syscall.SIGKILL)
+		_ = syscall.Kill(-parentPID, syscall.SIGKILL)
 		for _, pid := range []int{parentPID, childPID, grandchildPID} {
 			if processExists(pid) {
 				_ = syscall.Kill(pid, syscall.SIGKILL)
@@ -197,7 +197,7 @@ printf 'VISIBLE_FROM_OS=%%s\n' "${VISIBLE_FROM_OS:-}" >> %q
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
 
-	mgr := NewManager()
+	mgr := NewManager(workspaceRoot)
 	visibleEnv := map[string]string{"VISIBLE_AT_LAUNCH": "first-value"}
 	mgr.SetEnvSnapshot(func() map[string]string {
 		snapshot := make(map[string]string, len(visibleEnv))
@@ -273,7 +273,7 @@ printf 'WORKSPACE_DYNAMIC=%%s\n' "${WORKSPACE_DYNAMIC:-}" > %q
 		t.Fatalf("WriteFile(script) failed: %v", err)
 	}
 
-	mgr := NewManager()
+	mgr := NewManager(workspaceRoot)
 
 	if _, code, err := mgr.StartService(workspaceRoot, serviceID); err != nil {
 		t.Fatalf("StartService(first) failed: code=%q err=%v", code, err)

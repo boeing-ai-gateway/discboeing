@@ -25,6 +25,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/handler"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
 	"github.com/obot-platform/discobot/agent-go/internal/middleware"
+	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
@@ -173,6 +174,7 @@ func Run(cfg *config.Config) {
 
 	// ── ConversationManager ────────────────────────────────────────────────────
 	conversations := agent.NewConversationManager(a)
+	processMgr := processes.NewManager(cfg.AgentCwd)
 
 	queueStore := promptqueue.NewStore(cfg.ThreadsDir)
 	promptQueue := promptqueue.NewManager(queueStore, conversations, nil)
@@ -187,7 +189,7 @@ func Run(cfg *config.Config) {
 	// ── Hook manager ─────────────────────────────────────────────────────────
 	var hookMgr *hooks.Manager
 	if cfg.HooksEnabled {
-		hookMgr = hooks.NewManager(cfg.AgentCwd, cfg.SessionID)
+		hookMgr = hooks.NewManager(cfg.AgentCwd, cfg.SessionID, processMgr)
 		if err := hookMgr.Init(); err != nil {
 			log.Printf("warn: hooks init: %v", err)
 		}
@@ -203,13 +205,13 @@ func Run(cfg *config.Config) {
 	}
 
 	// ── Service manager ──────────────────────────────────────────────────────
-	svcMgr := services.NewManager()
+	svcMgr := services.NewManager(cfg.AgentCwd, processMgr)
 	svcMgr.SetEnvSnapshot(func() map[string]string {
 		return credMgr.ServicesSnapshot()
 	})
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
-	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr)
+	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr, processMgr)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()

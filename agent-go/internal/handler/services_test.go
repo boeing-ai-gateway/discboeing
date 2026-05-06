@@ -33,7 +33,7 @@ exec sleep 30
 		t.Fatalf("WriteFile() failed: %v", err)
 	}
 
-	serviceManager := services.NewManager()
+	serviceManager := services.NewManager(workspaceRoot)
 	h := New(workspaceRoot, agent.NewConversationManager(&streamTestAgent{}), nil, serviceManager, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/services/preview/http/health", nil)

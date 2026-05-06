@@ -1,9 +1,8 @@
 package services
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"log"
 	"maps"
 	"os"
 	"os/exec"
@@ -11,9 +10,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 )
 
@@ -26,8 +25,9 @@ type subscriber struct {
 type managedService struct {
 	mu          sync.Mutex
 	service     ServiceInfo
-	process     *os.Process
+	sessionID   string
 	closeCh     chan struct{} // closed when process exits
+	closeOnce   sync.Once
 	subscribers []*subscriber
 }
 
@@ -68,12 +68,18 @@ type Manager struct {
 	mu          sync.RWMutex
 	services    map[string]*managedService // keyed by service ID
 	envSnapshot func() map[string]string
+	processes   *processes.Manager
 }
 
 // NewManager creates a new service Manager.
-func NewManager() *Manager {
+func NewManager(defaultWorkDir string, processManager ...*processes.Manager) *Manager {
+	procMgr := processes.NewManager(defaultWorkDir)
+	if len(processManager) > 0 && processManager[0] != nil {
+		procMgr = processManager[0]
+	}
 	return &Manager{
-		services: make(map[string]*managedService),
+		services:  make(map[string]*managedService),
+		processes: procMgr,
 	}
 }
 
@@ -275,21 +281,19 @@ func (mgr *Manager) StopService(serviceID string) (string, error) {
 
 	managed.mu.Lock()
 	managed.service.Status = "stopping"
-	proc := managed.process
+	sessionID := managed.sessionID
 	managed.mu.Unlock()
 
-	if proc != nil {
-		// Kill process group
-		_ = killProcessGroup(proc.Pid, syscall.SIGTERM)
+	if sessionID != "" {
+		_ = mgr.processes.Kill(sessionID)
 
-		// SIGKILL after 5 seconds if still running
 		go func() {
 			time.Sleep(5 * time.Second)
 			managed.mu.Lock()
 			s := managed.service.Status
 			managed.mu.Unlock()
 			if s == "stopping" {
-				_ = killProcessGroup(proc.Pid, syscall.SIGKILL)
+				_ = mgr.processes.Kill(sessionID)
 			}
 		}()
 	}
@@ -332,35 +336,27 @@ func (mgr *Manager) spawnService(workspaceRoot string, svcTemplate ServiceInfo, 
 	svc.StartedAt = time.Now().UTC().Format(time.RFC3339)
 
 	command, args := buildServiceCommand(svcTemplate.Path)
-	cmd := exec.Command(command, args...)
-	cmd.Dir = workspaceRoot
-	cmd.Env = mergedEnv(requestEnv)
-	setSysProcAttr(cmd)
-
-	stdout, err := cmd.StdoutPipe()
+	session, err := mgr.processes.Start(context.Background(), processes.CreateRequest{
+		Kind:     processes.KindService,
+		Name:     svc.Name,
+		ReuseKey: "service:" + svc.ID,
+		Cmd:      append([]string{command}, args...),
+		WorkDir:  workspaceRoot,
+		Env:      mergedEnvMap(requestEnv),
+		Metadata: map[string]string{"serviceId": svc.ID},
+	})
 	if err != nil {
-		log.Printf("services: failed to create stdout pipe for %s: %v", svc.ID, err)
-		return
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		log.Printf("services: failed to create stderr pipe for %s: %v", svc.ID, err)
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Printf("services: failed to start %s: %v", svc.ID, err)
 		appendEvent(svc.ID, newErrorEvent(err.Error()))
 		return
 	}
 
-	svc.PID = cmd.Process.Pid
+	svc.PID = session.PID
 	svc.Status = "running"
 
 	managed := &managedService{
-		service: svc,
-		process: cmd.Process,
-		closeCh: make(chan struct{}),
+		service:   svc,
+		sessionID: session.ID,
+		closeCh:   make(chan struct{}),
 	}
 
 	mgr.mu.Lock()
@@ -372,61 +368,60 @@ func (mgr *Manager) spawnService(workspaceRoot string, svcTemplate ServiceInfo, 
 		managed.broadcast(event)
 	}
 
-	// Read stdout
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			emitEvent(newStdoutEvent(scanner.Text()))
+		events, unsubscribe, done, err := mgr.processes.Subscribe(session.ID)
+		if err != nil {
+			emitEvent(newErrorEvent(err.Error()))
+			close(managed.closeCh)
+			return
+		}
+		defer unsubscribe()
+
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					mgr.finishService(svc.ID, managed)
+					return
+				}
+				switch event.Type {
+				case "stdout":
+					emitEvent(newStdoutEvent(event.Data))
+				case "stderr":
+					emitEvent(newStderrEvent(event.Data))
+				case "exit":
+					emitEvent(newExitEvent(event.ExitCode))
+				case "error":
+					emitEvent(newErrorEvent(event.Error))
+				}
+			case <-done:
+				mgr.finishService(svc.ID, managed)
+				return
+			}
 		}
 	}()
+}
 
-	// Read stderr
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			emitEvent(newStderrEvent(scanner.Text()))
-		}
-	}()
-
-	// Wait for process exit
-	go func() {
-		err := cmd.Wait()
-
-		// Determine the exit event outside the lock to avoid deadlock:
-		// emitEvent → broadcast also acquires managed.mu.
-		var event OutputEvent
+func (mgr *Manager) finishService(serviceID string, managed *managedService) {
+	managed.closeOnce.Do(func() {
+		session, err := mgr.processes.Get(managed.sessionID)
 		managed.mu.Lock()
 		managed.service.Status = "stopped"
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				code := exitErr.ExitCode()
-				managed.service.ExitCode = &code
-				event = newExitEvent(&code)
-			} else {
-				event = newErrorEvent(err.Error())
-			}
-		} else {
-			code := 0
-			managed.service.ExitCode = &code
-			event = newExitEvent(&code)
+		if err == nil {
+			managed.service.ExitCode = session.ExitCode
 		}
 		managed.mu.Unlock()
 
-		emitEvent(event)
-
 		close(managed.closeCh)
 
-		// Grace period: remove from map after 30 seconds
 		time.AfterFunc(30*time.Second, func() {
 			mgr.mu.Lock()
-			if current, ok := mgr.services[svc.ID]; ok && current == managed {
-				delete(mgr.services, svc.ID)
+			if current, ok := mgr.services[serviceID]; ok && current == managed {
+				delete(mgr.services, serviceID)
 			}
 			mgr.mu.Unlock()
 		})
-	}()
+	})
 }
 
 func buildServiceCommand(path string) (string, []string) {
@@ -460,8 +455,8 @@ func (mgr *Manager) visibleEnvSnapshot(workspaceRoot string) map[string]string {
 	return env
 }
 
-func mergedEnv(requestEnv map[string]string) []string {
-	return workspaceenv.List(workspaceenv.MergeProcessSnapshot(requestEnv))
+func mergedEnvMap(requestEnv map[string]string) map[string]string {
+	return workspaceenv.MergeProcessSnapshot(requestEnv)
 }
 
 func parseServiceShebang(path string) (string, []string) {
