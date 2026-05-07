@@ -8,6 +8,7 @@
 	"security.workspace.trust.enabled": false,
 	"telemetry.telemetryLevel": "off",
 	"chat.agent.enabled": false,
+	"chat.disableAIFeatures": true,
 	"workbench.secondarySideBar.defaultVisibility": "hidden",
 	"workbench.layoutControl.enabled": false,
 	"workbench.startupEditor": "none",
