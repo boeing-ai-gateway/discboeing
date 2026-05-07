@@ -1354,7 +1354,15 @@ func (s *SessionService) applyPatches(ctx context.Context, projectID string, wor
 
 	finalCommit, err := s.gitService.ApplyPatches(ctx, sess.WorkspaceID, []byte(patches))
 	if err != nil {
-		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to apply patches to workspace: %v", err))
+		errorMsg := fmt.Sprintf("Failed to apply patches to workspace: %v", err)
+		if usesPreparedSandboxCommitPull(opts) {
+			requestedBase := strings.TrimSpace(opts.RequestedBaseCommit)
+			currentHead, resolveErr := resolveSessionTargetCommit(ctx, s.gitService, sess)
+			if requestedBase != "" && resolveErr == nil && !commitHashesMatch(requestedBase, currentHead) {
+				errorMsg = fmt.Sprintf("%s\n\nThe requested patch base %s does not match the current workspace HEAD %s. Rebase the sandbox changes onto the current HEAD, create a new commit, and call RequestCommitPull again instead of creating unrelated replacement commits.", errorMsg, requestedBase, strings.TrimSpace(currentHead))
+			}
+		}
+		s.setCommitFailed(ctx, projectID, workspace, sess, errorMsg)
 		return nil
 	}
 
@@ -1448,6 +1456,12 @@ func chooseRequestedBaseCommit(resolvedTargetCommit string, opts CommitSessionOp
 
 func usesPreparedSandboxCommitPull(opts CommitSessionOptions) bool {
 	return strings.TrimSpace(opts.RequestedCommitHash) != ""
+}
+
+func commitHashesMatch(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	return a != "" && b != "" && (strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
 }
 
 func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, sessionID, threadID, questionID string, commitErr error) error {

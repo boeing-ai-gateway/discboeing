@@ -73,6 +73,31 @@ func addedFilePatch(message, authorName, authorEmail, path, content string) stri
 	return mustRunGitCommand(patchRepo, "format-patch", "--stdout", base+"..HEAD")
 }
 
+func modifiedReadmePatch(message, authorName, authorEmail, content string) string {
+	patchRepo, err := os.MkdirTemp(os.TempDir(), "discobot-perform-commit-patch-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(patchRepo)
+
+	mustRunGitCommand(patchRepo, "init")
+	mustRunGitCommand(patchRepo, "config", "user.email", authorEmail)
+	mustRunGitCommand(patchRepo, "config", "user.name", authorName)
+	if err := os.WriteFile(filepath.Join(patchRepo, "README.md"), []byte("# Test\n"), 0644); err != nil {
+		panic(err)
+	}
+	mustRunGitCommand(patchRepo, "add", "README.md")
+	mustRunGitCommand(patchRepo, "commit", "-m", "base")
+	base := strings.TrimSpace(mustRunGitCommand(patchRepo, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(patchRepo, "README.md"), []byte(content), 0644); err != nil {
+		panic(err)
+	}
+	mustRunGitCommand(patchRepo, "add", "README.md")
+	mustRunGitCommand(patchRepo, "commit", "-m", message)
+	return mustRunGitCommand(patchRepo, "format-patch", "--stdout", base+"..HEAD")
+}
+
 func mustRunGitCommand(dir string, args ...string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -1269,6 +1294,68 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 	}
 	if updatedSession.CommitStatus != model.CommitStatusCompleted {
 		t.Fatalf("expected commit status %q, got %q (error: %v)", model.CommitStatusCompleted, updatedSession.CommitStatus, updatedSession.CommitError)
+	}
+}
+
+func TestPerformCommit_RequestCommitPullApplyFailureSuggestsRebase(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	project := env.createTestProject(t)
+	workspace, initialCommit := env.createTestWorkspace(t, project.ID)
+	session := env.createTestSession(t, project.ID, workspace.ID, initialCommit)
+	currentHead := env.addCommitToWorkspace(t, workspace.Path, "README.md", "# Host\n")
+
+	const requestedCommit = "3b408234aefc"
+	const requestedDirectory = "/tmp/discobot-commit-worktree"
+
+	handler := &trackingHandler{
+		onCommits: func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(sandboxapi.CommitsResponse{
+				Patches:     modifiedReadmePatch("Prepared sandbox work", "Agent", "agent@example.com", "# Sandbox\n"),
+				CommitCount: 1,
+				HeadCommit:  requestedCommit + "5c338c39d2b610fc45a207ca83dc",
+			})
+		},
+	}
+	env.mockSandbox.HTTPHandler = handler
+
+	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create sandbox: %v", err)
+	}
+	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+		t.Fatalf("Failed to start sandbox: %v", err)
+	}
+
+	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
+	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
+	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+
+	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
+		RequestedDirectory:  requestedDirectory,
+		RequestedBaseCommit: initialCommit,
+		RequestedCommitHash: requestedCommit,
+	})
+	if err != nil {
+		t.Fatalf("PerformCommit failed: %v", err)
+	}
+
+	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Failed to get session: %v", err)
+	}
+	if updatedSession.CommitStatus != model.CommitStatusFailed {
+		t.Fatalf("expected commit status %q, got %q", model.CommitStatusFailed, updatedSession.CommitStatus)
+	}
+	if updatedSession.CommitError == nil {
+		t.Fatal("expected commit error")
+	}
+	for _, want := range []string{"Failed to apply patches", "does not match the current workspace HEAD", initialCommit, currentHead, "Rebase the sandbox changes"} {
+		if !strings.Contains(*updatedSession.CommitError, want) {
+			t.Fatalf("expected commit error to contain %q, got %q", want, *updatedSession.CommitError)
+		}
 	}
 }
 
