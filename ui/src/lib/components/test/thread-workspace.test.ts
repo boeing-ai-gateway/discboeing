@@ -7,9 +7,17 @@ const THREAD_WORKSPACE_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/ThreadWorkspace.svelte",
 );
+const THREAD_WORKSPACE_ACTIVE_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ThreadWorkspaceActive.svelte",
+);
 
 function readThreadWorkspaceSource() {
 	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
+}
+
+function readThreadWorkspaceActiveSource() {
+	return readFileSync(THREAD_WORKSPACE_ACTIVE_COMPONENT, "utf-8");
 }
 
 test("thread workspace keeps pending sessions on the active conversation view and avoids the loading screen once messages exist", () => {
@@ -65,4 +73,22 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		/Loading the selected thread while the session starts\./,
 	);
 	assert.match(source, /Select a thread to continue\./);
+});
+
+test("active thread workspace keeps the stream live while inactive conversation nodes are unmounted", () => {
+	const source = readThreadWorkspaceActiveSource();
+
+	assert.match(source, /void thread\.connect\(\);/);
+	assert.match(
+		source,
+		/\$effect\(\(\) => \{[\s\S]*void thread\.connect\(\);[\s\S]*\}\);/,
+	);
+	assert.match(
+		source,
+		/\{#if props\.visible\}\s*<ConversationPane visible=\{props\.visible\} \/>\s*\{\/if\}/,
+	);
+	assert.equal(
+		source.match(/<ConversationPane visible=\{props\.visible\} \/>/g)?.length,
+		2,
+	);
 });
