@@ -289,6 +289,13 @@ func (c *SessionClient) GetHooksStatus(ctx context.Context) (*sandboxapi.HooksSt
 	})
 }
 
+// GetHooksState retrieves hook status and inline outputs from the sandbox.
+func (c *SessionClient) GetHooksState(ctx context.Context) (*sandboxapi.HooksStateResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.HooksStateResponse, error) {
+		return c.inner.GetHooksState(ctx, c.sessionID)
+	})
+}
+
 // GetHookOutput retrieves the output log for a specific hook from the sandbox.
 func (c *SessionClient) GetHookOutput(ctx context.Context, hookID string) (*sandboxapi.HookOutputResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.HookOutputResponse, error) {

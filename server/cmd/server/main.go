@@ -1413,6 +1413,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/hooks/state",
+						Handler: h.GetHooksState,
+						Meta: routes.Meta{
+							Group:       "Hooks",
+							Description: "Get hook status and output logs",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "GET", Pattern: "/hooks/{hookId}/output",
 						Handler: h.GetHookOutput,
 						Meta: routes.Meta{

@@ -35,6 +35,31 @@ func (h *Handler) GetHooksStatus(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
+// GetHooksState returns hook status and inline outputs for a session's sandbox.
+// GET /api/projects/{projectId}/sessions/{sessionId}/hooks/state
+func (h *Handler) GetHooksState(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+
+	result, err := h.chatService.GetHooksState(ctx, projectID, sessionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
 // GetHookOutput returns the output log for a specific hook in a session's sandbox.
 // GET /api/projects/{projectId}/sessions/{sessionId}/hooks/{hookId}/output
 func (h *Handler) GetHookOutput(w http.ResponseWriter, r *http.Request) {

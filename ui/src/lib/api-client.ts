@@ -77,6 +77,7 @@ import type {
 	GitHubPollResponse,
 	HookOutputResponse,
 	HookRerunResponse,
+	HooksStateResponse,
 	HooksStatusResponse,
 	ListThreadsResponse,
 	ListServicesResponse,
@@ -1028,6 +1029,14 @@ class ApiClient {
 		return this.fetch<HooksStatusResponse>(
 			`/sessions/${sessionId}/hooks/status`,
 		);
+	}
+
+	/**
+	 * Get hook status and output logs for a session's sandbox.
+	 * @param sessionId Session ID
+	 */
+	async getHooksState(sessionId: string): Promise<HooksStateResponse> {
+		return this.fetch<HooksStateResponse>(`/sessions/${sessionId}/hooks/state`);
 	}
 
 	/**

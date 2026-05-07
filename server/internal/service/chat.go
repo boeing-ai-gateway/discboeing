@@ -615,6 +615,22 @@ func (c *ChatService) GetHooksStatus(ctx context.Context, projectID, sessionID s
 	return client.GetHooksStatus(ctx)
 }
 
+// GetHooksState retrieves hook status and inline outputs from the sandbox.
+// The sandbox is automatically reconciled if not running.
+func (c *ChatService) GetHooksState(ctx context.Context, projectID, sessionID string) (*sandboxapi.HooksStateResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetHooksState(ctx)
+}
+
 // GetHookOutput retrieves the output log for a specific hook from the sandbox.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) GetHookOutput(ctx context.Context, projectID, sessionID, hookID string) (*sandboxapi.HookOutputResponse, error) {

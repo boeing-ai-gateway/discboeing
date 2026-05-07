@@ -1353,6 +1353,11 @@ export interface HookOutputResponse {
 	tooLarge: boolean;
 }
 
+/** Hook status and output logs for a session */
+export interface HooksStateResponse extends HooksStatusResponse {
+	outputs: Record<string, HookOutputResponse>;
+}
+
 /** Hook rerun response */
 export interface HookRerunResponse {
 	success: boolean;

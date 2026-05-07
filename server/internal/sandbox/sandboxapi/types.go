@@ -487,6 +487,12 @@ type HookOutputResponse struct {
 	TooLarge       bool   `json:"tooLarge"`
 }
 
+// HooksStateResponse is the GET /hooks/state response.
+type HooksStateResponse struct {
+	HooksStatusResponse
+	Outputs map[string]HookOutputResponse `json:"outputs"`
+}
+
 // HookRerunResponse is the POST /hooks/:hookId/rerun response.
 type HookRerunResponse struct {
 	Success  bool `json:"success"`

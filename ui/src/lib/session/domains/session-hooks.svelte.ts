@@ -1,5 +1,5 @@
 import { api } from "$lib/api-client";
-import type { HooksStatusResponse } from "$lib/api-types";
+import type { HookOutputResponse, HooksStatusResponse } from "$lib/api-types";
 import { createResource } from "$lib/resource/create-resource.svelte";
 import {
 	mergeHookOutput,
@@ -10,7 +10,7 @@ import type {
 	SessionHooksService,
 } from "$lib/session/session-context.types";
 
-const HOOK_STATUS_POLL_MS = 2_000;
+const HOOK_STATUS_POLL_MS = 5_000;
 
 type CreateSessionHooksDomainArgs = {
 	sessionId: string;
@@ -28,8 +28,8 @@ export function createSessionHooksDomain(
 		enabled: () => args.hasSession(),
 		createEmptyValue: () => null,
 		load: async () => {
-			const nextStatus = await api.getHooksStatus(args.sessionId);
-			await loadOutputs(nextStatus);
+			const nextStatus = await api.getHooksState(args.sessionId);
+			loadOutputs(nextStatus.outputs);
 			streamedStatus = null;
 			return nextStatus;
 		},
@@ -88,31 +88,12 @@ export function createSessionHooksDomain(
 		};
 	});
 
-	async function loadOutputs(nextStatus: HooksStatusResponse | null) {
-		if (!nextStatus) {
-			outputById = {};
-			return;
-		}
-
-		const outputs = await Promise.allSettled(
-			Object.keys(nextStatus.hooks).map(async (hookId) => {
-				const response = await api.getHookOutput(args.sessionId, hookId);
-				return [hookId, response] as const;
-			}),
-		);
-
-		outputById = outputs.reduce<Record<string, HookOutputState>>(
-			(nextOutputById, result) => {
-				if (result.status === "rejected") {
-					console.warn(
-						"Failed to load hook output; continuing without it",
-						result.reason,
-					);
-					return nextOutputById;
-				}
-				const [hookId, response] = result.value;
-				return mergeHookOutput(nextOutputById, hookId, response);
-			},
+	function loadOutputs(outputs: Record<string, HookOutputResponse>) {
+		outputById = Object.entries(outputs).reduce<
+			Record<string, HookOutputState>
+		>(
+			(nextOutputById, [hookId, response]) =>
+				mergeHookOutput(nextOutputById, hookId, response),
 			{},
 		);
 	}
@@ -126,7 +107,13 @@ export function createSessionHooksDomain(
 			return;
 		}
 		streamedStatus = nextStatus;
-		await loadOutputs(nextStatus);
+		try {
+			const nextState = await api.getHooksState(args.sessionId);
+			streamedStatus = nextState;
+			loadOutputs(nextState.outputs);
+		} catch (error) {
+			console.warn("Failed to load hook state; continuing with status", error);
+		}
 		resource.invalidate();
 	}
 

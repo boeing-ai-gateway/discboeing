@@ -1878,6 +1878,51 @@ func (c *SandboxAgentClient) GetHooksStatus(ctx context.Context, sessionID strin
 	return &result, nil
 }
 
+// GetHooksState retrieves hook status and inline outputs from the sandbox.
+// Retries with exponential backoff on connection errors and 5xx responses.
+func (c *SandboxAgentClient) GetHooksState(ctx context.Context, sessionID string) (*sandboxapi.HooksStateResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/hooks/state", nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hooks state: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.HooksStateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GetHookOutput retrieves the output log for a specific hook from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
 func (c *SandboxAgentClient) GetHookOutput(ctx context.Context, sessionID, hookID string) (*sandboxapi.HookOutputResponse, error) {

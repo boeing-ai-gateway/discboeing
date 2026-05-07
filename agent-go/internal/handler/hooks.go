@@ -12,13 +12,16 @@ import (
 
 // HooksStatus handles GET /hooks/status — returns hook evaluation status.
 func (h *Handler) HooksStatus(w http.ResponseWriter, _ *http.Request) {
+	h.JSON(w, http.StatusOK, h.hooksStatusResponse())
+}
+
+func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 	if h.hookManager == nil {
-		h.JSON(w, http.StatusOK, api.HooksStatusResponse{
+		return api.HooksStatusResponse{
 			Hooks:           map[string]api.HookRunStatus{},
 			PendingHooks:    []string{},
 			LastEvaluatedAt: "",
-		})
-		return
+		}
 	}
 
 	status := h.hookManager.GetStatus()
@@ -43,6 +46,36 @@ func (h *Handler) HooksStatus(w http.ResponseWriter, _ *http.Request) {
 			RunCount:            s.RunCount,
 			FailCount:           s.FailCount,
 			ConsecutiveFailures: s.ConsecutiveFailures,
+		}
+	}
+
+	return resp
+}
+
+// HooksState handles GET /hooks/state — returns hook status and inline outputs.
+func (h *Handler) HooksState(w http.ResponseWriter, _ *http.Request) {
+	status := h.hooksStatusResponse()
+	resp := api.HooksStateResponse{
+		HooksStatusResponse: status,
+		Outputs:             map[string]api.HookOutputResponse{},
+	}
+
+	if h.hookManager == nil {
+		h.JSON(w, http.StatusOK, resp)
+		return
+	}
+
+	for hookID := range status.Hooks {
+		output, err := h.hookManager.GetHookOutput(hookID)
+		if err != nil {
+			h.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		resp.Outputs[hookID] = api.HookOutputResponse{
+			Output:         output.Output,
+			SizeBytes:      output.SizeBytes,
+			DisplayedBytes: output.DisplayedBytes,
+			TooLarge:       output.TooLarge,
 		}
 	}
 

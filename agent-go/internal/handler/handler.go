@@ -256,6 +256,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Hook routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/status", Handler: h.HooksStatus,
 		Meta: routes.Meta{Group: "Hooks", Description: "Get hook evaluation status"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/state", Handler: h.HooksState,
+		Meta: routes.Meta{Group: "Hooks", Description: "Get hook status and output logs"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/{hookId}/output", Handler: h.HookOutput,
 		Meta: routes.Meta{Group: "Hooks", Description: "Get hook output log"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/{hookId}/output/download", Handler: h.HookOutputDownload,
