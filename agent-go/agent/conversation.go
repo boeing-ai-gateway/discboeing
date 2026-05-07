@@ -233,7 +233,7 @@ type PollResult struct {
 }
 
 // EmitEphemeralChunk publishes a global ephemeral chunk to current subscribers only.
-func (cm *ConversationManager) EmitEphemeralChunk(_ string, chunk message.MessageChunk) {
+func (cm *ConversationManager) EmitEphemeralChunk(chunk message.MessageChunk) {
 	cm.mu.Lock()
 	subscribers := make([]chan message.MessageChunk, 0, len(cm.ephemeralSubscribers))
 	for _, ch := range cm.ephemeralSubscribers {

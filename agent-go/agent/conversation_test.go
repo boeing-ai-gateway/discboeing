@@ -741,7 +741,7 @@ func TestConversationManager_SubscribeEphemeral_ReceivesFutureChunk(t *testing.T
 
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		cm.EmitEphemeralChunk("hooks-status", message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":2}`)})
+		cm.EmitEphemeralChunk(message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":2}`)})
 	}()
 
 	select {
@@ -760,7 +760,7 @@ func TestConversationManager_SubscribeEphemeral_ReceivesFutureChunk(t *testing.T
 
 func TestConversationManager_SubscribeEphemeral_DoesNotReplayPastChunk(t *testing.T) {
 	cm := NewConversationManager(&mockAgent{})
-	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":1}`)})
+	cm.EmitEphemeralChunk(message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":1}`)})
 
 	ch, unsubscribe := cm.SubscribeEphemeral()
 	defer unsubscribe()
@@ -777,8 +777,8 @@ func TestConversationManager_SubscribeEphemeral_ReceivesMultipleLiveChunks(t *te
 	ch, unsubscribe := cm.SubscribeEphemeral()
 	defer unsubscribe()
 
-	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":1}`)})
-	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":2}`)})
+	cm.EmitEphemeralChunk(message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":1}`)})
+	cm.EmitEphemeralChunk(message.DataChunk{DataType: "hooks-status", Data: []byte(`{"step":2}`)})
 
 	for _, want := range []string{`{"step":1}`, `{"step":2}`} {
 		select {

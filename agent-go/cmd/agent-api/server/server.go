@@ -183,7 +183,8 @@ func Run(cfg *config.Config) {
 		if err != nil {
 			return
 		}
-		conversations.EmitChunkIfActive(threadID, threadUpdateChunk(conversations, info, queue))
+		chunk := threadUpdateChunk(conversations, info, queue)
+		emitThreadUpdate(conversations, threadID, chunk)
 	})
 
 	// ── Hook manager ─────────────────────────────────────────────────────────
@@ -197,7 +198,7 @@ func Run(cfg *config.Config) {
 			return credMgr.HooksSnapshot()
 		})
 		hookMgr.SetChunkEmitter(func(chunk message.MessageChunk) {
-			conversations.EmitEphemeralChunk("hooks-status", chunk)
+			conversations.EmitEphemeralChunk(chunk)
 		})
 		hookMgr.SetRepromptRunner(conversations, promptQueue)
 		// The HTTP handler owns post-completion hook evaluation so hook-failure
@@ -297,6 +298,12 @@ func Run(cfg *config.Config) {
 	}
 
 	log.Println("agent-api: stopped")
+}
+
+func emitThreadUpdate(conversations *agent.ConversationManager, threadID string, chunk message.ThreadUpdateChunk) {
+	if !conversations.EmitChunkIfActive(threadID, chunk) {
+		conversations.EmitEphemeralChunk(chunk)
+	}
 }
 
 func threadUpdateChunk(conversations *agent.ConversationManager, info agent.ThreadInfo, queue []promptqueue.Prompt) message.ThreadUpdateChunk {

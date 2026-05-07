@@ -2740,7 +2740,7 @@ func TestChatStream_ForwardsThreadUpdateChunk(t *testing.T) {
 
 func TestChatStream_DoesNotReplayPastEphemeralChunk(t *testing.T) {
 	cm := agent.NewConversationManager(&streamTestAgent{})
-	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{
+	cm.EmitEphemeralChunk(message.DataChunk{
 		DataType: "hooks-status",
 		Data:     []byte(`{"hooks":{"go-check":{"hookId":"go-check"}}}`),
 	})
@@ -2810,7 +2810,7 @@ func TestChatStream_ForwardsLiveEphemeralChunk(t *testing.T) {
 		t.Fatalf("expected history-end, got %+v", frames[1])
 	}
 
-	cm.EmitEphemeralChunk("hooks-status", message.DataChunk{
+	cm.EmitEphemeralChunk(message.DataChunk{
 		DataType: "hooks-status",
 		Data:     []byte(`{"hooks":{"go-check":{"hookId":"go-check"}}}`),
 	})
