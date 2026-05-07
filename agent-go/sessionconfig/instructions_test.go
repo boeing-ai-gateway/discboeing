@@ -55,6 +55,50 @@ func TestDiscoverInstructions_PrefersFirstMatchingFilePerDirectory(t *testing.T)
 	}
 }
 
+func TestDiscoverInstructions_GEMINIMDProviderFallback(t *testing.T) {
+	root := t.TempDir()
+	mkdirAll(t, filepath.Join(root, ".git"))
+	writeFile(t, filepath.Join(root, "GEMINI.md"), "Gemini instructions")
+
+	entries, err := discoverInstructions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Path != "GEMINI.md" {
+		t.Fatalf("path = %q, want GEMINI.md", entries[0].Path)
+	}
+	if entries[0].Content != "Gemini instructions" {
+		t.Fatalf("content = %q, want Gemini instructions", entries[0].Content)
+	}
+}
+
+func TestDiscoverInstructions_AGENTSPrecedesProviderFallbacks(t *testing.T) {
+	root := t.TempDir()
+	mkdirAll(t, filepath.Join(root, ".git"))
+	writeFile(t, filepath.Join(root, "AGENTS.md"), "Agents instructions")
+	writeFile(t, filepath.Join(root, "GEMINI.md"), "Gemini instructions")
+	writeFile(t, filepath.Join(root, "CLAUDE.md"), "Claude instructions")
+
+	entries, err := discoverInstructions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Path != "AGENTS.md" {
+		t.Fatalf("path = %q, want AGENTS.md", entries[0].Path)
+	}
+	if entries[0].Content != "Agents instructions" {
+		t.Fatalf("content = %q, want Agents instructions", entries[0].Content)
+	}
+}
+
 func TestDiscoverInstructions_WalkUpDirectory(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))

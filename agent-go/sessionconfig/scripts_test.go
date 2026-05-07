@@ -91,6 +91,50 @@ echo ok
 	}
 }
 
+func TestDiscoverScripts_DiscobotSpecificOnly(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+
+	discobotScriptsDir := filepath.Join(home, ".discobot", "scripts")
+	mkdirAll(t, discobotScriptsDir)
+	discobotPath := filepath.Join(discobotScriptsDir, "release")
+	writeFile(t, discobotPath, `#!/bin/sh
+#---
+# name: release
+# description: Discobot script
+#---
+echo ok
+`)
+	if err := os.Chmod(discobotPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	agentsScriptsDir := filepath.Join(home, ".agents", "scripts")
+	mkdirAll(t, agentsScriptsDir)
+	agentsPath := filepath.Join(agentsScriptsDir, "portable")
+	writeFile(t, agentsPath, `#!/bin/sh
+#---
+# name: portable
+# description: Portable script
+#---
+echo ignored
+`)
+	if err := os.Chmod(agentsPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scripts, _, err := discoverScriptsWithHome(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) != 1 {
+		t.Fatalf("expected only Discobot script, got %d", len(scripts))
+	}
+	if scripts[0].Name != "release" {
+		t.Fatalf("script name = %q, want release", scripts[0].Name)
+	}
+}
+
 func TestLookupScript_SystemDir(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
@@ -121,6 +165,33 @@ echo ok
 	}
 	if script.Name != "release" {
 		t.Fatalf("script name = %q, want release", script.Name)
+	}
+}
+
+func TestLookupScript_DoesNotUseAgentsScripts(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+
+	agentsScriptsDir := filepath.Join(home, ".agents", "scripts")
+	mkdirAll(t, agentsScriptsDir)
+	agentsPath := filepath.Join(agentsScriptsDir, "portable")
+	writeFile(t, agentsPath, `#!/bin/sh
+#---
+# name: portable
+# description: Portable script
+#---
+echo ignored
+`)
+	if err := os.Chmod(agentsPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, found, err := lookupScriptWithHome(root, "portable", home, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Fatal("expected .agents script to be ignored")
 	}
 }
 

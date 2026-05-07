@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// discoverInstructions walks from cwd upward to find CLAUDE.md, AGENTS.md,
-// and related instruction files. Returns structured entries preserving each
-// file's path, description, and content individually.
+// discoverInstructions walks from cwd upward to find AGENTS.md first, then
+// provider-specific instruction files as fallbacks. Returns structured entries
+// preserving each file's path, description, and content individually.
 func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 	projectRoot := findProjectRoot(cwd)
 
@@ -27,7 +27,7 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 		}
 		seen[dir] = true
 
-		for _, name := range []string{"AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"} {
+		for _, name := range []string{"AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md", "GEMINI.md", ".gemini/GEMINI.md"} {
 			p := filepath.Join(dir, name)
 			content, err := readFileIfExists(p)
 			if err != nil {

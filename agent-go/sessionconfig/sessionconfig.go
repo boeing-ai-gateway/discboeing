@@ -25,7 +25,8 @@ type SessionConfig struct {
 	// SystemPrompt is the default base system prompt (behavioral instructions).
 	SystemPrompt string
 
-	// UserInstructions are discovered CLAUDE.md, AGENTS.md, and rules files.
+	// UserInstructions are discovered AGENTS.md, provider fallback instruction
+	// files, and rules files.
 	// These are delivered separately from the system prompt in <system-reminder> tags.
 	UserInstructions []InstructionEntry
 
@@ -36,18 +37,18 @@ type SessionConfig struct {
 	// These are not connected yet — just parsed for future use.
 	MCPServers []MCPServerConfig
 
-	// SubAgents are sub-agent configurations from .claude/agents/*.md.
+	// SubAgents are sub-agent configurations from project agent directories.
 	SubAgents []SubAgentConfig
 
 	// MaxSubagentDepth limits how many nested Task/Agent hops may run beneath a
 	// top-level thread. Top-level threads are depth 0.
 	MaxSubagentDepth int
 
-	// Skills are discovered skill configurations from project-level .claude/skills/
-	// and .discobot/skills/, user-level ~/.claude/skills, ~/.discobot/skills,
-	// ~/.agents/skills, Discobot system directories, and legacy commands
-	// directories including ~/.agents/commands. They are listed in the
-	// system-reminder so the model knows which slash commands are available.
+	// Skills are discovered skill configurations from Discobot-native skill
+	// directories, shared .agents skill directories, provider fallback skill
+	// directories, Discobot system directories, and legacy command directories.
+	// They are listed in the system-reminder so the model knows which slash
+	// commands are available.
 	Skills []SkillConfig
 
 	// SkillDiscoveryWarnings are non-fatal skill loading issues, such as
@@ -55,8 +56,8 @@ type SessionConfig struct {
 	// a system reminder so it can tell the user to fix them.
 	SkillDiscoveryWarnings []string
 
-	// Scripts are discovered executable slash-command scripts from .discobot/
-	// scripts, supported user-level script directories, and Discobot system
+	// Scripts are discovered executable slash-command scripts from project-level
+	// .discobot/scripts, user-level ~/.discobot/scripts, and Discobot system
 	// script directories. Visible scripts are listed in the system reminders so
 	// the model knows which executable slash commands are available.
 	Scripts []ScriptConfig

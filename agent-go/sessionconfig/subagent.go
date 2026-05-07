@@ -11,7 +11,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
 
-// SubAgentConfig represents a sub-agent defined in .claude/agents/*.md (Claude Code convention).
+// SubAgentConfig represents a sub-agent defined in an agents/*.md directory.
 type SubAgentConfig struct {
 	Name             string                     `yaml:"name" json:"name"`
 	Description      string                     `yaml:"description" json:"description"`
@@ -23,8 +23,9 @@ type SubAgentConfig struct {
 	Prompt           string                     `yaml:"-" json:"prompt"` // Markdown body
 }
 
-// discoverSubAgents loads sub-agent configs from .claude/agents/*.md plus built-in embedded agents.
-// Project agents override built-in agents with the same name.
+// discoverSubAgents loads sub-agent configs from project agent directories plus
+// built-in embedded agents. Project agents override built-in agents with the
+// same name.
 func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 	projectAgents, err := discoverProjectSubAgents(projectRoot)
 	if err != nil {
@@ -38,7 +39,33 @@ func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 }
 
 func discoverProjectSubAgents(projectRoot string) ([]SubAgentConfig, error) {
-	agentsDir := filepath.Join(projectRoot, ".claude", "agents")
+	dirs := []string{
+		filepath.Join(projectRoot, ".discobot", "agents"),
+		filepath.Join(projectRoot, ".agents", "agents"),
+		filepath.Join(projectRoot, ".claude", "agents"),
+		filepath.Join(projectRoot, ".gemini", "agents"),
+		filepath.Join(projectRoot, ".opencode", "agents"),
+	}
+
+	var agents []SubAgentConfig
+	seen := make(map[string]struct{})
+	for _, agentsDir := range dirs {
+		dirAgents, err := loadSubAgentsDir(agentsDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, agent := range dirAgents {
+			if _, ok := seen[agent.Name]; ok {
+				continue
+			}
+			seen[agent.Name] = struct{}{}
+			agents = append(agents, agent)
+		}
+	}
+	return agents, nil
+}
+
+func loadSubAgentsDir(agentsDir string) ([]SubAgentConfig, error) {
 	entries, err := os.ReadDir(agentsDir)
 	if err != nil {
 		if os.IsNotExist(err) {

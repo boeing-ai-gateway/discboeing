@@ -56,10 +56,8 @@ func discoverScriptsWithHome(projectRoot, home string) ([]ScriptConfig, []string
 		return nil, nil, err
 	}
 	if home != "" {
-		for _, dir := range []string{".discobot", ".agents"} {
-			if err := addFrom(loadScriptsDir(filepath.Join(home, dir, "scripts"))); err != nil {
-				return nil, nil, err
-			}
+		if err := addFrom(loadScriptsDir(filepath.Join(home, ".discobot", "scripts"))); err != nil {
+			return nil, nil, err
 		}
 	}
 	for _, dir := range discobotSystemPaths("scripts") {
@@ -82,9 +80,7 @@ func lookupScriptWithHome(projectRoot, name, home string, visibleOnly bool) (Scr
 	var dirs []string
 	dirs = append(dirs, filepath.Join(projectRoot, ".discobot", "scripts"))
 	if home != "" {
-		for _, dir := range []string{".discobot", ".agents"} {
-			dirs = append(dirs, filepath.Join(home, dir, "scripts"))
-		}
+		dirs = append(dirs, filepath.Join(home, ".discobot", "scripts"))
 	}
 	dirs = append(dirs, discobotSystemPaths("scripts")...)
 

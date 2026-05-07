@@ -57,17 +57,11 @@ type DiscobotCredentialApprovedUse struct {
 	Description string
 }
 
-// discoverSkills loads skill configs from the project's .claude/skills and
-// .claude/commands directories, plus user-level skill directories including
-// ~/.claude/skills, ~/.discobot/skills, and ~/.agents/skills, along with
-// ~/.claude/commands, ~/.discobot/commands, and ~/.agents/commands. Discobot
-// system directories under /opt/discobot, /usr/local/share/discobot, and
-// /usr/share/discobot are also checked for skills/ and commands/.
-// The equivalent .discobot/ directories are also checked as an alternative
-// naming style.
-// Priority: project skills (.claude then .discobot) → user skills →
-// project commands → user commands → system skills → system commands.
-// Later entries with a duplicate name are ignored.
+// discoverSkills loads skill configs from Discobot-native skill directories and
+// the shared .agents skill directories first. Provider-specific skill
+// directories are compatibility fallbacks and only win for names that were not
+// already defined by .discobot or .agents. Later entries with a duplicate name
+// are ignored.
 func discoverSkills(projectRoot string) ([]SkillConfig, []string, error) {
 	home, _ := os.UserHomeDir()
 	return discoverSkillsWithHome(projectRoot, home)
@@ -97,31 +91,55 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 		return nil
 	}
 
-	// 1. Project skills: .claude/skills/*/SKILL.md then .discobot/skills/*/SKILL.md
-	for _, dir := range []string{".claude", ".discobot"} {
+	// 1. Project skills: .discobot/skills/*/SKILL.md then
+	// .agents/skills/*/SKILL.md.
+	for _, dir := range []string{".discobot", ".agents"} {
 		if err := addFrom(loadSkillsDir(filepath.Join(projectRoot, dir, "skills"))); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// 2. User skills: ~/.claude/skills/*/SKILL.md then ~/.discobot/skills/*/SKILL.md
-	// then ~/.agents/skills/*/SKILL.md.
+	// 2. User skills: ~/.discobot/skills/*/SKILL.md then
+	// ~/.agents/skills/*/SKILL.md.
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot", ".agents"} {
+		for _, dir := range []string{".discobot", ".agents"} {
 			if err := addFrom(loadSkillsDir(filepath.Join(home, dir, "skills"))); err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 
-	// 3. Project commands: .claude/commands/ then .discobot/commands/ (both formats).
+	// 3. System skills installed with the image.
+	for _, dir := range discobotSystemPaths("skills") {
+		if err := addFrom(loadSkillsDir(dir)); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// 4. Provider-specific project skills are fallback compatibility sources.
+	for _, dir := range []string{".claude", ".gemini", ".opencode"} {
+		if err := addFrom(loadSkillsDir(filepath.Join(projectRoot, dir, "skills"))); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// 5. Provider-specific user skills are fallback compatibility sources.
+	if home != "" {
+		for _, dir := range []string{".claude", ".gemini", filepath.Join(".config", "opencode")} {
+			if err := addFrom(loadSkillsDir(filepath.Join(home, dir, "skills"))); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	// 6. Project commands: .claude/commands/ then .discobot/commands/ (both formats).
 	for _, dir := range []string{".claude", ".discobot"} {
 		if err := addFrom(loadCommandsDir(filepath.Join(projectRoot, dir, "commands"))); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// 4. User commands: ~/.claude/commands/ then ~/.discobot/commands/ then
+	// 7. User commands: ~/.claude/commands/ then ~/.discobot/commands/ then
 	// ~/.agents/commands/ (both formats).
 	if home != "" {
 		for _, dir := range []string{".claude", ".discobot", ".agents"} {
@@ -131,12 +149,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 		}
 	}
 
-	// 5. System skills and commands installed with the image.
-	for _, dir := range discobotSystemPaths("skills") {
-		if err := addFrom(loadSkillsDir(dir)); err != nil {
-			return nil, nil, err
-		}
-	}
+	// 8. System commands installed with the image.
 	for _, dir := range discobotSystemPaths("commands") {
 		if err := addFrom(loadCommandsDir(dir)); err != nil {
 			return nil, nil, err
@@ -148,9 +161,9 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 
 // LookupSkill searches for a skill by name in skills/ directories only.
 // It does NOT search commands/ — use LookupCommand for legacy commands.
-// Project-level .claude and .discobot directory styles are checked, along with
-// user-level ~/.claude/skills, ~/.discobot/skills, ~/.agents/skills, and the
-// Discobot system skills directories.
+// Project-level .discobot and .agents directories are checked first, followed by
+// user-level ~/.discobot/skills and ~/.agents/skills, Discobot system skills,
+// then provider-specific compatibility fallbacks.
 // Returns (zero, false, nil) if the skill is not found.
 func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 	home, _ := os.UserHomeDir()
@@ -159,15 +172,23 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 
 func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool, error) {
 	dirs := []string{
-		filepath.Join(projectRoot, ".claude", "skills"),
 		filepath.Join(projectRoot, ".discobot", "skills"),
+		filepath.Join(projectRoot, ".agents", "skills"),
 	}
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot", ".agents"} {
+		for _, dir := range []string{".discobot", ".agents"} {
 			dirs = append(dirs, filepath.Join(home, dir, "skills"))
 		}
 	}
 	dirs = append(dirs, discobotSystemPaths("skills")...)
+	for _, dir := range []string{".claude", ".gemini", ".opencode"} {
+		dirs = append(dirs, filepath.Join(projectRoot, dir, "skills"))
+	}
+	if home != "" {
+		for _, dir := range []string{".claude", ".gemini", filepath.Join(".config", "opencode")} {
+			dirs = append(dirs, filepath.Join(home, dir, "skills"))
+		}
+	}
 
 	return lookupInSkillIndex(skillName, dirs, "skill", false)
 }

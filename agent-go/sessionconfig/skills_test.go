@@ -177,10 +177,10 @@ func TestDiscoverSkills_DiscobotSkillsDir(t *testing.T) {
 	}
 }
 
-func TestDiscoverSkills_ClaudeTakesPriorityOverDiscobot(t *testing.T) {
+func TestDiscoverSkills_DiscobotTakesPriorityOverProviderFallback(t *testing.T) {
 	root := t.TempDir()
 
-	// Same skill in both .claude and .discobot — .claude wins.
+	// Same skill in both .discobot and .claude — .discobot wins.
 	claudeDir := filepath.Join(root, ".claude", "skills", "deploy")
 	mkdirAll(t, claudeDir)
 	writeFile(t, filepath.Join(claudeDir, "SKILL.md"), "---\nname: deploy\ndescription: Claude version.\n---\nClaude deploy.")
@@ -196,8 +196,42 @@ func TestDiscoverSkills_ClaudeTakesPriorityOverDiscobot(t *testing.T) {
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill (deduped), got %d", len(skills))
 	}
-	if skills[0].Description != "Claude version." {
-		t.Errorf("description = %q, want .claude to take priority", skills[0].Description)
+	if skills[0].Description != "Discobot version." {
+		t.Errorf("description = %q, want .discobot to take priority", skills[0].Description)
+	}
+}
+
+func TestDiscoverSkills_StandardAgentsTakesPriorityOverProviderFallback(t *testing.T) {
+	root := t.TempDir()
+
+	agentsDir := filepath.Join(root, ".agents", "skills", "deploy")
+	mkdirAll(t, agentsDir)
+	writeFile(t, filepath.Join(agentsDir, "SKILL.md"), "---\nname: deploy\ndescription: Agents version.\n---\nAgents deploy.")
+
+	claudeDir := filepath.Join(root, ".claude", "skills", "deploy")
+	mkdirAll(t, claudeDir)
+	writeFile(t, filepath.Join(claudeDir, "SKILL.md"), "---\nname: deploy\ndescription: Claude version.\n---\nClaude deploy.")
+
+	geminiDir := filepath.Join(root, ".gemini", "skills", "debug")
+	mkdirAll(t, geminiDir)
+	writeFile(t, filepath.Join(geminiDir, "SKILL.md"), "---\nname: debug\ndescription: Gemini fallback.\n---\nDebug.")
+
+	skills, _, err := discoverSkillsWithHome(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 {
+		t.Fatalf("expected 2 skills, got %d: %#v", len(skills), skills)
+	}
+	byName := map[string]SkillConfig{}
+	for _, skill := range skills {
+		byName[skill.Name] = skill
+	}
+	if byName["deploy"].Description != "Agents version." {
+		t.Fatalf("deploy description = %q, want .agents version", byName["deploy"].Description)
+	}
+	if byName["debug"].Description != "Gemini fallback." {
+		t.Fatalf("debug description = %q, want Gemini fallback", byName["debug"].Description)
 	}
 }
 
@@ -326,7 +360,7 @@ func TestDiscoverSkills_UserAgentsSkillsDir(t *testing.T) {
 	}
 }
 
-func TestDiscoverSkills_UserClaudeTakesPriorityOverAgents(t *testing.T) {
+func TestDiscoverSkills_UserAgentsTakesPriorityOverProviderFallback(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 
@@ -345,8 +379,8 @@ func TestDiscoverSkills_UserClaudeTakesPriorityOverAgents(t *testing.T) {
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill (deduped), got %d", len(skills))
 	}
-	if skills[0].Description != "Claude user version." {
-		t.Errorf("description = %q, want ~/.claude to take priority", skills[0].Description)
+	if skills[0].Description != "Agents user version." {
+		t.Errorf("description = %q, want ~/.agents to take priority", skills[0].Description)
 	}
 }
 

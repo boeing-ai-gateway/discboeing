@@ -261,6 +261,49 @@ func TestDiscoverSubAgents_MultipleAgents(t *testing.T) {
 	}
 }
 
+func TestDiscoverSubAgents_DiscobotAndAgentsPrecedeProviderFallbacks(t *testing.T) {
+	root := t.TempDir()
+
+	discobotDir := filepath.Join(root, ".discobot", "agents")
+	mkdirAll(t, discobotDir)
+	writeFile(t, filepath.Join(discobotDir, "reviewer.md"), "---\nname: reviewer\ndescription: Discobot reviewer\n---\nDiscobot prompt.")
+
+	agentsDir := filepath.Join(root, ".agents", "agents")
+	mkdirAll(t, agentsDir)
+	writeFile(t, filepath.Join(agentsDir, "planner.md"), "---\nname: planner\ndescription: Agents planner\n---\nAgents prompt.")
+
+	claudeDir := filepath.Join(root, ".claude", "agents")
+	mkdirAll(t, claudeDir)
+	writeFile(t, filepath.Join(claudeDir, "reviewer.md"), "---\nname: reviewer\ndescription: Claude reviewer\n---\nClaude prompt.")
+	writeFile(t, filepath.Join(claudeDir, "debugger.md"), "---\nname: debugger\ndescription: Claude debugger\n---\nClaude debug prompt.")
+
+	geminiDir := filepath.Join(root, ".gemini", "agents")
+	mkdirAll(t, geminiDir)
+	writeFile(t, filepath.Join(geminiDir, "planner.md"), "---\nname: planner\ndescription: Gemini planner\n---\nGemini prompt.")
+
+	agents, err := discoverProjectSubAgents(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byName := map[string]SubAgentConfig{}
+	for _, agent := range agents {
+		byName[agent.Name] = agent
+	}
+	if len(byName) != 3 {
+		t.Fatalf("expected 3 project agents, got %d: %#v", len(byName), agents)
+	}
+	if byName["reviewer"].Description != "Discobot reviewer" {
+		t.Fatalf("reviewer = %q, want Discobot reviewer", byName["reviewer"].Description)
+	}
+	if byName["planner"].Description != "Agents planner" {
+		t.Fatalf("planner = %q, want Agents planner", byName["planner"].Description)
+	}
+	if byName["debugger"].Description != "Claude debugger" {
+		t.Fatalf("debugger = %q, want Claude fallback", byName["debugger"].Description)
+	}
+}
+
 func TestDiscoverSubAgents_MissingDir(t *testing.T) {
 	root := t.TempDir()
 	agents, err := discoverSubAgents(root)
