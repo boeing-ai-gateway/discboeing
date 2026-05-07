@@ -18,6 +18,52 @@ import (
 	"github.com/obot-platform/discobot/server/internal/ssh"
 )
 
+type mockExecStreamer struct {
+	execStreamFunc func(context.Context, string, []string, sandbox.ExecStreamOptions) (sandbox.Stream, error)
+}
+
+type mockAttacher struct {
+	attachFunc func(context.Context, string, int, int, string, string, map[string]string) (sandbox.PTY, error)
+}
+
+func newMockExecStreamer(provider *mock.Provider) *mockExecStreamer {
+	return &mockExecStreamer{
+		execStreamFunc: func(ctx context.Context, sessionID string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+			sb, err := provider.Get(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
+			if sb.Status != sandbox.StatusRunning {
+				return nil, sandbox.ErrNotRunning
+			}
+			return &mock.Stream{}, nil
+		},
+	}
+}
+
+func newMockAttacher(provider *mock.Provider) *mockAttacher {
+	return &mockAttacher{
+		attachFunc: func(ctx context.Context, sessionID string, _, _ int, _, _ string, _ map[string]string) (sandbox.PTY, error) {
+			sb, err := provider.Get(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
+			if sb.Status != sandbox.StatusRunning {
+				return nil, sandbox.ErrNotRunning
+			}
+			return &mock.PTY{}, nil
+		},
+	}
+}
+
+func (m *mockExecStreamer) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	return m.execStreamFunc(ctx, sessionID, cmd, opts)
+}
+
+func (m *mockAttacher) Attach(ctx context.Context, sessionID string, rows, cols int, user, workDir string, env map[string]string) (sandbox.PTY, error) {
+	return m.attachFunc(ctx, sessionID, rows, cols, user, workDir, env)
+}
+
 func TestSSHServer_Integration_ConnectToSession(t *testing.T) {
 	SkipIfShort(t) // SSH integration test
 	provider := mock.NewProvider()
@@ -39,6 +85,8 @@ func TestSSHServer_Integration_ConnectToSession(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -80,6 +128,8 @@ func TestSSHServer_Integration_RejectUnknownSession(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -124,6 +174,8 @@ func TestSSHServer_Integration_RejectStoppedSandbox(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -167,6 +219,8 @@ func TestSSHServer_Integration_AutoStartStoppedSandbox(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 		SandboxEnsurer:  ensurer,
 	})
 	if err != nil {
@@ -239,6 +293,8 @@ func TestSSHServer_Integration_MultipleConnections(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -284,6 +340,8 @@ func TestSSHServer_Integration_HostKeyPersistence(t *testing.T) {
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     keyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create first server: %v", err)
@@ -310,6 +368,8 @@ func TestSSHServer_Integration_HostKeyPersistence(t *testing.T) {
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     keyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create second server: %v", err)
@@ -417,8 +477,8 @@ func TestSSHServer_Integration_SessionTerminatesOnProcessExit(t *testing.T) {
 	// Create a PTY that we can trigger to exit
 	pty := newTestPTY(42) // Exit code 42
 
-	// Hook AttachFunc to return our test PTY
-	provider.AttachFunc = func(_ context.Context, sid string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
+	attacher := newMockAttacher(provider)
+	attacher.attachFunc = func(_ context.Context, sid string, _, _ int, _, _ string, _ map[string]string) (sandbox.PTY, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -428,6 +488,8 @@ func TestSSHServer_Integration_SessionTerminatesOnProcessExit(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        attacher,
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -510,8 +572,9 @@ func TestSSHServer_Integration_SessionTerminatesOnExecExit(t *testing.T) {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
-	// Hook ExecStreamFunc to simulate command execution (runExec uses ExecStream)
-	provider.ExecStreamFunc = func(_ context.Context, sid string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	// Hook ExecStream to simulate command execution (runExec uses ExecStream)
+	execStreamer := &mockExecStreamer{}
+	execStreamer.execStreamFunc = func(_ context.Context, sid string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -522,6 +585,8 @@ func TestSSHServer_Integration_SessionTerminatesOnExecExit(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    execStreamer,
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -741,8 +806,9 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 	// When data is written, it echoes it back (simulating a simple TCP echo server)
 	var testStreamInstance *testStream
 
-	// Hook ExecStreamFunc to intercept socat calls
-	provider.ExecStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	// Hook ExecStream to intercept socat calls
+	execStreamer := &mockExecStreamer{}
+	execStreamer.execStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -758,6 +824,8 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    execStreamer,
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -839,7 +907,8 @@ func TestSSHServer_Integration_OpenSSHLocalForward(t *testing.T) {
 
 	var testStreamInstance *testStream
 	var socatCommand []string
-	provider.ExecStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	execStreamer := &mockExecStreamer{}
+	execStreamer.execStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -851,6 +920,8 @@ func TestSSHServer_Integration_OpenSSHLocalForward(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    execStreamer,
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -976,8 +1047,9 @@ func TestSSHServer_Integration_SFTP(t *testing.T) {
 	var sftpCalled bool
 	var sftpCommand []string
 
-	// Hook ExecStreamFunc to intercept sftp-server calls
-	provider.ExecStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	// Hook ExecStream to intercept sftp-server calls
+	execStreamer := &mockExecStreamer{}
+	execStreamer.execStreamFunc = func(_ context.Context, sid string, cmd []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -992,6 +1064,8 @@ func TestSSHServer_Integration_SFTP(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    execStreamer,
+		Attacher:        newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -1055,12 +1129,13 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 	var attachedUser string
 	var attachedWorkDir string
 
-	provider.AttachFunc = func(_ context.Context, sid string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	attacher := newMockAttacher(provider)
+	attacher.attachFunc = func(_ context.Context, sid string, _, _ int, user, workDir string, _ map[string]string) (sandbox.PTY, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
-		attachedUser = opts.User
-		attachedWorkDir = opts.WorkDir
+		attachedUser = user
+		attachedWorkDir = workDir
 		pty := newTestPTY(0)
 		// Exit immediately
 		go func() {
@@ -1079,6 +1154,8 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    newMockExecStreamer(provider),
+		Attacher:        attacher,
 		UserInfoFetcher: userFetcher,
 	})
 	if err != nil {
@@ -1144,7 +1221,8 @@ func TestSSHServer_Integration_ExecUsesSSHHomeWorkDir(t *testing.T) {
 	}
 
 	var execWorkDir string
-	provider.ExecStreamFunc = func(_ context.Context, sid string, _ []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	execStreamer := &mockExecStreamer{}
+	execStreamer.execStreamFunc = func(_ context.Context, sid string, _ []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
 		if sid != sessionID {
 			return nil, sandbox.ErrNotFound
 		}
@@ -1155,6 +1233,8 @@ func TestSSHServer_Integration_ExecUsesSSHHomeWorkDir(t *testing.T) {
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    execStreamer,
+		Attacher:        newMockAttacher(provider),
 		UserInfoFetcher: &mockUserInfoFetcher{uid: 1000, gid: 1000},
 	})
 	if err != nil {

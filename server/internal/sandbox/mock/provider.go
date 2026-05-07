@@ -40,6 +40,7 @@ type Provider struct {
 	// HTTPHandler is used by HTTPClient to handle requests without network.
 	// If nil, a default handler that returns 202/200 is used.
 	HTTPHandler        http.Handler
+	HTTPClient         *http.Client
 	defaultHTTPHandler http.Handler
 
 	// Configurable behaviors for testing
@@ -49,9 +50,6 @@ type Provider struct {
 	RemoveFunc     func(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error
 	GetFunc        func(ctx context.Context, sessionID string) (*sandbox.Sandbox, error)
 	GetSecretFunc  func(ctx context.Context, sessionID string) (string, error)
-	ExecFunc       func(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error)
-	AttachFunc     func(ctx context.Context, sessionID string, opts sandbox.AttachOptions) (sandbox.PTY, error)
-	ExecStreamFunc func(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error)
 	WatchFunc      func(ctx context.Context) (<-chan sandbox.StateEvent, error)
 	ClearCacheFunc func(ctx context.Context, projectID string) error
 }
@@ -285,69 +283,6 @@ func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, err
 	return secret, nil
 }
 
-// Exec runs a mock command.
-func (p *Provider) Exec(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	if p.ExecFunc != nil {
-		return p.ExecFunc(ctx, sessionID, cmd, opts)
-	}
-
-	p.mu.RLock()
-	_, exists := p.sandboxes[sessionID]
-	p.mu.RUnlock()
-
-	if !exists {
-		return nil, sandbox.ErrNotFound
-	}
-
-	return &sandbox.ExecResult{
-		ExitCode: 0,
-		Stdout:   []byte("mock output\n"),
-		Stderr:   []byte{},
-	}, nil
-}
-
-// Attach creates a mock PTY.
-func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
-	if p.AttachFunc != nil {
-		return p.AttachFunc(ctx, sessionID, opts)
-	}
-
-	p.mu.RLock()
-	s, exists := p.sandboxes[sessionID]
-	p.mu.RUnlock()
-
-	if !exists {
-		return nil, sandbox.ErrNotFound
-	}
-
-	if s.Status != sandbox.StatusRunning {
-		return nil, sandbox.ErrNotRunning
-	}
-
-	return &PTY{}, nil
-}
-
-// ExecStream creates a mock stream for bidirectional I/O.
-func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-	if p.ExecStreamFunc != nil {
-		return p.ExecStreamFunc(ctx, sessionID, cmd, opts)
-	}
-
-	p.mu.RLock()
-	s, exists := p.sandboxes[sessionID]
-	p.mu.RUnlock()
-
-	if !exists {
-		return nil, sandbox.ErrNotFound
-	}
-
-	if s.Status != sandbox.StatusRunning {
-		return nil, sandbox.ErrNotRunning
-	}
-
-	return &Stream{}, nil
-}
-
 // List returns all sandboxes managed by this mock provider.
 func (p *Provider) List(_ context.Context) ([]*sandbox.Sandbox, error) {
 	p.mu.RLock()
@@ -374,6 +309,10 @@ func (p *Provider) AcquireHTTPClient(_ context.Context, sessionID string) (*sand
 
 	if s.Status != sandbox.StatusRunning {
 		return nil, sandbox.ErrNotRunning
+	}
+
+	if p.HTTPClient != nil {
+		return &sandbox.HTTPClientLease{Client: p.HTTPClient}, nil
 	}
 
 	// Use mock transport that calls the handler directly.
@@ -826,8 +765,10 @@ func (w *pipeResponseWriter) ensureHeaderReady() {
 // Also supports thread CRUD, file, and diff endpoints for testing.
 func defaultMockHandler() http.Handler {
 	var (
-		mu      sync.Mutex
-		threads = map[string]string{}
+		mu       sync.Mutex
+		threads  = map[string]string{}
+		execSeq  int
+		sessions = map[string]map[string]any{}
 	)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -837,6 +778,37 @@ func defaultMockHandler() http.Handler {
 		case r.URL.Path == "/health" && r.Method == "GET":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+
+		case r.URL.Path == "/exec" && r.Method == "POST":
+			mu.Lock()
+			execSeq++
+			id := fmt.Sprintf("mock-exec-%d", execSeq)
+			exitCode := 0
+			sessions[id] = map[string]any{"id": id, "status": "exited", "exitCode": exitCode}
+			session := sessions[id]
+			mu.Unlock()
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(session)
+			return
+
+		case strings.HasPrefix(r.URL.Path, "/exec/") && r.Method == "GET" && !strings.HasSuffix(r.URL.Path, "/events"):
+			id := strings.TrimPrefix(r.URL.Path, "/exec/")
+			mu.Lock()
+			session, ok := sessions[id]
+			mu.Unlock()
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error":"exec not found"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(session)
+			return
+
+		case strings.HasPrefix(r.URL.Path, "/exec/") && strings.HasSuffix(r.URL.Path, "/events") && r.Method == "GET":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"events":[]}`))
 			return
 
 		case strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "POST":

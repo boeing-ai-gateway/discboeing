@@ -278,6 +278,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Exec", Description: "Get or follow exec events"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec/{id}/resize", Handler: h.ResizeExec,
 		Meta: routes.Meta{Group: "Exec", Description: "Resize an exec TTY"}})
+	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec/{id}/close-write", Handler: h.CloseWriteExec,
+		Meta: routes.Meta{Group: "Exec", Description: "Close exec stdin"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec/{id}/kill", Handler: h.KillExec,
 		Meta: routes.Meta{Group: "Exec", Description: "Kill an exec session"}})
 	reg.Register(r, routes.Route{Method: "DELETE", Pattern: "/exec/{id}", Handler: h.DeleteExec,

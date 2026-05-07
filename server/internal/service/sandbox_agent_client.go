@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/agentexec"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -47,8 +49,8 @@ func MakeCredentialFetcher(s *store.Store, credSvc *CredentialService) Credentia
 	}
 }
 
-// SandboxChatClient handles communication with the agent running in a sandbox.
-type SandboxChatClient struct {
+// SandboxAgentClient handles communication with the agent running in a sandbox.
+type SandboxAgentClient struct {
 	provider          sandbox.Provider
 	credentialFetcher CredentialFetcher
 
@@ -79,20 +81,20 @@ func (e *SandboxChatStartError) Error() string {
 	return fmt.Sprintf("sandbox returned status %d: %s", e.StatusCode, message)
 }
 
-// SandboxChatClientConfig contains optional configuration for a SandboxChatClient.
+// SandboxAgentClientConfig contains optional configuration for a SandboxAgentClient.
 // All fields are optional — pass nil for defaults.
-type SandboxChatClientConfig struct {
+type SandboxAgentClientConfig struct {
 	// GitUserName is the git user.name sent on every request.
 	GitUserName string
 	// GitUserEmail is the git user.email sent on every request.
 	GitUserEmail string
 }
 
-// NewSandboxChatClient creates a new sandbox chat client.
+// NewSandboxAgentClient creates a new sandbox agent client.
 // The fetcher parameter is optional - if nil, credentials will not be automatically fetched.
 // config is optional — pass nil to create a bare client without git or session config.
-func NewSandboxChatClient(provider sandbox.Provider, fetcher CredentialFetcher, config *SandboxChatClientConfig) *SandboxChatClient {
-	c := &SandboxChatClient{
+func NewSandboxAgentClient(provider sandbox.Provider, fetcher CredentialFetcher, config *SandboxAgentClientConfig) *SandboxAgentClient {
+	c := &SandboxAgentClient{
 		provider:          provider,
 		credentialFetcher: fetcher,
 	}
@@ -104,15 +106,15 @@ func NewSandboxChatClient(provider sandbox.Provider, fetcher CredentialFetcher, 
 }
 
 // threadsURL returns the agent-go thread collection route.
-func (c *SandboxChatClient) threadsURL() string {
+func (c *SandboxAgentClient) threadsURL() string {
 	return "http://sandbox/threads"
 }
 
 // threadURL returns a URL under the agent-go thread-scoped route.
 // For example, threadURL("thread-123", "/chat") returns "http://sandbox/threads/thread-123/chat".
 // The HTTP client's transport routes the request to the correct sandbox container
-// based on the sessionID passed to getHTTPClient — the URL host is always "sandbox".
-func (c *SandboxChatClient) threadURL(threadID, path string) string {
+// based on the sessionID passed to acquireHTTPClient — the URL host is always "sandbox".
+func (c *SandboxAgentClient) threadURL(threadID, path string) string {
 	return c.threadsURL() + "/" + url.PathEscape(threadID) + path
 }
 
@@ -214,8 +216,132 @@ type SSELine struct {
 
 // acquireHTTPClient returns a leased HTTP client configured for the sandbox.
 // Callers must release the lease after the request or stream completes.
-func (c *SandboxChatClient) acquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	return sandbox.AcquireHTTPClient(ctx, c.provider, sessionID)
+func (c *SandboxAgentClient) acquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	lease, err := sandbox.AcquireHTTPClient(ctx, c.provider, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	secret, err := c.provider.GetSecret(ctx, sessionID)
+	if err != nil || secret == "" {
+		return lease, nil
+	}
+	lease.Client = &http.Client{
+		Transport: &sandboxAuthTransport{
+			base:   lease.Client.Transport,
+			secret: secret,
+		},
+		Timeout: lease.Client.Timeout,
+	}
+	return lease, nil
+}
+
+type sandboxAuthTransport struct {
+	base   http.RoundTripper
+	secret string
+}
+
+func (t *sandboxAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Header.Set("Authorization", "Bearer "+t.secret)
+	return t.baseTransport().RoundTrip(clone)
+}
+
+func (t *sandboxAuthTransport) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if transport, ok := t.base.(*http.Transport); ok && transport.DialContext != nil {
+		return transport.DialContext(ctx, network, addr)
+	}
+	var d net.Dialer
+	return d.DialContext(ctx, network, addr)
+}
+
+func (t *sandboxAuthTransport) Headers() http.Header {
+	headers := make(http.Header)
+	headers.Set("Authorization", "Bearer "+t.secret)
+	return headers
+}
+
+func (t *sandboxAuthTransport) baseTransport() http.RoundTripper {
+	if t.base != nil {
+		return t.base
+	}
+	return http.DefaultTransport
+}
+
+// Attach creates an interactive PTY session to the sandbox.
+// If user is empty, the container's default user is used.
+// env contains additional environment variables to set in the session.
+func (c *SandboxAgentClient) Attach(ctx context.Context, sessionID string, rows, cols int, user, workDir string, env map[string]string) (sandbox.PTY, error) {
+	lease, err := c.acquireHTTPClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := agentexec.Create(ctx, lease.Client, agentexec.CreateRequest{
+		Kind:    "user",
+		WorkDir: workDir,
+		Env:     env,
+		User:    user,
+		TTY:     true,
+		Rows:    rows,
+		Cols:    cols,
+	})
+	if err != nil {
+		lease.Release()
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+	}
+	stream, err := agentexec.Attach(ctx, lease, session.ID)
+	if err != nil {
+		_ = agentexec.Kill(context.Background(), lease.Client, session.ID)
+		lease.Release()
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+	}
+	return stream, nil
+}
+
+// AttachTerminal creates or reuses a persistent terminal PTY for a session.
+func (c *SandboxAgentClient) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, reuseKey string, env map[string]string) (sandbox.PTY, error) {
+	lease, err := c.acquireHTTPClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return agentexec.CreateAndAttach(ctx, lease, agentexec.CreateRequest{
+		Kind:     "user",
+		Name:     "terminal",
+		ReuseKey: "terminal:" + reuseKey,
+		Env:      env,
+		User:     user,
+		TTY:      true,
+		Rows:     rows,
+		Cols:     cols,
+	})
+}
+
+// ExecStream runs a command with bidirectional streaming I/O in the session's sandbox.
+func (c *SandboxAgentClient) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	lease, err := c.acquireHTTPClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := agentexec.Create(ctx, lease.Client, agentexec.CreateRequest{
+		Kind:    "user",
+		Cmd:     cmd,
+		WorkDir: opts.WorkDir,
+		Env:     opts.Env,
+		User:    opts.User,
+		TTY:     opts.TTY,
+	})
+	if err != nil {
+		lease.Release()
+		return nil, fmt.Errorf("failed to create exec: %w", err)
+	}
+	stream, err := agentexec.Attach(ctx, lease, session.ID)
+	if err != nil {
+		_ = agentexec.Kill(context.Background(), lease.Client, session.ID)
+		lease.Release()
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
+	}
+	return stream, nil
 }
 
 // RequestOptions contains optional parameters for sandbox requests.
@@ -254,7 +380,7 @@ type GetCommitsRequest struct {
 
 // applyRequestAuth sets Authorization and credentials headers on a request.
 // Credentials are automatically fetched unless SkipCredentials is set.
-func (c *SandboxChatClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
+func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
 	// Add Authorization header with Bearer token
 	secret, err := c.provider.GetSecret(ctx, sessionID)
 	if err == nil && secret != "" {
@@ -289,7 +415,7 @@ func (c *SandboxChatClient) applyRequestAuth(ctx context.Context, req *http.Requ
 }
 
 // StartChat sends messages to the sandbox and returns the initial completion metadata.
-func (c *SandboxChatClient) StartChat(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (*sandboxapi.ChatStartedResponse, error) {
+func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (*sandboxapi.ChatStartedResponse, error) {
 	// Build the request body once - pass messages through as-is
 	reasoning := ""
 	mode := ""
@@ -390,7 +516,7 @@ func (c *SandboxChatClient) StartChat(ctx context.Context, sessionID, threadID s
 // The sandbox is expected to respond with SSE events in AI SDK UIMessage Stream format.
 // Messages and responses are passed through without parsing.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) SendMessages(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (<-chan SSELine, error) {
+func (c *SandboxAgentClient) SendMessages(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (<-chan SSELine, error) {
 	if _, err := c.StartChat(ctx, sessionID, threadID, messages, model, opts); err != nil {
 		return nil, err
 	}
@@ -401,7 +527,7 @@ func (c *SandboxChatClient) SendMessages(ctx context.Context, sessionID, threadI
 
 // GetStream connects to the sandbox's long-lived SSE stream for a thread.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetStream(ctx context.Context, sessionID, threadID string, opts *RequestOptions) (<-chan SSELine, error) {
+func (c *SandboxAgentClient) GetStream(ctx context.Context, sessionID, threadID string, opts *RequestOptions) (<-chan SSELine, error) {
 	// Use retry logic to handle transient connection errors during container startup
 	var streamLease *sandbox.HTTPClientLease
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
@@ -465,7 +591,7 @@ func (c *SandboxChatClient) GetStream(ctx context.Context, sessionID, threadID s
 		}()
 
 		if err := streamSSELines(ctx, resp.Body, lineCh); err != nil && ctx.Err() == nil {
-			log.Printf("[SandboxChatClient] Error reading chat stream for session %s: %v", sessionID, err)
+			log.Printf("[SandboxAgentClient] Error reading chat stream for session %s: %v", sessionID, err)
 			errorData, marshalErr := json.Marshal(struct {
 				Type      string `json:"type"`
 				ErrorText string `json:"errorText"`
@@ -597,7 +723,7 @@ func (r *chunkedLineReader) ReadLine() (string, error) {
 }
 
 // ListThreads retrieves all threads from the sandbox agent.
-func (c *SandboxChatClient) ListThreads(ctx context.Context, sessionID string) (*sandboxapi.ListThreadsResponse, error) {
+func (c *SandboxAgentClient) ListThreads(ctx context.Context, sessionID string) (*sandboxapi.ListThreadsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -639,7 +765,7 @@ func (c *SandboxChatClient) ListThreads(ctx context.Context, sessionID string) (
 }
 
 // GetThread retrieves a specific thread from the sandbox agent.
-func (c *SandboxChatClient) GetThread(ctx context.Context, sessionID, threadID string) (*sandboxapi.Thread, error) {
+func (c *SandboxAgentClient) GetThread(ctx context.Context, sessionID, threadID string) (*sandboxapi.Thread, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -681,7 +807,7 @@ func (c *SandboxChatClient) GetThread(ctx context.Context, sessionID, threadID s
 }
 
 // CreateThread creates a new thread in the sandbox agent.
-func (c *SandboxChatClient) CreateThread(ctx context.Context, sessionID string, reqBody *sandboxapi.CreateThreadRequest) (*sandboxapi.Thread, error) {
+func (c *SandboxAgentClient) CreateThread(ctx context.Context, sessionID string, reqBody *sandboxapi.CreateThreadRequest) (*sandboxapi.Thread, error) {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -729,7 +855,7 @@ func (c *SandboxChatClient) CreateThread(ctx context.Context, sessionID string, 
 }
 
 // UpdateThread updates a thread in the sandbox agent.
-func (c *SandboxChatClient) UpdateThread(ctx context.Context, sessionID, threadID string, reqBody *sandboxapi.UpdateThreadRequest) (*sandboxapi.Thread, error) {
+func (c *SandboxAgentClient) UpdateThread(ctx context.Context, sessionID, threadID string, reqBody *sandboxapi.UpdateThreadRequest) (*sandboxapi.Thread, error) {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -777,7 +903,7 @@ func (c *SandboxChatClient) UpdateThread(ctx context.Context, sessionID, threadI
 }
 
 // DeleteQueuedPrompt removes a queued prompt from a thread in the sandbox agent.
-func (c *SandboxChatClient) DeleteQueuedPrompt(ctx context.Context, sessionID, threadID, queuedPromptID string) (*sandboxapi.DeleteQueuedPromptResponse, error) {
+func (c *SandboxAgentClient) DeleteQueuedPrompt(ctx context.Context, sessionID, threadID, queuedPromptID string) (*sandboxapi.DeleteQueuedPromptResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -819,7 +945,7 @@ func (c *SandboxChatClient) DeleteQueuedPrompt(ctx context.Context, sessionID, t
 }
 
 // UpdateQueuedPrompt updates a queued prompt in the sandbox agent.
-func (c *SandboxChatClient) UpdateQueuedPrompt(ctx context.Context, sessionID, threadID, queuedPromptID string, reqBody *sandboxapi.UpdateQueuedPromptRequest) (*sandboxapi.UpdateQueuedPromptResponse, error) {
+func (c *SandboxAgentClient) UpdateQueuedPrompt(ctx context.Context, sessionID, threadID, queuedPromptID string, reqBody *sandboxapi.UpdateQueuedPromptRequest) (*sandboxapi.UpdateQueuedPromptResponse, error) {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -867,7 +993,7 @@ func (c *SandboxChatClient) UpdateQueuedPrompt(ctx context.Context, sessionID, t
 }
 
 // DeleteThread removes a thread from the sandbox agent.
-func (c *SandboxChatClient) DeleteThread(ctx context.Context, sessionID, threadID string) (*sandboxapi.DeleteThreadResponse, error) {
+func (c *SandboxAgentClient) DeleteThread(ctx context.Context, sessionID, threadID string) (*sandboxapi.DeleteThreadResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -910,7 +1036,7 @@ func (c *SandboxChatClient) DeleteThread(ctx context.Context, sessionID, threadI
 
 // GetChatStatus retrieves the completion status for a thread from the sandbox.
 // Calls GET /threads/{id}/chat/status which returns {"isRunning": bool}.
-func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID, threadID string) (*sandboxapi.ChatStatusResponse, error) {
+func (c *SandboxAgentClient) GetChatStatus(ctx context.Context, sessionID, threadID string) (*sandboxapi.ChatStatusResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -955,7 +1081,7 @@ func (c *SandboxChatClient) GetChatStatus(ctx context.Context, sessionID, thread
 // CancelCompletion cancels an in-progress completion in the sandbox.
 // Returns ErrNoActiveCompletion if no completion is active (409 status).
 // Retries with exponential backoff on connection errors.
-func (c *SandboxChatClient) CancelCompletion(ctx context.Context, sessionID, threadID string) (*CancelCompletionResponse, error) {
+func (c *SandboxAgentClient) CancelCompletion(ctx context.Context, sessionID, threadID string) (*CancelCompletionResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1007,7 +1133,7 @@ func (c *SandboxChatClient) CancelCompletion(ctx context.Context, sessionID, thr
 // ============================================================================
 
 // GetQuestion returns the pending AskUserQuestion for a specific question ID.
-func (c *SandboxChatClient) GetQuestion(ctx context.Context, sessionID, threadID string, toolUseID string) (*sandboxapi.PendingQuestionResponse, error) {
+func (c *SandboxAgentClient) GetQuestion(ctx context.Context, sessionID, threadID string, toolUseID string) (*sandboxapi.PendingQuestionResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1053,7 +1179,7 @@ func (c *SandboxChatClient) GetQuestion(ctx context.Context, sessionID, threadID
 }
 
 // AnswerQuestion submits the user's answer to a pending AskUserQuestion.
-func (c *SandboxChatClient) AnswerQuestion(ctx context.Context, sessionID, threadID string, req *sandboxapi.AnswerQuestionRequest) (*sandboxapi.AnswerQuestionResponse, error) {
+func (c *SandboxAgentClient) AnswerQuestion(ctx context.Context, sessionID, threadID string, req *sandboxapi.AnswerQuestionRequest) (*sandboxapi.AnswerQuestionResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -1112,7 +1238,7 @@ func (c *SandboxChatClient) AnswerQuestion(ctx context.Context, sessionID, threa
 
 // ListFiles lists directory contents in the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) ListFiles(ctx context.Context, sessionID string, path string, includeHidden bool) (*sandboxapi.ListFilesResponse, error) {
+func (c *SandboxAgentClient) ListFiles(ctx context.Context, sessionID string, path string, includeHidden bool) (*sandboxapi.ListFilesResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1163,7 +1289,7 @@ func (c *SandboxChatClient) ListFiles(ctx context.Context, sessionID string, pat
 
 // SearchFiles performs a fuzzy search over workspace files in the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) SearchFiles(ctx context.Context, sessionID string, query string, limit int) (*sandboxapi.SearchFilesResponse, error) {
+func (c *SandboxAgentClient) SearchFiles(ctx context.Context, sessionID string, query string, limit int) (*sandboxapi.SearchFilesResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1212,7 +1338,7 @@ func (c *SandboxChatClient) SearchFiles(ctx context.Context, sessionID string, q
 
 // ReadFile reads file content from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) ReadFile(ctx context.Context, sessionID string, path string) (*sandboxapi.ReadFileResponse, error) {
+func (c *SandboxAgentClient) ReadFile(ctx context.Context, sessionID string, path string) (*sandboxapi.ReadFileResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1260,7 +1386,7 @@ func (c *SandboxChatClient) ReadFile(ctx context.Context, sessionID string, path
 
 // ReadThreadArtifact reads a thread-local artifact from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) ReadThreadArtifact(ctx context.Context, sessionID, threadID, uri string) (*sandboxapi.ReadFileResponse, error) {
+func (c *SandboxAgentClient) ReadThreadArtifact(ctx context.Context, sessionID, threadID, uri string) (*sandboxapi.ReadFileResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1308,7 +1434,7 @@ func (c *SandboxChatClient) ReadThreadArtifact(ctx context.Context, sessionID, t
 
 // WriteFile writes file content to the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) WriteFile(ctx context.Context, sessionID string, req *sandboxapi.WriteFileRequest) (*sandboxapi.WriteFileResponse, error) {
+func (c *SandboxAgentClient) WriteFile(ctx context.Context, sessionID string, req *sandboxapi.WriteFileRequest) (*sandboxapi.WriteFileResponse, error) {
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -1359,7 +1485,7 @@ func (c *SandboxChatClient) WriteFile(ctx context.Context, sessionID string, req
 
 // DeleteFile deletes a file or directory in the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) DeleteFile(ctx context.Context, sessionID string, req *sandboxapi.DeleteFileRequest) (*sandboxapi.DeleteFileResponse, error) {
+func (c *SandboxAgentClient) DeleteFile(ctx context.Context, sessionID string, req *sandboxapi.DeleteFileRequest) (*sandboxapi.DeleteFileResponse, error) {
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -1410,7 +1536,7 @@ func (c *SandboxChatClient) DeleteFile(ctx context.Context, sessionID string, re
 
 // RenameFile renames/moves a file or directory in the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) RenameFile(ctx context.Context, sessionID string, req *sandboxapi.RenameFileRequest) (*sandboxapi.RenameFileResponse, error) {
+func (c *SandboxAgentClient) RenameFile(ctx context.Context, sessionID string, req *sandboxapi.RenameFileRequest) (*sandboxapi.RenameFileResponse, error) {
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -1462,7 +1588,7 @@ func (c *SandboxChatClient) RenameFile(ctx context.Context, sessionID string, re
 // GetUserInfo retrieves the default user info from the sandbox.
 // This is used to determine which user to run terminal sessions as.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetUserInfo(ctx context.Context, sessionID string) (*sandboxapi.UserResponse, error) {
+func (c *SandboxAgentClient) GetUserInfo(ctx context.Context, sessionID string) (*sandboxapi.UserResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1506,7 +1632,7 @@ func (c *SandboxChatClient) GetUserInfo(ctx context.Context, sessionID string) (
 }
 
 // ListCommands retrieves available slash commands from the sandbox.
-func (c *SandboxChatClient) ListCommands(ctx context.Context, sessionID string) (*sandboxapi.ListCommandsResponse, error) {
+func (c *SandboxAgentClient) ListCommands(ctx context.Context, sessionID string) (*sandboxapi.ListCommandsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1555,7 +1681,7 @@ func (c *SandboxChatClient) ListCommands(ctx context.Context, sessionID string) 
 // Otherwise returns full diff with patches.
 // When targetCommit is non-empty, the sandbox diffs against that commit/ref.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetDiff(ctx context.Context, sessionID, path, format, targetCommit string) (any, error) {
+func (c *SandboxAgentClient) GetDiff(ctx context.Context, sessionID, path, format, targetCommit string) (any, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1636,7 +1762,7 @@ func (c *SandboxChatClient) GetDiff(ctx context.Context, sessionID, path, format
 // git working directory.
 // Returns the patch string and commit count on success, or an error on failure.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetCommits(ctx context.Context, sessionID string, commitsReq GetCommitsRequest) (*sandboxapi.CommitsResponse, error) {
+func (c *SandboxAgentClient) GetCommits(ctx context.Context, sessionID string, commitsReq GetCommitsRequest) (*sandboxapi.CommitsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1709,7 +1835,7 @@ func (c *SandboxChatClient) GetCommits(ctx context.Context, sessionID string, co
 
 // GetHooksStatus retrieves hook evaluation status from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetHooksStatus(ctx context.Context, sessionID string) (*sandboxapi.HooksStatusResponse, error) {
+func (c *SandboxAgentClient) GetHooksStatus(ctx context.Context, sessionID string) (*sandboxapi.HooksStatusResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1754,7 +1880,7 @@ func (c *SandboxChatClient) GetHooksStatus(ctx context.Context, sessionID string
 
 // GetHookOutput retrieves the output log for a specific hook from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetHookOutput(ctx context.Context, sessionID, hookID string) (*sandboxapi.HookOutputResponse, error) {
+func (c *SandboxAgentClient) GetHookOutput(ctx context.Context, sessionID, hookID string) (*sandboxapi.HookOutputResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1800,7 +1926,7 @@ func (c *SandboxChatClient) GetHookOutput(ctx context.Context, sessionID, hookID
 
 // DownloadHookOutput retrieves the full hook output log from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) DownloadHookOutput(ctx context.Context, sessionID, hookID string) ([]byte, error) {
+func (c *SandboxAgentClient) DownloadHookOutput(ctx context.Context, sessionID, hookID string) ([]byte, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1845,7 +1971,7 @@ func (c *SandboxChatClient) DownloadHookOutput(ctx context.Context, sessionID, h
 }
 
 // RerunHook manually reruns a specific hook in the sandbox.
-func (c *SandboxChatClient) RerunHook(ctx context.Context, sessionID, hookID string) (*sandboxapi.HookRerunResponse, error) {
+func (c *SandboxAgentClient) RerunHook(ctx context.Context, sessionID, hookID string) (*sandboxapi.HookRerunResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1895,7 +2021,7 @@ func (c *SandboxChatClient) RerunHook(ctx context.Context, sessionID, hookID str
 
 // ListServices retrieves all services from the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) ListServices(ctx context.Context, sessionID string) (*sandboxapi.ListServicesResponse, error) {
+func (c *SandboxAgentClient) ListServices(ctx context.Context, sessionID string) (*sandboxapi.ListServicesResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1941,7 +2067,7 @@ func (c *SandboxChatClient) ListServices(ctx context.Context, sessionID string) 
 // StartService starts a service in the sandbox.
 // Returns immediately with status "starting" (202 Accepted).
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) StartService(ctx context.Context, sessionID string, serviceID string) (*sandboxapi.StartServiceResponse, error) {
+func (c *SandboxAgentClient) StartService(ctx context.Context, sessionID string, serviceID string) (*sandboxapi.StartServiceResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -1988,7 +2114,7 @@ func (c *SandboxChatClient) StartService(ctx context.Context, sessionID string, 
 
 // StopService stops a service in the sandbox.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) StopService(ctx context.Context, sessionID string, serviceID string) (*sandboxapi.StopServiceResponse, error) {
+func (c *SandboxAgentClient) StopService(ctx context.Context, sessionID string, serviceID string) (*sandboxapi.StopServiceResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -2036,7 +2162,7 @@ func (c *SandboxChatClient) StopService(ctx context.Context, sessionID string, s
 // Returns a channel of raw SSE lines. The channel is closed when the service
 // stops or the context is cancelled.
 // Retries with exponential backoff on connection errors and 5xx responses.
-func (c *SandboxChatClient) GetServiceOutput(ctx context.Context, sessionID string, serviceID string) (<-chan SSELine, error) {
+func (c *SandboxAgentClient) GetServiceOutput(ctx context.Context, sessionID string, serviceID string) (<-chan SSELine, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
@@ -2108,7 +2234,7 @@ func (c *SandboxChatClient) GetServiceOutput(ctx context.Context, sessionID stri
 		}
 
 		if err := <-doneCh; err != nil && ctx.Err() == nil {
-			log.Printf("[SandboxChatClient] Error reading service output stream for session %s: %v", sessionID, err)
+			log.Printf("[SandboxAgentClient] Error reading service output stream for session %s: %v", sessionID, err)
 		}
 	}()
 

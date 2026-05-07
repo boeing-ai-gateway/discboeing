@@ -176,18 +176,6 @@ func (m *mockSandboxProvider) List(_ context.Context) ([]*sandbox.Sandbox, error
 	return result, nil
 }
 
-func (m *mockSandboxProvider) Exec(_ context.Context, _ string, _ []string, _ sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	return nil, nil
-}
-
-func (m *mockSandboxProvider) Attach(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-	return nil, nil
-}
-
-func (m *mockSandboxProvider) ExecStream(_ context.Context, _ string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-	return nil, nil
-}
-
 func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
 	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }

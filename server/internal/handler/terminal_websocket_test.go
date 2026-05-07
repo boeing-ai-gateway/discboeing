@@ -403,9 +403,6 @@ func TestTerminalWebSocket_PTYExitsCleanly(t *testing.T) {
 	}
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)
@@ -462,9 +459,6 @@ func TestTerminalWebSocket_PTYWriteError(t *testing.T) {
 	}
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)
@@ -524,9 +518,6 @@ func TestTerminalWebSocket_PTYReadError(t *testing.T) {
 	}
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)
@@ -585,9 +576,6 @@ func TestTerminalWebSocket_ResizeOperations(t *testing.T) {
 	}
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)
@@ -659,9 +647,6 @@ func TestTerminalWebSocket_OutputDraining(t *testing.T) {
 	}
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)
@@ -726,9 +711,6 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 	}()
 
 	mockProvider := mock.NewProvider()
-	mockProvider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-		return pty, nil
-	}
 
 	testStore := setupTestStore(t)
 	sandboxService := service.NewSandboxService(testStore, mockProvider, nil, nil, nil, nil, nil)

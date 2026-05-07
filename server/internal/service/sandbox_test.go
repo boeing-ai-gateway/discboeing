@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -218,18 +221,6 @@ func (p *imageIDAwareReconcileProvider) List(_ context.Context) ([]*sandbox.Sand
 		result = append(result, sb)
 	}
 	return result, nil
-}
-
-func (p *imageIDAwareReconcileProvider) Exec(_ context.Context, _ string, _ []string, _ sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (p *imageIDAwareReconcileProvider) Attach(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (p *imageIDAwareReconcileProvider) ExecStream(_ context.Context, _ string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-	return nil, errors.New("not implemented")
 }
 
 func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
@@ -962,38 +953,43 @@ func TestSandboxService_DestroyForSession_NotFound(t *testing.T) {
 	}
 }
 
-func TestSandboxService_Exec(t *testing.T) {
-	mockProvider := mock.NewProvider()
-	testStore := setupTestStore(t)
-	cfg := &config.Config{EncryptionKey: testEncryptionKey}
-	svc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-
-	ctx := context.Background()
-	sessionID := "test-session-1"
-	workspacePath := "/workspace"
-
-	// Create test session
-	createTestSession(t, testStore, sessionID, workspacePath)
-
-	// Create sandbox
-	err := svc.CreateForSession(ctx, sessionID)
-	if err != nil {
-		t.Fatalf("CreateForSession failed: %v", err)
-	}
-
-	// Execute command
-	result, err := svc.Exec(ctx, sessionID, []string{"echo", "hello"}, sandbox.ExecOptions{})
-	if err != nil {
-		t.Fatalf("Exec failed: %v", err)
-	}
-
-	if result.ExitCode != 0 {
-		t.Errorf("Expected exit code 0, got %d", result.ExitCode)
-	}
-}
-
 func TestSandboxService_Attach(t *testing.T) {
 	mockProvider := mock.NewProvider()
+	execServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/exec" && r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"test-exec","status":"running"}`))
+		case strings.HasPrefix(r.URL.Path, "/exec/") && strings.HasSuffix(r.URL.Path, "/attach"):
+			upgrader := websocket.Upgrader{}
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			if err := conn.WriteMessage(websocket.BinaryMessage, []byte("$ ")); err != nil {
+				return
+			}
+			for {
+				if _, _, err := conn.ReadMessage(); err != nil {
+					return
+				}
+			}
+		case r.URL.Path == "/exec/test-exec/kill" && r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		default:
+			http.Error(w, r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer execServer.Close()
+	execAddr := strings.TrimPrefix(execServer.URL, "http://")
+	mockProvider.HTTPClient = &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, network, execAddr)
+		},
+	}}
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
 	svc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
@@ -1012,7 +1008,7 @@ func TestSandboxService_Attach(t *testing.T) {
 	}
 
 	// Attach PTY
-	pty, err := svc.Attach(ctx, sessionID, 24, 80, "", nil)
+	pty, err := svc.Attach(ctx, sessionID, 24, 80, "", "", nil)
 	if err != nil {
 		t.Fatalf("Attach failed: %v", err)
 	}

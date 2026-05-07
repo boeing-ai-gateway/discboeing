@@ -1,20 +1,13 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"maps"
-	"net"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -131,7 +124,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 		if runAsRoot {
 			execUser = "root"
 		}
-		return h.attachAgentExec(ctx, sessionID, rows, cols, execUser, termKey, envVars)
+		return h.sandboxService.AttachTerminal(ctx, sessionID, rows, cols, execUser, termKey, envVars)
 	})
 	if err != nil {
 		log.Printf("failed to attach to sandbox PTY: %v", err)
@@ -160,224 +153,6 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer termSession.Unsubscribe(sub)
 
 	handlePersistentTerminalSession(ctx, termSession, sub, conn)
-}
-
-type agentExecCreateRequest struct {
-	Kind     string            `json:"kind,omitempty"`
-	Name     string            `json:"name,omitempty"`
-	ReuseKey string            `json:"reuseKey,omitempty"`
-	Cmd      []string          `json:"cmd,omitempty"`
-	WorkDir  string            `json:"workDir,omitempty"`
-	Env      map[string]string `json:"env,omitempty"`
-	User     string            `json:"user,omitempty"`
-	TTY      bool              `json:"tty,omitempty"`
-	Rows     int               `json:"rows,omitempty"`
-	Cols     int               `json:"cols,omitempty"`
-}
-
-type agentExecSession struct {
-	ID       string `json:"id"`
-	Status   string `json:"status"`
-	ExitCode *int   `json:"exitCode,omitempty"`
-}
-
-type agentExecResizeRequest struct {
-	Rows int `json:"rows"`
-	Cols int `json:"cols"`
-}
-
-type agentExecPTY struct {
-	sessionID string
-	execID    string
-	lease     *sandbox.HTTPClientLease
-	conn      *websocket.Conn
-	readBuf   []byte
-	readMu    sync.Mutex
-	writeMu   sync.Mutex
-	closeOnce sync.Once
-}
-
-func (h *Handler) attachAgentExec(ctx context.Context, sessionID string, rows, cols int, user, reuseKey string, env map[string]string) (sandbox.PTY, error) {
-	lease, err := h.sandboxService.AcquireHTTPClient(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	execSession, err := createAgentExec(ctx, lease.Client, agentExecCreateRequest{
-		Kind:     "user",
-		Name:     "terminal",
-		ReuseKey: "terminal:" + reuseKey,
-		Env:      env,
-		User:     user,
-		TTY:      true,
-		Rows:     rows,
-		Cols:     cols,
-	})
-	if err != nil {
-		lease.Release()
-		return nil, err
-	}
-
-	conn, _, err := agentExecDialer(lease.Client).DialContext(ctx, "ws://sandbox/exec/"+url.PathEscape(execSession.ID)+"/attach", nil)
-	if err != nil {
-		lease.Release()
-		return nil, err
-	}
-
-	return &agentExecPTY{
-		sessionID: sessionID,
-		execID:    execSession.ID,
-		lease:     lease,
-		conn:      conn,
-	}, nil
-}
-
-func createAgentExec(ctx context.Context, client *http.Client, payload agentExecCreateRequest) (*agentExecSession, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://sandbox/exec", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("agent exec create failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
-	}
-	var session agentExecSession
-	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
-		return nil, err
-	}
-	return &session, nil
-}
-
-func agentExecDialer(client *http.Client) *websocket.Dialer {
-	dialer := *websocket.DefaultDialer
-	if transport, ok := client.Transport.(*http.Transport); ok && transport.DialContext != nil {
-		dialer.NetDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return transport.DialContext(ctx, network, addr)
-		}
-	}
-	return &dialer
-}
-
-func (p *agentExecPTY) Read(buf []byte) (int, error) {
-	p.readMu.Lock()
-	defer p.readMu.Unlock()
-	if len(p.readBuf) > 0 {
-		n := copy(buf, p.readBuf)
-		p.readBuf = p.readBuf[n:]
-		return n, nil
-	}
-	for {
-		msgType, payload, err := p.conn.ReadMessage()
-		if err != nil {
-			return 0, err
-		}
-		if msgType != websocket.BinaryMessage && msgType != websocket.TextMessage {
-			continue
-		}
-		n := copy(buf, payload)
-		p.readBuf = append(p.readBuf[:0], payload[n:]...)
-		return n, nil
-	}
-}
-
-func (p *agentExecPTY) Write(data []byte) (int, error) {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	if err := p.conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
-		return 0, err
-	}
-	return len(data), nil
-}
-
-func (p *agentExecPTY) Resize(ctx context.Context, rows, cols int) error {
-	payload, err := json.Marshal(agentExecResizeRequest{Rows: rows, Cols: cols})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://sandbox/exec/"+url.PathEscape(p.execID)+"/resize", bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := p.lease.Client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("agent exec resize failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
-	}
-	return nil
-}
-
-func (p *agentExecPTY) Close() error {
-	var err error
-	p.closeOnce.Do(func() {
-		err = p.conn.Close()
-		req, reqErr := http.NewRequest(http.MethodPost, "http://sandbox/exec/"+url.PathEscape(p.execID)+"/kill", nil)
-		if reqErr == nil {
-			if resp, doErr := p.lease.Client.Do(req); doErr == nil {
-				_ = resp.Body.Close()
-			}
-		}
-		p.lease.Release()
-	})
-	return err
-}
-
-func (p *agentExecPTY) Wait(ctx context.Context) (int, error) {
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		session, err := getAgentExec(ctx, p.lease.Client, p.execID)
-		if err != nil {
-			return -1, err
-		}
-		switch session.Status {
-		case "exited", "killed", "failed":
-			if session.ExitCode != nil {
-				return *session.ExitCode, nil
-			}
-			return 0, nil
-		}
-		select {
-		case <-ctx.Done():
-			return -1, ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func getAgentExec(ctx context.Context, client *http.Client, execID string) (*agentExecSession, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://sandbox/exec/"+url.PathEscape(execID), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("agent exec get failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
-	}
-	var session agentExecSession
-	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
-		return nil, err
-	}
-	return &session, nil
 }
 
 // handlePersistentTerminalSession relays data between a persistent terminal

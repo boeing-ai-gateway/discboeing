@@ -19,12 +19,12 @@ type SessionInitializer interface {
 	Initialize(ctx context.Context, sessionID string) error
 }
 
-// SessionClient is a session-bound wrapper around SandboxChatClient.
+// SessionClient is a session-bound wrapper around SandboxAgentClient.
 // It removes the need to pass sessionID on every call and automatically
 // reconciles the sandbox on unavailability errors.
 type SessionClient struct {
 	sessionID       string
-	inner           *SandboxChatClient
+	inner           *SandboxAgentClient
 	sandboxSvc      *SandboxService
 	activityTracker func(string)
 	connTracker     *conntrack.Tracker

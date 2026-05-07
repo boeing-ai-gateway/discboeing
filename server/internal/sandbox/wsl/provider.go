@@ -437,48 +437,6 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 	return dockerProvider.List(ctx)
 }
 
-// Exec runs a command through the inner Docker provider.
-func (p *Provider) Exec(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
-	if err != nil {
-		return nil, err
-	}
-
-	dockerProvider, err := p.requireDockerProvider(ctx, runtimeInfo)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProvider.Exec(ctx, sessionID, cmd, opts)
-}
-
-// Attach creates a PTY through the inner Docker provider.
-func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
-	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
-	if err != nil {
-		return nil, err
-	}
-
-	dockerProvider, err := p.requireDockerProvider(ctx, runtimeInfo)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProvider.Attach(ctx, sessionID, opts)
-}
-
-// ExecStream creates a bidirectional stream through the inner Docker provider.
-func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
-	if err != nil {
-		return nil, err
-	}
-
-	dockerProvider, err := p.requireDockerProvider(ctx, runtimeInfo)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProvider.ExecStream(ctx, sessionID, cmd, opts)
-}
-
 // AcquireHTTPClient returns a leased sandbox HTTP client through the inner Docker provider.
 func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})

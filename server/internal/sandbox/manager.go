@@ -291,51 +291,6 @@ func (p *ProviderProxy) List(ctx context.Context) ([]*Sandbox, error) {
 	return allSandboxes, nil
 }
 
-// Exec executes a command using the provider determined by providerGetter.
-func (p *ProviderProxy) Exec(ctx context.Context, sessionID string, cmd []string, opts ExecOptions) (*ExecResult, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return nil, err
-	}
-
-	return provider.Exec(ctx, sessionID, cmd, opts)
-}
-
-// Attach attaches to a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Attach(ctx context.Context, sessionID string, opts AttachOptions) (PTY, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return nil, err
-	}
-
-	return provider.Attach(ctx, sessionID, opts)
-}
-
-// ExecStream executes a streaming command using the provider determined by providerGetter.
-func (p *ProviderProxy) ExecStream(ctx context.Context, sessionID string, cmd []string, opts ExecStreamOptions) (Stream, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return nil, err
-	}
-
-	return provider.ExecStream(ctx, sessionID, cmd, opts)
-}
-
 // AcquireHTTPClient returns a leased HTTP client using the provider determined by providerGetter.
 func (p *ProviderProxy) AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error) {
 	providerName, err := p.providerGetter(ctx, sessionID)

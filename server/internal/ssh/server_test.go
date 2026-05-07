@@ -35,6 +35,8 @@ func TestNew_GeneratesHostKey(t *testing.T) {
 		Address:         ":0",
 		HostKeyPath:     keyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -57,6 +59,8 @@ func TestNew_LoadsExistingHostKey(t *testing.T) {
 		Address:         ":0",
 		HostKeyPath:     keyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create first server: %v", err)
@@ -74,6 +78,8 @@ func TestNew_LoadsExistingHostKey(t *testing.T) {
 		Address:         ":0",
 		HostKeyPath:     keyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create second server: %v", err)
@@ -110,6 +116,8 @@ func TestServer_AcceptsConnection(t *testing.T) {
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -152,6 +160,8 @@ func TestServer_RejectsUnknownSession(t *testing.T) {
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -196,6 +206,8 @@ func TestServer_RejectsStoppedSandbox(t *testing.T) {
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -318,14 +330,16 @@ func TestWindowChangeResizesPTY(t *testing.T) {
 
 	// Track the mock PTY so we can inspect resize calls
 	mockPTY := &mock.PTY{}
-	provider.AttachFunc = func(_ context.Context, _ string, _ sandbox.AttachOptions) (sandbox.PTY, error) {
+	attacher := testAttacher{attachFunc: func(_ context.Context, _ string, _, _ int, _, _ string, _ map[string]string) (sandbox.PTY, error) {
 		return mockPTY, nil
-	}
+	}}
 
 	srv, err := New(&Config{
 		Address:         "127.0.0.1:0",
 		HostKeyPath:     getSharedTestKeyPath(),
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        attacher,
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -514,6 +528,8 @@ func TestServer_Stop(t *testing.T) {
 	srv, err := New(&Config{
 		Address:         "127.0.0.1:0",
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)

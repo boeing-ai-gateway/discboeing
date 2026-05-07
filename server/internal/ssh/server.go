@@ -48,6 +48,16 @@ type EnvVarFetcher interface {
 	GetEnvVarsForSession(ctx context.Context, sessionID string) (map[string]string, error)
 }
 
+// ExecStreamer runs bidirectional streaming commands in a sandbox session.
+type ExecStreamer interface {
+	ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error)
+}
+
+// Attacher creates interactive PTY sessions in a sandbox session.
+type Attacher interface {
+	Attach(ctx context.Context, sessionID string, rows, cols int, user, workDir string, env map[string]string) (sandbox.PTY, error)
+}
+
 // ConnectionTracker tracks active connections per session.
 // Implementations must be safe for concurrent use.
 type ConnectionTracker interface {
@@ -67,6 +77,12 @@ type Config struct {
 
 	// SandboxProvider is used to route connections to containers.
 	SandboxProvider sandbox.Provider
+
+	// ExecStreamer is used for SSH exec, SFTP, and direct TCP forwarding.
+	ExecStreamer ExecStreamer
+
+	// Attacher is used for SSH shell PTY sessions.
+	Attacher Attacher
 
 	// SandboxEnsurer is called on each incoming connection to ensure the sandbox
 	// is started before channels are opened. If nil, connections to non-running
@@ -90,6 +106,8 @@ type Config struct {
 type Server struct {
 	config            *ssh.ServerConfig
 	provider          sandbox.Provider
+	execStreamer      ExecStreamer
+	attacher          Attacher
 	sandboxEnsurer    SandboxEnsurer
 	userInfoFetcher   UserInfoFetcher
 	envVarFetcher     EnvVarFetcher
@@ -106,6 +124,14 @@ type Server struct {
 func New(cfg *Config) (*Server, error) {
 	if cfg.SandboxProvider == nil {
 		return nil, errors.New("sandbox provider is required")
+	}
+	execStreamer := cfg.ExecStreamer
+	if execStreamer == nil {
+		return nil, errors.New("exec streamer is required")
+	}
+	attacher := cfg.Attacher
+	if attacher == nil {
+		return nil, errors.New("attacher is required")
 	}
 
 	// Load or generate host key
@@ -132,6 +158,8 @@ func New(cfg *Config) (*Server, error) {
 	return &Server{
 		config:            sshConfig,
 		provider:          cfg.SandboxProvider,
+		execStreamer:      execStreamer,
+		attacher:          attacher,
 		sandboxEnsurer:    cfg.SandboxEnsurer,
 		userInfoFetcher:   cfg.UserInfoFetcher,
 		envVarFetcher:     cfg.EnvVarFetcher,
@@ -247,7 +275,7 @@ func (s *Server) handleConnection(netConn net.Conn) {
 	}
 
 	// Create session handler
-	handler := newSessionHandler(sessionID, s.provider, s.userInfoFetcher, s.envVarFetcher)
+	handler := newSessionHandler(sessionID, s.provider, s.execStreamer, s.attacher, s.userInfoFetcher, s.envVarFetcher)
 
 	s.mu.Lock()
 	s.sessions[sessionID] = handler
@@ -319,6 +347,8 @@ func loadOrGenerateHostKey(path string) (ssh.Signer, error) {
 type sessionHandler struct {
 	sessionID       string
 	provider        sandbox.Provider
+	execStreamer    ExecStreamer
+	attacher        Attacher
 	userInfoFetcher UserInfoFetcher
 	envVarFetcher   EnvVarFetcher
 }
@@ -328,10 +358,12 @@ type sessionUser struct {
 	homeDir string
 }
 
-func newSessionHandler(sessionID string, provider sandbox.Provider, userInfoFetcher UserInfoFetcher, envVarFetcher EnvVarFetcher) *sessionHandler {
+func newSessionHandler(sessionID string, provider sandbox.Provider, execStreamer ExecStreamer, attacher Attacher, userInfoFetcher UserInfoFetcher, envVarFetcher EnvVarFetcher) *sessionHandler {
 	return &sessionHandler{
 		sessionID:       sessionID,
 		provider:        provider,
+		execStreamer:    execStreamer,
+		attacher:        attacher,
 		userInfoFetcher: userInfoFetcher,
 		envVarFetcher:   envVarFetcher,
 	}
@@ -557,17 +589,13 @@ func (h *sessionHandler) runShell(channel ssh.Channel, ptyReq *ptyRequest, envVa
 	mergedEnv := h.getEnvVars(ctx, envVars)
 	sessionUser := h.getSessionUser(ctx)
 
-	opts := sandbox.AttachOptions{
-		Env:     mergedEnv,
-		User:    sessionUser.user,
-		WorkDir: sessionWorkDir(mergedEnv, sessionUser.homeDir),
-	}
+	rows, cols := 0, 0
 	if ptyReq != nil {
-		opts.Rows = int(ptyReq.Rows)
-		opts.Cols = int(ptyReq.Cols)
+		rows = int(ptyReq.Rows)
+		cols = int(ptyReq.Cols)
 	}
 
-	pty, err := h.provider.Attach(ctx, h.sessionID, opts)
+	pty, err := h.attacher.Attach(ctx, h.sessionID, rows, cols, sessionUser.user, sessionWorkDir(mergedEnv, sessionUser.homeDir), mergedEnv)
 	if err != nil {
 		log.Printf("SSH session %s: failed to attach: %v", h.sessionID, err)
 		sendExitStatus(channel, 1)
@@ -611,7 +639,7 @@ func (h *sessionHandler) runExec(channel ssh.Channel, command string, ptyReq *pt
 	sessionUser := h.getSessionUser(ctx)
 
 	// Execute command in sandbox using streaming to avoid buffering large outputs.
-	stream, err := h.provider.ExecStream(ctx, h.sessionID, []string{"sh", "-c", command}, sandbox.ExecStreamOptions{
+	stream, err := h.execStreamer.ExecStream(ctx, h.sessionID, []string{"sh", "-c", command}, sandbox.ExecStreamOptions{
 		Env:     mergedEnv,
 		User:    sessionUser.user,
 		WorkDir: sessionWorkDir(mergedEnv, sessionUser.homeDir),
@@ -672,7 +700,7 @@ func (h *sessionHandler) runSFTP(channel ssh.Channel) {
 
 	// Run sftp-server inside the container using ExecStream for bidirectional I/O
 	// The sftp-server binary handles the SFTP protocol
-	stream, err := h.provider.ExecStream(ctx, h.sessionID, []string{"/usr/lib/openssh/sftp-server"}, sandbox.ExecStreamOptions{
+	stream, err := h.execStreamer.ExecStream(ctx, h.sessionID, []string{"/usr/lib/openssh/sftp-server"}, sandbox.ExecStreamOptions{
 		User:    sessionUser.user,
 		WorkDir: sessionUser.homeDir,
 	})
@@ -729,7 +757,7 @@ func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
 	// commonly uses "localhost" as the destination; prefer IPv4 loopback so
 	// services bound to 127.0.0.1 work even when localhost resolves to ::1 first.
 	cmd := directTCPIPCommand(destHost, destPort)
-	stream, err := h.provider.ExecStream(ctx, h.sessionID, cmd, sandbox.ExecStreamOptions{
+	stream, err := h.execStreamer.ExecStream(ctx, h.sessionID, cmd, sandbox.ExecStreamOptions{
 		User: user,
 	})
 	if err != nil {

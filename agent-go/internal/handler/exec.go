@@ -169,6 +169,15 @@ func (h *Handler) ResizeExec(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// CloseWriteExec handles POST /exec/{id}/close-write.
+func (h *Handler) CloseWriteExec(w http.ResponseWriter, r *http.Request) {
+	if err := h.processManager.CloseWrite(chi.URLParam(r, "id")); err != nil {
+		h.processError(w, err)
+		return
+	}
+	h.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // KillExec handles POST /exec/{id}/kill.
 func (h *Handler) KillExec(w http.ResponseWriter, r *http.Request) {
 	if err := h.processManager.Kill(chi.URLParam(r, "id")); err != nil {

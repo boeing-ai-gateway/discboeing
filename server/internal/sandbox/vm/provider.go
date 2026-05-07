@@ -415,33 +415,6 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 	return allSandboxes, nil
 }
 
-// Exec executes a command in a sandbox.
-func (p *Provider) Exec(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProv.Exec(ctx, sessionID, cmd, opts)
-}
-
-// Attach attaches to a sandbox.
-func (p *Provider) Attach(ctx context.Context, sessionID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
-	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProv.Attach(ctx, sessionID, opts)
-}
-
-// ExecStream executes a streaming command in a sandbox.
-func (p *Provider) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return dockerProv.ExecStream(ctx, sessionID, cmd, opts)
-}
-
 // AcquireHTTPClient returns a leased HTTP client that connects to the sandbox's published port
 // via the VM's port dialer.
 func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {

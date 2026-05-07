@@ -49,20 +49,6 @@ type Provider interface {
 	// This includes sandboxes in any state (running, stopped, failed).
 	List(ctx context.Context) ([]*Sandbox, error)
 
-	// Exec runs a non-interactive command in the sandbox.
-	// Returns stdout, stderr, and exit code.
-	Exec(ctx context.Context, sessionID string, cmd []string, opts ExecOptions) (*ExecResult, error)
-
-	// Attach creates an interactive PTY session to the sandbox.
-	// The PTY can be used for bidirectional terminal communication.
-	Attach(ctx context.Context, sessionID string, opts AttachOptions) (PTY, error)
-
-	// ExecStream runs a command with bidirectional streaming I/O (no TTY).
-	// Unlike Exec, this doesn't buffer output - it provides direct streaming access.
-	// Unlike Attach, this doesn't allocate a PTY, so binary data is not corrupted.
-	// This is used for SFTP and port forwarding.
-	ExecStream(ctx context.Context, sessionID string, cmd []string, opts ExecStreamOptions) (Stream, error)
-
 	// AcquireHTTPClient returns a leased HTTP client configured to communicate with
 	// the sandbox. Callers must release the lease after use.
 	AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error)
@@ -324,21 +310,6 @@ type ResourceConfig struct {
 	CPUCores float64       // CPU cores (0 = no limit)
 	DiskMB   int           // Disk space in MB (0 = no limit)
 	Timeout  time.Duration // Max sandbox lifetime (0 = no limit)
-}
-
-// ExecOptions configures non-interactive command execution.
-type ExecOptions struct {
-	WorkDir string            // Working directory for command
-	Env     map[string]string // Additional environment variables
-	User    string            // User to run as (empty = default)
-	Stdin   io.Reader         // Optional stdin input
-}
-
-// ExecResult contains the result of a non-interactive command execution.
-type ExecResult struct {
-	ExitCode int    // Exit code of the command
-	Stdout   []byte // Standard output
-	Stderr   []byte // Standard error
 }
 
 // AttachOptions configures interactive PTY session creation.

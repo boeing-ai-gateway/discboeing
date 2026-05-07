@@ -269,6 +269,8 @@ func main() {
 			Address:           fmt.Sprintf(":%d", cfg.SSHPort),
 			HostKeyPath:       cfg.SSHHostKeyPath,
 			SandboxProvider:   sandboxProvider,
+			ExecStreamer:      sshSandboxSvc,
+			Attacher:          sshSandboxSvc,
 			UserInfoFetcher:   &sshUserInfoAdapter{svc: sshSandboxSvc},
 			EnvVarFetcher:     sshEnvVarFetcher,
 			ConnectionTracker: connTracker,

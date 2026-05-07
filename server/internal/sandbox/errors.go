@@ -19,9 +19,6 @@ var (
 	// ErrStartFailed indicates the sandbox failed to start.
 	ErrStartFailed = errors.New("sandbox failed to start")
 
-	// ErrExecFailed indicates command execution failed.
-	ErrExecFailed = errors.New("command execution failed")
-
 	// ErrAttachFailed indicates failed to attach to sandbox PTY.
 	ErrAttachFailed = errors.New("failed to attach to sandbox")
 

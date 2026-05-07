@@ -102,28 +102,21 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 		return nil, err
 	}
 
-	gitName, gitEmail := s.getGitConfig(ctx)
-
-	inner := NewSandboxChatClient(s.provider, s.credentialFetcher, &SandboxChatClientConfig{
-		GitUserName:  gitName,
-		GitUserEmail: gitEmail,
-	})
-
 	return &SessionClient{
 		sessionID:       sessionID,
-		inner:           inner,
+		inner:           s.newAgentClient(ctx),
 		sandboxSvc:      s,
 		activityTracker: s.RecordActivity,
 		connTracker:     s.connTracker,
 	}, nil
 }
 
-// AcquireHTTPClient returns a leased HTTP client for the session's agent API.
-func (s *SandboxService) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
-		return nil, err
-	}
-	return sandbox.AcquireHTTPClient(ctx, s.provider, sessionID)
+func (s *SandboxService) newAgentClient(ctx context.Context) *SandboxAgentClient {
+	gitName, gitEmail := s.getGitConfig(ctx)
+	return NewSandboxAgentClient(s.provider, s.credentialFetcher, &SandboxAgentClientConfig{
+		GitUserName:  gitName,
+		GitUserEmail: gitEmail,
+	})
 }
 
 // EnsureSandboxReady checks the session state from the database and ensures
@@ -377,22 +370,30 @@ func (s *SandboxService) GetForSession(ctx context.Context, sessionID string) (*
 	return s.provider.Get(ctx, sessionID)
 }
 
-// Exec runs a non-interactive command in the session's sandbox.
-func (s *SandboxService) Exec(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecOptions) (*sandbox.ExecResult, error) {
-	return s.provider.Exec(ctx, sessionID, cmd, opts)
-}
-
 // Attach creates an interactive PTY session to the sandbox.
 // If user is empty, the container's default user is used.
 // env contains additional environment variables to set in the session.
-func (s *SandboxService) Attach(ctx context.Context, sessionID string, rows, cols int, user string, env map[string]string) (sandbox.PTY, error) {
-	opts := sandbox.AttachOptions{
-		Rows: rows,
-		Cols: cols,
-		User: user,
-		Env:  env,
+func (s *SandboxService) Attach(ctx context.Context, sessionID string, rows, cols int, user, workDir string, env map[string]string) (sandbox.PTY, error) {
+	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
+		return nil, err
 	}
-	return s.provider.Attach(ctx, sessionID, opts)
+	return s.newAgentClient(ctx).Attach(ctx, sessionID, rows, cols, user, workDir, env)
+}
+
+// AttachTerminal creates or reuses a persistent terminal PTY for a session.
+func (s *SandboxService) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, reuseKey string, env map[string]string) (sandbox.PTY, error) {
+	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	return s.newAgentClient(ctx).AttachTerminal(ctx, sessionID, rows, cols, user, reuseKey, env)
+}
+
+// ExecStream runs a command with bidirectional streaming I/O in the session's sandbox.
+func (s *SandboxService) ExecStream(ctx context.Context, sessionID string, cmd []string, opts sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	return s.newAgentClient(ctx).ExecStream(ctx, sessionID, cmd, opts)
 }
 
 // StopForSession stops the sandbox for a session.

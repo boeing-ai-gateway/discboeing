@@ -1,10 +1,12 @@
 package ssh
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
 )
 
@@ -13,6 +15,23 @@ import (
 // RSA 4096-bit key generation (~1.4s) for each test.
 var sharedTestKeyPath string
 var sharedTestKeyDir string
+
+type testExecStreamer struct{}
+
+func (testExecStreamer) ExecStream(_ context.Context, _ string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
+	return &mock.Stream{}, nil
+}
+
+type testAttacher struct {
+	attachFunc func(context.Context, string, int, int, string, string, map[string]string) (sandbox.PTY, error)
+}
+
+func (a testAttacher) Attach(ctx context.Context, sessionID string, rows, cols int, user, workDir string, env map[string]string) (sandbox.PTY, error) {
+	if a.attachFunc != nil {
+		return a.attachFunc(ctx, sessionID, rows, cols, user, workDir, env)
+	}
+	return &mock.PTY{}, nil
+}
 
 func TestMain(m *testing.M) {
 	// Pre-generate SSH host key for tests
@@ -31,6 +50,8 @@ func TestMain(m *testing.M) {
 		Address:         ":0",
 		HostKeyPath:     sharedTestKeyPath,
 		SandboxProvider: provider,
+		ExecStreamer:    testExecStreamer{},
+		Attacher:        testAttacher{},
 	})
 	if err != nil {
 		os.Stderr.WriteString("Failed to generate test host key: " + err.Error() + "\n")

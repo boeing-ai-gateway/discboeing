@@ -213,6 +213,14 @@ func (m *Manager) Resize(ctx context.Context, id string, rows, cols int) error {
 	return managed.stream.Resize(ctx, rows, cols)
 }
 
+func (m *Manager) CloseWrite(id string) error {
+	managed := m.get(id)
+	if managed == nil {
+		return ErrNotFound
+	}
+	return managed.stream.CloseWrite()
+}
+
 func (m *Manager) Kill(id string) error {
 	managed := m.get(id)
 	if managed == nil {
