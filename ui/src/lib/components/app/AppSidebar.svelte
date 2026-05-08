@@ -497,7 +497,7 @@
 		}
 
 		if (!workspace || workspace.sourceType === "managed") {
-			return "New Workspace";
+			return "Unnamed Workspace";
 		}
 
 		return trimWorkspacePrefix(workspace.path, workspace.sourceType);

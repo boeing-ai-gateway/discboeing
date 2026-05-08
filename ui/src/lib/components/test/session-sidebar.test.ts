@@ -214,7 +214,7 @@ test("session sidebar can group all sessions by workspace type", () => {
 	assert.match(source, /<GitBranchIcon class="size-3 shrink-0" \/>/);
 	assert.match(source, /<FolderIcon class="size-3 shrink-0" \/>/);
 	assert.match(source, /<PackageIcon class="size-3 shrink-0" \/>/);
-	assert.match(source, /New Workspace/);
+	assert.match(source, /Unnamed Workspace/);
 	assert.match(source, /Rename workspace/);
 	assert.match(source, /Delete workspace\?/);
 	assert.match(source, /<Switch/);

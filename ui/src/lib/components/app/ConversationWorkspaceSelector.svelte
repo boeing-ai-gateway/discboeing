@@ -113,7 +113,7 @@
 			return displayName;
 		}
 		if (workspace.sourceType === "managed") {
-			return "New Workspace";
+			return "Unnamed Workspace";
 		}
 		return shortenHomePath(workspace.path);
 	}
@@ -773,7 +773,7 @@
 				</optgroup>
 			{/if}
 			<optgroup label="Create new">
-				<option value="new-workspace">Empty Workspace</option>
+				<option value="new-workspace">Create New Workspace</option>
 				<option value="local-directory">Local Directory</option>
 				<option value="git-repo">GitHub Repo</option>
 			</optgroup>
