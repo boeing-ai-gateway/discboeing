@@ -4,4 +4,4 @@
 # type: file
 # pattern: "ui/**/*.{ts,tsx,js,jsx,svelte,json}"
 #---
-cd ui && pnpx sv check
+scripts/temproot.sh pnpm ui:typecheck

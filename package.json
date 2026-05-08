@@ -63,6 +63,7 @@
     "check:skills": ".claude/scripts/validate-skills.sh",
     "format": "pnpm ui:format",
     "ci": "pnpm check && pnpm test:unit && node scripts/run-ci-tail.mjs",
+    "temproot": "scripts/temproot.sh",
     "tauri": "tauri",
     "refresh-models": "./scripts/refresh-models-data.sh"
   },
