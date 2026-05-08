@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/creack/pty"
@@ -199,6 +202,40 @@ func cleanupPlatform(pid, pgid int) {
 	if pid > 0 {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
+}
+
+func shouldCleanupAbandoned(s Session) bool {
+	if s.PID <= 0 {
+		return false
+	}
+	if s.PGID > 0 {
+		pgid, err := syscall.Getpgid(s.PID)
+		if err != nil || pgid != s.PGID {
+			return false
+		}
+		if pgid == syscall.Getpgrp() {
+			return false
+		}
+	}
+	if len(s.Cmd) == 0 || s.Cmd[0] == "" || runtime.GOOS != "linux" {
+		return true
+	}
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(s.PID), "cmdline"))
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	fields := strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
+	if len(fields) == 0 || fields[0] == "" {
+		return false
+	}
+	if filepath.Base(fields[0]) != filepath.Base(s.Cmd[0]) {
+		return false
+	}
+	data, err = os.ReadFile(filepath.Join("/proc", strconv.Itoa(s.PID), "environ"))
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	return slices.Contains(strings.Split(strings.TrimRight(string(data), "\x00"), "\x00"), processSessionEnv+"="+s.ID)
 }
 
 func platformCapabilities() Capabilities {

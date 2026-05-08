@@ -96,9 +96,11 @@ type Manager struct {
 
 // NewManager creates a new HookManager.
 func NewManager(workspaceRoot, sessionID string, processManager ...*processes.Manager) *Manager {
-	procMgr := processes.NewManager(workspaceRoot)
+	var procMgr *processes.Manager
 	if len(processManager) > 0 && processManager[0] != nil {
 		procMgr = processManager[0]
+	} else {
+		procMgr = processes.NewManager(workspaceRoot)
 	}
 	return &Manager{
 		workspaceRoot:      workspaceRoot,

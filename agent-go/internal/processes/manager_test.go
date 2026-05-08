@@ -4,7 +4,11 @@ package processes
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -93,6 +97,74 @@ func TestManagerEventsSupportSequenceAndFilters(t *testing.T) {
 	}
 	if len(sinceEvents) != len(events) {
 		t.Fatalf("since events = %d, want %d", len(sinceEvents), len(events))
+	}
+}
+
+func TestNewManagerDoesNotCleanupCurrentProcessGroupFromStaleMetadata(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	sessionDir := filepath.Join(homeDir, ".discobot", "processes", "stale")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	session := Session{
+		ID:        "stale",
+		Status:    StatusRunning,
+		PID:       os.Getpid(),
+		PGID:      syscall.Getpgrp(),
+		StartedAt: time.Now().Add(-time.Hour),
+		Cmd:       []string{"/bin/sh"},
+	}
+	if err := writeJSON(filepath.Join(sessionDir, "session.json"), session); err != nil {
+		t.Fatalf("writeJSON() failed: %v", err)
+	}
+
+	_ = NewManager(t.TempDir())
+
+	var got Session
+	if err := readJSON(filepath.Join(sessionDir, "session.json"), &got); err != nil {
+		t.Fatalf("readJSON() failed: %v", err)
+	}
+	if got.Status != StatusKilled {
+		t.Fatalf("status = %q, want %q", got.Status, StatusKilled)
+	}
+}
+
+func TestNewManagerDoesNotCleanupProcessWithoutSessionMarker(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	cmd := exec.Command("/bin/sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_, _ = cmd.Process.Wait()
+	})
+
+	sessionDir := filepath.Join(homeDir, ".discobot", "processes", "stale")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	session := Session{
+		ID:        "stale",
+		Status:    StatusRunning,
+		PID:       cmd.Process.Pid,
+		PGID:      cmd.Process.Pid,
+		StartedAt: time.Now().Add(-time.Hour),
+		Cmd:       []string{"/bin/sleep", "30"},
+	}
+	if err := writeJSON(filepath.Join(sessionDir, "session.json"), session); err != nil {
+		t.Fatalf("writeJSON() failed: %v", err)
+	}
+
+	_ = NewManager(t.TempDir())
+
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("process was cleaned up without a session marker: %v", err)
 	}
 }
 

@@ -15,7 +15,10 @@ import (
 )
 
 func TestGetServicesIncludesBuiltInVSCodeWhenAvailable(t *testing.T) {
+	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 
 	originalLookPath := lookPath
 	lookPath = func(file string) (string, error) {
@@ -53,7 +56,10 @@ func TestGetServicesIncludesBuiltInVSCodeWhenAvailable(t *testing.T) {
 }
 
 func TestGetServiceReturnsBuiltInVSCodeWhenAvailable(t *testing.T) {
+	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 
 	originalLookPath := lookPath
 	lookPath = func(file string) (string, error) {
@@ -87,6 +93,7 @@ func TestStopServiceKillsEntireProcessGroup(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	pidDir := filepath.Join(workspaceRoot, "pids")
 	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 
 	servicesDir := filepath.Join(workspaceRoot, ServicesDir)
 	if err := os.MkdirAll(servicesDir, 0o755); err != nil {

@@ -15,7 +15,11 @@ import (
 )
 
 func TestServiceProxyDoesNotAutoStartStoppedExecutableService(t *testing.T) {
+	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
 	servicesDir := filepath.Join(workspaceRoot, services.ServicesDir)
 	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() failed: %v", err)

@@ -49,7 +49,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	var bm *browser.Manager
 	var pq *promptqueue.Store
 	var promptQueue *promptqueue.Manager
-	processManager := processes.NewManager(agentCwd)
+	var processManager *processes.Manager
 	for _, option := range options {
 		switch value := option.(type) {
 		case *browser.Manager:
@@ -61,6 +61,9 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		case *processes.Manager:
 			processManager = value
 		}
+	}
+	if processManager == nil {
+		processManager = processes.NewManager(agentCwd)
 	}
 	h := &Handler{
 		agentCwd:          agentCwd,

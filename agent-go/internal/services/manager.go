@@ -73,9 +73,11 @@ type Manager struct {
 
 // NewManager creates a new service Manager.
 func NewManager(defaultWorkDir string, processManager ...*processes.Manager) *Manager {
-	procMgr := processes.NewManager(defaultWorkDir)
+	var procMgr *processes.Manager
 	if len(processManager) > 0 && processManager[0] != nil {
 		procMgr = processManager[0]
+	} else {
+		procMgr = processes.NewManager(defaultWorkDir)
 	}
 	return &Manager{
 		services:  make(map[string]*managedService),

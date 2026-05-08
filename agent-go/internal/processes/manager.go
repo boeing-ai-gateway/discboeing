@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 )
 
 const ringBufferSize = 512 * 1024
+const processSessionEnv = "DISCOBOT_PROCESS_SESSION_ID"
 
 type managedSession struct {
 	mu        sync.Mutex
@@ -23,6 +25,7 @@ type managedSession struct {
 	buf       *ringBuffer
 	subs      map[chan OutputEvent]struct{}
 	done      chan struct{}
+	readers   sync.WaitGroup
 	nextSeq   int64
 	closeOnce sync.Once
 }
@@ -74,6 +77,14 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 	}
 
 	id := "exec_" + randomID()
+	if req.Env == nil {
+		req.Env = map[string]string{}
+	} else {
+		env := make(map[string]string, len(req.Env)+1)
+		maps.Copy(env, req.Env)
+		req.Env = env
+	}
+	req.Env[processSessionEnv] = id
 	log, err := newOutputLog(id, req.TTY, req.LogDir, req.LogPath)
 	if err != nil {
 		return nil, err
@@ -108,6 +119,7 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 		subs:    map[chan OutputEvent]struct{}{},
 		done:    make(chan struct{}),
 	}
+	managed.readers.Add(1)
 	m.mu.Lock()
 	m.sessions[id] = managed
 	if req.ReuseKey != "" {
@@ -117,6 +129,7 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 	managed.persist()
 	go m.readLoop(managed, "stdout", stream)
 	if stderr := stream.Stderr(); stderr != nil {
+		managed.readers.Add(1)
 		go m.readLoop(managed, "stderr", stderr)
 	}
 	go m.waitLoop(context.Background(), managed)
@@ -234,6 +247,7 @@ func (m *Manager) Kill(id string) error {
 }
 
 func (m *Manager) readLoop(managed *managedSession, streamType string, r io.Reader) {
+	defer managed.readers.Done()
 	buf := make([]byte, 4096)
 	for {
 		n, err := r.Read(buf)
@@ -253,6 +267,7 @@ func (m *Manager) waitLoop(ctx context.Context, managed *managedSession) {
 	if err != nil && code < 0 {
 		code = 1
 	}
+	managed.readers.Wait()
 	exited := time.Now().UTC()
 	managed.mu.Lock()
 	managed.session.ExitCode = new(code)
@@ -311,6 +326,13 @@ func (m *Manager) cleanupAbandoned() {
 		path := filepath.Join(dataDir(), entry.Name(), "session.json")
 		var s Session
 		if readJSON(path, &s) != nil || s.Status != StatusRunning {
+			continue
+		}
+		if !shouldCleanupAbandoned(s) {
+			now := time.Now().UTC()
+			s.Status = StatusKilled
+			s.ExitedAt = &now
+			_ = writeJSON(path, s)
 			continue
 		}
 		cleanupPlatform(s.PID, s.PGID)

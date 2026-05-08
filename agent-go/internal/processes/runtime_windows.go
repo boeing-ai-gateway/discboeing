@@ -222,6 +222,10 @@ func cleanupPlatform(pid, _ int) {
 	}
 }
 
+func shouldCleanupAbandoned(s Session) bool {
+	return s.PID > 0
+}
+
 func platformCapabilities() Capabilities {
 	return Capabilities{
 		Platform:        runtime.GOOS,
