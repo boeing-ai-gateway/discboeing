@@ -526,7 +526,8 @@ func (c *ChatService) ReadFileFromBase(ctx context.Context, projectID, sessionID
 	}, nil
 }
 
-// WriteFile writes file content to the sandbox.
+// WriteFile writes file content to the sandbox. Relative paths resolve in the
+// workspace; paths beginning with ~/ resolve in the agent user's home directory.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) WriteFile(ctx context.Context, projectID, sessionID string, req *sandboxapi.WriteFileRequest) (*sandboxapi.WriteFileResponse, error) {
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {

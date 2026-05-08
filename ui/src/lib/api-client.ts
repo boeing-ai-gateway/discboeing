@@ -365,9 +365,10 @@ class ApiClient {
 
 	// Session Files
 	/**
-	 * List files in a session's workspace directory.
+	 * List files in a session directory. Relative paths resolve in the workspace;
+	 * paths beginning with ~/ resolve in the agent user's home directory.
 	 * @param sessionId Session ID
-	 * @param path Directory path relative to workspace root (defaults to ".")
+	 * @param path Directory path relative to workspace root, or ~/ for home (defaults to ".")
 	 * @param includeHidden Whether to include hidden files (starting with ".")
 	 */
 	async listSessionFiles(
@@ -404,9 +405,10 @@ class ApiClient {
 	}
 
 	/**
-	 * Read a file from a session's workspace.
+	 * Read a file from a session. Relative paths resolve in the workspace; paths
+	 * beginning with ~/ resolve in the agent user's home directory.
 	 * @param sessionId Session ID
-	 * @param path File path relative to workspace root
+	 * @param path File path relative to workspace root, or ~/ for home
 	 * @param options.fromBase If true, read from base commit (for deleted files)
 	 */
 	async readSessionFile(
@@ -438,7 +440,8 @@ class ApiClient {
 	}
 
 	/**
-	 * Write a file to a session's workspace.
+	 * Write a file to a session. Relative paths resolve in the workspace; paths
+	 * beginning with ~/ resolve in the agent user's home directory.
 	 * @param sessionId Session ID
 	 * @param data File content and path (include originalContent for optimistic locking)
 	 * @throws {FileConflictError} When originalContent doesn't match current file content

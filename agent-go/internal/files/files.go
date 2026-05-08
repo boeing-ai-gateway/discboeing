@@ -1,4 +1,5 @@
-// Package files provides file system operations scoped to a workspace root.
+// Package files provides file system operations scoped to either a workspace
+// root or, for paths beginning with ~/, the current user's home directory.
 // All paths are validated to prevent directory traversal.
 package files
 
@@ -120,31 +121,80 @@ var textBasenames = map[string]bool{
 	"README": true, "CHANGELOG": true,
 }
 
+type resolvedPath struct {
+	resolved     string
+	root         string
+	rel          string
+	resultPrefix string
+	rootResult   string
+}
+
 // ValidatePath validates and resolves a path relative to the workspace root.
+// Paths beginning with ~/ are resolved relative to the current user's home
+// directory instead.
 // Returns the resolved absolute path or an error if the path is invalid.
 func ValidatePath(inputPath, workspaceRoot string) (string, error) {
+	resolved, err := resolvePath(inputPath, workspaceRoot)
+	if err != nil {
+		return "", err
+	}
+	return resolved.resolved, nil
+}
+
+func resolvePath(inputPath, workspaceRoot string) (*resolvedPath, error) {
+	root := filepath.Clean(workspaceRoot)
+	path := inputPath
+	resultPrefix := ""
+	rootResult := "."
+
+	if inputPath == "~" || strings.HasPrefix(inputPath, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("home directory unavailable")
+		}
+		root = filepath.Clean(homeDir)
+		resultPrefix = "~/"
+		rootResult = "~"
+		path = strings.TrimPrefix(inputPath, "~/")
+		if inputPath == "~" {
+			path = "."
+		}
+	}
+
 	if inputPath == "" || inputPath == "." {
-		return workspaceRoot, nil
+		return &resolvedPath{
+			resolved:     root,
+			root:         root,
+			rel:          ".",
+			resultPrefix: resultPrefix,
+			rootResult:   rootResult,
+		}, nil
 	}
 
 	// Reject absolute paths
-	if filepath.IsAbs(inputPath) {
-		return "", fmt.Errorf("absolute paths are not allowed")
+	if filepath.IsAbs(path) {
+		return nil, fmt.Errorf("absolute paths are not allowed")
 	}
 
-	resolved := filepath.Join(workspaceRoot, inputPath)
+	resolved := filepath.Join(root, path)
 	resolved = filepath.Clean(resolved)
 
 	// Check for traversal
-	rel, err := filepath.Rel(workspaceRoot, resolved)
+	rel, err := filepath.Rel(root, resolved)
 	if err != nil {
-		return "", fmt.Errorf("invalid path")
+		return nil, fmt.Errorf("invalid path")
 	}
-	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path traversal is not allowed")
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("path traversal is not allowed")
 	}
 
-	return resolved, nil
+	return &resolvedPath{
+		resolved:     resolved,
+		root:         root,
+		rel:          rel,
+		resultPrefix: resultPrefix,
+		rootResult:   rootResult,
+	}, nil
 }
 
 func normalizeResultPath(relPath string) string {
@@ -152,6 +202,31 @@ func normalizeResultPath(relPath string) string {
 		return "."
 	}
 	return filepath.ToSlash(strings.ReplaceAll(relPath, "\\", "/"))
+}
+
+func (p *resolvedPath) resultPath() string {
+	normalized := normalizeResultPath(p.rel)
+	if normalized == "." {
+		return p.rootResult
+	}
+	return p.resultPrefix + normalized
+}
+
+func (p *resolvedPath) openRoot() (*os.Root, error) {
+	return os.OpenRoot(p.root)
+}
+
+func fileOperationError(err error) *Error {
+	if os.IsNotExist(err) {
+		return newError(404, "File not found")
+	}
+	if os.IsPermission(err) {
+		return newError(403, "Permission denied")
+	}
+	if strings.Contains(err.Error(), "path escapes from parent") {
+		return newError(400, "Invalid path")
+	}
+	return newError(500, err.Error())
 }
 
 // IsTextFile determines if a file should be treated as text or binary.
@@ -188,12 +263,18 @@ func IsTextFile(path string, content []byte) bool {
 
 // ListDirectory lists the contents of a directory.
 func ListDirectory(inputPath, workspaceRoot string, includeHidden bool) (*ListResult, *Error) {
-	resolved, err := ValidatePath(inputPath, workspaceRoot)
+	resolved, err := resolvePath(inputPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid path")
 	}
 
-	info, err := os.Stat(resolved)
+	root, err := resolved.openRoot()
+	if err != nil {
+		return nil, fileOperationError(err)
+	}
+	defer root.Close()
+
+	info, err := root.Stat(resolved.rel)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, newError(404, "Directory not found")
@@ -207,12 +288,15 @@ func ListDirectory(inputPath, workspaceRoot string, includeHidden bool) (*ListRe
 		return nil, newError(400, "Not a directory")
 	}
 
-	dirEntries, err := os.ReadDir(resolved)
+	dir, err := root.Open(resolved.rel)
 	if err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+		return nil, fileOperationError(err)
+	}
+	defer dir.Close()
+
+	dirEntries, err := dir.ReadDir(-1)
+	if err != nil {
+		return nil, fileOperationError(err)
 	}
 
 	entries := make([]FileEntry, 0, len(dirEntries))
@@ -243,30 +327,25 @@ func ListDirectory(inputPath, workspaceRoot string, includeHidden bool) (*ListRe
 		return entries[i].Name < entries[j].Name
 	})
 
-	relPath, _ := filepath.Rel(workspaceRoot, resolved)
-	if relPath == "" || relPath == "." {
-		relPath = "."
-	}
-
-	return &ListResult{Path: normalizeResultPath(relPath), Entries: entries}, nil
+	return &ListResult{Path: resolved.resultPath(), Entries: entries}, nil
 }
 
 // ReadFile reads the content of a file.
 func ReadFile(inputPath, workspaceRoot string) (*ReadResult, *Error) {
-	resolved, err := ValidatePath(inputPath, workspaceRoot)
+	resolved, err := resolvePath(inputPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid path")
 	}
 
-	info, err := os.Stat(resolved)
+	root, err := resolved.openRoot()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, newError(404, "File not found")
-		}
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+		return nil, fileOperationError(err)
+	}
+	defer root.Close()
+
+	info, err := root.Stat(resolved.rel)
+	if err != nil {
+		return nil, fileOperationError(err)
 	}
 	if info.IsDir() {
 		return nil, newError(400, "Is a directory")
@@ -275,19 +354,15 @@ func ReadFile(inputPath, workspaceRoot string) (*ReadResult, *Error) {
 		return nil, newError(413, "File too large")
 	}
 
-	content, err := os.ReadFile(resolved)
+	content, err := root.ReadFile(resolved.rel)
 	if err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+		return nil, fileOperationError(err)
 	}
 
-	relPath, _ := filepath.Rel(workspaceRoot, resolved)
 	isText := IsTextFile(inputPath, content)
 
 	result := &ReadResult{
-		Path: normalizeResultPath(relPath),
+		Path: resolved.resultPath(),
 		Size: info.Size(),
 	}
 	if isText {
@@ -303,17 +378,9 @@ func ReadFile(inputPath, workspaceRoot string) (*ReadResult, *Error) {
 
 // WriteFile writes content to a file.
 func WriteFile(inputPath, content, encoding, workspaceRoot string) (*WriteResult, *Error) {
-	resolved, err := ValidatePath(inputPath, workspaceRoot)
+	resolved, err := resolvePath(inputPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid path")
-	}
-
-	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
 	}
 
 	var data []byte
@@ -326,38 +393,45 @@ func WriteFile(inputPath, content, encoding, workspaceRoot string) (*WriteResult
 		data = []byte(content)
 	}
 
-	if err := os.WriteFile(resolved, data, 0o644); err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+	root, err := resolved.openRoot()
+	if err != nil {
+		return nil, fileOperationError(err)
+	}
+	defer root.Close()
+
+	// Ensure parent directory exists inside the selected root.
+	if err := root.MkdirAll(filepath.Dir(resolved.rel), 0o755); err != nil {
+		return nil, fileOperationError(err)
 	}
 
-	relPath, _ := filepath.Rel(workspaceRoot, resolved)
-	return &WriteResult{Path: normalizeResultPath(relPath), Size: int64(len(data))}, nil
+	if err := root.WriteFile(resolved.rel, data, 0o644); err != nil {
+		return nil, fileOperationError(err)
+	}
+
+	return &WriteResult{Path: resolved.resultPath(), Size: int64(len(data))}, nil
 }
 
 // DeleteFile deletes a file or directory.
 func DeleteFile(inputPath, workspaceRoot string) (*DeleteResult, *Error) {
-	resolved, err := ValidatePath(inputPath, workspaceRoot)
+	resolved, err := resolvePath(inputPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid path")
 	}
 
-	// Prevent deleting the workspace root
-	if resolved == workspaceRoot {
-		return nil, newError(400, "Cannot delete workspace root")
+	// Prevent deleting the workspace or home root.
+	if resolved.rel == "." {
+		return nil, newError(400, "Cannot delete root")
 	}
 
-	info, err := os.Stat(resolved)
+	root, err := resolved.openRoot()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, newError(404, "File not found")
-		}
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+		return nil, fileOperationError(err)
+	}
+	defer root.Close()
+
+	info, err := root.Stat(resolved.rel)
+	if err != nil {
+		return nil, fileOperationError(err)
 	}
 
 	entryType := "file"
@@ -365,58 +439,54 @@ func DeleteFile(inputPath, workspaceRoot string) (*DeleteResult, *Error) {
 		entryType = "directory"
 	}
 
-	if err := os.RemoveAll(resolved); err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+	if err := root.RemoveAll(resolved.rel); err != nil {
+		return nil, fileOperationError(err)
 	}
 
-	relPath, _ := filepath.Rel(workspaceRoot, resolved)
-	return &DeleteResult{Path: normalizeResultPath(relPath), Type: entryType}, nil
+	return &DeleteResult{Path: resolved.resultPath(), Type: entryType}, nil
 }
 
 // RenameFile renames (moves) a file or directory.
 func RenameFile(oldPath, newPath, workspaceRoot string) (*RenameResult, *Error) {
-	resolvedOld, err := ValidatePath(oldPath, workspaceRoot)
+	resolvedOld, err := resolvePath(oldPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid source path")
 	}
 
-	resolvedNew, err := ValidatePath(newPath, workspaceRoot)
+	resolvedNew, err := resolvePath(newPath, workspaceRoot)
 	if err != nil {
 		return nil, newError(400, "Invalid destination path")
 	}
 
+	if resolvedOld.rel == "." {
+		return nil, newError(400, "Cannot rename root")
+	}
+
+	if resolvedOld.root != resolvedNew.root {
+		return nil, newError(400, "Cannot rename across roots")
+	}
+
+	root, err := resolvedOld.openRoot()
+	if err != nil {
+		return nil, fileOperationError(err)
+	}
+	defer root.Close()
+
 	// Verify source exists
-	if _, err := os.Stat(resolvedOld); err != nil {
-		if os.IsNotExist(err) {
-			return nil, newError(404, "File not found")
-		}
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+	if _, err := root.Stat(resolvedOld.rel); err != nil {
+		return nil, fileOperationError(err)
 	}
 
 	// Ensure parent directory of destination exists
-	if err := os.MkdirAll(filepath.Dir(resolvedNew), 0o755); err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+	if err := root.MkdirAll(filepath.Dir(resolvedNew.rel), 0o755); err != nil {
+		return nil, fileOperationError(err)
 	}
 
-	if err := os.Rename(resolvedOld, resolvedNew); err != nil {
-		if os.IsPermission(err) {
-			return nil, newError(403, "Permission denied")
-		}
-		return nil, newError(500, err.Error())
+	if err := root.Rename(resolvedOld.rel, resolvedNew.rel); err != nil {
+		return nil, fileOperationError(err)
 	}
 
-	relOld, _ := filepath.Rel(workspaceRoot, resolvedOld)
-	relNew, _ := filepath.Rel(workspaceRoot, resolvedNew)
-	return &RenameResult{OldPath: normalizeResultPath(relOld), NewPath: normalizeResultPath(relNew)}, nil
+	return &RenameResult{OldPath: resolvedOld.resultPath(), NewPath: resolvedNew.resultPath()}, nil
 }
 
 // Directories to skip during manual file walk.

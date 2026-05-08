@@ -160,7 +160,9 @@ func getDirectorySuggestions(query string) []Suggestion {
 // Session File Endpoints
 // ============================================================================
 
-// ListSessionFiles lists directory contents for a session's workspace.
+// ListSessionFiles lists directory contents for a session. Relative paths
+// resolve in the workspace; paths beginning with ~/ resolve in the agent user's
+// home directory.
 // GET /api/projects/{projectId}/sessions/{sessionId}/files?path=.&hidden=true
 func (h *Handler) ListSessionFiles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -231,7 +233,8 @@ func (h *Handler) SearchSessionFiles(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
-// ReadSessionFile reads a file from a session's workspace.
+// ReadSessionFile reads a file from a session. Relative paths resolve in the
+// workspace; paths beginning with ~/ resolve in the agent user's home directory.
 // GET /api/projects/{projectId}/sessions/{sessionId}/files/read?path=...&fromBase=true
 func (h *Handler) ReadSessionFile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -312,7 +315,8 @@ func (h *Handler) ReadSessionThreadArtifact(w http.ResponseWriter, r *http.Reque
 	h.JSON(w, http.StatusOK, result)
 }
 
-// WriteSessionFile writes a file to a session's workspace.
+// WriteSessionFile writes a file to a session. Relative paths resolve in the
+// workspace; paths beginning with ~/ resolve in the agent user's home directory.
 // PUT /api/projects/{projectId}/sessions/{sessionId}/files/write
 func (h *Handler) WriteSessionFile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
