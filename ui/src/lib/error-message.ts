@@ -22,5 +22,8 @@ export function getErrorMessage(error: unknown): string | null {
 			return String(error);
 		}
 	}
+	if (typeof error === "symbol") {
+		return "An unknown error occurred.";
+	}
 	return String(error);
 }

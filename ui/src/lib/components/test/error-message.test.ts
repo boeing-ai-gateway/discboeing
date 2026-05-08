@@ -11,5 +11,6 @@ test("getErrorMessage extracts useful messages", () => {
 	assert.equal(getErrorMessage({ error: "not found" }), "not found");
 	assert.equal(getErrorMessage({ detail: "denied" }), "denied");
 	assert.equal(getErrorMessage({ code: "E_FAIL" }), '{"code":"E_FAIL"}');
+	assert.equal(getErrorMessage(Symbol("simple")), "An unknown error occurred.");
 	assert.equal(getErrorMessage(404), "404");
 });
