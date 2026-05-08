@@ -8,6 +8,8 @@
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
+	import { requestVSCodeOpenFile } from "$lib/editor-control";
+	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
 	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 
@@ -87,8 +89,19 @@ ${selectedText}
 		});
 	}
 
-	function handleOpenDiffFile(path: string) {
-		void session.files.open(path);
+	async function handleOpenDiffFile(path: string) {
+		if (!editorEnabled || !vscodeAvailable) {
+			await session.files.open(path);
+			return;
+		}
+
+		try {
+			await requestVSCodeOpenFile(session.sessionId, path);
+			sessionView.openVSCode();
+		} catch (error) {
+			console.error("Failed to request editor open file", error);
+			await session.files.open(path);
+		}
 	}
 </script>
 

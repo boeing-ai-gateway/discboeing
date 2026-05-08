@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
-	import { api } from "$lib/api-client";
 	import { appendAuthToken, getApiRootBase } from "$lib/api-config";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import { Button } from "$lib/components/ui/button";
+	import { syncEditorTheme } from "$lib/editor-control";
 	import type { ResolvedTheme } from "$lib/theme";
 	import type { ServiceItem } from "$lib/shell-types";
 
@@ -16,11 +16,6 @@
 		service: ServiceItem | null;
 		shiftWindowControlsForSidebar?: boolean;
 	};
-
-	const VSCODE_THEME_FILE_PATH = ".discobot/.vscode-theme.json";
-	const GIT_HEAD_PATH = ".git/HEAD";
-	const GIT_EXCLUDE_PATH = ".git/info/exclude";
-	const GIT_EXCLUDE_ENTRY = `${VSCODE_THEME_FILE_PATH}\n`;
 
 	let {
 		dockMaximized,
@@ -74,40 +69,6 @@
 		return appendAuthToken(`${protocol}//${subdomain}.${parsed.host}${path}`);
 	}
 
-	function buildThemePayload(nextTheme: ResolvedTheme): string {
-		return JSON.stringify({ theme: nextTheme }, null, "\t");
-	}
-
-	async function ensureThemeFileIsGitIgnored(nextSessionId: string) {
-		try {
-			await api.readSessionFile(nextSessionId, GIT_HEAD_PATH);
-		} catch {
-			return;
-		}
-
-		let currentExclude = "";
-		try {
-			const response = await api.readSessionFile(
-				nextSessionId,
-				GIT_EXCLUDE_PATH,
-			);
-			currentExclude = response.content;
-		} catch {
-			currentExclude = "";
-		}
-
-		if (currentExclude.includes(VSCODE_THEME_FILE_PATH)) {
-			return;
-		}
-
-		const separator =
-			currentExclude.length > 0 && !currentExclude.endsWith("\n") ? "\n" : "";
-		await api.writeSessionFile(nextSessionId, {
-			path: GIT_EXCLUDE_PATH,
-			content: `${currentExclude}${separator}${GIT_EXCLUDE_ENTRY}`,
-		});
-	}
-
 	function refreshPreview() {
 		isLoading = true;
 		error = null;
@@ -147,14 +108,7 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				await ensureThemeFileIsGitIgnored(sessionId);
-				if (cancelled) {
-					return;
-				}
-				await api.writeSessionFile(sessionId, {
-					path: VSCODE_THEME_FILE_PATH,
-					content: buildThemePayload(resolvedTheme),
-				});
+				await syncEditorTheme(sessionId, resolvedTheme);
 				if (!cancelled) {
 					lastSyncedThemeKey = themeKey;
 				}

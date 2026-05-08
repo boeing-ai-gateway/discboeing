@@ -7,6 +7,10 @@ const VSCODE_PANEL_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/parts/VSCodePanel.svelte",
 );
+const EDITOR_CONTROL_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../editor-control.ts",
+);
 const VSCODE_THEME_EXTENSION = path.resolve(
 	import.meta.dirname,
 	"../../../../../container-assets/code-server/extensions/discobot.discobot-theme/dist/web-extension.js",
@@ -30,6 +34,10 @@ function readVSCodePanelSource() {
 	return readFileSync(VSCODE_PANEL_COMPONENT, "utf-8");
 }
 
+function readEditorControlSource() {
+	return readFileSync(EDITOR_CONTROL_MODULE, "utf-8");
+}
+
 function readVSCodeThemeExtensionSource() {
 	return readFileSync(VSCODE_THEME_EXTENSION, "utf-8");
 }
@@ -39,41 +47,76 @@ function readVSCodeSystemdServiceSource() {
 }
 
 test("vscode panel syncs the theme file for the embedded editor", () => {
-	const source = readVSCodePanelSource();
+	const panelSource = readVSCodePanelSource();
+	const controlSource = readEditorControlSource();
 
+	assert.match(panelSource, /syncEditorTheme\(sessionId, resolvedTheme\)/);
 	assert.match(
-		source,
-		/const VSCODE_THEME_FILE_PATH = "\.discobot\/\.vscode-theme\.json";/,
+		controlSource,
+		/export const VSCODE_THEME_FILE_PATH = "~\/\.discobot\/editor\/\.vscode-theme\.json";/,
 	);
 	assert.match(
-		source,
-		/const GIT_EXCLUDE_ENTRY = `\$\{VSCODE_THEME_FILE_PATH\}\\n`;/,
+		controlSource,
+		/export const VSCODE_CONTROL_FILE_PATH =\s*"~\/\.discobot\/editor\/\.vscode-control\.json";/,
 	);
 	assert.match(
-		source,
+		controlSource,
 		/function buildThemePayload\(nextTheme: ResolvedTheme\): string/,
 	);
 	assert.match(
-		source,
+		controlSource,
 		/path: VSCODE_THEME_FILE_PATH,[\s\S]*content: buildThemePayload\(resolvedTheme\),/m,
 	);
-	assert.doesNotMatch(source, /openPath\?: string;/);
-	assert.doesNotMatch(source, /VSCODE_OPEN_FILE_PATH/);
+});
+
+test("diff open file requests vscode through the editor control file", () => {
+	const source = readEditorControlSource();
+
+	assert.match(source, /type: "openFile"/);
+	assert.match(source, /path: VSCODE_CONTROL_FILE_PATH/);
+	assert.match(source, /content: buildOpenFilePayload\(path\)/);
 });
 
 test("vscode theme extension watches and retries theme sync", () => {
 	const source = readVSCodeThemeExtensionSource();
 
+	assert.match(source, /const workspaceFolder = getWorkspaceFolder\(\);/);
+	assert.match(source, /workspaceFolder\.uri\.with\(\{ path: homeDir \}\)/);
 	assert.match(
 		source,
-		/new vscode\.RelativePattern\(workspaceFolder, themeSyncFilePath\)/,
+		/new vscode\.RelativePattern\([\s\S]*getHomeDirUri\(\),[\s\S]*`\$\{editorStateDirRelativeToHome\}\/\$\{relativePath\}`/m,
 	);
 	assert.match(
 		source,
-		/vscode\.workspace\.createFileSystemWatcher\(getThemeSyncPattern\(\)\)/,
+		/vscode\.workspace\.createFileSystemWatcher\([\s\S]*getEditorStateFilePattern\(themeSyncFilePath\)/m,
 	);
 	assert.match(source, /for \(const retryDelay of \[0, 250, 1000, 2500\]\)/);
 	assert.match(source, /await syncThemeFromFile\(\);/);
+});
+
+test("vscode theme extension consumes open-file control commands", () => {
+	const source = readVSCodeThemeExtensionSource();
+
+	assert.match(
+		source,
+		/const editorStateDirRelativeToHome = "\.discobot\/editor";/,
+	);
+	assert.match(source, /const controlFilePath = "\.vscode-control\.json";/);
+	assert.match(
+		source,
+		/vscode\.workspace\.createFileSystemWatcher\([\s\S]*getEditorStateFilePattern\(controlFilePath\)/m,
+	);
+	assert.match(source, /for \(const retryDelay of \[0, 250, 1000, 2500\]\)/);
+	assert.match(source, /processControlCommand\("process initial command"\)/);
+	assert.match(source, /payload\.type !== "openFile"/);
+	assert.match(
+		source,
+		/vscode\.window\.showTextDocument\(fileUri, \{ preview: false \}\)/,
+	);
+	assert.match(
+		source,
+		/vscode\.workspace\.fs\.delete\(controlUri, \{ useTrash: false \}\)/,
+	);
 });
 
 test("dockerfile does not ship stale code-server extension registry", () => {

@@ -6,7 +6,9 @@ exports.deactivate = deactivate;
 
 const vscode = require("vscode");
 
-const themeSyncFilePath = ".discobot/.vscode-theme.json";
+const editorStateDirRelativeToHome = ".discobot/editor";
+const themeSyncFilePath = ".vscode-theme.json";
+const controlFilePath = ".vscode-control.json";
 const themeNames = {
 	dark: "Discobot Dark",
 	light: "Discobot Light",
@@ -20,26 +22,81 @@ function getWorkspaceFolder() {
 	return vscode.workspace.workspaceFolders?.[0] ?? null;
 }
 
-function getThemeSyncUri() {
+function getWorkspaceFileUri(relativePath) {
 	const workspaceFolder = getWorkspaceFolder();
 	if (!workspaceFolder) {
 		return null;
 	}
 
-	return vscode.Uri.joinPath(workspaceFolder.uri, themeSyncFilePath);
+	return vscode.Uri.joinPath(workspaceFolder.uri, relativePath);
 }
 
-function getThemeSyncPattern() {
+function getHomeDirUri() {
+	const homeDir =
+		typeof process !== "undefined" && process.env?.HOME
+			? process.env.HOME
+			: "/home/discobot";
 	const workspaceFolder = getWorkspaceFolder();
-	if (!workspaceFolder) {
-		return themeSyncFilePath;
+	if (workspaceFolder) {
+		return workspaceFolder.uri.with({ path: homeDir });
 	}
+	return vscode.Uri.file(homeDir);
+}
 
-	return new vscode.RelativePattern(workspaceFolder, themeSyncFilePath);
+function getEditorStateFileUri(relativePath) {
+	return vscode.Uri.joinPath(
+		getHomeDirUri(),
+		editorStateDirRelativeToHome,
+		relativePath,
+	);
+}
+
+function getEditorStateFilePattern(relativePath) {
+	return new vscode.RelativePattern(
+		getHomeDirUri(),
+		`${editorStateDirRelativeToHome}/${relativePath}`,
+	);
 }
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readJsonFile(uri, label) {
+	let rawContent;
+	try {
+		rawContent = await vscode.workspace.fs.readFile(uri);
+	} catch (error) {
+		log(`${label} file not readable yet`, error);
+		return null;
+	}
+
+	try {
+		return JSON.parse(new TextDecoder().decode(rawContent));
+	} catch (error) {
+		console.error(`[discobot-theme] failed to parse ${label} file`, error);
+		return null;
+	}
+}
+
+function getWorkspaceRelativeUri(path) {
+	if (typeof path !== "string") {
+		return null;
+	}
+
+	const trimmed = path.trim();
+	if (!trimmed || trimmed.startsWith("/") || trimmed.includes("\0")) {
+		return null;
+	}
+
+	const segments = trimmed.split("/");
+	if (
+		segments.some((segment) => !segment || segment === "." || segment === "..")
+	) {
+		return null;
+	}
+
+	return getWorkspaceFileUri(trimmed);
 }
 
 function activate(context) {
@@ -72,26 +129,11 @@ function activate(context) {
 	};
 
 	const syncThemeFromFile = async () => {
-		const themeSyncUri = getThemeSyncUri();
-		if (!themeSyncUri) {
-			log("workspace folder unavailable for theme sync");
-			return;
-		}
+		const themeSyncUri = getEditorStateFileUri(themeSyncFilePath);
 
 		log("reading theme sync file", themeSyncUri.toString());
-		let rawContent;
-		try {
-			rawContent = await vscode.workspace.fs.readFile(themeSyncUri);
-		} catch (error) {
-			log("theme sync file not readable yet", error);
-			return;
-		}
-
-		let payload;
-		try {
-			payload = JSON.parse(new TextDecoder().decode(rawContent));
-		} catch (error) {
-			console.error("[discobot-theme] failed to parse theme sync file", error);
+		const payload = await readJsonFile(themeSyncUri, "theme sync");
+		if (!payload) {
 			return;
 		}
 
@@ -99,23 +141,91 @@ function activate(context) {
 		await applyTheme(payload.theme);
 	};
 
-	const watcher = vscode.workspace.createFileSystemWatcher(getThemeSyncPattern());
-	watcher.onDidCreate((uri) => {
+	const openFileFromCommand = async () => {
+		const controlUri = getEditorStateFileUri(controlFilePath);
+
+		log("reading editor control file", controlUri.toString());
+		const payload = await readJsonFile(controlUri, "editor control");
+		if (!payload) {
+			return;
+		}
+
+		log("editor control payload received", payload);
+		if (payload.type !== "openFile") {
+			log("ignoring unknown editor control command", payload.type);
+			return;
+		}
+
+		const fileUri = getWorkspaceRelativeUri(payload.path);
+		if (!fileUri) {
+			log("ignoring invalid open file path", payload.path);
+			return;
+		}
+
+		await vscode.window.showTextDocument(fileUri, { preview: false });
+		await vscode.workspace.fs.delete(controlUri, { useTrash: false }).then(
+			() => log("editor control command consumed", payload.id),
+			(error) => log("failed to delete consumed editor control file", error),
+		);
+	};
+
+	let controlCommandInFlight = false;
+	const processControlCommand = async (label) => {
+		if (controlCommandInFlight) {
+			return;
+		}
+
+		controlCommandInFlight = true;
+		try {
+			await openFileFromCommand();
+		} catch (error) {
+			console.error(`[discobot-theme] failed to ${label}`, error);
+		} finally {
+			controlCommandInFlight = false;
+		}
+	};
+
+	const themeWatcher = vscode.workspace.createFileSystemWatcher(
+		getEditorStateFilePattern(themeSyncFilePath),
+	);
+	themeWatcher.onDidCreate((uri) => {
 		log("theme sync file created", uri.toString());
 		void syncThemeFromFile().catch((error) => {
-			console.error("[discobot-theme] failed to sync created theme file", error);
+			console.error(
+				"[discobot-theme] failed to sync created theme file",
+				error,
+			);
 		});
 	});
-	watcher.onDidChange((uri) => {
+	themeWatcher.onDidChange((uri) => {
 		log("theme sync file changed", uri.toString());
 		void syncThemeFromFile().catch((error) => {
-			console.error("[discobot-theme] failed to sync changed theme file", error);
+			console.error(
+				"[discobot-theme] failed to sync changed theme file",
+				error,
+			);
 		});
 	});
-	watcher.onDidDelete((uri) => {
+	themeWatcher.onDidDelete((uri) => {
 		log("theme sync file deleted", uri.toString());
 	});
-	context.subscriptions.push(watcher);
+	context.subscriptions.push(themeWatcher);
+
+	const controlWatcher = vscode.workspace.createFileSystemWatcher(
+		getEditorStateFilePattern(controlFilePath),
+	);
+	controlWatcher.onDidCreate((uri) => {
+		log("editor control file created", uri.toString());
+		void processControlCommand("process created command");
+	});
+	controlWatcher.onDidChange((uri) => {
+		log("editor control file changed", uri.toString());
+		void processControlCommand("process changed command");
+	});
+	controlWatcher.onDidDelete((uri) => {
+		log("editor control file deleted", uri.toString());
+	});
+	context.subscriptions.push(controlWatcher);
 
 	void (async () => {
 		for (const retryDelay of [0, 250, 1000, 2500]) {
@@ -123,9 +233,10 @@ function activate(context) {
 				await delay(retryDelay);
 			}
 			await syncThemeFromFile();
+			await processControlCommand("process initial command");
 		}
 	})().catch((error) => {
-		console.error("[discobot-theme] initial theme sync failed", error);
+		console.error("[discobot-theme] initial editor sync failed", error);
 	});
 }
 

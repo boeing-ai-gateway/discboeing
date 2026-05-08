@@ -2,8 +2,8 @@
 	"name": "discobot-theme",
 	"displayName": "Discobot Theme",
 	"publisher": "discobot",
-	"version": "0.0.2",
-	"description": "Discobot light and dark themes with file-based UI theme sync.",
+	"version": "0.0.3",
+	"description": "Discobot themes with file-based UI sync and editor control.",
 	"engines": {
 		"vscode": "^1.101.0"
 	},

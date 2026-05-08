@@ -63,8 +63,13 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 		/if \(!editorEnabled && sessionView\.activeView\.kind === "vscode"\) \{/,
 	);
 	assert.match(source, /sessionView\.openChat\(\);/);
-	assert.match(source, /function handleOpenDiffFile\(path: string\)/);
-	assert.match(source, /void session\.files\.open\(path\);/);
+	assert.match(source, /async function handleOpenDiffFile\(path: string\)/);
+	assert.match(
+		source,
+		/await requestVSCodeOpenFile\(session\.sessionId, path\);/,
+	);
+	assert.match(source, /sessionView\.openVSCode\(\);/);
+	assert.match(source, /await session\.files\.open\(path\);/);
 	assert.match(source, /onOpenFile=\{handleOpenDiffFile\}/);
 	assert.match(
 		source,
