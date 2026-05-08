@@ -9,11 +9,19 @@ import {
 	resolveComposerDraftStorageKey,
 	writeComposerDraft,
 } from "$lib/composer-draft-storage";
+import {
+	clearConversationComments,
+	readConversationComments,
+	resolveConversationCommentsStorageKey,
+	serializeConversationComments,
+	writeConversationComments,
+} from "$lib/conversation-comment-storage";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createConversationDomain } from "$lib/thread/conversation.svelte";
 import { getPlanEntries } from "$lib/session/domains/session-domain.helpers";
 import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
 import type {
+	ConversationComment,
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
@@ -21,6 +29,7 @@ import type { ThreadSummary } from "$lib/shell-types";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
+const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
 export function normalizeThreadComposerMode(
 	mode: string | null | undefined,
@@ -256,7 +265,11 @@ export function createThreadContext(
 	let nextReasoning = $state<string | undefined>(undefined);
 	let loadedComposerDraftStorageKey = $state<string | null>(null);
 	let lastStoredComposerDraft = $state("");
+	let pendingComments = $state<ConversationComment[]>([]);
+	let loadedPendingCommentsStorageKey = $state<string | null>(null);
+	let lastStoredPendingComments = $state("");
 	let composerDraftPersistTimer: ReturnType<typeof setTimeout> | null = null;
+	let pendingCommentsPersistTimer: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
 		const nextSourceComposerValues = sourceComposerValues;
@@ -274,6 +287,13 @@ export function createThreadContext(
 
 	const composerDraftStorageKey = $derived.by(() =>
 		resolveComposerDraftStorageKey({
+			isPending: session.isPending,
+			threadId,
+			sessionId: session.sessionId,
+		}),
+	);
+	const pendingCommentsStorageKey = $derived.by(() =>
+		resolveConversationCommentsStorageKey({
 			isPending: session.isPending,
 			threadId,
 			sessionId: session.sessionId,
@@ -332,6 +352,53 @@ export function createThreadContext(
 				session.ui.setComposerDraft("");
 			},
 		});
+	};
+
+	$effect(() => {
+		const storageKey = pendingCommentsStorageKey;
+		if (loadedPendingCommentsStorageKey !== storageKey) {
+			loadedPendingCommentsStorageKey = storageKey;
+			pendingComments = readConversationComments(storageKey);
+			lastStoredPendingComments =
+				serializeConversationComments(pendingComments);
+			return;
+		}
+
+		const serializedComments = serializeConversationComments(pendingComments);
+		if (serializedComments === lastStoredPendingComments) {
+			return;
+		}
+
+		if (pendingCommentsPersistTimer !== null) {
+			clearTimeout(pendingCommentsPersistTimer);
+		}
+
+		pendingCommentsPersistTimer = setTimeout(() => {
+			writeConversationComments(storageKey, pendingComments);
+			lastStoredPendingComments = serializedComments;
+			pendingCommentsPersistTimer = null;
+		}, PENDING_COMMENTS_PERSIST_DELAY_MS);
+
+		return () => {
+			if (pendingCommentsPersistTimer !== null) {
+				clearTimeout(pendingCommentsPersistTimer);
+				pendingCommentsPersistTimer = null;
+			}
+		};
+	});
+
+	const clearStoredPendingComments = (
+		storageKey = pendingCommentsStorageKey,
+	) => {
+		if (pendingCommentsPersistTimer !== null) {
+			clearTimeout(pendingCommentsPersistTimer);
+			pendingCommentsPersistTimer = null;
+		}
+		clearConversationComments(storageKey);
+		if (storageKey === pendingCommentsStorageKey) {
+			lastStoredPendingComments = "[]";
+			pendingComments = [];
+		}
 	};
 
 	const clearNextComposerValues = () => {
@@ -433,6 +500,30 @@ export function createThreadContext(
 		get pendingQuestionId() {
 			return conversation.pendingQuestionId;
 		},
+		get pendingComments() {
+			return pendingComments;
+		},
+		addPendingComment: (comment) => {
+			const trimmedSnippet = comment.snippet.trim();
+			const trimmedComment = comment.comment.trim();
+			if (!trimmedSnippet || !trimmedComment) {
+				return;
+			}
+			pendingComments = [
+				...pendingComments,
+				{
+					id: crypto.randomUUID(),
+					snippet: trimmedSnippet,
+					comment: trimmedComment,
+				},
+			];
+		},
+		removePendingComment: (id) => {
+			pendingComments = pendingComments.filter((comment) => comment.id !== id);
+		},
+		clearPendingComments: () => {
+			clearStoredPendingComments();
+		},
 		clearComposerDraft: clearStoredComposerDraft,
 		submit,
 		cancel: conversation.cancel,
@@ -458,6 +549,10 @@ export function createThreadContext(
 			if (composerDraftPersistTimer !== null) {
 				clearTimeout(composerDraftPersistTimer);
 				composerDraftPersistTimer = null;
+			}
+			if (pendingCommentsPersistTimer !== null) {
+				clearTimeout(pendingCommentsPersistTimer);
+				pendingCommentsPersistTimer = null;
 			}
 			conversation.dispose();
 		},

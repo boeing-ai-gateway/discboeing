@@ -57,7 +57,7 @@
 		onDiffTargetChange: (target: string) => Promise<void> | void;
 		onOpenFile: (path: string) => Promise<void> | void;
 		onRefresh: () => Promise<void> | void;
-		onSubmitSelectionComment: (payload: {
+		onQueueSelectionComment: (payload: {
 			path: string;
 			selectedText: string;
 			comment: string;
@@ -95,6 +95,11 @@
 		text: string;
 	};
 
+	type CommentPopoverPosition = {
+		top: number;
+		left: number;
+	};
+
 	type LoadedDiffState =
 		| {
 				status: "idle";
@@ -117,7 +122,7 @@
 		onDiffTargetChange,
 		onOpenFile,
 		onRefresh,
-		onSubmitSelectionComment,
+		onQueueSelectionComment,
 		onToggleDockMaximized,
 		sessionId,
 		diff,
@@ -144,8 +149,13 @@
 		Record<string, DiffSelectionState | null>
 	>({});
 	let commentDraftByPath = $state<Record<string, string>>({});
-	let submittingCommentByPath = $state<Record<string, boolean>>({});
+	let queueingCommentByPath = $state<Record<string, boolean>>({});
 	let commentErrorByPath = $state<Record<string, string | null>>({});
+	let commentPopoverPositionByPath = $state<
+		Record<string, CommentPopoverPosition | null>
+	>({});
+	let lastPointerPositionByPath: Record<string, CommentPopoverPosition | null> =
+		{};
 
 	const diffCount = $derived.by(() => diff.length);
 	const sortedDiff = $derived.by(() =>
@@ -305,8 +315,10 @@
 		approvedCount = 0;
 		selectedDiffTextByPath = {};
 		commentDraftByPath = {};
-		submittingCommentByPath = {};
+		queueingCommentByPath = {};
 		commentErrorByPath = {};
+		commentPopoverPositionByPath = {};
+		lastPointerPositionByPath = {};
 	}
 
 	function getDiffState(path: string): LoadedDiffState | undefined {
@@ -713,6 +725,63 @@
 		return commentErrorByPath[path] ?? null;
 	}
 
+	function getCommentPopoverPosition(path: string) {
+		return commentPopoverPositionByPath[path] ?? null;
+	}
+
+	function findDiffReviewFileElement(path: string) {
+		return Array.from(
+			document.querySelectorAll<HTMLElement>("[data-diff-review-file]"),
+		).find((element) => element.dataset.diffReviewPath === path);
+	}
+
+	function updateCommentPopoverPosition(path: string) {
+		requestAnimationFrame(() => {
+			const fileElement = findDiffReviewFileElement(path);
+			if (!fileElement) {
+				commentPopoverPositionByPath = {
+					...commentPopoverPositionByPath,
+					[path]: null,
+				};
+				return;
+			}
+
+			const selectedLine = fileElement.querySelector<HTMLElement>(
+				"[data-selected-line]",
+			);
+			const anchorRect =
+				selectedLine?.getBoundingClientRect() ??
+				fileElement.getBoundingClientRect();
+			const pointerPosition = lastPointerPositionByPath[path] ?? null;
+			const popoverWidth = Math.min(window.innerWidth - 24, 384);
+			const anchorLeft = pointerPosition?.left ?? anchorRect.left + 36;
+			const anchorTop = pointerPosition?.top ?? anchorRect.bottom;
+			const left = Math.min(
+				Math.max(anchorLeft + 12, 12),
+				window.innerWidth - popoverWidth - 12,
+			);
+			const belowTop = anchorTop + 12;
+			const top =
+				belowTop + 260 <= window.innerHeight
+					? belowTop
+					: Math.max(12, Math.min(anchorTop - 272, window.innerHeight - 272));
+			commentPopoverPositionByPath = {
+				...commentPopoverPositionByPath,
+				[path]: { top, left },
+			};
+		});
+	}
+
+	function trackDiffPointer(path: string, event: PointerEvent) {
+		lastPointerPositionByPath = {
+			...lastPointerPositionByPath,
+			[path]: {
+				top: event.clientY,
+				left: event.clientX,
+			},
+		};
+	}
+
 	function normalizeSelectedLineRange(
 		range: SelectedLineRange,
 	): SelectedLineRange {
@@ -838,6 +907,12 @@
 				...commentDraftByPath,
 				[path]: "",
 			};
+			commentPopoverPositionByPath = {
+				...commentPopoverPositionByPath,
+				[path]: null,
+			};
+		} else {
+			updateCommentPopoverPosition(path);
 		}
 	}
 
@@ -861,21 +936,29 @@
 			...commentErrorByPath,
 			[path]: null,
 		};
+		commentPopoverPositionByPath = {
+			...commentPopoverPositionByPath,
+			[path]: null,
+		};
+		lastPointerPositionByPath = {
+			...lastPointerPositionByPath,
+			[path]: null,
+		};
 	}
 
-	async function submitSelectionComment(path: string) {
+	async function queueSelectionComment(path: string) {
 		const selectedText = getSelectedDiffText(path).trim();
 		const comment = getCommentDraft(path).trim();
 		if (!selectedText || !comment) {
 			commentErrorByPath = {
 				...commentErrorByPath,
-				[path]: "Select diff text and add a comment before sending.",
+				[path]: "Select diff text and add a comment before queueing.",
 			};
 			return;
 		}
 
-		submittingCommentByPath = {
-			...submittingCommentByPath,
+		queueingCommentByPath = {
+			...queueingCommentByPath,
 			[path]: true,
 		};
 		commentErrorByPath = {
@@ -883,7 +966,7 @@
 			[path]: null,
 		};
 		try {
-			await onSubmitSelectionComment({ path, selectedText, comment });
+			await onQueueSelectionComment({ path, selectedText, comment });
 			resetSelectionComment(path);
 		} catch (error) {
 			commentErrorByPath = {
@@ -891,11 +974,11 @@
 				[path]:
 					error instanceof Error
 						? error.message
-						: "Failed to send diff comment",
+						: "Failed to queue diff comment",
 			};
 		} finally {
-			submittingCommentByPath = {
-				...submittingCommentByPath,
+			queueingCommentByPath = {
+				...queueingCommentByPath,
 				[path]: false,
 			};
 		}
@@ -1339,60 +1422,15 @@
 												state,
 											)}
 											{#if rendererParams}
-												{#if getSelectedDiffText(file.path)}
-													<div
-														class="rounded-md border border-border bg-background p-3"
-													>
-														<p
-															class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
-														>
-															Selected diff text
-														</p>
-														<pre
-															class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 font-mono text-xs text-foreground">{getSelectedDiffText(
-																file.path,
-															)}</pre>
-														<Textarea
-															class="mt-3 min-h-24"
-															placeholder="Add a comment for the assistant"
-															value={getCommentDraft(file.path)}
-															oninput={(event) =>
-																updateCommentDraft(
-																	file.path,
-																	event.currentTarget.value,
-																)}
-														/>
-														{#if getCommentError(file.path)}
-															<p class="mt-2 text-xs text-destructive">
-																{getCommentError(file.path)}
-															</p>
-														{/if}
-														<div class="mt-3 flex flex-wrap items-center gap-2">
-															<Button
-																size="sm"
-																onclick={() =>
-																	void submitSelectionComment(file.path)}
-																disabled={submittingCommentByPath[file.path] ===
-																	true}
-															>
-																{submittingCommentByPath[file.path] === true
-																	? "Sending…"
-																	: "Send to thread"}
-															</Button>
-															<Button
-																variant="ghost"
-																size="sm"
-																onclick={() => resetSelectionComment(file.path)}
-																disabled={submittingCommentByPath[file.path] ===
-																	true}
-															>
-																Clear selection
-															</Button>
-														</div>
-													</div>
-												{/if}
 												<div
+													data-diff-review-file
+													data-diff-review-path={file.path}
+													role="presentation"
 													class="overflow-hidden rounded-md border border-border bg-background"
+													onpointerdown={(event) =>
+														trackDiffPointer(file.path, event)}
+													onpointerup={(event) =>
+														trackDiffPointer(file.path, event)}
 												>
 													<DiffReviewFileRenderer
 														params={rendererParams}
@@ -1400,6 +1438,69 @@
 														onLineSelected={(range) =>
 															handleLineSelection(file.path, state, range)}
 													/>
+													{#if getSelectedDiffText(file.path) && getCommentPopoverPosition(file.path)}
+														{@const popoverPosition = getCommentPopoverPosition(
+															file.path,
+														)}
+														{#if popoverPosition}
+															<div
+																class="fixed z-50 w-[min(calc(100vw-1.5rem),24rem)] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+																style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`}
+															>
+																<p
+																	class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
+																>
+																	Selected diff text
+																</p>
+																<pre
+																	class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 font-mono text-xs text-foreground">{getSelectedDiffText(
+																		file.path,
+																	)}</pre>
+																<Textarea
+																	class="mt-3 min-h-24"
+																	placeholder="Add a comment for the assistant"
+																	value={getCommentDraft(file.path)}
+																	oninput={(event) =>
+																		updateCommentDraft(
+																			file.path,
+																			event.currentTarget.value,
+																		)}
+																/>
+																{#if getCommentError(file.path)}
+																	<p class="mt-2 text-xs text-destructive">
+																		{getCommentError(file.path)}
+																	</p>
+																{/if}
+																<div
+																	class="mt-3 flex flex-wrap items-center gap-2"
+																>
+																	<Button
+																		size="sm"
+																		onclick={() =>
+																			void queueSelectionComment(file.path)}
+																		disabled={queueingCommentByPath[
+																			file.path
+																		] === true}
+																	>
+																		{queueingCommentByPath[file.path] === true
+																			? "Queueing…"
+																			: "Queue comment"}
+																	</Button>
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		onclick={() =>
+																			resetSelectionComment(file.path)}
+																		disabled={queueingCommentByPath[
+																			file.path
+																		] === true}
+																	>
+																		Clear selection
+																	</Button>
+																</div>
+															</div>
+														{/if}
+													{/if}
 												</div>
 											{/if}
 										{/if}

@@ -73,7 +73,7 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 	assert.match(source, /const thread = useThreadContext\(\)/);
 	assert.match(
 		source,
-		/onSubmitSelectionComment=\{handleSubmitDiffSelectionComment\}/,
+		/onQueueSelectionComment=\{handleQueueDiffSelectionComment\}/,
 	);
-	assert.match(source, /buildUserMessageParts\(prompt, \[\]\)/);
+	assert.match(source, /thread\.addPendingComment\(\{/);
 });

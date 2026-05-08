@@ -222,6 +222,12 @@ export type SubmitPromptOptions = {
 
 export type SubmitPromptResult = StartChatResponse | ThreadSubmitResult | void;
 
+export type ConversationComment = {
+	id: string;
+	snippet: string;
+	comment: string;
+};
+
 export type ThreadContextValue = {
 	threadId: string;
 	thread: ThreadSummary | null;
@@ -243,6 +249,10 @@ export type ThreadContextValue = {
 	error: string | null;
 	hasPendingQuestion: boolean;
 	pendingQuestionId: string | null;
+	pendingComments: ConversationComment[];
+	addPendingComment: (comment: Omit<ConversationComment, "id">) => void;
+	removePendingComment: (id: string) => void;
+	clearPendingComments: () => void;
 	clearComposerDraft: (storageKey?: string) => void;
 	submit: (payload: {
 		parts: ChatMessage["parts"];

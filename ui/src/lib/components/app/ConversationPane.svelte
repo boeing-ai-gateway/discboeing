@@ -47,6 +47,7 @@
 	import OptimizedToolRenderer from "$lib/components/ai/tool-renderers/OptimizedToolRenderer.svelte";
 	import type { DynamicToolPart } from "$lib/components/ai/types";
 	import ConversationComposer from "$lib/components/app/ConversationComposer.svelte";
+	import ConversationSelectionComment from "$lib/components/app/parts/ConversationSelectionComment.svelte";
 	import MessageResponseWithCommand from "$lib/components/app/parts/MessageResponseWithCommand.svelte";
 	import {
 		type ConversationTurn,
@@ -1800,6 +1801,11 @@
 						{/each}
 					</div>
 				</div>
+				<ConversationSelectionComment
+					conversationRoot={contentEl}
+					scrollContainer={viewport}
+					onAddComment={(comment) => thread?.addPendingComment(comment)}
+				/>
 				{#if !isNearBottom}
 					<div
 						class="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center"

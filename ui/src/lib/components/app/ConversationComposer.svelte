@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
+	import XIcon from "@lucide/svelte/icons/x";
 	import { onDestroy, onMount, tick } from "svelte";
 	import { InputGroup, InputGroupAddon } from "$lib/components/ui/input-group";
 	import { Button } from "$lib/components/ui/button";
@@ -37,6 +38,7 @@
 		WorkspaceSelectorHandle,
 	} from "$lib/components/app/conversation-composer.types";
 	import type { ModelInfo, UpdateQueuedPromptRequest } from "$lib/api-types";
+	import type { ConversationComment } from "$lib/session/session-context.types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import {
@@ -259,7 +261,10 @@
 	}
 
 	function inputEmpty() {
-		return sessionView.composerDraft.trim().length === 0;
+		return (
+			sessionView.composerDraft.trim().length === 0 &&
+			thread.pendingComments.length === 0
+		);
 	}
 
 	function addFiles(files: File[] | FileList) {
@@ -308,6 +313,39 @@
 			attachmentFiles.map(({ file }) => createUserMessageAttachment(file)),
 		);
 		return buildUserMessageParts(text, attachments);
+	}
+
+	function quoteCommentSnippet(snippet: string) {
+		return snippet
+			.split(/\r?\n/)
+			.map((line) => `> ${line}`)
+			.join("\n");
+	}
+
+	function formatPendingComments(comments: ConversationComment[]) {
+		if (comments.length === 0) {
+			return "";
+		}
+		return [
+			"Comments on selected conversation text:",
+			"",
+			...comments.flatMap((comment, index) => [
+				`${index + 1}. Selected text:`,
+				quoteCommentSnippet(comment.snippet),
+				"",
+				"Comment:",
+				comment.comment,
+				"",
+			]),
+		]
+			.join("\n")
+			.trim();
+	}
+
+	function buildSubmitText(draft: string, comments: ConversationComment[]) {
+		const text = draft.trim();
+		const commentText = formatPendingComments(comments);
+		return [text, commentText].filter(Boolean).join("\n\n");
 	}
 
 	async function focusComposerTextarea() {
@@ -462,6 +500,9 @@
 		if (composerDisabled && !forceEmptyPendingMessage) {
 			return false;
 		}
+		const submitComments = forceEmptyPendingMessage
+			? []
+			: thread.pendingComments;
 		const emptyWithoutAttachments =
 			inputEmpty() && attachmentFiles.length === 0;
 		if (isGenerating() && emptyWithoutAttachments) {
@@ -478,7 +519,9 @@
 		pendingSubmitError = null;
 		const wasPending = session.isPending;
 		const currentDraft = sessionView.composerDraft;
-		const nextMessageText = forceEmptyPendingMessage ? "" : currentDraft.trim();
+		const nextMessageText = forceEmptyPendingMessage
+			? ""
+			: buildSubmitText(currentDraft, submitComments);
 		const shouldAllowEmptyPendingMessage =
 			wasPending &&
 			(forceEmptyPendingMessage ||
@@ -525,6 +568,7 @@
 			}
 			if (!preserveDraft) {
 				thread.clearNextComposerValues();
+				thread.clearPendingComments();
 				scheduledRunAfter = null;
 				schedulePopoverOpen = false;
 				composerTextareaRef?.closeMentionDropdown();
@@ -593,6 +637,47 @@
 
 		{#if pendingSubmitError}
 			<div class="mb-2 text-sm text-destructive">{pendingSubmitError}</div>
+		{/if}
+		{#if thread.pendingComments.length > 0}
+			<div
+				class="mb-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm shadow-sm dark:border-amber-400/30 dark:bg-amber-950/20"
+			>
+				<div class="mb-2 font-medium text-foreground">
+					{thread.pendingComments.length}
+					{thread.pendingComments.length === 1 ? "comment" : "comments"} ready to
+					submit
+				</div>
+				<div class="space-y-2">
+					{#each thread.pendingComments as comment (comment.id)}
+						<div
+							class="rounded-lg border border-border/70 bg-background/80 p-2 text-xs"
+						>
+							<div class="flex items-start gap-2">
+								<div class="min-w-0 flex-1 space-y-1">
+									<div
+										class="line-clamp-2 border-muted-foreground/30 border-l-2 pl-2 text-muted-foreground italic"
+									>
+										{comment.snippet}
+									</div>
+									<div class="whitespace-pre-wrap text-foreground">
+										{comment.comment}
+									</div>
+								</div>
+								<Button
+									aria-label="Remove comment"
+									class="size-6 shrink-0"
+									onclick={() => thread.removePendingComment(comment.id)}
+									size="icon-xs"
+									type="button"
+									variant="ghost"
+								>
+									<XIcon class="size-3.5" />
+								</Button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
 		{/if}
 		{#if composerDisabledMessage}
 			<div

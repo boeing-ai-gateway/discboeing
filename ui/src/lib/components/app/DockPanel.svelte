@@ -5,7 +5,6 @@
 	import ServicePanel from "$lib/components/app/parts/ServicePanel.svelte";
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
 	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
-	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
@@ -64,34 +63,27 @@
 		}
 	});
 
-	function buildDiffSelectionPrompt({
+	function buildDiffSelectionSnippet({
 		path,
 		selectedText,
-		comment,
 	}: {
 		path: string;
 		selectedText: string;
-		comment: string;
 	}) {
-		return `Please help with this selected diff excerpt from \`${path}\`.
-
-Comment:
-${comment}
-
-Selected diff text:
+		return `Diff excerpt from \`${path}\`:
 \`\`\`diff
 ${selectedText}
 \`\`\``;
 	}
 
-	async function handleSubmitDiffSelectionComment(payload: {
+	function handleQueueDiffSelectionComment(payload: {
 		path: string;
 		selectedText: string;
 		comment: string;
 	}) {
-		const prompt = buildDiffSelectionPrompt(payload);
-		await thread.submit({
-			parts: buildUserMessageParts(prompt, []),
+		thread.addPendingComment({
+			snippet: buildDiffSelectionSnippet(payload),
+			comment: payload.comment,
 		});
 	}
 
@@ -174,7 +166,7 @@ ${selectedText}
 				onDiffTargetChange={session.files.setDiffTarget}
 				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
-				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
+				onQueueSelectionComment={handleQueueDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				sessionId={session.sessionId}
 				diff={sessionFileDiff}
