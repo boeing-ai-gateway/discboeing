@@ -245,8 +245,8 @@ func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 	h := New("", agent.NewConversationManager(&streamTestAgent{}), nil, nil, agentImpl, browserMgr)
 	tracker := h.newBrowserCDPTracker("thread-1")
 
-	tracker.onClientMessage([]byte(`{"id":7,"method":"Page.navigate","params":{"url":"https://example.com"}}`))
-	tracker.onServerMessage([]byte(`{"id":7,"result":{"frameId":"f1"}}`))
+	tracker.onClientMessage([]byte(`{"id":7,"method":"Browser.getVersion","params":{}}`))
+	tracker.onServerMessage([]byte(`{"id":7,"result":{"product":"Chrome/123"}}`))
 
 	entries, err := browserMgr.EventEntries("thread-1")
 	if err != nil {
@@ -256,16 +256,16 @@ func TestBrowserCDPTrackerPersistsRequestAndResponse(t *testing.T) {
 		t.Fatalf("expected 2 browser events, got %d", len(entries))
 	}
 	events := []thread.BrowserEvent{entries[0].Event, entries[1].Event}
-	if events[0].Direction != "request" || events[0].Method != "Page.navigate" {
+	if events[0].Direction != "request" || events[0].Method != "Browser.getVersion" {
 		t.Fatalf("unexpected request event %#v", events[0])
 	}
-	if string(events[0].Payload) != `{"id":7,"method":"Page.navigate","params":{"url":"https://example.com"}}` {
+	if string(events[0].Payload) != `{"id":7,"method":"Browser.getVersion","params":{}}` {
 		t.Fatalf("unexpected request payload %q", string(events[0].Payload))
 	}
 	if events[1].Direction != "response" {
 		t.Fatalf("unexpected response event %#v", events[1])
 	}
-	if string(events[1].Payload) != `{"id":7,"result":{"frameId":"f1"}}` {
+	if string(events[1].Payload) != `{"id":7,"result":{"product":"Chrome/123"}}` {
 		t.Fatalf("unexpected response payload %q", string(events[1].Payload))
 	}
 }

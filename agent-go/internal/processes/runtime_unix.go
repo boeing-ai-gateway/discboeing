@@ -63,21 +63,34 @@ func startPlatform(_ context.Context, req CreateRequest) (Stream, platformProces
 	if err != nil {
 		return nil, platformProcess{}, err
 	}
-	stream.stdout, err = cmd.StdoutPipe()
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {
 		return nil, platformProcess{}, err
 	}
-	stream.stderr, err = cmd.StderrPipe()
+	stderrReader, stderrWriter, err := os.Pipe()
 	if err != nil {
+		_ = stdoutReader.Close()
+		_ = stdoutWriter.Close()
 		return nil, platformProcess{}, err
 	}
+	stream.stdout = stdoutReader
+	stream.stderr = stderrReader
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
 	if err := cmd.Start(); err != nil {
+		_ = stdoutReader.Close()
+		_ = stdoutWriter.Close()
+		_ = stderrReader.Close()
+		_ = stderrWriter.Close()
 		return nil, platformProcess{}, err
 	}
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
 	return stream, platformProcess{pid: cmd.Process.Pid, pgid: cmd.Process.Pid}, nil
 }
 
