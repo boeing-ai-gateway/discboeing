@@ -1750,6 +1750,16 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 		return "", fmt.Errorf("save recent threads reminder: %w", err)
 	}
 
+	servicesReminder := sessionconfig.FormatDiscobotServicesReminder(sessionCfg.DiscobotServicesConfigured)
+	if err := appendMessage("discobot-services-"+agent.GenerateID(), "user", servicesReminder); err != nil {
+		return "", fmt.Errorf("save Discobot services reminder: %w", err)
+	}
+
+	hooksReminder := sessionconfig.FormatDiscobotHooksReminder(sessionCfg.DiscobotHooksConfigured)
+	if err := appendMessage("discobot-hooks-"+agent.GenerateID(), "user", hooksReminder); err != nil {
+		return "", fmt.Errorf("save Discobot hooks reminder: %w", err)
+	}
+
 	if hasNamedTool(tools, "Task") {
 		subAgentReminder := sessionconfig.FormatSubAgentReminder(sessionCfg.SubAgents)
 		if err := appendMessage("sub-agents-"+agent.GenerateID(), "user", subAgentReminder); err != nil {

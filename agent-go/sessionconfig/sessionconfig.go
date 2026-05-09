@@ -2,6 +2,8 @@ package sessionconfig
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
@@ -64,6 +66,14 @@ type SessionConfig struct {
 
 	// ScriptDiscoveryWarnings are non-fatal script loading issues.
 	ScriptDiscoveryWarnings []string
+
+	// DiscobotServicesConfigured indicates whether project-level
+	// .discobot/services exists.
+	DiscobotServicesConfigured bool
+
+	// DiscobotHooksConfigured indicates whether project-level .discobot/hooks
+	// exists.
+	DiscobotHooksConfigured bool
 }
 
 // Load discovers and loads session configuration from the given working directory.
@@ -84,6 +94,8 @@ func Load(cwd string) (*SessionConfig, error) {
 		return nil, err
 	}
 	cfg.MaxSubagentDepth = DefaultMaxSubagentDepth
+	cfg.DiscobotServicesConfigured = dirExists(filepath.Join(projectRoot, ".discobot", "services"))
+	cfg.DiscobotHooksConfigured = dirExists(filepath.Join(projectRoot, ".discobot", "hooks"))
 
 	// 2. Discover user instruction files (CLAUDE.md, AGENTS.md, rules).
 	entries, err := discoverInstructions(cwd)
@@ -137,4 +149,9 @@ func Load(cwd string) (*SessionConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

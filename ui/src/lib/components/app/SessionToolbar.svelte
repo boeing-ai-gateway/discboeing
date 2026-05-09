@@ -8,6 +8,16 @@
 	import type { Component } from "svelte";
 	import { SvelteSet } from "svelte/reactivity";
 	import {
+		AlertDialog,
+		AlertDialogAction,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle,
+	} from "$lib/components/ui/alert-dialog";
+	import {
 		DropdownMenu,
 		DropdownMenuContent,
 		DropdownMenuGroup,
@@ -58,6 +68,8 @@
 	setSessionContext(session);
 	const sessionView = session.ui;
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
+	let learnMoreDialogOpen = $state(false);
+	let submittingLearnMorePrompt = $state(false);
 	const sessionServices = $derived.by(() =>
 		session.services.list.filter(
 			(service) =>
@@ -208,7 +220,30 @@
 			return;
 		}
 
+		if (sessionServices.length === 0) {
+			learnMoreDialogOpen = true;
+			return;
+		}
+
 		sessionView.openServices();
+	}
+
+	async function submitLearnMorePrompt() {
+		if (submittingLearnMorePrompt) {
+			return;
+		}
+
+		submittingLearnMorePrompt = true;
+		try {
+			await session.submit(
+				"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
+			);
+			learnMoreDialogOpen = false;
+		} catch (error) {
+			console.error("Failed to ask agent about Discobot services:", error);
+		} finally {
+			submittingLearnMorePrompt = false;
+		}
 	}
 
 	const diffStats = $derived.by(() => {
@@ -429,7 +464,6 @@
 					: "ghost"}
 				size="xs"
 				onclick={toggleServices}
-				disabled={sessionServices.length === 0}
 			>
 				Services
 			</Button>
@@ -603,3 +637,30 @@
 
 	<SessionCommandCredentialsDialog dialog={session.commands.credentialDialog} />
 </div>
+
+<AlertDialog bind:open={learnMoreDialogOpen}>
+	<AlertDialogContent>
+		<AlertDialogHeader>
+			<AlertDialogTitle>Learn about services and hooks?</AlertDialogTitle>
+			<AlertDialogDescription>
+				This project does not have Discobot services configured yet. Would you
+				like the agent to explain how services and hooks could help run,
+				preview, and automate this application?
+			</AlertDialogDescription>
+		</AlertDialogHeader>
+		<AlertDialogFooter>
+			<AlertDialogCancel disabled={submittingLearnMorePrompt}>
+				Cancel
+			</AlertDialogCancel>
+			<AlertDialogAction
+				disabled={submittingLearnMorePrompt}
+				onclick={(event) => {
+					event.preventDefault();
+					void submitLearnMorePrompt();
+				}}
+			>
+				{submittingLearnMorePrompt ? "Asking..." : "Yes, ask agent"}
+			</AlertDialogAction>
+		</AlertDialogFooter>
+	</AlertDialogContent>
+</AlertDialog>
