@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -406,4 +407,173 @@ exit 1
 		t.Fatal("timed out waiting for queued hook re-prompt to start")
 	}
 	waitForCompletionDone(t, cm, "thread-1")
+}
+
+func TestTurnCompleteSchedulesHookEvaluationWhenStreamPausesForAnswer(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, hooks.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+echo "lint failed"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hookManager := hooks.NewManager(workspaceRoot, "session-123")
+	if err := hookManager.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	firstTurnCh := make(chan struct{}, 1)
+	repromptCh := make(chan agent.PromptRequest, 1)
+	var promptCalls int32
+	ma := &streamTestAgent{
+		promptFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			if threadID != "thread-1" {
+				t.Fatalf("threadID = %q, want %q", threadID, "thread-1")
+			}
+			if atomic.AddInt32(&promptCalls, 1) == 1 {
+				firstTurnCh <- struct{}{}
+				return func(yield func(message.MessageChunk, error) bool) {
+					// A paused turn returns without a response-finish chunk while
+					// leaving the persisted turn state waiting for an answer. The
+					// conversation manager should still treat the stream as complete
+					// enough to notify post-turn listeners.
+					yield(message.StartChunk{MessageID: "assistant-1"}, nil)
+				}
+			}
+			repromptCh <- req
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	cm := agent.NewConversationManager(ma)
+	_ = New("", cm, hookManager, nil, nil)
+
+	if _, err := cm.Chat("thread-1", agent.PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{Text: "initial turn"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-firstTurnCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial paused turn")
+	}
+
+	select {
+	case req := <-repromptCh:
+		part, ok := req.UserParts[0].(message.UITextPart)
+		if !ok {
+			t.Fatalf("expected UITextPart, got %T", req.UserParts[0])
+		}
+		if !strings.Contains(part.Text, "### Hook failed: Go Check") {
+			t.Fatalf("re-prompt text = %q, want hook failure prompt", part.Text)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for hook evaluation after paused turn")
+	}
+}
+
+func TestScheduleHookEvaluation_QueuesHookRepromptWhenAnswerNeeded(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, hooks.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+echo "lint failed"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hookManager := hooks.NewManager(workspaceRoot, "session-123")
+	if err := hookManager.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	queueStore := promptqueue.NewStore(t.TempDir())
+	ma := &streamTestAgent{
+		pendingQuestionFn: func(threadID string) (*agent.PendingQuestion, error) {
+			if threadID != "thread-1" {
+				t.Fatalf("threadID = %q, want %q", threadID, "thread-1")
+			}
+			return &agent.PendingQuestion{ApprovalID: "approval-1"}, nil
+		},
+		promptFn: func(context.Context, string, agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			t.Fatal("hook re-prompt should queue while an answer is pending")
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	cm := agent.NewConversationManager(ma)
+	promptQueue := promptqueue.NewManager(queueStore, cm, nil)
+	_ = New("", cm, hookManager, nil, nil, promptQueue)
+
+	hookManager.OnTurnComplete("thread-1")
+
+	var queue []promptqueue.Prompt
+	var err error
+	for range 20 {
+		queue, err = queueStore.List("thread-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(queue) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(queue) != 1 {
+		t.Fatalf("queued prompts = %d, want 1", len(queue))
+	}
+	part, ok := queue[0].Message.Parts[0].(message.UITextPart)
+	if !ok {
+		t.Fatalf("expected UITextPart, got %T", queue[0].Message.Parts[0])
+	}
+	if !strings.Contains(part.Text, "### Hook failed: Go Check") {
+		t.Fatalf("queued prompt text = %q, want hook failure prompt", part.Text)
+	}
 }

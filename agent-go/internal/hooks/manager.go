@@ -539,6 +539,11 @@ func (m *Manager) StartFailureReprompt(threadID string, result FileHookEvalResul
 	m.mu.Unlock()
 	if promptQueue != nil {
 		_, err := promptQueue.StartOrQueue(threadID, req, HookFailureQueuedPrompt(result))
+		if errors.Is(err, agent.ErrPendingQuestionRequiresAnswer) {
+			if _, _, enqueueErr := promptQueue.Enqueue(threadID, HookFailureQueuedPrompt(result)); enqueueErr != nil {
+				return enqueueErr
+			}
+		}
 		return err
 	}
 	if conversations == nil {
