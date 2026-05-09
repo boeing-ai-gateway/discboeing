@@ -599,6 +599,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					mode: nextMode,
 					...(runAfter ? { runAfter } : {}),
 				});
+				if ((activeSubscription?.getState() ?? "idle") === "idle") {
+					ensureStream(true);
+				}
 				if (response.status === "queued" && userMessage) {
 					messages = removeProvisionalSubmitMessage(messages, userMessage.id);
 					await args.refreshThread();

@@ -196,6 +196,15 @@ test("conversation loader keeps closed-stream recovery at the websocket layer", 
 	);
 });
 
+test("conversation submit retries the stream after chat starts if subscribe went idle", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(
+		source,
+		/ensureStream\(true\);[\s\S]*const response = await args\.startChat\([\s\S]*if \(\(activeSubscription\?\.getState\(\) \?\? "idle"\) === "idle"\) \{[\s\S]*ensureStream\(true\);/,
+	);
+});
+
 test("conversation loader falls back to stream finish when completion status never clears", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
