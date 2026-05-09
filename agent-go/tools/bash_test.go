@@ -644,6 +644,30 @@ func TestBash_CredentialUsesOverrideSnapshotEnvByID(t *testing.T) {
 	}
 }
 
+func TestBash_SudoCredentialUseInjectsGateMetadata(t *testing.T) {
+	skipOnWindows(t)
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	e.SetCredentialUseEnv(func(_ []CredentialUseBinding) (map[string]string, error) {
+		return map[string]string{"DISCOBOT_SUDO_TOKEN": "sudo-token"}, nil
+	})
+
+	out, ok := runBash(t, e, map[string]any{
+		"command": "printf '%s|%s|%s|%s' \"$DISCOBOT_SUDO_RUNTIME\" \"$DISCOBOT_SUDO_CREDENTIAL_ID\" \"$DISCOBOT_SUDO_USE_ID\" \"$DISCOBOT_SUDO_TOKEN\"",
+		"credentialUses": []map[string]string{{
+			"credentialId": "cred_s_sudo",
+			"useId":        "use_s_sudo",
+			"envVar":       "DISCOBOT_SUDO_TOKEN",
+		}},
+	})
+	if !ok {
+		t.Fatalf("unexpected error output: %s", out)
+	}
+	if !strings.Contains(out, "→agent|cred_s_sudo|use_s_sudo|sudo-token") {
+		t.Fatalf("expected sudo gate metadata, got: %q", out)
+	}
+}
+
 func TestBash_CredentialUsesRequireEnvResolver(t *testing.T) {
 	skipOnWindows(t)
 

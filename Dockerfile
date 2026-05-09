@@ -66,11 +66,12 @@ COPY modelsdev/ /modelsdev/
 # Copy agent-go source
 COPY agent-go/ ./
 
-# Build the agent-go binary as discobot-agent-api
+# Build the agent-go binary as discobot-agent-api and the sudo policy gate.
 # Use mcp_go_client_oauth build tag to enable OAuth support for MCP tools
 RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -tags mcp_go_client_oauth -ldflags="-s -w" -o /discobot-agent-api ./cmd/agent-api
+    CGO_ENABLED=0 go build -tags mcp_go_client_oauth -ldflags="-s -w" -o /discobot-agent-api ./cmd/agent-api \
+    && CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sudo-gate ./cmd/sudo-gate
 
 # Stage 3: Shared Ubuntu runtime base
 FROM ubuntu:24.04 AS runtime-base
@@ -169,9 +170,25 @@ RUN (useradd -m -s /bin/bash -u 1000 discobot 2>/dev/null \
     && mkdir -m 0755 /nix \
     && chown discobot:discobot /nix
 
-# Explicitly deny sudo access for discobot user
-RUN echo 'discobot ALL=(ALL) !ALL' > /etc/sudoers.d/discobot-deny \
-    && chmod 440 /etc/sudoers.d/discobot-deny
+# Install the Discobot sudo gate. The real sudo binary is kept in a
+# root-only path; /usr/bin/sudo becomes a setuid Discobot gate that calls the
+# local agent API before exec'ing the real sudo binary.
+COPY --from=agent-go-builder --chmod=4755 /discobot-sudo-gate /tmp/discobot-sudo-gate
+RUN mkdir -p /usr/lib/discobot /etc/discobot \
+    && dpkg-divert --rename --add /usr/bin/sudo \
+    && mv /usr/bin/sudo.distrib /usr/lib/discobot/sudo.real \
+    && chown root:root /usr/lib/discobot/sudo.real \
+    && install -m 4755 /tmp/discobot-sudo-gate /usr/bin/sudo \
+    && rm -f /tmp/discobot-sudo-gate \
+    && chmod 4700 /usr/lib/discobot/sudo.real \
+    && printf '%s\n' '{"realSudo":"/usr/lib/discobot/sudo.real","agentAPIURL":"http://127.0.0.1:3002/sudo/authorize"}' > /etc/discobot/sudo-gate.json \
+    && chown root:root /etc/discobot/sudo-gate.json \
+    && chmod 400 /etc/discobot/sudo-gate.json \
+    && printf '%s\n' \
+        'Defaults env_keep += "DISCOBOT_SUDO_RUNTIME DISCOBOT_SUDO_TOKEN DISCOBOT_SUDO_CREDENTIAL_ID DISCOBOT_SUDO_USE_ID DISCOBOT_SUDO_TOOL_CALL_ID DISCOBOT_SUDO_COMMAND DISCOBOT_SECRET"' \
+        'discobot ALL=(ALL) NOPASSWD:SETENV: ALL' \
+        > /etc/sudoers.d/discobot-gated \
+    && chmod 440 /etc/sudoers.d/discobot-gated
 
 # Install rustup for discobot user (Rust toolchain manager)
 # Must be done after user creation so rust tools are owned by discobot

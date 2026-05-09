@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,9 +51,9 @@ func (e *Executor) executeBash(ctx context.Context, toolCtx *thread.ToolContext,
 	}
 
 	if input.RunInBackground {
-		return e.startBashBackground(toolCtx, call, input.Command, credentialEnv)
+		return e.startBashBackground(toolCtx, call, input.Command, bashCredentialEnvForCall(credentialEnv, input.CredentialUses, call.ToolCallID, input.Command))
 	}
-	return e.runBashSync(ctx, toolCtx, call, input.Command, timeout, credentialEnv)
+	return e.runBashSync(ctx, toolCtx, call, input.Command, timeout, bashCredentialEnvForCall(credentialEnv, input.CredentialUses, call.ToolCallID, input.Command))
 }
 
 // bashLogPath returns the path for the log file for a bash call.
@@ -234,6 +235,26 @@ func applyCredentialEnv(env []string, credentialEnv map[string]string) []string 
 			continue
 		}
 		out = append(out, key+"="+value)
+	}
+	return out
+}
+
+func bashCredentialEnvForCall(credentialEnv map[string]string, uses []CredentialUseBinding, toolCallID, command string) map[string]string {
+	if len(credentialEnv) == 0 && len(uses) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(credentialEnv)+4)
+	maps.Copy(out, credentialEnv)
+	for _, use := range uses {
+		if use.EnvVar != "DISCOBOT_SUDO_TOKEN" {
+			continue
+		}
+		out["DISCOBOT_SUDO_RUNTIME"] = "agent"
+		out["DISCOBOT_SUDO_CREDENTIAL_ID"] = use.CredentialID
+		out["DISCOBOT_SUDO_USE_ID"] = use.UseID
+		out["DISCOBOT_SUDO_TOOL_CALL_ID"] = toolCallID
+		out["DISCOBOT_SUDO_COMMAND"] = command
+		break
 	}
 	return out
 }

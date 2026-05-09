@@ -212,7 +212,8 @@ func Run(cfg *config.Config) {
 	})
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
-	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr, processMgr)
+	sudoAuthorizer := credentials.NewSudoAuthorizer(authorizer, credMgr)
+	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr, processMgr, sudoAuthorizer)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()

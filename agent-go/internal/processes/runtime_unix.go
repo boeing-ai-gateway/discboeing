@@ -19,6 +19,8 @@ import (
 	"github.com/creack/pty"
 )
 
+const sudoPath = "/usr/bin/sudo"
+
 type platformProcess struct {
 	pid  int
 	pgid int
@@ -33,18 +35,18 @@ type platformStream struct {
 }
 
 func startPlatform(_ context.Context, req CreateRequest) (Stream, platformProcess, error) {
-	if len(req.Cmd) == 0 {
+	cmdArgs, err := commandForUser(req.Cmd, req.User)
+	if err != nil {
+		return nil, platformProcess{}, err
+	}
+	if len(cmdArgs) == 0 {
 		return nil, platformProcess{}, errors.New("command is required")
 	}
-	cmd := exec.Command(req.Cmd[0], req.Cmd[1:]...)
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = req.WorkDir
 	cmd.Env = os.Environ()
 	for k, v := range req.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-
-	if err := configureUser(cmd, req.User); err != nil {
-		return nil, platformProcess{}, err
 	}
 
 	stream := &platformStream{cmd: cmd}
@@ -57,7 +59,6 @@ func startPlatform(_ context.Context, req CreateRequest) (Stream, platformProces
 		return stream, platformProcess{pid: cmd.Process.Pid, pgid: cmd.Process.Pid}, nil
 	}
 
-	var err error
 	stream.stdin, err = cmd.StdinPipe()
 	if err != nil {
 		return nil, platformProcess{}, err
@@ -80,33 +81,52 @@ func startPlatform(_ context.Context, req CreateRequest) (Stream, platformProces
 	return stream, platformProcess{pid: cmd.Process.Pid, pgid: cmd.Process.Pid}, nil
 }
 
-func configureUser(cmd *exec.Cmd, username string) error {
-	if username == "" {
-		return nil
+func commandForUser(cmd []string, targetUser string) ([]string, error) {
+	if len(cmd) == 0 {
+		return nil, nil
 	}
+	targetUser = strings.TrimSpace(targetUser)
+	if targetUser == "" || isCurrentUserTarget(targetUser) {
+		return cmd, nil
+	}
+	return sudoCommandForUser(targetUser, cmd), nil
+}
+
+func sudoCommandForUser(targetUser string, cmd []string) []string {
+	args := []string{sudoPath, "-E", "-n"}
+	userPart, groupPart, hasGroup := strings.Cut(targetUser, ":")
+	args = append(args, "-u", sudoUserArg(userPart))
+	if hasGroup && strings.TrimSpace(groupPart) != "" {
+		args = append(args, "-g", sudoUserArg(groupPart))
+	}
+	args = append(args, "--")
+	args = append(args, cmd...)
+	return args
+}
+
+func sudoUserArg(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return value
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return value
+		}
+	}
+	return "#" + value
+}
+
+func isCurrentUserTarget(targetUser string) bool {
 	current, err := user.Current()
-	if err == nil && (username == current.Username || username == current.Uid) {
-		return nil
-	}
-	target, err := user.Lookup(username)
 	if err != nil {
-		return err
+		return false
 	}
-	uid, err := strconv.ParseUint(target.Uid, 10, 32)
-	if err != nil {
-		return err
+	userPart, groupPart, hasGroup := strings.Cut(targetUser, ":")
+	if userPart != current.Username && userPart != current.Uid {
+		return false
 	}
-	gid, err := strconv.ParseUint(target.Gid, 10, 32)
-	if err != nil {
-		return err
-	}
-	if os.Geteuid() != 0 {
-		return ErrUserSwitchUnsupported
-	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)},
-	}
-	return nil
+	return !hasGroup || groupPart == "" || groupPart == current.Gid
 }
 
 func (s *platformStream) Read(p []byte) (int, error) {
@@ -245,6 +265,11 @@ func platformCapabilities() Capabilities {
 		TTY:             true,
 		Resize:          true,
 		ProcessTreeKill: true,
-		UserSwitching:   os.Geteuid() == 0,
+		UserSwitching:   os.Geteuid() == 0 || isExecutableFile(sudoPath),
 	}
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
 }

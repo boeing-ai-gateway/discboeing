@@ -50,6 +50,7 @@
 	const REQUEST_REJECTED_KEY = "__request_user_credential_rejected__";
 	const REQUEST_REJECTED_REASON_KEY =
 		"__request_user_credential_rejection_reason__";
+	const SUDO_TOKEN_ENV_VAR = "DISCOBOT_SUDO_TOKEN";
 
 	type PendingCredentialLike = {
 		toolUseID: string;
@@ -120,6 +121,26 @@
 			return typeof approval.id === "string" ? approval.id : null;
 		}
 		return toolPart.toolCallId || null;
+	}
+
+	function isSudoCredentialRequest(request: RequestedCredential): boolean {
+		return request.envVar.trim() === SUDO_TOKEN_ENV_VAR;
+	}
+
+	function generateSudoApprovalToken(): string {
+		if (typeof crypto === "undefined" || !crypto.getRandomValues) {
+			throw new Error("Secure random token generation is not available.");
+		}
+		const bytes = new Uint8Array(32);
+		crypto.getRandomValues(bytes);
+		return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+			"",
+		);
+	}
+
+	function sudoApprovalName(request: RequestedCredential | undefined): string {
+		const name = request?.name.trim() ?? "";
+		return name.length > 0 ? name : "Sudo approval";
 	}
 
 	function initializeDrafts(credentials: RequestedCredential[]) {
@@ -251,6 +272,10 @@
 		return "";
 	});
 	const wasRejected = $derived.by(() => rejectionSummary !== null);
+	const pendingRequestIsSudoOnly = $derived.by(() => {
+		const credentials = pendingCredentialRequest?.credentials ?? [];
+		return credentials.length > 0 && credentials.every(isSudoCredentialRequest);
+	});
 	const grantedCredentialDetails = $derived.by(() =>
 		grantedCredentials.map((granted) => {
 			const assignment = sessionAssignments.find(
@@ -259,13 +284,16 @@
 			const request = requestedCredentials.find(
 				(item) => item.envVar === granted.envVar,
 			);
+			const isSudo = request ? isSudoCredentialRequest(request) : false;
 			return {
 				...granted,
-				credentialName:
-					assignment?.credential.name ??
-					assignment?.credentialId ??
-					granted.name ??
-					granted.credentialId,
+				isSudo,
+				credentialName: isSudo
+					? sudoApprovalName(request)
+					: (assignment?.credential.name ??
+						assignment?.credentialId ??
+						granted.name ??
+						granted.credentialId),
 				justification: request?.justification.trim() ?? "",
 				uses: granted.approvedUses.map((use) => {
 					const assignedUse = assignment?.uses?.find(
@@ -279,6 +307,11 @@
 				}),
 			};
 		}),
+	);
+	const grantedRequestIsSudoOnly = $derived.by(
+		() =>
+			grantedCredentialDetails.length > 0 &&
+			grantedCredentialDetails.every((granted) => granted.isSudo),
 	);
 
 	function formatCredentialTimeframe(expiresAt: string | undefined): string {
@@ -472,6 +505,29 @@
 		}
 	}
 
+	async function createSudoApprovalCredential(
+		request: RequestedCredential,
+		expiresAt?: string,
+	): Promise<CredentialInfo> {
+		const credential = await api.createCredential({
+			name: sudoApprovalName(request),
+			description: request.justification.trim() || undefined,
+			authType: "api_key",
+			envVars: [
+				{ key: SUDO_TOKEN_ENV_VAR, value: generateSudoApprovalToken() },
+			],
+			agentVisible: false,
+		});
+		projectCredentials = [...projectCredentials, credential];
+		await assignCredentialToSession(
+			request,
+			credential,
+			SUDO_TOKEN_ENV_VAR,
+			expiresAt,
+		);
+		return credential;
+	}
+
 	async function submitGrantedCredentials(
 		selectedCredentialIds: Record<string, string>,
 	) {
@@ -556,6 +612,24 @@
 		try {
 			const resolvedCredentialIds: Record<string, string> = {};
 			for (const request of pendingCredentialRequest.credentials) {
+				if (isSudoCredentialRequest(request)) {
+					const expiresAt = buildCredentialUseExpiryFromPreset(
+						"15_minutes",
+						"1",
+						"hours",
+					);
+					const credential = await createSudoApprovalCredential(
+						request,
+						expiresAt,
+					);
+					resolvedCredentialIds[request.envVar] = credential.id;
+					continue;
+				}
+				const expiresAt = buildCredentialUseExpiryFromPreset(
+					validityPresetByEnvVar[request.envVar] ?? "1_hour",
+					validityValueByEnvVar[request.envVar] ?? "1",
+					validityUnitByEnvVar[request.envVar] ?? "hours",
+				);
 				const selectedOption =
 					selectedOptionByEnvVar[request.envVar]?.trim() ?? "";
 				if (!selectedOption) {
@@ -570,11 +644,6 @@
 						`${selectedOAuthType.name} OAuth isn't wired up here yet.`,
 					);
 				}
-				const expiresAt = buildCredentialUseExpiryFromPreset(
-					validityPresetByEnvVar[request.envVar] ?? "1_hour",
-					validityValueByEnvVar[request.envVar] ?? "1",
-					validityUnitByEnvVar[request.envVar] ?? "hours",
-				);
 				if (selectedOption === CUSTOM_CREDENTIAL_OPTION) {
 					const value =
 						createCredentialSecretsByEnvVar[request.envVar]?.trim() ?? "";
@@ -660,18 +729,30 @@
 	{:else if grantedCredentialDetails.length > 0}
 		<div class="space-y-4 p-4 pt-3">
 			<div class="space-y-1">
-				<p class="font-medium text-sm">Credential access granted</p>
+				<p class="font-medium text-sm">
+					{grantedRequestIsSudoOnly
+						? "Sudo access granted"
+						: "Credential access granted"}
+				</p>
 				<p class="text-muted-foreground text-sm">
-					The agent can use these credentials for the approved purposes below.
+					{grantedRequestIsSudoOnly
+						? "The agent can retry sudo for the approved privileged action below."
+						: "The agent can use these credentials for the approved purposes below."}
 				</p>
 			</div>
 			{#each grantedCredentialDetails as granted}
 				<div class="space-y-3 rounded-md border border-amber-500/30 p-3">
 					<div class="space-y-1">
 						<p class="font-medium text-sm">{granted.credentialName}</p>
-						<p class="font-mono text-xs text-muted-foreground">
-							{granted.envVar} → {granted.credentialId}
-						</p>
+						{#if granted.isSudo}
+							<p class="text-muted-foreground text-xs">
+								Internal sudo approval token
+							</p>
+						{:else}
+							<p class="font-mono text-xs text-muted-foreground">
+								{granted.envVar} → {granted.credentialId}
+							</p>
+						{/if}
 					</div>
 					{#if granted.justification}
 						<div class="space-y-1 rounded-md bg-muted/30 p-2">
@@ -729,10 +810,15 @@
 			{:else if pendingCredentialRequest}
 				<div class="space-y-4 rounded-lg border bg-card p-4">
 					<div>
-						<h3 class="font-semibold text-base">Approve credential access</h3>
+						<h3 class="font-semibold text-base">
+							{pendingRequestIsSudoOnly
+								? "Approve sudo access"
+								: "Approve credential access"}
+						</h3>
 						<p class="text-muted-foreground text-sm">
-							Review why the agent is asking, choose which credential to use,
-							and approve or deny the request.
+							{pendingRequestIsSudoOnly
+								? "Review the privileged action and approve or deny sudo access. No credential value is needed."
+								: "Review why the agent is asking, choose which credential to use, and approve or deny the request."}
 						</p>
 					</div>
 
@@ -767,6 +853,23 @@
 									</p>
 								</div>
 
+								{#if isSudoCredentialRequest(request)}
+									<div
+										class="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3"
+									>
+										<p
+											class="font-medium text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300"
+										>
+											Sudo approval
+										</p>
+										<p class="text-sm">
+											Approving this creates a short-lived internal token for
+											the agent to retry the sudo command. You do not need to
+											enter or select a secret.
+										</p>
+									</div>
+								{/if}
+
 								<div class="space-y-2 rounded-md bg-muted/40 p-3">
 									<p
 										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
@@ -792,134 +895,208 @@
 								{/if}
 							</div>
 
-							<div class="space-y-2">
-								<p
-									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-								>
-									Credential to use
-								</p>
-								<Select
-									type="single"
-									value={selectedOption}
-									onValueChange={(value) => {
-										selectedOptionByEnvVar = {
-											...selectedOptionByEnvVar,
-											[request.envVar]: value,
-										};
-									}}
-								>
-									<SelectTrigger class="w-full">
-										{selectedOption === CUSTOM_CREDENTIAL_OPTION
-											? "Custom credential"
-											: selectedOAuthType
-												? `New ${selectedOAuthType.name} OAuth`
-												: selectedCredential
-													? credentialDisplayName(selectedCredential)
-													: "Choose a credential"}
-									</SelectTrigger>
-									<SelectContent>
-										{#each listAnyCredentials(projectCredentials, sessionAssignments) as match (match.credential.id)}
-											<SelectItem value={match.credential.id}>
-												{credentialDisplayName(match.credential)}
-											</SelectItem>
-										{/each}
-										{#each oauthOptions as option (option.value)}
-											<SelectItem value={option.value}>
-												{option.label}
-											</SelectItem>
-										{/each}
-										<SelectItem value={CUSTOM_CREDENTIAL_OPTION}
-											>Custom credential</SelectItem
-										>
-									</SelectContent>
-								</Select>
-								{#if selectedCredential}
-									<p class="text-muted-foreground text-xs">
-										{credentialBindingDescription(
-											request.envVar,
-											selectedCredential,
-										)}
+							{#if !isSudoCredentialRequest(request)}
+								<div class="space-y-2">
+									<p
+										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+									>
+										Credential to use
 									</p>
-								{:else if selectedOAuthType}
+									<Select
+										type="single"
+										value={selectedOption}
+										onValueChange={(value) => {
+											selectedOptionByEnvVar = {
+												...selectedOptionByEnvVar,
+												[request.envVar]: value,
+											};
+										}}
+									>
+										<SelectTrigger class="w-full">
+											{selectedOption === CUSTOM_CREDENTIAL_OPTION
+												? "Custom credential"
+												: selectedOAuthType
+													? `New ${selectedOAuthType.name} OAuth`
+													: selectedCredential
+														? credentialDisplayName(selectedCredential)
+														: "Choose a credential"}
+										</SelectTrigger>
+										<SelectContent>
+											{#each listAnyCredentials(projectCredentials, sessionAssignments) as match (match.credential.id)}
+												<SelectItem value={match.credential.id}>
+													{credentialDisplayName(match.credential)}
+												</SelectItem>
+											{/each}
+											{#each oauthOptions as option (option.value)}
+												<SelectItem value={option.value}>
+													{option.label}
+												</SelectItem>
+											{/each}
+											<SelectItem value={CUSTOM_CREDENTIAL_OPTION}
+												>Custom credential</SelectItem
+											>
+										</SelectContent>
+									</Select>
+									{#if selectedCredential}
+										<p class="text-muted-foreground text-xs">
+											{credentialBindingDescription(
+												request.envVar,
+												selectedCredential,
+											)}
+										</p>
+									{:else if selectedOAuthType}
+										<div
+											class="space-y-2 rounded-md border border-dashed border-border p-3"
+										>
+											<p
+												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+											>
+												OAuth sign-in
+											</p>
+											<p class="text-sm">
+												We'll start the {selectedOAuthType.name} OAuth flow here next.
+											</p>
+										</div>
+									{/if}
+								</div>
+
+								<div class="space-y-2">
+									<p
+										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+									>
+										How long it is valid
+									</p>
+									<Select
+										type="single"
+										value={validityPresetByEnvVar[request.envVar] ?? "1_hour"}
+										onValueChange={(value) => {
+											validityPresetByEnvVar = {
+												...validityPresetByEnvVar,
+												[request.envVar]: value as CredentialValidityPreset,
+											};
+											if (value === "custom") {
+												validityValueByEnvVar = {
+													...validityValueByEnvVar,
+													[request.envVar]:
+														validityValueByEnvVar[request.envVar] ?? "1",
+												};
+												validityUnitByEnvVar = {
+													...validityUnitByEnvVar,
+													[request.envVar]:
+														validityUnitByEnvVar[request.envVar] ?? "hours",
+												};
+											}
+										}}
+									>
+										<SelectTrigger class="w-full">
+											{validityPresets.find(
+												(preset) =>
+													preset.value ===
+													(validityPresetByEnvVar[request.envVar] ?? "1_hour"),
+											)?.label ?? "1 hour"}
+										</SelectTrigger>
+										<SelectContent>
+											{#each validityPresets as preset (preset.value)}
+												<SelectItem value={preset.value}
+													>{preset.label}</SelectItem
+												>
+											{/each}
+										</SelectContent>
+									</Select>
+								</div>
+
+								{#if (validityPresetByEnvVar[request.envVar] ?? "1_hour") === "custom"}
+									<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+										<div class="space-y-2">
+											<label
+												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+												for={`validity-${request.envVar}`}
+											>
+												Custom duration
+											</label>
+											<Input
+												id={`validity-${request.envVar}`}
+												type="number"
+												min="1"
+												disabled={(validityUnitByEnvVar[request.envVar] ??
+													"hours") === "never"}
+												value={validityValueByEnvVar[request.envVar] ?? "1"}
+												oninput={(event) => {
+													validityValueByEnvVar = {
+														...validityValueByEnvVar,
+														[request.envVar]: (
+															event.currentTarget as HTMLInputElement
+														).value,
+													};
+												}}
+											/>
+										</div>
+										<div class="space-y-2">
+											<p
+												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+											>
+												Unit
+											</p>
+											<Select
+												type="single"
+												value={validityUnitByEnvVar[request.envVar] ?? "hours"}
+												onValueChange={(value) => {
+													validityUnitByEnvVar = {
+														...validityUnitByEnvVar,
+														[request.envVar]: value as CredentialValidityUnit,
+													};
+												}}
+											>
+												<SelectTrigger class="w-full">
+													{validityUnits.find(
+														(unit) =>
+															unit.value ===
+															(validityUnitByEnvVar[request.envVar] ?? "hours"),
+													)?.label ?? "Hours"}
+												</SelectTrigger>
+												<SelectContent>
+													{#each validityUnits as unit (unit.value)}
+														<SelectItem value={unit.value}
+															>{unit.label}</SelectItem
+														>
+													{/each}
+												</SelectContent>
+											</Select>
+										</div>
+									</div>
+								{/if}
+
+								{#if selectedOption === CUSTOM_CREDENTIAL_OPTION}
 									<div
-										class="space-y-2 rounded-md border border-dashed border-border p-3"
+										class="space-y-3 rounded-md border border-dashed border-border p-3"
 									>
 										<p
 											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
 										>
-											OAuth sign-in
+											Enter new credential
 										</p>
-										<p class="text-sm">
-											We'll start the {selectedOAuthType.name} OAuth flow here next.
-										</p>
-									</div>
-								{/if}
-							</div>
-
-							<div class="space-y-2">
-								<p
-									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-								>
-									How long it is valid
-								</p>
-								<Select
-									type="single"
-									value={validityPresetByEnvVar[request.envVar] ?? "1_hour"}
-									onValueChange={(value) => {
-										validityPresetByEnvVar = {
-											...validityPresetByEnvVar,
-											[request.envVar]: value as CredentialValidityPreset,
-										};
-										if (value === "custom") {
-											validityValueByEnvVar = {
-												...validityValueByEnvVar,
-												[request.envVar]:
-													validityValueByEnvVar[request.envVar] ?? "1",
-											};
-											validityUnitByEnvVar = {
-												...validityUnitByEnvVar,
-												[request.envVar]:
-													validityUnitByEnvVar[request.envVar] ?? "hours",
-											};
-										}
-									}}
-								>
-									<SelectTrigger class="w-full">
-										{validityPresets.find(
-											(preset) =>
-												preset.value ===
-												(validityPresetByEnvVar[request.envVar] ?? "1_hour"),
-										)?.label ?? "1 hour"}
-									</SelectTrigger>
-									<SelectContent>
-										{#each validityPresets as preset (preset.value)}
-											<SelectItem value={preset.value}
-												>{preset.label}</SelectItem
-											>
-										{/each}
-									</SelectContent>
-								</Select>
-							</div>
-
-							{#if (validityPresetByEnvVar[request.envVar] ?? "1_hour") === "custom"}
-								<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-									<div class="space-y-2">
-										<label
-											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											for={`validity-${request.envVar}`}
-										>
-											Custom duration
-										</label>
 										<Input
-											id={`validity-${request.envVar}`}
-											type="number"
-											min="1"
-											disabled={(validityUnitByEnvVar[request.envVar] ??
-												"hours") === "never"}
-											value={validityValueByEnvVar[request.envVar] ?? "1"}
+											value={createCredentialNamesByEnvVar[request.envVar] ??
+												defaultCredentialName(request)}
+											placeholder="Credential name"
 											oninput={(event) => {
-												validityValueByEnvVar = {
-													...validityValueByEnvVar,
+												createCredentialNamesByEnvVar = {
+													...createCredentialNamesByEnvVar,
+													[request.envVar]: (
+														event.currentTarget as HTMLInputElement
+													).value,
+												};
+											}}
+										/>
+										<Input
+											type="password"
+											value={createCredentialSecretsByEnvVar[request.envVar] ??
+												""}
+											placeholder={`Enter ${request.envVar}`}
+											class="font-mono"
+											oninput={(event) => {
+												createCredentialSecretsByEnvVar = {
+													...createCredentialSecretsByEnvVar,
 													[request.envVar]: (
 														event.currentTarget as HTMLInputElement
 													).value,
@@ -927,79 +1104,7 @@
 											}}
 										/>
 									</div>
-									<div class="space-y-2">
-										<p
-											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-										>
-											Unit
-										</p>
-										<Select
-											type="single"
-											value={validityUnitByEnvVar[request.envVar] ?? "hours"}
-											onValueChange={(value) => {
-												validityUnitByEnvVar = {
-													...validityUnitByEnvVar,
-													[request.envVar]: value as CredentialValidityUnit,
-												};
-											}}
-										>
-											<SelectTrigger class="w-full">
-												{validityUnits.find(
-													(unit) =>
-														unit.value ===
-														(validityUnitByEnvVar[request.envVar] ?? "hours"),
-												)?.label ?? "Hours"}
-											</SelectTrigger>
-											<SelectContent>
-												{#each validityUnits as unit (unit.value)}
-													<SelectItem value={unit.value}
-														>{unit.label}</SelectItem
-													>
-												{/each}
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
-							{/if}
-
-							{#if selectedOption === CUSTOM_CREDENTIAL_OPTION}
-								<div
-									class="space-y-3 rounded-md border border-dashed border-border p-3"
-								>
-									<p
-										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-									>
-										Enter new credential
-									</p>
-									<Input
-										value={createCredentialNamesByEnvVar[request.envVar] ??
-											defaultCredentialName(request)}
-										placeholder="Credential name"
-										oninput={(event) => {
-											createCredentialNamesByEnvVar = {
-												...createCredentialNamesByEnvVar,
-												[request.envVar]: (
-													event.currentTarget as HTMLInputElement
-												).value,
-											};
-										}}
-									/>
-									<Input
-										type="password"
-										value={createCredentialSecretsByEnvVar[request.envVar] ??
-											""}
-										placeholder={`Enter ${request.envVar}`}
-										class="font-mono"
-										oninput={(event) => {
-											createCredentialSecretsByEnvVar = {
-												...createCredentialSecretsByEnvVar,
-												[request.envVar]: (
-													event.currentTarget as HTMLInputElement
-												).value,
-											};
-										}}
-									/>
-								</div>
+								{/if}
 							{/if}
 						</div>
 					{/each}
@@ -1063,7 +1168,11 @@
 									void approveCredentialRequest();
 								}}
 							>
-								{isSubmittingApproval ? "Approving..." : "Approve"}
+								{isSubmittingApproval
+									? "Approving..."
+									: pendingRequestIsSudoOnly
+										? "Approve sudo"
+										: "Approve"}
 							</Button>
 						{/if}
 					</div>

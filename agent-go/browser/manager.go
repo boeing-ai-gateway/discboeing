@@ -59,6 +59,7 @@ type Manager struct {
 	userDataDir   string
 	chromiumPath  string
 	cmd           *exec.Cmd
+	cmdDone       chan struct{}
 	upstreamWSURL string
 	lastError     string
 	store         *Store
@@ -341,13 +342,23 @@ func isUniformColorPNG(data []byte) (bool, error) {
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	cmd := m.cmd
+	done := m.cmdDone
 	m.cmd = nil
+	m.cmdDone = nil
 	m.upstreamWSURL = ""
 	m.mu.Unlock()
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
-	return cmd.Process.Kill()
+	err := cmd.Process.Kill()
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Printf("browser[%s]: timed out waiting for chromium shutdown", m.sessionID)
+		}
+	}
+	return err
 }
 
 func (m *Manager) ensureRunning() error {
@@ -408,16 +419,20 @@ func (m *Manager) ensureRunning() error {
 	}
 
 	m.cmd = cmd
+	m.cmdDone = make(chan struct{})
 	m.upstreamWSURL = upstreamWSURL
 	m.lastError = ""
 	log.Printf("browser[%s]: chromium ready upstream=%s pid=%d", m.sessionID, upstreamWSURL, cmd.Process.Pid)
 
+	done := m.cmdDone
 	go func() {
+		defer close(done)
 		err := cmd.Wait()
 		_ = logFile.Close()
 		m.mu.Lock()
 		if m.cmd == cmd {
 			m.cmd = nil
+			m.cmdDone = nil
 			m.upstreamWSURL = ""
 		}
 		m.mu.Unlock()

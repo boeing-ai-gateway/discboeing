@@ -212,6 +212,17 @@ func (m *Manager) SessionCredential(id string) *EnvVar {
 	return nil
 }
 
+func (m *Manager) SessionCredentialForValue(id, value string) *EnvVar {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for i := range m.creds {
+		if m.creds[i].SessionCredentialID == id && m.creds[i].Value == value {
+			return &m.creds[i]
+		}
+	}
+	return nil
+}
+
 // ReportableBindings returns the current agent-visible session-scoped
 // credential bindings that can be safely communicated back to the LLM.
 func (m *Manager) ReportableBindings() []ReportableBinding {

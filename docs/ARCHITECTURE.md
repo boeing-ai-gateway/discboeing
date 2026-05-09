@@ -199,6 +199,26 @@ Browser artifacts are exposed to the UI with `artifacts://...` URIs and are
 read back through a thread-scoped artifact endpoint instead of the workspace
 file API so screenshots remain outside the editable workspace tree.
 
+Sandbox images replace `/usr/bin/sudo` with a Discobot-owned gate binary. The
+gate reads `/etc/discobot/sudo-gate.json`, which must be root-owned and
+inaccessible to group/other users, to find the real sudo binary and local
+agent authorization endpoint. It calls the local `discobot-agent-api`
+`/sudo/authorize` endpoint before it execs the real sudo binary from a
+root-only path. Interactive console terminals receive a per-terminal random
+console sudo token in their exec environment. The agent API registers that token
+internally while creating the PTY, before the process can invoke `sudo`, and
+revokes it when the persistent terminal PTY exits. There is no standalone HTTP
+API for registering or revoking console sudo tokens. Console sudo is allowed
+only when invoked from a TTY with that internally registered token, so console
+sudo grants do not remain valid after the terminal session closes.
+Agent Bash tool invocations must first obtain an approved `DISCOBOT_SUDO_TOKEN`
+credential through the normal request-credential flow; the Bash tool injects
+the returned credential/use metadata so the gate can validate the sudo request
+against the approved use before privilege escalation. Exec API requests that
+ask to run as a different OS user are also started through `/usr/bin/sudo`
+instead of direct process credential switching, so root and non-root user
+acquisition follow the same gate and sudoers policy.
+
 ## Data Model
 
 ### Entity Relationships

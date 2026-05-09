@@ -16,6 +16,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
 	"github.com/obot-platform/discobot/agent-go/internal/services"
+	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 	"github.com/obot-platform/discobot/agent-go/promptqueue"
 )
 
@@ -30,6 +31,7 @@ type Handler struct {
 	defaultAgent   *agentimpl.DefaultAgent // for MCP manager access; may be nil
 	browserManager *browser.Manager
 	promptQueue    *promptqueue.Manager
+	sudoAuthorizer sudoauth.Authorizer
 	chatPingEvery  time.Duration
 
 	answeredMu        sync.Mutex
@@ -76,6 +78,11 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		browserManager:    bm,
 		chatPingEvery:     defaultChatStreamPingInterval,
 		answeredQuestions: make(map[string]bool),
+	}
+	for _, option := range options {
+		if value, ok := option.(sudoauth.Authorizer); ok && value != nil {
+			h.sudoAuthorizer = value
+		}
 	}
 	if defaultAgent != nil {
 		h.threadManager = defaultAgent
@@ -271,6 +278,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Service routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec/capabilities", Handler: h.ExecCapabilities,
 		Meta: routes.Meta{Group: "Exec", Description: "Get exec supervisor capabilities"}})
+	reg.Register(r, routes.Route{Method: "POST", Pattern: "/sudo/authorize", Handler: h.AuthorizeSudo,
+		Meta: routes.Meta{Group: "Exec", Description: "Authorize a sudo invocation from the sandbox wrapper"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/exec", Handler: h.CreateExec,
 		Meta: routes.Meta{Group: "Exec", Description: "Create an exec session"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/exec", Handler: h.ListExec,

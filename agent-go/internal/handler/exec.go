@@ -9,12 +9,14 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/agent-go/internal/processes"
+	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 )
 
 type execResizeRequest struct {
@@ -45,12 +47,56 @@ func (h *Handler) CreateExec(w http.ResponseWriter, r *http.Request) {
 	if req.Kind == "" {
 		req.Kind = processes.KindUserExec
 	}
+	revokeConsoleSudoToken, ok := h.registerConsoleSudoTokenForExec(w, req)
+	if !ok {
+		return
+	}
 	session, err := h.processManager.Start(r.Context(), req)
 	if err != nil {
+		if revokeConsoleSudoToken != nil {
+			revokeConsoleSudoToken()
+		}
 		h.processError(w, err)
 		return
 	}
+	if revokeConsoleSudoToken != nil {
+		go h.revokeConsoleSudoTokenOnExit(session.ID, revokeConsoleSudoToken)
+	}
 	h.JSON(w, http.StatusCreated, session)
+}
+
+func (h *Handler) registerConsoleSudoTokenForExec(w http.ResponseWriter, req processes.CreateRequest) (func(), bool) {
+	if req.Kind != processes.KindUserExec || !req.TTY || req.Env["DISCOBOT_SUDO_RUNTIME"] != "console" {
+		return nil, true
+	}
+	token := req.Env[sudoauth.TokenEnvVar]
+	if token == "" {
+		return nil, true
+	}
+	token = strings.TrimSpace(token)
+	if len(token) < 32 {
+		h.Error(w, http.StatusBadRequest, "console sudo token is too short")
+		return nil, false
+	}
+	if h.sudoAuthorizer == nil {
+		h.JSON(w, http.StatusForbidden, sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo authorization is not configured", Guidance: sudoauth.Guidance})
+		return nil, false
+	}
+	h.sudoAuthorizer.RegisterConsoleToken(token)
+	return func() {
+		h.sudoAuthorizer.RevokeConsoleToken(token)
+	}, true
+}
+
+func (h *Handler) revokeConsoleSudoTokenOnExit(sessionID string, revoke func()) {
+	_, unsubscribe, done, err := h.processManager.Subscribe(sessionID)
+	if err != nil {
+		revoke()
+		return
+	}
+	defer unsubscribe()
+	<-done
+	revoke()
 }
 
 // ListExec handles GET /exec.

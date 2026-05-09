@@ -14,6 +14,8 @@ description: |-
   For git work, avoid destructive commands, force pushes, or skipped hooks unless the user explicitly requests them. Do not commit or push unless asked.
 
   If a command needs a secret, first use RequestUserCredential to request it. Later Bash calls may reuse approved credential ids and approved-use ids through `credentialUses`. Never invent or guess credential ids or approved-use ids; only use ids returned by RequestUserCredential.
+
+  Commands that invoke `sudo` require explicit user approval through RequestUserCredential. Request a sudo approval credential with envVar `DISCOBOT_SUDO_TOKEN` and an approved use describing the exact privileged action, then retry the Bash command with the returned `credentialUses` binding.
 inputSchema:
   type: object
   additionalProperties: false

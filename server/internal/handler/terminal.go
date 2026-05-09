@@ -2,8 +2,11 @@ package handler
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"maps"
 	"net/http"
@@ -114,17 +117,25 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 			maps.Copy(envVars, credentialVars)
 		}
 	}
-
 	// Get or create the persistent terminal session for this (sandbox, user) pair.
 	// If one already exists (from a previous WebSocket connection) it is reused —
 	// the caller never sees the PTY directly, only a subscriber channel.
 	termKey := sessionID + ":" + user
 	termSession, err := h.terminalManager.GetOrCreate(ctx, termKey, func(ctx context.Context) (sandbox.PTY, error) {
+		consoleSudoToken, err := secureRandomHex(32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate console sudo token: %w", err)
+		}
+
+		terminalEnv := maps.Clone(envVars)
+		terminalEnv["DISCOBOT_SUDO_RUNTIME"] = "console"
+		terminalEnv["DISCOBOT_SUDO_TOKEN"] = consoleSudoToken
+
 		execUser := ""
 		if runAsRoot {
 			execUser = "root"
 		}
-		return h.sandboxService.AttachTerminal(ctx, sessionID, rows, cols, execUser, termKey, envVars)
+		return h.sandboxService.AttachTerminal(ctx, sessionID, rows, cols, execUser, termKey, terminalEnv)
 	})
 	if err != nil {
 		log.Printf("failed to attach to sandbox PTY: %v", err)
@@ -153,6 +164,17 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer termSession.Unsubscribe(sub)
 
 	handlePersistentTerminalSession(ctx, termSession, sub, conn)
+}
+
+func secureRandomHex(bytesLen int) (string, error) {
+	if bytesLen <= 0 {
+		return "", fmt.Errorf("random byte length must be positive")
+	}
+	buf := make([]byte, bytesLen)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 // handlePersistentTerminalSession relays data between a persistent terminal
