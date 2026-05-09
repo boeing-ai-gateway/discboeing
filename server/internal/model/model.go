@@ -406,6 +406,58 @@ const (
 	EventTypeThreadUpdated  = "thread_updated"
 )
 
+const (
+	SessionActivityStatusIdle           = "idle"
+	SessionActivityStatusQueued         = "queued"
+	SessionActivityStatusRunning        = "running"
+	SessionActivityStatusNeedsAttention = "needs_attention"
+	SessionActivityStatusUnknown        = "unknown"
+)
+
+const (
+	SessionActivityReasonCompletion              = "completion"
+	SessionActivityReasonQueuedPrompt            = "queued_prompt"
+	SessionActivityReasonPendingQuestion         = "pending_question"
+	SessionActivityReasonInterrupted             = "interrupted"
+	SessionActivityReasonCancelled               = "cancelled"
+	SessionActivityReasonThreadError             = "thread_error"
+	SessionActivityReasonSandboxStoppedDuringRun = "sandbox_stopped_during_run"
+)
+
+// SessionThreadState stores sparse non-idle status for a session thread. Idle
+// threads are represented by the absence of a row so sessions with many
+// historical idle threads do not create monitor pressure.
+type SessionThreadState struct {
+	SessionID    string     `gorm:"column:session_id;primaryKey;type:text" json:"sessionId"`
+	ThreadID     string     `gorm:"column:thread_id;primaryKey;type:text" json:"threadId"`
+	ProjectID    string     `gorm:"column:project_id;not null;type:text;index" json:"projectId"`
+	Status       string     `gorm:"not null;type:text;index" json:"status"`
+	Reason       string     `gorm:"type:text" json:"reason,omitempty"`
+	CompletionID *string    `gorm:"column:completion_id;type:text" json:"completionId,omitempty"`
+	QueueCount   int        `gorm:"column:queue_count;not null;default:0" json:"queueCount"`
+	NextRunAfter *time.Time `gorm:"column:next_run_after" json:"nextRunAfter,omitempty"`
+	Message      string     `gorm:"type:text" json:"message,omitempty"`
+	UpdatedAt    time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+}
+
+func (SessionThreadState) TableName() string { return "session_thread_states" }
+
+// SessionActivityStatus stores the aggregate thread activity for a session.
+type SessionActivityStatus struct {
+	SessionID              string    `gorm:"column:session_id;primaryKey;type:text" json:"sessionId"`
+	ProjectID              string    `gorm:"column:project_id;not null;type:text;index" json:"projectId"`
+	Status                 string    `gorm:"not null;type:text;index" json:"status"`
+	Reason                 string    `gorm:"type:text" json:"reason,omitempty"`
+	NeedsAttentionCount    int       `gorm:"column:needs_attention_count;not null;default:0" json:"needsAttentionCount"`
+	RunningCount           int       `gorm:"column:running_count;not null;default:0" json:"runningCount"`
+	QueuedCount            int       `gorm:"column:queued_count;not null;default:0" json:"queuedCount"`
+	UnknownCount           int       `gorm:"column:unknown_count;not null;default:0" json:"unknownCount"`
+	RepresentativeThreadID *string   `gorm:"column:representative_thread_id;type:text" json:"threadId,omitempty"`
+	UpdatedAt              time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+}
+
+func (SessionActivityStatus) TableName() string { return "session_activity_statuses" }
+
 // ProjectEvent represents a persisted event for a project.
 // Events are used for SSE streaming to clients.
 type ProjectEvent struct {
@@ -523,6 +575,8 @@ func AllModels() []any {
 		&Workspace{},
 		&Session{},
 		&SessionCommitLog{},
+		&SessionThreadState{},
+		&SessionActivityStatus{},
 		&Message{},
 		&PromptSubmission{},
 		&Credential{},

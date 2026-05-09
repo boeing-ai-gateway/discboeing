@@ -134,6 +134,13 @@ func (c *SessionClient) ListThreads(ctx context.Context) (*sandboxapi.ListThread
 	})
 }
 
+// GetSessionActivity retrieves aggregate thread activity without reconciliation
+// or idle activity tracking. Callers that must not start stopped sandboxes should
+// obtain the snapshot through SandboxService.GetSessionActivityIfRunning.
+func (c *SessionClient) GetSessionActivity(ctx context.Context) (*sandboxapi.SessionActivityResponse, error) {
+	return c.inner.GetSessionActivity(ctx, c.sessionID)
+}
+
 // GetThread retrieves a specific thread from the sandbox.
 func (c *SessionClient) GetThread(ctx context.Context, threadID string) (*sandboxapi.Thread, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.Thread, error) {

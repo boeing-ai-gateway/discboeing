@@ -142,6 +142,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Thread routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads", Handler: h.ListThreads,
 		Meta: routes.Meta{Group: "Threads", Description: "List all threads"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads/activity", Handler: h.GetSessionActivity,
+		Meta: routes.Meta{Group: "Threads", Description: "Get session-level thread activity"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/threads", Handler: h.CreateThread,
 		Meta: routes.Meta{
 			Group:       "Threads",

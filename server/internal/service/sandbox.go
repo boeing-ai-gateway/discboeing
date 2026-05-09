@@ -17,6 +17,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
@@ -101,7 +102,33 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
 		return nil, err
 	}
+	return s.newSessionClient(ctx, sessionID)
+}
 
+// GetSessionActivityIfRunning returns the sandbox's aggregate thread activity
+// only when the sandbox is already running. It intentionally does not reconcile,
+// start, health-probe, or record idle activity for stopped/unavailable sandboxes.
+func (s *SandboxService) GetSessionActivityIfRunning(ctx context.Context, sessionID string) (*sandboxapi.SessionActivityResponse, error) {
+	sess, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+	if sess.Status != model.SessionStatusReady && sess.Status != legacySessionStatusRunning {
+		return nil, sandbox.ErrNotRunning
+	}
+
+	sb, err := s.provider.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if sb.Status != sandbox.StatusRunning {
+		return nil, sandbox.ErrNotRunning
+	}
+
+	return s.newAgentClient(ctx).GetSessionActivity(ctx, sessionID)
+}
+
+func (s *SandboxService) newSessionClient(ctx context.Context, sessionID string) (*SessionClient, error) {
 	return &SessionClient{
 		sessionID:       sessionID,
 		inner:           s.newAgentClient(ctx),

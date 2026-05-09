@@ -133,18 +133,20 @@ type ErrorResponse struct {
 
 // Thread represents a conversation thread persisted by the agent.
 type Thread struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	LastMessage   string          `json:"lastMessage,omitempty"`
-	ErrorMessage  string          `json:"errorMessage,omitempty"`
-	Model         string          `json:"model,omitempty"`         // full "providerId/modelId" ref
-	Reasoning     string          `json:"reasoning,omitempty"`     // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
-	Mode          string          `json:"mode"`                    // "build" or "plan"
-	State         string          `json:"state,omitempty"`         // "interrupted" or "cancelled"
-	ActiveCommand string          `json:"activeCommand,omitempty"` // empty when no command is running
-	Pending       bool            `json:"pending,omitempty"`       // true when the thread exists in concept but the sandbox hasn't created it yet
-	PromptQueue   []QueuedPrompt  `json:"promptQueue,omitempty"`
-	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	LastMessage     string          `json:"lastMessage,omitempty"`
+	ErrorMessage    string          `json:"errorMessage,omitempty"`
+	Model           string          `json:"model,omitempty"`           // full "providerId/modelId" ref
+	Reasoning       string          `json:"reasoning,omitempty"`       // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
+	Mode            string          `json:"mode"`                      // "build" or "plan"
+	State           string          `json:"state,omitempty"`           // "interrupted" or "cancelled"
+	PendingQuestion bool            `json:"pendingQuestion,omitempty"` // true when the thread is paused for user input
+	ActiveCommand   string          `json:"activeCommand,omitempty"`   // empty when no command is running
+	Pending         bool            `json:"pending,omitempty"`         // true when the thread exists in concept but the sandbox hasn't created it yet
+	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
+	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"` // sparse non-idle activity state from /threads/activity
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 
 type QueuedPrompt struct {
@@ -160,6 +162,41 @@ type QueuedPrompt struct {
 // ListThreadsResponse is the GET /threads response.
 type ListThreadsResponse struct {
 	Threads []Thread `json:"threads"`
+}
+
+// ThreadActivity is the sparse non-idle activity state exposed on thread list
+// responses.
+type ThreadActivity struct {
+	Status       string     `json:"status"`
+	Reason       string     `json:"reason,omitempty"`
+	CompletionID *string    `json:"completionId,omitempty"`
+	QueueCount   int        `json:"queueCount,omitempty"`
+	NextRunAfter *time.Time `json:"nextRunAfter,omitempty"`
+	Message      string     `json:"message,omitempty"`
+}
+
+// SessionThreadActivityState is the sparse non-idle activity state for one
+// thread in the sandbox session.
+type SessionThreadActivityState struct {
+	ThreadID     string     `json:"threadId"`
+	Status       string     `json:"status"`
+	Reason       string     `json:"reason,omitempty"`
+	CompletionID *string    `json:"completionId,omitempty"`
+	QueueCount   int        `json:"queueCount,omitempty"`
+	NextRunAfter *time.Time `json:"nextRunAfter,omitempty"`
+	Message      string     `json:"message,omitempty"`
+}
+
+// SessionActivityResponse is the session-level aggregate activity snapshot.
+type SessionActivityResponse struct {
+	Status                 string                       `json:"status"`
+	Reason                 string                       `json:"reason,omitempty"`
+	NeedsAttentionCount    int                          `json:"needsAttentionCount"`
+	RunningCount           int                          `json:"runningCount"`
+	QueuedCount            int                          `json:"queuedCount"`
+	UnknownCount           int                          `json:"unknownCount"`
+	RepresentativeThreadID string                       `json:"threadId,omitempty"`
+	Threads                []SessionThreadActivityState `json:"threads,omitempty"`
 }
 
 // CreateThreadRequest is the POST /threads request body.

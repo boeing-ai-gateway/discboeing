@@ -7,6 +7,7 @@ import type {
 	HooksStatusResponse,
 	StartChatResponse,
 	Thread,
+	ThreadActivityStatus,
 } from "$lib/api-types";
 import {
 	createChatStreamEventListeners,
@@ -40,6 +41,7 @@ type CreateConversationDomainArgs = {
 	) => void | Promise<void>;
 	refreshSessionState?: () => Promise<void>;
 	shouldIgnoreClosedStreamError?: () => boolean;
+	onActivityStatusChange?: (status: ThreadActivityStatus | null) => void;
 	afterTurn?: () => Promise<void>;
 };
 
@@ -190,12 +192,14 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 	const handleCompletionStart = () => {
 		if (completionRunning) {
+			args.onActivityStatusChange?.({ status: "running" });
 			return;
 		}
 		streamError = null;
 		afterTurnPending = true;
 		completionRunning = true;
 		pendingQuestionId = null;
+		args.onActivityStatusChange?.({ status: "running" });
 	};
 
 	const handleCompletionFinish = () => {
@@ -203,6 +207,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			return;
 		}
 		completionRunning = false;
+		args.onActivityStatusChange?.(null);
 		void dismissRetryToast(args.threadId);
 		return runAfterTurnIfNeeded();
 	};
@@ -243,6 +248,11 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		onChunkError: (errorText) => {
 			fatalStreamError = true;
 			completionRunning = false;
+			args.onActivityStatusChange?.({
+				status: "needs_attention",
+				reason: "stream_error",
+				message: errorText,
+			});
 			streamError = errorText;
 			void dismissRetryToast(args.threadId);
 			if (loadStatus === "loading") {
@@ -614,6 +624,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				};
 			} catch (error) {
 				completionRunning = false;
+				args.onActivityStatusChange?.(null);
 				const errorDetails = getStartChatErrorDetails(error);
 				if (args.hasSession()) {
 					await refresh();
@@ -633,6 +644,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			}
 			await api.cancelThreadChat(args.sessionId, args.threadId);
 			completionRunning = false;
+			args.onActivityStatusChange?.(null);
 			await refresh();
 		},
 		refresh,
@@ -650,6 +662,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		dispose: () => {
 			loadStatus = "idle";
 			completionRunning = false;
+			args.onActivityStatusChange?.(null);
 			pendingQuestionId = null;
 			browserEventsByTurnId = {};
 			void dismissRetryToast(args.threadId);

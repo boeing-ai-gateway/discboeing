@@ -7,6 +7,28 @@ import (
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
+func TestMapSessionResponseIncludesThreadStatus(t *testing.T) {
+	t.Parallel()
+
+	response := mapSessionResponse(&service.Session{
+		ID:     "session-1",
+		Status: model.SessionStatusReady,
+		ThreadStatus: &service.SessionActivityStatus{
+			Status:                 model.SessionActivityStatusNeedsAttention,
+			Reason:                 model.SessionActivityReasonPendingQuestion,
+			NeedsAttentionCount:    1,
+			RepresentativeThreadID: "thread-1",
+		},
+	})
+
+	if response.ThreadStatus == nil {
+		t.Fatal("expected thread status to be included")
+	}
+	if response.ThreadStatus.Status != model.SessionActivityStatusNeedsAttention {
+		t.Fatalf("thread status = %q, want %q", response.ThreadStatus.Status, model.SessionActivityStatusNeedsAttention)
+	}
+}
+
 func TestDeriveSessionStatusAndError_MapsCompletedCommitOperation(t *testing.T) {
 	t.Parallel()
 

@@ -17,10 +17,21 @@ export interface Thread {
 	reasoning?: string;
 	mode: string;
 	state?: ThreadState;
+	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running
 	pending?: boolean;
 	promptQueue?: QueuedPrompt[];
+	activityStatus?: ThreadActivityStatus;
 	metadata?: Record<string, unknown>;
+}
+
+export interface ThreadActivityStatus {
+	status: SessionThreadActivityStatusValue;
+	reason?: string;
+	completionId?: string;
+	queueCount?: number;
+	nextRunAfter?: string;
+	message?: string;
 }
 
 export type QueuedPromptMessagePart =
@@ -172,6 +183,24 @@ export type SessionStatus =
 // Commit operation values representing which operation owns local UI state
 export type CommitOperation = "commit" | "rebase";
 
+export type SessionThreadActivityStatusValue =
+	| "idle"
+	| "queued"
+	| "running"
+	| "needs_attention"
+	| "unknown";
+
+export interface SessionThreadStatus {
+	status: SessionThreadActivityStatusValue;
+	reason?: string;
+	needsAttentionCount: number;
+	runningCount: number;
+	queuedCount: number;
+	unknownCount: number;
+	threadId?: string;
+	updatedAt?: string;
+}
+
 export interface Session {
 	id: string;
 	name: string;
@@ -187,6 +216,8 @@ export interface Session {
 	appliedCommit?: string;
 	/** Error message if status is "error" */
 	errorMessage?: string;
+	/** Aggregated non-idle thread activity for this session. */
+	threadStatus?: SessionThreadStatus;
 	files: FileNode[];
 	workspaceId?: string;
 	model?: string;

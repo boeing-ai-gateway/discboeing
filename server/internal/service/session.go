@@ -94,23 +94,24 @@ func normalizeSessionStatus(status string) string {
 
 // Session represents a chat session (for API responses)
 type Session struct {
-	ID              string     `json:"id"`
-	ProjectID       string     `json:"projectId"`
-	Name            string     `json:"name"`
-	DisplayName     string     `json:"displayName,omitempty"`
-	Description     string     `json:"description"`
-	CreatedAt       string     `json:"createdAt"`
-	Timestamp       string     `json:"timestamp"`
-	Status          string     `json:"status"`
-	CommitStatus    string     `json:"commitStatus,omitempty"`
-	CommitOperation string     `json:"commitOperation,omitempty"`
-	CommitError     string     `json:"commitError,omitempty"`
-	TargetRef       string     `json:"targetRef,omitempty"`
-	AppliedCommit   string     `json:"appliedCommit,omitempty"`
-	ErrorMessage    string     `json:"errorMessage,omitempty"`
-	Files           []FileNode `json:"files"`
-	WorkspaceID     string     `json:"workspaceId,omitempty"`
-	WorkspacePath   string     `json:"workspacePath,omitempty"`
+	ID              string                 `json:"id"`
+	ProjectID       string                 `json:"projectId"`
+	Name            string                 `json:"name"`
+	DisplayName     string                 `json:"displayName,omitempty"`
+	Description     string                 `json:"description"`
+	CreatedAt       string                 `json:"createdAt"`
+	Timestamp       string                 `json:"timestamp"`
+	Status          string                 `json:"status"`
+	CommitStatus    string                 `json:"commitStatus,omitempty"`
+	CommitOperation string                 `json:"commitOperation,omitempty"`
+	CommitError     string                 `json:"commitError,omitempty"`
+	TargetRef       string                 `json:"targetRef,omitempty"`
+	AppliedCommit   string                 `json:"appliedCommit,omitempty"`
+	ErrorMessage    string                 `json:"errorMessage,omitempty"`
+	ThreadStatus    *SessionActivityStatus `json:"threadStatus,omitempty"`
+	Files           []FileNode             `json:"files"`
+	WorkspaceID     string                 `json:"workspaceId,omitempty"`
+	WorkspacePath   string                 `json:"workspacePath,omitempty"`
 }
 
 // FileNode represents a file in a session
@@ -132,6 +133,7 @@ type SessionService struct {
 	sandboxService  *SandboxService
 	eventBroker     *events.Broker
 	jobEnqueuer     JobEnqueuer
+	activityService *SessionActivityService
 	cleanupDelay    time.Duration
 }
 
@@ -146,6 +148,10 @@ func NewSessionService(s *store.Store, gitSvc *GitService, sandboxProv sandbox.P
 		jobEnqueuer:     jobEnqueuer,
 		cleanupDelay:    defaultSandboxCleanupRetentionDelay,
 	}
+}
+
+func (s *SessionService) SetActivityService(activityService *SessionActivityService) {
+	s.activityService = activityService
 }
 
 // SetSandboxCleanupDelay updates the retention window used before permanently
@@ -164,10 +170,22 @@ func (s *SessionService) ListSessionsByProject(ctx context.Context, projectID st
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
+	statuses := map[string]*model.SessionActivityStatus{}
+	if s.activityService != nil {
+		sessionIDs := make([]string, 0, len(dbSessions))
+		for _, sess := range dbSessions {
+			sessionIDs = append(sessionIDs, sess.ID)
+		}
+		statuses, err = s.store.ListSessionActivityStatuses(ctx, sessionIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list session activity statuses: %w", err)
+		}
+	}
+
 	sessions := make([]*Session, len(dbSessions))
 	for i, sess := range dbSessions {
 		s.syncSessionNameFromPrimaryThread(ctx, sess)
-		sessions[i] = s.mapSession(sess)
+		sessions[i] = s.mapSessionWithActivity(sess, statuses[sess.ID])
 	}
 	return sessions, nil
 }
@@ -197,7 +215,11 @@ func (s *SessionService) GetSession(ctx context.Context, sessionID string) (*Ses
 
 	s.syncSessionNameFromPrimaryThread(ctx, sess)
 
-	return s.mapSession(sess), nil
+	var activity *model.SessionActivityStatus
+	if s.activityService != nil {
+		activity, _ = s.store.GetSessionActivityStatus(ctx, sessionID)
+	}
+	return s.mapSessionWithActivity(sess, activity), nil
 }
 
 func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, sess *model.Session) {
@@ -600,8 +622,12 @@ func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, ses
 	return nil
 }
 
-// mapSession maps a model Session to a service Session
 func (s *SessionService) mapSession(sess *model.Session) *Session {
+	return s.mapSessionWithActivity(sess, nil)
+}
+
+// mapSession maps a model Session to a service Session
+func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *model.SessionActivityStatus) *Session {
 	description := ""
 	if sess.Description != nil {
 		description = *sess.Description
@@ -652,7 +678,7 @@ func (s *SessionService) mapSession(sess *model.Session) *Session {
 		createdAt = timestamp
 	}
 
-	return &Session{
+	session := &Session{
 		ID:              sess.ID,
 		ProjectID:       sess.ProjectID,
 		Name:            sess.Name,
@@ -671,6 +697,10 @@ func (s *SessionService) mapSession(sess *model.Session) *Session {
 		WorkspaceID:     sess.WorkspaceID,
 		WorkspacePath:   workspacePath,
 	}
+	if s.activityService != nil {
+		session.ThreadStatus = s.activityService.ToAPI(activity)
+	}
+	return session
 }
 
 func trimStringPtr(value *string) string {

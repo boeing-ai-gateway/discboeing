@@ -46,6 +46,7 @@ export function toSessionSummaries(sessions: Session[]): SessionSummary[] {
 			id: session.id,
 			name: session.displayName || session.name,
 			status: session.status,
+			threadStatus: session.threadStatus,
 			isRecent: false,
 			workspaceId: session.workspaceId,
 		}));

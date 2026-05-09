@@ -764,6 +764,49 @@ func (c *SandboxAgentClient) ListThreads(ctx context.Context, sessionID string) 
 	return &result, nil
 }
 
+// GetSessionActivity retrieves the aggregate thread activity snapshot from the
+// sandbox agent in a single session-level request.
+func (c *SandboxAgentClient) GetSessionActivity(ctx context.Context, sessionID string) (*sandboxapi.SessionActivityResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.threadsURL()+"/activity", nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session activity: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.SessionActivityResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GetThread retrieves a specific thread from the sandbox agent.
 func (c *SandboxAgentClient) GetThread(ctx context.Context, sessionID, threadID string) (*sandboxapi.Thread, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {

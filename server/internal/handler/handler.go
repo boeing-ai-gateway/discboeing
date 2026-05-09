@@ -37,6 +37,7 @@ type Handler struct {
 	sandboxManager      *sandbox.Manager
 	sandboxService      *service.SandboxService
 	sessionService      *service.SessionService
+	activityService     *service.SessionActivityService
 	chatService         *service.ChatService
 	modelsService       *service.ModelsService
 	workspaceService    *service.WorkspaceService
@@ -81,6 +82,8 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 
 	// Create session service
 	sessionSvc := service.NewSessionService(s, gitSvc, sandboxProvider, sandboxSvc, eventBroker, jobQueue)
+	activitySvc := service.NewSessionActivityService(s, eventBroker)
+	sessionSvc.SetActivityService(activitySvc)
 
 	// Break circular dependency: SandboxService needs SessionInitializer (which is SessionService)
 	if sandboxSvc != nil {
@@ -92,6 +95,7 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 
 	// Create chat service
 	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, sandboxSvc, gitSvc)
+	chatSvc.SetActivityService(activitySvc)
 
 	// Create remaining services
 	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxProvider, eventBroker, jobQueue)
@@ -111,6 +115,7 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 		sandboxManager:    sandboxManager,
 		sandboxService:    sandboxSvc,
 		sessionService:    sessionSvc,
+		activityService:   activitySvc,
 		chatService:       chatSvc,
 		modelsService:     modelsSvc,
 		workspaceService:  workspaceSvc,

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
@@ -24,13 +25,14 @@ type JobEnqueuer interface {
 
 // ChatService handles chat operations including session creation and message streaming.
 type ChatService struct {
-	store          *store.Store
-	sessionService *SessionService
-	jobEnqueuer    JobEnqueuer
-	eventBroker    *events.Broker
-	sandboxService *SandboxService
-	gitService     *GitService
-	encryptor      *encryption.Encryptor
+	store           *store.Store
+	sessionService  *SessionService
+	jobEnqueuer     JobEnqueuer
+	eventBroker     *events.Broker
+	sandboxService  *SandboxService
+	gitService      *GitService
+	encryptor       *encryption.Encryptor
+	activityService *SessionActivityService
 }
 
 // NewChatService creates a new chat service.
@@ -52,6 +54,10 @@ func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionS
 		gitService:     gitService,
 		encryptor:      encryptor,
 	}
+}
+
+func (c *ChatService) SetActivityService(activityService *SessionActivityService) {
+	c.activityService = activityService
 }
 
 // NewSessionRequest contains the parameters for creating a new chat session.
@@ -186,8 +192,10 @@ func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threa
 	}
 	started, err := prepared.client.StartChat(ctx, threadID, rawMessages, prepared.modelID, prepared.opts)
 	if err != nil {
+		c.markChatStartError(ctx, projectID, sessionID, threadID, err)
 		return "", nil, err
 	}
+	c.markChatStarted(ctx, projectID, sessionID, threadID, started)
 	if err := c.sessionService.ClearTerminalCommitState(ctx, projectID, sessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", sessionID, err)
 	}
@@ -212,13 +220,38 @@ func (c *ChatService) SendToSandbox(ctx context.Context, projectID, sessionID, t
 
 	innerCh, err := prepared.client.SendMessages(ctx, threadID, messages, prepared.modelID, prepared.opts)
 	if err != nil {
+		c.markChatStartError(ctx, projectID, sessionID, threadID, err)
 		return nil, err
 	}
 	if err := c.sessionService.ClearTerminalCommitState(ctx, projectID, sessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", sessionID, err)
 	}
+	if c.activityService != nil {
+		c.activityService.MarkRunning(ctx, projectID, sessionID, threadID, "")
+	}
 
 	return innerCh, nil
+}
+
+func (c *ChatService) markChatStarted(ctx context.Context, projectID, sessionID, threadID string, started *sandboxapi.ChatStartedResponse) {
+	if c.activityService == nil || started == nil {
+		return
+	}
+	if started.QueuedPromptID != "" || started.Status == "queued" {
+		c.activityService.MarkQueued(ctx, projectID, sessionID, threadID)
+		return
+	}
+	c.activityService.MarkRunning(ctx, projectID, sessionID, threadID, started.CompletionID)
+}
+
+func (c *ChatService) markChatStartError(ctx context.Context, projectID, sessionID, threadID string, err error) {
+	if c.activityService == nil || err == nil {
+		return
+	}
+	var startErr *SandboxChatStartError
+	if errors.As(err, &startErr) && startErr.ErrorCode == "pending_question_requires_answer" {
+		c.activityService.MarkNeedsAttention(ctx, projectID, sessionID, threadID, model.SessionActivityReasonPendingQuestion, startErr.Message)
+	}
 }
 
 // GetStream returns a channel of SSE events for a thread.
@@ -253,7 +286,71 @@ func (c *ChatService) ListThreads(ctx context.Context, projectID, sessionID stri
 		return nil, err
 	}
 
-	return client.ListThreads(ctx)
+	result, err := client.ListThreads(ctx)
+	if err == nil && c.activityService != nil {
+		for _, thread := range result.Threads {
+			c.activityService.ApplyThreadSnapshot(ctx, projectID, sessionID, thread)
+		}
+		if snapshot, snapshotErr := client.GetSessionActivity(ctx); snapshotErr == nil {
+			c.activityService.ApplySessionSnapshot(ctx, projectID, sessionID, snapshot)
+			attachThreadActivity(result, snapshot.Threads)
+		} else if states, statesErr := c.store.ListSessionThreadStates(ctx, sessionID); statesErr == nil {
+			attachStoredThreadActivity(result, states)
+		}
+	}
+	return result, err
+}
+
+func attachThreadActivity(result *sandboxapi.ListThreadsResponse, states []sandboxapi.SessionThreadActivityState) {
+	if result == nil || len(states) == 0 {
+		return
+	}
+	byThread := make(map[string]sandboxapi.ThreadActivity, len(states))
+	for _, state := range states {
+		threadID := strings.TrimSpace(state.ThreadID)
+		status := strings.TrimSpace(state.Status)
+		if threadID == "" || status == "" || status == model.SessionActivityStatusIdle {
+			continue
+		}
+		byThread[threadID] = sandboxapi.ThreadActivity{
+			Status:       status,
+			Reason:       strings.TrimSpace(state.Reason),
+			CompletionID: state.CompletionID,
+			QueueCount:   state.QueueCount,
+			NextRunAfter: state.NextRunAfter,
+			Message:      state.Message,
+		}
+	}
+	for i := range result.Threads {
+		if activity, ok := byThread[result.Threads[i].ID]; ok {
+			result.Threads[i].ActivityStatus = &activity
+		}
+	}
+}
+
+func attachStoredThreadActivity(result *sandboxapi.ListThreadsResponse, states []*model.SessionThreadState) {
+	if result == nil || len(states) == 0 {
+		return
+	}
+	byThread := make(map[string]sandboxapi.ThreadActivity, len(states))
+	for _, state := range states {
+		if state == nil || state.Status == "" || state.Status == model.SessionActivityStatusIdle {
+			continue
+		}
+		byThread[state.ThreadID] = sandboxapi.ThreadActivity{
+			Status:       state.Status,
+			Reason:       state.Reason,
+			CompletionID: state.CompletionID,
+			QueueCount:   state.QueueCount,
+			NextRunAfter: state.NextRunAfter,
+			Message:      state.Message,
+		}
+	}
+	for i := range result.Threads {
+		if activity, ok := byThread[result.Threads[i].ID]; ok {
+			result.Threads[i].ActivityStatus = &activity
+		}
+	}
 }
 
 // ListCommands retrieves available slash commands for a session from the sandbox agent.
@@ -285,7 +382,11 @@ func (c *ChatService) GetThread(ctx context.Context, projectID, sessionID, threa
 		return nil, err
 	}
 
-	return client.GetThread(ctx, threadID)
+	thread, err := client.GetThread(ctx, threadID)
+	if err == nil && c.activityService != nil {
+		c.activityService.ApplyThreadSnapshot(ctx, projectID, sessionID, *thread)
+	}
+	return thread, err
 }
 
 // CreateThread creates a thread for a session in the sandbox agent.
@@ -301,7 +402,11 @@ func (c *ChatService) CreateThread(ctx context.Context, projectID, sessionID str
 		return nil, err
 	}
 
-	return client.CreateThread(ctx, req)
+	thread, err := client.CreateThread(ctx, req)
+	if err == nil && c.activityService != nil {
+		c.activityService.ApplyThreadSnapshot(ctx, projectID, sessionID, *thread)
+	}
+	return thread, err
 }
 
 // UpdateThread updates a thread for a session in the sandbox agent.
@@ -317,7 +422,11 @@ func (c *ChatService) UpdateThread(ctx context.Context, projectID, sessionID, th
 		return nil, err
 	}
 
-	return client.UpdateThread(ctx, threadID, req)
+	thread, err := client.UpdateThread(ctx, threadID, req)
+	if err == nil && c.activityService != nil {
+		c.activityService.ApplyThreadSnapshot(ctx, projectID, sessionID, *thread)
+	}
+	return thread, err
 }
 
 // DeleteQueuedPrompt removes a queued prompt for a thread in the sandbox agent.
@@ -333,7 +442,11 @@ func (c *ChatService) DeleteQueuedPrompt(ctx context.Context, projectID, session
 		return nil, err
 	}
 
-	return client.DeleteQueuedPrompt(ctx, threadID, queuedPromptID)
+	result, err := client.DeleteQueuedPrompt(ctx, threadID, queuedPromptID)
+	if err == nil {
+		c.refreshThreadActivity(ctx, projectID, sessionID, threadID)
+	}
+	return result, err
 }
 
 // UpdateQueuedPrompt updates a queued prompt for a thread in the sandbox agent.
@@ -349,7 +462,11 @@ func (c *ChatService) UpdateQueuedPrompt(ctx context.Context, projectID, session
 		return nil, err
 	}
 
-	return client.UpdateQueuedPrompt(ctx, threadID, queuedPromptID, req)
+	result, err := client.UpdateQueuedPrompt(ctx, threadID, queuedPromptID, req)
+	if err == nil {
+		c.refreshThreadActivity(ctx, projectID, sessionID, threadID)
+	}
+	return result, err
 }
 
 // DeleteThread deletes a thread for a session in the sandbox agent.
@@ -365,7 +482,11 @@ func (c *ChatService) DeleteThread(ctx context.Context, projectID, sessionID, th
 		return nil, err
 	}
 
-	return client.DeleteThread(ctx, threadID)
+	result, err := client.DeleteThread(ctx, threadID)
+	if err == nil && c.activityService != nil {
+		c.activityService.MarkThreadDeleted(ctx, sessionID, threadID)
+	}
+	return result, err
 }
 
 // CancelCompletion cancels an in-progress chat completion in the sandbox.
@@ -382,7 +503,11 @@ func (c *ChatService) CancelCompletion(ctx context.Context, projectID, sessionID
 	if err != nil {
 		return nil, err
 	}
-	return client.CancelCompletion(ctx, threadID)
+	result, err := client.CancelCompletion(ctx, threadID)
+	if err == nil && c.activityService != nil {
+		c.activityService.MarkIdle(ctx, sessionID, threadID)
+	}
+	return result, err
 }
 
 // ============================================================================
@@ -403,7 +528,11 @@ func (c *ChatService) GetQuestion(ctx context.Context, projectID, sessionID, thr
 	if err != nil {
 		return nil, err
 	}
-	return client.GetQuestion(ctx, threadID, toolUseID)
+	result, err := client.GetQuestion(ctx, threadID, toolUseID)
+	if err == nil && c.activityService != nil && result != nil && result.Question != nil {
+		c.activityService.MarkNeedsAttention(ctx, projectID, sessionID, threadID, model.SessionActivityReasonPendingQuestion, result.Question.Context)
+	}
+	return result, err
 }
 
 // AnswerQuestion submits answers to a pending AskUserQuestion.
@@ -418,7 +547,30 @@ func (c *ChatService) AnswerQuestion(ctx context.Context, projectID, sessionID, 
 	if err != nil {
 		return nil, err
 	}
-	return client.AnswerQuestion(ctx, threadID, req)
+	result, err := client.AnswerQuestion(ctx, threadID, req)
+	if err == nil && c.activityService != nil {
+		if result != nil && result.CompletionID != "" {
+			c.activityService.MarkRunning(ctx, projectID, sessionID, threadID, result.CompletionID)
+		} else {
+			c.refreshThreadActivity(ctx, projectID, sessionID, threadID)
+		}
+	}
+	return result, err
+}
+
+func (c *ChatService) refreshThreadActivity(ctx context.Context, projectID, sessionID, threadID string) {
+	if c.activityService == nil || c.sandboxService == nil {
+		return
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	thread, err := client.GetThread(ctx, threadID)
+	if err != nil {
+		return
+	}
+	c.activityService.ApplyThreadSnapshot(ctx, projectID, sessionID, *thread)
 }
 
 // ============================================================================

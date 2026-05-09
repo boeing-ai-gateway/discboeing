@@ -119,6 +119,27 @@ func createTestSession(t *testing.T, s *store.Store, sessionID, workspacePath st
 	}
 }
 
+func TestGetSessionActivityIfRunningDoesNotStartStoppedSandbox(t *testing.T) {
+	ctx := context.Background()
+	st := setupTestStore(t)
+	sessionID := "stopped-session"
+	createTestSession(t, st, sessionID, t.TempDir())
+	if err := st.UpdateSessionStatus(ctx, sessionID, model.SessionStatusStopped, nil); err != nil {
+		t.Fatalf("failed to stop test session: %v", err)
+	}
+
+	provider := newImageIDAwareReconcileProvider(testImage, "image-id")
+	svc := NewSandboxService(st, provider, &config.Config{}, nil, nil, nil, nil)
+
+	_, err := svc.GetSessionActivityIfRunning(ctx, sessionID)
+	if !errors.Is(err, sandbox.ErrNotRunning) {
+		t.Fatalf("expected ErrNotRunning, got %v", err)
+	}
+	if provider.createCount != 0 || provider.startCount != 0 || provider.removeCount != 0 {
+		t.Fatalf("activity check changed sandbox lifecycle: create=%d start=%d remove=%d", provider.createCount, provider.startCount, provider.removeCount)
+	}
+}
+
 type imageIDAwareReconcileProvider struct {
 	sandboxes         map[string]*sandbox.Sandbox
 	configuredImage   string

@@ -135,6 +135,30 @@ type ListThreadsResponse struct {
 	Threads []Thread `json:"threads"`
 }
 
+// SessionThreadActivityState is the sparse non-idle activity state for one
+// thread in the agent session.
+type SessionThreadActivityState struct {
+	ThreadID     string `json:"threadId"`
+	Status       string `json:"status"`
+	Reason       string `json:"reason,omitempty"`
+	CompletionID string `json:"completionId,omitempty"`
+	QueueCount   int    `json:"queueCount,omitempty"`
+	NextRunAfter string `json:"nextRunAfter,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+// SessionActivityResponse is the session-level aggregate activity snapshot.
+type SessionActivityResponse struct {
+	Status                 string                       `json:"status"`
+	Reason                 string                       `json:"reason,omitempty"`
+	NeedsAttentionCount    int                          `json:"needsAttentionCount"`
+	RunningCount           int                          `json:"runningCount"`
+	QueuedCount            int                          `json:"queuedCount"`
+	UnknownCount           int                          `json:"unknownCount"`
+	RepresentativeThreadID string                       `json:"threadId,omitempty"`
+	Threads                []SessionThreadActivityState `json:"threads,omitempty"`
+}
+
 // ListMessagesResponse is the GET /threads/{id}/messages response.
 type ListMessagesResponse struct {
 	Messages []message.UIMessage `json:"messages"`

@@ -3,6 +3,10 @@ import type {
 	ServiceStatus,
 	Session,
 	SessionStatus,
+	SessionThreadActivityStatusValue,
+	SessionThreadStatus,
+	Thread,
+	ThreadActivityStatus,
 	ThreadState,
 } from "$lib/api-types";
 
@@ -48,6 +52,7 @@ export type AsyncStatus = "idle" | "loading" | "ready" | "error";
 export type WorkspaceSourceType = "local" | "git" | "managed";
 export type WorkspaceStatus = "ready" | "loading" | "error";
 export type SessionStatusValue = SessionStatus;
+export type SessionActivityStatusValue = SessionThreadActivityStatusValue;
 export type ConversationRole = "user" | "assistant";
 export type SessionFileState = "active" | "edited" | "linked";
 export type PlanEntryStatus = "pending" | "in_progress" | "completed";
@@ -97,6 +102,7 @@ export type SessionSummary = {
 	name: string;
 	isRecent: boolean;
 	status: SessionStatusValue;
+	threadStatus?: SessionThreadStatus;
 	workspaceId?: string;
 };
 
@@ -107,6 +113,7 @@ export type RecentThreadSummary = {
 	threadId: string;
 	threadName: string;
 	state?: ThreadState;
+	activityStatus?: ThreadActivityStatus;
 	lastMessage?: string;
 	lastAccessedAt: string;
 };
@@ -133,8 +140,10 @@ export type ThreadSummary = {
 	errorMessage?: string;
 	mode: string;
 	state?: ThreadState;
+	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running
 	promptQueue?: QueuedPrompt[];
+	activityStatus?: Thread["activityStatus"];
 };
 
 export type PlanEntry = {

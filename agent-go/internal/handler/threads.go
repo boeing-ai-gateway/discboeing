@@ -42,6 +42,97 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 	}
 }
 
+func (h *Handler) threadActivityState(thread api.Thread) *api.SessionThreadActivityState {
+	state := api.SessionThreadActivityState{ThreadID: thread.ID}
+	if thread.PendingQuestion {
+		state.Status = "needs_attention"
+		state.Reason = "pending_question"
+		return &state
+	}
+	if thread.ErrorMessage != "" {
+		state.Status = "needs_attention"
+		state.Reason = "thread_error"
+		state.Message = thread.ErrorMessage
+		return &state
+	}
+	switch strings.TrimSpace(thread.State) {
+	case "interrupted":
+		state.Status = "needs_attention"
+		state.Reason = "interrupted"
+		return &state
+	case "cancelled":
+		state.Status = "needs_attention"
+		state.Reason = "cancelled"
+		return &state
+	}
+	if h.conversations != nil {
+		state.CompletionID = h.conversations.ActiveCompletionID(thread.ID)
+	}
+	if thread.ActiveCommand != "" || state.CompletionID != "" {
+		state.Status = "running"
+		state.Reason = "completion"
+		state.Message = thread.ActiveCommand
+		return &state
+	}
+	if len(thread.PromptQueue) > 0 {
+		state.Status = "queued"
+		state.Reason = "queued_prompt"
+		state.QueueCount = len(thread.PromptQueue)
+		for _, queued := range thread.PromptQueue {
+			if queued.RunAfter == "" {
+				continue
+			}
+			if state.NextRunAfter == "" || queued.RunAfter < state.NextRunAfter {
+				state.NextRunAfter = queued.RunAfter
+			}
+		}
+		return &state
+	}
+	return nil
+}
+
+func activityPriority(status string) int {
+	switch status {
+	case "needs_attention":
+		return 4
+	case "running":
+		return 3
+	case "queued":
+		return 2
+	case "unknown":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (h *Handler) sessionActivityResponse(threads []api.Thread) api.SessionActivityResponse {
+	resp := api.SessionActivityResponse{Status: "idle"}
+	for _, thread := range threads {
+		state := h.threadActivityState(thread)
+		if state == nil {
+			continue
+		}
+		resp.Threads = append(resp.Threads, *state)
+		switch state.Status {
+		case "needs_attention":
+			resp.NeedsAttentionCount++
+		case "running":
+			resp.RunningCount++
+		case "queued":
+			resp.QueuedCount++
+		case "unknown":
+			resp.UnknownCount++
+		}
+		if activityPriority(state.Status) > activityPriority(resp.Status) {
+			resp.Status = state.Status
+			resp.Reason = state.Reason
+			resp.RepresentativeThreadID = state.ThreadID
+		}
+	}
+	return resp
+}
+
 func (h *Handler) applyThreadStateOverlay(info *agent.ThreadInfo) {
 	if info == nil || h.conversations == nil || strings.TrimSpace(info.ID) == "" {
 		return
@@ -107,6 +198,28 @@ func (h *Handler) ListThreads(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, api.ListThreadsResponse{Threads: threads})
+}
+
+// GetSessionActivity handles GET /threads/activity — returns one aggregate
+// snapshot of non-idle activity for the whole sandbox session.
+func (h *Handler) GetSessionActivity(w http.ResponseWriter, _ *http.Request) {
+	if !h.requireConversations(w) {
+		return
+	}
+
+	infos, err := h.threadManager.ListThreadInfos()
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sort.Slice(infos, func(i, j int) bool { return infos[i].ID < infos[j].ID })
+
+	threads := make([]api.Thread, 0, len(infos))
+	for _, info := range infos {
+		threads = append(threads, h.threadResponse(info))
+	}
+
+	h.JSON(w, http.StatusOK, h.sessionActivityResponse(threads))
 }
 
 // CreateThread handles POST /threads — creates a new thread.

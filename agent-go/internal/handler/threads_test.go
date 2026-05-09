@@ -84,3 +84,63 @@ func TestCreateThread_DefaultsCWDToHandlerRoot(t *testing.T) {
 		t.Fatalf("expected cwd %q, got %q", root, got.CWD)
 	}
 }
+
+func TestSessionActivityResponsePrioritizesNeedsAttention(t *testing.T) {
+	h := &Handler{}
+
+	got := h.sessionActivityResponse([]api.Thread{
+		{
+			ID:            "running-thread",
+			ActiveCommand: "pnpm test",
+		},
+		{
+			ID:              "blocked-thread",
+			PendingQuestion: true,
+		},
+		{
+			ID: "queued-thread",
+			PromptQueue: []api.QueuedPrompt{
+				{ID: "queued-1"},
+			},
+		},
+	})
+
+	if got.Status != "needs_attention" {
+		t.Fatalf("expected needs_attention, got %q", got.Status)
+	}
+	if got.RepresentativeThreadID != "blocked-thread" {
+		t.Fatalf("expected blocked representative, got %q", got.RepresentativeThreadID)
+	}
+	if got.NeedsAttentionCount != 1 || got.RunningCount != 1 || got.QueuedCount != 1 {
+		t.Fatalf("unexpected counts: needs=%d running=%d queued=%d", got.NeedsAttentionCount, got.RunningCount, got.QueuedCount)
+	}
+	if len(got.Threads) != 3 {
+		t.Fatalf("expected 3 sparse states, got %d", len(got.Threads))
+	}
+}
+
+func TestSessionActivityResponseTreatsTerminalStatesAsNeedsAttention(t *testing.T) {
+	h := &Handler{}
+
+	got := h.sessionActivityResponse([]api.Thread{
+		{ID: "interrupted-thread", State: "interrupted"},
+		{ID: "cancelled-thread", State: "cancelled"},
+	})
+
+	if got.Status != "needs_attention" {
+		t.Fatalf("expected needs_attention, got %q", got.Status)
+	}
+	if got.NeedsAttentionCount != 2 {
+		t.Fatalf("expected 2 needs_attention threads, got %d", got.NeedsAttentionCount)
+	}
+	reasons := map[string]string{}
+	for _, state := range got.Threads {
+		reasons[state.ThreadID] = state.Reason
+	}
+	if reasons["interrupted-thread"] != "interrupted" {
+		t.Fatalf("expected interrupted reason, got %q", reasons["interrupted-thread"])
+	}
+	if reasons["cancelled-thread"] != "cancelled" {
+		t.Fatalf("expected cancelled reason, got %q", reasons["cancelled-thread"])
+	}
+}

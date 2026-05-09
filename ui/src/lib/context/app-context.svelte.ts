@@ -17,7 +17,11 @@ import { createAppSupportInfoDomain } from "$lib/app/domains/app-support-info.sv
 import { createAppUpdatesDomain } from "$lib/app/domains/app-updates.svelte";
 import { createAppWorkspacesDomain } from "$lib/app/domains/app-workspaces.svelte";
 import { createAppViewState } from "$lib/app/view/create-app-view-state.svelte";
-import type { StartChatResponse, StartupTask } from "$lib/api-types";
+import type {
+	SessionThreadStatus,
+	StartChatResponse,
+	StartupTask,
+} from "$lib/api-types";
 import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
 import { SessionStore } from "$lib/store/sessions.store.svelte";
 import { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
@@ -50,7 +54,8 @@ type ProjectEvent<TData> = {
 
 type SessionUpdatedEventData = {
 	sessionId: string;
-	status: string;
+	status?: string;
+	threadStatus?: SessionThreadStatus;
 };
 
 type ThreadUpdatedEventData = {

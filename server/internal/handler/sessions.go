@@ -17,20 +17,21 @@ import (
 )
 
 type sessionResponse struct {
-	ID            string             `json:"id"`
-	ProjectID     string             `json:"projectId"`
-	Name          string             `json:"name"`
-	DisplayName   string             `json:"displayName,omitempty"`
-	Description   string             `json:"description"`
-	CreatedAt     string             `json:"createdAt"`
-	Timestamp     string             `json:"timestamp"`
-	Status        string             `json:"status"`
-	TargetRef     string             `json:"targetRef,omitempty"`
-	AppliedCommit string             `json:"appliedCommit,omitempty"`
-	ErrorMessage  string             `json:"errorMessage,omitempty"`
-	Files         []service.FileNode `json:"files"`
-	WorkspaceID   string             `json:"workspaceId,omitempty"`
-	WorkspacePath string             `json:"workspacePath,omitempty"`
+	ID            string                         `json:"id"`
+	ProjectID     string                         `json:"projectId"`
+	Name          string                         `json:"name"`
+	DisplayName   string                         `json:"displayName,omitempty"`
+	Description   string                         `json:"description"`
+	CreatedAt     string                         `json:"createdAt"`
+	Timestamp     string                         `json:"timestamp"`
+	Status        string                         `json:"status"`
+	TargetRef     string                         `json:"targetRef,omitempty"`
+	AppliedCommit string                         `json:"appliedCommit,omitempty"`
+	ErrorMessage  string                         `json:"errorMessage,omitempty"`
+	ThreadStatus  *service.SessionActivityStatus `json:"threadStatus,omitempty"`
+	Files         []service.FileNode             `json:"files"`
+	WorkspaceID   string                         `json:"workspaceId,omitempty"`
+	WorkspacePath string                         `json:"workspacePath,omitempty"`
 }
 
 type workspaceResponse struct {
@@ -90,6 +91,7 @@ func mapSessionResponse(sess *service.Session) *sessionResponse {
 		TargetRef:     sess.TargetRef,
 		AppliedCommit: sess.AppliedCommit,
 		ErrorMessage:  errorMessage,
+		ThreadStatus:  sess.ThreadStatus,
 		Files:         sess.Files,
 		WorkspaceID:   sess.WorkspaceID,
 		WorkspacePath: sess.WorkspacePath,

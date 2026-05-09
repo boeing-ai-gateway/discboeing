@@ -8,7 +8,11 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
-	import type { Thread, Workspace } from "$lib/api-types";
+	import type {
+		SessionThreadActivityStatusValue,
+		Thread,
+		Workspace,
+	} from "$lib/api-types";
 	import * as Collapsible from "$lib/components/ui/collapsible";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
 	import {
@@ -306,6 +310,73 @@
 		return "";
 	}
 
+	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
+		const status = sessionObj.threadStatus?.status;
+		return status && status !== "idle" ? status : sessionObj.status;
+	}
+
+	function threadContextDisplayStatus(
+		sessionId: string,
+		threadId: string,
+	): SessionThreadActivityStatusValue | null {
+		const threadContext = app.sessions.sessionContexts
+			.get(sessionId)
+			?.threadContexts.get(threadId);
+		if (threadContext?.status === "streaming") {
+			return "running";
+		}
+		if (threadContext?.hasPendingQuestion) {
+			return "needs_attention";
+		}
+		return null;
+	}
+
+	function threadDisplayStatus(
+		sessionId: string,
+		threadObj: Thread,
+	): SessionThreadActivityStatusValue | null {
+		const contextStatus = threadContextDisplayStatus(sessionId, threadObj.id);
+		if (contextStatus) {
+			return contextStatus;
+		}
+		const activityStatus = threadObj.activityStatus?.status;
+		if (activityStatus && activityStatus !== "idle") {
+			return activityStatus;
+		}
+		if (
+			threadObj.pendingQuestion ||
+			(threadObj.errorMessage ?? "").trim() ||
+			threadObj.state === "interrupted" ||
+			threadObj.state === "cancelled"
+		) {
+			return "needs_attention";
+		}
+		if ((threadObj.promptQueue?.length ?? 0) > 0) {
+			return "queued";
+		}
+		return null;
+	}
+
+	function recentThreadDisplayStatus(
+		threadObj: (typeof sessions.recentThreads)[number],
+	): SessionThreadActivityStatusValue | null {
+		const contextStatus = threadContextDisplayStatus(
+			threadObj.sessionId,
+			threadObj.threadId,
+		);
+		if (contextStatus) {
+			return contextStatus;
+		}
+		const activityStatus = threadObj.activityStatus?.status;
+		if (activityStatus && activityStatus !== "idle") {
+			return activityStatus;
+		}
+		if (threadObj.state === "interrupted" || threadObj.state === "cancelled") {
+			return "needs_attention";
+		}
+		return null;
+	}
+
 	function openRenameDialog(sessionId: string) {
 		const sessionItem = sessionById(sessionId);
 		if (!sessionItem) {
@@ -600,6 +671,7 @@
 </script>
 
 {#snippet threadItem(sessionId: string, threadObj: Thread, depth: number)}
+	{@const displayStatus = threadDisplayStatus(sessionId, threadObj)}
 	<div class="space-y-0.5">
 		<div class="group flex min-w-0 items-center gap-0.5">
 			<button
@@ -607,7 +679,13 @@
 				onclick={() => handleSelectRecentThread(sessionId, threadObj.id)}
 				class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionId, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
-				{#if isTaskThread(threadObj)}
+				{#if displayStatus}
+					<SessionStatus
+						status={displayStatus}
+						showLabel={false}
+						class="shrink-0"
+					/>
+				{:else if isTaskThread(threadObj)}
 					<GitBranchIcon class="size-3 shrink-0 text-sidebar-foreground/50" />
 				{/if}
 				<span class="min-w-0 flex-1 truncate"
@@ -672,7 +750,7 @@
 				class={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
 				<SessionStatus
-					status={sessionObj.status}
+					status={sessionDisplayStatus(sessionObj)}
 					showLabel={false}
 					class="shrink-0"
 				/>
@@ -728,6 +806,7 @@
 	threadObj: (typeof sessions.recentThreads)[number],
 	isSelected: boolean,
 )}
+	{@const displayStatus = recentThreadDisplayStatus(threadObj)}
 	<button
 		type="button"
 		onclick={() =>
@@ -735,7 +814,7 @@
 		class={`flex w-full min-w-0 items-start gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left transition-colors ${hasRecentThreadSubtitle(threadObj) ? "min-h-10" : ""} ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 	>
 		<SessionStatus
-			status={threadObj.sessionStatus}
+			status={displayStatus ?? threadObj.sessionStatus}
 			showLabel={false}
 			class="mt-0.5 shrink-0"
 		/>

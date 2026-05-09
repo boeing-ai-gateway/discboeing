@@ -3,11 +3,17 @@
 	import CircleIcon from "@lucide/svelte/icons/circle";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
-	import type { SessionStatusValue } from "$lib/shell-types";
+	import MessageCircleQuestionMarkIcon from "@lucide/svelte/icons/message-circle-question-mark";
+	import type {
+		SessionActivityStatusValue,
+		SessionStatusValue,
+	} from "$lib/shell-types";
 	import { cn } from "$lib/utils";
 
+	type DisplayStatusValue = SessionStatusValue | SessionActivityStatusValue;
+
 	type Props = {
-		status: SessionStatusValue;
+		status: DisplayStatusValue;
 		class?: string;
 		iconClass?: string;
 		labelClass?: string;
@@ -22,20 +28,27 @@
 		showLabel = true,
 	}: Props = $props();
 
-	function normalizedStatus(status: SessionStatusValue): string {
+	function normalizedStatus(status: DisplayStatusValue): string {
 		return status.toLowerCase();
 	}
 
-	function statusLabel(status: SessionStatusValue): string {
+	function statusLabel(status: DisplayStatusValue): string {
 		return status
 			.replace(/_/g, " ")
 			.replace(/\b\w/g, (char) => char.toUpperCase());
 	}
 
-	function statusTone(status: SessionStatusValue): string {
+	function statusTone(status: DisplayStatusValue): string {
 		switch (normalizedStatus(status)) {
 			case "error":
 				return "text-destructive";
+			case "needs_attention":
+				return "text-amber-500";
+			case "running":
+				return "text-blue-500";
+			case "queued":
+			case "unknown":
+				return "text-yellow-500";
 			case "ready":
 			case "completed":
 			case "committed":
@@ -55,8 +68,11 @@
 		}
 	}
 
-	function isSpinningStatus(status: SessionStatusValue): boolean {
+	function isSpinningStatus(status: DisplayStatusValue): boolean {
 		switch (normalizedStatus(status)) {
+			case "running":
+			case "queued":
+			case "unknown":
 			case "pending":
 			case "committing":
 			case "initializing":
@@ -80,6 +96,8 @@
 	<span class={cn("inline-flex items-center", statusTone(status), iconClass)}>
 		{#if isSpinningStatus(status)}
 			<Loader2Icon class="size-3.5 animate-spin" />
+		{:else if normalizedStatus(status) === "needs_attention"}
+			<MessageCircleQuestionMarkIcon class="size-3.5" />
 		{:else if normalizedStatus(status) === "committed"}
 			<GitCommitIcon class="size-3.5" />
 		{:else if ["ready", "completed"].includes(normalizedStatus(status))}

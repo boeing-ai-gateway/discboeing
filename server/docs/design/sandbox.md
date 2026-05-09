@@ -90,17 +90,17 @@ This module provides the sandbox runtime abstraction for managing execution envi
    - Project-level VMs with session reference counting
    - Configurable console logging and resource allocation
 
-6. **Shared Idle Runtime Monitor**: Generic host-runtime shutdown logic
+4. **Shared Idle Runtime Monitor**: Generic host-runtime shutdown logic
    - Separate from the session-scoped sandbox `Provider` interface
    - Watches shared runtimes such as project VMs or the managed WSL distro
    - Stops a runtime only after it has no running Discobot sandboxes for the configured idle period
 
-4. **Local Provider**: Direct process execution (development only)
+5. **Local Provider**: Direct process execution (development only)
    - No container/VM overhead
    - Runs agent-api as local process
    - Not recommended for production
 
-5. **Mock Provider**: In-memory testing
+6. **Mock Provider**: In-memory testing
    - No real sandboxes created
    - Used for unit tests
 

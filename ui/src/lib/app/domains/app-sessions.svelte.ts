@@ -101,6 +101,9 @@ export function createAppSessionsDomain(
 						threadId: liveThread.id,
 						threadName: liveThread.name,
 						...(liveThread.state ? { state: liveThread.state } : {}),
+						...(liveThread.activityStatus
+							? { activityStatus: liveThread.activityStatus }
+							: {}),
 						lastMessage: liveThread.lastMessage ?? "",
 						lastAccessedAt: savedEntry.lastAccessedAt,
 					},

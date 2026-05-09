@@ -86,6 +86,7 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		}
 		return latest, nil, fmt.Errorf("prompt dispatch did not reach sandbox")
 	}
+	c.markChatStarted(ctx, projectID, sessionID, threadID, started)
 	return latest, started, nil
 }
 
@@ -126,6 +127,7 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 	opts.RunAfter = submission.RunAfter
 	started, err := prepared.client.StartChat(ctx, submission.ThreadID, rawMessages, prepared.modelID, opts)
 	if err != nil {
+		c.markChatStartError(ctx, submission.ProjectID, submission.SessionID, submission.ThreadID, err)
 		return c.handlePromptDispatchError(ctx, submission, err)
 	}
 
@@ -140,6 +142,7 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 	if err := c.store.MarkPromptSubmissionAccepted(ctx, submission.ID, completionID, queuedPromptID); err != nil {
 		return err
 	}
+	c.markChatStarted(ctx, submission.ProjectID, submission.SessionID, submission.ThreadID, started)
 	if err := c.sessionService.ClearTerminalCommitState(ctx, submission.ProjectID, submission.SessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", submission.SessionID, err)
 	}

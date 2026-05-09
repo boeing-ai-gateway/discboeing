@@ -130,6 +130,36 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	);
 });
 
+test("session sidebar thread rows render live activity status", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /function threadContextDisplayStatus/);
+	assert.match(source, /threadContext\?\.status === "streaming"/);
+	assert.match(source, /return "running"/);
+	assert.match(source, /threadObj\.activityStatus\?\.status/);
+	assert.match(
+		source,
+		/\{@const displayStatus = threadDisplayStatus\(sessionId, threadObj\)\}/,
+	);
+	assert.match(source, /status=\{displayStatus\}/);
+	assert.doesNotMatch(source, /activeCommand[\s\S]*return "running"/);
+});
+
+test("session sidebar recent rows prefer thread activity status", () => {
+	const source = readSessionSidebarSource();
+
+	assert.match(source, /function recentThreadDisplayStatus/);
+	assert.match(source, /threadObj\.activityStatus\?\.status/);
+	assert.match(
+		source,
+		/\{@const displayStatus = recentThreadDisplayStatus\(threadObj\)\}/,
+	);
+	assert.match(
+		source,
+		/status=\{displayStatus \?\? threadObj\.sessionStatus\}/,
+	);
+});
+
 test("session sidebar nests task threads by parent metadata and renders a task icon", () => {
 	const source = readSessionSidebarSource();
 

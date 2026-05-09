@@ -2,7 +2,7 @@ import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
 import { SessionStatus } from "$lib/api-constants";
-import type { Thread } from "$lib/api-types";
+import type { Thread, ThreadActivityStatus } from "$lib/api-types";
 import {
 	clearComposerDraft,
 	readComposerDraft,
@@ -189,6 +189,18 @@ export function createThreadContext(
 			),
 		]);
 	};
+	const applyLocalActivityStatus = (
+		activityStatus: ThreadActivityStatus | null,
+	) => {
+		const currentThread = session.stores.threads.get(threadId);
+		if (!currentThread) {
+			return;
+		}
+		session.stores.threads.upsert({
+			...currentThread,
+			activityStatus: activityStatus ?? undefined,
+		});
+	};
 
 	const conversation = createConversationDomain({
 		sessionId: session.sessionId,
@@ -235,6 +247,7 @@ export function createThreadContext(
 		},
 		refreshSessionState,
 		shouldIgnoreClosedStreamError,
+		onActivityStatusChange: applyLocalActivityStatus,
 		afterTurn: async () => {
 			await session.threads.refreshThread(threadId);
 			await refreshSessionState();
