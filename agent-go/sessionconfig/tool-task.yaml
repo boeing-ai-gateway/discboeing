@@ -19,17 +19,6 @@ inputSchema:
     description:
       type: string
       description: Short 3-5 word summary.
-    max_turns:
-      type: integer
-      exclusiveMinimum: 0
-      description: Maximum agent turns.
-    model:
-      type: string
-      enum:
-        - sonnet
-        - opus
-        - haiku
-      description: Optional model override.
     prompt:
       type: string
       description: Task instructions for the agent.

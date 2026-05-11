@@ -417,10 +417,14 @@ func executeLoop(
 func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 	stepIndex := lc.turnState.CurrentStep
 	if cfg.MaxSteps > 0 && stepIndex >= cfg.MaxSteps {
-		if !lc.materializeMaxStepsMessage(cfg, stepIndex) {
+		cfg.Tools = nil
+		cfg.MaxSteps = 0
+		lc.turnState.Config = *cfg
+		if err := lc.store.SaveTurnState(lc.threadID, *lc.turnState); err != nil {
+			lc.yield(nil, fmt.Errorf("save max steps turn state: %w", err))
 			return loopStepStop
 		}
-		return loopStepDone
+		return loopStepContinue
 	}
 	if !lc.refreshTurnTools(cfg) {
 		return loopStepStop
@@ -515,32 +519,74 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 	return loopStepContinue
 }
 
-func (lc *loopContext) materializeMaxStepsMessage(cfg *TurnConfig, stepIndex int) bool {
-	stepResult, err := lc.store.LoadStepResult(lc.threadID, lc.turnID, stepIndex)
-	if err != nil {
-		lc.yield(nil, fmt.Errorf("load max steps result: %w", err))
-		return false
-	}
-	if stepResult == nil {
-		stepResult = &StepResult{
-			AssistantMessage: message.Message{
-				Role: "assistant",
-				Parts: []message.Part{message.TextPart{Text: fmt.Sprintf(
-					"Stopped because the maximum number of steps (%d) was reached before the task completed.",
-					cfg.MaxSteps,
-				)}},
-			},
-		}
-		if err := lc.store.SaveStepResult(lc.threadID, lc.turnID, stepIndex, *stepResult); err != nil {
-			lc.yield(nil, fmt.Errorf("save max steps result: %w", err))
-			return false
-		}
-	}
-	if _, err := saveAssistantStepMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, *cfg, stepIndex, stepResult); err != nil {
-		lc.yield(nil, err)
+func (lc *loopContext) prepareMaxStepsFinalStep() bool {
+	lc.turnState.Config.Tools = nil
+	lc.turnState.Config.MaxSteps = 0
+	if err := lc.store.SaveTurnState(lc.threadID, *lc.turnState); err != nil {
+		lc.yield(nil, fmt.Errorf("save max steps turn state: %w", err))
 		return false
 	}
 	return true
+}
+
+func prepareToolResultForAppend(turnState *TurnState, stepIndex int, result message.ToolResultPart, allResults map[string]message.ToolResultPart, totalToolCalls int) message.ToolResultPart {
+	if allResults != nil {
+		allResults[result.ToolCallID] = result
+	}
+	maxSteps := turnState.Config.MaxSteps
+	if maxSteps <= 0 || stepIndex+1 < maxSteps || totalToolCalls <= 0 || len(allResults) < totalToolCalls {
+		return result
+	}
+	reminderText := sessionconfig.FormatMaxStepsReminder(maxSteps)
+	if !toolResultHasReminder(result, reminderText) {
+		result.Output = appendReminderToToolResultOutput(result.Output, reminderText)
+	}
+	if allResults != nil {
+		allResults[result.ToolCallID] = result
+	}
+	turnState.Config.Tools = nil
+	turnState.Config.MaxSteps = 0
+	return result
+}
+
+func toolResultHasReminder(result message.ToolResultPart, reminderText string) bool {
+	return strings.Contains(toolResultOutputText(result.Output), reminderText)
+}
+
+func appendReminderToToolResultOutput(output message.ToolResultOutput, reminderText string) message.ToolResultOutput {
+	text := toolResultOutputText(output)
+	if strings.TrimSpace(text) == "" {
+		text = "Tool completed."
+	}
+	return message.TextOutput{Value: text + "\n\n" + reminderText}
+}
+
+func toolResultOutputText(output message.ToolResultOutput) string {
+	switch v := output.(type) {
+	case message.TextOutput:
+		return v.Value
+	case message.JSONOutput:
+		return string(v.Value)
+	case message.ErrorTextOutput:
+		return v.Value
+	case message.ErrorJSONOutput:
+		return string(v.Value)
+	case message.ExecutionDeniedOutput:
+		if v.Reason != "" {
+			return "Execution denied: " + v.Reason
+		}
+		return "Execution denied"
+	case message.ContentOutput:
+		var parts []string
+		for _, item := range v.Value {
+			if text, ok := item.(message.ContentTextItem); ok && text.Text != "" {
+				parts = append(parts, text.Text)
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
 }
 
 func (lc *loopContext) refreshTurnTools(cfg *TurnConfig) bool {
@@ -656,7 +702,7 @@ func (lc *loopContext) runToolsPhase() loopStepResult {
 		if at, ok := state.existingAsyncByID[tc.ToolCallID]; ok {
 			// This tool already launched async work earlier, so resume that
 			// continuation instead of re-executing the tool from scratch.
-			phaseResult := lc.handleRecoveredAsyncTool(state.stepIndex, tc, at, state.allResults)
+			phaseResult := lc.handleRecoveredAsyncTool(state.stepIndex, tc, at, state.allResults, len(state.toolCalls))
 			if phaseResult == loopStepContinue {
 				continue
 			}
@@ -673,7 +719,7 @@ func (lc *loopContext) runToolsPhase() loopStepResult {
 			// original one-tool-at-a-time execution model without replaying the call.
 			interruptedOne = true
 			result := message.ToolResultPart{ToolCallID: tc.ToolCallID, ToolName: tc.ToolName, Output: message.ErrorTextOutput{Value: "interrupted by transient system failure"}}
-			state.allResults[tc.ToolCallID] = result
+			result = prepareToolResultForAppend(lc.turnState, state.stepIndex, result, state.allResults, len(state.toolCalls))
 			if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, state.stepIndex, result); err != nil {
 				lc.yield(nil, fmt.Errorf("append tool result message: %w", err))
 				return loopStepStop
@@ -681,7 +727,7 @@ func (lc *loopContext) runToolsPhase() loopStepResult {
 			continue
 		}
 
-		phaseResult := lc.handleFreshToolExecution(state.stepIndex, tc, state.asyncContinuationsState, state.allResults)
+		phaseResult := lc.handleFreshToolExecution(state.stepIndex, tc, state.asyncContinuationsState, state.allResults, len(state.toolCalls))
 		if phaseResult == loopStepContinue {
 			continue
 		}
@@ -749,14 +795,14 @@ func (lc *loopContext) loadToolsPhaseState() (*toolsPhaseState, bool) {
 // continuation metadata in a previous process. Depending on what the executor reports,
 // the tool either stays async, pauses for approval, or resolves into a final
 // tool result that is appended to the step events.
-func (lc *loopContext) handleRecoveredAsyncTool(stepIndex int, tc message.ToolCallPart, at AsyncContinuationInfo, allResults map[string]message.ToolResultPart) loopStepResult {
+func (lc *loopContext) handleRecoveredAsyncTool(stepIndex int, tc message.ToolCallPart, at AsyncContinuationInfo, allResults map[string]message.ToolResultPart, totalToolCalls int) loopStepResult {
 	call := message.ToolCallPart{ToolCallID: tc.ToolCallID, ToolName: tc.ToolName, Input: string(at.Input)}
 	resumeResult, resumeErr := lc.executor.Continue(lc.ctx, lc.toolCtx, call, at.Continuation, nil)
 	if resumeErr != nil {
 		// The async continuation is gone or unrecoverable. Convert that into a
 		// persisted tool error so the step can keep moving.
 		result := message.ToolResultPart{ToolCallID: tc.ToolCallID, ToolName: tc.ToolName, Output: message.ErrorTextOutput{Value: fmt.Sprintf("async continuation lost: %v", resumeErr)}}
-		allResults[tc.ToolCallID] = result
+		result = prepareToolResultForAppend(lc.turnState, stepIndex, result, allResults, totalToolCalls)
 		if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, result); err != nil {
 			lc.yield(nil, fmt.Errorf("append tool result message: %w", err))
 			return loopStepStop
@@ -783,12 +829,12 @@ func (lc *loopContext) handleRecoveredAsyncTool(stepIndex int, tc message.ToolCa
 		}
 		return loopStepDone
 	}
-	allResults[tc.ToolCallID] = resumeResult.Result
-	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, resumeResult.Result); err != nil {
+	result := prepareToolResultForAppend(lc.turnState, stepIndex, resumeResult.Result, allResults, totalToolCalls)
+	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, result); err != nil {
 		lc.yield(nil, fmt.Errorf("append tool result message: %w", err))
 		return loopStepStop
 	}
-	for _, mc := range message.ToolResultToChunks(resumeResult.Result) {
+	for _, mc := range message.ToolResultToChunks(result) {
 		if !lc.yield(mc, nil) {
 			return loopStepStop
 		}
@@ -799,7 +845,7 @@ func (lc *loopContext) handleRecoveredAsyncTool(stepIndex int, tc message.ToolCa
 // handleFreshToolExecution runs a tool that has not been persisted before. It
 // normalizes executor outcomes into the three states the loop understands:
 // asynchronous work, approval pauses, or a final tool result event.
-func (lc *loopContext) handleFreshToolExecution(stepIndex int, tc message.ToolCallPart, asyncContinuationsState StepAsyncContinuations, allResults map[string]message.ToolResultPart) loopStepResult {
+func (lc *loopContext) handleFreshToolExecution(stepIndex int, tc message.ToolCallPart, asyncContinuationsState StepAsyncContinuations, allResults map[string]message.ToolResultPart, totalToolCalls int) loopStepResult {
 	execResult, execErr := lc.executor.Execute(lc.ctx, lc.toolCtx, tc)
 	if execErr != nil {
 		// Synchronous tool execution failures are recorded as normal tool results so
@@ -819,7 +865,7 @@ func (lc *loopContext) handleFreshToolExecution(stepIndex int, tc message.ToolCa
 		if len(lc.asyncHandles) > 0 {
 			// Flush any already-started async work before pausing for approval so the
 			// turn state does not forget about it.
-			pause, ok := waitForAsyncHandles(lc.ctx, lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, lc.asyncHandles, allResults, lc.yield)
+			pause, ok := waitForAsyncHandles(lc.ctx, lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, lc.asyncHandles, allResults, totalToolCalls, lc.yield)
 			if !ok {
 				return loopStepStop
 			}
@@ -839,7 +885,7 @@ func (lc *loopContext) handleFreshToolExecution(stepIndex int, tc message.ToolCa
 	}
 
 	result := execResult.Result
-	allResults[tc.ToolCallID] = result
+	result = prepareToolResultForAppend(lc.turnState, stepIndex, result, allResults, totalToolCalls)
 	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, result); err != nil {
 		lc.yield(nil, fmt.Errorf("append tool result message: %w", err))
 		return loopStepStop
@@ -873,7 +919,7 @@ func (lc *loopContext) finalizeToolsPhase(state *toolsPhaseState) loopStepResult
 				continue
 			}
 			result := message.ToolResultPart{ToolCallID: tc.ToolCallID, ToolName: tc.ToolName, Output: message.ErrorTextOutput{Value: "cancelled"}}
-			state.allResults[tc.ToolCallID] = result
+			result = prepareToolResultForAppend(lc.turnState, state.stepIndex, result, state.allResults, len(state.toolCalls))
 			_, _ = appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, state.stepIndex, result)
 		}
 		return loopStepDone
@@ -886,6 +932,11 @@ func (lc *loopContext) finalizeToolsPhase(state *toolsPhaseState) loopStepResult
 			return loopStepStop
 		}
 		return loopStepContinue
+	}
+	if lc.turnState.Config.MaxSteps > 0 && state.stepIndex+1 >= lc.turnState.Config.MaxSteps {
+		if !lc.prepareMaxStepsFinalStep() {
+			return loopStepStop
+		}
 	}
 	if err := advanceToNextStep(lc.store, lc.threadID, lc.turnState); err != nil {
 		lc.yield(nil, err)
@@ -940,12 +991,12 @@ func (lc *loopContext) loadWaitingForAsyncPhaseState() (*waitingForAsyncPhaseSta
 // continuation while the step is in PhaseWaitingForAsync. The continuation may
 // still be running, may now need approval, or may have finished with a result
 // that must be appended to the step's event stream.
-func (lc *loopContext) handleRecoveredWaitingAsyncContinuation(stepIndex int, continuation AsyncContinuationInfo, allResults map[string]message.ToolResultPart) loopStepResult {
+func (lc *loopContext) handleRecoveredWaitingAsyncContinuation(stepIndex int, continuation AsyncContinuationInfo, allResults map[string]message.ToolResultPart, totalToolCalls int) loopStepResult {
 	call := message.ToolCallPart{ToolCallID: continuation.ToolCallID, ToolName: continuation.ToolName, Input: string(continuation.Input)}
 	resumeResult, resumeErr := lc.executor.Continue(lc.ctx, lc.toolCtx, call, continuation.Continuation, nil)
 	if resumeErr != nil {
 		result := message.ToolResultPart{ToolCallID: continuation.ToolCallID, ToolName: continuation.ToolName, Output: message.ErrorTextOutput{Value: fmt.Sprintf("async continuation lost after restart: %v", resumeErr)}}
-		allResults[continuation.ToolCallID] = result
+		result = prepareToolResultForAppend(lc.turnState, stepIndex, result, allResults, totalToolCalls)
 		if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, result); err != nil {
 			lc.yield(nil, fmt.Errorf("append async recovery result message: %w", err))
 			return loopStepStop
@@ -966,8 +1017,8 @@ func (lc *loopContext) handleRecoveredWaitingAsyncContinuation(stepIndex int, co
 		}
 		return loopStepDone
 	}
-	allResults[continuation.ToolCallID] = resumeResult.Result
-	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, resumeResult.Result); err != nil {
+	result := prepareToolResultForAppend(lc.turnState, stepIndex, resumeResult.Result, allResults, totalToolCalls)
+	if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, result); err != nil {
 		lc.yield(nil, fmt.Errorf("append async resumed result message: %w", err))
 		return loopStepStop
 	}
@@ -984,9 +1035,14 @@ func (lc *loopContext) finalizeWaitingForAsyncPhase(state *waitingForAsyncPhaseS
 			continue
 		}
 		result := message.ToolResultPart{ToolCallID: tc.ToolCallID, ToolName: tc.ToolName, Output: message.ErrorTextOutput{Value: "interrupted by transient system failure"}}
-		state.allResults[tc.ToolCallID] = result
+		result = prepareToolResultForAppend(lc.turnState, state.stepIndex, result, state.allResults, len(state.toolCalls))
 		if _, err := appendStepToolEventMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, state.stepIndex, result); err != nil {
 			lc.yield(nil, fmt.Errorf("append missing async result message: %w", err))
+			return loopStepStop
+		}
+	}
+	if lc.turnState.Config.MaxSteps > 0 && state.stepIndex+1 >= lc.turnState.Config.MaxSteps {
+		if !lc.prepareMaxStepsFinalStep() {
 			return loopStepStop
 		}
 	}
@@ -1017,7 +1073,7 @@ func (lc *loopContext) runWaitingForAsyncPhase() loopStepResult {
 			if _, done := state.allResults[continuation.ToolCallID]; done {
 				continue
 			}
-			phaseResult := lc.handleRecoveredWaitingAsyncContinuation(state.stepIndex, continuation, state.allResults)
+			phaseResult := lc.handleRecoveredWaitingAsyncContinuation(state.stepIndex, continuation, state.allResults, len(state.toolCalls))
 			if phaseResult == loopStepContinue {
 				continue
 			}
@@ -1025,7 +1081,7 @@ func (lc *loopContext) runWaitingForAsyncPhase() loopStepResult {
 		}
 	}
 	if len(lc.asyncHandles) > 0 {
-		pause, ok := waitForAsyncHandles(lc.ctx, lc.store, lc.threadID, lc.turnID, lc.turnState, state.stepIndex, lc.asyncHandles, state.allResults, lc.yield)
+		pause, ok := waitForAsyncHandles(lc.ctx, lc.store, lc.threadID, lc.turnID, lc.turnState, state.stepIndex, lc.asyncHandles, state.allResults, len(state.toolCalls), lc.yield)
 		if !ok {
 			return loopStepStop
 		}
@@ -1092,6 +1148,11 @@ func (lc *loopContext) runWaitingForAnswerPhase() loopStepResult {
 	}
 	if err := ensureLegacyStepToolResultsMaterialized(lc.store, lc.threadID, lc.turnID, lc.turnState, stepIndex, extractToolCalls(stepResult.AssistantMessage)); err != nil {
 		lc.yield(nil, fmt.Errorf("materialize legacy approval tool results: %w", err))
+		return loopStepStop
+	}
+	allResults, err := loadCompletedToolResultsFromStepEvents(lc.store, lc.threadID, lc.turnID, stepIndex)
+	if err != nil {
+		lc.yield(nil, fmt.Errorf("load answered step tool results: %w", err))
 		return loopStepStop
 	}
 	approvalResponse := message.ToolApprovalResponse{ToolCallID: pendingQuestion.ToolCallID, ApprovalID: pendingQuestion.ApprovalID, Approved: true}
@@ -1164,6 +1225,7 @@ func (lc *loopContext) runWaitingForAnswerPhase() loopStepResult {
 	}
 
 	resolved := next.Result
+	resolved = prepareToolResultForAppend(lc.turnState, stepIndex, resolved, allResults, len(stepResult.ToolCalls))
 	if err := recordCommunicatedCredentialResult(lc.store, lc.threadID, resolved); err != nil {
 		lc.yield(nil, fmt.Errorf("record communicated credential ids: %w", err))
 		return loopStepStop
@@ -1513,6 +1575,7 @@ func waitForAsyncHandles(
 	stepIndex int,
 	pending []pendingAsyncEntry,
 	allResults map[string]message.ToolResultPart,
+	totalToolCalls int,
 	yield func(message.MessageChunk, error) bool,
 ) (*pendingApprovalPause, bool) {
 	type asyncResult struct {
@@ -1558,13 +1621,13 @@ func waitForAsyncHandles(
 			}
 			continue
 		}
-		allResults[ar.toolCallID] = ar.result.Result
-		if _, err := appendStepToolEventMessage(store, threadID, turnID, turnState, stepIndex, ar.result.Result); err != nil {
+		result := prepareToolResultForAppend(turnState, stepIndex, ar.result.Result, allResults, totalToolCalls)
+		if _, err := appendStepToolEventMessage(store, threadID, turnID, turnState, stepIndex, result); err != nil {
 			yield(nil, fmt.Errorf("append async tool result message: %w", err))
 			return nil, false
 		}
 
-		for _, mc := range message.ToolResultToChunks(ar.result.Result) {
+		for _, mc := range message.ToolResultToChunks(result) {
 			if !yield(mc, nil) {
 				return nil, false
 			}

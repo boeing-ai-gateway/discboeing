@@ -279,6 +279,13 @@ func TestRunTurn_MaxStepsPersistsAssistantMessage(t *testing.T) {
 				},
 				message.FinishChunk{FinishReason: message.FinishReason{Unified: "tool-calls"}},
 			},
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "I read test.txt and found hello."},
+				message.TextEndChunk{ID: "t1"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
 		},
 	}
 	executor := &mockExecutor{
@@ -301,8 +308,25 @@ func TestRunTurn_MaxStepsPersistsAssistantMessage(t *testing.T) {
 		},
 	))
 
-	if prov.callIndex != 1 {
-		t.Fatalf("expected 1 provider call, got %d", prov.callIndex)
+	if prov.callIndex != 2 {
+		t.Fatalf("expected final provider call after max steps, got %d", prov.callIndex)
+	}
+	if len(prov.requests) != 2 {
+		t.Fatalf("expected 2 provider requests, got %d", len(prov.requests))
+	}
+	if len(prov.requests[1].Tools) != 0 {
+		t.Fatalf("expected final max steps request to disable tools, got %#v", prov.requests[1].Tools)
+	}
+	if len(prov.requests[1].Messages) == 0 {
+		t.Fatalf("expected final max steps request to include messages")
+	}
+	lastRequestMsg := prov.requests[1].Messages[len(prov.requests[1].Messages)-1]
+	if lastRequestMsg.Role != "tool" {
+		t.Fatalf("expected max steps reminder on final tool result, got %#v", lastRequestMsg)
+	}
+	results := toolResultParts([]message.Message{lastRequestMsg})
+	if len(results) != 1 || !strings.Contains(toolResultOutputText(results[0].Output), "maximum number of agent steps (1)") {
+		t.Fatalf("expected final max steps reminder in request, got %#v", prov.requests[1].Messages)
 	}
 	state, err := store.LoadTurnState(threadID)
 	if err != nil {
@@ -326,8 +350,8 @@ func TestRunTurn_MaxStepsPersistsAssistantMessage(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected final text part, got %#v", history[len(history)-1].Parts)
 	}
-	if !strings.Contains(part.Text, "maximum number of steps (1) was reached") {
-		t.Fatalf("expected max steps message, got %q", part.Text)
+	if !strings.Contains(part.Text, "I read test.txt and found hello.") {
+		t.Fatalf("expected model-generated final answer, got %q", part.Text)
 	}
 }
 

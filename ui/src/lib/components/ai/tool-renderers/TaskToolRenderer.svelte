@@ -98,17 +98,6 @@
 							>Background</span
 						>
 					{/if}
-					{#if validInput?.model}
-						<span
-							class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs"
-							>{validInput.model}</span
-						>
-					{/if}
-					{#if validInput?.max_turns}
-						<span class="text-muted-foreground text-xs"
-							>max {validInput.max_turns} turns</span
-						>
-					{/if}
 				</div>
 				{#if validInput?.description}
 					<p class="text-foreground text-sm">{validInput.description}</p>

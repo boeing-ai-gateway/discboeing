@@ -20,14 +20,12 @@ import (
 type taskInput struct {
 	AllowedTools    []string `json:"allowed_tools"`
 	Description     string   `json:"description"`
-	Model           string   `json:"model"`
 	Prompt          string   `json:"prompt"`
 	Resume          string   `json:"resume"`
 	RunInBackground bool     `json:"run_in_background"`
 
 	// Agent-specific fields (from the Agent/Task tool schema).
 	SubagentType string `json:"subagent_type"`
-	MaxTurns     int    `json:"max_turns"`
 }
 
 type taskContinuation struct {
@@ -147,18 +145,15 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 		SubagentType:    input.SubagentType,
 		Description:     input.Description,
 		Prompt:          prompt,
-		Model:           input.Model,
 		RunInBackground: input.RunInBackground,
 		StartedAt:       rec.created.UTC(),
 	})
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
-		Model:         input.Model,
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
-		MaxTurns:      input.MaxTurns,
 	})
 
 	if input.RunInBackground {
@@ -341,11 +336,9 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
-		Model:         input.Model,
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
-		MaxTurns:      input.MaxTurns,
 	})
 
 	return thread.ToolExecuteResult{Async: taskHandle(call, rec, subThreadID)}, nil

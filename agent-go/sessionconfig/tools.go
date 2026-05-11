@@ -317,6 +317,15 @@ func FormatToolAvailabilityChangeReminder(previous, current []providers.ToolDefi
 	return strings.Join(lines, "\n")
 }
 
+// FormatMaxStepsReminder tells the model that the loop reached its step budget
+// and must produce its final answer without making additional tool calls.
+func FormatMaxStepsReminder(maxSteps int) string {
+	return fmt.Sprintf(
+		"<system-reminder>\nThe maximum number of agent steps (%d) has been reached. Do not call any more tools. Provide the best final answer you can from the work completed so far, clearly noting any uncertainty or unfinished work.\n</system-reminder>",
+		maxSteps,
+	)
+}
+
 func sortedToolNames(tools []providers.ToolDefinition) []string {
 	if len(tools) == 0 {
 		return nil

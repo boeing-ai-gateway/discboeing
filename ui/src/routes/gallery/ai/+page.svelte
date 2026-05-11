@@ -399,7 +399,6 @@
 			subagent_type: "Explore",
 			description: "Search for message renderer files",
 			prompt: "Find message rendering components in ui/src/lib/components/ai",
-			max_turns: 4,
 			run_in_background: false,
 		},
 		output: {

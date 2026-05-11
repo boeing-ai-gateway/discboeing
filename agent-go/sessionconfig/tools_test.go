@@ -196,9 +196,14 @@ func TestBuiltinTools_TaskSchema(t *testing.T) {
 	schema := findToolSchema(t, "Task")
 	props := schema["properties"].(map[string]any)
 
-	for _, field := range []string{"description", "prompt", "subagent_type", "model", "resume", "run_in_background", "max_turns", "allowed_tools"} {
+	for _, field := range []string{"description", "prompt", "subagent_type", "resume", "run_in_background", "allowed_tools"} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("Task schema missing '%s' property", field)
+		}
+	}
+	for _, field := range []string{"model", "max_turns"} {
+		if _, ok := props[field]; ok {
+			t.Errorf("Task schema should not expose '%s' property", field)
 		}
 	}
 
@@ -405,6 +410,19 @@ func TestFormatToolAvailabilityChangeReminder_Unchanged(t *testing.T) {
 	)
 	if got != "" {
 		t.Fatalf("expected empty reminder for unchanged tool names, got %q", got)
+	}
+}
+
+func TestFormatMaxStepsReminder(t *testing.T) {
+	got := FormatMaxStepsReminder(3)
+	if !strings.Contains(got, "<system-reminder>") {
+		t.Fatalf("expected system reminder, got %q", got)
+	}
+	if !strings.Contains(got, "maximum number of agent steps (3)") {
+		t.Fatalf("expected max steps count in reminder, got %q", got)
+	}
+	if !strings.Contains(got, "Do not call any more tools") {
+		t.Fatalf("expected no-tools instruction in reminder, got %q", got)
 	}
 }
 

@@ -497,7 +497,6 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	raw, _ := json.Marshal(map[string]string{
 		"prompt":        wantPrompt,
 		"subagent_type": wantType,
-		"model":         "haiku",
 	})
 	call := message.ToolCallPart{
 		ToolCallID: t.Name() + "-tc",
@@ -522,8 +521,8 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	if gotType != wantType {
 		t.Errorf("subagent_type: got %q, want %q", gotType, wantType)
 	}
-	if gotModel != "haiku" {
-		t.Errorf("model: got %q, want %q", gotModel, "haiku")
+	if gotModel != "" {
+		t.Errorf("model: got %q, want empty", gotModel)
 	}
 	if gotParentTaskID == "" {
 		t.Errorf("parent_task_id: got %q, want non-empty task id", gotParentTaskID)
@@ -1206,7 +1205,7 @@ func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
 	call := message.ToolCallPart{
 		ToolCallID: t.Name() + "-tc",
 		ToolName:   "Task",
-		Input:      `{"description":"Investigate task flow","prompt":"inspect the child thread","subagent_type":"helper","run_in_background":true,"model":"sonnet"}`,
+		Input:      `{"description":"Investigate task flow","prompt":"inspect the child thread","subagent_type":"helper","run_in_background":true}`,
 	}
 	result, err := exec.Execute(context.Background(), toolCtx, call)
 	if err != nil {
@@ -1234,7 +1233,7 @@ func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
 	if cfg.Metadata.Prompt != "inspect the child thread" {
 		t.Fatalf("metadata prompt = %#v", cfg.Metadata.Prompt)
 	}
-	if cfg.Metadata.Model != "sonnet" {
+	if cfg.Metadata.Model != "" {
 		t.Fatalf("metadata model = %#v", cfg.Metadata.Model)
 	}
 	if len(emitted) == 0 {

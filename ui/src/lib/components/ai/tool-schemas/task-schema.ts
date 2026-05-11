@@ -13,10 +13,6 @@ export const TaskToolInputSchema = z.object({
 	prompt: z.string().optional(),
 	/** Short description (3-5 words) */
 	description: z.string().optional(),
-	/** Optional model to use */
-	model: z.enum(["sonnet", "opus", "haiku"]).optional(),
-	/** Maximum number of turns */
-	max_turns: z.number().optional(),
 	/** Run agent in background */
 	run_in_background: z.boolean().optional(),
 	/** Agent ID to resume from */

@@ -300,8 +300,6 @@
 					description: "Inspect conversation renderer usage",
 					prompt:
 						"Find everywhere the message pane depends on thread/session context.",
-					max_turns: 5,
-					model: "haiku",
 					run_in_background: false,
 				},
 				output: {
