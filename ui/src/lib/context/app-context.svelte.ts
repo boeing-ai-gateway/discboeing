@@ -55,7 +55,7 @@ type SessionUpdatedEventData = {
 
 type ThreadUpdatedEventData = {
 	sessionId: string;
-	threadId: string;
+	threadId?: string;
 	name?: string;
 };
 
@@ -113,6 +113,34 @@ function startProjectEventsSubscription(app: AppContext) {
 		}
 	};
 
+	const handleThreadUpdated = (event: MessageEvent<string>) => {
+		try {
+			const payload = JSON.parse(
+				event.data,
+			) as ProjectEvent<ThreadUpdatedEventData>;
+			const threadData = payload.data;
+			if (!threadData?.sessionId) {
+				return;
+			}
+
+			const sessionContext = app.sessions.sessionContexts.get(
+				threadData.sessionId,
+			);
+			if (!sessionContext) {
+				return;
+			}
+
+			if (threadData.threadId) {
+				void sessionContext.threads.refreshThread(threadData.threadId);
+				return;
+			}
+
+			void sessionContext.threads.refresh();
+		} catch (error) {
+			console.error("[WS] Failed to parse thread_updated event:", error);
+		}
+	};
+
 	const handleStartupTaskUpdated = (event: MessageEvent<string>) => {
 		try {
 			const payload = JSON.parse(event.data) as ProjectEvent<StartupTask>;
@@ -136,6 +164,10 @@ function startProjectEventsSubscription(app: AppContext) {
 		handleWorkspaceUpdated,
 	);
 	subscription.eventSource.addEventListener(
+		"thread_updated",
+		handleThreadUpdated,
+	);
+	subscription.eventSource.addEventListener(
 		"startup_task_updated",
 		handleStartupTaskUpdated,
 	);
@@ -149,6 +181,10 @@ function startProjectEventsSubscription(app: AppContext) {
 		subscription.eventSource.removeEventListener(
 			"workspace_updated",
 			handleWorkspaceUpdated,
+		);
+		subscription.eventSource.removeEventListener(
+			"thread_updated",
+			handleThreadUpdated,
 		);
 		subscription.eventSource.removeEventListener(
 			"startup_task_updated",

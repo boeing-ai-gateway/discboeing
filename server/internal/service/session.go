@@ -346,13 +346,7 @@ func (s *SessionService) setThreadStatus(ctx context.Context, projectID, session
 	if err != nil {
 		return fmt.Errorf("failed to update session thread status: %w", err)
 	}
-	if !changed || s.eventBroker == nil {
-		return nil
-	}
-	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
-		log.Printf("Failed to publish session thread status event: %v", err)
-	}
-	return nil
+	return s.publishThreadStatusChanged(ctx, projectID, sessionID, changed)
 }
 
 // PromoteThreadStatus records an observed activity status only when it is more
@@ -371,11 +365,18 @@ func (s *SessionService) PromoteThreadStatus(ctx context.Context, projectID, ses
 	if err != nil {
 		return fmt.Errorf("failed to promote session thread status: %w", err)
 	}
+	return s.publishThreadStatusChanged(ctx, projectID, sessionID, changed)
+}
+
+func (s *SessionService) publishThreadStatusChanged(ctx context.Context, projectID, sessionID string, changed bool) error {
 	if !changed || s.eventBroker == nil {
 		return nil
 	}
 	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
 		log.Printf("Failed to publish session thread status event: %v", err)
+	}
+	if err := s.eventBroker.PublishSessionThreadsUpdated(ctx, projectID, sessionID); err != nil {
+		log.Printf("Failed to publish session threads update event: %v", err)
 	}
 	return nil
 }

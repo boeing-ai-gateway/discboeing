@@ -487,6 +487,58 @@ func TestBroker_PublishThreadUpdated(t *testing.T) {
 	}
 }
 
+func TestBroker_PublishSessionThreadsUpdated(t *testing.T) {
+	env := testSetup(t)
+	defer env.Cleanup()
+
+	ctx := context.Background()
+
+	pollerCfg := DefaultPollerConfig()
+	pollerCfg.PollInterval = 10 * time.Millisecond
+	poller := NewPoller(env.Store, pollerCfg)
+	if err := poller.Start(ctx); err != nil {
+		t.Fatalf("Failed to start poller: %v", err)
+	}
+	defer poller.Stop()
+
+	broker := NewBroker(env.Store, poller)
+
+	sub := broker.Subscribe(env.ProjectID)
+	defer broker.Unsubscribe(sub)
+
+	if err := broker.PublishSessionThreadsUpdated(ctx, env.ProjectID, "session-123"); err != nil {
+		t.Fatalf("Failed to publish session threads updated: %v", err)
+	}
+
+	select {
+	case received := <-sub.Events:
+		if received.Type != EventTypeThreadUpdated {
+			t.Errorf("Expected type %s, got %s", EventTypeThreadUpdated, received.Type)
+		}
+
+		var data ThreadUpdatedData
+		if err := json.Unmarshal(received.Data, &data); err != nil {
+			t.Fatalf("Failed to unmarshal data: %v", err)
+		}
+		if data.SessionID != "session-123" {
+			t.Errorf("Expected sessionId 'session-123', got '%s'", data.SessionID)
+		}
+		if data.ThreadID != "" {
+			t.Errorf("Expected empty threadId, got '%s'", data.ThreadID)
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal(received.Data, &raw); err != nil {
+			t.Fatalf("Failed to unmarshal raw data: %v", err)
+		}
+		if _, ok := raw["threadId"]; ok {
+			t.Error("Expected threadId to be omitted for session-level thread update")
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("Timeout waiting for event")
+	}
+}
+
 func TestBroker_GetEventsSince(t *testing.T) {
 	env := testSetup(t)
 	defer env.Cleanup()

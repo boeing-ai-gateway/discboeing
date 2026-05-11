@@ -57,7 +57,7 @@ type SessionUpdatedData struct {
 // ThreadUpdatedData is the payload for thread_updated events
 type ThreadUpdatedData struct {
 	SessionID string `json:"sessionId"`
-	ThreadID  string `json:"threadId"`
+	ThreadID  string `json:"threadId,omitempty"`
 	Name      string `json:"name,omitempty"`
 }
 
@@ -199,6 +199,14 @@ func (b *Broker) PublishThreadUpdated(ctx context.Context, projectID, sessionID,
 	}
 
 	return b.Publish(ctx, projectID, event)
+}
+
+// PublishSessionThreadsUpdated publishes a session-level thread invalidation.
+// Consumers should refresh the open session's thread list when threadID is
+// omitted. This is used when a session activity snapshot changes the aggregate
+// status but does not identify every thread that may have transitioned to idle.
+func (b *Broker) PublishSessionThreadsUpdated(ctx context.Context, projectID, sessionID string) error {
+	return b.PublishThreadUpdated(ctx, projectID, sessionID, "", "")
 }
 
 // PublishWorkspaceUpdated is a convenience method to publish workspace update events.
