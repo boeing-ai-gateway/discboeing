@@ -390,7 +390,7 @@ func TestPerformCommit_WorkspaceUnchangedNoExistingPatches(t *testing.T) {
 	// Create session service
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Run PerformCommit
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
@@ -492,7 +492,7 @@ func TestPerformCommit_CompletesOnFinishChunkWithoutDoneEvent(t *testing.T) {
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Windows arm64 runners can take longer to validate and apply the fetched patch,
 	// so give this end-to-end commit flow a bit more time than the default small timeout.
@@ -615,7 +615,7 @@ func TestPerformCommit_StreamEndsBeforeFinishContinuesReconciliation(t *testing.
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
 	if err != nil {
@@ -682,7 +682,7 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 	// Create session service
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Run PerformCommit
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
@@ -781,7 +781,7 @@ func TestPerformCommit_WorkspaceChangedNoPatches(t *testing.T) {
 	// Create session service
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Run PerformCommit
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
@@ -883,7 +883,7 @@ func TestPerformCommit_WorkspaceChangedGetCommitsError(t *testing.T) {
 	// Create session service
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Run PerformCommit
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
@@ -945,7 +945,7 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 	// Create session service
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	// Run PerformCommit
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
@@ -1037,7 +1037,7 @@ func TestPerformCommit_NoCommitsAfterPromptMarksCompleted(t *testing.T) {
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
 	if err != nil {
@@ -1105,7 +1105,7 @@ func TestPerformCommit_NoCommitsAfterPrompt_DirtyWorkTree_MarksFailed(t *testing
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
 	if err != nil {
@@ -1154,7 +1154,7 @@ func TestPerformCommit_NoCommitsAfterPrompt_CleanTargetMatchCompletes(t *testing
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
 	if err != nil {
@@ -1258,7 +1258,7 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
 		RequestedDirectory:  requestedDirectory,
@@ -1331,7 +1331,7 @@ func TestPerformCommit_RequestCommitPullApplyFailureSuggestsRebase(t *testing.T)
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
 		RequestedDirectory:  requestedDirectory,
@@ -1403,7 +1403,7 @@ func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t 
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
 		RequestedDirectory:  "/tmp/discobot-commit-worktree",
@@ -1468,7 +1468,7 @@ func TestPerformCommit_PromptErrorStillMarksFailed(t *testing.T) {
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{})
 	if err != nil {
@@ -1547,7 +1547,7 @@ func TestPerformCommit_RepeatedCommitsAdvanceSandboxBaseAndRecordLogs(t *testing
 
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
 	sandboxSvc.SetSessionInitializer(&testSessionInitializer{})
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	if err := sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{}); err != nil {
 		t.Fatalf("first PerformCommit failed: %v", err)
@@ -1696,7 +1696,7 @@ func TestPerformCommit_SandboxNotRunning(t *testing.T) {
 
 	// Create session service with real initializer to test sandbox reconciliation
 	sandboxSvc := NewSandboxService(env.store, env.mockSandbox, &config.Config{}, nil, env.eventBroker, nil, nil)
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, sandboxSvc, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 	sandboxSvc.SetSessionInitializer(sessionSvc)
 
 	// Run PerformCommit - should reconcile (start) the sandbox and complete successfully

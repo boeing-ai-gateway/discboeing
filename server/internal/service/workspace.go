@@ -14,7 +14,6 @@ import (
 	discogit "github.com/obot-platform/discobot/server/internal/git"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
@@ -128,21 +127,21 @@ type Workspace struct {
 
 // WorkspaceService handles workspace operations
 type WorkspaceService struct {
-	store           *store.Store
-	gitProvider     discogit.Provider
-	sandboxProvider sandbox.Provider
-	eventBroker     *events.Broker
-	jobEnqueuer     JobEnqueuer
+	store          *store.Store
+	gitProvider    discogit.Provider
+	sandboxService *SandboxService
+	eventBroker    *events.Broker
+	jobEnqueuer    JobEnqueuer
 }
 
 // NewWorkspaceService creates a new workspace service
-func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, sandboxProvider sandbox.Provider, eventBroker *events.Broker, jobEnqueuer JobEnqueuer) *WorkspaceService {
+func NewWorkspaceService(s *store.Store, gitProvider discogit.Provider, sandboxService *SandboxService, eventBroker *events.Broker, jobEnqueuer JobEnqueuer) *WorkspaceService {
 	return &WorkspaceService{
-		store:           s,
-		gitProvider:     gitProvider,
-		sandboxProvider: sandboxProvider,
-		eventBroker:     eventBroker,
-		jobEnqueuer:     jobEnqueuer,
+		store:          s,
+		gitProvider:    gitProvider,
+		sandboxService: sandboxService,
+		eventBroker:    eventBroker,
+		jobEnqueuer:    jobEnqueuer,
 	}
 }
 
@@ -385,7 +384,7 @@ func (s *WorkspaceService) PerformDeletion(ctx context.Context, workspaceID stri
 	if err != nil {
 		return fmt.Errorf("failed to list workspace sessions: %w", err)
 	}
-	sessionSvc := NewSessionService(s.store, nil, s.sandboxProvider, nil, s.eventBroker, nil)
+	sessionSvc := NewSessionService(s.store, nil, s.sandboxService, s.eventBroker, nil)
 	for _, sess := range sessions {
 		if sess.DeletedAt.Valid {
 			if err := sessionSvc.PerformDeferredSandboxDeletion(ctx, sess.ID); err != nil {
@@ -423,8 +422,8 @@ func (s *WorkspaceService) GetWorkspaceWithSessions(ctx context.Context, workspa
 	}
 
 	// Create session service to fetch sessions
-	// Note: git service, sandbox provider, sandbox service, and job enqueuer are nil since ListSessionsByWorkspace doesn't need them
-	sessionSvc := NewSessionService(s.store, nil, nil, nil, s.eventBroker, nil)
+	// Note: git service, sandbox service, and job enqueuer are nil since ListSessionsByWorkspace doesn't need them.
+	sessionSvc := NewSessionService(s.store, nil, nil, s.eventBroker, nil)
 	sessions, err := sessionSvc.ListSessionsByWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, err

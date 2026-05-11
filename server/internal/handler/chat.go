@@ -124,7 +124,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Session doesn't exist - create it
 		req.ProviderID = strings.TrimSpace(req.ProviderID)
-		if err := h.validateSandboxProviderID(r, projectID, req.ProviderID); err != nil {
+		if err := h.sandboxService.ValidateSandboxProviderID(ctx, projectID, req.ProviderID); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				h.Error(w, http.StatusBadRequest, "Sandbox provider not found")
 				return

@@ -45,7 +45,7 @@ func TestSessionInitialize_SetsTargetRefOnFirstInit(t *testing.T) {
 	}
 
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
-	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
+	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.SandboxService, nil, nil)
 
 	ctx := context.Background()
 	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
@@ -92,7 +92,7 @@ func TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile(t *test
 	}
 
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
-	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
+	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.SandboxService, nil, nil)
 
 	ctx := context.Background()
 	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
@@ -178,7 +178,7 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 	}
 
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
-	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
+	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.SandboxService, nil, nil)
 
 	ctx := context.Background()
 	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {
@@ -234,7 +234,7 @@ func TestMapSession_IncludesTargetRefAndWorkspacePath(t *testing.T) {
 	}
 
 	gitSvc := service.NewGitService(ts.Store, ts.GitProvider)
-	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.MockSandbox, nil, nil, nil)
+	sessionSvc := service.NewSessionService(ts.Store, gitSvc, ts.SandboxService, nil, nil)
 
 	ctx := context.Background()
 	svcSession, err := sessionSvc.GetSession(ctx, session.ID)
@@ -267,7 +267,7 @@ func TestSessionInitialize_NoGitService(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	sessionSvc := service.NewSessionService(ts.Store, nil, ts.MockSandbox, nil, nil, nil)
+	sessionSvc := service.NewSessionService(ts.Store, nil, ts.SandboxService, nil, nil)
 
 	ctx := context.Background()
 	if err := sessionSvc.Initialize(ctx, session.ID); err != nil {

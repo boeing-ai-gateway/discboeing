@@ -432,7 +432,6 @@ Key environment variables:
 | `WORKSPACE_DIR` | Base directory for workspaces |
 | `SANDBOX_IMAGE` | Default sandbox image for local runtimes |
 | `SANDBOX_IMAGE_REMOTE` | Default remotely pullable sandbox image for non-local runtimes |
-| `SANDBOX_IMAGE_MODE` | Sandbox image selection override: `default`, `local`, or `remote` |
 | `AUTH_ENABLED` | Enable authentication |
 | `ENCRYPTION_KEY` | AES-256 key for credentials |
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth client ID for GitHub git credentials |

@@ -946,8 +946,8 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 // GET /api/projects/{projectId}/workspaces/providers
 func (h *Handler) GetProviders(w http.ResponseWriter, _ *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{
-		"providers": h.sandboxManager.ListProviderStatuses(),
-		"default":   h.sandboxManager.DefaultProviderName(),
+		"providers": h.sandboxService.ListProviderStatuses(),
+		"default":   h.sandboxService.DefaultProviderName(),
 	})
 }
 
@@ -956,7 +956,7 @@ func (h *Handler) GetProviders(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) GetProvider(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "provider")
 
-	status, ok := h.sandboxManager.GetProviderStatus(name)
+	status, ok := h.sandboxService.ProviderStatus(name)
 	if !ok {
 		h.Error(w, http.StatusNotFound, "Provider not found")
 		return

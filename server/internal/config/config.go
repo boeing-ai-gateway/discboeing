@@ -74,7 +74,6 @@ type Config struct {
 	// Sandbox runtime settings
 	SandboxImage               string        // Default sandbox image for local runtimes
 	SandboxImageRemote         string        // Default remotely-pullable sandbox image for remote runtimes
-	SandboxImageMode           string        // Sandbox image selection mode: default, local, or remote
 	SandboxProvider            string        // Default sandbox provider override
 	SandboxIdleTimeout         time.Duration // Auto-stop sandboxes after idle period
 	IdleCheckInterval          time.Duration // How often to check for idle sessions
@@ -113,14 +112,6 @@ type Config struct {
 	// Local provider settings
 	LocalProviderEnabled bool   // Enable local sandbox provider (default: false)
 	LocalAgentBinary     string // Path to agent API binary for local provider (default: obot-agent-api in PATH)
-
-	// exe.dev provider settings
-	ExeDevProviderEnabled bool   // Enable exe.dev sandbox provider (default: false)
-	ExeDevEndpoint        string // exe.dev HTTPS command endpoint
-	ExeDevToken           string // Bearer token for exe.dev command API
-	ExeDevVMHostSuffix    string // DNS suffix for VM HTTP access
-	ExeDevVMNamePrefix    string // Prefix for Discobot-created VM names
-	ExeDevStopCommand     string // Command template used to stop a VM
 
 	// SSH server settings
 	SSHEnabled     bool   // Enable SSH server (default: true)
@@ -247,14 +238,6 @@ func Load() (*Config, error) {
 	// Sandbox runtime settings
 	cfg.SandboxImage = getEnv("SANDBOX_IMAGE", DefaultSandboxImage())
 	cfg.SandboxImageRemote = getEnv("SANDBOX_IMAGE_REMOTE", "")
-	cfg.SandboxImageMode = strings.ToLower(getEnv("SANDBOX_IMAGE_MODE", "default"))
-	switch cfg.SandboxImageMode {
-	case "", "default":
-		cfg.SandboxImageMode = "default"
-	case "local", "remote":
-	default:
-		return nil, fmt.Errorf("SANDBOX_IMAGE_MODE must be one of: default, local, remote")
-	}
 	cfg.SandboxProvider = getEnv("SANDBOX_PROVIDER", "")
 	cfg.SandboxIdleTimeout = getEnvDuration("SANDBOX_IDLE_TIMEOUT", 1*time.Hour)
 	cfg.IdleCheckInterval = getEnvDuration("IDLE_CHECK_INTERVAL", 5*time.Minute)
@@ -298,14 +281,6 @@ func Load() (*Config, error) {
 	// Local provider settings
 	cfg.LocalProviderEnabled = getEnvBool("LOCAL_PROVIDER_ENABLED", false)
 	cfg.LocalAgentBinary = getEnv("LOCAL_AGENT_BINARY", "obot-agent-api")
-
-	// exe.dev provider settings
-	cfg.ExeDevProviderEnabled = getEnvBool("EXEDEV_PROVIDER_ENABLED", false)
-	cfg.ExeDevEndpoint = getEnv("EXEDEV_ENDPOINT", "https://exe.dev/exec")
-	cfg.ExeDevToken = getEnv("EXEDEV_TOKEN", "")
-	cfg.ExeDevVMHostSuffix = getEnv("EXEDEV_VM_HOST_SUFFIX", "exe.xyz")
-	cfg.ExeDevVMNamePrefix = getEnv("EXEDEV_VM_NAME_PREFIX", "discobot")
-	cfg.ExeDevStopCommand = getEnv("EXEDEV_STOP_COMMAND", "ssh ${name} sudo shutdown -h now")
 
 	// SSH server settings
 	// SSH host key defaults to XDG_STATE_HOME/discobot/ssh_host_key

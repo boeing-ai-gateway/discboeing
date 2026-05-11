@@ -673,6 +673,16 @@ func (s *Store) DeleteSandboxProviderInstance(ctx context.Context, projectID, id
 	return s.writeDB.WithContext(ctx).Delete(&model.SandboxProviderInstance{}, "project_id = ? AND id = ? AND built_in = ?", projectID, id, false).Error
 }
 
+func (s *Store) CountSessionsReferencingSandboxProvider(ctx context.Context, projectID, providerID string) (int64, error) {
+	var count int64
+	err := s.readDB.WithContext(ctx).
+		Model(&model.Session{}).
+		Where("project_id = ? AND sandbox_provider_id = ?", projectID, providerID).
+		Where("status NOT IN ?", []string{model.SessionStatusRemoved}).
+		Count(&count).Error
+	return count, err
+}
+
 func (s *Store) CountSandboxProviderInstancesReferencingCredential(ctx context.Context, projectID, credentialID string) (int64, error) {
 	credentialID = strings.TrimSpace(credentialID)
 	if credentialID == "" {

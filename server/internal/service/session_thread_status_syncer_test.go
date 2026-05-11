@@ -51,7 +51,7 @@ func createThreadStatusSyncerSession(ctx context.Context, t *testing.T, st *stor
 
 func newThreadStatusSyncerForTest(st *store.Store, provider *mockSandboxProvider) *SessionThreadStatusSyncer {
 	sandboxSvc := NewSandboxService(st, provider, &config.Config{}, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(st, nil, provider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(st, nil, sandboxSvc, nil, nil)
 	return NewSessionThreadStatusSyncer(st, sessionSvc, slog.Default(), time.Hour)
 }
 

@@ -26,6 +26,14 @@ type mockAttacher struct {
 	attachFunc func(context.Context, string, int, int, string, string, map[string]string) (sandbox.PTY, error)
 }
 
+type testSandboxGetter struct {
+	provider *mock.Provider
+}
+
+func (g testSandboxGetter) GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+	return g.provider.Get(ctx, nil, sessionID)
+}
+
 func newMockExecStreamer(provider *mock.Provider) *mockExecStreamer {
 	return &mockExecStreamer{
 		execStreamFunc: func(ctx context.Context, sessionID string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
@@ -83,10 +91,10 @@ func TestSSHServer_Integration_ConnectToSession(t *testing.T) {
 
 	// Create SSH server
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -126,10 +134,10 @@ func TestSSHServer_Integration_RejectUnknownSession(t *testing.T) {
 
 	// Create SSH server (no sandboxes created)
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -172,10 +180,10 @@ func TestSSHServer_Integration_RejectStoppedSandbox(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -217,11 +225,11 @@ func TestSSHServer_Integration_AutoStartStoppedSandbox(t *testing.T) {
 	ensurer := &mockSandboxEnsurer{provider: provider}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
-		SandboxEnsurer:  ensurer,
+		Address:        "127.0.0.1:0",
+		SandboxGetter:  testSandboxGetter{provider: provider},
+		ExecStreamer:   newMockExecStreamer(provider),
+		Attacher:       newMockAttacher(provider),
+		SandboxEnsurer: ensurer,
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -292,10 +300,10 @@ func TestSSHServer_Integration_MultipleConnections(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -338,11 +346,11 @@ func TestSSHServer_Integration_HostKeyPersistence(t *testing.T) {
 
 	// Create first server - generates key
 	srv1, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     keyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   keyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create first server: %v", err)
@@ -366,11 +374,11 @@ func TestSSHServer_Integration_HostKeyPersistence(t *testing.T) {
 
 	// Create second server - should load same key
 	srv2, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     keyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   keyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create second server: %v", err)
@@ -487,10 +495,10 @@ func TestSSHServer_Integration_SessionTerminatesOnProcessExit(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    newMockExecStreamer(provider),
-		Attacher:        attacher,
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  newMockExecStreamer(provider),
+		Attacher:      attacher,
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -584,10 +592,10 @@ func TestSSHServer_Integration_SessionTerminatesOnExecExit(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    execStreamer,
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  execStreamer,
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -823,10 +831,10 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    execStreamer,
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  execStreamer,
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -919,10 +927,10 @@ func TestSSHServer_Integration_OpenSSHLocalForward(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    execStreamer,
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  execStreamer,
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -1063,10 +1071,10 @@ func TestSSHServer_Integration_SFTP(t *testing.T) {
 	}
 
 	sshServer, err := ssh.New(&ssh.Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    execStreamer,
-		Attacher:        newMockAttacher(provider),
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  execStreamer,
+		Attacher:      newMockAttacher(provider),
 	})
 	if err != nil {
 		t.Fatalf("failed to create SSH server: %v", err)
@@ -1154,7 +1162,7 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
+		SandboxGetter:   testSandboxGetter{provider: provider},
 		ExecStreamer:    newMockExecStreamer(provider),
 		Attacher:        attacher,
 		UserInfoFetcher: userFetcher,
@@ -1233,7 +1241,7 @@ func TestSSHServer_Integration_ExecUsesSSHHomeWorkDir(t *testing.T) {
 
 	sshServer, err := ssh.New(&ssh.Config{
 		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
+		SandboxGetter:   testSandboxGetter{provider: provider},
 		ExecStreamer:    execStreamer,
 		Attacher:        newMockAttacher(provider),
 		UserInfoFetcher: &mockUserInfoFetcher{uid: 1000, gid: 1000},

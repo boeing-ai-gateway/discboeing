@@ -27,7 +27,7 @@ func TestCommitSession_Success(t *testing.T) {
 		},
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, mockEnqueuer)
 
 	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{})
 	if err != nil {
@@ -65,7 +65,7 @@ func TestCommitSession_PreservesApprovalContextInPayload(t *testing.T) {
 		},
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, mockEnqueuer)
 
 	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{
 		RequestedDirectory:  "subdir",
@@ -114,7 +114,7 @@ func TestCommitSession_EnqueueFailure(t *testing.T) {
 		},
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, mockEnqueuer)
 
 	err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, mockEnqueuer, CommitSessionOptions{})
 	if err == nil {
@@ -137,7 +137,7 @@ func TestSessionOperations_BlockParallelStart(t *testing.T) {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, nil)
 
 	if err := sessionSvc.CommitSession(context.Background(), project.ID, session.ID, &mockJobEnqueuer{}, CommitSessionOptions{}); !errors.Is(err, ErrSessionOperationInProgress) {
 		t.Fatalf("Expected ErrSessionOperationInProgress, got %v", err)
@@ -165,7 +165,7 @@ func TestReconcileCommitStates_ReenqueuesCommitWhenOperationUnset(t *testing.T) 
 			return nil
 		},
 	}
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, mockEnqueuer)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, mockEnqueuer)
 
 	if err := sessionSvc.ReconcileCommitStates(context.Background()); err != nil {
 		t.Fatalf("ReconcileCommitStates failed: %v", err)
@@ -191,7 +191,7 @@ func TestMarkCommitCompleted_CommitMarksCompleted(t *testing.T) {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, nil)
 	if err := sessionSvc.markCommitCompleted(context.Background(), project.ID, session); err != nil {
 		t.Fatalf("markCommitCompleted failed: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestClearTerminalCommitState(t *testing.T) {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, nil)
 
 	err := sessionSvc.ClearTerminalCommitState(context.Background(), project.ID, session.ID)
 	if err != nil {
@@ -294,7 +294,7 @@ func TestClearTerminalCommitState_ClearsFailedCommitError(t *testing.T) {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, nil)
 
 	err := sessionSvc.ClearTerminalCommitState(context.Background(), project.ID, session.ID)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestClearTerminalCommitState_DoesNotChangeIncompleteState(t *testing.T) {
 		t.Fatalf("Failed to update session: %v", err)
 	}
 
-	sessionSvc := NewSessionService(env.store, env.gitService, env.mockSandbox, nil, env.eventBroker, nil)
+	sessionSvc := NewSessionService(env.store, env.gitService, nil, env.eventBroker, nil)
 
 	err := sessionSvc.ClearTerminalCommitState(context.Background(), project.ID, session.ID)
 	if err != nil {

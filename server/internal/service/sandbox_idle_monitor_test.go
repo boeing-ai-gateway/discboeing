@@ -94,7 +94,7 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	// Create idle monitor with short timeout
 	idleTimeout := 1 * time.Second
@@ -186,7 +186,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	// Create idle monitor with short timeout
 	idleTimeout := 1 * time.Second
@@ -279,7 +279,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	monitor := NewSandboxIdleMonitor(
 		testStore,
@@ -357,7 +357,7 @@ func TestSandboxIdleMonitor_SkipsQueuedPrompts(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	monitor := NewSandboxIdleMonitor(
 		testStore,
@@ -436,7 +436,7 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	// Create idle monitor with short timeout
 	idleTimeout := 1 * time.Second
@@ -532,7 +532,7 @@ func TestSandboxIdleMonitor_IgnoresStoppedSessions(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	idleTimeout := 1 * time.Second
 	checkInterval := 100 * time.Millisecond
@@ -600,7 +600,7 @@ func TestSandboxIdleMonitor_GracefulShutdown(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	monitor := NewSandboxIdleMonitor(
 		testStore,
@@ -657,7 +657,7 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 
 	cfg := &config.Config{}
 	sandboxSvc := NewSandboxService(testStore, mockProvider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, mockProvider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	idleTimeout := 1 * time.Second
 	checkInterval := 100 * time.Millisecond

@@ -99,7 +99,6 @@ golangci-lint run
 | `WORKSPACE_DIR` | `/tmp/workspaces` | Base directory for workspaces |
 | `SANDBOX_IMAGE` | `ghcr.io/obot-platform/discobot:main` | Default sandbox image for local runtimes such as Docker |
 | `SANDBOX_IMAGE_REMOTE` | (empty) | Remotely pullable sandbox image for non-local runtimes; when empty, non-local providers fall back to `ghcr.io/obot-platform/discobot:main` |
-| `SANDBOX_IMAGE_MODE` | `default` | Image selection override: `default` uses provider locality, `local` always uses `SANDBOX_IMAGE`, and `remote` always uses `SANDBOX_IMAGE_REMOTE` |
 | `THREAD_STATUS_SYNC_INTERVAL` | `10s` | Poll interval for non-terminal session thread summaries |
 | `CACHE_ENABLED` | `true` | Enable project-scoped cache volumes |
 | `ENCRYPTION_KEY` | (required) | Key for credential encryption |

@@ -10,7 +10,6 @@ import (
 	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/git"
 	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/startup"
 	"github.com/obot-platform/discobot/server/internal/store"
@@ -33,8 +32,6 @@ type Handler struct {
 	credentialService   *service.CredentialService
 	gitService          *service.GitService
 	gitProvider         git.Provider
-	sandboxProvider     sandbox.Provider
-	sandboxManager      *sandbox.Manager
 	sandboxService      *service.SandboxService
 	sessionService      *service.SessionService
 	chatService         *service.ChatService
@@ -52,8 +49,8 @@ type Handler struct {
 	shutdownOnce        sync.Once
 }
 
-// New creates a new Handler with the required git and sandbox providers.
-func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxProvider sandbox.Provider, sandboxManager *sandbox.Manager, eventBroker *events.Broker, jobQueue *jobs.Queue, systemManager *startup.SystemManager) *Handler {
+// New creates a new Handler with the required application services.
+func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxSvc *service.SandboxService, eventBroker *events.Broker, jobQueue *jobs.Queue, systemManager *startup.SystemManager) *Handler {
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 
 	credSvc, err := service.NewCredentialService(s, cfg)
@@ -67,20 +64,13 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 		gitSvc = service.NewGitService(s, gitProvider)
 	}
 
-	// Create credential fetcher for sandbox client
-	var credFetcher service.CredentialFetcher
-	if credSvc != nil {
-		credFetcher = service.MakeCredentialFetcher(s, credSvc)
-	}
-
-	// Create sandbox service with all dependencies
-	var sandboxSvc *service.SandboxService
-	if sandboxProvider != nil {
-		sandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, nil)
+	// Finish wiring the sandbox service with handler-owned dependencies.
+	if sandboxSvc != nil {
+		sandboxSvc.SetCredentialService(credSvc)
 	}
 
 	// Create session service
-	sessionSvc := service.NewSessionService(s, gitSvc, sandboxProvider, sandboxSvc, eventBroker, jobQueue)
+	sessionSvc := service.NewSessionService(s, gitSvc, sandboxSvc, eventBroker, jobQueue)
 
 	// Break circular dependency: SandboxService needs SessionInitializer (which is SessionService)
 	if sandboxSvc != nil {
@@ -94,8 +84,8 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, sandboxSvc, gitSvc)
 
 	// Create remaining services
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxProvider, eventBroker, jobQueue)
-	projectSvc := service.NewProjectService(s, sandboxProvider)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxSvc, eventBroker, jobQueue)
+	projectSvc := service.NewProjectService(s, sandboxSvc)
 	preferenceSvc := service.NewPreferenceService(s)
 
 	modelsSvc := service.NewModelsService(credSvc)
@@ -107,8 +97,6 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxPr
 		credentialService: credSvc,
 		gitService:        gitSvc,
 		gitProvider:       gitProvider,
-		sandboxProvider:   sandboxProvider,
-		sandboxManager:    sandboxManager,
 		sandboxService:    sandboxSvc,
 		sessionService:    sessionSvc,
 		chatService:       chatSvc,
@@ -179,6 +167,11 @@ func (h *Handler) DecodeJSON(r *http.Request, v any) error {
 // Used by main.go to wire up dispatcher notifications.
 func (h *Handler) JobQueue() *jobs.Queue {
 	return h.jobQueue
+}
+
+// SandboxService returns the handler's sandbox service.
+func (h *Handler) SandboxService() *service.SandboxService {
+	return h.sandboxService
 }
 
 // EventBroker returns the handler's event broker for SSE.

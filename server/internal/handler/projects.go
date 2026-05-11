@@ -125,7 +125,7 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetProjectResources(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
-	resources, err := h.projectService.GetProjectResources(r.Context(), projectID)
+	resources, err := h.sandboxService.GetProjectResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName())
 	if err != nil {
 		if errors.Is(err, sandbox.ErrProjectResourcesUnsupported) {
 			h.Error(w, http.StatusNotImplemented, err.Error())
@@ -155,7 +155,7 @@ func (h *Handler) UpdateProjectResources(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := h.projectService.UpdateProjectResources(r.Context(), projectID, req)
+	result, err := h.sandboxService.UpdateProjectResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName(), req)
 	if err != nil {
 		var validationErr *service.RequestValidationError
 		switch {
@@ -176,7 +176,7 @@ func (h *Handler) UpdateProjectResources(w http.ResponseWriter, r *http.Request)
 func (h *Handler) GetProjectInspection(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
-	info, err := h.projectService.GetProjectInspection(r.Context(), projectID)
+	info, err := h.sandboxService.GetProjectInspectionForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName())
 	if err != nil {
 		if errors.Is(err, sandbox.ErrProjectInspectionUnsupported) {
 			h.Error(w, http.StatusNotImplemented, err.Error())
@@ -221,7 +221,7 @@ func (h *Handler) ProjectInspectionTerminalWebSocket(w http.ResponseWriter, r *h
 	ctx := r.Context()
 	termKey := "project-inspection:" + projectID + ":" + termUserID
 	termSession, err := h.terminalManager.GetOrCreate(ctx, termKey, func(ctx context.Context) (sandbox.PTY, error) {
-		return h.projectService.AttachProjectInspection(ctx, projectID, sandbox.AttachOptions{
+		return h.sandboxService.AttachProjectInspectionForProvider(ctx, projectID, h.sandboxService.DefaultProviderName(), sandbox.AttachOptions{
 			Cmd:  []string{"nsenter", "-m", "-t", "1", "--", "/bin/bash", "-lc", "cd /root && exec /bin/bash -l"},
 			Rows: rows,
 			Cols: cols,
@@ -348,19 +348,12 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListProjectCacheVolumes(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
-	// Check if provider supports cache volume listing
-	type cacheVolumeManager interface {
-		ListCacheVolumes(ctx context.Context, projectID string) (any, error)
-	}
-
-	cvm, ok := h.sandboxProvider.(cacheVolumeManager)
-	if !ok {
-		h.Error(w, http.StatusNotImplemented, "Cache volumes not supported by provider")
-		return
-	}
-
-	volumes, err := cvm.ListCacheVolumes(r.Context(), projectID)
+	volumes, err := h.sandboxService.ListProjectCacheVolumes(r.Context(), projectID)
 	if err != nil {
+		if errors.Is(err, sandbox.ErrProjectCacheUnsupported) {
+			h.Error(w, http.StatusNotImplemented, "Cache volumes not supported by provider")
+			return
+		}
 		h.Error(w, http.StatusInternalServerError, "Failed to list cache volumes")
 		return
 	}
@@ -382,13 +375,7 @@ func (h *Handler) DeleteProjectCacheVolume(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cacheManager, ok := h.sandboxProvider.(sandbox.ProjectCacheManager)
-	if !ok {
-		h.Error(w, http.StatusNotImplemented, sandbox.ErrProjectCacheUnsupported.Error())
-		return
-	}
-
-	if err := cacheManager.ClearCache(r.Context(), projectID); err != nil {
+	if err := h.sandboxService.ClearProjectCache(r.Context(), projectID); err != nil {
 		if errors.Is(err, sandbox.ErrProjectCacheUnsupported) {
 			h.Error(w, http.StatusNotImplemented, err.Error())
 			return

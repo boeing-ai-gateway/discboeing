@@ -19,6 +19,10 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
+func testSandboxConfig() *config.Config {
+	return &config.Config{EncryptionKey: []byte("12345678901234567890123456789012")}
+}
+
 type imageIDAwareSessionProvider struct {
 	*mocksandbox.Provider
 	base           *mocksandbox.Provider
@@ -173,7 +177,8 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := mocksandbox.NewProvider()
-	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	project := &model.Project{ID: "project-git", Name: "git project"}
 	if err := testStore.CreateProject(ctx, project); err != nil {
@@ -254,7 +259,8 @@ func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 	provider.CreateFunc = func(context.Context, []byte, string, sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 		return nil, nil, errors.New("provider quota exceeded")
 	}
-	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	project := &model.Project{ID: "project-create-failed", Name: "create failed project"}
 	if err := testStore.CreateProject(ctx, project); err != nil {
@@ -305,7 +311,8 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 		base:           baseProvider,
 		currentImageID: "sha256:new",
 	}
-	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	project := &model.Project{ID: "project-stale", Name: "stale project"}
 	if err := testStore.CreateProject(ctx, project); err != nil {
@@ -387,8 +394,8 @@ func TestSessionServiceGetSessionSyncsNameFromPrimaryThread(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := mocksandbox.NewProvider()
-	sandboxSvc := NewSandboxService(testStore, provider, &config.Config{}, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-1",
@@ -447,8 +454,8 @@ func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := mocksandbox.NewProvider()
-	sandboxSvc := NewSandboxService(testStore, provider, &config.Config{}, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-2",
@@ -501,7 +508,7 @@ func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *
 func TestSessionServicePromoteThreadStatusOnlyRaisesPriority(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-thread-status",
@@ -558,7 +565,7 @@ func TestSessionServicePromoteThreadStatusOnlyRaisesPriority(t *testing.T) {
 func TestSessionServiceStaleThreadSnapshotDoesNotLowerPromotion(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-stale-thread-status",
@@ -793,7 +800,8 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 		return nil
 	}}
 
-	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, enqueuer)
 	sessionSvc.SetSandboxCleanupDelay(30 * 24 * time.Hour)
 
 	before := time.Now()
@@ -854,7 +862,7 @@ func TestSessionServiceDeleteSession_RequeuesRemovingSession(t *testing.T) {
 		return nil
 	}}
 
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
 	if err := sessionSvc.DeleteSession(ctx, workspace.ProjectID, session.ID, enqueuer); err != nil {
 		t.Fatalf("DeleteSession failed: %v", err)
 	}
@@ -898,7 +906,7 @@ func TestSessionServiceDeleteSessionMarksCreateFailedPayload(t *testing.T) {
 		return nil
 	}}
 
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
 	if err := sessionSvc.DeleteSession(ctx, workspace.ProjectID, session.ID, enqueuer); err != nil {
 		t.Fatalf("DeleteSession failed: %v", err)
 	}
@@ -942,7 +950,8 @@ func TestSessionServicePerformDeletion_RemovesCreateFailedSandboxImmediately(t *
 		return nil
 	}}
 
-	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, enqueuer)
 	if err := sessionSvc.PerformDeletionFromDeleteJob(ctx, workspace.ProjectID, session.ID, true); err != nil {
 		t.Fatalf("PerformDeletionFromDeleteJob failed: %v", err)
 	}
@@ -1002,7 +1011,8 @@ func TestSessionServicePerformDeletion_ContinuesWhenSandboxStopFails(t *testing.
 		return nil
 	}}
 
-	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, enqueuer)
 	if err := sessionSvc.PerformDeletion(ctx, workspace.ProjectID, session.ID); err != nil {
 		t.Fatalf("PerformDeletion failed: %v", err)
 	}
@@ -1019,7 +1029,8 @@ func TestSessionServicePerformDeferredSandboxDeletion_SkipsWhenSessionExists(t *
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := &deferredCleanupProvider{Provider: mocksandbox.NewProvider()}
-	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-delete-2",
@@ -1054,7 +1065,8 @@ func TestSessionServicePerformDeferredSandboxDeletion_RemovesWhenSessionStaysDel
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := &deferredCleanupProvider{Provider: mocksandbox.NewProvider()}
-	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	if err := sessionSvc.PerformDeferredSandboxDeletion(ctx, "session-delete-3"); err != nil {
 		t.Fatalf("PerformDeferredSandboxDeletion failed: %v", err)

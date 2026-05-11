@@ -8,6 +8,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
+	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/startup"
 )
 
@@ -44,7 +45,10 @@ func TestGetSystemStatusRefreshesProviderStatusesFirst(t *testing.T) {
 		},
 	})
 
-	h := &Handler{sandboxManager: sandboxManager, systemManager: systemManager}
+	sandboxSvc := service.NewSandboxService(nil, nil, nil, nil, nil, nil, nil)
+	sandboxSvc.SetProviderManager(sandboxManager)
+
+	h := &Handler{sandboxService: sandboxSvc, systemManager: systemManager}
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	rec := httptest.NewRecorder()
 

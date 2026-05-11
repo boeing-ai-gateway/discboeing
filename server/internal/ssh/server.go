@@ -66,6 +66,11 @@ type ConnectionTracker interface {
 	Track(sessionID string) func()
 }
 
+// SandboxGetter fetches sandbox runtime status for a session.
+type SandboxGetter interface {
+	GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error)
+}
+
 // Config holds SSH server configuration.
 type Config struct {
 	// Address to listen on (e.g., ":2222")
@@ -75,8 +80,9 @@ type Config struct {
 	// If the file doesn't exist, a new key will be generated.
 	HostKeyPath string
 
-	// SandboxProvider is used to route connections to containers.
-	SandboxProvider sandbox.Provider
+	// SandboxGetter is used to verify sandbox status when no ensurer is
+	// configured.
+	SandboxGetter SandboxGetter
 
 	// ExecStreamer is used for SSH exec, SFTP, and direct TCP forwarding.
 	ExecStreamer ExecStreamer
@@ -105,7 +111,7 @@ type Config struct {
 // Server is an SSH server that routes connections to sandbox containers.
 type Server struct {
 	config            *ssh.ServerConfig
-	provider          sandbox.Provider
+	sandboxGetter     SandboxGetter
 	execStreamer      ExecStreamer
 	attacher          Attacher
 	sandboxEnsurer    SandboxEnsurer
@@ -122,8 +128,8 @@ type Server struct {
 
 // New creates a new SSH server with the given configuration.
 func New(cfg *Config) (*Server, error) {
-	if cfg.SandboxProvider == nil {
-		return nil, errors.New("sandbox provider is required")
+	if cfg.SandboxGetter == nil && cfg.SandboxEnsurer == nil {
+		return nil, errors.New("sandbox getter or ensurer is required")
 	}
 	execStreamer := cfg.ExecStreamer
 	if execStreamer == nil {
@@ -157,7 +163,7 @@ func New(cfg *Config) (*Server, error) {
 
 	return &Server{
 		config:            sshConfig,
-		provider:          cfg.SandboxProvider,
+		sandboxGetter:     cfg.SandboxGetter,
 		execStreamer:      execStreamer,
 		attacher:          attacher,
 		sandboxEnsurer:    cfg.SandboxEnsurer,
@@ -261,7 +267,7 @@ func (s *Server) handleConnection(netConn net.Conn) {
 		}
 	} else {
 		// No ensurer — require the sandbox to already be running.
-		sb, err := s.provider.Get(ctx, nil, sessionID)
+		sb, err := s.sandboxGetter.GetSandbox(ctx, sessionID)
 		if err != nil {
 			log.Printf("SSH session %s: sandbox not found: %v", sessionID, err)
 			sshConn.Close()
@@ -275,7 +281,7 @@ func (s *Server) handleConnection(netConn net.Conn) {
 	}
 
 	// Create session handler
-	handler := newSessionHandler(sessionID, s.provider, s.execStreamer, s.attacher, s.userInfoFetcher, s.envVarFetcher)
+	handler := newSessionHandler(sessionID, s.execStreamer, s.attacher, s.userInfoFetcher, s.envVarFetcher)
 
 	s.mu.Lock()
 	s.sessions[sessionID] = handler
@@ -346,7 +352,6 @@ func loadOrGenerateHostKey(path string) (ssh.Signer, error) {
 // sessionHandler handles SSH channels for a specific session/sandbox.
 type sessionHandler struct {
 	sessionID       string
-	provider        sandbox.Provider
 	execStreamer    ExecStreamer
 	attacher        Attacher
 	userInfoFetcher UserInfoFetcher
@@ -358,10 +363,9 @@ type sessionUser struct {
 	homeDir string
 }
 
-func newSessionHandler(sessionID string, provider sandbox.Provider, execStreamer ExecStreamer, attacher Attacher, userInfoFetcher UserInfoFetcher, envVarFetcher EnvVarFetcher) *sessionHandler {
+func newSessionHandler(sessionID string, execStreamer ExecStreamer, attacher Attacher, userInfoFetcher UserInfoFetcher, envVarFetcher EnvVarFetcher) *sessionHandler {
 	return &sessionHandler{
 		sessionID:       sessionID,
-		provider:        provider,
 		execStreamer:    execStreamer,
 		attacher:        attacher,
 		userInfoFetcher: userInfoFetcher,

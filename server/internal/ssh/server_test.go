@@ -14,10 +14,18 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
 )
 
+type testSandboxGetter struct {
+	provider *mock.Provider
+}
+
+func (g testSandboxGetter) GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+	return g.provider.Get(ctx, nil, sessionID)
+}
+
 func TestNew_RequiresSandboxProvider(t *testing.T) {
 	_, err := New(&Config{
-		Address:         ":0",
-		SandboxProvider: nil,
+		Address:       ":0",
+		SandboxGetter: nil,
 	})
 	if err == nil {
 		t.Fatal("expected error when sandbox provider is nil")
@@ -32,11 +40,11 @@ func TestNew_GeneratesHostKey(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "test_host_key")
 
 	srv, err := New(&Config{
-		Address:         ":0",
-		HostKeyPath:     keyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       ":0",
+		HostKeyPath:   keyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -56,11 +64,11 @@ func TestNew_LoadsExistingHostKey(t *testing.T) {
 
 	// Create first server to generate key
 	srv1, err := New(&Config{
-		Address:         ":0",
-		HostKeyPath:     keyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       ":0",
+		HostKeyPath:   keyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create first server: %v", err)
@@ -75,11 +83,11 @@ func TestNew_LoadsExistingHostKey(t *testing.T) {
 
 	// Create second server - should load existing key
 	srv2, err := New(&Config{
-		Address:         ":0",
-		HostKeyPath:     keyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       ":0",
+		HostKeyPath:   keyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create second server: %v", err)
@@ -113,11 +121,11 @@ func TestServer_AcceptsConnection(t *testing.T) {
 	}
 
 	srv, err := New(&Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   getSharedTestKeyPath(), // Use pre-generated key
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -157,11 +165,11 @@ func TestServer_RejectsUnknownSession(t *testing.T) {
 	provider := mock.NewProvider()
 
 	srv, err := New(&Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   getSharedTestKeyPath(), // Use pre-generated key
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -203,11 +211,11 @@ func TestServer_RejectsStoppedSandbox(t *testing.T) {
 	}
 
 	srv, err := New(&Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     getSharedTestKeyPath(), // Use pre-generated key
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   getSharedTestKeyPath(), // Use pre-generated key
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -335,11 +343,11 @@ func TestWindowChangeResizesPTY(t *testing.T) {
 	}}
 
 	srv, err := New(&Config{
-		Address:         "127.0.0.1:0",
-		HostKeyPath:     getSharedTestKeyPath(),
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        attacher,
+		Address:       "127.0.0.1:0",
+		HostKeyPath:   getSharedTestKeyPath(),
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      attacher,
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -526,10 +534,10 @@ func TestServer_Stop(t *testing.T) {
 	provider := mock.NewProvider()
 
 	srv, err := New(&Config{
-		Address:         "127.0.0.1:0",
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       "127.0.0.1:0",
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)

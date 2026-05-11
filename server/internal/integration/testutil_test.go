@@ -46,6 +46,7 @@ type TestServer struct {
 	DB              *database.DB
 	GitProvider     git.Provider
 	SandboxProvider sandbox.Provider
+	SandboxService  *service.SandboxService
 	MockSandbox     *mock.Provider // Access to mock for test assertions
 	Dispatcher      *dispatcher.Service
 	EventPoller     *events.Poller
@@ -171,7 +172,10 @@ func NewTestServer(t *testing.T) *TestServer {
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
 
-	h := handler.New(s, cfg, gitProvider, mockSandbox, sandboxManager, eventBroker, jobQueue, nil)
+	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
+	sandboxSvc.SetProviderManager(sandboxManager)
+
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
 
 	// Create and start dispatcher for job processing
 	cfg.DispatcherEnabled = true
@@ -181,11 +185,9 @@ func NewTestServer(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker, jobQueue)
-
 	gitSvc := service.NewGitService(s, gitProvider)
-	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
-	sessionSvc := service.NewSessionService(s, gitSvc, mockSandbox, sandboxSvc, eventBroker, jobQueue)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxSvc, eventBroker, jobQueue)
+	sessionSvc := service.NewSessionService(s, gitSvc, sandboxSvc, eventBroker, jobQueue)
 	sandboxSvc.SetSessionInitializer(sessionSvc)
 
 	disp := dispatcher.NewService(s, cfg, eventBroker)
@@ -211,6 +213,7 @@ func NewTestServer(t *testing.T) *TestServer {
 		DB:              db,
 		GitProvider:     gitProvider,
 		SandboxProvider: mockSandbox,
+		SandboxService:  sandboxSvc,
 		MockSandbox:     mockSandbox,
 		Dispatcher:      disp,
 		EventPoller:     eventPoller,
@@ -476,7 +479,10 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
 
-	h := handler.New(s, cfg, gitProvider, mockSandbox, sandboxManager, eventBroker, jobQueue, nil)
+	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
+	sandboxSvc.SetProviderManager(sandboxManager)
+
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
 
 	// Create and start dispatcher for job processing
 	cfg.DispatcherEnabled = true
@@ -486,11 +492,9 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	cfg.DispatcherJobTimeout = 30 * time.Second
 	cfg.DispatcherStaleJobTimeout = 1 * time.Minute
 
-	workspaceSvc := service.NewWorkspaceService(s, gitProvider, mockSandbox, eventBroker, jobQueue)
-
 	gitSvc := service.NewGitService(s, gitProvider)
-	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
-	sessionSvc := service.NewSessionService(s, gitSvc, mockSandbox, sandboxSvc, eventBroker, jobQueue)
+	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxSvc, eventBroker, jobQueue)
+	sessionSvc := service.NewSessionService(s, gitSvc, sandboxSvc, eventBroker, jobQueue)
 	sandboxSvc.SetSessionInitializer(sessionSvc)
 
 	disp := dispatcher.NewService(s, cfg, eventBroker)
@@ -516,6 +520,7 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 		DB:              db,
 		GitProvider:     gitProvider,
 		SandboxProvider: mockSandbox,
+		SandboxService:  sandboxSvc,
 		MockSandbox:     mockSandbox,
 		Dispatcher:      disp,
 		EventPoller:     eventPoller,

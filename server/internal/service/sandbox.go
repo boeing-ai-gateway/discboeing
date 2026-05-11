@@ -20,6 +20,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	sandboxlocal "github.com/obot-platform/discobot/server/internal/sandbox/local"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -32,8 +33,10 @@ type GitConfigProvider func(ctx context.Context) (name, email string)
 type SandboxService struct {
 	store              *store.Store
 	provider           sandbox.Provider
+	providerManager    *sandbox.Manager
 	cfg                *config.Config
 	credentialFetcher  CredentialFetcher
+	credentialService  *CredentialService
 	eventBroker        *events.Broker
 	jobEnqueuer        JobEnqueuer
 	sessionInitializer SessionInitializer
@@ -77,6 +80,18 @@ func NewSandboxService(s *store.Store, p sandbox.Provider, cfg *config.Config, c
 	}
 }
 
+// SetProviderManager sets the provider manager used for provider catalog and
+// project-scoped capability operations.
+func (s *SandboxService) SetProviderManager(manager *sandbox.Manager) {
+	s.providerManager = manager
+}
+
+// SetCredentialService sets the credential service used to validate provider
+// instance credential configuration.
+func (s *SandboxService) SetCredentialService(credSvc *CredentialService) {
+	s.credentialService = credSvc
+}
+
 // SetSessionInitializer sets the session initializer (post-construction to break circular dependency).
 func (s *SandboxService) SetSessionInitializer(init SessionInitializer) {
 	s.sessionInitializer = init
@@ -112,6 +127,30 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 // persisted provider state when the provider requires it.
 func (s *SandboxService) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
 	return s.acquireHTTPClient(ctx, sessionID)
+}
+
+// GetSandbox returns the current provider state for a session sandbox using
+// persisted provider state when the provider requires it.
+func (s *SandboxService) GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+	return s.getSandbox(ctx, sessionID)
+}
+
+// ClonesGitWorkspaces reports whether the provider expects git URL workspaces
+// to be cloned inside the sandbox instead of on the host.
+func (s *SandboxService) ClonesGitWorkspaces() bool {
+	return sandboxClonesGitWorkspace(s.provider)
+}
+
+// ListSandboxes returns all sandboxes known to the underlying runtime. This is
+// intended for routing and reconciliation code that needs to discover existing
+// sessions without directly depending on the provider.
+func (s *SandboxService) ListSandboxes(ctx context.Context) ([]*sandbox.Sandbox, error) {
+	return s.provider.List(ctx)
+}
+
+// WatchSandboxEvents returns runtime sandbox state events from the underlying provider.
+func (s *SandboxService) WatchSandboxEvents(ctx context.Context) (<-chan sandbox.StateEvent, error) {
+	return s.provider.Watch(ctx)
 }
 
 // GetSessionActivityIfRunning returns the sandbox's aggregate thread activity
@@ -240,6 +279,73 @@ func (s *SandboxService) removeSandbox(ctx context.Context, sessionID string, op
 		return err
 	}
 	return s.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+}
+
+// RemoveSessionSandbox removes a session sandbox and persists provider state.
+func (s *SandboxService) RemoveSessionSandbox(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+	return s.removeSandbox(ctx, sessionID, opts...)
+}
+
+// StartSessionSandbox starts a session sandbox and persists provider state.
+func (s *SandboxService) StartSessionSandbox(ctx context.Context, sessionID string) error {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	newState, err := s.provider.Start(ctx, state, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+}
+
+// PrepareSessionSandboxState prepares and persists provider state before
+// sandbox creation.
+func (s *SandboxService) PrepareSessionSandboxState(ctx context.Context, sessionID string, opts sandbox.CreateOptions) error {
+	state, err := s.provider.PrepareState(ctx, sessionID, opts)
+	if err != nil {
+		return err
+	}
+	return s.saveProviderState(ctx, sessionID, state)
+}
+
+// CreateSessionSandbox creates a session sandbox and persists returned state.
+func (s *SandboxService) CreateSessionSandbox(ctx context.Context, sessionID string, opts sandbox.CreateOptions) error {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	_, newState, err := s.provider.Create(ctx, state, sessionID, opts)
+	if err != nil {
+		return err
+	}
+	return s.saveProviderState(ctx, sessionID, newState)
+}
+
+// SandboxImage returns the provider image reference used for new sandboxes.
+func (s *SandboxService) SandboxImage() string {
+	return s.provider.Image()
+}
+
+// SandboxImageExists reports whether the provider image is already present.
+func (s *SandboxService) SandboxImageExists(ctx context.Context) bool {
+	return s.provider.ImageExists(ctx)
+}
+
+// WaitForSandboxImageOpsReady waits for the image operation provider to become
+// ready when the underlying provider exposes a readiness hook.
+func (s *SandboxService) WaitForSandboxImageOpsReady(ctx context.Context) error {
+	return waitForSandboxImageOpsReady(ctx, providerForSandboxImageOps(s.provider))
+}
+
+// CurrentSandboxImageID returns the current provider image ID when available.
+func (s *SandboxService) CurrentSandboxImageID(ctx context.Context) (string, error) {
+	imageProvider := providerForSandboxImageOps(s.provider)
+	imageIDProvider, ok := imageProvider.(sandbox.CurrentImageIDProvider)
+	if !ok {
+		return "", nil
+	}
+	return imageIDProvider.CurrentImageID(ctx)
 }
 
 // EnsureSandboxReady checks the session state from the database and ensures
@@ -594,6 +700,29 @@ func (s *SandboxService) StopForSession(ctx context.Context, sessionID string) e
 	return s.stopSandbox(ctx, sessionID, 10*time.Second)
 }
 
+// RemoveForSession removes a session sandbox and its volumes using persisted
+// provider state when available.
+func (s *SandboxService) RemoveForSession(ctx context.Context, sessionID string) error {
+	return s.removeSandbox(ctx, sessionID, sandbox.RemoveVolumes())
+}
+
+// RemoveForDeletedSession removes a session sandbox after its database record
+// has been deleted. Missing sandboxes are treated as already removed, and any
+// retained provider state is cleared.
+func (s *SandboxService) RemoveForDeletedSession(ctx context.Context, sessionID string) error {
+	err := s.RemoveForSession(ctx, sessionID)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, sandbox.ErrNotFound) {
+		if deleteErr := s.store.DeleteSessionSandboxState(ctx, sessionID); deleteErr != nil {
+			log.Printf("Failed to delete missing sandbox state for session %s: %v", sessionID, deleteErr)
+		}
+		return nil
+	}
+	return err
+}
+
 // probeSandboxHealth does a fast, single-attempt HTTP health check against the
 // sandbox's agent-api. It uses a short timeout (2s) to quickly detect dead or
 // dying containers without blocking for the full retry backoff (~14s).
@@ -698,11 +827,6 @@ func (s *SandboxService) DestroyForSession(ctx context.Context, sessionID string
 	return err
 }
 
-// Provider returns the underlying provider for advanced operations.
-func (s *SandboxService) Provider() sandbox.Provider {
-	return s.provider
-}
-
 type sandboxImageOpsReadyWaiter interface {
 	WaitForReady(ctx context.Context) error
 }
@@ -722,6 +846,11 @@ func waitForSandboxImageOpsReady(ctx context.Context, provider sandbox.Provider)
 		return nil
 	}
 	return waiter.WaitForReady(ctx)
+}
+
+func sandboxClonesGitWorkspace(provider sandbox.Provider) bool {
+	_, isLocal := provider.(*sandboxlocal.Provider)
+	return !isLocal
 }
 
 func sandboxUsesExpectedImage(sb *sandbox.Sandbox, expectedImage, expectedImageID string) bool {

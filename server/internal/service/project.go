@@ -17,8 +17,8 @@ import (
 
 // ProjectService handles project operations
 type ProjectService struct {
-	store    *store.Store
-	provider sandbox.Provider
+	store          *store.Store
+	sandboxService *SandboxService
 }
 
 // Project represents a project (for API responses)
@@ -110,10 +110,10 @@ func newValidationError(message string) error {
 }
 
 // NewProjectService creates a new project service
-func NewProjectService(s *store.Store, p sandbox.Provider) *ProjectService {
+func NewProjectService(s *store.Store, sandboxService *SandboxService) *ProjectService {
 	return &ProjectService{
-		store:    s,
-		provider: p,
+		store:          s,
+		sandboxService: sandboxService,
 	}
 }
 
@@ -210,168 +210,6 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID, name stri
 	}, nil
 }
 
-// GetProjectResources returns project-scoped VM resources when supported.
-func (s *ProjectService) GetProjectResources(ctx context.Context, projectID string) (*ProjectResources, error) {
-	return s.GetProjectResourcesForProvider(ctx, projectID, s.provider)
-}
-
-// GetProjectResourcesForProvider returns project-scoped VM resources for a specific provider.
-func (s *ProjectService) GetProjectResourcesForProvider(ctx context.Context, projectID string, provider sandbox.Provider) (*ProjectResources, error) {
-	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
-		return nil, err
-	}
-
-	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
-	if !ok {
-		return nil, sandbox.ErrProjectResourcesUnsupported
-	}
-
-	info, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ProjectResources{
-		Provider: info.Provider,
-		VM:       projectVMResourcesFromInfo(info),
-	}, nil
-}
-
-// UpdateProjectResources updates project-scoped VM resources when supported.
-func (s *ProjectService) UpdateProjectResources(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
-	return s.UpdateProjectResourcesForProvider(ctx, projectID, s.provider, req)
-}
-
-// UpdateProjectResourcesForProvider updates project-scoped VM resources for a specific provider.
-func (s *ProjectService) UpdateProjectResourcesForProvider(ctx context.Context, projectID string, provider sandbox.Provider, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
-	if req.MemoryMB == nil && req.DataDiskGB == nil {
-		return nil, newValidationError("at least one resource must be provided")
-	}
-
-	project, err := s.store.GetProjectByID(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
-	if !ok {
-		return nil, sandbox.ErrProjectResourcesUnsupported
-	}
-
-	currentInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.MemoryMB != nil {
-		if *req.MemoryMB <= 0 {
-			return nil, newValidationError("memoryMB must be greater than 0")
-		}
-		if *req.MemoryMB%1024 != 0 {
-			return nil, newValidationError("memoryMB must be a whole GiB multiple")
-		}
-	}
-	if req.DataDiskGB != nil && *req.DataDiskGB <= 0 {
-		return nil, newValidationError("dataDiskGB must be greater than 0")
-	}
-	if req.DataDiskGB != nil && *req.DataDiskGB < currentInfo.DataDiskGB {
-		return nil, newValidationError("data disk size can only increase")
-	}
-
-	previousMemory := project.VZMemoryMB
-	previousDisk := project.VZDataDiskGB
-	if req.MemoryMB != nil {
-		memoryMB := *req.MemoryMB
-		project.VZMemoryMB = &memoryMB
-	}
-	if req.DataDiskGB != nil {
-		dataDiskGB := *req.DataDiskGB
-		project.VZDataDiskGB = &dataDiskGB
-	}
-
-	if err := s.store.UpdateProject(ctx, project); err != nil {
-		return nil, err
-	}
-
-	rollback := func() {
-		project.VZMemoryMB = previousMemory
-		project.VZDataDiskGB = previousDisk
-		if updateErr := s.store.UpdateProject(context.Background(), project); updateErr != nil {
-			log.Printf("Warning: failed to roll back project resources for %s: %v", projectID, updateErr)
-		}
-	}
-
-	sandboxReq := sandbox.UpdateProjectResourcesRequest{
-		MemoryMB:   req.MemoryMB,
-		DataDiskGB: req.DataDiskGB,
-	}
-	if err := resourceManager.ApplyProjectResourceUpdate(ctx, projectID, sandboxReq); err != nil {
-		rollback()
-		return nil, err
-	}
-
-	updatedInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
-	if err != nil {
-		rollback()
-		return nil, err
-	}
-
-	return &ProjectResourcesUpdateResult{
-		Provider:        updatedInfo.Provider,
-		Previous:        projectVMResourcesFromInfo(currentInfo),
-		Current:         projectVMResourcesFromInfo(updatedInfo),
-		RestartRequired: true,
-	}, nil
-}
-
-// GetProjectInspection returns inspection-container access details when supported.
-func (s *ProjectService) GetProjectInspection(ctx context.Context, projectID string) (*ProjectInspection, error) {
-	return s.GetProjectInspectionForProvider(ctx, projectID, s.provider)
-}
-
-// GetProjectInspectionForProvider returns inspection access details for a specific provider.
-func (s *ProjectService) GetProjectInspectionForProvider(ctx context.Context, projectID string, provider sandbox.Provider) (*ProjectInspection, error) {
-	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
-		return nil, err
-	}
-
-	inspectionManager, ok := provider.(sandbox.ProjectInspectionManager)
-	if !ok {
-		return nil, sandbox.ErrProjectInspectionUnsupported
-	}
-
-	info, err := inspectionManager.GetProjectInspectionInfo(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ProjectInspection{
-		Provider:      info.Provider,
-		Available:     info.Available,
-		ContainerName: info.ContainerName,
-		Scope:         info.Scope,
-	}, nil
-}
-
-// AttachProjectInspection attaches to the project's inspection container shell.
-func (s *ProjectService) AttachProjectInspection(ctx context.Context, projectID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
-	return s.AttachProjectInspectionForProvider(ctx, projectID, s.provider, opts)
-}
-
-// AttachProjectInspectionForProvider attaches to a specific provider's inspection shell.
-func (s *ProjectService) AttachProjectInspectionForProvider(ctx context.Context, projectID string, provider sandbox.Provider, opts sandbox.AttachOptions) (sandbox.PTY, error) {
-	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
-		return nil, err
-	}
-
-	inspectionManager, ok := provider.(sandbox.ProjectInspectionManager)
-	if !ok {
-		return nil, sandbox.ErrProjectInspectionUnsupported
-	}
-
-	return inspectionManager.AttachProjectInspection(ctx, projectID, opts)
-}
-
 // DeleteProject deletes a project and cleans up associated resources
 func (s *ProjectService) DeleteProject(ctx context.Context, projectID string) error {
 	// Delete from database first
@@ -380,8 +218,8 @@ func (s *ProjectService) DeleteProject(ctx context.Context, projectID string) er
 	}
 
 	// Clean up provider-managed resources (cache volumes, BuildKit containers, networks, etc.)
-	if s.provider != nil {
-		if err := s.provider.RemoveProject(ctx, projectID); err != nil {
+	if s.sandboxService != nil {
+		if err := s.sandboxService.RemoveProject(ctx, projectID); err != nil {
 			log.Printf("Warning: failed to remove provider resources for project %s: %v", projectID, err)
 		}
 	}

@@ -49,27 +49,6 @@ func TestLoadSandboxImageRemoteDefaultsBlank(t *testing.T) {
 	}
 }
 
-func TestLoadSandboxImageMode(t *testing.T) {
-	t.Setenv("SANDBOX_IMAGE_MODE", "remote")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.SandboxImageMode != "remote" {
-		t.Fatalf("expected SandboxImageMode remote, got %q", cfg.SandboxImageMode)
-	}
-}
-
-func TestLoadRejectsInvalidSandboxImageMode(t *testing.T) {
-	t.Setenv("SANDBOX_IMAGE_MODE", "nearby")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected Load() to fail for invalid sandbox image mode")
-	}
-}
-
 func TestLoadRejectsIncompleteStaticHTTPSConfig(t *testing.T) {
 	t.Setenv("HTTPS_PORT", "3443")
 	t.Setenv("HTTPS_TLS_MODE", "static")

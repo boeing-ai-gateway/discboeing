@@ -127,7 +127,7 @@ func TestServiceSubdomainPattern(t *testing.T) {
 	}
 }
 
-// mockSandboxProvider implements sandbox.Provider for testing
+// mockSandboxService implements the narrow service-proxy sandbox interface for testing.
 type mockSandboxProvider struct {
 	sandboxes    map[string]*sandbox.Sandbox
 	client       *http.Client
@@ -162,7 +162,7 @@ func (m *mockSandboxProvider) Remove(_ context.Context, state []byte, _ string, 
 	return state, nil
 }
 
-func (m *mockSandboxProvider) Get(_ context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
+func (m *mockSandboxProvider) GetSandbox(_ context.Context, sessionID string) (*sandbox.Sandbox, error) {
 	if sb, ok := m.sandboxes[sessionID]; ok {
 		return sb, nil
 	}
@@ -173,7 +173,7 @@ func (m *mockSandboxProvider) GetSecret(_ context.Context, _ []byte, _ string) (
 	return "", nil
 }
 
-func (m *mockSandboxProvider) List(_ context.Context) ([]*sandbox.Sandbox, error) {
+func (m *mockSandboxProvider) ListSandboxes(_ context.Context) ([]*sandbox.Sandbox, error) {
 	var result []*sandbox.Sandbox
 	for _, sb := range m.sandboxes {
 		result = append(result, sb)
@@ -181,7 +181,7 @@ func (m *mockSandboxProvider) List(_ context.Context) ([]*sandbox.Sandbox, error
 	return result, nil
 }
 
-func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
 	m.acquireCalls++
 	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }
@@ -200,16 +200,6 @@ func (m *mockSandboxProvider) RemoveProject(_ context.Context, _ string) error {
 
 func (m *mockSandboxProvider) ClearCache(_ context.Context, _ string) error {
 	return nil
-}
-
-type mockSandboxHTTPClientAcquirer struct {
-	client     *http.Client
-	sessionIDs []string
-}
-
-func (m *mockSandboxHTTPClientAcquirer) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	m.sessionIDs = append(m.sessionIDs, sessionID)
-	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }
 
 // TestServiceProxyNonServiceSubdomain verifies that non-service requests pass through
@@ -432,7 +422,10 @@ func TestServiceProxyUsesHTTPClientAcquirer(t *testing.T) {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{}).DialContext,
 	}
-	acquirer := &mockSandboxHTTPClientAcquirer{
+	provider := &mockSandboxProvider{
+		sandboxes: map[string]*sandbox.Sandbox{
+			sessionID: {SessionID: sessionID},
+		},
 		client: &http.Client{
 			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = backendURL.Scheme
@@ -441,18 +434,12 @@ func TestServiceProxyUsesHTTPClientAcquirer(t *testing.T) {
 			}),
 		},
 	}
-	provider := &mockSandboxProvider{
-		sandboxes: map[string]*sandbox.Sandbox{
-			sessionID: {SessionID: sessionID},
-		},
-		client: &http.Client{},
-	}
 
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("next handler should not be called for valid service subdomain")
 	})
 
-	middleware := ServiceProxyWithHTTPClientAcquirer(provider, nil, acquirer)(next)
+	middleware := ServiceProxy(provider, nil)(next)
 	host := sessionID + "-svc-ui.localhost:3001"
 	req := httptest.NewRequest("GET", "http://"+host+"/hello", nil)
 	req.Host = host
@@ -466,11 +453,8 @@ func TestServiceProxyUsesHTTPClientAcquirer(t *testing.T) {
 	if proxiedPath != "/services/ui/http/hello" {
 		t.Fatalf("proxied path = %q, want /services/ui/http/hello", proxiedPath)
 	}
-	if provider.acquireCalls != 0 {
-		t.Fatalf("provider AcquireHTTPClient called %d times, want 0", provider.acquireCalls)
-	}
-	if len(acquirer.sessionIDs) != 1 || acquirer.sessionIDs[0] != sessionID {
-		t.Fatalf("acquirer sessionIDs = %v, want [%s]", acquirer.sessionIDs, sessionID)
+	if provider.acquireCalls != 1 {
+		t.Fatalf("AcquireHTTPClient called %d times, want 1", provider.acquireCalls)
 	}
 }
 

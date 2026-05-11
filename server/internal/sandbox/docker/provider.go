@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -232,15 +233,18 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 }
 
 func (p *Provider) Definition() sandbox.ProviderDefinition {
+	configFields := []sandbox.ProviderConfigField{
+		{Key: "host", Label: "Docker host", Type: "text", Placeholder: "unix:///var/run/docker.sock", Description: "Optional Docker daemon socket or host URL.", Advanced: true},
+		{Key: "network", Label: "Docker network", Type: "text", Placeholder: "bridge", Description: "Optional Docker network for sandbox containers.", Advanced: true},
+	}
+	if runtime.GOOS == "windows" {
+		configFields = append(configFields, sandbox.ProviderConfigField{Key: "wslDistro", Label: "WSL distro", Type: "text", Placeholder: "Ubuntu", Description: "Optional Windows WSL distro used to proxy host Docker access.", Advanced: true})
+	}
 	return sandbox.ProviderDefinition{
-		Name:        "Docker",
-		Icon:        "simple:docker",
-		Description: "Docker sandbox driver",
-		ConfigFields: []sandbox.ProviderConfigField{
-			{Key: "host", Label: "Docker host", Type: "text", Placeholder: "unix:///var/run/docker.sock", Description: "Optional Docker daemon socket or host URL.", Advanced: true},
-			{Key: "network", Label: "Docker network", Type: "text", Placeholder: "bridge", Description: "Optional Docker network for sandbox containers.", Advanced: true},
-			{Key: "wslDistro", Label: "WSL distro", Type: "text", Placeholder: "Ubuntu", Description: "Optional Windows WSL distro used to proxy host Docker access.", Advanced: true},
-		},
+		Name:         "Docker",
+		Icon:         "simple:docker",
+		Description:  "Docker sandbox driver",
+		ConfigFields: configFields,
 	}
 }
 

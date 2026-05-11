@@ -149,8 +149,8 @@ wrappers around the default provider.
    - Uses the exe.dev HTTPS command endpoint (`POST /exec`) for VM lifecycle
    - Creates one exe.dev VM per Discobot session
    - Routes sandbox agent HTTP traffic through the VM's `*.exe.xyz` hostname
-   - Enable with `EXEDEV_PROVIDER_ENABLED=true`, `EXEDEV_TOKEN`, and optionally
-     `SANDBOX_PROVIDER=exedev`
+   - Enable by creating an exe.dev sandbox provider instance that references an
+     exe.dev API credential
 
 Non-local providers use `SANDBOX_IMAGE_REMOTE` by default so remote runtimes can
 pull a published image even when local development uses a local-only
@@ -158,8 +158,8 @@ pull a published image even when local development uses a local-only
 optional `sandbox.LocalityProvider` capability. Docker is local when
 `DOCKER_HOST` is empty or points at a local socket (`unix://`, `npipe://`, or
 `fd://`), and remote when it is explicitly configured with a remote host such as
-`tcp://...` or `ssh://...`. `SANDBOX_IMAGE_MODE=local|remote` can override the
-locality-based default for advanced setups.
+`tcp://...` or `ssh://...`. Provider instances can override their configured
+image directly when they need something other than the locality-based default.
 
 7. **Mock Provider**: In-memory testing
    - No real sandboxes created

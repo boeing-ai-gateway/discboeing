@@ -209,11 +209,23 @@ func main() {
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
 
+	// Create a shared connection tracker so the idle monitor can see live SSH and
+	// service-proxy connections and avoid stopping sandboxes while they are in use.
+	connTracker := conntrack.New()
+
+	var sandboxSvc *service.SandboxService
+	if sandboxProvider != nil {
+		credFetcher := service.MakeCredentialFetcher(s, credSvc)
+		sandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
+		sandboxSvc.SetProviderManager(sandboxManager)
+		sandboxSvc.SetCredentialService(credSvc)
+	}
+
 	// Start sandbox watcher to sync session states with sandbox states
 	// This handles external changes (e.g., Docker containers deleted outside Discobot)
 	var sandboxWatcherCancel context.CancelFunc
-	if sandboxProvider != nil {
-		sandboxWatcher := service.NewSandboxWatcher(sandboxProvider, s, eventBroker)
+	if sandboxSvc != nil {
+		sandboxWatcher := service.NewSandboxWatcher(sandboxSvc, s, eventBroker)
 		var watcherCtx context.Context
 		watcherCtx, sandboxWatcherCancel = context.WithCancel(context.Background())
 		go func() {
@@ -223,15 +235,9 @@ func main() {
 		}()
 	}
 
-	// Create a shared connection tracker so the idle monitor can see live SSH and
-	// service-proxy connections and avoid stopping sandboxes while they are in use.
-	connTracker := conntrack.New()
-
 	// Start SSH server for VS Code Remote SSH and other SSH-based workflows
 	var sshServer *ssh.Server
-	if sandboxProvider != nil && cfg.SSHEnabled {
-		// Create sandbox service for UserInfoFetcher
-		sshSandboxSvc := service.NewSandboxService(s, sandboxProvider, cfg, nil, nil, nil, nil)
+	if sandboxSvc != nil && cfg.SSHEnabled {
 		// Create env var services for SSH sessions.
 		var sshEnvVarFetcher ssh.EnvVarFetcher
 		sshEnvVarAdapter := &sshEnvVarAdapter{}
@@ -246,10 +252,10 @@ func main() {
 		sshServer, err = ssh.New(&ssh.Config{
 			Address:           fmt.Sprintf(":%d", cfg.SSHPort),
 			HostKeyPath:       cfg.SSHHostKeyPath,
-			SandboxProvider:   sandboxProvider,
-			ExecStreamer:      sshSandboxSvc,
-			Attacher:          sshSandboxSvc,
-			UserInfoFetcher:   &sshUserInfoAdapter{svc: sshSandboxSvc},
+			SandboxGetter:     sandboxSvc,
+			ExecStreamer:      sandboxSvc,
+			Attacher:          sandboxSvc,
+			UserInfoFetcher:   &sshUserInfoAdapter{svc: sandboxSvc},
 			EnvVarFetcher:     sshEnvVarFetcher,
 			ConnectionTracker: connTracker,
 		})
@@ -274,22 +280,17 @@ func main() {
 	var sessionThreadStatusSyncer *service.SessionThreadStatusSyncer
 	if cfg.DispatcherEnabled {
 		disp = dispatcher.NewService(s, cfg, eventBroker)
+		dispSandboxSvc = sandboxSvc
 
 		// Register workspace init executor
-		workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxProvider, eventBroker, jobQueue)
+		workspaceSvc := service.NewWorkspaceService(s, gitProvider, dispSandboxSvc, eventBroker, jobQueue)
 		disp.RegisterExecutor(dispatcher.NewWorkspaceInitExecutor(workspaceSvc))
 		disp.RegisterExecutor(dispatcher.NewWorkspaceDeleteExecutor(workspaceSvc))
 
 		// Register session init, delete, and commit executors if sandbox provider is available
-		if sandboxProvider != nil {
+		if dispSandboxSvc != nil {
 			gitSvc := service.NewGitService(s, gitProvider)
-			credSvc, err := service.NewCredentialService(s, cfg)
-			if err != nil {
-				log.Fatalf("Failed to create credential service for dispatcher: %v", err)
-			}
-			credFetcher := service.MakeCredentialFetcher(s, credSvc)
-			dispSandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
-			sessionSvc = service.NewSessionService(s, gitSvc, sandboxProvider, dispSandboxSvc, eventBroker, jobQueue)
+			sessionSvc = service.NewSessionService(s, gitSvc, dispSandboxSvc, eventBroker, jobQueue)
 			sessionSvc.SetSandboxCleanupDelay(cfg.SessionSandboxCleanupDelay)
 			dispChatSvc = service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, dispSandboxSvc, gitSvc)
 			dispSandboxSvc.SetSessionInitializer(sessionSvc)
@@ -310,7 +311,7 @@ func main() {
 		}
 
 		// Start sandbox idle monitor to auto-stop idle sessions
-		if sandboxProvider != nil && sessionSvc != nil && cfg.SandboxIdleTimeout > 0 {
+		if sandboxSvc != nil && sessionSvc != nil && cfg.SandboxIdleTimeout > 0 {
 			sandboxIdleMonitor = service.NewSandboxIdleMonitor(
 				s,
 				dispSandboxSvc,
@@ -326,7 +327,7 @@ func main() {
 		}
 
 		// Keep persisted session thread summaries fresh even when no UI stream is connected.
-		if sandboxProvider != nil && sessionSvc != nil && cfg.ThreadStatusSyncInterval > 0 {
+		if sandboxSvc != nil && sessionSvc != nil && cfg.ThreadStatusSyncInterval > 0 {
 			sessionThreadStatusSyncer = service.NewSessionThreadStatusSyncer(
 				s,
 				sessionSvc,
@@ -403,12 +404,8 @@ func main() {
 	// and proxies to agent-api's HTTP proxy endpoint without credentials.
 	// IMPORTANT: This must run BEFORE CORS middleware so that OPTIONS requests
 	// are forwarded to the service (which handles its own CORS).
-	if sandboxProvider != nil {
-		serviceProxySandboxSvc := dispSandboxSvc
-		if serviceProxySandboxSvc == nil {
-			serviceProxySandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, nil, nil, nil, connTracker)
-		}
-		r.Use(middleware.ServiceProxyWithHTTPClientAcquirer(sandboxProvider, connTracker, serviceProxySandboxSvc))
+	if sandboxSvc != nil {
+		r.Use(middleware.ServiceProxy(sandboxSvc, connTracker))
 	}
 
 	if len(cfg.CORSOrigins) > 0 {
@@ -428,7 +425,7 @@ func main() {
 	r.Use(middleware.DesktopShellAuth(cfg))
 
 	// Initialize handlers
-	h := handler.New(s, cfg, gitProvider, sandboxProvider, sandboxManager, eventBroker, jobQueue, systemManager)
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, systemManager)
 	spaHandler, err := static.NewSPAHandler()
 	if err != nil {
 		log.Fatalf("Failed to initialize embedded UI handler: %v", err)
@@ -1887,7 +1884,7 @@ func main() {
 	var debugDockerServer *handler.DebugDockerServer
 	if cfg.DebugDocker {
 		var err error
-		debugDockerServer, err = handler.NewDebugDockerServer(sandboxManager, "local", cfg.DebugDockerPort)
+		debugDockerServer, err = handler.NewDebugDockerServer(h.SandboxService(), "local", cfg.DebugDockerPort)
 		if err != nil {
 			log.Printf("Warning: Failed to create debug Docker proxy: %v", err)
 		} else {
@@ -2071,12 +2068,6 @@ func remoteSandboxImage(cfg *config.Config) string {
 }
 
 func sandboxImageForProvider(cfg *config.Config, providerName string) string {
-	switch sandboxImageMode(cfg) {
-	case "local":
-		return localSandboxImage(cfg)
-	case "remote":
-		return remoteSandboxImage(cfg)
-	}
 	if isLocalSandboxProvider(cfg, providerName) {
 		return localSandboxImage(cfg)
 	}
@@ -2088,18 +2079,6 @@ func localSandboxImage(cfg *config.Config) string {
 		return cfg.SandboxImage
 	}
 	return config.DefaultSandboxImage()
-}
-
-func sandboxImageMode(cfg *config.Config) string {
-	if cfg == nil {
-		return "default"
-	}
-	switch cfg.SandboxImageMode {
-	case "local", "remote":
-		return cfg.SandboxImageMode
-	default:
-		return "default"
-	}
 }
 
 func configForSandboxProvider(cfg *config.Config, providerName string) *config.Config {

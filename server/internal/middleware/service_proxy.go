@@ -33,32 +33,26 @@ type ConnectionTracker interface {
 	Track(sessionID string) func()
 }
 
-// SandboxHTTPClientAcquirer obtains a leased client for a session sandbox.
-// Implementations can load any provider-specific state before acquiring the
-// client; the fallback provider implementation below passes nil state.
-type SandboxHTTPClientAcquirer interface {
+// SandboxService obtains session sandbox information and clients for the service
+// proxy. The concrete implementation is service.SandboxService; keeping this
+// narrow avoids exposing raw sandbox providers to middleware.
+type SandboxService interface {
+	GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error)
+	ListSandboxes(ctx context.Context) ([]*sandbox.Sandbox, error)
 	AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error)
-}
-
-type providerHTTPClientAcquirer struct {
-	provider sandbox.Provider
-}
-
-func (a providerHTTPClientAcquirer) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	return sandbox.AcquireHTTPClient(ctx, a.provider, nil, sessionID)
 }
 
 // findSessionID finds the actual session ID with correct casing.
 // DNS/URLs are case-insensitive, so we need to do a case-insensitive lookup.
-func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID string) (string, error) {
+func findSessionID(ctx context.Context, sandboxSvc SandboxService, urlSessionID string) (string, error) {
 	// First try exact match (fast path)
-	sb, err := provider.Get(ctx, nil, urlSessionID)
+	sb, err := sandboxSvc.GetSandbox(ctx, urlSessionID)
 	if err == nil && sb != nil {
 		return sb.SessionID, nil
 	}
 
 	// Fall back to case-insensitive search via List
-	sandboxes, err := provider.List(ctx)
+	sandboxes, err := sandboxSvc.ListSandboxes(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sandboxes: %w", err)
 	}
@@ -92,17 +86,7 @@ func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID 
 // tracker, if non-nil, is notified for every proxied request (including long-lived
 // connections such as SSE and WebSocket) so that the idle monitor can avoid
 // shutting down sandboxes with live service-proxy connections.
-func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(http.Handler) http.Handler {
-	return ServiceProxyWithHTTPClientAcquirer(provider, tracker, nil)
-}
-
-// ServiceProxyWithHTTPClientAcquirer creates service proxy middleware using a
-// state-aware sandbox HTTP client acquirer.
-func ServiceProxyWithHTTPClientAcquirer(provider sandbox.Provider, tracker ConnectionTracker, acquirer SandboxHTTPClientAcquirer) func(http.Handler) http.Handler {
-	if acquirer == nil {
-		acquirer = providerHTTPClientAcquirer{provider: provider}
-	}
-
+func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check both Host and X-Forwarded-Host for service subdomains.
@@ -127,7 +111,7 @@ func ServiceProxyWithHTTPClientAcquirer(provider sandbox.Provider, tracker Conne
 					if matches == nil {
 						continue
 					}
-					sid, err := findSessionID(ctx, provider, matches[1])
+					sid, err := findSessionID(ctx, sandboxSvc, matches[1])
 					if err != nil {
 						continue
 					}
@@ -147,7 +131,7 @@ func ServiceProxyWithHTTPClientAcquirer(provider sandbox.Provider, tracker Conne
 			}
 
 			// Get HTTP client for the sandbox (handles transport-level routing)
-			clientLease, err := acquirer.AcquireHTTPClient(ctx, sessionID)
+			clientLease, err := sandboxSvc.AcquireHTTPClient(ctx, sessionID)
 			if err != nil {
 				writeJSONError(w, http.StatusBadGateway, "Failed to connect to sandbox", map[string]string{
 					"sessionId": sessionID,

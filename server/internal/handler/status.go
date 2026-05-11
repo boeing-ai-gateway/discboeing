@@ -32,8 +32,8 @@ func (h *Handler) GetServerConfig(w http.ResponseWriter, _ *http.Request) {
 // GetSystemStatus checks system requirements and returns status (including startup tasks)
 func (h *Handler) GetSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	// Refresh provider status first so providers can reconcile any stale startup tasks.
-	if h.sandboxManager != nil {
-		_ = h.sandboxManager.ListProviderStatuses()
+	if h.sandboxService != nil {
+		h.sandboxService.RefreshProviderStatuses()
 	}
 
 	// Use system manager to get complete system status
@@ -131,8 +131,8 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 
 	// Get sanitized config info
 	var availableProviders []string
-	if h.sandboxManager != nil {
-		availableProviders = h.sandboxManager.ListProviders()
+	if h.sandboxService != nil {
+		availableProviders = h.sandboxService.ListProviderNames()
 	}
 
 	configInfo := ConfigInfo{
@@ -188,8 +188,8 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 
 	// Get system status from system manager
 	var systemStatus startup.SystemStatusResponse
-	if h.sandboxManager != nil {
-		_ = h.sandboxManager.ListProviderStatuses()
+	if h.sandboxService != nil {
+		h.sandboxService.RefreshProviderStatuses()
 	}
 	if h.systemManager != nil {
 		systemStatus = h.systemManager.GetSystemStatus()

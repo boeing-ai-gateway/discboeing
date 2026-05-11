@@ -47,11 +47,11 @@ func TestMain(m *testing.M) {
 	// Generate the key by creating a temporary server (it will generate the key)
 	provider := mock.NewProvider()
 	srv, err := New(&Config{
-		Address:         ":0",
-		HostKeyPath:     sharedTestKeyPath,
-		SandboxProvider: provider,
-		ExecStreamer:    testExecStreamer{},
-		Attacher:        testAttacher{},
+		Address:       ":0",
+		HostKeyPath:   sharedTestKeyPath,
+		SandboxGetter: testSandboxGetter{provider: provider},
+		ExecStreamer:  testExecStreamer{},
+		Attacher:      testAttacher{},
 	})
 	if err != nil {
 		os.Stderr.WriteString("Failed to generate test host key: " + err.Error() + "\n")

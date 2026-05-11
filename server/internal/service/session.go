@@ -18,7 +18,6 @@ import (
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
-	sandboxlocal "github.com/obot-platform/discobot/server/internal/sandbox/local"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
@@ -129,25 +128,23 @@ type FileNode struct {
 
 // SessionService handles session operations
 type SessionService struct {
-	store           *store.Store
-	gitService      *GitService
-	sandboxProvider sandbox.Provider
-	sandboxService  *SandboxService
-	eventBroker     *events.Broker
-	jobEnqueuer     JobEnqueuer
-	cleanupDelay    time.Duration
+	store          *store.Store
+	gitService     *GitService
+	sandboxService *SandboxService
+	eventBroker    *events.Broker
+	jobEnqueuer    JobEnqueuer
+	cleanupDelay   time.Duration
 }
 
 // NewSessionService creates a new session service
-func NewSessionService(s *store.Store, gitSvc *GitService, sandboxProv sandbox.Provider, sandboxService *SandboxService, eventBroker *events.Broker, jobEnqueuer JobEnqueuer) *SessionService {
+func NewSessionService(s *store.Store, gitSvc *GitService, sandboxService *SandboxService, eventBroker *events.Broker, jobEnqueuer JobEnqueuer) *SessionService {
 	return &SessionService{
-		store:           s,
-		gitService:      gitSvc,
-		sandboxProvider: sandboxProv,
-		sandboxService:  sandboxService,
-		eventBroker:     eventBroker,
-		jobEnqueuer:     jobEnqueuer,
-		cleanupDelay:    defaultSandboxCleanupRetentionDelay,
+		store:          s,
+		gitService:     gitSvc,
+		sandboxService: sandboxService,
+		eventBroker:    eventBroker,
+		jobEnqueuer:    jobEnqueuer,
+		cleanupDelay:   defaultSandboxCleanupRetentionDelay,
 	}
 }
 
@@ -671,18 +668,13 @@ func (s *SessionService) performDeletion(ctx context.Context, projectID, session
 	// sandbox creation failed, remove it immediately instead; there is no useful
 	// sandbox to retain, and remote providers may have reserved a VM that needs an
 	// explicit provisioner delete to avoid orphaning it.
-	if s.sandboxProvider != nil {
+	if s.sandboxService != nil {
 		if removeSandboxNow {
 			if err := s.removeSandboxForDeletedSession(ctx, sessionID); err != nil {
 				return err
 			}
 		} else {
-			var err error
-			if s.sandboxService != nil {
-				err = s.sandboxService.stopSandbox(ctx, sessionID, 10*time.Second)
-			} else {
-				_, err = s.sandboxProvider.Stop(ctx, nil, sessionID, 10*time.Second)
-			}
+			err := s.sandboxService.StopForSession(ctx, sessionID)
 			if err != nil {
 				if !errors.Is(err, sandbox.ErrNotFound) && !errors.Is(err, sandbox.ErrNotRunning) {
 					log.Printf("Failed to stop sandbox for deleted session %s; continuing with database deletion and deferred cleanup: %v", sessionID, err)
@@ -698,7 +690,7 @@ func (s *SessionService) performDeletion(ctx context.Context, projectID, session
 
 	// Step 3: Schedule deferred sandbox cleanup unless the sandbox was already
 	// removed because creation failed.
-	if !removeSandboxNow && s.jobEnqueuer != nil && s.sandboxProvider != nil {
+	if !removeSandboxNow && s.jobEnqueuer != nil && s.sandboxService != nil {
 		if err := s.jobEnqueuer.Enqueue(ctx, jobs.SessionSandboxDeletePayload{
 			SessionID: sessionID,
 			DeleteAt:  time.Now().Add(s.cleanupDelay),
@@ -719,21 +711,8 @@ func (s *SessionService) performDeletion(ctx context.Context, projectID, session
 }
 
 func (s *SessionService) removeSandboxForDeletedSession(ctx context.Context, sessionID string) error {
-	var err error
-	if s.sandboxService != nil {
-		err = s.sandboxService.removeSandbox(ctx, sessionID, sandbox.RemoveVolumes())
-	} else {
-		_, err = s.sandboxProvider.Remove(ctx, nil, sessionID, sandbox.RemoveVolumes())
-	}
+	err := s.sandboxService.RemoveForDeletedSession(ctx, sessionID)
 	if err == nil {
-		return nil
-	}
-	if errors.Is(err, sandbox.ErrNotFound) {
-		if s.sandboxService != nil {
-			if deleteErr := s.store.DeleteSessionSandboxState(ctx, sessionID); deleteErr != nil {
-				log.Printf("Failed to delete missing sandbox state for session %s: %v", sessionID, deleteErr)
-			}
-		}
 		return nil
 	}
 	return fmt.Errorf("failed to remove failed sandbox: %w", err)
@@ -742,7 +721,7 @@ func (s *SessionService) removeSandboxForDeletedSession(ctx context.Context, ses
 // PerformDeferredSandboxDeletion removes a retained sandbox after the
 // session has been deleted long enough to age out of the recovery window.
 func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, sessionID string) error {
-	if s.sandboxProvider == nil {
+	if s.sandboxService == nil {
 		return nil
 	}
 
@@ -753,12 +732,7 @@ func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, ses
 		return fmt.Errorf("failed to check session before deferred sandbox cleanup: %w", err)
 	}
 
-	var err error
-	if s.sandboxService != nil {
-		err = s.sandboxService.removeSandbox(ctx, sessionID, sandbox.RemoveVolumes())
-	} else {
-		_, err = s.sandboxProvider.Remove(ctx, nil, sessionID, sandbox.RemoveVolumes())
-	}
+	err := s.sandboxService.RemoveForSession(ctx, sessionID)
 	if err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		return fmt.Errorf("failed to remove deferred sandbox: %w", err)
 	}
@@ -877,11 +851,6 @@ func sessionTargetRef(sess *model.Session) string {
 	return targetRef
 }
 
-func sandboxClonesGitWorkspace(provider sandbox.Provider) bool {
-	_, isLocal := provider.(*sandboxlocal.Provider)
-	return !isLocal
-}
-
 func ensureSessionTargetRef(sess *model.Session) bool {
 	if sess == nil {
 		return false
@@ -963,13 +932,16 @@ func (s *SessionService) initializeSync(
 	workspace *model.Workspace,
 ) error {
 	sessionID := session.ID
+	if s.sandboxService == nil {
+		return fmt.Errorf("sandbox service is not configured")
+	}
 
 	// Step 1: Ensure workspace is available (always needed, even on reconcile)
 	var workspacePath string
 	var currentCommit string
 
 	isGitWorkspace := workspace.SourceType == model.WorkspaceSourceTypeGit || git.IsGitURL(workspace.Path)
-	cloneInSandbox := isGitWorkspace && git.IsGitURL(workspace.Path) && sandboxClonesGitWorkspace(s.sandboxProvider)
+	cloneInSandbox := isGitWorkspace && git.IsGitURL(workspace.Path) && s.sandboxService.ClonesGitWorkspaces()
 
 	if cloneInSandbox {
 		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCloning, nil)
@@ -1007,16 +979,8 @@ func (s *SessionService) initializeSync(
 
 	// Step 3: Create or get existing sandbox (idempotent)
 	// First check if sandbox already exists (from a previous failed attempt)
-	var providerState []byte
 	var err error
-	if s.sandboxService != nil {
-		providerState, err = s.sandboxService.loadProviderState(ctx, sessionID)
-		if err != nil {
-			return fmt.Errorf("failed to load sandbox provider state: %w", err)
-		}
-	}
-
-	existingSandbox, err := s.sandboxProvider.Get(ctx, providerState, sessionID)
+	existingSandbox, err := s.sandboxService.GetSandbox(ctx, sessionID)
 	if err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		log.Printf("Failed to check for existing sandbox for session %s: %v", sessionID, err)
 		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to check sandbox: "+err.Error()))
@@ -1033,47 +997,32 @@ func (s *SessionService) initializeSync(
 			// Container reports running — verify services are actually responsive.
 			// This prevents marking a session "ready" when the container is mid-shutdown
 			// (e.g., idle monitor sent SIGTERM but Docker still reports "running").
-			if s.sandboxService != nil {
-				if err := s.sandboxService.probeSandboxHealth(ctx, sessionID); err != nil {
-					log.Printf("Sandbox for session %s reports running but health check failed: %v, removing", sessionID, err)
-					newState, rmErr := s.sandboxProvider.Remove(ctx, providerState, sessionID)
-					if rmErr == nil && s.sandboxService != nil {
-						rmErr = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
-					}
-					if rmErr != nil {
-						log.Printf("Failed to remove unhealthy sandbox for session %s: %v", sessionID, rmErr)
-					}
-					needsCreation = true
-					break
+			if err := s.sandboxService.probeSandboxHealth(ctx, sessionID); err != nil {
+				log.Printf("Sandbox for session %s reports running but health check failed: %v, removing", sessionID, err)
+				if rmErr := s.sandboxService.RemoveSessionSandbox(ctx, sessionID); rmErr != nil {
+					log.Printf("Failed to remove unhealthy sandbox for session %s: %v", sessionID, rmErr)
 				}
+				needsCreation = true
+				break
 			}
 			log.Printf("Sandbox for session %s is already running (verified healthy)", sessionID)
 			needsCreation = false
 
 		case sandbox.StatusCreated, sandbox.StatusStopped:
-			imageProvider := providerForSandboxImageOps(s.sandboxProvider)
-			if err := waitForSandboxImageOpsReady(ctx, imageProvider); err != nil {
+			if err := s.sandboxService.WaitForSandboxImageOpsReady(ctx); err != nil {
 				log.Printf("Warning: failed to wait for sandbox image provider readiness for session %s: %v", sessionID, err)
 			}
 
-			expectedImageID := ""
-			if imageIDProvider, ok := imageProvider.(sandbox.CurrentImageIDProvider); ok {
-				imageID, err := imageIDProvider.CurrentImageID(ctx)
-				if err != nil {
-					log.Printf("Warning: failed to resolve current sandbox image ID for session %s: %v", sessionID, err)
-				} else {
-					expectedImageID = imageID
-				}
+			expectedImageID, err := s.sandboxService.CurrentSandboxImageID(ctx)
+			if err != nil {
+				log.Printf("Warning: failed to resolve current sandbox image ID for session %s: %v", sessionID, err)
 			}
+			expectedImage := s.sandboxService.SandboxImage()
 
-			if !sandboxUsesExpectedImage(existingSandbox, s.sandboxProvider.Image(), expectedImageID) {
+			if !sandboxUsesExpectedImage(existingSandbox, expectedImage, expectedImageID) {
 				log.Printf("Sandbox for session %s is inactive but uses outdated image %s (expected %s), recreating instead of restarting",
-					sessionID, existingSandbox.Image, s.sandboxProvider.Image())
-				newState, err := s.sandboxProvider.Remove(ctx, providerState, sessionID)
-				if err == nil && s.sandboxService != nil {
-					err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
-				}
-				if err != nil {
+					sessionID, existingSandbox.Image, expectedImage)
+				if err := s.sandboxService.RemoveSessionSandbox(ctx, sessionID); err != nil {
 					log.Printf("Failed to remove outdated sandbox for session %s: %v", sessionID, err)
 					s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to remove outdated sandbox: "+err.Error()))
 					return fmt.Errorf("failed to remove outdated sandbox: %w", err)
@@ -1083,20 +1032,12 @@ func (s *SessionService) initializeSync(
 			}
 
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
-			newState, err := s.sandboxProvider.Start(ctx, providerState, sessionID)
-			if err == nil && s.sandboxService != nil {
-				err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
-				providerState = newState
-			}
+			err = s.sandboxService.StartSessionSandbox(ctx, sessionID)
 			if err != nil {
 				if !errors.Is(err, sandbox.ErrAlreadyRunning) {
 					log.Printf("Sandbox start failed for session %s: %v, will attempt to remove and recreate", sessionID, err)
 					// Start failed - try to remove and recreate
-					newState, rmErr := s.sandboxProvider.Remove(ctx, providerState, sessionID)
-					if rmErr == nil && s.sandboxService != nil {
-						rmErr = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
-					}
-					if rmErr != nil {
+					if rmErr := s.sandboxService.RemoveSessionSandbox(ctx, sessionID); rmErr != nil {
 						log.Printf("Failed to remove failed sandbox for session %s: %v", sessionID, rmErr)
 						s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox start failed and removal failed: "+rmErr.Error()))
 						return fmt.Errorf("sandbox start failed and removal failed: %w", rmErr)
@@ -1117,11 +1058,7 @@ func (s *SessionService) initializeSync(
 		default:
 			// Sandbox is in failed state - remove and recreate (preserve volumes)
 			log.Printf("Removing failed sandbox for session %s", sessionID)
-			newState, err := s.sandboxProvider.Remove(ctx, providerState, sessionID)
-			if err == nil && s.sandboxService != nil {
-				err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
-			}
-			if err != nil {
+			if err := s.sandboxService.RemoveSessionSandbox(ctx, sessionID); err != nil {
 				log.Printf("Failed to remove old sandbox for session %s: %v", sessionID, err)
 				s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to remove old sandbox: "+err.Error()))
 				return fmt.Errorf("failed to remove old sandbox: %w", err)
@@ -1131,32 +1068,26 @@ func (s *SessionService) initializeSync(
 
 	if needsCreation {
 		// Check if image needs to be pulled and notify if so
-		if !s.sandboxProvider.ImageExists(ctx) {
+		if !s.sandboxService.SandboxImageExists(ctx) {
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusPullingImage, nil)
-			log.Printf("Pulling sandbox image %s for session %s", s.sandboxProvider.Image(), sessionID)
+			log.Printf("Pulling sandbox image %s for session %s", s.sandboxService.SandboxImage(), sessionID)
 		} else {
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
 		}
 
 		var sshKey *sandbox.SSHKeyProvision
-		if s.sandboxService != nil {
-			sessionModel, err := s.store.GetSessionByID(ctx, sessionID)
-			if err != nil {
-				return fmt.Errorf("failed to reload session for sandbox ssh key provisioning: %w", err)
-			}
-			sshKey, err = ensureSessionSSHKey(ctx, s.store, s.sandboxService.cfg, sessionModel)
-			if err != nil {
-				return fmt.Errorf("failed to ensure sandbox ssh key: %w", err)
-			}
+		sessionModel, err := s.store.GetSessionByID(ctx, sessionID)
+		if err != nil {
+			return fmt.Errorf("failed to reload session for sandbox ssh key provisioning: %w", err)
+		}
+		sshKey, err = ensureSessionSSHKey(ctx, s.store, s.sandboxService.cfg, sessionModel)
+		if err != nil {
+			return fmt.Errorf("failed to ensure sandbox ssh key: %w", err)
 		}
 
 		sandboxSecret := generateSecret(32)
-		mcpOAuthRedirectBase := ""
-		agentServerURL := ""
-		if s.sandboxService != nil {
-			mcpOAuthRedirectBase = s.sandboxService.cfg.MCPOAuthRedirectBase
-			agentServerURL = s.sandboxService.cfg.AgentServerURL
-		}
+		mcpOAuthRedirectBase := s.sandboxService.cfg.MCPOAuthRedirectBase
+		agentServerURL := s.sandboxService.cfg.AgentServerURL
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
 			SSHKey:       sshKey,
@@ -1172,34 +1103,20 @@ func (s *SessionService) initializeSync(
 			WorkspaceTargetRef: session.TargetRef,
 		}
 
-		providerState, err = s.sandboxProvider.PrepareState(ctx, sessionID, opts)
-		if err == nil && s.sandboxService != nil {
-			err = s.sandboxService.saveProviderState(ctx, sessionID, providerState)
-		}
-		if err != nil {
+		if err := s.sandboxService.PrepareSessionSandboxState(ctx, sessionID, opts); err != nil {
 			log.Printf("Sandbox state preparation failed for session %s: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox state preparation failed: "+err.Error()))
 			return fmt.Errorf("sandbox state preparation failed: %w", err)
 		}
 
-		_, providerState, err = s.sandboxProvider.Create(ctx, providerState, sessionID, opts)
-		if err != nil {
+		if err := s.sandboxService.CreateSessionSandbox(ctx, sessionID, opts); err != nil {
 			log.Printf("Sandbox creation failed for session %s: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreateFailed, ptrString("sandbox creation failed: "+err.Error()))
 			return fmt.Errorf("sandbox creation failed: %w", err)
 		}
-		if s.sandboxService != nil {
-			if err := s.sandboxService.saveProviderState(ctx, sessionID, providerState); err != nil {
-				return fmt.Errorf("failed to save sandbox provider state: %w", err)
-			}
-		}
 
 		// Start the sandbox
-		providerState, err = s.sandboxProvider.Start(ctx, providerState, sessionID)
-		if err == nil && s.sandboxService != nil {
-			err = s.sandboxService.saveProviderState(ctx, sessionID, providerState)
-		}
-		if err != nil {
+		if err := s.sandboxService.StartSessionSandbox(ctx, sessionID); err != nil {
 			log.Printf("Sandbox start failed for session %s: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox start failed: "+err.Error()))
 			return fmt.Errorf("sandbox start failed: %w", err)

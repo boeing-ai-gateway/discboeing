@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/service"
 )
 
 // DebugDockerServer runs a standalone HTTP server that proxies Docker API requests
@@ -19,22 +20,13 @@ type DebugDockerServer struct {
 }
 
 // NewDebugDockerServer creates a new debug Docker proxy server for the given project.
-func NewDebugDockerServer(sandboxManager *sandbox.Manager, projectID string, port int) (*DebugDockerServer, error) {
-	// Find a provider that supports Docker proxying
-	var proxyProvider sandbox.DockerProxyProvider
-	for _, name := range sandboxManager.ListProviders() {
-		provider, err := sandboxManager.GetProvider(name)
-		if err != nil {
-			continue
-		}
-		if dp, ok := provider.(sandbox.DockerProxyProvider); ok {
-			proxyProvider = dp
-			break
-		}
+func NewDebugDockerServer(sandboxService *service.SandboxService, projectID string, port int) (*DebugDockerServer, error) {
+	if sandboxService == nil {
+		return nil, fmt.Errorf("sandbox service is not configured")
 	}
-
-	if proxyProvider == nil {
-		return nil, fmt.Errorf("no provider supports Docker proxying")
+	proxyProvider, err := sandboxService.DockerProxyProvider()
+	if err != nil {
+		return nil, err
 	}
 
 	proxy := &httputil.ReverseProxy{

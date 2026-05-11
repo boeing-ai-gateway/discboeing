@@ -541,7 +541,7 @@ func TestSessionService_Initialize_WaitsForSandboxHealthAfterStart(t *testing.T)
 		EncryptionKey:      testEncryptionKey,
 	}
 	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	ctx := context.Background()
 	workspace := &model.Workspace{
@@ -592,7 +592,7 @@ func TestSessionService_Initialize_WaitsBeyondGenericRetryBudgetForSandboxHealth
 		EncryptionKey:      testEncryptionKey,
 	}
 	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	ctx := context.Background()
 	workspace := &model.Workspace{
@@ -629,7 +629,7 @@ func TestSessionService_Initialize_FailsWhenSandboxHealthProbeFails(t *testing.T
 		EncryptionKey:      testEncryptionKey,
 	}
 	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(testStore, nil, provider, sandboxSvc, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
 
 	ctx := context.Background()
 	workspace := &model.Workspace{

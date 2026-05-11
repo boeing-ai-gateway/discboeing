@@ -114,9 +114,9 @@ func newChatTestHandler(t *testing.T, s *store.Store, provider *mocksandbox.Prov
 	}
 
 	jobQueue := jobs.NewQueue(s, cfg)
-	workspaceSvc := service.NewWorkspaceService(s, nil, provider, nil, jobQueue)
 	sandboxSvc := service.NewSandboxService(s, provider, cfg, nil, nil, jobQueue, nil)
-	sessionSvc := service.NewSessionService(s, nil, provider, sandboxSvc, nil, jobQueue)
+	workspaceSvc := service.NewWorkspaceService(s, nil, sandboxSvc, nil, jobQueue)
+	sessionSvc := service.NewSessionService(s, nil, sandboxSvc, nil, jobQueue)
 	sandboxSvc.SetSessionInitializer(sessionSvc)
 	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, nil, sandboxSvc, nil)
 

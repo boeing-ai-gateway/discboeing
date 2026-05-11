@@ -14,17 +14,22 @@ import (
 // It handles cases where sandboxes are modified externally (e.g., Docker
 // containers deleted outside of Discobot).
 type SandboxWatcher struct {
-	provider sandbox.Provider
-	store    *store.Store
-	broker   *events.Broker
+	events SandboxEventWatcher
+	store  *store.Store
+	broker *events.Broker
+}
+
+// SandboxEventWatcher provides runtime sandbox state events.
+type SandboxEventWatcher interface {
+	WatchSandboxEvents(ctx context.Context) (<-chan sandbox.StateEvent, error)
 }
 
 // NewSandboxWatcher creates a new sandbox watcher.
-func NewSandboxWatcher(provider sandbox.Provider, s *store.Store, broker *events.Broker) *SandboxWatcher {
+func NewSandboxWatcher(events SandboxEventWatcher, s *store.Store, broker *events.Broker) *SandboxWatcher {
 	return &SandboxWatcher{
-		provider: provider,
-		store:    s,
-		broker:   broker,
+		events: events,
+		store:  s,
+		broker: broker,
 	}
 }
 
@@ -32,7 +37,7 @@ func NewSandboxWatcher(provider sandbox.Provider, s *store.Store, broker *events
 // It blocks until the context is cancelled.
 // Events are processed to keep session states in sync with sandbox states.
 func (w *SandboxWatcher) Start(ctx context.Context) error {
-	eventCh, err := w.provider.Watch(ctx)
+	eventCh, err := w.events.WatchSandboxEvents(ctx)
 	if err != nil {
 		return err
 	}
