@@ -1,8 +1,11 @@
 package thread
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +49,24 @@ func TestThreadErrorHelpers_ClearPersistAndIgnoreCancel(t *testing.T) {
 	}
 	if cfg.ErrorMessage != "provider failed" {
 		t.Fatalf("canceled error changed message to %q", cfg.ErrorMessage)
+	}
+}
+
+func TestThreadErrorHelpers_IgnoreMissingThreadWithoutLogging(t *testing.T) {
+	store := NewStore(t.TempDir())
+
+	var logs bytes.Buffer
+	oldWriter := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(oldWriter)
+
+	if _, cleared := ClearError(store, "thread-missing"); cleared {
+		t.Fatal("expected ClearError to report no cleared error for a missing thread")
+	}
+	if persisted := PersistError(store, "thread-missing", errors.New("provider failed")); persisted {
+		t.Fatal("expected PersistError to report no persisted error for a missing thread")
+	}
+	if strings.TrimSpace(logs.String()) != "" {
+		t.Fatalf("expected missing thread bookkeeping to stay quiet, got log output %q", logs.String())
 	}
 }

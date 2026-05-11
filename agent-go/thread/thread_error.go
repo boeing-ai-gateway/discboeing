@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -18,6 +19,11 @@ type ErrorStore interface {
 func ClearError(store ErrorStore, threadID string) (Info, bool) {
 	info, err := store.GetThreadInfo(threadID)
 	if err != nil {
+		// Brand-new CLI threads are created lazily on first prompt, so missing
+		// thread metadata here is expected and should not be logged as an error.
+		if errors.Is(err, os.ErrNotExist) {
+			return Info{}, false
+		}
 		log.Printf("thread error: failed to load config for %s: %v", threadID, err)
 		return Info{}, false
 	}
@@ -43,6 +49,9 @@ func PersistError(store ErrorStore, threadID string, err error) bool {
 		return false
 	}
 	if _, saveErr := store.UpdateThreadInfo(threadID, UpdateThreadRequest{ErrorMessage: &errMessage}); saveErr != nil {
+		if errors.Is(saveErr, os.ErrNotExist) {
+			return false
+		}
 		log.Printf("thread error: failed to save config for %s: %v", threadID, saveErr)
 		return false
 	}
