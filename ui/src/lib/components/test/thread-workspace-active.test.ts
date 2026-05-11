@@ -16,13 +16,12 @@ test("thread workspace active reconnects when the session becomes available", ()
 	const source = readThreadWorkspaceActiveSource();
 
 	assert.match(source, /\$effect\(\(\) => \{/);
-	assert.match(source, /if \(!session\.current\) \{/);
+	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
 	assert.match(source, /void thread\.connect\(\);/);
 	assert.doesNotMatch(
 		source,
 		/untrack\(\(\) => \{\s*void thread\.connect\(\);\s*\}\);/,
 	);
-	assert.doesNotMatch(source, /if \(!props\.visible\) \{/);
 	assert.doesNotMatch(source, /currentThread\.disconnect\(\)/);
 	assert.match(source, /onDestroy\(\(\) => \{/);
 	assert.match(source, /thread\.dispose\(\);/);

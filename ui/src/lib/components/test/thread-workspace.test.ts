@@ -40,7 +40,7 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
 		source,
-		/session\.isPending \|\|\s*\(sandboxReady && session\.threads\.selectedId !== null\)/,
+		/session\.isPending \|\|\s*\(canLoadThreadData && session\.threads\.selectedId !== null\)/,
 	);
 	assert.match(
 		source,
@@ -51,11 +51,11 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		source,
 		/\(\) => hasSelectedThread \|\| hasConversationMessages/,
 	);
-	assert.match(source, /const sandboxReady = \$derived\.by/);
+	assert.match(source, /const canLoadThreadData = \$derived\.by/);
 	assert.match(source, /const isLoadingThread = \$derived\.by/);
 	assert.match(
 		source,
-		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
+		/import \{[\s\S]*canLoadSessionThreads,[\s\S]*isSessionTransitioningStatus,[\s\S]*\} from "\$lib\/api-constants"/,
 	);
 	assert.match(
 		source,
@@ -103,6 +103,7 @@ test("thread context stops sandbox refreshes when a session is not ready", () =>
 test("active thread workspace keeps the stream live while inactive conversation nodes are unmounted", () => {
 	const source = readThreadWorkspaceActiveSource();
 
+	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
 	assert.match(source, /void thread\.connect\(\);/);
 	assert.match(
 		source,

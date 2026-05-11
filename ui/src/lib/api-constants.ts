@@ -33,11 +33,28 @@ const SESSION_TRANSITIONING_STATUSES = new Set<SessionStatusValue>([
 	SessionStatus.REMOVING,
 ]);
 
+const SESSION_THREAD_ACCESSIBLE_STATUSES = new Set<SessionStatusValue>([
+	SessionStatus.READY,
+	SessionStatus.STOPPED,
+	SessionStatus.COMPLETED,
+	SessionStatus.COMMITTED,
+	SessionStatus.COMMITTING,
+	SessionStatus.ERROR,
+]);
+
 export function isSessionTransitioningStatus(
 	status: SessionStatusValue | null | undefined,
 ): boolean {
 	return status !== null && status !== undefined
 		? SESSION_TRANSITIONING_STATUSES.has(status)
+		: false;
+}
+
+export function canLoadSessionThreads(
+	status: SessionStatusValue | null | undefined,
+): boolean {
+	return status !== null && status !== undefined
+		? SESSION_THREAD_ACCESSIBLE_STATUSES.has(status)
 		: false;
 }
 

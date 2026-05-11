@@ -20,7 +20,7 @@
 	const thread = useThreadContext();
 
 	$effect(() => {
-		if (!session.current) {
+		if (!props.visible || !session.current) {
 			return;
 		}
 		void thread.connect();

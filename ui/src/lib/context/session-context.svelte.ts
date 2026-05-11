@@ -1,7 +1,7 @@
 import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
-import { SessionStatus } from "$lib/api-constants";
+import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createThreadContext } from "$lib/context/thread-context.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
@@ -40,6 +40,9 @@ export function createSessionContext(
 	const canLoadSandboxData = $derived.by(
 		() => current?.status === SessionStatus.READY,
 	);
+	const canLoadThreadData = $derived.by(() =>
+		canLoadSessionThreads(current?.status),
+	);
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -56,7 +59,7 @@ export function createSessionContext(
 	const stores: SessionStores = {
 		threads: new ThreadStore({
 			sessionId,
-			enabled: () => canLoadSandboxData,
+			enabled: () => canLoadThreadData,
 		}),
 	};
 
@@ -70,7 +73,7 @@ export function createSessionContext(
 	const threads = createSessionThreadsDomain({
 		store: stores.threads,
 		sessionId,
-		hasSession: () => canLoadSandboxData,
+		hasSession: () => canLoadThreadData,
 		getSession: () => current,
 		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
@@ -125,7 +128,7 @@ export function createSessionContext(
 	const commands = createSessionCommandsDomain({
 		app,
 		sessionId,
-		hasSession: () => canLoadSandboxData,
+		hasSession: () => canLoadThreadData,
 		getSelectedThreadId: () => threads.selectedId ?? sessionId,
 		submit,
 	});

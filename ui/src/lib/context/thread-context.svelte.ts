@@ -1,7 +1,7 @@
 import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
-import { SessionStatus } from "$lib/api-constants";
+import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
 import type { Thread, ThreadActivityStatus } from "$lib/api-types";
 import {
 	clearComposerDraft,
@@ -160,8 +160,8 @@ export function createThreadContext(
 	session: SessionContextValue,
 	threadId: string,
 ): ThreadContextValue {
-	const hasSession = $derived.by(
-		() => session.current?.status === SessionStatus.READY,
+	const hasSession = $derived.by(() =>
+		canLoadSessionThreads(session.current?.status),
 	);
 	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",

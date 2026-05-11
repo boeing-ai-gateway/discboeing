@@ -1,7 +1,10 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import { untrack } from "svelte";
-	import { isSessionTransitioningStatus } from "$lib/api-constants";
+	import {
+		canLoadSessionThreads,
+		isSessionTransitioningStatus,
+	} from "$lib/api-constants";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
@@ -28,13 +31,13 @@
 	const session = useSessionContext();
 	const thread = session.ensureThread(untrack(() => threadId));
 	setThreadContext(thread);
-	const sandboxReady = $derived.by(
-		() => !session.isPending && session.current?.status === "ready",
+	const canLoadThreadData = $derived.by(
+		() => !session.isPending && canLoadSessionThreads(session.current?.status),
 	);
 	const hasSelectedThread = $derived.by(
 		() =>
 			session.isPending ||
-			(sandboxReady && session.threads.selectedId !== null),
+			(canLoadThreadData && session.threads.selectedId !== null),
 	);
 	const hasConversationMessages = $derived.by(() => thread.messages.length > 0);
 	const showActiveConversation = $derived.by(
@@ -47,7 +50,7 @@
 			isSessionTransitioningStatus(session.current?.status),
 	);
 	const showThreadSelectionPrompt = $derived.by(
-		() => !showActiveConversation && sandboxReady,
+		() => !showActiveConversation && canLoadThreadData,
 	);
 </script>
 
