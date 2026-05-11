@@ -13,15 +13,27 @@
 	type Props = {
 		conversationRoot: HTMLElement | null;
 		scrollContainer: HTMLElement | null;
-		onAddComment: (comment: Omit<ConversationComment, "id">) => void;
+		onQueueComment: (
+			comment: Omit<ConversationComment, "id">,
+		) => Promise<void> | void;
+		onSubmitComment: (
+			comment: Omit<ConversationComment, "id">,
+		) => Promise<void> | void;
 	};
 
-	let { conversationRoot, scrollContainer, onAddComment }: Props = $props();
+	let {
+		conversationRoot,
+		scrollContainer,
+		onQueueComment,
+		onSubmitComment,
+	}: Props = $props();
 
 	let pendingSelectionComment = $state<PendingSelectionComment | null>(null);
 	let selectionCommentOpen = $state(false);
 	let selectionCommentDraft = $state("");
 	let selectionCommentTextarea = $state<HTMLTextAreaElement | null>(null);
+	let pendingAction = $state<"queue" | "submit" | null>(null);
+	let selectionCommentError = $state<string | null>(null);
 
 	function clampSelectionCommentPosition(left: number, top: number) {
 		return {
@@ -86,19 +98,35 @@
 	function closeSelectionComment() {
 		selectionCommentOpen = false;
 		selectionCommentDraft = "";
+		selectionCommentError = null;
+		pendingAction = null;
 		pendingSelectionComment = null;
 	}
 
-	function submitSelectionComment() {
+	async function saveSelectionComment(action: "queue" | "submit") {
 		if (!pendingSelectionComment || !selectionCommentDraft.trim()) {
 			return;
 		}
-		onAddComment({
+		const comment = {
 			snippet: pendingSelectionComment.snippet,
 			comment: selectionCommentDraft,
-		});
-		window.getSelection()?.removeAllRanges();
-		closeSelectionComment();
+		};
+		pendingAction = action;
+		selectionCommentError = null;
+		try {
+			if (action === "queue") {
+				await onQueueComment(comment);
+			} else {
+				await onSubmitComment(comment);
+			}
+			window.getSelection()?.removeAllRanges();
+			closeSelectionComment();
+		} catch (error) {
+			selectionCommentError =
+				error instanceof Error ? error.message : "Failed to save comment";
+		} finally {
+			pendingAction = null;
+		}
 	}
 
 	$effect(() => {
@@ -164,6 +192,9 @@
 			class="min-h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 			placeholder="Add a comment..."
 		></textarea>
+		{#if selectionCommentError}
+			<p class="mt-2 text-destructive text-xs">{selectionCommentError}</p>
+		{/if}
 		<div class="mt-3 flex justify-end gap-2">
 			<Button
 				onclick={closeSelectionComment}
@@ -174,12 +205,21 @@
 				Cancel
 			</Button>
 			<Button
-				disabled={!selectionCommentDraft.trim()}
-				onclick={submitSelectionComment}
+				disabled={!selectionCommentDraft.trim() || pendingAction !== null}
+				onclick={() => void saveSelectionComment("queue")}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				{pendingAction === "queue" ? "Queueing…" : "Queue"}
+			</Button>
+			<Button
+				disabled={!selectionCommentDraft.trim() || pendingAction !== null}
+				onclick={() => void saveSelectionComment("submit")}
 				size="sm"
 				type="button"
 			>
-				Add comment
+				{pendingAction === "submit" ? "Submitting…" : "Submit"}
 			</Button>
 		</div>
 	</div>

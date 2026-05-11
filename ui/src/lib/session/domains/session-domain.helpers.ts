@@ -8,7 +8,10 @@ import type {
 	Session,
 } from "$lib/api-types";
 import type { DynamicToolPart } from "$lib/components/ai/types";
-import type { HookOutputState } from "$lib/session/session-context.types";
+import type {
+	ConversationComment,
+	HookOutputState,
+} from "$lib/session/session-context.types";
 import type {
 	HookLastResult,
 	HookRunStatus,
@@ -138,6 +141,35 @@ export function buildUserMessageParts(
 		})),
 	);
 	return parts;
+}
+
+export function quoteCommentSnippet(snippet: string): string {
+	return snippet
+		.split(/\r?\n/)
+		.map((line) => `> ${line}`)
+		.join("\n");
+}
+
+export function formatConversationComments(
+	comments: Array<Omit<ConversationComment, "id">>,
+): string {
+	if (comments.length === 0) {
+		return "";
+	}
+	return [
+		"Comments on selected conversation text:",
+		"",
+		...comments.flatMap((comment, index) => [
+			`${index + 1}. Selected text:`,
+			quoteCommentSnippet(comment.snippet),
+			"",
+			"Comment:",
+			comment.comment,
+			"",
+		]),
+	]
+		.join("\n")
+		.trim();
 }
 
 export function hasUserMessageContent(parts: ChatMessage["parts"]): boolean {

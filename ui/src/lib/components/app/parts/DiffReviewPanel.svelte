@@ -62,6 +62,11 @@
 			selectedText: string;
 			comment: string;
 		}) => Promise<void> | void;
+		onSubmitSelectionComment: (payload: {
+			path: string;
+			selectedText: string;
+			comment: string;
+		}) => Promise<void> | void;
 		onToggleDockMaximized: () => void;
 		sessionId: string;
 		diff: SessionDiffFileEntry[];
@@ -123,6 +128,7 @@
 		onOpenFile,
 		onRefresh,
 		onQueueSelectionComment,
+		onSubmitSelectionComment,
 		onToggleDockMaximized,
 		sessionId,
 		diff,
@@ -150,6 +156,7 @@
 	>({});
 	let commentDraftByPath = $state<Record<string, string>>({});
 	let queueingCommentByPath = $state<Record<string, boolean>>({});
+	let submittingCommentByPath = $state<Record<string, boolean>>({});
 	let commentErrorByPath = $state<Record<string, string | null>>({});
 	let commentPopoverPositionByPath = $state<
 		Record<string, CommentPopoverPosition | null>
@@ -316,6 +323,7 @@
 		selectedDiffTextByPath = {};
 		commentDraftByPath = {};
 		queueingCommentByPath = {};
+		submittingCommentByPath = {};
 		commentErrorByPath = {};
 		commentPopoverPositionByPath = {};
 		lastPointerPositionByPath = {};
@@ -946,27 +954,41 @@
 		};
 	}
 
-	async function queueSelectionComment(path: string) {
+	async function saveSelectionComment(
+		path: string,
+		action: "queue" | "submit",
+	) {
 		const selectedText = getSelectedDiffText(path).trim();
 		const comment = getCommentDraft(path).trim();
 		if (!selectedText || !comment) {
 			commentErrorByPath = {
 				...commentErrorByPath,
-				[path]: "Select diff text and add a comment before queueing.",
+				[path]: `Select diff text and add a comment before ${action === "queue" ? "queueing" : "submitting"}.`,
 			};
 			return;
 		}
 
-		queueingCommentByPath = {
-			...queueingCommentByPath,
-			[path]: true,
-		};
+		if (action === "queue") {
+			queueingCommentByPath = {
+				...queueingCommentByPath,
+				[path]: true,
+			};
+		} else {
+			submittingCommentByPath = {
+				...submittingCommentByPath,
+				[path]: true,
+			};
+		}
 		commentErrorByPath = {
 			...commentErrorByPath,
 			[path]: null,
 		};
 		try {
-			await onQueueSelectionComment({ path, selectedText, comment });
+			if (action === "queue") {
+				await onQueueSelectionComment({ path, selectedText, comment });
+			} else {
+				await onSubmitSelectionComment({ path, selectedText, comment });
+			}
 			resetSelectionComment(path);
 		} catch (error) {
 			commentErrorByPath = {
@@ -974,13 +996,20 @@
 				[path]:
 					error instanceof Error
 						? error.message
-						: "Failed to queue diff comment",
+						: `Failed to ${action} diff comment`,
 			};
 		} finally {
-			queueingCommentByPath = {
-				...queueingCommentByPath,
-				[path]: false,
-			};
+			if (action === "queue") {
+				queueingCommentByPath = {
+					...queueingCommentByPath,
+					[path]: false,
+				};
+			} else {
+				submittingCommentByPath = {
+					...submittingCommentByPath,
+					[path]: false,
+				};
+			}
 		}
 	}
 
@@ -1477,14 +1506,37 @@
 																	<Button
 																		size="sm"
 																		onclick={() =>
-																			void queueSelectionComment(file.path)}
+																			void saveSelectionComment(
+																				file.path,
+																				"queue",
+																			)}
 																		disabled={queueingCommentByPath[
 																			file.path
-																		] === true}
+																		] === true ||
+																			submittingCommentByPath[file.path] ===
+																				true}
+																		variant="outline"
 																	>
 																		{queueingCommentByPath[file.path] === true
 																			? "Queueing…"
-																			: "Queue comment"}
+																			: "Queue"}
+																	</Button>
+																	<Button
+																		size="sm"
+																		onclick={() =>
+																			void saveSelectionComment(
+																				file.path,
+																				"submit",
+																			)}
+																		disabled={queueingCommentByPath[
+																			file.path
+																		] === true ||
+																			submittingCommentByPath[file.path] ===
+																				true}
+																	>
+																		{submittingCommentByPath[file.path] === true
+																			? "Submitting…"
+																			: "Submit"}
 																	</Button>
 																	<Button
 																		variant="ghost"
@@ -1493,7 +1545,9 @@
 																			resetSelectionComment(file.path)}
 																		disabled={queueingCommentByPath[
 																			file.path
-																		] === true}
+																		] === true ||
+																			submittingCommentByPath[file.path] ===
+																				true}
 																	>
 																		Clear selection
 																	</Button>

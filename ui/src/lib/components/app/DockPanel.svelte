@@ -9,7 +9,10 @@
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import { requestVSCodeOpenFile } from "$lib/editor-control";
-	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
+	import {
+		buildUserMessageParts,
+		formatConversationComments,
+	} from "$lib/session/domains/session-domain.helpers";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
 	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
 
@@ -86,6 +89,22 @@ ${selectedText}
 		thread.addPendingComment({
 			snippet: buildDiffSelectionSnippet(payload),
 			comment: payload.comment,
+		});
+	}
+
+	async function handleSubmitDiffSelectionComment(payload: {
+		path: string;
+		selectedText: string;
+		comment: string;
+	}) {
+		const text = formatConversationComments([
+			{
+				snippet: buildDiffSelectionSnippet(payload),
+				comment: payload.comment,
+			},
+		]);
+		await thread.submit({
+			parts: buildUserMessageParts(text),
 		});
 	}
 
@@ -180,6 +199,7 @@ ${selectedText}
 				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
 				onQueueSelectionComment={handleQueueDiffSelectionComment}
+				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				sessionId={session.sessionId}
 				diff={sessionFileDiff}

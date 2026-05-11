@@ -62,6 +62,7 @@
 	import {
 		buildUserMessageParts,
 		createUserMessageAttachment,
+		formatConversationComments,
 		getLatestPlanState,
 	} from "$lib/session/domains/session-domain.helpers";
 
@@ -359,36 +360,9 @@
 		return buildUserMessageParts(text, attachments);
 	}
 
-	function quoteCommentSnippet(snippet: string) {
-		return snippet
-			.split(/\r?\n/)
-			.map((line) => `> ${line}`)
-			.join("\n");
-	}
-
-	function formatPendingComments(comments: ConversationComment[]) {
-		if (comments.length === 0) {
-			return "";
-		}
-		return [
-			"Comments on selected conversation text:",
-			"",
-			...comments.flatMap((comment, index) => [
-				`${index + 1}. Selected text:`,
-				quoteCommentSnippet(comment.snippet),
-				"",
-				"Comment:",
-				comment.comment,
-				"",
-			]),
-		]
-			.join("\n")
-			.trim();
-	}
-
 	function buildSubmitText(draft: string, comments: ConversationComment[]) {
 		const text = draft.trim();
-		const commentText = formatPendingComments(comments);
+		const commentText = formatConversationComments(comments);
 		return [text, commentText].filter(Boolean).join("\n\n");
 	}
 

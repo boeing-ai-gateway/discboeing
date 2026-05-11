@@ -68,7 +68,11 @@
 	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
 	import { getErrorMessage } from "$lib/error-message";
 	import type { ThreadContextValue } from "$lib/session/session-context.types";
-	import { getTodoWriteEntries } from "$lib/session/domains/session-domain.helpers";
+	import {
+		buildUserMessageParts,
+		formatConversationComments,
+		getTodoWriteEntries,
+	} from "$lib/session/domains/session-domain.helpers";
 
 	type ConversationPaneStatus = ThreadContextValue["status"];
 	type ConversationPaneErrorBannerKey = "session" | "thread";
@@ -758,6 +762,18 @@
 			...expandedErrorBanners,
 			[key]: expanded,
 		};
+	}
+
+	async function submitSelectionComment(
+		comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
+	) {
+		if (!thread) {
+			return;
+		}
+		const text = formatConversationComments([comment]);
+		await thread.submit({
+			parts: buildUserMessageParts(text),
+		});
 	}
 
 	function getErrorBannerToggleLabel(
@@ -1804,7 +1820,8 @@
 				<ConversationSelectionComment
 					conversationRoot={contentEl}
 					scrollContainer={viewport}
-					onAddComment={(comment) => thread?.addPendingComment(comment)}
+					onQueueComment={(comment) => thread?.addPendingComment(comment)}
+					onSubmitComment={submitSelectionComment}
 				/>
 				{#if !isNearBottom}
 					<div
