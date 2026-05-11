@@ -611,11 +611,6 @@
 		deleteWorkspaceDialogOpen = true;
 	}
 
-	function openSystemSettings() {
-		app.ui.openSettings("project");
-		closeFloatingSidebar();
-	}
-
 	function closeDeleteWorkspaceDialog() {
 		deleteWorkspaceDialogOpen = false;
 		deleteWorkspaceId = null;
@@ -1010,9 +1005,6 @@
 																</Button>
 															</DropdownMenuTrigger>
 															<DropdownMenuContent align="end" class="w-32">
-																<DropdownMenuItem onclick={openSystemSettings}>
-																	System
-																</DropdownMenuItem>
 																<DropdownMenuItem
 																	onclick={() =>
 																		openRenameWorkspaceDialog(
@@ -1092,9 +1084,6 @@
 															</Button>
 														</DropdownMenuTrigger>
 														<DropdownMenuContent align="end" class="w-32">
-															<DropdownMenuItem onclick={openSystemSettings}>
-																System
-															</DropdownMenuItem>
 															<DropdownMenuItem
 																onclick={() =>
 																	openRenameWorkspaceDialog(group.workspaceId!)}

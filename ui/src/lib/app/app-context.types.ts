@@ -65,7 +65,6 @@ export type ChatWidthMode = "full" | "constrained";
 export type SettingsDialogTab =
 	| "appearance"
 	| "chat"
-	| "project"
 	| "providers"
 	| "update"
 	| "credentials";

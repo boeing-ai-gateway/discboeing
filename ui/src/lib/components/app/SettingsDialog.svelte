@@ -45,7 +45,6 @@
 		TabsTrigger,
 	} from "$lib/components/ui/tabs";
 	import CredentialsManager from "$lib/components/app/CredentialsManager.svelte";
-	import ProjectSettingsTabContent from "$lib/components/app/parts/ProjectSettingsTabContent.svelte";
 	import SandboxProvidersManager from "$lib/components/app/SandboxProvidersManager.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
 	import { api } from "$lib/api-client";
@@ -190,7 +189,6 @@
 		if (
 			value !== "appearance" &&
 			value !== "chat" &&
-			value !== "project" &&
 			value !== "providers" &&
 			value !== "credentials" &&
 			(showUpdateTab || value !== "update")
@@ -239,7 +237,7 @@
 		<Dialog.Header>
 			<Dialog.Title>Settings</Dialog.Title>
 			<Dialog.Description>
-				Configure appearance, chat defaults, system tools, {showUpdateTab
+				Configure appearance, chat defaults, providers, {showUpdateTab
 					? "updates, and support tools"
 					: "and support tools"}.
 			</Dialog.Description>
@@ -251,11 +249,10 @@
 			class="mt-1"
 		>
 			<TabsList
-				class={`grid w-full ${showUpdateTab ? "grid-cols-6" : "grid-cols-5"}`}
+				class={`grid w-full ${showUpdateTab ? "grid-cols-5" : "grid-cols-4"}`}
 			>
 				<TabsTrigger value="appearance">Appearance</TabsTrigger>
 				<TabsTrigger value="chat">Chat</TabsTrigger>
-				<TabsTrigger value="project">System</TabsTrigger>
 				<TabsTrigger value="providers">Providers</TabsTrigger>
 				{#if showUpdateTab}
 					<TabsTrigger value="update">
@@ -514,13 +511,6 @@
 							</ItemGroup>
 						</CardContent>
 					</Card>
-				</TabsContent>
-
-				<TabsContent value="project" class="mt-0 h-full">
-					<ProjectSettingsTabContent
-						active={ui.settingsDialog.open &&
-							ui.settingsDialog.tab === "project"}
-					/>
 				</TabsContent>
 
 				<TabsContent value="providers" class="mt-0 h-full">
