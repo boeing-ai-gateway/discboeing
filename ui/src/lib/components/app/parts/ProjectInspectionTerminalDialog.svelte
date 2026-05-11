@@ -18,6 +18,7 @@
 		open: boolean;
 		onOpenChange: (open: boolean) => void;
 		projectId: string;
+		providerId?: string;
 		title?: string;
 		description?: string;
 	};
@@ -30,6 +31,7 @@
 		open,
 		onOpenChange,
 		projectId,
+		providerId,
 		title = "Inspection shell",
 		description = "Open a troubleshooting shell in the inspection container.",
 	}: Props = $props();
@@ -188,8 +190,11 @@
 			/\/projects\/[^/]+$/,
 			`/projects/${encodeURIComponent(nextProjectId)}`,
 		);
+		const terminalPath = providerId
+			? `/sandbox-providers/${encodeURIComponent(providerId)}/inspection/terminal/ws`
+			: "/inspection/terminal/ws";
 		const wsUrl = appendAuthToken(
-			`${projectWsBase}/inspection/terminal/ws?rows=${rows}&cols=${cols}`,
+			`${projectWsBase}${terminalPath}?rows=${rows}&cols=${cols}`,
 		);
 		const nextSocket = new WebSocket(wsUrl);
 		socket = nextSocket;

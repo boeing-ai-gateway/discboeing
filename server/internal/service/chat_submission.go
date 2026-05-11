@@ -99,12 +99,19 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID string) error {
 	submission, err := c.store.GetPromptSubmissionByID(ctx, submissionID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
 		return err
 	}
 
 	switch submission.Status {
 	case model.PromptSubmissionStatusAccepted, model.PromptSubmissionStatusFailed, model.PromptSubmissionStatusDispatching:
 		return nil
+	}
+
+	if done, err := c.finishPromptDispatchForClosedSession(ctx, submission); done || err != nil {
+		return err
 	}
 
 	claimed, err := c.store.ClaimPromptSubmissionForDispatch(ctx, submission.ID)
@@ -153,6 +160,22 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", submission.SessionID, err)
 	}
 	return nil
+}
+
+func (c *ChatService) finishPromptDispatchForClosedSession(ctx context.Context, submission *model.PromptSubmission) (bool, error) {
+	sess, err := c.store.GetSessionByID(ctx, submission.SessionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return true, c.store.MarkPromptSubmissionFailed(ctx, submission.ID, "session no longer exists")
+		}
+		return false, err
+	}
+	switch sess.Status {
+	case model.SessionStatusRemoving, model.SessionStatusRemoved:
+		return true, c.store.MarkPromptSubmissionFailed(ctx, submission.ID, fmt.Sprintf("session is %s", sess.Status))
+	default:
+		return false, nil
+	}
 }
 
 func (c *ChatService) ReconcilePromptSubmissions(ctx context.Context) error {

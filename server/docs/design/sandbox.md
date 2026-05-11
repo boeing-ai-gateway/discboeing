@@ -4,23 +4,24 @@ This module provides the sandbox runtime abstraction for managing execution envi
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `internal/sandbox/runtime.go` | Provider interface definition |
-| `internal/sandbox/idle_runtime_monitor.go` | Shared idle host-runtime shutdown monitor |
-| `internal/sandbox/errors.go` | Error types |
-| `internal/sandbox/manager.go` | Provider manager and proxy |
-| `internal/sandbox/docker/provider.go` | Docker implementation |
-| `internal/sandbox/docker/cache.go` | Cache volume management |
-| `internal/sandbox/vm/manager.go` | VM abstraction layer (interfaces for VZ, KVM, WSL2) |
-| `internal/sandbox/vz/vz_vm_manager.go` | Apple Virtualization.framework VM manager (macOS) |
-| `internal/sandbox/vz/vz_docker.go` | Hybrid provider: VZ VMs with Docker containers (macOS) |
-| `internal/sandbox/vz/vsock.go` | VSOCK communication types |
-| `internal/sandbox/wsl/` | Windows WSL2 provider and lifecycle management |
-| `server/docs/design/wsl2-sandbox-plan.md` | Working implementation plan for the WSL2 sandbox backend |
-| `internal/sandbox/vz/provider_stub.go` | Stub for non-darwin platforms |
-| `internal/sandbox/local/provider.go` | Local process provider (development) |
-| `internal/sandbox/mock/provider.go` | Mock implementation for testing |
+| File                                       | Description                                              |
+| ------------------------------------------ | -------------------------------------------------------- |
+| `internal/sandbox/runtime.go`              | Provider interface definition                            |
+| `internal/sandbox/idle_runtime_monitor.go` | Shared idle host-runtime shutdown monitor                |
+| `internal/sandbox/errors.go`               | Error types                                              |
+| `internal/sandbox/manager.go`              | Provider manager and proxy                               |
+| `internal/sandbox/docker/provider.go`      | Docker implementation                                    |
+| `internal/sandbox/docker/cache.go`         | Cache volume management                                  |
+| `internal/sandbox/exedev/provider.go`      | exe.dev VM implementation                                |
+| `internal/sandbox/vm/manager.go`           | VM abstraction layer (interfaces for VZ, KVM, WSL2)      |
+| `internal/sandbox/vz/vz_vm_manager.go`     | Apple Virtualization.framework VM manager (macOS)        |
+| `internal/sandbox/vz/vz_docker.go`         | Hybrid provider: VZ VMs with Docker containers (macOS)   |
+| `internal/sandbox/vz/vsock.go`             | VSOCK communication types                                |
+| `internal/sandbox/wsl/`                    | Windows WSL2 provider and lifecycle management           |
+| `server/docs/design/wsl2-sandbox-plan.md`  | Working implementation plan for the WSL2 sandbox backend |
+| `internal/sandbox/vz/provider_stub.go`     | Stub for non-darwin platforms                            |
+| `internal/sandbox/local/provider.go`       | Local process provider (development)                     |
+| `internal/sandbox/mock/provider.go`        | Mock implementation for testing                          |
 
 ## Architecture
 
@@ -62,6 +63,50 @@ This module provides the sandbox runtime abstraction for managing execution envi
 
 ### Provider Types
 
+Provider types are the runtime capabilities known to the sandbox manager, such
+as `docker`, `vz`, `wsl`, `local`, and `exedev`. Some types are registered as
+process-wide runtime providers, while others may be registered only as
+definitions that can be instantiated from project configuration. User
+configuration is represented separately as sandbox provider instances stored in
+`sandbox_provider_instances`. Instance `config` contains only non-secret
+settings; infrastructure secrets such as an exe.dev API key live in the normal
+credential store and are referenced from config by credential ID. New sessions
+may persist `sessions.sandbox_provider_id`; routing resolves that ID to either
+a built-in provider type or a configured instance type. Sessions without a
+provider ID use the project default provider when `projects.default_sandbox_provider_id`
+is set, otherwise they fall back to the process-wide default selected by the
+sandbox manager (`SANDBOX_PROVIDER` or the platform default). Workspaces do not
+own sandbox provider selection.
+
+Provider definitions expose config field metadata. Credential fields may include
+the expected credential provider and auth type, such as `exedev` plus `api_key`,
+so the UI can filter credential choices and create correctly scoped credentials
+inline.
+
+Built-in provider rows may also be stored in `sandbox_provider_instances` as
+project-level overrides. These rows use the provider type as the ID, set
+`built_in=true`, and can set `disabled=true` to hide that built-in provider from
+new session selection and prevent project sessions from routing to it.
+
+Provider icons are returned as UI display metadata. Built-in provider types have
+hard-coded defaults; custom provider instances may set `config.icon` through the
+API's top-level `icon` request field. Icon values may be `simple-icons:<name>`,
+an inline SVG string, a data URL, or an external image URL.
+
+Operational controls are provider capabilities, not global project features.
+Provider type and instance responses expose `capabilities.resources`,
+`capabilities.inspection`, and `capabilities.clearCache` so the UI can show only
+supported controls. Provider-scoped routes resolve either a built-in provider ID
+or a configured provider instance ID before calling the runtime provider:
+
+- `GET /api/projects/{projectId}/sandbox-providers/{providerId}/resources`
+- `PATCH /api/projects/{projectId}/sandbox-providers/{providerId}/resources`
+- `GET /api/projects/{projectId}/sandbox-providers/{providerId}/inspection`
+- `GET /api/projects/{projectId}/sandbox-providers/{providerId}/inspection/terminal/ws`
+
+The legacy project-level resources and inspection endpoints remain compatibility
+wrappers around the default provider.
+
 1. **Docker Provider**: Standard Docker containers (cross-platform)
    - Direct connection to Docker daemon
    - One container per session
@@ -100,7 +145,23 @@ This module provides the sandbox runtime abstraction for managing execution envi
    - Runs agent-api as local process
    - Not recommended for production
 
-6. **Mock Provider**: In-memory testing
+6. **exe.dev Provider**: Remote exe.dev VMs (opt-in)
+   - Uses the exe.dev HTTPS command endpoint (`POST /exec`) for VM lifecycle
+   - Creates one exe.dev VM per Discobot session
+   - Routes sandbox agent HTTP traffic through the VM's `*.exe.xyz` hostname
+   - Enable with `EXEDEV_PROVIDER_ENABLED=true`, `EXEDEV_TOKEN`, and optionally
+     `SANDBOX_PROVIDER=exedev`
+
+Non-local providers use `SANDBOX_IMAGE_REMOTE` by default so remote runtimes can
+pull a published image even when local development uses a local-only
+`SANDBOX_IMAGE`. Provider implementations can report locality through the
+optional `sandbox.LocalityProvider` capability. Docker is local when
+`DOCKER_HOST` is empty or points at a local socket (`unix://`, `npipe://`, or
+`fd://`), and remote when it is explicitly configured with a remote host such as
+`tcp://...` or `ssh://...`. `SANDBOX_IMAGE_MODE=local|remote` can override the
+locality-based default for advanced setups.
+
+7. **Mock Provider**: In-memory testing
    - No real sandboxes created
    - Used for unit tests
 
@@ -503,18 +564,22 @@ The provider uses the `vm.ProjectVMManager` interface, making it easy to swap VZ
 ### Create Flow
 
 1. **Get/Create Project VM**:
+
    ```go
    pvm, err := p.vmManager.GetOrCreateVM(ctx, opts.ProjectID, sessionID)
    ```
+
    - Creates new VM if first session in project
    - Reuses existing VM if project already has one
    - Waits for Docker daemon to be ready (max 60s)
    - VM manager handles console logging, resource allocation, and lifecycle
 
 2. **Get/Create Docker Provider**:
+
    ```go
    dockerProv, err := p.getOrCreateDockerProvider(opts.ProjectID, pvm)
    ```
+
    - Creates Docker client with VSOCK transport
    - VSOCK dialer connects to port 2375 in the VM
    - Docker client communicates as if local
@@ -523,6 +588,7 @@ The provider uses the `vm.ProjectVMManager` interface, making it easy to swap VZ
    ```go
    sb, err := dockerProv.Create(ctx, sessionID, opts)
    ```
+
    - Standard Docker container creation
    - Container runs inside the project VM
    - Isolated from other sessions via Docker
@@ -557,6 +623,7 @@ func (pvm *projectVM) DockerDialer() func(ctx context.Context, network, addr str
 ### VM Base Image Requirements
 
 The base disk image must include:
+
 - Linux kernel with virtio drivers (vsock, net, blk)
 - Docker daemon
 - socat for VSOCK-to-socket bridging
@@ -681,6 +748,7 @@ labels := map[string]string{
 The sandbox provider's `Remove()` method accepts optional `RemoveOption` parameters:
 
 ### Default behavior (no options)
+
 - **Purpose**: Remove container for rebuild scenarios (e.g., image updates)
 - **Behavior**: Deletes the container but preserves data volumes
 - **Use case**: Image reconciliation, container recreation, failed container recovery
@@ -696,6 +764,7 @@ if err := provider.Remove(ctx, sessionID); err != nil {
 ```
 
 ### With sandbox.RemoveVolumes() option
+
 - **Purpose**: Complete cleanup when deleting a session or explicitly purging retained data
 - **Behavior**: Deletes both container and all associated data volumes
 - **Use case**: Immediate permanent cleanup, explicit cleanup jobs

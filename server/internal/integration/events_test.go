@@ -275,7 +275,7 @@ func TestEvents_SessionCreationEmitsEvents(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Connect to SSE

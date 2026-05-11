@@ -379,11 +379,11 @@ func TestPerformCommit_WorkspaceUnchangedNoExistingPatches(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create sandbox for the session
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -482,11 +482,11 @@ func TestPerformCommit_CompletesOnFinishChunkWithoutDoneEvent(t *testing.T) {
 		}
 	})
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -605,11 +605,11 @@ func TestPerformCommit_StreamEndsBeforeFinishContinuesReconciliation(t *testing.
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -671,11 +671,11 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create and start sandbox
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -770,11 +770,11 @@ func TestPerformCommit_WorkspaceChangedNoPatches(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create and start sandbox
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -872,11 +872,11 @@ func TestPerformCommit_WorkspaceChangedGetCommitsError(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create and start sandbox
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -934,11 +934,11 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create and start sandbox
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1027,11 +1027,11 @@ func TestPerformCommit_NoCommitsAfterPromptMarksCompleted(t *testing.T) {
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1095,11 +1095,11 @@ func TestPerformCommit_NoCommitsAfterPrompt_DirtyWorkTree_MarksFailed(t *testing
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1144,11 +1144,11 @@ func TestPerformCommit_NoCommitsAfterPrompt_CleanTargetMatchCompletes(t *testing
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1248,11 +1248,11 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1321,11 +1321,11 @@ func TestPerformCommit_RequestCommitPullApplyFailureSuggestsRebase(t *testing.T)
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1393,11 +1393,11 @@ func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t 
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1458,11 +1458,11 @@ func TestPerformCommit_PromptErrorStillMarksFailed(t *testing.T) {
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1537,11 +1537,11 @@ func TestPerformCommit_RepeatedCommitsAdvanceSandboxBaseAndRecordLogs(t *testing
 	}
 	env.mockSandbox.HTTPHandler = handler
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -1680,13 +1680,13 @@ func TestPerformCommit_SandboxNotRunning(t *testing.T) {
 	env.mockSandbox.HTTPHandler = handler
 
 	// Create sandbox but DON'T start it - simulating the scenario from the bug report
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
 
 	// Verify sandbox is not running
-	sb, err := env.mockSandbox.Get(context.Background(), session.ID)
+	sb, err := env.mockSandbox.Get(context.Background(), nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox info: %v", err)
 	}
@@ -1706,7 +1706,7 @@ func TestPerformCommit_SandboxNotRunning(t *testing.T) {
 	}
 
 	// Verify the sandbox was started during reconciliation
-	sb, err = env.mockSandbox.Get(context.Background(), session.ID)
+	sb, err = env.mockSandbox.Get(context.Background(), nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox info after commit: %v", err)
 	}

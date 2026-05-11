@@ -178,6 +178,14 @@ var credentialTypeSpecs = []credentialTypeSpec{
 		GroupName:         "Tools",
 		AuthType:          "api_key",
 	},
+	{
+		ID:                "exedev:api_key",
+		DisplayProviderID: "exedev",
+		BackendProviderID: "exedev",
+		Group:             CredentialTypeGroupTools,
+		GroupName:         "Tools",
+		AuthType:          "api_key",
+	},
 }
 
 // GetCredentialTypes returns the credential choices used by the current UI.

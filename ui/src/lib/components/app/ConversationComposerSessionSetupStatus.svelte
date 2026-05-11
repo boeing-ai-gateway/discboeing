@@ -12,6 +12,9 @@
 		() => app.sessions.awaitingInitialStatusId === session.sessionId,
 	);
 	const sessionStatus = $derived.by(() => session.current?.status ?? null);
+	const sessionErrorMessage = $derived.by(
+		() => session.current?.errorMessage?.trim() ?? "",
+	);
 	const showSessionStatus = $derived.by(
 		() => sessionStatus !== null && sessionStatus !== "ready",
 	);
@@ -41,6 +44,14 @@
 				class="text-sm"
 				labelClass="font-medium"
 			/>
+			{#if sessionErrorMessage}
+				<p
+					class="mt-1 line-clamp-3 text-xs text-destructive"
+					title={sessionErrorMessage}
+				>
+					{sessionErrorMessage}
+				</p>
+			{/if}
 		{:else}
 			<p class="text-sm font-medium text-muted-foreground">
 				Start a new session

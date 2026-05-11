@@ -54,6 +54,7 @@ export type SessionViewState = {
 	pendingWorkspaceSourceType: "local" | "git";
 	pendingWorkspaceSourceIsValid: boolean;
 	pendingWorkspaceValidationMessage: string | null;
+	pendingSandboxProviderId: string;
 	openChat: () => void;
 	openTerminal: () => void;
 	openDesktop: () => void;
@@ -73,6 +74,7 @@ export type SessionViewState = {
 	) => void;
 	setPendingWorkspaceValidating: (value: boolean) => void;
 	setPendingWorkspaceSetupMessage: (value: string | null) => void;
+	setPendingSandboxProviderId: (value: string) => void;
 	resetPendingWorkspaceSetup: () => void;
 	setHooksExpanded: (value: boolean) => void;
 	setQueueExpanded: (value: boolean) => void;
@@ -102,6 +104,7 @@ export function createSessionViewState(
 	);
 	let pendingWorkspaceValidating = $state(false);
 	let pendingWorkspaceSetupMessage = $state<string | null>(null);
+	let pendingSandboxProviderId = $state("");
 
 	const openChat = () => {
 		dockMaximized = false;
@@ -156,6 +159,7 @@ export function createSessionViewState(
 		pendingWorkspaceValidation = null;
 		pendingWorkspaceValidating = false;
 		pendingWorkspaceSetupMessage = null;
+		pendingSandboxProviderId = "";
 	};
 
 	return {
@@ -291,6 +295,9 @@ export function createSessionViewState(
 					return null;
 			}
 		},
+		get pendingSandboxProviderId() {
+			return pendingSandboxProviderId;
+		},
 		openChat,
 		openTerminal,
 		openDesktop,
@@ -325,6 +332,9 @@ export function createSessionViewState(
 		},
 		setPendingWorkspaceSetupMessage: (value) => {
 			pendingWorkspaceSetupMessage = value;
+		},
+		setPendingSandboxProviderId: (value) => {
+			pendingSandboxProviderId = value;
 		},
 		resetPendingWorkspaceSetup,
 		setHooksExpanded: (value) => {

@@ -34,6 +34,7 @@ const (
 	ProviderOpenAI        = "openai"
 	ProviderTavily        = "tavily"
 	ProviderDiscobot      = "discobot"
+	ProviderExeDev        = "exedev"
 )
 
 // mcpProviderPrefix is the credential provider prefix for MCP OAuth tokens.
@@ -1632,7 +1633,7 @@ func isValidProvider(provider string) bool {
 		return true
 	}
 	switch provider {
-	case ProviderAnthropic, ProviderGitHubCopilot, ProviderGitHub, ProviderCodex, ProviderOpenAI, ProviderTavily, ProviderDiscobot:
+	case ProviderAnthropic, ProviderGitHubCopilot, ProviderGitHub, ProviderCodex, ProviderOpenAI, ProviderTavily, ProviderDiscobot, ProviderExeDev:
 		return true
 	default:
 		return false

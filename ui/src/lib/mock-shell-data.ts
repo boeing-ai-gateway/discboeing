@@ -284,6 +284,7 @@ const allSessionStatuses: SessionData["status"][] = [
 	SessionStatus.CLONING,
 	SessionStatus.PULLING_IMAGE,
 	SessionStatus.CREATING_SANDBOX,
+	SessionStatus.CREATE_FAILED,
 	SessionStatus.READY,
 	SessionStatus.PENDING,
 	SessionStatus.COMMITTING,

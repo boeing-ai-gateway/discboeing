@@ -4,9 +4,6 @@ package local
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"maps"
@@ -92,20 +89,31 @@ func (p *Provider) Image() string {
 	return "local"
 }
 
+func (p *Provider) IsLocal() bool {
+	return true
+}
+
+func (p *Provider) Definition() sandbox.ProviderDefinition {
+	return sandbox.ProviderDefinition{
+		Name:        "Local",
+		Description: "Local process sandbox driver",
+	}
+}
+
 // Create creates a new sandbox for the given session by preparing the process info.
 // The process is not started yet.
-func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *Provider) Create(_ context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	p.processesMu.Lock()
 	defer p.processesMu.Unlock()
 
 	// Check if already exists
 	if _, exists := p.processes[sessionID]; exists {
-		return nil, sandbox.ErrAlreadyExists
+		return nil, state, sandbox.ErrAlreadyExists
 	}
 
 	// Validate workspace path
 	if opts.WorkspacePath == "" {
-		return nil, fmt.Errorf("%w: workspace path is required", sandbox.ErrStartFailed)
+		return nil, state, fmt.Errorf("%w: workspace path is required", sandbox.ErrStartFailed)
 	}
 
 	// Ensure workspace path is absolute
@@ -113,16 +121,16 @@ func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.Crea
 	if !filepath.IsAbs(workspacePath) {
 		absPath, err := filepath.Abs(workspacePath)
 		if err != nil {
-			return nil, fmt.Errorf("%w: failed to resolve absolute path for workspace: %v", sandbox.ErrStartFailed, err)
+			return nil, state, fmt.Errorf("%w: failed to resolve absolute path for workspace: %v", sandbox.ErrStartFailed, err)
 		}
 		workspacePath = absPath
 	}
 
 	// Verify workspace exists
 	if stat, err := os.Stat(workspacePath); err != nil {
-		return nil, fmt.Errorf("%w: workspace path does not exist: %v", sandbox.ErrStartFailed, err)
+		return nil, state, fmt.Errorf("%w: workspace path does not exist: %v", sandbox.ErrStartFailed, err)
 	} else if !stat.IsDir() {
-		return nil, fmt.Errorf("%w: workspace path is not a directory", sandbox.ErrStartFailed)
+		return nil, state, fmt.Errorf("%w: workspace path is not a directory", sandbox.ErrStartFailed)
 	}
 
 	// Build metadata
@@ -132,39 +140,7 @@ func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.Crea
 	}
 	maps.Copy(metadata, opts.Labels)
 
-	// Build environment variables
-	env := map[string]string{
-		"DISCOBOT_SESSION_ID":   sessionID,
-		"WORKSPACE_ORIGIN_PATH": workspacePath,
-	}
-
-	// Add hashed secret if provided
-	if opts.SharedSecret != "" {
-		hashedSecret := hashSecret(opts.SharedSecret)
-		env["DISCOBOT_SECRET"] = hashedSecret
-	}
-
-	// Add workspace source and commit
-	if opts.WorkspaceSource != "" {
-		env["WORKSPACE_SOURCE"] = opts.WorkspaceSource
-	}
-	if opts.WorkspaceCommit != "" {
-		env["WORKSPACE_COMMIT"] = opts.WorkspaceCommit
-	}
-	if opts.WorkspaceTargetRef != "" {
-		env["WORKSPACE_TARGET_REF"] = opts.WorkspaceTargetRef
-	}
-
-	// MCP OAuth env vars (agent uses these to persist tokens back to the server)
-	if opts.ProjectID != "" {
-		env["DISCOBOT_PROJECT_ID"] = opts.ProjectID
-	}
-	if opts.MCPOAuthRedirectBase != "" {
-		env["DISCOBOT_MCP_OAUTH_REDIRECT_BASE"] = opts.MCPOAuthRedirectBase
-	}
-	if opts.AgentServerURL != "" {
-		env["DISCOBOT_SERVER_URL"] = opts.AgentServerURL
-	}
+	env := maps.Clone(opts.Env)
 
 	// Create process info (not started yet)
 	now := time.Now()
@@ -195,22 +171,22 @@ func (p *Provider) Create(_ context.Context, sessionID string, opts sandbox.Crea
 		CreatedAt: now,
 		Metadata:  metadata,
 		Env:       env,
-	}, nil
+	}, state, nil
 }
 
 // Start starts the agent API process for the given session.
-func (p *Provider) Start(_ context.Context, sessionID string) error {
+func (p *Provider) Start(_ context.Context, state []byte, sessionID string) ([]byte, error) {
 	p.processesMu.Lock()
 	defer p.processesMu.Unlock()
 
 	info, exists := p.processes[sessionID]
 	if !exists {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	// Check if already running
 	if info.status == sandbox.StatusRunning {
-		return nil // Already running
+		return state, nil // Already running
 	}
 
 	// Allocate a random port by binding to port 0
@@ -224,7 +200,7 @@ func (p *Provider) Start(_ context.Context, sessionID string) error {
 			Timestamp: time.Now(),
 			Error:     info.error,
 		})
-		return fmt.Errorf("%w: failed to allocate port: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: failed to allocate port: %v", sandbox.ErrStartFailed, err)
 	}
 
 	// Get the assigned port
@@ -255,7 +231,7 @@ func (p *Provider) Start(_ context.Context, sessionID string) error {
 			Timestamp: time.Now(),
 			Error:     info.error,
 		})
-		return fmt.Errorf("%w: failed to start agent API: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: failed to start agent API: %v", sandbox.ErrStartFailed, err)
 	}
 
 	// Update process info
@@ -277,7 +253,7 @@ func (p *Provider) Start(_ context.Context, sessionID string) error {
 
 	log.Printf("Started agent API for session %s on port %d (PID %d)", sessionID, port, cmd.Process.Pid)
 
-	return nil
+	return state, nil
 }
 
 // monitorProcess monitors a process and updates status when it exits.
@@ -317,18 +293,18 @@ func (p *Provider) monitorProcess(sessionID string, cmd *exec.Cmd) {
 }
 
 // Stop stops the agent API process gracefully.
-func (p *Provider) Stop(_ context.Context, sessionID string, timeout time.Duration) error {
+func (p *Provider) Stop(_ context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	p.processesMu.Lock()
 	defer p.processesMu.Unlock()
 
 	info, exists := p.processes[sessionID]
 	if !exists {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	if info.status != sandbox.StatusRunning || info.cmd == nil {
 		p.httpClients.Remove(sessionID)
-		return nil // Already stopped
+		return state, nil // Already stopped
 	}
 
 	p.httpClients.Remove(sessionID)
@@ -372,21 +348,21 @@ func (p *Provider) Stop(_ context.Context, sessionID string, timeout time.Durati
 		log.Printf("Force killed agent API for session %s after timeout", sessionID)
 	}
 
-	return nil
+	return state, nil
 }
 
 // Remove removes the sandbox (stops the process if running).
-func (p *Provider) Remove(ctx context.Context, sessionID string, _ ...sandbox.RemoveOption) error {
+func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, _ ...sandbox.RemoveOption) ([]byte, error) {
 	// Stop the process first if running
-	if err := p.Stop(ctx, sessionID, 5*time.Second); err != nil && err != sandbox.ErrNotFound {
-		return err
+	if _, err := p.Stop(ctx, state, sessionID, 5*time.Second); err != nil && err != sandbox.ErrNotFound {
+		return state, err
 	}
 
 	p.processesMu.Lock()
 	defer p.processesMu.Unlock()
 
 	if _, exists := p.processes[sessionID]; !exists {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	// Remove from map
@@ -402,11 +378,11 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, _ ...sandbox.Re
 
 	log.Printf("Removed sandbox for session %s", sessionID)
 
-	return nil
+	return state, nil
 }
 
 // Get returns the current state of a sandbox.
-func (p *Provider) Get(_ context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *Provider) Get(_ context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
 	p.processesMu.RLock()
 	defer p.processesMu.RUnlock()
 
@@ -441,7 +417,7 @@ func (p *Provider) Get(_ context.Context, sessionID string) (*sandbox.Sandbox, e
 }
 
 // GetSecret returns the shared secret for the sandbox.
-func (p *Provider) GetSecret(_ context.Context, sessionID string) (string, error) {
+func (p *Provider) GetSecret(_ context.Context, _ []byte, sessionID string) (string, error) {
 	p.processesMu.RLock()
 	defer p.processesMu.RUnlock()
 
@@ -460,7 +436,7 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 
 	var sandboxes []*sandbox.Sandbox
 	for sessionID := range p.processes {
-		sb, err := p.Get(ctx, sessionID)
+		sb, err := p.Get(ctx, nil, sessionID)
 		if err == nil {
 			sandboxes = append(sandboxes, sb)
 		}
@@ -470,7 +446,7 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 }
 
 // AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
-func (p *Provider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+func (p *Provider) AcquireHTTPClient(_ context.Context, _ []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
 	p.processesMu.RLock()
 	info, exists := p.processes[sessionID]
 	p.processesMu.RUnlock()
@@ -576,24 +552,4 @@ func (p *Provider) Reconcile(_ context.Context) error {
 // RemoveProject is a no-op for the local provider.
 func (p *Provider) RemoveProject(_ context.Context, _ string) error {
 	return nil
-}
-
-// hashSecret creates a salted SHA-256 hash of the secret.
-// This matches the Docker provider implementation.
-func hashSecret(secret string) string {
-	// Generate a random 16-byte salt
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		log.Printf("Failed to generate salt: %v", err)
-		return ""
-	}
-
-	// Hash the secret with the salt
-	hasher := sha256.New()
-	hasher.Write(salt)
-	hasher.Write([]byte(secret))
-	hash := hasher.Sum(nil)
-
-	// Return salt:hash in hex format
-	return fmt.Sprintf("%s:%s", hex.EncodeToString(salt), hex.EncodeToString(hash))
 }

@@ -24,7 +24,14 @@
 	import CredentialTypePicker from "$lib/components/app/parts/CredentialTypePicker.svelte";
 	import * as Dialog from "$lib/components/ui/dialog";
 	import { Input } from "$lib/components/ui/input";
-	import { ItemGroup } from "$lib/components/ui/item";
+	import {
+		Item,
+		ItemContent,
+		ItemDescription,
+		ItemGroup,
+		ItemSeparator,
+		ItemTitle,
+	} from "$lib/components/ui/item";
 	import { Label } from "$lib/components/ui/label";
 	import { NativeSelect } from "$lib/components/ui/native-select";
 	import * as Tooltip from "$lib/components/ui/tooltip";
@@ -1308,30 +1315,42 @@
 		{#if loading}
 			<div class="text-sm text-muted-foreground">Loading credentials…</div>
 		{:else}
-			<div class="flex items-center justify-between gap-2">
-				<div class="text-sm text-muted-foreground">
-					Manage built-in credentials and custom environment variable bundles.
+			<div class="flex items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium">Configured credentials</p>
+					<p class="text-xs text-muted-foreground">
+						Manage built-in credentials and custom environment variable bundles.
+					</p>
 				</div>
-				<Button variant="outline" size="sm" onclick={startCreate}>
+				<Button variant="default" size="xs" onclick={startCreate}>
 					<PlusIcon class="size-4" />
-					New credential
+					Add credential
 				</Button>
 			</div>
 
 			{#if errorMessage && mode === "list"}
-				<div class="text-sm text-destructive">{errorMessage}</div>
+				<div
+					class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+				>
+					{errorMessage}
+				</div>
 			{/if}
 
 			<div class="min-h-0 flex-1 overflow-auto">
-				<ItemGroup>
+				<ItemGroup class="rounded-md border border-border">
 					{#if credentialsApi.list.length === 0}
-						<div
-							class="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground"
-						>
-							No credentials configured.
-						</div>
+						<Item size="sm">
+							<ItemContent>
+								<ItemTitle>No credentials configured</ItemTitle>
+								<ItemDescription>
+									Add a credential or environment variable bundle to make it
+									available to sessions.
+								</ItemDescription>
+							</ItemContent>
+						</Item>
 					{:else}
-						{#each credentialListEntries as entry (entry.credential.id)}
+						{#each credentialListEntries as entry, index (entry.credential.id)}
+							{#if index > 0}<ItemSeparator />{/if}
 							<CredentialListItem
 								credential={entry.credential}
 								title={entry.title}

@@ -803,7 +803,6 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		Path        string  `json:"path"`
 		DisplayName *string `json:"displayName"`
 		SourceType  string  `json:"sourceType"`
-		Provider    string  `json:"provider"`
 	}
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
@@ -817,7 +816,7 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		req.SourceType = "local"
 	}
 
-	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), projectID, req.Path, req.SourceType, req.Provider)
+	workspace, err := h.workspaceService.CreateWorkspace(r.Context(), projectID, req.Path, req.SourceType)
 	if err != nil {
 		// Pass through the detailed error message from the service
 		h.Error(w, http.StatusBadRequest, err.Error())
@@ -910,8 +909,6 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		}
 		modified = true
 	}
-
-	// Note: Provider cannot be updated after creation - it's set only on Create
 
 	// Save if we modified the workspace
 	if modified {

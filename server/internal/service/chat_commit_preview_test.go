@@ -163,11 +163,11 @@ index e69de29..587be6b 100644
 		}
 	})
 
-	_, err := env.mockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{})
+	_, _, err := env.mockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := env.mockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := env.mockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 

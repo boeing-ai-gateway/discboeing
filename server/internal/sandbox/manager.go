@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"runtime"
 	"time"
 )
@@ -25,6 +26,7 @@ func PlatformDefaultProvider() string {
 // Manager manages multiple sandbox providers and routes requests to the appropriate one.
 type Manager struct {
 	providers       map[string]Provider
+	definitions     map[string]ProviderDefinition
 	defaultProvider string // Default provider name
 }
 
@@ -33,6 +35,7 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		providers:       make(map[string]Provider),
+		definitions:     make(map[string]ProviderDefinition),
 		defaultProvider: PlatformDefaultProvider(),
 	}
 }
@@ -40,6 +43,15 @@ func NewManager() *Manager {
 // RegisterProvider registers a provider with the given name.
 func (m *Manager) RegisterProvider(name string, provider Provider) {
 	m.providers[name] = provider
+	if dp, ok := provider.(DefinitionProvider); ok {
+		m.definitions[name] = dp.Definition()
+	}
+}
+
+// RegisterProviderDefinition registers configurable provider type metadata
+// without registering a process-wide provider instance.
+func (m *Manager) RegisterProviderDefinition(name string, definition ProviderDefinition) {
+	m.definitions[name] = definition
 }
 
 // SetDefault sets the default provider name.
@@ -112,9 +124,49 @@ func (m *Manager) GetProviderStatus(name string) (ProviderStatus, bool) {
 		status = sp.Status()
 	}
 
+	_, status.SupportsResources = provider.(ProjectResourceManager)
+	_, status.SupportsInspection = provider.(ProjectInspectionManager)
 	_, status.SupportsClearCache = provider.(ProjectCacheManager)
 
 	return status, true
+}
+
+// GetProviderDefinition returns the driver metadata for a registered provider.
+func (m *Manager) GetProviderDefinition(name string) (ProviderDefinition, bool) {
+	if definition, ok := m.definitions[name]; ok {
+		return definition, true
+	}
+	provider, ok := m.providers[name]
+	if !ok {
+		return ProviderDefinition{}, false
+	}
+	if dp, ok := provider.(DefinitionProvider); ok {
+		return dp.Definition(), true
+	}
+	return ProviderDefinition{
+		Name:        name,
+		Description: "Built-in " + name + " sandbox driver",
+	}, true
+}
+
+// ListProviderDefinitions returns all registered provider type definitions.
+func (m *Manager) ListProviderDefinitions() map[string]ProviderDefinition {
+	definitions := make(map[string]ProviderDefinition, len(m.definitions)+len(m.providers))
+	maps.Copy(definitions, m.definitions)
+	for name, provider := range m.providers {
+		if _, ok := definitions[name]; ok {
+			continue
+		}
+		if dp, ok := provider.(DefinitionProvider); ok {
+			definitions[name] = dp.Definition()
+			continue
+		}
+		definitions[name] = ProviderDefinition{
+			Name:        name,
+			Description: "Built-in " + name + " sandbox driver",
+		}
+	}
+	return definitions
 }
 
 // ListProviderStatuses returns the status of all registered providers.
@@ -146,12 +198,12 @@ func (m *Manager) Shutdown() {
 // This is used when we need a single Provider interface but want to support multiple backends.
 type ProviderProxy struct {
 	manager        *Manager
-	providerGetter func(ctx context.Context, sessionID string) (string, error)
+	providerGetter func(ctx context.Context, sessionID string) (Provider, error)
 }
 
 // NewProviderProxy creates a new provider proxy that uses providerGetter to determine
 // which provider to use for each session.
-func NewProviderProxy(manager *Manager, providerGetter func(ctx context.Context, sessionID string) (string, error)) *ProviderProxy {
+func NewProviderProxy(manager *Manager, providerGetter func(ctx context.Context, sessionID string) (Provider, error)) *ProviderProxy {
 	return &ProviderProxy{
 		manager:        manager,
 		providerGetter: providerGetter,
@@ -186,94 +238,82 @@ func (p *ProviderProxy) DefaultProvider() Provider {
 	return p.manager.GetDefault()
 }
 
-// Create creates a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Create(ctx context.Context, sessionID string, opts CreateOptions) (*Sandbox, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
+func (p *ProviderProxy) providerForSession(ctx context.Context, sessionID string) (Provider, error) {
+	provider, err := p.providerGetter(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider for session: %w", err)
 	}
+	return provider, nil
+}
 
-	provider, err := p.manager.GetProvider(providerName)
+// PrepareState returns provider state using the provider determined by providerGetter.
+func (p *ProviderProxy) PrepareState(ctx context.Context, sessionID string, opts CreateOptions) ([]byte, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	return provider.Create(ctx, sessionID, opts)
+	return provider.PrepareState(ctx, sessionID, opts)
+}
+
+// Create creates a sandbox using the provider determined by providerGetter.
+func (p *ProviderProxy) Create(ctx context.Context, state []byte, sessionID string, opts CreateOptions) (*Sandbox, []byte, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return provider.Create(ctx, state, sessionID, opts)
 }
 
 // Start starts a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Start(ctx context.Context, sessionID string) error {
-	providerName, err := p.providerGetter(ctx, sessionID)
+func (p *ProviderProxy) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get provider for session: %w", err)
+		return state, err
 	}
 
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return err
-	}
-
-	return provider.Start(ctx, sessionID)
+	return provider.Start(ctx, state, sessionID)
 }
 
 // Stop stops a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
-	providerName, err := p.providerGetter(ctx, sessionID)
+func (p *ProviderProxy) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get provider for session: %w", err)
+		return state, err
 	}
 
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return err
-	}
-
-	return provider.Stop(ctx, sessionID, timeout)
+	return provider.Stop(ctx, state, sessionID, timeout)
 }
 
 // Remove removes a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Remove(ctx context.Context, sessionID string, opts ...RemoveOption) error {
-	providerName, err := p.providerGetter(ctx, sessionID)
+func (p *ProviderProxy) Remove(ctx context.Context, state []byte, sessionID string, opts ...RemoveOption) ([]byte, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get provider for session: %w", err)
+		return state, err
 	}
 
-	provider, err := p.manager.GetProvider(providerName)
-	if err != nil {
-		return err
-	}
-
-	return provider.Remove(ctx, sessionID, opts...)
+	return provider.Remove(ctx, state, sessionID, opts...)
 }
 
 // Get gets a sandbox using the provider determined by providerGetter.
-func (p *ProviderProxy) Get(ctx context.Context, sessionID string) (*Sandbox, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
+func (p *ProviderProxy) Get(ctx context.Context, state []byte, sessionID string) (*Sandbox, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	return provider.Get(ctx, sessionID)
+	return provider.Get(ctx, state, sessionID)
 }
 
 // GetSecret gets the secret using the provider determined by providerGetter.
-func (p *ProviderProxy) GetSecret(ctx context.Context, sessionID string) (string, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
+func (p *ProviderProxy) GetSecret(ctx context.Context, state []byte, sessionID string) (string, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
 
-	return provider.GetSecret(ctx, sessionID)
+	return provider.GetSecret(ctx, state, sessionID)
 }
 
 // List lists all sandboxes across all providers.
@@ -292,18 +332,13 @@ func (p *ProviderProxy) List(ctx context.Context) ([]*Sandbox, error) {
 }
 
 // AcquireHTTPClient returns a leased HTTP client using the provider determined by providerGetter.
-func (p *ProviderProxy) AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error) {
-	providerName, err := p.providerGetter(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for session: %w", err)
-	}
-
-	provider, err := p.manager.GetProvider(providerName)
+func (p *ProviderProxy) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*HTTPClientLease, error) {
+	provider, err := p.providerForSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	return AcquireHTTPClient(ctx, provider, sessionID)
+	return provider.AcquireHTTPClient(ctx, state, sessionID)
 }
 
 // Watch watches all providers and merges events.

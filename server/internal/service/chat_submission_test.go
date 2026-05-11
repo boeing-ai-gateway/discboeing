@@ -67,3 +67,70 @@ func TestSubmitPromptReturnsQueuedWhileDispatchContinues(t *testing.T) {
 		t.Fatalf("expected queued status, got %q", started.Status)
 	}
 }
+
+func TestDispatchPromptSubmissionSkipsRemovingSession(t *testing.T) {
+	ctx := context.Background()
+	st := setupTestStore(t)
+	chatService := NewChatService(st, &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}, nil, nil, nil, nil, nil)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-removing",
+		ProjectID:  "project-1",
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "session-removing",
+		ProjectID:   "project-1",
+		WorkspaceID: workspace.ID,
+		Name:        "Removing Session",
+		Status:      model.SessionStatusRemoving,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	submission := &model.PromptSubmission{
+		ProjectID:       "project-1",
+		SessionID:       session.ID,
+		ThreadID:        "thread-1",
+		ClientMessageID: "msg-user-1",
+		MessageID:       "msg-user-1",
+		Status:          model.PromptSubmissionStatusPending,
+	}
+	if err := st.CreatePromptSubmission(ctx, submission); err != nil {
+		t.Fatalf("failed to create prompt submission: %v", err)
+	}
+
+	if err := chatService.DispatchPromptSubmission(ctx, submission.ID); err != nil {
+		t.Fatalf("DispatchPromptSubmission returned error: %v", err)
+	}
+
+	latest, err := st.GetPromptSubmissionByID(ctx, submission.ID)
+	if err != nil {
+		t.Fatalf("failed to load prompt submission: %v", err)
+	}
+	if latest.Status != model.PromptSubmissionStatusFailed {
+		t.Fatalf("expected failed submission status, got %q", latest.Status)
+	}
+	if latest.ErrorMessage == nil || *latest.ErrorMessage != "session is removing" {
+		t.Fatalf("expected removing session error, got %v", latest.ErrorMessage)
+	}
+}
+
+func TestDispatchPromptSubmissionIgnoresDeletedSubmission(t *testing.T) {
+	st := setupTestStore(t)
+	chatService := NewChatService(st, &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}, nil, nil, nil, nil, nil)
+
+	if err := chatService.DispatchPromptSubmission(context.Background(), "missing-submission"); err != nil {
+		t.Fatalf("DispatchPromptSubmission returned error for missing submission: %v", err)
+	}
+}

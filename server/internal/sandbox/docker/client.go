@@ -51,6 +51,19 @@ func NewAPIClient(cfg *config.Config) (*client.Client, error) {
 	return client.NewClientWithOpts(clientOpts...)
 }
 
+// IsLocalHost reports whether a Docker host string points at a local daemon.
+// An empty host is treated as local because the Docker SDK will use the local
+// default socket unless the user has explicitly configured a remote host.
+func IsLocalHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return true
+	}
+	return strings.HasPrefix(host, "unix://") ||
+		strings.HasPrefix(host, "npipe://") ||
+		strings.HasPrefix(host, "fd://")
+}
+
 func newWSLDockerHTTPClient(distroName string) (*http.Client, error) {
 	distroName = strings.TrimSpace(distroName)
 	if distroName == "" {

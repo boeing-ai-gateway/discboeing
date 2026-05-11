@@ -32,8 +32,8 @@ func newHTTPClientLease(client *http.Client, release func()) *HTTPClientLease {
 }
 
 // AcquireHTTPClient acquires a leased HTTP client from the provider.
-func AcquireHTTPClient(ctx context.Context, provider Provider, sessionID string) (*HTTPClientLease, error) {
-	return provider.AcquireHTTPClient(ctx, sessionID)
+func AcquireHTTPClient(ctx context.Context, provider Provider, state []byte, sessionID string) (*HTTPClientLease, error) {
+	return provider.AcquireHTTPClient(ctx, state, sessionID)
 }
 
 // HTTPClientCache caches leased HTTP clients keyed by a unique session identifier.

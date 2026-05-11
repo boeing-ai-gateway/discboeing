@@ -97,6 +97,7 @@ func normalizeSessionStatus(status string) string {
 type Session struct {
 	ID              string                 `json:"id"`
 	ProjectID       string                 `json:"projectId"`
+	ProviderID      string                 `json:"providerId,omitempty"`
 	Name            string                 `json:"name"`
 	DisplayName     string                 `json:"displayName,omitempty"`
 	Description     string                 `json:"description"`
@@ -204,6 +205,9 @@ func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, s
 	if sess == nil || strings.TrimSpace(sess.Name) != "" || s.sandboxService == nil {
 		return
 	}
+	if normalizeSessionStatus(sess.Status) != model.SessionStatusReady {
+		return
+	}
 
 	client, err := s.sandboxService.GetClient(ctx, sess.ID)
 	if err != nil {
@@ -231,13 +235,19 @@ func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, s
 // CreateSession creates a new session with initializing status and auto-generated ID.
 // If initialMessage is provided, it creates the first user message in the session.
 func (s *SessionService) CreateSession(ctx context.Context, projectID, workspaceID, name, initialMessage string) (*Session, error) {
+	return s.CreateSessionWithProvider(ctx, projectID, workspaceID, "", name, initialMessage)
+}
+
+// CreateSessionWithProvider creates a new session with a selected sandbox provider instance.
+func (s *SessionService) CreateSessionWithProvider(ctx context.Context, projectID, workspaceID, providerID, name, initialMessage string) (*Session, error) {
 	sess := &model.Session{
-		ProjectID:    projectID,
-		WorkspaceID:  workspaceID,
-		Name:         name,
-		Description:  nil,
-		Status:       model.SessionStatusInitializing,
-		ThreadStatus: model.SessionActivityStatusIdle,
+		ProjectID:         projectID,
+		WorkspaceID:       workspaceID,
+		SandboxProviderID: strings.TrimSpace(providerID),
+		Name:              name,
+		Description:       nil,
+		Status:            model.SessionStatusInitializing,
+		ThreadStatus:      model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -261,14 +271,20 @@ func (s *SessionService) CreateSession(ctx context.Context, projectID, workspace
 
 // CreateSessionWithID creates a new session with the provided client ID.
 func (s *SessionService) CreateSessionWithID(ctx context.Context, sessionID, projectID, workspaceID, name string) (*Session, error) {
+	return s.CreateSessionWithIDAndProvider(ctx, sessionID, projectID, workspaceID, "", name)
+}
+
+// CreateSessionWithIDAndProvider creates a new session with the provided client ID and sandbox provider instance.
+func (s *SessionService) CreateSessionWithIDAndProvider(ctx context.Context, sessionID, projectID, workspaceID, providerID, name string) (*Session, error) {
 	sess := &model.Session{
-		ID:           sessionID, // Use client-provided ID
-		ProjectID:    projectID,
-		WorkspaceID:  workspaceID,
-		Name:         name,
-		Description:  nil,
-		Status:       model.SessionStatusInitializing,
-		ThreadStatus: model.SessionActivityStatusIdle,
+		ID:                sessionID, // Use client-provided ID
+		ProjectID:         projectID,
+		WorkspaceID:       workspaceID,
+		SandboxProviderID: strings.TrimSpace(providerID),
+		Name:              name,
+		Description:       nil,
+		Status:            model.SessionStatusInitializing,
+		ThreadStatus:      model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -479,26 +495,26 @@ func (s *SessionService) DeleteSession(ctx context.Context, projectID, sessionID
 		return fmt.Errorf("session not found: %w", err)
 	}
 
-	// Don't allow deletion of sessions already being removed
-	if sess.Status == model.SessionStatusRemoving {
-		return nil // Already being deleted
-	}
+	wasCreateFailed := sess.Status == model.SessionStatusCreateFailed
+	if sess.Status != model.SessionStatusRemoving {
+		// Update status to "removing"
+		sess.Status = model.SessionStatusRemoving
+		if err := s.store.UpdateSession(ctx, sess); err != nil {
+			return fmt.Errorf("failed to update session status: %w", err)
+		}
 
-	// Update status to "removing"
-	sess.Status = model.SessionStatusRemoving
-	if err := s.store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session status: %w", err)
-	}
-
-	// Emit SSE event
-	if s.eventBroker != nil {
-		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, model.SessionStatusRemoving, sess.CommitStatus); err != nil {
-			log.Printf("Failed to publish session removing event: %v", err)
+		// Emit SSE event
+		if s.eventBroker != nil {
+			if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, model.SessionStatusRemoving, sess.CommitStatus); err != nil {
+				log.Printf("Failed to publish session removing event: %v", err)
+			}
 		}
 	}
 
-	// Enqueue deletion job
-	if err := jobQueue.Enqueue(ctx, jobs.SessionDeletePayload{ProjectID: projectID, SessionID: sessionID}); err != nil {
+	// Enqueue deletion job. Re-enqueue even when the session is already in
+	// "removing" so a failed or exhausted prior delete job does not leave the
+	// session stuck forever.
+	if err := jobQueue.Enqueue(ctx, jobs.SessionDeletePayload{ProjectID: projectID, SessionID: sessionID, CreateFailed: wasCreateFailed}); err != nil {
 		// If job enqueueing fails, log but don't fail - the session is marked as removing
 		// and can be cleaned up later by reconciliation
 		log.Printf("Failed to enqueue session delete job for %s: %v", sessionID, err)
@@ -636,12 +652,41 @@ func (s *SessionService) ReconcileCommitStates(ctx context.Context) error {
 // PerformDeletion performs the actual session deletion work.
 // This is called by the SessionDeleteExecutor job handler.
 func (s *SessionService) PerformDeletion(ctx context.Context, projectID, sessionID string) error {
+	return s.performDeletion(ctx, projectID, sessionID, false)
+}
+
+func (s *SessionService) PerformDeletionFromDeleteJob(ctx context.Context, projectID, sessionID string, createFailed bool) error {
+	return s.performDeletion(ctx, projectID, sessionID, createFailed)
+}
+
+func (s *SessionService) performDeletion(ctx context.Context, projectID, sessionID string, createFailed bool) error {
+	sess, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", err)
+	}
+	removeSandboxNow := createFailed || sess.Status == model.SessionStatusCreateFailed
+
 	// Step 1: Stop the sandbox immediately so the session is inactive during the
-	// recovery window, but keep the sandbox itself for deferred deletion.
+	// recovery window, but keep the sandbox itself for deferred deletion. If
+	// sandbox creation failed, remove it immediately instead; there is no useful
+	// sandbox to retain, and remote providers may have reserved a VM that needs an
+	// explicit provisioner delete to avoid orphaning it.
 	if s.sandboxProvider != nil {
-		if err := s.sandboxProvider.Stop(ctx, sessionID, 10*time.Second); err != nil {
-			if !errors.Is(err, sandbox.ErrNotFound) && !errors.Is(err, sandbox.ErrNotRunning) {
-				return fmt.Errorf("failed to stop sandbox: %w", err)
+		if removeSandboxNow {
+			if err := s.removeSandboxForDeletedSession(ctx, sessionID); err != nil {
+				return err
+			}
+		} else {
+			var err error
+			if s.sandboxService != nil {
+				err = s.sandboxService.stopSandbox(ctx, sessionID, 10*time.Second)
+			} else {
+				_, err = s.sandboxProvider.Stop(ctx, nil, sessionID, 10*time.Second)
+			}
+			if err != nil {
+				if !errors.Is(err, sandbox.ErrNotFound) && !errors.Is(err, sandbox.ErrNotRunning) {
+					log.Printf("Failed to stop sandbox for deleted session %s; continuing with database deletion and deferred cleanup: %v", sessionID, err)
+				}
 			}
 		}
 	}
@@ -651,8 +696,9 @@ func (s *SessionService) PerformDeletion(ctx context.Context, projectID, session
 		return fmt.Errorf("failed to delete session from database: %w", err)
 	}
 
-	// Step 3: Schedule deferred sandbox cleanup.
-	if s.jobEnqueuer != nil && s.sandboxProvider != nil {
+	// Step 3: Schedule deferred sandbox cleanup unless the sandbox was already
+	// removed because creation failed.
+	if !removeSandboxNow && s.jobEnqueuer != nil && s.sandboxProvider != nil {
 		if err := s.jobEnqueuer.Enqueue(ctx, jobs.SessionSandboxDeletePayload{
 			SessionID: sessionID,
 			DeleteAt:  time.Now().Add(s.cleanupDelay),
@@ -672,6 +718,27 @@ func (s *SessionService) PerformDeletion(ctx context.Context, projectID, session
 	return nil
 }
 
+func (s *SessionService) removeSandboxForDeletedSession(ctx context.Context, sessionID string) error {
+	var err error
+	if s.sandboxService != nil {
+		err = s.sandboxService.removeSandbox(ctx, sessionID, sandbox.RemoveVolumes())
+	} else {
+		_, err = s.sandboxProvider.Remove(ctx, nil, sessionID, sandbox.RemoveVolumes())
+	}
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, sandbox.ErrNotFound) {
+		if s.sandboxService != nil {
+			if deleteErr := s.store.DeleteSessionSandboxState(ctx, sessionID); deleteErr != nil {
+				log.Printf("Failed to delete missing sandbox state for session %s: %v", sessionID, deleteErr)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("failed to remove failed sandbox: %w", err)
+}
+
 // PerformDeferredSandboxDeletion removes a retained sandbox after the
 // session has been deleted long enough to age out of the recovery window.
 func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, sessionID string) error {
@@ -686,7 +753,13 @@ func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, ses
 		return fmt.Errorf("failed to check session before deferred sandbox cleanup: %w", err)
 	}
 
-	if err := s.sandboxProvider.Remove(ctx, sessionID, sandbox.RemoveVolumes()); err != nil && !errors.Is(err, sandbox.ErrNotFound) {
+	var err error
+	if s.sandboxService != nil {
+		err = s.sandboxService.removeSandbox(ctx, sessionID, sandbox.RemoveVolumes())
+	} else {
+		_, err = s.sandboxProvider.Remove(ctx, nil, sessionID, sandbox.RemoveVolumes())
+	}
+	if err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		return fmt.Errorf("failed to remove deferred sandbox: %w", err)
 	}
 
@@ -753,6 +826,7 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *S
 	session := &Session{
 		ID:              sess.ID,
 		ProjectID:       sess.ProjectID,
+		ProviderID:      sess.SandboxProviderID,
 		Name:            sess.Name,
 		DisplayName:     displayName,
 		Description:     description,
@@ -933,7 +1007,16 @@ func (s *SessionService) initializeSync(
 
 	// Step 3: Create or get existing sandbox (idempotent)
 	// First check if sandbox already exists (from a previous failed attempt)
-	existingSandbox, err := s.sandboxProvider.Get(ctx, sessionID)
+	var providerState []byte
+	var err error
+	if s.sandboxService != nil {
+		providerState, err = s.sandboxService.loadProviderState(ctx, sessionID)
+		if err != nil {
+			return fmt.Errorf("failed to load sandbox provider state: %w", err)
+		}
+	}
+
+	existingSandbox, err := s.sandboxProvider.Get(ctx, providerState, sessionID)
 	if err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		log.Printf("Failed to check for existing sandbox for session %s: %v", sessionID, err)
 		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to check sandbox: "+err.Error()))
@@ -953,7 +1036,11 @@ func (s *SessionService) initializeSync(
 			if s.sandboxService != nil {
 				if err := s.sandboxService.probeSandboxHealth(ctx, sessionID); err != nil {
 					log.Printf("Sandbox for session %s reports running but health check failed: %v, removing", sessionID, err)
-					if rmErr := s.sandboxProvider.Remove(ctx, sessionID); rmErr != nil {
+					newState, rmErr := s.sandboxProvider.Remove(ctx, providerState, sessionID)
+					if rmErr == nil && s.sandboxService != nil {
+						rmErr = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
+					}
+					if rmErr != nil {
 						log.Printf("Failed to remove unhealthy sandbox for session %s: %v", sessionID, rmErr)
 					}
 					needsCreation = true
@@ -982,7 +1069,11 @@ func (s *SessionService) initializeSync(
 			if !sandboxUsesExpectedImage(existingSandbox, s.sandboxProvider.Image(), expectedImageID) {
 				log.Printf("Sandbox for session %s is inactive but uses outdated image %s (expected %s), recreating instead of restarting",
 					sessionID, existingSandbox.Image, s.sandboxProvider.Image())
-				if err := s.sandboxProvider.Remove(ctx, sessionID); err != nil {
+				newState, err := s.sandboxProvider.Remove(ctx, providerState, sessionID)
+				if err == nil && s.sandboxService != nil {
+					err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
+				}
+				if err != nil {
 					log.Printf("Failed to remove outdated sandbox for session %s: %v", sessionID, err)
 					s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to remove outdated sandbox: "+err.Error()))
 					return fmt.Errorf("failed to remove outdated sandbox: %w", err)
@@ -992,11 +1083,20 @@ func (s *SessionService) initializeSync(
 			}
 
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
-			if err := s.sandboxProvider.Start(ctx, sessionID); err != nil {
+			newState, err := s.sandboxProvider.Start(ctx, providerState, sessionID)
+			if err == nil && s.sandboxService != nil {
+				err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
+				providerState = newState
+			}
+			if err != nil {
 				if !errors.Is(err, sandbox.ErrAlreadyRunning) {
 					log.Printf("Sandbox start failed for session %s: %v, will attempt to remove and recreate", sessionID, err)
 					// Start failed - try to remove and recreate
-					if rmErr := s.sandboxProvider.Remove(ctx, sessionID); rmErr != nil {
+					newState, rmErr := s.sandboxProvider.Remove(ctx, providerState, sessionID)
+					if rmErr == nil && s.sandboxService != nil {
+						rmErr = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
+					}
+					if rmErr != nil {
 						log.Printf("Failed to remove failed sandbox for session %s: %v", sessionID, rmErr)
 						s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox start failed and removal failed: "+rmErr.Error()))
 						return fmt.Errorf("sandbox start failed and removal failed: %w", rmErr)
@@ -1017,7 +1117,11 @@ func (s *SessionService) initializeSync(
 		default:
 			// Sandbox is in failed state - remove and recreate (preserve volumes)
 			log.Printf("Removing failed sandbox for session %s", sessionID)
-			if err := s.sandboxProvider.Remove(ctx, sessionID); err != nil {
+			newState, err := s.sandboxProvider.Remove(ctx, providerState, sessionID)
+			if err == nil && s.sandboxService != nil {
+				err = s.sandboxService.saveProviderStateIfChanged(ctx, sessionID, providerState, newState)
+			}
+			if err != nil {
 				log.Printf("Failed to remove old sandbox for session %s: %v", sessionID, err)
 				s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to remove old sandbox: "+err.Error()))
 				return fmt.Errorf("failed to remove old sandbox: %w", err)
@@ -1047,9 +1151,16 @@ func (s *SessionService) initializeSync(
 		}
 
 		sandboxSecret := generateSecret(32)
+		mcpOAuthRedirectBase := ""
+		agentServerURL := ""
+		if s.sandboxService != nil {
+			mcpOAuthRedirectBase = s.sandboxService.cfg.MCPOAuthRedirectBase
+			agentServerURL = s.sandboxService.cfg.AgentServerURL
+		}
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
 			SSHKey:       sshKey,
+			Env:          sandboxCreateEnv(sessionID, sandboxSecret, workspacePath, workspace.Path, workspaceCommit, session.TargetRef, projectID, mcpOAuthRedirectBase, agentServerURL),
 			Labels: map[string]string{
 				"discobot.session.id":   sessionID,
 				"discobot.workspace.id": workspace.ID,
@@ -1061,15 +1172,34 @@ func (s *SessionService) initializeSync(
 			WorkspaceTargetRef: session.TargetRef,
 		}
 
-		_, err := s.sandboxProvider.Create(ctx, sessionID, opts)
+		providerState, err = s.sandboxProvider.PrepareState(ctx, sessionID, opts)
+		if err == nil && s.sandboxService != nil {
+			err = s.sandboxService.saveProviderState(ctx, sessionID, providerState)
+		}
+		if err != nil {
+			log.Printf("Sandbox state preparation failed for session %s: %v", sessionID, err)
+			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox state preparation failed: "+err.Error()))
+			return fmt.Errorf("sandbox state preparation failed: %w", err)
+		}
+
+		_, providerState, err = s.sandboxProvider.Create(ctx, providerState, sessionID, opts)
 		if err != nil {
 			log.Printf("Sandbox creation failed for session %s: %v", sessionID, err)
-			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox creation failed: "+err.Error()))
+			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreateFailed, ptrString("sandbox creation failed: "+err.Error()))
 			return fmt.Errorf("sandbox creation failed: %w", err)
+		}
+		if s.sandboxService != nil {
+			if err := s.sandboxService.saveProviderState(ctx, sessionID, providerState); err != nil {
+				return fmt.Errorf("failed to save sandbox provider state: %w", err)
+			}
 		}
 
 		// Start the sandbox
-		if err := s.sandboxProvider.Start(ctx, sessionID); err != nil {
+		providerState, err = s.sandboxProvider.Start(ctx, providerState, sessionID)
+		if err == nil && s.sandboxService != nil {
+			err = s.sandboxService.saveProviderState(ctx, sessionID, providerState)
+		}
+		if err != nil {
 			log.Printf("Sandbox start failed for session %s: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox start failed: "+err.Error()))
 			return fmt.Errorf("sandbox start failed: %w", err)
@@ -1092,9 +1222,21 @@ func (s *SessionService) initializeSync(
 }
 
 // updateStatusWithEvent updates session status and emits an SSE event.
-// This now just delegates to UpdateStatus since it always publishes events.
+// Initialization jobs may still be running when deletion starts; never let them
+// move a session out of the removing/removed terminal cleanup path.
 func (s *SessionService) updateStatusWithEvent(ctx context.Context, projectID, sessionID, status string, errorMsg *string) {
-	_, err := s.UpdateStatus(ctx, projectID, sessionID, status, errorMsg)
+	current, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to load session %s before status update to %s: %v", sessionID, status, err)
+		return
+	}
+	if (current.Status == model.SessionStatusRemoving || current.Status == model.SessionStatusRemoved) &&
+		status != model.SessionStatusRemoving && status != model.SessionStatusRemoved {
+		log.Printf("Skipping session %s status update to %s because current status is %s", sessionID, status, current.Status)
+		return
+	}
+
+	_, err = s.UpdateStatus(ctx, projectID, sessionID, status, errorMsg)
 	if err != nil {
 		log.Printf("Failed to update session %s status to %s: %v", sessionID, status, err)
 	}

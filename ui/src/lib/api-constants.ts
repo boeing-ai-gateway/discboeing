@@ -8,6 +8,7 @@ export const SessionStatus = {
 	CLONING: "cloning",
 	PULLING_IMAGE: "pulling_image",
 	CREATING_SANDBOX: "creating_sandbox",
+	CREATE_FAILED: "create_failed",
 	READY: "ready",
 	STOPPED: "stopped",
 	PENDING: "pending",

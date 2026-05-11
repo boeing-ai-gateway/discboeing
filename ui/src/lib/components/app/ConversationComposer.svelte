@@ -2,8 +2,16 @@
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import XIcon from "@lucide/svelte/icons/x";
 	import { onDestroy, onMount, tick } from "svelte";
+	import { api } from "$lib/api-client";
 	import { InputGroup, InputGroupAddon } from "$lib/components/ui/input-group";
 	import { Button } from "$lib/components/ui/button";
+	import { Label } from "$lib/components/ui/label";
+	import {
+		Select,
+		SelectContent,
+		SelectItem,
+		SelectTrigger,
+	} from "$lib/components/ui/select";
 	import ConversationComposerAttachmentButton from "$lib/components/app/parts/ConversationComposerAttachmentButton.svelte";
 	import ConversationComposerAttachments from "$lib/components/app/parts/ConversationComposerAttachments.svelte";
 	import ConversationComposerHooksControl from "$lib/components/app/parts/ConversationComposerHooksControl.svelte";
@@ -16,6 +24,7 @@
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ConversationComposerSubmitButton from "$lib/components/app/parts/ConversationComposerSubmitButton.svelte";
 	import ConversationPromptSchedulePicker from "$lib/components/app/parts/ConversationPromptSchedulePicker.svelte";
+	import ProviderIcon from "$lib/components/app/parts/ProviderIcon.svelte";
 	import ConversationComposerTextarea from "$lib/components/app/parts/ConversationComposerTextarea.svelte";
 	import ConversationCredentialsControl from "$lib/components/app/ConversationCredentialsControl.svelte";
 	import ConversationHooksPanel from "$lib/components/app/ConversationHooksPanel.svelte";
@@ -37,7 +46,11 @@
 		WorkspaceSelectionResult,
 		WorkspaceSelectorHandle,
 	} from "$lib/components/app/conversation-composer.types";
-	import type { ModelInfo, UpdateQueuedPromptRequest } from "$lib/api-types";
+	import type {
+		ModelInfo,
+		SandboxProviderInstance,
+		UpdateQueuedPromptRequest,
+	} from "$lib/api-types";
 	import type { ConversationComment } from "$lib/session/session-context.types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
@@ -68,6 +81,7 @@
 	const sessionView = session.ui;
 	const sessionHooks = session.hooks;
 	const sessionCommands = session.commands;
+	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
 	let composerContainer = $state<HTMLDivElement | null>(null);
@@ -76,6 +90,9 @@
 	);
 	let sessionSetupRef = $state<WorkspaceSelectorHandle | null>(null);
 	let pendingSubmitError = $state<string | null>(null);
+	let sandboxProviders = $state<SandboxProviderInstance[]>([]);
+	let sandboxDefaultProviderId = $state("");
+	let sandboxProvidersError = $state<string | null>(null);
 	let schedulePopoverOpen = $state(false);
 	let scheduledRunAfter = $state<string | null>(null);
 	let pendingAutocompleteSessionCreation = $state<Promise<boolean> | null>(
@@ -181,6 +198,33 @@
 			sessionCommands.fetchedAt === null &&
 			sessionCommands.status !== "error",
 	);
+	const selectableSandboxProviders = $derived.by(() =>
+		sandboxProviders.filter((provider) => provider.available),
+	);
+	const selectedSandboxProvider = $derived.by(() =>
+		selectableSandboxProviders.find(
+			(provider) =>
+				provider.id ===
+				(sessionView.pendingSandboxProviderId || sandboxDefaultProviderId),
+		),
+	);
+	const selectedSandboxProviderTitle = $derived.by(() => {
+		if (!selectedSandboxProvider) {
+			return "Sandbox provider";
+		}
+		return sessionView.pendingSandboxProviderId
+			? selectedSandboxProvider.name
+			: `Default provider: ${selectedSandboxProvider.name}`;
+	});
+	const sandboxProviderSelectValue = $derived(
+		sessionView.pendingSandboxProviderId || sandboxDefaultProviderId,
+	);
+
+	function handleSandboxProviderSelect(value: string) {
+		sessionView.setPendingSandboxProviderId(
+			value === sandboxDefaultProviderId ? "" : value,
+		);
+	}
 
 	function handleModeSelect(nextMode: ComposerMode) {
 		thread.setNextMode(nextMode === thread.mode ? undefined : nextMode);
@@ -355,6 +399,20 @@
 
 	onMount(() => {
 		void focusComposerTextarea();
+		void loadSandboxProviders();
+		const handleSandboxProvidersUpdated = () => {
+			void loadSandboxProviders();
+		};
+		window.addEventListener(
+			sandboxProvidersUpdatedEvent,
+			handleSandboxProvidersUpdated,
+		);
+		return () => {
+			window.removeEventListener(
+				sandboxProvidersUpdatedEvent,
+				handleSandboxProvidersUpdated,
+			);
+		};
 	});
 
 	$effect(() => {
@@ -385,6 +443,9 @@
 		}
 
 		return {
+			...(sessionView.pendingSandboxProviderId
+				? { providerId: sessionView.pendingSandboxProviderId }
+				: {}),
 			...(workspaceSelection.workspaceId
 				? { workspaceId: workspaceSelection.workspaceId }
 				: {}),
@@ -395,6 +456,28 @@
 					}
 				: {}),
 		};
+	}
+
+	async function loadSandboxProviders() {
+		try {
+			const response = await api.getSandboxProviders();
+			sandboxProviders = response.providers;
+			sandboxDefaultProviderId = response.default;
+			sandboxProvidersError = null;
+			if (
+				sessionView.pendingSandboxProviderId &&
+				!response.providers.some(
+					(provider) =>
+						provider.id === sessionView.pendingSandboxProviderId &&
+						provider.available,
+				)
+			) {
+				sessionView.setPendingSandboxProviderId("");
+			}
+		} catch (error) {
+			sandboxProvidersError =
+				error instanceof Error ? error.message : "Failed to load providers.";
+		}
 	}
 
 	function finalizePendingSessionStart(sessionId: string, threadId: string) {
@@ -626,11 +709,59 @@
 		{#if session.isPending || session.current?.status !== "ready"}
 			<ConversationComposerSessionSetupStatus />
 			{#if showPendingWorkspaceSelector}
-				<div class="mb-2 flex w-full items-center gap-2 px-1 md:hidden">
+				<div class="mb-2 flex w-full flex-col gap-2 px-1 md:hidden">
 					<ConversationWorkspaceSelector
 						bind:this={sessionSetupRef}
 						fullWidth={true}
 					/>
+					{#if selectableSandboxProviders.length > 0}
+						<div class="space-y-1">
+							<Label
+								for="pending-sandbox-provider-mobile"
+								class="text-xs text-muted-foreground">Sandbox provider</Label
+							>
+							<Select
+								type="single"
+								value={sandboxProviderSelectValue}
+								onValueChange={handleSandboxProviderSelect}
+							>
+								<SelectTrigger
+									id="pending-sandbox-provider-mobile"
+									size="sm"
+									class="h-9 w-full px-3"
+									title={selectedSandboxProviderTitle}
+								>
+									<ProviderIcon
+										icon={selectedSandboxProvider?.icon}
+										name={selectedSandboxProvider?.name ?? "Sandbox provider"}
+										class="pointer-events-none size-4 border-0 bg-transparent"
+									/>
+									<span class="truncate">
+										{selectedSandboxProvider?.name ?? "Sandbox provider"}
+									</span>
+								</SelectTrigger>
+								<SelectContent>
+									{#each selectableSandboxProviders as provider (provider.id)}
+										<SelectItem value={provider.id} label={provider.name}>
+											<ProviderIcon
+												icon={provider.icon}
+												name={provider.name}
+												class="size-4"
+											/>
+											<span>{provider.name}</span>
+											{#if provider.id === sandboxDefaultProviderId}
+												<span
+													class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground"
+												>
+													default
+												</span>
+											{/if}
+										</SelectItem>
+									{/each}
+								</SelectContent>
+							</Select>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		{/if}
@@ -678,6 +809,9 @@
 					{/each}
 				</div>
 			</div>
+		{/if}
+		{#if session.isPending && sandboxProvidersError}
+			<div class="mb-2 text-sm text-destructive">{sandboxProvidersError}</div>
 		{/if}
 		{#if composerDisabledMessage}
 			<div
@@ -759,8 +893,54 @@
 
 						<div class="desktop-no-drag flex items-center justify-end gap-2">
 							{#if showPendingWorkspaceSelector}
-								<div class="hidden md:contents">
-									<ConversationWorkspaceSelector />
+								<div class="hidden items-center gap-2 md:flex">
+									{#if selectableSandboxProviders.length > 0}
+										<Label for="pending-sandbox-provider" class="sr-only"
+											>Sandbox provider</Label
+										>
+										<Select
+											type="single"
+											value={sandboxProviderSelectValue}
+											onValueChange={handleSandboxProviderSelect}
+										>
+											<SelectTrigger
+												id="pending-sandbox-provider"
+												size="sm"
+												class="h-8 px-2 text-xs"
+												title={selectedSandboxProviderTitle}
+											>
+												<ProviderIcon
+													icon={selectedSandboxProvider?.icon}
+													name={selectedSandboxProvider?.name ??
+														"Sandbox provider"}
+													class="pointer-events-none size-4 border-0 bg-transparent"
+												/>
+												<span class="truncate">
+													{selectedSandboxProvider?.name ?? "Sandbox provider"}
+												</span>
+											</SelectTrigger>
+											<SelectContent class="min-w-44">
+												{#each selectableSandboxProviders as provider (provider.id)}
+													<SelectItem value={provider.id} label={provider.name}>
+														<ProviderIcon
+															icon={provider.icon}
+															name={provider.name}
+															class="size-4"
+														/>
+														<span>{provider.name}</span>
+														{#if provider.id === sandboxDefaultProviderId}
+															<span
+																class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground"
+															>
+																default
+															</span>
+														{/if}
+													</SelectItem>
+												{/each}
+											</SelectContent>
+										</Select>
+									{/if}
+									<ConversationWorkspaceSelector bind:this={sessionSetupRef} />
 								</div>
 							{:else if !session.isPending}
 								<ConversationComposerHooksControl

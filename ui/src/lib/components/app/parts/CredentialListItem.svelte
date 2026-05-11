@@ -1,16 +1,18 @@
 <script lang="ts">
-	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import PencilIcon from "@lucide/svelte/icons/pencil";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import type { CredentialInfo, Icon } from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
+	import { Switch } from "$lib/components/ui/switch";
 	import {
 		Item,
 		ItemActions,
 		ItemContent,
 		ItemDescription,
+		ItemMedia,
 		ItemTitle,
 	} from "$lib/components/ui/item";
+	import * as Tooltip from "$lib/components/ui/tooltip";
 
 	type Props = {
 		credential: CredentialInfo;
@@ -41,22 +43,16 @@
 	}: Props = $props();
 </script>
 
-<Item>
+<Item size="sm">
 	<ItemContent>
 		<div class="flex items-start gap-3">
-			{#if image}
-				<div
-					class="flex size-10 items-center justify-center rounded-md border border-border/70 bg-muted/50 p-1.5"
-				>
+			<ItemMedia class="h-10 w-10 rounded-md border border-border bg-muted/50">
+				{#if image}
 					<img src={image.src} alt="" class={imageClass} />
-				</div>
-			{:else}
-				<div
-					class="flex size-10 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold"
-				>
+				{:else}
 					{monogram}
-				</div>
-			{/if}
+				{/if}
+			</ItemMedia>
 			<div class="min-w-0">
 				<ItemTitle>{title}</ItemTitle>
 				<ItemDescription>{subtitle}</ItemDescription>
@@ -64,39 +60,69 @@
 		</div>
 	</ItemContent>
 	<ItemActions>
-		<Button
-			variant="outline"
-			size="sm"
-			disabled={togglingInactive}
-			onclick={() => {
-				void onToggleInactive(credential);
-			}}
-		>
-			{#if togglingInactive}
-				<Loader2Icon class="size-4 animate-spin" />
-				{credential.inactive ? "Enabling…" : "Disabling…"}
-			{:else}
-				{credential.inactive ? "Enable" : "Disable"}
-			{/if}
-		</Button>
-		<Button
-			variant="ghost"
-			size="icon-sm"
-			onclick={() => {
-				void onEdit(credential);
-			}}
-		>
-			<PencilIcon class="size-4" />
-		</Button>
-		<Button
-			variant="ghost"
-			size="icon-sm"
-			disabled={deleting}
-			onclick={() => {
-				void onDelete(credential);
-			}}
-		>
-			<Trash2Icon class="size-4 text-destructive" />
-		</Button>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				{#snippet child({ props })}
+					<Switch
+						{...props}
+						checked={!credential.inactive}
+						disabled={togglingInactive}
+						aria-label={credential.inactive
+							? `Enable ${title}`
+							: `Disable ${title}`}
+						onCheckedChange={(checked) => {
+							if (checked !== !credential.inactive) {
+								void onToggleInactive(credential);
+							}
+						}}
+					/>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				{togglingInactive
+					? "Updating"
+					: credential.inactive
+						? "Enable"
+						: "Disable"}
+				{title}
+			</Tooltip.Content>
+		</Tooltip.Root>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				{#snippet child({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						aria-label={`Edit ${title}`}
+						onclick={() => {
+							void onEdit(credential);
+						}}
+					>
+						<PencilIcon class="size-4" />
+					</Button>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Content>Edit {title}</Tooltip.Content>
+		</Tooltip.Root>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				{#snippet child({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon-sm"
+						disabled={deleting}
+						aria-label={`Delete ${title}`}
+						onclick={() => {
+							void onDelete(credential);
+						}}
+					>
+						<Trash2Icon class="size-4 text-destructive" />
+					</Button>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Content>Delete {title}</Tooltip.Content>
+		</Tooltip.Root>
 	</ItemActions>
 </Item>

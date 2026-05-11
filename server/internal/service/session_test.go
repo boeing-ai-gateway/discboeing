@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"reflect"
 	"strings"
@@ -29,29 +30,29 @@ func (p *imageIDAwareSessionProvider) CurrentImageID(context.Context) (string, e
 	return p.currentImageID, nil
 }
 
-func (p *imageIDAwareSessionProvider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *imageIDAwareSessionProvider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	p.ops = append(p.ops, "create")
-	return p.base.Create(ctx, sessionID, opts)
+	return p.base.Create(ctx, state, sessionID, opts)
 }
 
-func (p *imageIDAwareSessionProvider) Start(ctx context.Context, sessionID string) error {
-	sbx, err := p.base.Get(ctx, sessionID)
+func (p *imageIDAwareSessionProvider) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
+	sbx, err := p.base.Get(ctx, state, sessionID)
 	if err != nil {
 		p.ops = append(p.ops, "start:<missing>")
 	} else {
 		p.ops = append(p.ops, "start:"+sbx.ID)
 	}
-	return p.base.Start(ctx, sessionID)
+	return p.base.Start(ctx, state, sessionID)
 }
 
-func (p *imageIDAwareSessionProvider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
-	sbx, err := p.base.Get(ctx, sessionID)
+func (p *imageIDAwareSessionProvider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
+	sbx, err := p.base.Get(ctx, state, sessionID)
 	if err != nil {
 		p.ops = append(p.ops, "remove:<missing>")
 	} else {
 		p.ops = append(p.ops, "remove:"+sbx.ID)
 	}
-	return p.base.Remove(ctx, sessionID, opts...)
+	return p.base.Remove(ctx, state, sessionID, opts...)
 }
 
 func TestValidateSessionID(t *testing.T) {
@@ -218,6 +219,24 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	if opts.WorkspaceTargetRef != defaultSessionTargetRef {
 		t.Fatalf("WorkspaceTargetRef = %q, want %q", opts.WorkspaceTargetRef, defaultSessionTargetRef)
 	}
+	if opts.Env["SESSION_ID"] != dbSession.ID {
+		t.Fatalf("Env[SESSION_ID] = %q, want %q", opts.Env["SESSION_ID"], dbSession.ID)
+	}
+	if opts.Env["DISCOBOT_SESSION_ID"] != dbSession.ID {
+		t.Fatalf("Env[DISCOBOT_SESSION_ID] = %q, want %q", opts.Env["DISCOBOT_SESSION_ID"], dbSession.ID)
+	}
+	if opts.Env["DISCOBOT_PROJECT_ID"] != project.ID {
+		t.Fatalf("Env[DISCOBOT_PROJECT_ID] = %q, want %q", opts.Env["DISCOBOT_PROJECT_ID"], project.ID)
+	}
+	if opts.Env["WORKSPACE_SOURCE"] != workspace.Path {
+		t.Fatalf("Env[WORKSPACE_SOURCE] = %q, want %q", opts.Env["WORKSPACE_SOURCE"], workspace.Path)
+	}
+	if opts.Env["WORKSPACE_TARGET_REF"] != defaultSessionTargetRef {
+		t.Fatalf("Env[WORKSPACE_TARGET_REF] = %q, want %q", opts.Env["WORKSPACE_TARGET_REF"], defaultSessionTargetRef)
+	}
+	if opts.Env["DISCOBOT_SECRET"] == "" {
+		t.Fatal("Env[DISCOBOT_SECRET] is empty")
+	}
 
 	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
 	if err != nil {
@@ -225,6 +244,55 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	}
 	if stored.WorkspacePath != nil && *stored.WorkspacePath != "" {
 		t.Fatalf("stored workspace path = %q, want empty", *stored.WorkspacePath)
+	}
+}
+
+func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	provider.CreateFunc = func(context.Context, []byte, string, sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+		return nil, nil, errors.New("provider quota exceeded")
+	}
+	svc := NewSessionService(testStore, nil, provider, nil, nil, nil)
+
+	project := &model.Project{ID: "project-create-failed", Name: "create failed project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-create-failed",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	dbSession := &model.Session{
+		ID:          "session-create-failed",
+		ProjectID:   project.ID,
+		WorkspaceID: workspace.ID,
+		Name:        "Create Failed Session",
+		Status:      model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err == nil {
+		t.Fatal("expected Initialize to fail")
+	}
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.Status != model.SessionStatusCreateFailed {
+		t.Fatalf("status = %q, want %q", stored.Status, model.SessionStatusCreateFailed)
+	}
+	if stored.ErrorMessage == nil || !strings.Contains(*stored.ErrorMessage, "provider quota exceeded") {
+		t.Fatalf("error message = %v", stored.ErrorMessage)
 	}
 }
 
@@ -266,7 +334,7 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	oldSandbox, err := provider.base.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret"})
+	oldSandbox, _, err := provider.base.Create(ctx, nil, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret"})
 	if err != nil {
 		t.Fatalf("failed to create stale sandbox: %v", err)
 	}
@@ -285,7 +353,7 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 		t.Fatalf("operation order = %v, want %v", got, want)
 	}
 
-	sbx, err := provider.Get(ctx, dbSession.ID)
+	sbx, err := provider.Get(ctx, nil, dbSession.ID)
 	if err != nil {
 		t.Fatalf("failed to get recreated sandbox: %v", err)
 	}
@@ -343,10 +411,10 @@ func TestSessionServiceGetSessionSyncsNameFromPrimaryThread(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	if _, err := provider.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret", WorkspacePath: workspace.Path}); err != nil {
+	if _, _, err := provider.Create(ctx, nil, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret", WorkspacePath: workspace.Path}); err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, dbSession.ID); err != nil {
+	if _, err := provider.Start(ctx, nil, dbSession.ID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -403,10 +471,10 @@ func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	if _, err := provider.Create(ctx, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret", WorkspacePath: workspace.Path}); err != nil {
+	if _, _, err := provider.Create(ctx, nil, dbSession.ID, sandbox.CreateOptions{SharedSecret: "test-secret", WorkspacePath: workspace.Path}); err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, dbSession.ID); err != nil {
+	if _, err := provider.Start(ctx, nil, dbSession.ID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -583,22 +651,23 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 	// Define field mappings: model field -> service field
 	// This map documents the expected mapping between model and service layer
 	fieldMappings := map[string]string{
-		"ID":              "ID",
-		"ProjectID":       "ProjectID",
-		"WorkspaceID":     "WorkspaceID",
-		"Name":            "Name",
-		"DisplayName":     "DisplayName",
-		"Description":     "Description",
-		"Status":          "Status",
-		"ThreadStatus":    "ThreadStatus",
-		"CommitStatus":    "CommitStatus",
-		"CommitOperation": "CommitOperation",
-		"CommitError":     "CommitError",
-		"TargetRef":       "TargetRef",
-		"AppliedCommit":   "AppliedCommit",
-		"ErrorMessage":    "ErrorMessage",
-		"WorkspacePath":   "WorkspacePath",
-		"CreatedAt":       "CreatedAt",
+		"ID":                "ID",
+		"ProjectID":         "ProjectID",
+		"WorkspaceID":       "WorkspaceID",
+		"SandboxProviderID": "ProviderID",
+		"Name":              "Name",
+		"DisplayName":       "DisplayName",
+		"Description":       "Description",
+		"Status":            "Status",
+		"ThreadStatus":      "ThreadStatus",
+		"CommitStatus":      "CommitStatus",
+		"CommitOperation":   "CommitOperation",
+		"CommitError":       "CommitError",
+		"TargetRef":         "TargetRef",
+		"AppliedCommit":     "AppliedCommit",
+		"ErrorMessage":      "ErrorMessage",
+		"WorkspacePath":     "WorkspacePath",
+		"CreatedAt":         "CreatedAt",
 		// Excluded fields (not part of API response):
 		// - SSHKeyEncryptedData: encrypted secret material, never exposed
 		// - UpdatedAt: mapped to Timestamp
@@ -708,10 +777,10 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 
 	var stoppedSessionID string
 	var stopTimeout time.Duration
-	provider.StopFunc = func(_ context.Context, sessionID string, timeout time.Duration) error {
+	provider.StopFunc = func(_ context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 		stoppedSessionID = sessionID
 		stopTimeout = timeout
-		return nil
+		return state, nil
 	}
 
 	var queuedPayload jobs.SessionSandboxDeletePayload
@@ -744,6 +813,202 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 	}
 	if queuedPayload.DeleteAt.Before(before.Add(30*24*time.Hour)) || queuedPayload.DeleteAt.After(after.Add(30*24*time.Hour)) {
 		t.Fatalf("queued delete time %s outside expected retention window", queuedPayload.DeleteAt)
+	}
+	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
+		t.Fatalf("expected session to be deleted, got err=%v", err)
+	}
+}
+
+func TestSessionServiceDeleteSession_RequeuesRemovingSession(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-delete-requeue",
+		ProjectID:  "project-delete-requeue",
+		Path:       "/workspace-delete-requeue",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "session-delete-requeue",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Name:        "Delete Requeue",
+		Status:      model.SessionStatusRemoving,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	var queuedPayload jobs.SessionDeletePayload
+	enqueuer := &mockJobEnqueuer{enqueueFunc: func(_ context.Context, payload jobs.JobPayload) error {
+		var ok bool
+		queuedPayload, ok = payload.(jobs.SessionDeletePayload)
+		if !ok {
+			t.Fatalf("unexpected payload type %T", payload)
+		}
+		return nil
+	}}
+
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	if err := sessionSvc.DeleteSession(ctx, workspace.ProjectID, session.ID, enqueuer); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	if queuedPayload.SessionID != session.ID {
+		t.Fatalf("queued session ID = %q, want %q", queuedPayload.SessionID, session.ID)
+	}
+}
+
+func TestSessionServiceDeleteSessionMarksCreateFailedPayload(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-delete-create-failed-payload",
+		ProjectID:  "project-delete-create-failed-payload",
+		Path:       "/workspace-delete-create-failed-payload",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "session-delete-create-failed-payload",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Name:        "Delete Create Failed Payload",
+		Status:      model.SessionStatusCreateFailed,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	var queuedPayload jobs.SessionDeletePayload
+	enqueuer := &mockJobEnqueuer{enqueueFunc: func(_ context.Context, payload jobs.JobPayload) error {
+		var ok bool
+		queuedPayload, ok = payload.(jobs.SessionDeletePayload)
+		if !ok {
+			t.Fatalf("unexpected payload type %T", payload)
+		}
+		return nil
+	}}
+
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+	if err := sessionSvc.DeleteSession(ctx, workspace.ProjectID, session.ID, enqueuer); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	if !queuedPayload.CreateFailed {
+		t.Fatal("expected create failed delete payload")
+	}
+}
+
+func TestSessionServicePerformDeletion_RemovesCreateFailedSandboxImmediately(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := &deferredCleanupProvider{Provider: mocksandbox.NewProvider()}
+
+	workspace := &model.Workspace{
+		ID:         "workspace-delete-create-failed",
+		ProjectID:  "project-delete-create-failed",
+		Path:       "/workspace-delete-create-failed",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:          "session-delete-create-failed",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusRemoving,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	provider.StopFunc = func(_ context.Context, state []byte, _ string, _ time.Duration) ([]byte, error) {
+		t.Fatal("did not expect stop for create-failed deletion")
+		return state, nil
+	}
+	var queued bool
+	enqueuer := &mockJobEnqueuer{enqueueFunc: func(context.Context, jobs.JobPayload) error {
+		queued = true
+		return nil
+	}}
+
+	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	if err := sessionSvc.PerformDeletionFromDeleteJob(ctx, workspace.ProjectID, session.ID, true); err != nil {
+		t.Fatalf("PerformDeletionFromDeleteJob failed: %v", err)
+	}
+	if len(provider.removeCalls) != 1 {
+		t.Fatalf("expected one immediate sandbox removal, got %v", provider.removeCalls)
+	}
+	if provider.removeCalls[0].sessionID != session.ID {
+		t.Fatalf("removed session ID = %q", provider.removeCalls[0].sessionID)
+	}
+	if !provider.removeCalls[0].cfg.RemoveVolumes {
+		t.Fatal("expected immediate sandbox removal to delete volumes")
+	}
+	if queued {
+		t.Fatal("did not expect deferred sandbox cleanup to be enqueued")
+	}
+	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
+		t.Fatalf("expected session to be deleted, got err=%v", err)
+	}
+}
+
+func TestSessionServicePerformDeletion_ContinuesWhenSandboxStopFails(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := &deferredCleanupProvider{Provider: mocksandbox.NewProvider()}
+
+	workspace := &model.Workspace{
+		ID:         "workspace-delete-stop-fails",
+		ProjectID:  "project-delete-stop-fails",
+		Path:       "/workspace-delete-stop-fails",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	session := &model.Session{
+		ID:          "session-delete-stop-fails",
+		ProjectID:   workspace.ProjectID,
+		WorkspaceID: workspace.ID,
+		Status:      model.SessionStatusRemoving,
+	}
+	if err := testStore.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	provider.StopFunc = func(_ context.Context, state []byte, _ string, _ time.Duration) ([]byte, error) {
+		return state, context.DeadlineExceeded
+	}
+
+	var queued bool
+	enqueuer := &mockJobEnqueuer{enqueueFunc: func(_ context.Context, payload jobs.JobPayload) error {
+		if _, ok := payload.(jobs.SessionSandboxDeletePayload); !ok {
+			t.Fatalf("unexpected payload type %T", payload)
+		}
+		queued = true
+		return nil
+	}}
+
+	sessionSvc := NewSessionService(testStore, nil, provider, nil, nil, enqueuer)
+	if err := sessionSvc.PerformDeletion(ctx, workspace.ProjectID, session.ID); err != nil {
+		t.Fatalf("PerformDeletion failed: %v", err)
+	}
+
+	if !queued {
+		t.Fatal("expected deferred sandbox cleanup to be enqueued")
 	}
 	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
 		t.Fatalf("expected session to be deleted, got err=%v", err)
@@ -815,10 +1080,10 @@ type removeCall struct {
 	cfg       sandbox.RemoveConfig
 }
 
-func (p *deferredCleanupProvider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+func (p *deferredCleanupProvider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
 	if p.RemoveFunc != nil {
-		return p.RemoveFunc(ctx, sessionID, opts...)
+		return p.RemoveFunc(ctx, state, sessionID, opts...)
 	}
 	p.removeCalls = append(p.removeCalls, removeCall{sessionID: sessionID, cfg: sandbox.ParseRemoveOptions(opts)})
-	return nil
+	return state, nil
 }

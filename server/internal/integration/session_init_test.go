@@ -127,7 +127,7 @@ func TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile(t *test
 	if err := ts.Store.UpdateSession(ctx, afterFirstInit); err != nil {
 		t.Fatalf("Failed to update session status: %v", err)
 	}
-	if err := ts.MockSandbox.Remove(ctx, session.ID); err != nil {
+	if _, err := ts.MockSandbox.Remove(ctx, nil, session.ID); err != nil {
 		t.Fatalf("Failed to remove sandbox: %v", err)
 	}
 
@@ -185,7 +185,7 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 		t.Fatalf("Initialize (reconcile) failed: %v", err)
 	}
 
-	sbx, err := ts.MockSandbox.Get(ctx, session.ID)
+	sbx, err := ts.MockSandbox.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox after reconcile: %v", err)
 	}

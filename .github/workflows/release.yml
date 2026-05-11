@@ -283,6 +283,7 @@ jobs:
           echo "full=$TAG" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "release=discobot@${TAG}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "sandbox_image=ghcr.io/${{ github.repository }}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "Full version: $TAG"
           echo "Short SHA: $SHORT_SHA"
           echo "Sentry release: discobot@${TAG}+${SHORT_SHA}"
@@ -299,6 +300,8 @@ jobs:
           TAURI_TARGET_TRIPLE: ${{ matrix.target }}
           TAURI_BUNDLER_DMG_IGNORE_CI: false
           DISCOBOT_VERSION: ${{ steps.version.outputs.full }}
+          SANDBOX_IMAGE: ${{ steps.version.outputs.sandbox_image }}
+          SANDBOX_IMAGE_REMOTE: ${{ steps.version.outputs.sandbox_image }}
           PUBLIC_SENTRY_DSN: ${{ secrets.DISCOBOT_SENTRY_DSN }}
           PUBLIC_SENTRY_APP_VERSION: ${{ steps.version.outputs.full }}
           PUBLIC_SENTRY_RELEASE: ${{ steps.version.outputs.release }}
@@ -384,6 +387,7 @@ jobs:
           echo "full=$TAG" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "release=discobot@${TAG}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "sandbox_image=ghcr.io/${{ github.repository }}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "Full version: $TAG"
           echo "Short SHA: $SHORT_SHA"
           echo "Sentry release: discobot@${TAG}+${SHORT_SHA}"
@@ -415,6 +419,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCOBOT_VERSION: ${{ steps.version.outputs.full }}
+          SANDBOX_IMAGE: ${{ steps.version.outputs.sandbox_image }}
+          SANDBOX_IMAGE_REMOTE: ${{ steps.version.outputs.sandbox_image }}
           PUBLIC_SENTRY_DSN: ${{ secrets.DISCOBOT_SENTRY_DSN }}
           PUBLIC_SENTRY_APP_VERSION: ${{ steps.version.outputs.full }}
           PUBLIC_SENTRY_RELEASE: ${{ steps.version.outputs.release }}

@@ -29,7 +29,7 @@ type mockAttacher struct {
 func newMockExecStreamer(provider *mock.Provider) *mockExecStreamer {
 	return &mockExecStreamer{
 		execStreamFunc: func(ctx context.Context, sessionID string, _ []string, _ sandbox.ExecStreamOptions) (sandbox.Stream, error) {
-			sb, err := provider.Get(ctx, sessionID)
+			sb, err := provider.Get(ctx, nil, sessionID)
 			if err != nil {
 				return nil, err
 			}
@@ -44,7 +44,7 @@ func newMockExecStreamer(provider *mock.Provider) *mockExecStreamer {
 func newMockAttacher(provider *mock.Provider) *mockAttacher {
 	return &mockAttacher{
 		attachFunc: func(ctx context.Context, sessionID string, _, _ int, _, _ string, _ map[string]string) (sandbox.PTY, error) {
-			sb, err := provider.Get(ctx, sessionID)
+			sb, err := provider.Get(ctx, nil, sessionID)
 			if err != nil {
 				return nil, err
 			}
@@ -71,13 +71,13 @@ func TestSSHServer_Integration_ConnectToSession(t *testing.T) {
 
 	// Create and start a sandbox
 	sessionID := "ssh-test-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret: "test-secret",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestSSHServer_Integration_RejectStoppedSandbox(t *testing.T) {
 
 	// Create sandbox but don't start it (status: created, not running)
 	sessionID := "stopped-ssh-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestSSHServer_Integration_AutoStartStoppedSandbox(t *testing.T) {
 
 	// Create sandbox but don't start it
 	sessionID := "autostart-ssh-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
@@ -263,12 +263,13 @@ type mockSandboxEnsurer struct {
 
 func (m *mockSandboxEnsurer) EnsureSandboxReady(ctx context.Context, sessionID string) error {
 	m.called = true
-	sb, err := m.provider.Get(ctx, sessionID)
+	sb, err := m.provider.Get(ctx, nil, sessionID)
 	if err != nil {
 		return err
 	}
 	if sb.Status != sandbox.StatusRunning {
-		return m.provider.Start(ctx, sessionID)
+		_, err := m.provider.Start(ctx, nil, sessionID)
+		return err
 	}
 	return nil
 }
@@ -281,11 +282,11 @@ func TestSSHServer_Integration_MultipleConnections(t *testing.T) {
 	// Create multiple sessions
 	sessions := []string{"session-1", "session-2", "session-3"}
 	for _, sessionID := range sessions {
-		_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+		_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 		if err != nil {
 			t.Fatalf("failed to create sandbox %s: %v", sessionID, err)
 		}
-		if err := provider.Start(ctx, sessionID); err != nil {
+		if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 			t.Fatalf("failed to start sandbox %s: %v", sessionID, err)
 		}
 	}
@@ -466,11 +467,11 @@ func TestSSHServer_Integration_SessionTerminatesOnProcessExit(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "exit-test-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -564,11 +565,11 @@ func TestSSHServer_Integration_SessionTerminatesOnExecExit(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "exec-exit-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -794,11 +795,11 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "portfwd-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -897,11 +898,11 @@ func TestSSHServer_Integration_OpenSSHLocalForward(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "openssh-local-forward-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -1035,11 +1036,11 @@ func TestSSHServer_Integration_SFTP(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "sftp-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -1117,11 +1118,11 @@ func TestSSHServer_Integration_UserInfoFetcher(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "user-test-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -1212,11 +1213,11 @@ func TestSSHServer_Integration_ExecUsesSSHHomeWorkDir(t *testing.T) {
 	ctx := context.Background()
 
 	sessionID := "exec-home-workdir-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 

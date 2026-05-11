@@ -28,6 +28,18 @@ var dockerClientClose = func(cli *dockerclient.Client) error {
 	return cli.Close()
 }
 
+func (p *Provider) Definition() sandbox.ProviderDefinition {
+	return sandbox.ProviderDefinition{
+		Name:        "WSL2",
+		Icon:        "simple:linux",
+		Description: "WSL2 sandbox driver",
+		ConfigFields: []sandbox.ProviderConfigField{
+			{Key: "distro", Label: "Distro", Type: "text", Placeholder: "Ubuntu", Description: "WSL distro used for sandbox execution."},
+			{Key: "installRoot", Label: "Install root", Type: "text", Placeholder: "C:\\Users\\me\\AppData\\Local\\Discobot\\wsl", Description: "Optional location for Discobot-managed WSL data.", Advanced: true},
+		},
+	}
+}
+
 // SessionProjectResolver maps session IDs to project IDs.
 type SessionProjectResolver func(ctx context.Context, sessionID string) (projectID string, err error)
 
@@ -335,7 +347,7 @@ func (p *Provider) Image() string {
 
 // Create creates a new sandbox through the inner Docker provider once the WSL
 // bridge is available.
-func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return nil, err
@@ -354,7 +366,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 }
 
 // Start starts a sandbox through the inner Docker provider.
-func (p *Provider) Start(ctx context.Context, sessionID string) error {
+func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return err
@@ -368,7 +380,7 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 }
 
 // Stop stops a sandbox through the inner Docker provider.
-func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return err
@@ -382,7 +394,7 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 }
 
 // Remove removes a sandbox through the inner Docker provider.
-func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return err
@@ -396,7 +408,7 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 }
 
 // Get returns sandbox state through the inner Docker provider.
-func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *Provider) Get(ctx context.Context, state []byte, sessionID string) (*sandbox.Sandbox, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return nil, err
@@ -410,7 +422,7 @@ func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox,
 }
 
 // GetSecret returns sandbox secrets through the inner Docker provider.
-func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, error) {
+func (p *Provider) GetSecret(ctx context.Context, state []byte, sessionID string) (string, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return "", err
@@ -438,7 +450,7 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 }
 
 // AcquireHTTPClient returns a leased sandbox HTTP client through the inner Docker provider.
-func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
 	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
 	if err != nil {
 		return nil, err

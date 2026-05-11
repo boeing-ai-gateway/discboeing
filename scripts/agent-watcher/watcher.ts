@@ -24,6 +24,8 @@ export interface WatcherConfig {
 	debounceMs: number;
 	/** Optional: Dockerfile build target stage (e.g., "runtime-shell") */
 	buildTarget?: string;
+	/** Optional: remote image repository to tag and push for remote sandboxes */
+	remoteImageRepository?: string;
 	/** Optional: custom command runner for testing */
 	runCommand?: CommandRunner;
 	/** Optional: custom logger */
@@ -34,6 +36,11 @@ export interface CommandResult {
 	stdout: string;
 	stderr: string;
 	exitCode: number;
+}
+
+export interface BuildImageResult {
+	localImageRef: string;
+	remoteImageRef?: string;
 }
 
 export type CommandRunner = (
@@ -96,7 +103,9 @@ export function getCommandEnv(
 	env: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
 	const pathModule = isWindowsStylePath(command) ? win32 : null;
-	const commandDir = pathModule ? pathModule.dirname(command) : dirname(command);
+	const commandDir = pathModule
+		? pathModule.dirname(command)
+		: dirname(command);
 	if (commandDir === ".") {
 		return env;
 	}
@@ -120,6 +129,23 @@ export function getCommandEnv(
 function isDockerCommand(command: string): boolean {
 	const baseName = command.split(/[/\\]/).at(-1)?.toLowerCase() ?? "";
 	return baseName === "docker" || baseName === "docker.exe";
+}
+
+export function imageRepositoryFromRef(
+	imageRef: string | undefined,
+): string | undefined {
+	const trimmed = imageRef?.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+
+	const withoutDigest = trimmed.split("@", 1)[0];
+	const lastSlash = withoutDigest.lastIndexOf("/");
+	const lastColon = withoutDigest.lastIndexOf(":");
+	if (lastColon > lastSlash) {
+		return withoutDigest.slice(0, lastColon);
+	}
+	return withoutDigest;
 }
 
 export function resolveCommandInvocation(
@@ -193,13 +219,14 @@ export function createDefaultLogger(): Logger {
 }
 
 /**
- * Updates an env file with the SANDBOX_IMAGE variable.
+ * Updates an env file with the SANDBOX_IMAGE variables.
  * Creates the file if it doesn't exist.
- * Replaces existing SANDBOX_IMAGE if present, otherwise appends.
+ * Replaces existing variables if present, otherwise appends.
  */
 export async function updateEnvFile(
 	envFilePath: string,
 	imageRef: string,
+	remoteImageRef?: string,
 ): Promise<boolean> {
 	let envContent = "";
 
@@ -212,21 +239,31 @@ export async function updateEnvFile(
 	}
 
 	const lines = envContent.split("\n");
-	let found = false;
+	let foundSandboxImage = false;
+	let foundSandboxImageRemote = false;
 	const newLines = lines.map((line) => {
 		if (line.startsWith("SANDBOX_IMAGE=")) {
-			found = true;
+			foundSandboxImage = true;
 			return `SANDBOX_IMAGE=${imageRef}`;
+		}
+		if (remoteImageRef && line.startsWith("SANDBOX_IMAGE_REMOTE=")) {
+			foundSandboxImageRemote = true;
+			return `SANDBOX_IMAGE_REMOTE=${remoteImageRef}`;
 		}
 		return line;
 	});
 
-	if (!found) {
+	if (!foundSandboxImage || (remoteImageRef && !foundSandboxImageRemote)) {
 		// Remove trailing empty lines and add the new var
 		while (newLines.length > 0 && newLines[newLines.length - 1] === "") {
 			newLines.pop();
 		}
-		newLines.push(`SANDBOX_IMAGE=${imageRef}`);
+		if (!foundSandboxImage) {
+			newLines.push(`SANDBOX_IMAGE=${imageRef}`);
+		}
+		if (remoteImageRef && !foundSandboxImageRemote) {
+			newLines.push(`SANDBOX_IMAGE_REMOTE=${remoteImageRef}`);
+		}
 		newLines.push(""); // End with newline
 	}
 
@@ -289,7 +326,7 @@ export class AgentWatcher {
 		}
 	}
 
-	async buildImage(): Promise<string | null> {
+	async buildImage(): Promise<BuildImageResult | null> {
 		this.logger.log(`Building Docker image ${this.imageRef}...`);
 
 		const result = await this.runCommand(
@@ -350,15 +387,54 @@ export class AgentWatcher {
 		}
 
 		this.logger.log(`Tagged as: ${localImageRef}`);
-		return localImageRef;
+		const remoteRepository = this.config.remoteImageRepository?.trim();
+		if (!remoteRepository) {
+			return { localImageRef };
+		}
+
+		const remoteImageRef = `${remoteRepository}:${shortId}`;
+		const remoteTagResult = await this.runCommand(
+			this.dockerCommand,
+			["tag", localImageRef, remoteImageRef],
+			this.config.projectRoot,
+		);
+		if (remoteTagResult.exitCode !== 0) {
+			this.logger.error("Failed to tag remote image:");
+			this.logger.error(remoteTagResult.stderr || remoteTagResult.stdout);
+			return null;
+		}
+
+		this.logger.log(`Tagged remote image as: ${remoteImageRef}`);
+		const pushResult = await this.runCommand(
+			this.dockerCommand,
+			["push", remoteImageRef],
+			this.config.projectRoot,
+		);
+		if (pushResult.exitCode !== 0) {
+			this.logger.error("Failed to push remote image:");
+			this.logger.error(pushResult.stderr || pushResult.stdout);
+			return null;
+		}
+
+		this.logger.success(`Pushed remote image: ${remoteImageRef}`);
+		return { localImageRef, remoteImageRef };
 	}
 
-	async updateEnv(imageRef: string): Promise<boolean> {
-		const success = await updateEnvFile(this.config.envFilePath, imageRef);
+	async updateEnv(imageRef: string, remoteImageRef?: string): Promise<boolean> {
+		const success = await updateEnvFile(
+			this.config.envFilePath,
+			imageRef,
+			remoteImageRef,
+		);
 		if (success) {
 			this.logger.success(
 				`Updated ${this.config.envFilePath} with SANDBOX_IMAGE=${imageRef}`,
 			);
+			if (remoteImageRef) {
+				this.logger.success(
+					`Updated ${this.config.envFilePath} with SANDBOX_IMAGE_REMOTE=${remoteImageRef}`,
+				);
+			}
 			this.onEnvUpdate?.(imageRef);
 		} else {
 			this.logger.error(`Failed to write ${this.config.envFilePath}`);
@@ -377,19 +453,22 @@ export class AgentWatcher {
 		this.onBuildStart?.();
 
 		try {
-			const imageRef = await this.buildImage();
-			if (!imageRef) {
+			const buildResult = await this.buildImage();
+			if (!buildResult) {
 				this.onBuildComplete?.(false, null);
 				return;
 			}
 
 			// Use the image ID (sha256 digest) for deterministic container creation
-			await this.updateEnv(imageRef);
+			await this.updateEnv(
+				buildResult.localImageRef,
+				buildResult.remoteImageRef,
+			);
 
 			this.logger.log(
 				"Image ready. Server will use the new image for new containers.",
 			);
-			this.onBuildComplete?.(true, imageRef);
+			this.onBuildComplete?.(true, buildResult.localImageRef);
 		} finally {
 			this.buildInProgress = false;
 

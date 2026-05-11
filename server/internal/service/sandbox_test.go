@@ -39,7 +39,11 @@ type sandboxCreatingInitializer struct {
 
 func (t *sandboxCreatingInitializer) Initialize(ctx context.Context, sessionID string) error {
 	// Check if sandbox already exists (mimics SessionService.Initialize behavior)
-	existingSandbox, err := t.sandboxSvc.provider.Get(ctx, sessionID)
+	state, err := t.sandboxSvc.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	existingSandbox, err := t.sandboxSvc.provider.Get(ctx, state, sessionID)
 	if err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		return err
 	}
@@ -51,15 +55,20 @@ func (t *sandboxCreatingInitializer) Initialize(ctx context.Context, sessionID s
 			return nil // Already running
 		case sandbox.StatusCreated, sandbox.StatusStopped:
 			// Try to start it
-			if err := t.sandboxSvc.provider.Start(ctx, sessionID); err != nil {
+			newState, err := t.sandboxSvc.provider.Start(ctx, state, sessionID)
+			if err == nil {
+				err = t.sandboxSvc.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+				state = newState
+			}
+			if err != nil {
 				// Start failed - remove and recreate
-				_ = t.sandboxSvc.provider.Remove(ctx, sessionID)
+				_, _ = t.sandboxSvc.provider.Remove(ctx, state, sessionID)
 				return t.sandboxSvc.CreateForSession(ctx, sessionID)
 			}
 			return nil
 		default:
 			// Failed state - remove and recreate
-			_ = t.sandboxSvc.provider.Remove(ctx, sessionID)
+			_, _ = t.sandboxSvc.provider.Remove(ctx, state, sessionID)
 			return t.sandboxSvc.CreateForSession(ctx, sessionID)
 		}
 	}
@@ -175,9 +184,13 @@ func (p *imageIDAwareReconcileProvider) CleanupUnusedImages(_ context.Context) e
 	return nil
 }
 
-func (p *imageIDAwareReconcileProvider) Create(_ context.Context, sessionID string, _ sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *imageIDAwareReconcileProvider) PrepareState(context.Context, string, sandbox.CreateOptions) ([]byte, error) {
+	return nil, nil
+}
+
+func (p *imageIDAwareReconcileProvider) Create(_ context.Context, state []byte, sessionID string, _ sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	if _, exists := p.sandboxes[sessionID]; exists {
-		return nil, sandbox.ErrAlreadyExists
+		return nil, state, sandbox.ErrAlreadyExists
 	}
 
 	p.createCount++
@@ -192,39 +205,39 @@ func (p *imageIDAwareReconcileProvider) Create(_ context.Context, sessionID stri
 		},
 	}
 	p.sandboxes[sessionID] = sb
-	return sb, nil
+	return sb, state, nil
 }
 
-func (p *imageIDAwareReconcileProvider) Start(_ context.Context, sessionID string) error {
+func (p *imageIDAwareReconcileProvider) Start(_ context.Context, state []byte, sessionID string) ([]byte, error) {
 	sb, ok := p.sandboxes[sessionID]
 	if !ok {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	p.startCount++
 	now := time.Now()
 	sb.Status = sandbox.StatusRunning
 	sb.StartedAt = &now
-	return nil
+	return state, nil
 }
 
-func (p *imageIDAwareReconcileProvider) Stop(_ context.Context, sessionID string, _ time.Duration) error {
+func (p *imageIDAwareReconcileProvider) Stop(_ context.Context, state []byte, sessionID string, _ time.Duration) ([]byte, error) {
 	sb, ok := p.sandboxes[sessionID]
 	if !ok {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	sb.Status = sandbox.StatusStopped
-	return nil
+	return state, nil
 }
 
-func (p *imageIDAwareReconcileProvider) Remove(_ context.Context, sessionID string, _ ...sandbox.RemoveOption) error {
+func (p *imageIDAwareReconcileProvider) Remove(_ context.Context, state []byte, sessionID string, _ ...sandbox.RemoveOption) ([]byte, error) {
 	p.removeCount++
 	delete(p.sandboxes, sessionID)
-	return nil
+	return state, nil
 }
 
-func (p *imageIDAwareReconcileProvider) Get(_ context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *imageIDAwareReconcileProvider) Get(_ context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
 	sb, ok := p.sandboxes[sessionID]
 	if !ok {
 		return nil, sandbox.ErrNotFound
@@ -232,7 +245,7 @@ func (p *imageIDAwareReconcileProvider) Get(_ context.Context, sessionID string)
 	return sb, nil
 }
 
-func (p *imageIDAwareReconcileProvider) GetSecret(_ context.Context, _ string) (string, error) {
+func (p *imageIDAwareReconcileProvider) GetSecret(_ context.Context, _ []byte, _ string) (string, error) {
 	return "", sandbox.ErrNotFound
 }
 
@@ -244,7 +257,7 @@ func (p *imageIDAwareReconcileProvider) List(_ context.Context) ([]*sandbox.Sand
 	return result, nil
 }
 
-func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
 	return &sandbox.HTTPClientLease{Client: &http.Client{}}, nil
 }
 
@@ -365,7 +378,7 @@ func (p *healthAwareProvider) nextHealthStatus() int {
 	return statusCode
 }
 
-func (p *healthAwareProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+func (p *healthAwareProvider) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
 	return &sandbox.HTTPClientLease{Client: &http.Client{
 		Transport: healthRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			rec := newResponseRecorder()
@@ -448,7 +461,7 @@ func TestSandboxService_CreateForSession(t *testing.T) {
 	}
 
 	// Verify sandbox was created and started
-	sb, err := mockProvider.Get(ctx, sessionID)
+	sb, err := mockProvider.Get(ctx, nil, sessionID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -489,6 +502,34 @@ func TestSandboxService_EnsureSandboxReady_ReconcilesAfterWaitWhenHealthProbeFai
 	}
 	if initializer.calls != 1 {
 		t.Fatalf("expected exactly one reconciliation, got %d", initializer.calls)
+	}
+}
+
+func TestSandboxService_EnsureSandboxReady_DoesNotReconcileErroredSession(t *testing.T) {
+	provider := newHealthAwareProvider(testImage, http.StatusOK)
+	testStore := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: testEncryptionKey}
+	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	initializer := &countingInitializer{}
+	svc.SetSessionInitializer(initializer)
+
+	ctx := context.Background()
+	sessionID := "test-session-error-no-reconcile"
+	createTestSession(t, testStore, sessionID, "/workspace")
+	errorMessage := "sandbox creation failed: image not found"
+	if err := testStore.UpdateSessionStatus(ctx, sessionID, model.SessionStatusError, &errorMessage); err != nil {
+		t.Fatalf("failed to set session error: %v", err)
+	}
+
+	err := svc.ensureSandboxReady(ctx, sessionID)
+	if err == nil {
+		t.Fatal("expected ensureSandboxReady to fail for errored session")
+	}
+	if !strings.Contains(err.Error(), errorMessage) {
+		t.Fatalf("expected stored session error, got %v", err)
+	}
+	if initializer.calls != 0 {
+		t.Fatalf("expected no reconciliation, got %d", initializer.calls)
 	}
 }
 
@@ -656,7 +697,7 @@ func TestReconcileSandboxes_UsesImageIDAndRunsCleanup(t *testing.T) {
 		t.Fatalf("ReconcileSandboxes failed: %v", err)
 	}
 
-	sb, err := provider.Get(ctx, sessionID)
+	sb, err := provider.Get(ctx, nil, sessionID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -701,7 +742,7 @@ func TestReconcileSandboxes_RemovesStoppedOutdatedSandboxWithoutRestart(t *testi
 		t.Fatalf("ReconcileSandboxes failed: %v", err)
 	}
 
-	if _, err := provider.Get(ctx, sessionID); !errors.Is(err, sandbox.ErrNotFound) {
+	if _, err := provider.Get(ctx, nil, sessionID); !errors.Is(err, sandbox.ErrNotFound) {
 		t.Fatalf("expected stopped outdated sandbox to be removed, got %v", err)
 	}
 	if provider.createCount != 0 {
@@ -752,7 +793,7 @@ func TestReconcileSandboxes_PreservesRetainedDeletedSessionSandboxes(t *testing.
 		t.Fatalf("ReconcileSandboxes failed: %v", err)
 	}
 
-	if _, err := provider.Get(ctx, sessionID); err != nil {
+	if _, err := provider.Get(ctx, nil, sessionID); err != nil {
 		t.Fatalf("expected retained sandbox to be preserved, got error: %v", err)
 	}
 }
@@ -848,7 +889,7 @@ func TestSandboxService_EnsureSandboxReady_CreatesNew(t *testing.T) {
 		t.Fatalf("GetClient failed: %v", err)
 	}
 
-	sb, err := mockProvider.Get(ctx, sessionID)
+	sb, err := mockProvider.Get(ctx, nil, sessionID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -917,7 +958,7 @@ func TestSandboxService_EnsureSandboxReady_StartsStopped(t *testing.T) {
 		t.Fatalf("GetClient failed: %v", err)
 	}
 
-	sb, err := mockProvider.Get(ctx, sessionID)
+	sb, err := mockProvider.Get(ctx, nil, sessionID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -953,7 +994,7 @@ func TestSandboxService_DestroyForSession(t *testing.T) {
 	}
 
 	// Verify sandbox is gone
-	_, err = mockProvider.Get(ctx, sessionID)
+	_, err = mockProvider.Get(ctx, nil, sessionID)
 	if err != sandbox.ErrNotFound {
 		t.Errorf("Expected ErrNotFound after destroy, got %v", err)
 	}
@@ -1159,7 +1200,7 @@ func TestSandboxService_CreateForSession_ReusesExistingSSHKey(t *testing.T) {
 		t.Fatal("expected first sandbox create options to include an ssh key")
 	}
 
-	if err := mockProvider.Remove(ctx, sessionID); err != nil {
+	if _, err := mockProvider.Remove(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to remove mock sandbox: %v", err)
 	}
 	if err := svc.CreateForSession(ctx, sessionID); err != nil {

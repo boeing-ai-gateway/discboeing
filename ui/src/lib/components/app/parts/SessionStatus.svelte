@@ -41,6 +41,7 @@
 	function statusTone(status: DisplayStatusValue): string {
 		switch (normalizedStatus(status)) {
 			case "error":
+			case "create_failed":
 				return "text-destructive";
 			case "needs_attention":
 				return "text-amber-500";

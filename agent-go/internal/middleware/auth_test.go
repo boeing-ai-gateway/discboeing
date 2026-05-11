@@ -3,6 +3,8 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -41,5 +43,34 @@ func TestVerifySecret(t *testing.T) {
 				t.Errorf("verifySecret(%q, %q) = %v, want %v", tt.token, tt.hash, got, tt.expect)
 			}
 		})
+	}
+}
+
+func TestAuthAcceptsAuthorizationHeader(t *testing.T) {
+	salt := []byte("testsalt12345678")
+	plaintext := "my-secret-token"
+
+	h := sha256.New()
+	h.Write(salt)
+	h.Write([]byte(plaintext))
+	secretHash := hex.EncodeToString(salt) + ":" + hex.EncodeToString(h.Sum(nil))
+
+	called := false
+	handler := Auth(secretHash)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/threads", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("expected wrapped handler to be called")
 	}
 }

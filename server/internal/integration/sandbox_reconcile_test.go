@@ -103,6 +103,7 @@ func newTestSandboxSetup(t *testing.T) *testSandboxSetup {
 	cfg := &config.Config{
 		DatabaseDSN:        fmt.Sprintf("sqlite3://%s/test.db", dbDir),
 		DatabaseDriver:     "sqlite",
+		EncryptionKey:      []byte("01234567890123456789012345678901"),
 		SandboxImage:       testImageNew, // Expected image
 		SandboxIdleTimeout: 5 * time.Minute,
 		WorkspaceDir:       workingDir,
@@ -152,7 +153,7 @@ func newTestSandboxSetup(t *testing.T) *testSandboxSetup {
 		setup.mu.Unlock()
 
 		for _, sessionID := range sessionIDs {
-			_ = provider.Remove(ctx, sessionID)
+			_, _ = provider.Remove(ctx, nil, sessionID)
 		}
 
 		provider.Close()
@@ -248,12 +249,12 @@ func (s *testSandboxSetup) createSandboxWithImage(t *testing.T, sessionID, image
 		},
 	}
 
-	sb, err := tempProvider.Create(ctx, sessionID, opts)
+	sb, state, err := tempProvider.Create(ctx, nil, sessionID, opts)
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
 
-	if err := tempProvider.Start(ctx, sessionID); err != nil {
+	if _, err := tempProvider.Start(ctx, state, sessionID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
@@ -275,7 +276,7 @@ func TestReconcileSandboxes_ReplacesOutdatedImage(t *testing.T) {
 	setup.createSandboxWithImage(t, session.ID, testImageOld)
 
 	// Verify sandbox exists with old image
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -299,7 +300,7 @@ func TestReconcileSandboxes_ReplacesOutdatedImage(t *testing.T) {
 	}
 
 	// Verify sandbox was recreated with new image
-	sb, err = setup.provider.Get(ctx, session.ID)
+	sb, err = setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox after reconciliation: %v", err)
 	}
@@ -329,7 +330,7 @@ func TestReconcileSandboxes_SkipsCorrectImage(t *testing.T) {
 	setup.createSandboxWithImage(t, session.ID, testImageNew)
 
 	// Get sandbox info before reconciliation
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -346,7 +347,7 @@ func TestReconcileSandboxes_SkipsCorrectImage(t *testing.T) {
 	}
 
 	// Verify sandbox was NOT recreated
-	sb, err = setup.provider.Get(ctx, session.ID)
+	sb, err = setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox after reconciliation: %v", err)
 	}
@@ -382,7 +383,7 @@ func TestReconcileSandboxes_RemovesOrphanedSandboxes(t *testing.T) {
 	}
 
 	// Verify sandbox exists
-	sb, err := setup.provider.Get(ctx, orphanSessionID)
+	sb, err := setup.provider.Get(ctx, nil, orphanSessionID)
 	if err != nil {
 		t.Fatalf("Failed to get orphaned sandbox: %v", err)
 	}
@@ -398,7 +399,7 @@ func TestReconcileSandboxes_RemovesOrphanedSandboxes(t *testing.T) {
 	}
 
 	// Verify orphaned sandbox was removed
-	_, err = setup.provider.Get(ctx, orphanSessionID)
+	_, err = setup.provider.Get(ctx, nil, orphanSessionID)
 	if err != sandbox.ErrNotFound {
 		t.Errorf("Expected orphaned sandbox to be removed, got error: %v", err)
 	}
@@ -429,9 +430,9 @@ func TestReconcileSandboxes_MultipleSandboxes(t *testing.T) {
 	wg.Wait()
 
 	// Get original sandbox IDs
-	sb1, _ := setup.provider.Get(ctx, session1.ID)
-	sb2, _ := setup.provider.Get(ctx, session2.ID)
-	sb3, _ := setup.provider.Get(ctx, session3.ID)
+	sb1, _ := setup.provider.Get(ctx, nil, session1.ID)
+	sb2, _ := setup.provider.Get(ctx, nil, session2.ID)
+	sb3, _ := setup.provider.Get(ctx, nil, session3.ID)
 
 	originalIDs := map[string]string{
 		session1.ID: sb1.ID,
@@ -454,7 +455,7 @@ func TestReconcileSandboxes_MultipleSandboxes(t *testing.T) {
 	// Verify results
 	// Session 1 and 2 should have new sandboxes
 	for _, sessionID := range []string{session1.ID, session2.ID} {
-		sb, err := setup.provider.Get(ctx, sessionID)
+		sb, err := setup.provider.Get(ctx, nil, sessionID)
 		if err != nil {
 			t.Errorf("Failed to get sandbox for session %s: %v", sessionID, err)
 			continue
@@ -468,7 +469,7 @@ func TestReconcileSandboxes_MultipleSandboxes(t *testing.T) {
 	}
 
 	// Session 3 should have the same sandbox
-	sb3After, err := setup.provider.Get(ctx, session3.ID)
+	sb3After, err := setup.provider.Get(ctx, nil, session3.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox for session3: %v", err)
 	}
@@ -531,7 +532,7 @@ func TestReconcileSessionStates_MarksFailedSandboxAsError(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify sandbox is in failed state
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -583,7 +584,7 @@ func TestReconcileSessionStates_KeepsRunningSessionWithRunningSandbox(t *testing
 	setup.createSandboxWithImage(t, session.ID, testImageNew)
 
 	// Verify sandbox is running
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -626,7 +627,7 @@ func TestReconcileSessionStates_MarksStoppedSessionWithNoSandbox(t *testing.T) {
 	// or was removed while server was down
 
 	// Verify no sandbox exists
-	_, err := setup.provider.Get(ctx, session.ID)
+	_, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != sandbox.ErrNotFound {
 		t.Fatalf("Expected sandbox to not exist, got: %v", err)
 	}
@@ -667,12 +668,12 @@ func TestReconcileSessionStates_MarksStoppedSessionWithStoppedSandbox(t *testing
 	setup.createSandboxWithImage(t, session.ID, testImageNew)
 
 	// Stop the sandbox (0 timeout = SIGKILL immediately, no graceful shutdown needed for tests)
-	if err := setup.provider.Stop(ctx, session.ID, 0); err != nil {
+	if _, err := setup.provider.Stop(ctx, nil, session.ID, 0); err != nil {
 		t.Fatalf("Failed to stop sandbox: %v", err)
 	}
 
 	// Verify sandbox is stopped
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -716,7 +717,7 @@ func TestProvider_GetReturnsNotFoundAfterExternalContainerDeletion(t *testing.T)
 	setup.createSandboxWithImage(t, session.ID, testImageNew)
 
 	// Verify sandbox exists and is running
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -727,7 +728,7 @@ func TestProvider_GetReturnsNotFoundAfterExternalContainerDeletion(t *testing.T)
 	t.Logf("Sandbox created with container ID: %s", containerID)
 
 	// Call Get again to ensure the container ID is cached in the provider
-	_, err = setup.provider.Get(ctx, session.ID)
+	_, err = setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox (caching call): %v", err)
 	}
@@ -742,7 +743,7 @@ func TestProvider_GetReturnsNotFoundAfterExternalContainerDeletion(t *testing.T)
 
 	// Now call Get - it should return ErrNotFound, not a wrapped "No such container" error
 	t.Log("Calling Get after external deletion...")
-	_, err = setup.provider.Get(ctx, session.ID)
+	_, err = setup.provider.Get(ctx, nil, session.ID)
 	if err == nil {
 		t.Fatal("Expected error after container deletion, got nil")
 	}
@@ -788,17 +789,17 @@ func TestProvider_GetSecretReturnsNotFoundAfterExternalContainerDeletion(t *test
 		},
 	}
 
-	_, err = tempProvider.Create(ctx, session.ID, opts)
+	_, _, err = tempProvider.Create(ctx, nil, session.ID, opts)
 	if err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
 
-	if err := tempProvider.Start(ctx, session.ID); err != nil {
+	if _, err := tempProvider.Start(ctx, nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
 	// Verify we can get the secret
-	secret, err := setup.provider.GetSecret(ctx, session.ID)
+	secret, err := setup.provider.GetSecret(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get secret: %v", err)
 	}
@@ -817,7 +818,7 @@ func TestProvider_GetSecretReturnsNotFoundAfterExternalContainerDeletion(t *test
 
 	// Now call GetSecret - it should return ErrNotFound
 	t.Log("Calling GetSecret after external deletion...")
-	_, err = setup.provider.GetSecret(ctx, session.ID)
+	_, err = setup.provider.GetSecret(ctx, nil, session.ID)
 	if err == nil {
 		t.Fatal("Expected error after container deletion, got nil")
 	}
@@ -842,7 +843,7 @@ func TestReconcileSessionStates_HandlesExternallyDeletedContainer(t *testing.T) 
 	setup.createSandboxWithImage(t, session.ID, testImageNew)
 
 	// Verify sandbox exists
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}
@@ -913,7 +914,7 @@ func TestReconcileSessionStates_ResetsRunningSessionWithNoActiveChat(t *testing.
 	}
 
 	// Verify sandbox is running
-	sb, err := setup.provider.Get(ctx, session.ID)
+	sb, err := setup.provider.Get(ctx, nil, session.ID)
 	if err != nil {
 		t.Fatalf("Failed to get sandbox: %v", err)
 	}

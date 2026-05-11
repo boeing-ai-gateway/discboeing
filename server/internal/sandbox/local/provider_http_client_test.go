@@ -16,13 +16,13 @@ func TestAcquireHTTPClientCachesPerSessionPort(t *testing.T) {
 		httpClients: sandbox.NewHTTPClientCache(),
 	}
 
-	lease1, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease1, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() error = %v", err)
 	}
 	defer lease1.Release()
 
-	lease2, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease2, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() second call error = %v", err)
 	}
@@ -49,14 +49,14 @@ func TestAcquireHTTPClientRefreshesWhenPortChanges(t *testing.T) {
 		httpClients: sandbox.NewHTTPClientCache(),
 	}
 
-	lease1, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease1, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() error = %v", err)
 	}
 
 	provider.processes["session-1"].port = 3003
 
-	lease2, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease2, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() after port change error = %v", err)
 	}
@@ -77,18 +77,18 @@ func TestAcquireHTTPClientInvalidatesWhenSandboxStops(t *testing.T) {
 		httpClients: sandbox.NewHTTPClientCache(),
 	}
 
-	lease1, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease1, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() error = %v", err)
 	}
 
 	provider.processes["session-1"].port = 0
-	if _, err := provider.AcquireHTTPClient(context.Background(), "session-1"); err == nil {
+	if _, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1"); err == nil {
 		t.Fatalf("AcquireHTTPClient() after stop error = nil, want error")
 	}
 
 	provider.processes["session-1"].port = 3004
-	lease2, err := provider.AcquireHTTPClient(context.Background(), "session-1")
+	lease2, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1")
 	if err != nil {
 		t.Fatalf("AcquireHTTPClient() after restart error = %v", err)
 	}

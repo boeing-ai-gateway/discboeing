@@ -58,6 +58,9 @@ type SandboxAgentClient struct {
 	// X-Discobot-Git-User-Name and X-Discobot-Git-User-Email headers.
 	gitUserName  string
 	gitUserEmail string
+
+	acquireHTTPClientFunc func(context.Context, string) (*sandbox.HTTPClientLease, error)
+	getSecretFunc         func(context.Context, string) (string, error)
 }
 
 // SandboxChatStartError preserves a structured non-2xx response from the
@@ -88,6 +91,10 @@ type SandboxAgentClientConfig struct {
 	GitUserName string
 	// GitUserEmail is the git user.email sent on every request.
 	GitUserEmail string
+	// AcquireHTTPClient optionally overrides provider HTTP client acquisition.
+	AcquireHTTPClient func(context.Context, string) (*sandbox.HTTPClientLease, error)
+	// GetSecret optionally overrides provider secret lookup.
+	GetSecret func(context.Context, string) (string, error)
 }
 
 // NewSandboxAgentClient creates a new sandbox agent client.
@@ -101,6 +108,12 @@ func NewSandboxAgentClient(provider sandbox.Provider, fetcher CredentialFetcher,
 	if config != nil {
 		c.gitUserName = config.GitUserName
 		c.gitUserEmail = config.GitUserEmail
+		if config.AcquireHTTPClient != nil {
+			c.acquireHTTPClientFunc = config.AcquireHTTPClient
+		}
+		if config.GetSecret != nil {
+			c.getSecretFunc = config.GetSecret
+		}
 	}
 	return c
 }
@@ -217,13 +230,38 @@ type SSELine struct {
 // acquireHTTPClient returns a leased HTTP client configured for the sandbox.
 // Callers must release the lease after the request or stream completes.
 func (c *SandboxAgentClient) acquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	lease, err := sandbox.AcquireHTTPClient(ctx, c.provider, sessionID)
+	if c.acquireHTTPClientFunc != nil {
+		lease, err := c.acquireHTTPClientFunc(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return c.withSandboxAuth(ctx, lease, sessionID), nil
+	}
+	lease, err := sandbox.AcquireHTTPClient(ctx, c.provider, nil, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	secret, err := c.provider.GetSecret(ctx, sessionID)
+	return c.withSandboxAuth(ctx, lease, sessionID), nil
+}
+
+func (c *SandboxAgentClient) withSandboxAuth(ctx context.Context, lease *sandbox.HTTPClientLease, sessionID string) *sandbox.HTTPClientLease {
+	if c.getSecretFunc != nil {
+		secret, err := c.getSecretFunc(ctx, sessionID)
+		if err != nil || secret == "" {
+			return lease
+		}
+		lease.Client = &http.Client{
+			Transport: &sandboxAuthTransport{
+				base:   lease.Client.Transport,
+				secret: secret,
+			},
+			Timeout: lease.Client.Timeout,
+		}
+		return lease
+	}
+	secret, err := c.provider.GetSecret(ctx, nil, sessionID)
 	if err != nil || secret == "" {
-		return lease, nil
+		return lease
 	}
 	lease.Client = &http.Client{
 		Transport: &sandboxAuthTransport{
@@ -232,7 +270,7 @@ func (c *SandboxAgentClient) acquireHTTPClient(ctx context.Context, sessionID st
 		},
 		Timeout: lease.Client.Timeout,
 	}
-	return lease, nil
+	return lease
 }
 
 type sandboxAuthTransport struct {
@@ -255,9 +293,16 @@ func (t *sandboxAuthTransport) DialContext(ctx context.Context, network, addr st
 }
 
 func (t *sandboxAuthTransport) Headers() http.Header {
-	headers := make(http.Header)
+	headers := cloneHeaders(t.baseHeaders())
 	headers.Set("Authorization", "Bearer "+t.secret)
 	return headers
+}
+
+func (t *sandboxAuthTransport) WebSocketURL(rawURL string) string {
+	if transport, ok := t.base.(interface{ WebSocketURL(string) string }); ok {
+		return transport.WebSocketURL(rawURL)
+	}
+	return rawURL
 }
 
 func (t *sandboxAuthTransport) baseTransport() http.RoundTripper {
@@ -265,6 +310,21 @@ func (t *sandboxAuthTransport) baseTransport() http.RoundTripper {
 		return t.base
 	}
 	return http.DefaultTransport
+}
+
+func (t *sandboxAuthTransport) baseHeaders() http.Header {
+	if transport, ok := t.base.(interface{ Headers() http.Header }); ok {
+		return transport.Headers()
+	}
+	return nil
+}
+
+func cloneHeaders(headers http.Header) http.Header {
+	clone := make(http.Header)
+	for key, values := range headers {
+		clone[key] = append([]string(nil), values...)
+	}
+	return clone
 }
 
 // Attach creates an interactive PTY session to the sandbox.
@@ -382,7 +442,13 @@ type GetCommitsRequest struct {
 // Credentials are automatically fetched unless SkipCredentials is set.
 func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
 	// Add Authorization header with Bearer token
-	secret, err := c.provider.GetSecret(ctx, sessionID)
+	var secret string
+	var err error
+	if c.getSecretFunc != nil {
+		secret, err = c.getSecretFunc(ctx, sessionID)
+	} else {
+		secret, err = c.provider.GetSecret(ctx, nil, sessionID)
+	}
 	if err == nil && secret != "" {
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}

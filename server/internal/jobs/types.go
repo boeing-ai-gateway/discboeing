@@ -49,6 +49,7 @@ type SessionInitPayload struct {
 
 func (p SessionInitPayload) JobType() JobType              { return JobTypeSessionInit }
 func (p SessionInitPayload) ResourceKey() (string, string) { return ResourceTypeSession, p.SessionID }
+func (p SessionInitPayload) MaxAttempts() int              { return 1 }
 
 // WorkspaceInitPayload is the payload for workspace_init jobs.
 type WorkspaceInitPayload struct {
@@ -77,13 +78,15 @@ func (p WorkspaceDeletePayload) AllowDuplicates() bool { return true }
 
 // SessionDeletePayload is the payload for session_delete jobs.
 type SessionDeletePayload struct {
-	ProjectID string `json:"projectId"`
-	SessionID string `json:"sessionId"`
+	ProjectID    string `json:"projectId"`
+	SessionID    string `json:"sessionId"`
+	CreateFailed bool   `json:"createFailed,omitempty"`
 }
 
 func (p SessionDeletePayload) JobType() JobType              { return JobTypeSessionDelete }
 func (p SessionDeletePayload) ResourceKey() (string, string) { return ResourceTypeSession, p.SessionID }
 func (p SessionDeletePayload) Priority() int                 { return 5 }
+func (p SessionDeletePayload) AllowDuplicates() bool         { return true }
 
 // SessionSandboxDeletePayload is the payload for session_sandbox_delete jobs.
 type SessionSandboxDeletePayload struct {

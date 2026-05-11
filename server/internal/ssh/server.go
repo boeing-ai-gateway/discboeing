@@ -261,7 +261,7 @@ func (s *Server) handleConnection(netConn net.Conn) {
 		}
 	} else {
 		// No ensurer — require the sandbox to already be running.
-		sb, err := s.provider.Get(ctx, sessionID)
+		sb, err := s.provider.Get(ctx, nil, sessionID)
 		if err != nil {
 			log.Printf("SSH session %s: sandbox not found: %v", sessionID, err)
 			sshConn.Close()

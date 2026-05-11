@@ -37,11 +37,15 @@ func (m *mockSandboxProvider) Image() string {
 	return "test-image"
 }
 
-func (m *mockSandboxProvider) Create(_ context.Context, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, error) {
-	return &sandbox.Sandbox{Status: sandbox.StatusCreated}, nil
+func (m *mockSandboxProvider) PrepareState(context.Context, string, sandbox.CreateOptions) ([]byte, error) {
+	return nil, nil
 }
 
-func (m *mockSandboxProvider) Get(_ context.Context, _ string) (*sandbox.Sandbox, error) {
+func (m *mockSandboxProvider) Create(_ context.Context, state []byte, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+	return &sandbox.Sandbox{Status: sandbox.StatusCreated}, state, nil
+}
+
+func (m *mockSandboxProvider) Get(_ context.Context, _ []byte, _ string) (*sandbox.Sandbox, error) {
 	status := m.status
 	if status == "" {
 		status = sandbox.StatusRunning
@@ -51,30 +55,30 @@ func (m *mockSandboxProvider) Get(_ context.Context, _ string) (*sandbox.Sandbox
 	}, nil
 }
 
-func (m *mockSandboxProvider) Start(_ context.Context, _ string) error {
-	return nil
+func (m *mockSandboxProvider) Start(_ context.Context, state []byte, _ string) ([]byte, error) {
+	return state, nil
 }
 
-func (m *mockSandboxProvider) Stop(_ context.Context, sessionID string, _ time.Duration) error {
+func (m *mockSandboxProvider) Stop(_ context.Context, state []byte, sessionID string, _ time.Duration) ([]byte, error) {
 	if m.onStop != nil {
 		m.onStop(sessionID)
 	}
-	return nil
+	return state, nil
 }
 
-func (m *mockSandboxProvider) Remove(_ context.Context, _ string, _ ...sandbox.RemoveOption) error {
-	return nil
+func (m *mockSandboxProvider) Remove(_ context.Context, state []byte, _ string, _ ...sandbox.RemoveOption) ([]byte, error) {
+	return state, nil
 }
 
 func (m *mockSandboxProvider) List(_ context.Context) ([]*sandbox.Sandbox, error) {
 	return nil, nil
 }
 
-func (m *mockSandboxProvider) GetSecret(_ context.Context, _ string) (string, error) {
+func (m *mockSandboxProvider) GetSecret(_ context.Context, _ []byte, _ string) (string, error) {
 	return m.secret, nil
 }
 
-func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
 	if m.onAcquire != nil {
 		m.onAcquire(sessionID)
 	}
@@ -760,6 +764,41 @@ func TestSandboxAgentClient_SendMessages_WithAuthorization(t *testing.T) {
 	}
 }
 
+func TestSandboxAuthTransportMergesProviderWebSocketAuth(t *testing.T) {
+	base := providerWebSocketAuthTransport{}
+	transport := &sandboxAuthTransport{
+		base:   base,
+		secret: "discobot-secret",
+	}
+
+	headers := transport.Headers()
+	if got := headers.Get("Authorization"); got != "Bearer discobot-secret" {
+		t.Fatalf("Authorization = %q", got)
+	}
+	if got := headers.Get("X-Exedev-Authorization"); got != "Bearer vm-api-key" {
+		t.Fatalf("X-Exedev-Authorization = %q", got)
+	}
+	if got, want := transport.WebSocketURL("ws://sandbox/exec/abc/attach"), "wss://vm.exe.xyz/exec/abc/attach"; got != want {
+		t.Fatalf("WebSocketURL = %q, want %q", got, want)
+	}
+}
+
+type providerWebSocketAuthTransport struct{}
+
+func (providerWebSocketAuthTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("not used")
+}
+
+func (providerWebSocketAuthTransport) Headers() http.Header {
+	headers := make(http.Header)
+	headers.Set("X-Exedev-Authorization", "Bearer vm-api-key")
+	return headers
+}
+
+func (providerWebSocketAuthTransport) WebSocketURL(string) string {
+	return "wss://vm.exe.xyz/exec/abc/attach"
+}
+
 func TestSandboxAgentClient_SendMessages_RetriesOnEOF(t *testing.T) {
 	var attempts atomic.Int32
 
@@ -913,26 +952,31 @@ type mockSandboxProviderWithTransport struct {
 
 func (m *mockSandboxProviderWithTransport) ImageExists(_ context.Context) bool { return true }
 func (m *mockSandboxProviderWithTransport) Image() string                      { return "test-image" }
-func (m *mockSandboxProviderWithTransport) Create(_ context.Context, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, error) {
-	return &sandbox.Sandbox{Status: sandbox.StatusCreated}, nil
+func (m *mockSandboxProviderWithTransport) PrepareState(context.Context, string, sandbox.CreateOptions) ([]byte, error) {
+	return nil, nil
 }
-func (m *mockSandboxProviderWithTransport) Get(_ context.Context, _ string) (*sandbox.Sandbox, error) {
+func (m *mockSandboxProviderWithTransport) Create(_ context.Context, state []byte, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+	return &sandbox.Sandbox{Status: sandbox.StatusCreated}, state, nil
+}
+func (m *mockSandboxProviderWithTransport) Get(_ context.Context, _ []byte, _ string) (*sandbox.Sandbox, error) {
 	return &sandbox.Sandbox{Status: sandbox.StatusRunning}, nil
 }
-func (m *mockSandboxProviderWithTransport) Start(_ context.Context, _ string) error { return nil }
-func (m *mockSandboxProviderWithTransport) Stop(_ context.Context, _ string, _ time.Duration) error {
-	return nil
+func (m *mockSandboxProviderWithTransport) Start(_ context.Context, state []byte, _ string) ([]byte, error) {
+	return state, nil
 }
-func (m *mockSandboxProviderWithTransport) Remove(_ context.Context, _ string, _ ...sandbox.RemoveOption) error {
-	return nil
+func (m *mockSandboxProviderWithTransport) Stop(_ context.Context, state []byte, _ string, _ time.Duration) ([]byte, error) {
+	return state, nil
+}
+func (m *mockSandboxProviderWithTransport) Remove(_ context.Context, state []byte, _ string, _ ...sandbox.RemoveOption) ([]byte, error) {
+	return state, nil
 }
 func (m *mockSandboxProviderWithTransport) List(_ context.Context) ([]*sandbox.Sandbox, error) {
 	return nil, nil
 }
-func (m *mockSandboxProviderWithTransport) GetSecret(_ context.Context, _ string) (string, error) {
+func (m *mockSandboxProviderWithTransport) GetSecret(_ context.Context, _ []byte, _ string) (string, error) {
 	return "", nil
 }
-func (m *mockSandboxProviderWithTransport) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+func (m *mockSandboxProviderWithTransport) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
 	return &sandbox.HTTPClientLease{Client: &http.Client{Transport: m.transport}}, nil
 }
 func (m *mockSandboxProviderWithTransport) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {

@@ -23,11 +23,12 @@ type ProjectService struct {
 
 // Project represents a project (for API responses)
 type Project struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                       string    `json:"id"`
+	Name                     string    `json:"name"`
+	Slug                     string    `json:"slug"`
+	DefaultSandboxProviderID string    `json:"defaultSandboxProviderId,omitempty"`
+	CreatedAt                time.Time `json:"createdAt"`
+	UpdatedAt                time.Time `json:"updatedAt"`
 }
 
 // ProjectMember represents a project member (for API responses)
@@ -125,11 +126,12 @@ func (s *ProjectService) ListProjects(ctx context.Context, userID string) ([]Pro
 	projects := make([]Project, len(rows))
 	for i, row := range rows {
 		projects[i] = Project{
-			ID:        row.ID,
-			Name:      row.Name,
-			Slug:      row.Slug,
-			CreatedAt: row.CreatedAt,
-			UpdatedAt: row.UpdatedAt,
+			ID:                       row.ID,
+			Name:                     row.Name,
+			Slug:                     row.Slug,
+			DefaultSandboxProviderID: row.DefaultSandboxProviderID,
+			CreatedAt:                row.CreatedAt,
+			UpdatedAt:                row.UpdatedAt,
 		}
 	}
 	return projects, nil
@@ -163,11 +165,12 @@ func (s *ProjectService) CreateProject(ctx context.Context, userID, name string)
 	}
 
 	return &Project{
-		ID:        project.ID,
-		Name:      project.Name,
-		Slug:      project.Slug,
-		CreatedAt: project.CreatedAt,
-		UpdatedAt: project.UpdatedAt,
+		ID:                       project.ID,
+		Name:                     project.Name,
+		Slug:                     project.Slug,
+		DefaultSandboxProviderID: project.DefaultSandboxProviderID,
+		CreatedAt:                project.CreatedAt,
+		UpdatedAt:                project.UpdatedAt,
 	}, nil
 }
 
@@ -178,11 +181,12 @@ func (s *ProjectService) GetProject(ctx context.Context, projectID string) (*Pro
 		return nil, err
 	}
 	return &Project{
-		ID:        project.ID,
-		Name:      project.Name,
-		Slug:      project.Slug,
-		CreatedAt: project.CreatedAt,
-		UpdatedAt: project.UpdatedAt,
+		ID:                       project.ID,
+		Name:                     project.Name,
+		Slug:                     project.Slug,
+		DefaultSandboxProviderID: project.DefaultSandboxProviderID,
+		CreatedAt:                project.CreatedAt,
+		UpdatedAt:                project.UpdatedAt,
 	}, nil
 }
 
@@ -197,21 +201,27 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID, name stri
 		return nil, err
 	}
 	return &Project{
-		ID:        project.ID,
-		Name:      project.Name,
-		Slug:      project.Slug,
-		CreatedAt: project.CreatedAt,
-		UpdatedAt: project.UpdatedAt,
+		ID:                       project.ID,
+		Name:                     project.Name,
+		Slug:                     project.Slug,
+		DefaultSandboxProviderID: project.DefaultSandboxProviderID,
+		CreatedAt:                project.CreatedAt,
+		UpdatedAt:                project.UpdatedAt,
 	}, nil
 }
 
 // GetProjectResources returns project-scoped VM resources when supported.
 func (s *ProjectService) GetProjectResources(ctx context.Context, projectID string) (*ProjectResources, error) {
+	return s.GetProjectResourcesForProvider(ctx, projectID, s.provider)
+}
+
+// GetProjectResourcesForProvider returns project-scoped VM resources for a specific provider.
+func (s *ProjectService) GetProjectResourcesForProvider(ctx context.Context, projectID string, provider sandbox.Provider) (*ProjectResources, error) {
 	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
 		return nil, err
 	}
 
-	resourceManager, ok := s.provider.(sandbox.ProjectResourceManager)
+	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
 	if !ok {
 		return nil, sandbox.ErrProjectResourcesUnsupported
 	}
@@ -229,6 +239,11 @@ func (s *ProjectService) GetProjectResources(ctx context.Context, projectID stri
 
 // UpdateProjectResources updates project-scoped VM resources when supported.
 func (s *ProjectService) UpdateProjectResources(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
+	return s.UpdateProjectResourcesForProvider(ctx, projectID, s.provider, req)
+}
+
+// UpdateProjectResourcesForProvider updates project-scoped VM resources for a specific provider.
+func (s *ProjectService) UpdateProjectResourcesForProvider(ctx context.Context, projectID string, provider sandbox.Provider, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
 	if req.MemoryMB == nil && req.DataDiskGB == nil {
 		return nil, newValidationError("at least one resource must be provided")
 	}
@@ -238,7 +253,7 @@ func (s *ProjectService) UpdateProjectResources(ctx context.Context, projectID s
 		return nil, err
 	}
 
-	resourceManager, ok := s.provider.(sandbox.ProjectResourceManager)
+	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
 	if !ok {
 		return nil, sandbox.ErrProjectResourcesUnsupported
 	}
@@ -311,11 +326,16 @@ func (s *ProjectService) UpdateProjectResources(ctx context.Context, projectID s
 
 // GetProjectInspection returns inspection-container access details when supported.
 func (s *ProjectService) GetProjectInspection(ctx context.Context, projectID string) (*ProjectInspection, error) {
+	return s.GetProjectInspectionForProvider(ctx, projectID, s.provider)
+}
+
+// GetProjectInspectionForProvider returns inspection access details for a specific provider.
+func (s *ProjectService) GetProjectInspectionForProvider(ctx context.Context, projectID string, provider sandbox.Provider) (*ProjectInspection, error) {
 	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
 		return nil, err
 	}
 
-	inspectionManager, ok := s.provider.(sandbox.ProjectInspectionManager)
+	inspectionManager, ok := provider.(sandbox.ProjectInspectionManager)
 	if !ok {
 		return nil, sandbox.ErrProjectInspectionUnsupported
 	}
@@ -335,11 +355,16 @@ func (s *ProjectService) GetProjectInspection(ctx context.Context, projectID str
 
 // AttachProjectInspection attaches to the project's inspection container shell.
 func (s *ProjectService) AttachProjectInspection(ctx context.Context, projectID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	return s.AttachProjectInspectionForProvider(ctx, projectID, s.provider, opts)
+}
+
+// AttachProjectInspectionForProvider attaches to a specific provider's inspection shell.
+func (s *ProjectService) AttachProjectInspectionForProvider(ctx context.Context, projectID string, provider sandbox.Provider, opts sandbox.AttachOptions) (sandbox.PTY, error) {
 	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
 		return nil, err
 	}
 
-	inspectionManager, ok := s.provider.(sandbox.ProjectInspectionManager)
+	inspectionManager, ok := provider.(sandbox.ProjectInspectionManager)
 	if !ok {
 		return nil, sandbox.ErrProjectInspectionUnsupported
 	}

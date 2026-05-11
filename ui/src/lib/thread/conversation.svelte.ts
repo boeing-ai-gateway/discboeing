@@ -524,6 +524,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			modelId,
 			reasoning,
 			workspaceId,
+			providerId,
 			workspaceType,
 			workspacePath,
 			allowEmptyPendingMessage,
@@ -534,6 +535,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			modelId: string | null;
 			reasoning: string | undefined;
 			workspaceId?: string;
+			providerId?: string;
 			workspaceType?: "local" | "git" | null;
 			workspacePath?: string | null;
 			allowEmptyPendingMessage?: boolean;
@@ -572,6 +574,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 						threadId: args.threadId,
 						messages: userMessage ? getSubmitMessages(userMessage) : [],
 						...(workspaceId ? { workspaceId } : {}),
+						...(providerId ? { providerId } : {}),
 						...(workspaceType && workspacePath
 							? {
 									workspaceType,

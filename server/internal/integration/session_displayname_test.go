@@ -10,7 +10,7 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Create a session via chat
@@ -38,8 +38,8 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	var session map[string]any
 	ParseJSON(t, getResp, &session)
 
-	if session["name"] != "Help me fix authentication bug" {
-		t.Errorf("Expected name 'Help me fix authentication bug', got '%v'", session["name"])
+	if session["name"] != "" {
+		t.Errorf("Expected empty name initially, got '%v'", session["name"])
 	}
 	if _, exists := session["displayName"]; exists && session["displayName"] != nil && session["displayName"] != "" {
 		t.Errorf("Expected no displayName initially, got '%v'", session["displayName"])
@@ -59,9 +59,9 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	if updatedSession["displayName"] != "Auth Bug Fix" {
 		t.Errorf("Expected displayName 'Auth Bug Fix', got '%v'", updatedSession["displayName"])
 	}
-	// Original name should be preserved
-	if updatedSession["name"] != "Help me fix authentication bug" {
-		t.Errorf("Expected original name to be preserved, got '%v'", updatedSession["name"])
+	// Original name should stay empty until populated elsewhere.
+	if updatedSession["name"] != "" {
+		t.Errorf("Expected original name to remain empty, got '%v'", updatedSession["name"])
 	}
 
 	// Get session again to verify persistence
@@ -75,8 +75,8 @@ func TestSessionDisplayName_SetAndGet(t *testing.T) {
 	if persistedSession["displayName"] != "Auth Bug Fix" {
 		t.Errorf("Expected persisted displayName 'Auth Bug Fix', got '%v'", persistedSession["displayName"])
 	}
-	if persistedSession["name"] != "Help me fix authentication bug" {
-		t.Errorf("Expected original name to be preserved after persistence, got '%v'", persistedSession["name"])
+	if persistedSession["name"] != "" {
+		t.Errorf("Expected original name to remain empty after persistence, got '%v'", persistedSession["name"])
 	}
 }
 
@@ -85,7 +85,7 @@ func TestSessionDisplayName_ClearDisplayName(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Create a session
@@ -126,9 +126,9 @@ func TestSessionDisplayName_ClearDisplayName(t *testing.T) {
 	if clearedSession["displayName"] != nil && clearedSession["displayName"] != "" {
 		t.Errorf("Expected displayName to be cleared, got '%v'", clearedSession["displayName"])
 	}
-	// Original name should still be preserved
-	if clearedSession["name"] != "Original prompt text" {
-		t.Errorf("Expected original name to be preserved, got '%v'", clearedSession["name"])
+	// Original name should still be empty until populated elsewhere.
+	if clearedSession["name"] != "" {
+		t.Errorf("Expected original name to remain empty, got '%v'", clearedSession["name"])
 	}
 }
 
@@ -137,7 +137,7 @@ func TestSessionDisplayName_InList(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Create multiple sessions with different displayName configurations
@@ -220,12 +220,12 @@ func TestSessionDisplayName_InList(t *testing.T) {
 		t.Errorf("Session 2 expected displayName 'My Custom Session', got '%v'", session2["displayName"])
 	}
 
-	// Both should preserve original names
-	if session1["name"] != "First session prompt" {
-		t.Errorf("Session 1 expected name 'First session prompt', got '%v'", session1["name"])
+	// Both names should stay empty until populated elsewhere.
+	if session1["name"] != "" {
+		t.Errorf("Session 1 expected empty name, got '%v'", session1["name"])
 	}
-	if session2["name"] != "Second session prompt" {
-		t.Errorf("Session 2 expected name 'Second session prompt', got '%v'", session2["name"])
+	if session2["name"] != "" {
+		t.Errorf("Session 2 expected empty name, got '%v'", session2["name"])
 	}
 }
 
@@ -234,7 +234,7 @@ func TestSessionDisplayName_EmptyString(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Create a session
@@ -268,8 +268,8 @@ func TestSessionDisplayName_EmptyString(t *testing.T) {
 	if updatedSession["displayName"] != nil && updatedSession["displayName"] != "" {
 		t.Errorf("Expected displayName to be empty/null, got '%v'", updatedSession["displayName"])
 	}
-	// Original name preserved
-	if updatedSession["name"] != "Test prompt" {
-		t.Errorf("Expected original name to be preserved, got '%v'", updatedSession["name"])
+	// Original name remains empty.
+	if updatedSession["name"] != "" {
+		t.Errorf("Expected original name to remain empty, got '%v'", updatedSession["name"])
 	}
 }

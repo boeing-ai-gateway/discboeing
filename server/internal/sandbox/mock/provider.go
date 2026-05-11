@@ -44,10 +44,10 @@ type Provider struct {
 	defaultHTTPHandler http.Handler
 
 	// Configurable behaviors for testing
-	CreateFunc     func(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error)
-	StartFunc      func(ctx context.Context, sessionID string) error
-	StopFunc       func(ctx context.Context, sessionID string, timeout time.Duration) error
-	RemoveFunc     func(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error
+	CreateFunc     func(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error)
+	StartFunc      func(ctx context.Context, state []byte, sessionID string) ([]byte, error)
+	StopFunc       func(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error)
+	RemoveFunc     func(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error)
 	GetFunc        func(ctx context.Context, sessionID string) (*sandbox.Sandbox, error)
 	GetSecretFunc  func(ctx context.Context, sessionID string) (string, error)
 	WatchFunc      func(ctx context.Context) (<-chan sandbox.StateEvent, error)
@@ -86,6 +86,13 @@ func (p *Provider) Image() string {
 	return p.image
 }
 
+func (p *Provider) Definition() sandbox.ProviderDefinition {
+	return sandbox.ProviderDefinition{
+		Name:        "Mock",
+		Description: "Mock sandbox driver",
+	}
+}
+
 // GetCreateOptions returns the create options used for the session.
 func (p *Provider) GetCreateOptions(sessionID string) (sandbox.CreateOptions, bool) {
 	p.mu.RLock()
@@ -95,16 +102,16 @@ func (p *Provider) GetCreateOptions(sessionID string) (sandbox.CreateOptions, bo
 }
 
 // Create creates a mock sandbox.
-func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	if p.CreateFunc != nil {
-		return p.CreateFunc(ctx, sessionID, opts)
+		return p.CreateFunc(ctx, state, sessionID, opts)
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, exists := p.sandboxes[sessionID]; exists {
-		return nil, sandbox.ErrAlreadyExists
+		return nil, state, sandbox.ErrAlreadyExists
 	}
 
 	// Store the secret
@@ -142,13 +149,13 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 		Timestamp: now,
 	})
 
-	return s, nil
+	return s, state, nil
 }
 
 // Start starts a mock sandbox.
-func (p *Provider) Start(ctx context.Context, sessionID string) error {
+func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
 	if p.StartFunc != nil {
-		return p.StartFunc(ctx, sessionID)
+		return p.StartFunc(ctx, state, sessionID)
 	}
 
 	p.mu.Lock()
@@ -156,11 +163,11 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 
 	s, exists := p.sandboxes[sessionID]
 	if !exists {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	if s.Status == sandbox.StatusRunning {
-		return sandbox.ErrAlreadyRunning
+		return state, sandbox.ErrAlreadyRunning
 	}
 
 	s.Status = sandbox.StatusRunning
@@ -174,13 +181,13 @@ func (p *Provider) Start(ctx context.Context, sessionID string) error {
 		Timestamp: now,
 	})
 
-	return nil
+	return state, nil
 }
 
 // Stop stops a mock sandbox.
-func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	if p.StopFunc != nil {
-		return p.StopFunc(ctx, sessionID, timeout)
+		return p.StopFunc(ctx, state, sessionID, timeout)
 	}
 
 	p.mu.Lock()
@@ -188,11 +195,11 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 
 	s, exists := p.sandboxes[sessionID]
 	if !exists {
-		return sandbox.ErrNotFound
+		return state, sandbox.ErrNotFound
 	}
 
 	if s.Status != sandbox.StatusRunning {
-		return sandbox.ErrNotRunning
+		return state, sandbox.ErrNotRunning
 	}
 
 	s.Status = sandbox.StatusStopped
@@ -206,15 +213,15 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 		Timestamp: now,
 	})
 
-	return nil
+	return state, nil
 }
 
 // Remove removes a mock sandbox and optionally its associated data.
 // By default, secrets are preserved (simulates Docker volume preservation).
 // Pass sandbox.RemoveVolumes() to delete secrets (simulates complete cleanup).
-func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
 	if p.RemoveFunc != nil {
-		return p.RemoveFunc(ctx, sessionID, opts...)
+		return p.RemoveFunc(ctx, state, sessionID, opts...)
 	}
 
 	cfg := sandbox.ParseRemoveOptions(opts)
@@ -223,7 +230,7 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 	defer p.mu.Unlock()
 
 	if _, exists := p.sandboxes[sessionID]; !exists {
-		return nil // Idempotent
+		return state, nil // Idempotent
 	}
 
 	delete(p.sandboxes, sessionID)
@@ -240,11 +247,11 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 		Timestamp: time.Now(),
 	})
 
-	return nil
+	return state, nil
 }
 
 // Get returns a mock sandbox.
-func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *Provider) Get(ctx context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
 	if p.GetFunc != nil {
 		return p.GetFunc(ctx, sessionID)
 	}
@@ -263,7 +270,7 @@ func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox,
 }
 
 // GetSecret returns the raw shared secret for the sandbox.
-func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, error) {
+func (p *Provider) GetSecret(ctx context.Context, _ []byte, sessionID string) (string, error) {
 	if p.GetSecretFunc != nil {
 		return p.GetSecretFunc(ctx, sessionID)
 	}
@@ -298,7 +305,7 @@ func (p *Provider) List(_ context.Context) ([]*sandbox.Sandbox, error) {
 
 // AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
 // For mock provider, this uses the configured HTTPHandler without making real network connections.
-func (p *Provider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+func (p *Provider) AcquireHTTPClient(_ context.Context, _ []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

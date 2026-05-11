@@ -35,6 +35,10 @@ test("session transitioning status helper only flags non-resting states", () => 
 	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTING), true);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.REMOVING), true);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.ERROR), false);
+	assert.equal(
+		isSessionTransitioningStatus(SessionStatus.CREATE_FAILED),
+		false,
+	);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.STOPPED), false);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTED), false);
 	assert.equal(isSessionTransitioningStatus(null), false);

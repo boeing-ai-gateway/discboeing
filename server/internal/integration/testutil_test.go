@@ -276,6 +276,17 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 			r.Post("/resources", h.UpdateProjectResources)
 			r.Get("/inspection", h.GetProjectInspection)
 			r.Get("/inspection/terminal/ws", h.ProjectInspectionTerminalWebSocket)
+			r.Get("/sandbox-provider-types", h.ListSandboxProviderTypes)
+			r.Route("/sandbox-providers", func(r chi.Router) {
+				r.Get("/", h.ListSandboxProviders)
+				r.Post("/", h.CreateSandboxProvider)
+				r.Patch("/{providerId}", h.UpdateSandboxProvider)
+				r.Delete("/{providerId}", h.DeleteSandboxProvider)
+				r.Get("/{providerId}/resources", h.GetSandboxProviderResources)
+				r.Patch("/{providerId}/resources", h.UpdateSandboxProviderResources)
+				r.Get("/{providerId}/inspection", h.GetSandboxProviderInspection)
+				r.Get("/{providerId}/inspection/terminal/ws", h.SandboxProviderInspectionTerminalWebSocket)
+			})
 
 			r.Get("/members", h.ListProjectMembers)
 			r.Delete("/members/{userId}", h.RemoveProjectMember)
@@ -713,14 +724,14 @@ func (ts *TestServer) CreateTestSessionWithMockSandbox(workspace *model.Workspac
 
 	// Create and start a mock sandbox that points to the test server
 	ctx := context.Background()
-	_, err = ts.MockSandbox.Create(ctx, session.ID, sandbox.CreateOptions{
+	_, _, err = ts.MockSandbox.Create(ctx, nil, session.ID, sandbox.CreateOptions{
 		SharedSecret: "test-secret",
 	})
 	if err != nil {
 		ts.T.Fatalf("Failed to create mock sandbox: %v", err)
 	}
 
-	if err := ts.MockSandbox.Start(ctx, session.ID); err != nil {
+	if _, err := ts.MockSandbox.Start(ctx, nil, session.ID); err != nil {
 		ts.T.Fatalf("Failed to start mock sandbox: %v", err)
 	}
 
@@ -750,14 +761,14 @@ func (ts *TestServer) CreateTestSessionWithSandbox(workspace *model.Workspace, n
 
 	// Create and start a mock sandbox (uses default handler which supports all endpoints)
 	ctx := context.Background()
-	_, err := ts.MockSandbox.Create(ctx, session.ID, sandbox.CreateOptions{
+	_, _, err := ts.MockSandbox.Create(ctx, nil, session.ID, sandbox.CreateOptions{
 		SharedSecret: "test-secret",
 	})
 	if err != nil {
 		ts.T.Fatalf("Failed to create mock sandbox: %v", err)
 	}
 
-	if err := ts.MockSandbox.Start(ctx, session.ID); err != nil {
+	if _, err := ts.MockSandbox.Start(ctx, nil, session.ID); err != nil {
 		ts.T.Fatalf("Failed to start mock sandbox: %v", err)
 	}
 
@@ -770,14 +781,14 @@ func (ts *TestServer) CreateAndStartSandbox(sessionID string) {
 	ts.T.Helper()
 
 	ctx := context.Background()
-	_, err := ts.MockSandbox.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := ts.MockSandbox.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret: "test-secret",
 	})
 	if err != nil {
 		ts.T.Fatalf("Failed to create mock sandbox: %v", err)
 	}
 
-	if err := ts.MockSandbox.Start(ctx, sessionID); err != nil {
+	if _, err := ts.MockSandbox.Start(ctx, nil, sessionID); err != nil {
 		ts.T.Fatalf("Failed to start mock sandbox: %v", err)
 	}
 }

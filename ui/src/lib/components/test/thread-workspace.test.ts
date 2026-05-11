@@ -40,7 +40,7 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
 		source,
-		/session\.isPending \|\| session\.threads\.selectedId !== null/,
+		/session\.isPending \|\|\s*\(sandboxReady && session\.threads\.selectedId !== null\)/,
 	);
 	assert.match(
 		source,
@@ -55,7 +55,15 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /const isLoadingThread = \$derived\.by/);
 	assert.match(
 		source,
-		/\(\) => !showActiveConversation && !session\.isPending && !sandboxReady/,
+		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
+	);
+	assert.match(
+		source,
+		/isSessionTransitioningStatus\(session\.current\?\.status\)/,
+	);
+	assert.doesNotMatch(
+		source,
+		/!showActiveConversation && !session\.isPending && !sandboxReady/,
 	);
 	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
 	assert.match(source, /<ConversationComposerSessionSetupStatus/);
@@ -73,6 +81,23 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		/Loading the selected thread while the session starts\./,
 	);
 	assert.match(source, /Select a thread to continue\./);
+});
+
+test("thread context stops sandbox refreshes when a session is not ready", () => {
+	const source = readFileSync(
+		path.resolve(import.meta.dirname, "../../context/thread-context.svelte.ts"),
+		"utf-8",
+	);
+
+	assert.match(
+		source,
+		/const refreshSessionState = async \(\) => \{\s*if \(!hasSession\) \{/,
+	);
+	assert.match(
+		source,
+		/retryScheduler\.dispose\(\);\s*conversation\.disconnect\(\);/,
+	);
+	assert.match(source, /afterTurn: async \(\) => \{\s*if \(!hasSession\) \{/);
 });
 
 test("active thread workspace keeps the stream live while inactive conversation nodes are unmounted", () => {

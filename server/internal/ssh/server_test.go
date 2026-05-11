@@ -104,11 +104,11 @@ func TestServer_AcceptsConnection(t *testing.T) {
 	// Create and start a sandbox
 	ctx := context.Background()
 	sessionID := "test-session-123"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, state, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, state, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -197,7 +197,7 @@ func TestServer_RejectsStoppedSandbox(t *testing.T) {
 	sessionID := "stopped-session"
 
 	// Create sandbox but don't start it
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
@@ -320,11 +320,11 @@ func TestWindowChangeResizesPTY(t *testing.T) {
 
 	ctx := context.Background()
 	sessionID := "resize-test-session"
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{})
+	_, state, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, state, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 

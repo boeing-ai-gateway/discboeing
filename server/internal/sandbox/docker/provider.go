@@ -5,7 +5,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -229,6 +229,19 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 
 	log.Printf("Docker provider initialized, image pull running in background")
 	return p, nil
+}
+
+func (p *Provider) Definition() sandbox.ProviderDefinition {
+	return sandbox.ProviderDefinition{
+		Name:        "Docker",
+		Icon:        "simple:docker",
+		Description: "Docker sandbox driver",
+		ConfigFields: []sandbox.ProviderConfigField{
+			{Key: "host", Label: "Docker host", Type: "text", Placeholder: "unix:///var/run/docker.sock", Description: "Optional Docker daemon socket or host URL.", Advanced: true},
+			{Key: "network", Label: "Docker network", Type: "text", Placeholder: "bridge", Description: "Optional Docker network for sandbox containers.", Advanced: true},
+			{Key: "wslDistro", Label: "WSL distro", Type: "text", Placeholder: "Ubuntu", Description: "Optional Windows WSL distro used to proxy host Docker access.", Advanced: true},
+		},
+	}
 }
 
 // containerName generates a consistent container name from session ID.
@@ -511,8 +524,12 @@ func (p *Provider) Image() string {
 	return p.cfg.SandboxImage
 }
 
+func (p *Provider) IsLocal() bool {
+	return IsLocalHost(p.cfg.DockerHost)
+}
+
 // Create creates a new Docker container for the given session.
-func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	p.lifecycleMu.RLock()
 	defer p.lifecycleMu.RUnlock()
 
@@ -527,12 +544,12 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	if existing, err := p.client.ContainerInspect(ctx, name); err == nil && existing.ContainerJSONBase != nil {
 		// If we have a cached ID and it matches the existing container, return error
 		if existsInCache && cachedID == existing.ID {
-			return nil, sandbox.ErrAlreadyExists
+			return nil, state, sandbox.ErrAlreadyExists
 		}
 		// Otherwise, remove the stale container (force cleanup from previous runs)
 		log.Printf("Removing stale container %s (%s) before creating new sandbox", existing.ID[:12], name)
 		if err := p.client.ContainerRemove(ctx, existing.ID, containerTypes.RemoveOptions{Force: true}); err != nil {
-			return nil, fmt.Errorf("failed to remove stale container: %w", err)
+			return nil, state, fmt.Errorf("failed to remove stale container: %w", err)
 		}
 		// Clear any stale cache entry
 		p.clearContainerID(sessionID)
@@ -546,7 +563,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 
 	// Wait for image to be available (pulled on startup or by first caller)
 	if err := p.EnsureImage(ctx); err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrInvalidImage, err)
+		return nil, state, fmt.Errorf("%w: %v", sandbox.ErrInvalidImage, err)
 	}
 
 	// Create data volume for persistent storage
@@ -559,7 +576,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create data volume: %w", err)
+		return nil, state, fmt.Errorf("failed to create data volume: %w", err)
 	}
 
 	// Prepare labels - store the raw secret as a label
@@ -572,46 +589,15 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	}
 	maps.Copy(labels, opts.Labels)
 
-	// Build environment variables
-	var env []string
-
-	// Add session ID (required by discobot-agent for filesystem setup)
-	env = append(env, fmt.Sprintf("SESSION_ID=%s", sessionID))
-	env = append(env, fmt.Sprintf("DISCOBOT_SESSION_ID=%s", sessionID))
-
-	// Add hashed secret as DISCOBOT_SECRET env var
-	if opts.SharedSecret != "" {
-		hashedSecret := hashSecret(opts.SharedSecret)
-		env = append(env, fmt.Sprintf("DISCOBOT_SECRET=%s", hashedSecret))
+	envMap := maps.Clone(opts.Env)
+	keys := make([]string, 0, len(envMap))
+	for key := range envMap {
+		keys = append(keys, key)
 	}
-
-	// Handle workspace environment variables
-	// WORKSPACE_ORIGIN_PATH is always the mount point inside the container
-	// WORKSPACE_SOURCE is the original source (local path or git URL)
-	if opts.WorkspacePath != "" {
-		env = append(env, fmt.Sprintf("WORKSPACE_ORIGIN_PATH=%s", workspacePath))
-	}
-	if opts.WorkspaceSource != "" {
-		env = append(env, fmt.Sprintf("WORKSPACE_SOURCE=%s", opts.WorkspaceSource))
-	}
-
-	// Add workspace commit if provided
-	if opts.WorkspaceCommit != "" {
-		env = append(env, fmt.Sprintf("WORKSPACE_COMMIT=%s", opts.WorkspaceCommit))
-	}
-	if opts.WorkspaceTargetRef != "" {
-		env = append(env, fmt.Sprintf("WORKSPACE_TARGET_REF=%s", opts.WorkspaceTargetRef))
-	}
-
-	// MCP OAuth env vars (agent uses these to persist tokens back to the server)
-	if opts.ProjectID != "" {
-		env = append(env, fmt.Sprintf("DISCOBOT_PROJECT_ID=%s", opts.ProjectID))
-	}
-	if opts.MCPOAuthRedirectBase != "" {
-		env = append(env, fmt.Sprintf("DISCOBOT_MCP_OAUTH_REDIRECT_BASE=%s", opts.MCPOAuthRedirectBase))
-	}
-	if opts.AgentServerURL != "" {
-		env = append(env, fmt.Sprintf("DISCOBOT_SERVER_URL=%s", opts.AgentServerURL))
+	sort.Strings(keys)
+	env := make([]string, 0, len(keys))
+	for _, key := range keys {
+		env = append(env, key+"="+envMap[key])
 	}
 
 	// Container configuration
@@ -670,7 +656,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	if opts.WorkspacePath != "" {
 		sourcePath, err := resolveWorkspaceMountSource(opts.WorkspacePath)
 		if err != nil {
-			return nil, fmt.Errorf("%w: failed to resolve workspace mount source: %v", sandbox.ErrStartFailed, err)
+			return nil, state, fmt.Errorf("%w: failed to resolve workspace mount source: %v", sandbox.ErrStartFailed, err)
 		}
 
 		hostConfig.Mounts = append(hostConfig.Mounts, mount.Mount{
@@ -684,16 +670,16 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	// Resolve project for cache volume
 	projectID, err := p.sessionProjectResolver(ctx, sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve project for session %s: %w", sessionID, err)
+		return nil, state, fmt.Errorf("failed to resolve project for session %s: %w", sessionID, err)
 	}
 	if projectID == "" {
-		return nil, fmt.Errorf("session %s has no associated project", sessionID)
+		return nil, state, fmt.Errorf("session %s has no associated project", sessionID)
 	}
 
 	// Ensure the cache volume exists
 	cacheVolName, err := p.ensureCacheVolume(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cache volume for project %s: %w", projectID, err)
+		return nil, state, fmt.Errorf("failed to create cache volume for project %s: %w", projectID, err)
 	}
 
 	// Mount the entire cache volume at /.data/cache
@@ -735,13 +721,13 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 	// Create container
 	resp, err := p.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, name)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
+		return nil, state, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
 	}
 
 	if err := p.provisionSSHKey(ctx, resp.ID, opts.SSHKey); err != nil {
 		_ = p.client.ContainerRemove(ctx, resp.ID, containerTypes.RemoveOptions{Force: true})
 		_ = p.client.VolumeRemove(ctx, dataVolName, true)
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
+		return nil, state, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
 	}
 
 	// Store mapping
@@ -759,22 +745,7 @@ func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.Cr
 		Metadata: map[string]string{
 			"name": name,
 		},
-	}, nil
-}
-
-// hashSecret creates a salted SHA-256 hash of the secret.
-// Returns the format "salt:hash" where both are hex-encoded.
-// The salt is 16 random bytes, making each hash unique even for identical secrets.
-func hashSecret(secret string) string {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		// Fall back to a zero salt if random fails (shouldn't happen)
-		salt = make([]byte, 16)
-	}
-	h := sha256.New()
-	h.Write(salt)
-	h.Write([]byte(secret))
-	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(h.Sum(nil))
+	}, state, nil
 }
 
 // VerifySecret checks if a plaintext secret matches a salted hash.
@@ -1102,31 +1073,31 @@ func (p *Provider) RemoveProject(ctx context.Context, projectID string) error {
 }
 
 // Start starts a previously created sandbox.
-func (p *Provider) Start(ctx context.Context, sessionID string) error {
+func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
 	p.lifecycleMu.RLock()
 	defer p.lifecycleMu.RUnlock()
 
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
-		return err
+		return state, err
 	}
 
 	if err := p.client.ContainerStart(ctx, containerID, containerTypes.StartOptions{}); err != nil {
-		return fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
 	}
 
-	return nil
+	return state, nil
 }
 
 // Stop stops a running sandbox gracefully.
-func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	p.lifecycleMu.RLock()
 	defer p.lifecycleMu.RUnlock()
 	p.httpClients.Remove(sessionID)
 
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
-		return err
+		return state, err
 	}
 
 	timeoutSeconds := int(timeout.Seconds())
@@ -1135,16 +1106,16 @@ func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Dura
 	}
 
 	if err := p.client.ContainerStop(ctx, containerID, stopOptions); err != nil {
-		return fmt.Errorf("failed to stop sandbox: %w", err)
+		return state, fmt.Errorf("failed to stop sandbox: %w", err)
 	}
 
-	return nil
+	return state, nil
 }
 
 // Remove removes a sandbox container and optionally its associated data volume.
 // By default, data volumes are preserved (useful for rebuilds).
 // Pass sandbox.RemoveVolumes() to delete volumes (for session deletion).
-func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
 	p.lifecycleMu.RLock()
 	defer p.lifecycleMu.RUnlock()
 
@@ -1153,7 +1124,7 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		if err != sandbox.ErrNotFound {
-			return err
+			return state, err
 		}
 		// Container not found, but continue to clean up volume if requested
 		containerID = ""
@@ -1166,7 +1137,7 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 		}
 
 		if err := p.client.ContainerRemove(ctx, containerID, removeOptions); err != nil {
-			return fmt.Errorf("failed to remove sandbox container: %w", err)
+			return state, fmt.Errorf("failed to remove sandbox container: %w", err)
 		}
 
 		// Remove from mapping
@@ -1183,12 +1154,12 @@ func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox
 		if err := p.client.VolumeRemove(ctx, dataVolName, true); err != nil {
 			// Don't fail if volume doesn't exist
 			if !cerrdefs.IsNotFound(err) {
-				return fmt.Errorf("failed to remove data volume %s: %w", dataVolName, err)
+				return state, fmt.Errorf("failed to remove data volume %s: %w", dataVolName, err)
 			}
 		}
 	}
 
-	return nil
+	return state, nil
 }
 
 func applyContainerState(sb *sandbox.Sandbox, state *containerTypes.State) {
@@ -1221,7 +1192,7 @@ func applyContainerState(sb *sandbox.Sandbox, state *containerTypes.State) {
 }
 
 // Get returns the current state of a sandbox.
-func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *Provider) Get(ctx context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -1265,7 +1236,7 @@ func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox,
 }
 
 // GetSecret returns the raw shared secret stored during sandbox creation.
-func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, error) {
+func (p *Provider) GetSecret(ctx context.Context, _ []byte, sessionID string) (string, error) {
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
 		return "", err
@@ -1587,8 +1558,8 @@ func (p *dockerPTY) Wait(ctx context.Context) (int, error) {
 }
 
 // AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
-func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
-	sb, err := p.Get(ctx, sessionID)
+func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
+	sb, err := p.Get(ctx, state, sessionID)
 	if err != nil {
 		p.httpClients.Remove(sessionID)
 		return nil, err

@@ -21,6 +21,55 @@ func TestLoadDefaultsToEphemeralHTTPSMode(t *testing.T) {
 	}
 }
 
+func TestLoadSandboxImageRemote(t *testing.T) {
+	t.Setenv("SANDBOX_IMAGE", "discobot-local/discobot-agent-api:dev")
+	t.Setenv("SANDBOX_IMAGE_REMOTE", "ghcr.io/obot-platform/discobot:main")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.SandboxImage != "discobot-local/discobot-agent-api:dev" {
+		t.Fatalf("expected SandboxImage to use local override, got %q", cfg.SandboxImage)
+	}
+	if cfg.SandboxImageRemote != "ghcr.io/obot-platform/discobot:main" {
+		t.Fatalf("expected SandboxImageRemote to use remote override, got %q", cfg.SandboxImageRemote)
+	}
+}
+
+func TestLoadSandboxImageRemoteDefaultsBlank(t *testing.T) {
+	t.Setenv("SANDBOX_IMAGE", "discobot-local/discobot-agent-api:dev")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.SandboxImageRemote != "" {
+		t.Fatalf("expected SandboxImageRemote to default blank, got %q", cfg.SandboxImageRemote)
+	}
+}
+
+func TestLoadSandboxImageMode(t *testing.T) {
+	t.Setenv("SANDBOX_IMAGE_MODE", "remote")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.SandboxImageMode != "remote" {
+		t.Fatalf("expected SandboxImageMode remote, got %q", cfg.SandboxImageMode)
+	}
+}
+
+func TestLoadRejectsInvalidSandboxImageMode(t *testing.T) {
+	t.Setenv("SANDBOX_IMAGE_MODE", "nearby")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load() to fail for invalid sandbox image mode")
+	}
+}
+
 func TestLoadRejectsIncompleteStaticHTTPSConfig(t *testing.T) {
 	t.Setenv("HTTPS_PORT", "3443")
 	t.Setenv("HTTPS_TLS_MODE", "static")

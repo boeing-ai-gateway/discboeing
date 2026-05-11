@@ -282,23 +282,23 @@ func TestDeleteWorkspace(t *testing.T) {
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
-	if _, err := ts.MockSandbox.Create(context.Background(), session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := ts.MockSandbox.Create(context.Background(), nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create sandbox: %v", err)
 	}
-	if err := ts.MockSandbox.Start(context.Background(), session.ID); err != nil {
+	if _, err := ts.MockSandbox.Start(context.Background(), nil, session.ID); err != nil {
 		t.Fatalf("Failed to start sandbox: %v", err)
 	}
 
 	stopStarted := make(chan struct{}, 1)
 	releaseStop := make(chan struct{})
-	ts.MockSandbox.StopFunc = func(ctx context.Context, sessionID string, timeout time.Duration) error {
+	ts.MockSandbox.StopFunc = func(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 		select {
 		case stopStarted <- struct{}{}:
 		default:
 		}
 		<-releaseStop
 		ts.MockSandbox.StopFunc = nil
-		return ts.MockSandbox.Stop(ctx, sessionID, timeout)
+		return ts.MockSandbox.Stop(ctx, state, sessionID, timeout)
 	}
 
 	client := ts.AuthenticatedClient(user)
@@ -341,7 +341,7 @@ func TestDeleteWorkspace(t *testing.T) {
 			if _, err := ts.Store.GetSessionByIDIncludingDeleted(context.Background(), session.ID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatalf("expected session to be fully deleted, got err=%v", err)
 			}
-			if _, err := ts.MockSandbox.Get(context.Background(), session.ID); !errors.Is(err, sandbox.ErrNotFound) {
+			if _, err := ts.MockSandbox.Get(context.Background(), nil, session.ID); !errors.Is(err, sandbox.ErrNotFound) {
 				t.Fatalf("expected sandbox to be removed, got err=%v", err)
 			}
 			return
@@ -718,7 +718,7 @@ func TestListWorkspaces_WithDisplayNames(t *testing.T) {
 	}
 }
 
-func TestCreateWorkspace_WithProvider(t *testing.T) {
+func TestCreateWorkspace_IgnoresProvider(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -743,12 +743,12 @@ func TestCreateWorkspace_WithProvider(t *testing.T) {
 	if workspace["path"] != localPath {
 		t.Errorf("Expected path '%s', got '%v'", localPath, workspace["path"])
 	}
-	if workspace["provider"] != "docker" {
-		t.Errorf("Expected provider 'docker', got '%v'", workspace["provider"])
+	if _, ok := workspace["provider"]; ok {
+		t.Errorf("Expected workspace response not to include provider, got '%v'", workspace["provider"])
 	}
 }
 
-func TestCreateWorkspace_WithoutProvider(t *testing.T) {
+func TestCreateWorkspace_ResponseOmitsProvider(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -772,13 +772,12 @@ func TestCreateWorkspace_WithoutProvider(t *testing.T) {
 	if workspace["path"] != localPath {
 		t.Errorf("Expected path '%s', got '%v'", localPath, workspace["path"])
 	}
-	// Provider should be empty string or omitted when not specified
-	if provider, ok := workspace["provider"]; ok && provider != "" {
-		t.Errorf("Expected provider to be empty or omitted, got '%v'", provider)
+	if _, ok := workspace["provider"]; ok {
+		t.Errorf("Expected workspace response not to include provider, got '%v'", workspace["provider"])
 	}
 }
 
-func TestCreateWorkspace_WithVZProvider(t *testing.T) {
+func TestUpdateWorkspace_IgnoresProvider(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -788,61 +787,7 @@ func TestCreateWorkspace_WithVZProvider(t *testing.T) {
 	// Create a test git repo
 	localPath := createWorkspaceTestGitRepo(t)
 
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
-		"path":       localPath,
-		"sourceType": "local",
-		"provider":   "vz",
-	})
-	defer resp.Body.Close()
-
-	AssertStatus(t, resp, http.StatusCreated)
-
-	var workspace map[string]any
-	ParseJSON(t, resp, &workspace)
-
-	if workspace["provider"] != "vz" {
-		t.Errorf("Expected provider 'vz', got '%v'", workspace["provider"])
-	}
-}
-
-func TestCreateWorkspace_WithLocalProvider(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	client := ts.AuthenticatedClient(user)
-
-	// Create a test git repo
-	localPath := createWorkspaceTestGitRepo(t)
-
-	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
-		"path":       localPath,
-		"sourceType": "local",
-		"provider":   "local",
-	})
-	defer resp.Body.Close()
-
-	AssertStatus(t, resp, http.StatusCreated)
-
-	var workspace map[string]any
-	ParseJSON(t, resp, &workspace)
-
-	if workspace["provider"] != "local" {
-		t.Errorf("Expected provider 'local', got '%v'", workspace["provider"])
-	}
-}
-
-func TestUpdateWorkspace_ProviderImmutable(t *testing.T) {
-	t.Parallel()
-	ts := NewTestServer(t)
-	user := ts.CreateTestUser("test@example.com")
-	project := ts.CreateTestProject(user, "Test Project")
-	client := ts.AuthenticatedClient(user)
-
-	// Create a test git repo
-	localPath := createWorkspaceTestGitRepo(t)
-
-	// Create workspace with docker provider
+	// Create workspace with provider in the request for backward compatibility.
 	resp := client.Post("/api/projects/"+project.ID+"/workspaces", map[string]any{
 		"path":       localPath,
 		"sourceType": "local",
@@ -865,8 +810,7 @@ func TestUpdateWorkspace_ProviderImmutable(t *testing.T) {
 	var updated map[string]any
 	ParseJSON(t, resp, &updated)
 
-	// Provider should remain unchanged (docker, not vz)
-	if updated["provider"] != "docker" {
-		t.Errorf("Expected provider to remain 'docker', got '%v'", updated["provider"])
+	if _, ok := updated["provider"]; ok {
+		t.Errorf("Expected workspace response not to include provider, got '%v'", updated["provider"])
 	}
 }

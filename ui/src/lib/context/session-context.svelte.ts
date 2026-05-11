@@ -1,6 +1,7 @@
 import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
+import { SessionStatus } from "$lib/api-constants";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createThreadContext } from "$lib/context/thread-context.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
@@ -36,6 +37,9 @@ export function createSessionContext(
 
 	const hasSession = $derived.by(() => current !== null);
 	const isPending = $derived.by(() => !hasSession);
+	const canLoadSandboxData = $derived.by(
+		() => current?.status === SessionStatus.READY,
+	);
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -52,13 +56,13 @@ export function createSessionContext(
 	const stores: SessionStores = {
 		threads: new ThreadStore({
 			sessionId,
-			enabled: () => hasSession,
+			enabled: () => canLoadSandboxData,
 		}),
 	};
 
 	const filesDomain = createSessionFilesDomain({
 		sessionId,
-		hasSession: () => hasSession,
+		hasSession: () => canLoadSandboxData,
 		getSelectedFile: () => ui.selectedFile,
 		openFile: ui.openFile,
 	});
@@ -66,7 +70,7 @@ export function createSessionContext(
 	const threads = createSessionThreadsDomain({
 		store: stores.threads,
 		sessionId,
-		hasSession: () => hasSession,
+		hasSession: () => canLoadSandboxData,
 		getSession: () => current,
 		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
@@ -80,12 +84,12 @@ export function createSessionContext(
 
 	const hooks = createSessionHooksDomain({
 		sessionId,
-		hasSession: () => hasSession,
+		hasSession: () => canLoadSandboxData,
 	});
 
 	const services = createSessionServicesDomain({
 		sessionId,
-		hasSession: () => hasSession,
+		hasSession: () => canLoadSandboxData,
 		getActiveServiceId: () => ui.activeServiceId,
 		openService: ui.openService,
 	});
@@ -121,7 +125,7 @@ export function createSessionContext(
 	const commands = createSessionCommandsDomain({
 		app,
 		sessionId,
-		hasSession: () => hasSession,
+		hasSession: () => canLoadSandboxData,
 		getSelectedThreadId: () => threads.selectedId ?? sessionId,
 		submit,
 	});

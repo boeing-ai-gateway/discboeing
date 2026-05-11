@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run an exe.dev command through the HTTP exec endpoint using verbose curl.
+#
+# Usage:
+#   EXEDEV_TOKEN='your-token' scripts/exedevcmd ls
+#   EXEDEV_TOKEN='your-token' scripts/exedevcmd new --name my-vm
+#
+# Optional:
+#   EXEDEV_ENDPOINT=https://exe.dev/exec
+
+endpoint="${EXEDEV_ENDPOINT:-https://exe.dev/exec}"
+token="${EXEDEV_TOKEN:-}"
+
+if [[ -z "$token" ]]; then
+	echo "EXEDEV_TOKEN is required" >&2
+	exit 2
+fi
+
+if [[ $# -eq 0 ]]; then
+	echo "usage: EXEDEV_TOKEN=... $0 <exe.dev command args...>" >&2
+	exit 2
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+	echo "curl is required" >&2
+	exit 2
+fi
+
+command="$*"
+
+echo "+ exe.dev command: $command" >&2
+curl -v --fail-with-body \
+	--request POST "$endpoint" \
+	--header "Authorization: Bearer $token" \
+	--header "Content-Type: text/plain" \
+	--data "$command" \
+	2> >(sed -E 's/(Authorization: Bearer )[^[:space:]]+/\1<redacted>/g; s/(X-Exedev-Authorization: Bearer )[^[:space:]]+/\1<redacted>/g' >&2)

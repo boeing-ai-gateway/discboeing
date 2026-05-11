@@ -244,14 +244,14 @@ func TestChat_ClientDisconnect_DoesNotCancelSandbox(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -345,14 +345,14 @@ func TestChat_StartsCompletion_StatusBecomesRunning(t *testing.T) {
 
 	// Create and start the sandbox
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -404,14 +404,14 @@ func TestChat_PersistsChatStartErrorsOnTheSession(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -486,14 +486,14 @@ func TestChat_ClearsPersistedChatStartErrorsAfterSuccessfulRetry(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -552,14 +552,14 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -632,14 +632,14 @@ func TestChat_UsesExplicitThreadID(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 
@@ -707,14 +707,14 @@ func TestChat_ReturnsJSONResponse(t *testing.T) {
 	seedSession(t, s, sessionID)
 
 	ctx := context.Background()
-	_, err := provider.Create(ctx, sessionID, sandbox.CreateOptions{
+	_, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{
 		SharedSecret:  "test-secret",
 		WorkspacePath: "/workspace",
 	})
 	if err != nil {
 		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if err := provider.Start(ctx, sessionID); err != nil {
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
 		t.Fatalf("failed to start sandbox: %v", err)
 	}
 

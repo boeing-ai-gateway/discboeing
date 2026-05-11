@@ -129,8 +129,9 @@ func TestServiceSubdomainPattern(t *testing.T) {
 
 // mockSandboxProvider implements sandbox.Provider for testing
 type mockSandboxProvider struct {
-	sandboxes map[string]*sandbox.Sandbox
-	client    *http.Client
+	sandboxes    map[string]*sandbox.Sandbox
+	client       *http.Client
+	acquireCalls int
 }
 
 func (m *mockSandboxProvider) ImageExists(_ context.Context) bool {
@@ -141,30 +142,34 @@ func (m *mockSandboxProvider) Image() string {
 	return "test-image"
 }
 
-func (m *mockSandboxProvider) Create(_ context.Context, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (m *mockSandboxProvider) PrepareState(_ context.Context, _ string, _ sandbox.CreateOptions) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *mockSandboxProvider) Start(_ context.Context, _ string) error {
-	return nil
+func (m *mockSandboxProvider) Create(_ context.Context, state []byte, _ string, _ sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+	return nil, state, nil
 }
 
-func (m *mockSandboxProvider) Stop(_ context.Context, _ string, _ time.Duration) error {
-	return nil
+func (m *mockSandboxProvider) Start(_ context.Context, state []byte, _ string) ([]byte, error) {
+	return state, nil
 }
 
-func (m *mockSandboxProvider) Remove(_ context.Context, _ string, _ ...sandbox.RemoveOption) error {
-	return nil
+func (m *mockSandboxProvider) Stop(_ context.Context, state []byte, _ string, _ time.Duration) ([]byte, error) {
+	return state, nil
 }
 
-func (m *mockSandboxProvider) Get(_ context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (m *mockSandboxProvider) Remove(_ context.Context, state []byte, _ string, _ ...sandbox.RemoveOption) ([]byte, error) {
+	return state, nil
+}
+
+func (m *mockSandboxProvider) Get(_ context.Context, _ []byte, sessionID string) (*sandbox.Sandbox, error) {
 	if sb, ok := m.sandboxes[sessionID]; ok {
 		return sb, nil
 	}
 	return nil, nil
 }
 
-func (m *mockSandboxProvider) GetSecret(_ context.Context, _ string) (string, error) {
+func (m *mockSandboxProvider) GetSecret(_ context.Context, _ []byte, _ string) (string, error) {
 	return "", nil
 }
 
@@ -176,7 +181,8 @@ func (m *mockSandboxProvider) List(_ context.Context) ([]*sandbox.Sandbox, error
 	return result, nil
 }
 
-func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
+	m.acquireCalls++
 	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }
 
@@ -194,6 +200,16 @@ func (m *mockSandboxProvider) RemoveProject(_ context.Context, _ string) error {
 
 func (m *mockSandboxProvider) ClearCache(_ context.Context, _ string) error {
 	return nil
+}
+
+type mockSandboxHTTPClientAcquirer struct {
+	client     *http.Client
+	sessionIDs []string
+}
+
+func (m *mockSandboxHTTPClientAcquirer) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	m.sessionIDs = append(m.sessionIDs, sessionID)
+	return &sandbox.HTTPClientLease{Client: m.client}, nil
 }
 
 // TestServiceProxyNonServiceSubdomain verifies that non-service requests pass through
@@ -333,9 +349,15 @@ func TestServiceProxyXForwardedHost(t *testing.T) {
 
 	var proxiedPath string
 	var proxiedXFwdHost string
+	var proxiedDiscobotFwdHost string
+	var proxiedDiscobotFwdPath string
+	var proxiedDiscobotFwdProto string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxiedPath = r.URL.Path
 		proxiedXFwdHost = r.Header.Get("X-Forwarded-Host")
+		proxiedDiscobotFwdHost = r.Header.Get(discobotForwardedHostHeader)
+		proxiedDiscobotFwdPath = r.Header.Get(discobotForwardedPathHeader)
+		proxiedDiscobotFwdProto = r.Header.Get(discobotForwardedProtoHeader)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer backend.Close()
@@ -384,6 +406,71 @@ func TestServiceProxyXForwardedHost(t *testing.T) {
 	// next nested discobot level can find its own service subdomain.
 	if proxiedXFwdHost != originalChain {
 		t.Errorf("X-Forwarded-Host = %q, want full chain %q", proxiedXFwdHost, originalChain)
+	}
+	if proxiedDiscobotFwdHost != originalChain {
+		t.Errorf("%s = %q, want %q", discobotForwardedHostHeader, proxiedDiscobotFwdHost, originalChain)
+	}
+	if proxiedDiscobotFwdPath != "/some/path" {
+		t.Errorf("%s = %q, want /some/path", discobotForwardedPathHeader, proxiedDiscobotFwdPath)
+	}
+	if proxiedDiscobotFwdProto != "http" {
+		t.Errorf("%s = %q, want http", discobotForwardedProtoHeader, proxiedDiscobotFwdProto)
+	}
+}
+
+func TestServiceProxyUsesHTTPClientAcquirer(t *testing.T) {
+	sessionID := "zivnuflwywnlfxkr"
+
+	var proxiedPath string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxiedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	backendURL, _ := url.Parse(backend.URL)
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{}).DialContext,
+	}
+	acquirer := &mockSandboxHTTPClientAcquirer{
+		client: &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				req.URL.Scheme = backendURL.Scheme
+				req.URL.Host = backendURL.Host
+				return transport.RoundTrip(req)
+			}),
+		},
+	}
+	provider := &mockSandboxProvider{
+		sandboxes: map[string]*sandbox.Sandbox{
+			sessionID: {SessionID: sessionID},
+		},
+		client: &http.Client{},
+	}
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("next handler should not be called for valid service subdomain")
+	})
+
+	middleware := ServiceProxyWithHTTPClientAcquirer(provider, nil, acquirer)(next)
+	host := sessionID + "-svc-ui.localhost:3001"
+	req := httptest.NewRequest("GET", "http://"+host+"/hello", nil)
+	req.Host = host
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if proxiedPath != "/services/ui/http/hello" {
+		t.Fatalf("proxied path = %q, want /services/ui/http/hello", proxiedPath)
+	}
+	if provider.acquireCalls != 0 {
+		t.Fatalf("provider AcquireHTTPClient called %d times, want 0", provider.acquireCalls)
+	}
+	if len(acquirer.sessionIDs) != 1 || acquirer.sessionIDs[0] != sessionID {
+		t.Fatalf("acquirer sessionIDs = %v, want [%s]", acquirer.sessionIDs, sessionID)
 	}
 }
 

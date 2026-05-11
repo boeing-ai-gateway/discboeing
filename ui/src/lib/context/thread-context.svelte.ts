@@ -160,7 +160,9 @@ export function createThreadContext(
 	session: SessionContextValue,
 	threadId: string,
 ): ThreadContextValue {
-	const hasSession = $derived.by(() => session.current !== null);
+	const hasSession = $derived.by(
+		() => session.current?.status === SessionStatus.READY,
+	);
 	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",
 		enabled: () => hasSession,
@@ -180,6 +182,9 @@ export function createThreadContext(
 		}
 	};
 	const refreshSessionState = async () => {
+		if (!hasSession) {
+			return;
+		}
 		session.services.invalidate();
 		session.hooks.invalidate();
 		await Promise.all([
@@ -249,9 +254,20 @@ export function createThreadContext(
 		shouldIgnoreClosedStreamError,
 		onActivityStatusChange: applyLocalActivityStatus,
 		afterTurn: async () => {
+			if (!hasSession) {
+				return;
+			}
 			await session.threads.refreshThread(threadId);
 			await refreshSessionState();
 		},
+	});
+
+	$effect(() => {
+		if (hasSession) {
+			return;
+		}
+		retryScheduler.dispose();
+		conversation.disconnect();
 	});
 
 	const threadSummary = $derived.by(
@@ -423,6 +439,7 @@ export function createThreadContext(
 	const submit: ThreadContextValue["submit"] = async ({
 		parts,
 		workspaceId,
+		providerId,
 		workspaceType,
 		workspacePath,
 		allowEmptyPendingMessage,
@@ -442,6 +459,7 @@ export function createThreadContext(
 			modelId: submitValues.modelId,
 			reasoning: submitValues.reasoning,
 			workspaceId,
+			providerId,
 			workspaceType,
 			workspacePath,
 			allowEmptyPendingMessage,

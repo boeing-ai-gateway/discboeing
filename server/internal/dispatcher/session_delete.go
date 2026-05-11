@@ -44,7 +44,7 @@ func (e *SessionDeleteExecutor) Execute(ctx context.Context, job *model.Job) err
 		return fmt.Errorf("projectId is required")
 	}
 
-	return e.sessionService.PerformDeletion(ctx, payload.ProjectID, payload.SessionID)
+	return e.sessionService.PerformDeletionFromDeleteJob(ctx, payload.ProjectID, payload.SessionID, payload.CreateFailed)
 }
 
 // SessionSandboxDeleteExecutor handles session_sandbox_delete jobs.

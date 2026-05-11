@@ -257,6 +257,7 @@ export type ThreadContextValue = {
 	submit: (payload: {
 		parts: ChatMessage["parts"];
 		workspaceId?: string;
+		providerId?: string;
 		workspaceType?: "local" | "git" | null;
 		workspacePath?: string | null;
 		allowEmptyPendingMessage?: boolean;

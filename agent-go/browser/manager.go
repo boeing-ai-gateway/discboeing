@@ -59,7 +59,7 @@ type Manager struct {
 	userDataDir   string
 	chromiumPath  string
 	cmd           *exec.Cmd
-	cmdDone       chan struct{}
+	processDone   chan struct{}
 	upstreamWSURL string
 	lastError     string
 	store         *Store
@@ -342,23 +342,26 @@ func isUniformColorPNG(data []byte) (bool, error) {
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	cmd := m.cmd
-	done := m.cmdDone
+	done := m.processDone
 	m.cmd = nil
-	m.cmdDone = nil
+	m.processDone = nil
 	m.upstreamWSURL = ""
 	m.mu.Unlock()
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
-	err := cmd.Process.Kill()
+	killErr := killBrowserCommand(cmd)
 	if done != nil {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			log.Printf("browser[%s]: timed out waiting for chromium shutdown", m.sessionID)
+			return fmt.Errorf("wait for chromium shutdown: timed out")
 		}
 	}
-	return err
+	if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+		return killErr
+	}
+	return nil
 }
 
 func (m *Manager) ensureRunning() error {
@@ -402,6 +405,7 @@ func (m *Manager) ensureRunning() error {
 	cmd := exec.Command(chromiumPath, args...) //nolint:gosec
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	configureBrowserCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
 		m.lastError = err.Error()
@@ -411,7 +415,7 @@ func (m *Manager) ensureRunning() error {
 
 	upstreamWSURL, err := waitForDevToolsURL(filepath.Join(m.userDataDir, "DevToolsActivePort"))
 	if err != nil {
-		_ = cmd.Process.Kill()
+		_ = killBrowserCommand(cmd)
 		_ = logFile.Close()
 		m.lastError = err.Error()
 		log.Printf("browser[%s]: waiting for DevToolsActivePort failed: %v", m.sessionID, err)
@@ -419,20 +423,20 @@ func (m *Manager) ensureRunning() error {
 	}
 
 	m.cmd = cmd
-	m.cmdDone = make(chan struct{})
+	m.processDone = make(chan struct{})
+	processDone := m.processDone
 	m.upstreamWSURL = upstreamWSURL
 	m.lastError = ""
 	log.Printf("browser[%s]: chromium ready upstream=%s pid=%d", m.sessionID, upstreamWSURL, cmd.Process.Pid)
 
-	done := m.cmdDone
 	go func() {
-		defer close(done)
+		defer close(processDone)
 		err := cmd.Wait()
 		_ = logFile.Close()
 		m.mu.Lock()
 		if m.cmd == cmd {
 			m.cmd = nil
-			m.cmdDone = nil
+			m.processDone = nil
 			m.upstreamWSURL = ""
 		}
 		m.mu.Unlock()

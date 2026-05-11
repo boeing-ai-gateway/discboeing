@@ -192,7 +192,7 @@ func Kill(ctx context.Context, client *http.Client, id string) error {
 }
 
 func Attach(ctx context.Context, lease *sandbox.HTTPClientLease, id string) (*Stream, error) {
-	conn, _, err := dialer(lease.Client).DialContext(ctx, "ws://sandbox/exec/"+url.PathEscape(id)+"/attach", clientHeaders(lease.Client))
+	conn, _, err := dialer(lease.Client).DialContext(ctx, clientWebSocketURL(lease.Client, "ws://sandbox/exec/"+url.PathEscape(id)+"/attach"), clientHeaders(lease.Client))
 	if err != nil {
 		return nil, err
 	}
@@ -237,6 +237,13 @@ func clientHeaders(client *http.Client) http.Header {
 		return transport.Headers()
 	}
 	return nil
+}
+
+func clientWebSocketURL(client *http.Client, rawURL string) string {
+	if transport, ok := client.Transport.(interface{ WebSocketURL(string) string }); ok {
+		return transport.WebSocketURL(rawURL)
+	}
+	return rawURL
 }
 
 type Stream struct {

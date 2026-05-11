@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/routes"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/exedev"
 	"github.com/obot-platform/discobot/server/internal/sandbox/local"
 	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 	"github.com/obot-platform/discobot/server/internal/service"
@@ -185,6 +187,10 @@ func main() {
 			log.Printf("Local sandbox provider initialized")
 		}
 	}
+	sandboxManager.RegisterProviderDefinition("exedev", exedev.Definition())
+	if cfg.SandboxProvider != "" {
+		sandboxManager.SetDefault(cfg.SandboxProvider)
+	}
 
 	// Create provider proxy that routes based on workspace configuration
 	// The proxy will look up the session's workspace and use its provider setting
@@ -192,39 +198,11 @@ func main() {
 	if sandboxManager.EnsureDefaultAvailable() {
 		log.Printf("Default sandbox provider: %s", sandboxManager.DefaultProviderName())
 
-		// Create a sandbox service for the provider getter function
-		// This is a bit of a chicken-and-egg problem, so we'll pass the store directly
-		providerGetter := func(ctx context.Context, sessionID string) (string, error) {
-			// Include soft-deleted sessions so deferred sandbox cleanup can still route to
-			// the right provider after the session has been removed from the database.
-			session, err := s.GetSessionByIDIncludingDeleted(ctx, sessionID)
-			if err != nil {
-				if !errors.Is(err, store.ErrNotFound) {
-					return "", fmt.Errorf("failed to get session: %w", err)
-				}
-				// Session is completely gone (not even soft-deleted) — fall back to the
-				// default provider for best-effort sandbox cleanup.
-				return sandboxManager.DefaultProviderName(), nil
-			}
-
-			// Get workspace to retrieve provider
-			workspace, err := s.GetWorkspaceByID(ctx, session.WorkspaceID)
-			if err != nil {
-				if !errors.Is(err, store.ErrNotFound) {
-					return "", fmt.Errorf("failed to get workspace: %w", err)
-				}
-				return sandboxManager.DefaultProviderName(), nil
-			}
-
-			// Use platform default if workspace has no provider set
-			if workspace.Provider == "" {
-				return sandboxManager.DefaultProviderName(), nil
-			}
-
-			return workspace.Provider, nil
-		}
-
-		sandboxProvider = sandbox.NewProviderProxy(sandboxManager, providerGetter)
+		providerResolver := service.NewSandboxProviderResolver(s, sandboxManager)
+		providerResolver.RegisterFactory("exedev", func(ctx context.Context, instance *model.SandboxProviderInstance) (sandbox.Provider, error) {
+			return newExeDevInstanceProvider(ctx, cfg, credSvc, instance)
+		})
+		sandboxProvider = sandbox.NewProviderProxy(sandboxManager, providerResolver.ResolveForSession)
 		log.Printf("Sandbox provider proxy initialized with %d providers", len(sandboxManager.ListProviders()))
 	}
 
@@ -426,7 +404,11 @@ func main() {
 	// IMPORTANT: This must run BEFORE CORS middleware so that OPTIONS requests
 	// are forwarded to the service (which handles its own CORS).
 	if sandboxProvider != nil {
-		r.Use(middleware.ServiceProxy(sandboxProvider, connTracker))
+		serviceProxySandboxSvc := dispSandboxSvc
+		if serviceProxySandboxSvc == nil {
+			serviceProxySandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, nil, nil, nil, connTracker)
+		}
+		r.Use(middleware.ServiceProxyWithHTTPClientAcquirer(sandboxProvider, connTracker, serviceProxySandboxSvc))
 	}
 
 	if len(cfg.CORSOrigins) > 0 {
@@ -1009,6 +991,118 @@ func main() {
 							{Name: "projectId", Example: "local"},
 							{Name: "limit", In: "query", Example: "10"},
 						},
+					},
+				})
+			})
+
+			// Sandbox provider instances
+			r.Route("/sandbox-provider-types", func(r chi.Router) {
+				providerTypeReg := projReg.WithPrefix("/sandbox-provider-types")
+				providerTypeReg.Register(r, routes.Route{
+					Method:  "GET",
+					Pattern: "/",
+					Handler: h.ListSandboxProviderTypes,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "List sandbox provider types",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+					},
+				})
+			})
+
+			r.Route("/sandbox-providers", func(r chi.Router) {
+				providerReg := projReg.WithPrefix("/sandbox-providers")
+				providerReg.Register(r, routes.Route{
+					Method:  "GET",
+					Pattern: "/",
+					Handler: h.ListSandboxProviders,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "List sandbox provider instances",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "PATCH",
+					Pattern: "/default",
+					Handler: h.UpdateSandboxProviderDefault,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Update project default sandbox provider",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"providerId": "docker"},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "POST",
+					Pattern: "/",
+					Handler: h.CreateSandboxProvider,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Create sandbox provider instance",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}},
+						Body:        map[string]any{"type": "exedev", "name": "exe.dev Prod", "config": map[string]any{"credentialId": "credential-id"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "PATCH",
+					Pattern: "/{providerId}",
+					Handler: h.UpdateSandboxProvider,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Update sandbox provider instance",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "GET",
+					Pattern: "/{providerId}/resources",
+					Handler: h.GetSandboxProviderResources,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Get sandbox provider resources",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "PATCH",
+					Pattern: "/{providerId}/resources",
+					Handler: h.UpdateSandboxProviderResources,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Update sandbox provider resources",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
+						Body:        map[string]any{"memoryMB": 8192, "dataDiskGB": 200},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "GET",
+					Pattern: "/{providerId}/inspection",
+					Handler: h.GetSandboxProviderInspection,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Get sandbox provider inspection container info",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "GET",
+					Pattern: "/{providerId}/inspection/terminal/ws",
+					Handler: h.SandboxProviderInspectionTerminalWebSocket,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Sandbox provider inspection terminal websocket",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
+					},
+				})
+				providerReg.Register(r, routes.Route{
+					Method:  "DELETE",
+					Pattern: "/{providerId}",
+					Handler: h.DeleteSandboxProvider,
+					Meta: routes.Meta{
+						Group:       "Sandbox Providers",
+						Description: "Delete sandbox provider instance",
+						Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "providerId", Example: "provider-id"}},
 					},
 				})
 			})
@@ -1942,6 +2036,119 @@ func main() {
 	}
 
 	log.Println("Server stopped")
+}
+
+func newExeDevInstanceProvider(ctx context.Context, cfg *config.Config, credSvc *service.CredentialService, instance *model.SandboxProviderInstance) (sandbox.Provider, error) {
+	var instanceCfg struct {
+		exedev.Config
+		CredentialID string `json:"credentialId,omitempty"`
+	}
+	if len(instance.Config) > 0 {
+		if err := json.Unmarshal(instance.Config, &instanceCfg); err != nil {
+			return nil, fmt.Errorf("failed to parse sandbox provider instance config: %w", err)
+		}
+	}
+
+	if instanceCfg.CredentialID != "" {
+		token, err := credentialValue(ctx, credSvc, instance.ProjectID, instanceCfg.CredentialID, "EXEDEV_TOKEN")
+		if err != nil {
+			return nil, err
+		}
+		instanceCfg.Token = token
+	}
+	if instanceCfg.SandboxImage == "" {
+		instanceCfg.SandboxImage = sandboxImageForProvider(cfg, instance.Type)
+	}
+
+	return exedev.NewProvider(instanceCfg.Config)
+}
+
+func remoteSandboxImage(cfg *config.Config) string {
+	if cfg != nil && cfg.SandboxImageRemote != "" {
+		return cfg.SandboxImageRemote
+	}
+	return config.DefaultSandboxImage()
+}
+
+func sandboxImageForProvider(cfg *config.Config, providerName string) string {
+	switch sandboxImageMode(cfg) {
+	case "local":
+		return localSandboxImage(cfg)
+	case "remote":
+		return remoteSandboxImage(cfg)
+	}
+	if isLocalSandboxProvider(cfg, providerName) {
+		return localSandboxImage(cfg)
+	}
+	return remoteSandboxImage(cfg)
+}
+
+func localSandboxImage(cfg *config.Config) string {
+	if cfg != nil && cfg.SandboxImage != "" {
+		return cfg.SandboxImage
+	}
+	return config.DefaultSandboxImage()
+}
+
+func sandboxImageMode(cfg *config.Config) string {
+	if cfg == nil {
+		return "default"
+	}
+	switch cfg.SandboxImageMode {
+	case "local", "remote":
+		return cfg.SandboxImageMode
+	default:
+		return "default"
+	}
+}
+
+func configForSandboxProvider(cfg *config.Config, providerName string) *config.Config {
+	if cfg == nil {
+		return &config.Config{SandboxImage: sandboxImageForProvider(nil, providerName)}
+	}
+	providerCfg := *cfg
+	providerCfg.SandboxImage = sandboxImageForProvider(cfg, providerName)
+	return &providerCfg
+}
+
+func isLocalSandboxProvider(cfg *config.Config, providerName string) bool {
+	switch providerName {
+	case "docker":
+		if cfg == nil {
+			return true
+		}
+		return isLocalDockerHost(cfg.DockerHost)
+	case "local":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalDockerHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return true
+	}
+	return strings.HasPrefix(host, "unix://") ||
+		strings.HasPrefix(host, "npipe://") ||
+		strings.HasPrefix(host, "fd://")
+}
+
+func credentialValue(ctx context.Context, credSvc *service.CredentialService, projectID, credentialID, envKey string) (string, error) {
+	envVars, err := credSvc.GetAllDecrypted(ctx, projectID)
+	if err != nil {
+		return "", fmt.Errorf("failed to load sandbox provider credential: %w", err)
+	}
+	for _, envVar := range envVars {
+		if envVar.CredentialID != credentialID || envVar.Value == "" {
+			continue
+		}
+		if envKey == "" || envVar.EnvVar == envKey {
+			return strings.TrimSpace(envVar.Value), nil
+		}
+	}
+	return "", fmt.Errorf("sandbox provider credential %q is not configured", credentialID)
 }
 
 // sshUserInfoAdapter adapts SandboxService.GetClient to the ssh.UserInfoFetcher interface.

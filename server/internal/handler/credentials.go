@@ -298,6 +298,16 @@ func (h *Handler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	providerRefs, err := h.store.CountSandboxProviderInstancesReferencingCredential(r.Context(), projectID, credential.ID)
+	if err != nil {
+		h.Error(w, http.StatusInternalServerError, "Failed to check credential usage")
+		return
+	}
+	if providerRefs > 0 {
+		h.Error(w, http.StatusConflict, "Credential is used by one or more sandbox providers")
+		return
+	}
+
 	if err := h.credentialService.Delete(r.Context(), projectID, credential.ID); err != nil {
 		if errors.Is(err, service.ErrCredentialNotFound) {
 			h.Error(w, http.StatusNotFound, "Credential not found")

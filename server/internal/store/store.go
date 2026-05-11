@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -592,11 +593,143 @@ func (s *Store) UpdateSession(ctx context.Context, session *model.Session) error
 	return s.writeDB.WithContext(ctx).Save(session).Error
 }
 
+// --- Sandbox provider instances ---
+
+func (s *Store) ListSandboxProviderInstances(ctx context.Context, projectID string) ([]*model.SandboxProviderInstance, error) {
+	var instances []*model.SandboxProviderInstance
+	err := s.readDB.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Order("built_in DESC, name ASC").
+		Find(&instances).Error
+	return instances, err
+}
+
+func (s *Store) GetSandboxProviderInstance(ctx context.Context, projectID, id string) (*model.SandboxProviderInstance, error) {
+	var instance model.SandboxProviderInstance
+	if err := s.readDB.WithContext(ctx).First(&instance, "project_id = ? AND id = ?", projectID, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &instance, nil
+}
+
+func (s *Store) IsSandboxProviderDisabled(ctx context.Context, projectID, id string) (bool, error) {
+	instance, err := s.GetSandboxProviderInstance(ctx, projectID, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return instance.Disabled, nil
+}
+
+func (s *Store) CreateSandboxProviderInstance(ctx context.Context, instance *model.SandboxProviderInstance) error {
+	return s.writeDB.WithContext(ctx).Create(instance).Error
+}
+
+func (s *Store) UpdateSandboxProviderInstance(ctx context.Context, instance *model.SandboxProviderInstance) error {
+	return s.writeDB.WithContext(ctx).Save(instance).Error
+}
+
+func (s *Store) UpdateBuiltinSandboxProviderInstance(ctx context.Context, projectID, providerID, providerType, name string, config json.RawMessage, disabled *bool) (*model.SandboxProviderInstance, error) {
+	instance, err := s.GetSandboxProviderInstance(ctx, projectID, providerID)
+	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		instance = &model.SandboxProviderInstance{
+			ID:        providerID,
+			ProjectID: projectID,
+			Type:      providerType,
+			Name:      name,
+			Config:    config,
+			BuiltIn:   true,
+		}
+		if disabled != nil {
+			instance.Disabled = *disabled
+		}
+		if err := s.writeDB.WithContext(ctx).Create(instance).Error; err != nil {
+			return nil, err
+		}
+		return instance, nil
+	}
+	instance.Type = providerType
+	instance.Name = name
+	instance.Config = config
+	instance.BuiltIn = true
+	if disabled != nil {
+		instance.Disabled = *disabled
+	}
+	if err := s.writeDB.WithContext(ctx).Save(instance).Error; err != nil {
+		return nil, err
+	}
+	return instance, nil
+}
+
+func (s *Store) DeleteSandboxProviderInstance(ctx context.Context, projectID, id string) error {
+	return s.writeDB.WithContext(ctx).Delete(&model.SandboxProviderInstance{}, "project_id = ? AND id = ? AND built_in = ?", projectID, id, false).Error
+}
+
+func (s *Store) CountSandboxProviderInstancesReferencingCredential(ctx context.Context, projectID, credentialID string) (int64, error) {
+	credentialID = strings.TrimSpace(credentialID)
+	if credentialID == "" {
+		return 0, nil
+	}
+
+	var instances []model.SandboxProviderInstance
+	if err := s.readDB.WithContext(ctx).
+		Where("project_id = ?", projectID).
+		Find(&instances).Error; err != nil {
+		return 0, err
+	}
+
+	var count int64
+	for _, instance := range instances {
+		if len(instance.Config) == 0 || string(instance.Config) == "null" {
+			continue
+		}
+		var config map[string]any
+		if err := json.Unmarshal(instance.Config, &config); err != nil {
+			continue
+		}
+		if referencedID, ok := config["credentialId"].(string); ok && strings.TrimSpace(referencedID) == credentialID {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (s *Store) UpdateSessionSSHKey(ctx context.Context, id string, encryptedData []byte) error {
 	return s.writeDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where("id = ?", id).
 		Update("ssh_key_encrypted_data", encryptedData).Error
+}
+
+func (s *Store) GetSessionSandboxState(ctx context.Context, sessionID string) ([]byte, error) {
+	var state model.SessionSandboxState
+	if err := s.readDB.WithContext(ctx).First(&state, "session_id = ?", sessionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return state.EncryptedData, nil
+}
+
+func (s *Store) SaveSessionSandboxState(ctx context.Context, sessionID string, encryptedData []byte) error {
+	state := &model.SessionSandboxState{
+		SessionID:     sessionID,
+		EncryptedData: encryptedData,
+	}
+	return s.writeDB.WithContext(ctx).Save(state).Error
+}
+
+func (s *Store) DeleteSessionSandboxState(ctx context.Context, sessionID string) error {
+	return s.writeDB.WithContext(ctx).Delete(&model.SessionSandboxState{}, "session_id = ?", sessionID).Error
 }
 
 // UpdateSessionWorkspace updates the workspace path and target ref for a session.

@@ -18,6 +18,13 @@ import (
 // Service IDs are normalized lowercase (a-z0-9_- only).
 var serviceSubdomainPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)$`)
 
+const (
+	discobotForwardedForHeader   = "X-Discobot-Forwarded-For"
+	discobotForwardedHostHeader  = "X-Discobot-Forwarded-Host"
+	discobotForwardedPathHeader  = "X-Discobot-Forwarded-Path"
+	discobotForwardedProtoHeader = "X-Discobot-Forwarded-Proto"
+)
+
 // ConnectionTracker tracks active connections per session.
 // Implementations must be safe for concurrent use.
 type ConnectionTracker interface {
@@ -26,11 +33,26 @@ type ConnectionTracker interface {
 	Track(sessionID string) func()
 }
 
+// SandboxHTTPClientAcquirer obtains a leased client for a session sandbox.
+// Implementations can load any provider-specific state before acquiring the
+// client; the fallback provider implementation below passes nil state.
+type SandboxHTTPClientAcquirer interface {
+	AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error)
+}
+
+type providerHTTPClientAcquirer struct {
+	provider sandbox.Provider
+}
+
+func (a providerHTTPClientAcquirer) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	return sandbox.AcquireHTTPClient(ctx, a.provider, nil, sessionID)
+}
+
 // findSessionID finds the actual session ID with correct casing.
 // DNS/URLs are case-insensitive, so we need to do a case-insensitive lookup.
 func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID string) (string, error) {
 	// First try exact match (fast path)
-	sb, err := provider.Get(ctx, urlSessionID)
+	sb, err := provider.Get(ctx, nil, urlSessionID)
 	if err == nil && sb != nil {
 		return sb.SessionID, nil
 	}
@@ -71,6 +93,16 @@ func findSessionID(ctx context.Context, provider sandbox.Provider, urlSessionID 
 // connections such as SSE and WebSocket) so that the idle monitor can avoid
 // shutting down sandboxes with live service-proxy connections.
 func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(http.Handler) http.Handler {
+	return ServiceProxyWithHTTPClientAcquirer(provider, tracker, nil)
+}
+
+// ServiceProxyWithHTTPClientAcquirer creates service proxy middleware using a
+// state-aware sandbox HTTP client acquirer.
+func ServiceProxyWithHTTPClientAcquirer(provider sandbox.Provider, tracker ConnectionTracker, acquirer SandboxHTTPClientAcquirer) func(http.Handler) http.Handler {
+	if acquirer == nil {
+		acquirer = providerHTTPClientAcquirer{provider: provider}
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check both Host and X-Forwarded-Host for service subdomains.
@@ -115,7 +147,7 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 			}
 
 			// Get HTTP client for the sandbox (handles transport-level routing)
-			clientLease, err := sandbox.AcquireHTTPClient(ctx, provider, sessionID)
+			clientLease, err := acquirer.AcquireHTTPClient(ctx, sessionID)
 			if err != nil {
 				writeJSONError(w, http.StatusBadGateway, "Failed to connect to sandbox", map[string]string{
 					"sessionId": sessionID,
@@ -141,27 +173,38 @@ func ServiceProxy(provider sandbox.Provider, tracker ConnectionTracker) func(htt
 					// Set the Host header to the target
 					req.Host = target.Host
 
-					// Set x-forwarded-* headers.
-					req.Header.Set("X-Forwarded-Path", r.URL.Path)
-					req.Header.Set("X-Forwarded-Proto", getScheme(r))
-
-					// Preserve existing X-Forwarded-Host so the full subdomain
-					// chain survives through nested discobot levels. Only set it
-					// on the first proxy layer (when no forwarded host exists yet).
-					if r.Header.Get("X-Forwarded-Host") == "" {
-						req.Header.Set("X-Forwarded-Host", r.Host)
+					forwardedPath := r.URL.Path
+					forwardedProto := getScheme(r)
+					forwardedHost := r.Header.Get("X-Forwarded-Host")
+					if forwardedHost == "" {
+						forwardedHost = r.Host
 					}
+
+					// Set x-forwarded-* headers.
+					req.Header.Set("X-Forwarded-Path", forwardedPath)
+					req.Header.Set("X-Forwarded-Proto", forwardedProto)
+					req.Header.Set("X-Forwarded-Host", forwardedHost)
 
 					// Preserve or append X-Forwarded-For
 					clientIP := r.RemoteAddr
 					if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
 						clientIP = clientIP[:idx]
 					}
+					forwardedFor := clientIP
 					if prior := r.Header.Get("X-Forwarded-For"); prior != "" {
-						req.Header.Set("X-Forwarded-For", prior+", "+clientIP)
-					} else {
-						req.Header.Set("X-Forwarded-For", clientIP)
+						forwardedFor = prior + ", " + clientIP
 					}
+					req.Header.Set("X-Forwarded-For", forwardedFor)
+
+					// exe.dev's public VM proxy is expected to set/overwrite the
+					// standard X-Forwarded-* headers before the request reaches
+					// agent-go. Carry Discobot's intended values in private headers
+					// so agent-go can restore them before forwarding to the final
+					// workspace service.
+					req.Header.Set(discobotForwardedForHeader, forwardedFor)
+					req.Header.Set(discobotForwardedHostHeader, forwardedHost)
+					req.Header.Set(discobotForwardedPathHeader, forwardedPath)
+					req.Header.Set(discobotForwardedProtoHeader, forwardedProto)
 				},
 				Transport: clientLease.Client.Transport,
 				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {

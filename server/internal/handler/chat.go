@@ -42,6 +42,8 @@ type ChatRequest struct {
 	// WorkspaceID is optional for new sessions.
 	// If omitted, the server creates a local workspace under Discobot's data directory.
 	WorkspaceID string `json:"workspaceId,omitempty"`
+	// ProviderID is optional for new sessions and selects a sandbox provider instance.
+	ProviderID string `json:"providerId,omitempty"`
 	// Model is optional for new sessions.
 	Model string `json:"model,omitempty"`
 	// Reasoning controls extended thinking. This is passed through as a string
@@ -121,6 +123,16 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		sessionWorkspaceID = existingSession.WorkspaceID
 	} else {
 		// Session doesn't exist - create it
+		req.ProviderID = strings.TrimSpace(req.ProviderID)
+		if err := h.validateSandboxProviderID(r, projectID, req.ProviderID); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				h.Error(w, http.StatusBadRequest, "Sandbox provider not found")
+				return
+			}
+			h.Error(w, http.StatusInternalServerError, "Failed to validate sandbox provider")
+			return
+		}
+
 		workspaceID, err := h.resolveWorkspaceIDForNewSession(ctx, projectID, req.WorkspaceID)
 		if err != nil {
 			h.Error(w, http.StatusInternalServerError, err.Error())
@@ -132,6 +144,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 			SessionID:   sessionID,
 			ProjectID:   projectID,
 			WorkspaceID: workspaceID,
+			ProviderID:  req.ProviderID,
 			Messages:    req.Messages,
 		})
 		if err != nil {
@@ -223,6 +236,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 
 	// Set up SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("x-vercel-ai-ui-message-stream", "v1")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")

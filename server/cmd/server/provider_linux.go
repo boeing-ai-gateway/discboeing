@@ -20,12 +20,13 @@ func registerPrimarySandboxProvider(
 	_ vm.ProjectResourceResolver,
 	systemManager *startup.SystemManager,
 ) {
-	dockerProvider, err := docker.NewProvider(cfg, sessionProjectResolver, docker.WithSystemManager(systemManager))
+	providerCfg := configForSandboxProvider(cfg, "docker")
+	dockerProvider, err := docker.NewProvider(providerCfg, sessionProjectResolver, docker.WithSystemManager(systemManager))
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Docker sandbox provider: %v", err)
 		return
 	}
 
 	sandboxManager.RegisterProvider("docker", dockerProvider)
-	log.Printf("Docker sandbox provider initialized (image: %s)", cfg.SandboxImage)
+	log.Printf("Docker sandbox provider initialized (image: %s)", providerCfg.SandboxImage)
 }

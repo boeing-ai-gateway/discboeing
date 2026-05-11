@@ -98,6 +98,9 @@ import type {
 	RenameSessionFileResponse,
 	SearchSessionFilesResponse,
 	ServerConfig,
+	SandboxProviderInstance,
+	SandboxProviderTypesResponse,
+	SandboxProvidersResponse,
 	Session,
 	SessionCredentialAssignment,
 	SessionDiffFilesResponse,
@@ -266,6 +269,87 @@ class ApiClient {
 		return this.fetch<ProviderStatus>(`/workspaces/providers/${name}`);
 	}
 
+	async getSandboxProviderTypes(): Promise<SandboxProviderTypesResponse> {
+		return this.fetch<SandboxProviderTypesResponse>("/sandbox-provider-types");
+	}
+
+	async getSandboxProviders(): Promise<SandboxProvidersResponse> {
+		return this.fetch<SandboxProvidersResponse>("/sandbox-providers");
+	}
+
+	async updateDefaultSandboxProvider(providerId: string): Promise<{
+		default: string;
+		projectDefault: string;
+		systemDefault: string;
+	}> {
+		return this.fetch<{
+			default: string;
+			projectDefault: string;
+			systemDefault: string;
+		}>("/sandbox-providers/default", {
+			method: "PATCH",
+			body: JSON.stringify({ providerId }),
+		});
+	}
+
+	async createSandboxProvider(data: {
+		type: string;
+		name: string;
+		icon?: string;
+		config?: Record<string, unknown>;
+		disabled?: boolean;
+	}): Promise<SandboxProviderInstance> {
+		return this.fetch<SandboxProviderInstance>("/sandbox-providers", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	}
+
+	async updateSandboxProvider(
+		id: string,
+		data: {
+			type?: string;
+			name?: string;
+			icon?: string;
+			config?: Record<string, unknown>;
+			disabled?: boolean;
+		},
+	): Promise<SandboxProviderInstance> {
+		return this.fetch<SandboxProviderInstance>(`/sandbox-providers/${id}`, {
+			method: "PATCH",
+			body: JSON.stringify(data),
+		});
+	}
+
+	async deleteSandboxProvider(id: string): Promise<void> {
+		await this.fetch(`/sandbox-providers/${id}`, { method: "DELETE" });
+	}
+
+	async getSandboxProviderResources(id: string): Promise<ProjectResources> {
+		return this.fetch<ProjectResources>(`/sandbox-providers/${id}/resources`);
+	}
+
+	async updateSandboxProviderResources(
+		id: string,
+		data: UpdateProjectResourcesRequest,
+	): Promise<ProjectResourcesUpdateResult> {
+		return this.fetch<ProjectResourcesUpdateResult>(
+			`/sandbox-providers/${id}/resources`,
+			{
+				method: "PATCH",
+				body: JSON.stringify(data),
+			},
+		);
+	}
+
+	async getSandboxProviderInspection(
+		id: string,
+	): Promise<ProjectInspectionInfo> {
+		return this.fetch<ProjectInspectionInfo>(
+			`/sandbox-providers/${id}/inspection`,
+		);
+	}
+
 	async getProjectResources(): Promise<ProjectResources> {
 		return this.fetch<ProjectResources>("/resources");
 	}
@@ -340,6 +424,7 @@ class ApiClient {
 	async createSession(data: {
 		id: string;
 		workspaceId?: string;
+		providerId?: string;
 		model?: string;
 		reasoning?: string;
 	}): Promise<{ id: string }> {

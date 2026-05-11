@@ -79,6 +79,7 @@ type ConfigInfo struct {
 	AuthEnabled        bool     `json:"auth_enabled"`
 	WorkspaceDir       string   `json:"workspace_dir"`
 	SandboxImage       string   `json:"sandbox_image"`
+	SandboxImageRemote string   `json:"sandbox_image_remote,omitempty"`
 	DesktopMode        bool     `json:"desktop_mode"`
 	DesktopRuntime     string   `json:"desktop_runtime,omitempty"`
 	SSHEnabled         bool     `json:"ssh_enabled"`
@@ -142,6 +143,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		AuthEnabled:        h.cfg.AuthEnabled,
 		WorkspaceDir:       h.cfg.WorkspaceDir,
 		SandboxImage:       h.cfg.SandboxImage,
+		SandboxImageRemote: h.cfg.SandboxImageRemote,
 		DesktopMode:        h.cfg.DesktopMode,
 		DesktopRuntime:     h.cfg.DesktopRuntime,
 		SSHEnabled:         h.cfg.SSHEnabled,

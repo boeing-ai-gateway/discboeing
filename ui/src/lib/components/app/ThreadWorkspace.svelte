@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import { untrack } from "svelte";
+	import { isSessionTransitioningStatus } from "$lib/api-constants";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
@@ -27,18 +28,23 @@
 	const session = useSessionContext();
 	const thread = session.ensureThread(untrack(() => threadId));
 	setThreadContext(thread);
+	const sandboxReady = $derived.by(
+		() => !session.isPending && session.current?.status === "ready",
+	);
 	const hasSelectedThread = $derived.by(
-		() => session.isPending || session.threads.selectedId !== null,
+		() =>
+			session.isPending ||
+			(sandboxReady && session.threads.selectedId !== null),
 	);
 	const hasConversationMessages = $derived.by(() => thread.messages.length > 0);
 	const showActiveConversation = $derived.by(
 		() => hasSelectedThread || hasConversationMessages,
 	);
-	const sandboxReady = $derived.by(
-		() => !session.isPending && session.current?.status === "ready",
-	);
 	const isLoadingThread = $derived.by(
-		() => !showActiveConversation && !session.isPending && !sandboxReady,
+		() =>
+			!showActiveConversation &&
+			!session.isPending &&
+			isSessionTransitioningStatus(session.current?.status),
 	);
 	const showThreadSelectionPrompt = $derived.by(
 		() => !showActiveConversation && sandboxReady,

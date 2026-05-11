@@ -140,7 +140,7 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 	}
 
 	// Create sandbox for this session
-	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -232,7 +232,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 	}
 
 	// Create sandbox for this session
-	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -317,7 +317,7 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -395,7 +395,7 @@ func TestSandboxIdleMonitor_SkipsQueuedPrompts(t *testing.T) {
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -482,7 +482,7 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 	}
 
 	// Create sandbox
-	if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+	if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -703,7 +703,7 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := mockProvider.Create(ctx, session.ID, sandbox.CreateOptions{}); err != nil {
+		if _, _, err := mockProvider.Create(ctx, nil, session.ID, sandbox.CreateOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

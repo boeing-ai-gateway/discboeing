@@ -81,6 +81,10 @@ type Provider struct {
 	idleMonitor *sandbox.IdleRuntimeMonitor
 }
 
+func (p *Provider) IsLocal() bool {
+	return false
+}
+
 // Option configures a Provider.
 type Option func(*Provider)
 
@@ -150,6 +154,28 @@ func NewProvider(cfg *config.Config, vmManager ProjectVMManager, resolver Sessio
 	}()
 
 	return p
+}
+
+func (p *Provider) Definition() sandbox.ProviderDefinition {
+	name := "VM"
+	icon := ""
+	if p.providerName == "vz" {
+		name = "Apple VZ"
+		icon = "simple:apple"
+	}
+	return sandbox.ProviderDefinition{
+		Name:        name,
+		Icon:        icon,
+		Description: name + " sandbox driver",
+		ConfigFields: []sandbox.ProviderConfigField{
+			{Key: "dataDir", Label: "Data directory", Type: "text", Placeholder: "~/.local/state/discobot/vz", Description: "Directory for Apple VZ VM state.", Advanced: true},
+			{Key: "imageRef", Label: "Image reference", Type: "text", Placeholder: "ghcr.io/...", Description: "Optional registry image for VM guest assets.", Advanced: true},
+			{Key: "homeDir", Label: "Shared home directory", Type: "text", Placeholder: "/Users/me", Description: "Host directory shared into VMs.", Advanced: true},
+			{Key: "cpuCount", Label: "CPU count", Type: "number", Placeholder: "0", Description: "CPUs per VM. Leave empty or 0 for the platform default.", Advanced: true},
+			{Key: "memoryMB", Label: "Memory", Type: "number", Placeholder: "8192", Description: "Memory per VM in MB.", Advanced: true},
+			{Key: "dataDiskGB", Label: "Data disk", Type: "number", Placeholder: "100", Description: "Data disk size per VM in GB.", Advanced: true},
+		},
+	}
 }
 
 // ImageExists checks if the Docker image exists.
@@ -296,69 +322,70 @@ func (p *Provider) AttachProjectInspection(ctx context.Context, projectID string
 }
 
 // Create creates a sandbox in the project's VM.
-func (p *Provider) Create(ctx context.Context, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, error) {
+func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
 	projectID, err := p.sessionProjectResolver(ctx, sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve project for session %s: %w", sessionID, err)
+		return nil, state, fmt.Errorf("failed to resolve project for session %s: %w", sessionID, err)
 	}
 
 	dockerProv, err := p.getOrCreateDockerProvider(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get docker provider: %w", err)
+		return nil, state, fmt.Errorf("failed to get docker provider: %w", err)
 	}
 
-	return dockerProv.Create(ctx, sessionID, opts)
+	return dockerProv.Create(ctx, state, sessionID, opts)
 }
 
 // Start starts a sandbox.
-func (p *Provider) Start(ctx context.Context, sessionID string) error {
+func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([]byte, error) {
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
-		return err
+		return state, err
 	}
-	return dockerProv.Start(ctx, sessionID)
+	return dockerProv.Start(ctx, state, sessionID)
 }
 
 // Stop stops a sandbox.
-func (p *Provider) Stop(ctx context.Context, sessionID string, timeout time.Duration) error {
+func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	p.httpClients.Remove(sessionID)
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
-		return err
+		return state, err
 	}
-	return dockerProv.Stop(ctx, sessionID, timeout)
+	return dockerProv.Stop(ctx, state, sessionID, timeout)
 }
 
 // Remove removes a sandbox.
-func (p *Provider) Remove(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, opts ...sandbox.RemoveOption) ([]byte, error) {
 	p.httpClients.Remove(sessionID)
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
-		return err
+		return state, err
 	}
-	if err := dockerProv.Remove(ctx, sessionID, opts...); err != nil {
-		return err
+	newState, err := dockerProv.Remove(ctx, state, sessionID, opts...)
+	if err != nil {
+		return state, err
 	}
 
-	return nil
+	return newState, nil
 }
 
 // Get returns sandbox info.
-func (p *Provider) Get(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+func (p *Provider) Get(ctx context.Context, state []byte, sessionID string) (*sandbox.Sandbox, error) {
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	return dockerProv.Get(ctx, sessionID)
+	return dockerProv.Get(ctx, state, sessionID)
 }
 
 // GetSecret returns the shared secret for a sandbox.
-func (p *Provider) GetSecret(ctx context.Context, sessionID string) (string, error) {
+func (p *Provider) GetSecret(ctx context.Context, state []byte, sessionID string) (string, error) {
 	_, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
-	return dockerProv.GetSecret(ctx, sessionID)
+	return dockerProv.GetSecret(ctx, state, sessionID)
 }
 
 func (p *Provider) ensureDockerProviders(ctx context.Context) ([]*docker.Provider, error) {
@@ -417,7 +444,7 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 
 // AcquireHTTPClient returns a leased HTTP client that connects to the sandbox's published port
 // via the VM's port dialer.
-func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
 	projectID, dockerProv, err := p.getDockerProviderForSession(ctx, sessionID)
 	if err != nil {
 		p.httpClients.Remove(sessionID)
@@ -431,7 +458,7 @@ func (p *Provider) AcquireHTTPClient(ctx context.Context, sessionID string) (*sa
 	}
 
 	// Get the sandbox to find its published port
-	sb, err := dockerProv.Get(ctx, sessionID)
+	sb, err := dockerProv.Get(ctx, state, sessionID)
 	if err != nil {
 		p.httpClients.Remove(sessionID)
 		return nil, fmt.Errorf("failed to get sandbox info: %w", err)

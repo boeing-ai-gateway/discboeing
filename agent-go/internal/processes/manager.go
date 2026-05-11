@@ -25,8 +25,8 @@ type managedSession struct {
 	buf       *ringBuffer
 	subs      map[chan OutputEvent]struct{}
 	done      chan struct{}
-	readers   sync.WaitGroup
 	nextSeq   int64
+	readWG    sync.WaitGroup
 	closeOnce sync.Once
 }
 
@@ -119,7 +119,6 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 		subs:    map[chan OutputEvent]struct{}{},
 		done:    make(chan struct{}),
 	}
-	managed.readers.Add(1)
 	m.mu.Lock()
 	m.sessions[id] = managed
 	if req.ReuseKey != "" {
@@ -127,10 +126,13 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 	}
 	m.mu.Unlock()
 	managed.persist()
-	go m.readLoop(managed, "stdout", stream)
+	managed.readWG.Go(func() {
+		m.readLoop(managed, "stdout", stream)
+	})
 	if stderr := stream.Stderr(); stderr != nil {
-		managed.readers.Add(1)
-		go m.readLoop(managed, "stderr", stderr)
+		managed.readWG.Go(func() {
+			m.readLoop(managed, "stderr", stderr)
+		})
 	}
 	go m.waitLoop(context.Background(), managed)
 	return managed.snapshot(), nil
@@ -247,7 +249,6 @@ func (m *Manager) Kill(id string) error {
 }
 
 func (m *Manager) readLoop(managed *managedSession, streamType string, r io.Reader) {
-	defer managed.readers.Done()
 	buf := make([]byte, 4096)
 	for {
 		n, err := r.Read(buf)
@@ -263,11 +264,11 @@ func (m *Manager) readLoop(managed *managedSession, streamType string, r io.Read
 }
 
 func (m *Manager) waitLoop(ctx context.Context, managed *managedSession) {
+	managed.readWG.Wait()
 	code, err := managed.stream.Wait(ctx)
 	if err != nil && code < 0 {
 		code = 1
 	}
-	managed.readers.Wait()
 	exited := time.Now().UTC()
 	managed.mu.Lock()
 	managed.session.ExitCode = new(code)

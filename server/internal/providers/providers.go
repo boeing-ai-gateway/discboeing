@@ -104,6 +104,16 @@ var customAuthProviders = []AuthProvider{
 		},
 		Env: []string{"TAVILY_API_KEY"},
 	},
+	{
+		ID:          "exedev",
+		Name:        "exe.dev",
+		Description: "exe.dev API authentication for VM sandbox provisioning",
+		Category:    CategoryLLM,
+		Icons: []Icon{
+			{Src: "https://exe.dev/static/exy.png", MimeType: "image/png"},
+		},
+		Env: []string{"EXEDEV_TOKEN"},
+	},
 }
 
 // loadProviders loads auth providers from embedded models.dev data and custom providers

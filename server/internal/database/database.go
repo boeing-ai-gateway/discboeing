@@ -203,6 +203,9 @@ func (db *DB) Migrate() error {
 	if err := dropObsoleteSessionCredentialAssignmentIndexes(db); err != nil {
 		return err
 	}
+	if err := dropObsoleteSandboxProviderIndexes(db); err != nil {
+		return err
+	}
 
 	// Drop obsolete columns that are no longer in the model
 	// Note: AutoMigrate only adds columns, it never removes them.
@@ -285,6 +288,18 @@ func dropObsoleteSessionCredentialAssignmentIndexes(db *DB) error {
 	log.Println("Dropping obsolete SessionCredentialAssignment index idx_session_credential_assignment...")
 	if err := migrator.DropIndex(&model.SessionCredentialAssignment{}, "idx_session_credential_assignment"); err != nil {
 		return fmt.Errorf("failed to drop obsolete SessionCredentialAssignment index idx_session_credential_assignment: %w", err)
+	}
+	return nil
+}
+
+func dropObsoleteSandboxProviderIndexes(db *DB) error {
+	migrator := db.Migrator()
+	if !migrator.HasIndex(&model.SandboxProviderInstance{}, "idx_sandbox_provider_project_name") {
+		return nil
+	}
+	log.Println("Dropping obsolete SandboxProviderInstance index idx_sandbox_provider_project_name...")
+	if err := migrator.DropIndex(&model.SandboxProviderInstance{}, "idx_sandbox_provider_project_name"); err != nil {
+		return fmt.Errorf("failed to drop obsolete SandboxProviderInstance index idx_sandbox_provider_project_name: %w", err)
 	}
 	return nil
 }

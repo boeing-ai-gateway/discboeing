@@ -66,6 +66,7 @@ export type SettingsDialogTab =
 	| "appearance"
 	| "chat"
 	| "project"
+	| "providers"
 	| "update"
 	| "credentials";
 

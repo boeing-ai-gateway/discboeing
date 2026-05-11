@@ -9,6 +9,7 @@ import {
 	AgentWatcher,
 	type CommandRunner,
 	getCommandEnv,
+	imageRepositoryFromRef,
 	type Logger,
 	resolveCommandInvocation,
 	resolveDockerCommand,
@@ -86,8 +87,14 @@ describe("shouldIgnorePath", () => {
 
 describe("resolveDockerCommand", () => {
 	it("returns docker on non-Windows platforms", () => {
-		assert.equal(resolveDockerCommand("darwin", {}, () => false), "docker");
-		assert.equal(resolveDockerCommand("linux", {}, () => false), "docker");
+		assert.equal(
+			resolveDockerCommand("darwin", {}, () => false),
+			"docker",
+		);
+		assert.equal(
+			resolveDockerCommand("linux", {}, () => false),
+			"docker",
+		);
 	});
 
 	it("prefers DOCKER_EXE when provided on Windows", () => {
@@ -116,9 +123,13 @@ describe("resolveDockerCommand", () => {
 
 	it("falls back to docker on Windows when no known install path exists", () => {
 		assert.equal(
-			resolveDockerCommand("win32", { ProgramFiles: "C:\\Program Files" }, () => {
-				return false;
-			}),
+			resolveDockerCommand(
+				"win32",
+				{ ProgramFiles: "C:\\Program Files" },
+				() => {
+					return false;
+				},
+			),
 			"docker",
 		);
 	});
@@ -153,16 +164,25 @@ describe("getCommandEnv", () => {
 				"C:\\Windows\\System32",
 			].join(";"),
 		};
-		assert.equal(getCommandEnv("C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe", env), env);
+		assert.equal(
+			getCommandEnv(
+				"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				env,
+			),
+			env,
+		);
 	});
 });
 
 describe("resolveCommandInvocation", () => {
 	it("returns the original command when no WSL distro is configured", () => {
-		assert.deepEqual(resolveCommandInvocation("docker", ["build", "."], "win32", {}), {
-			command: "docker",
-			args: ["build", "."],
-		});
+		assert.deepEqual(
+			resolveCommandInvocation("docker", ["build", "."], "win32", {}),
+			{
+				command: "docker",
+				args: ["build", "."],
+			},
+		);
 	});
 
 	it("wraps docker commands with wsl.exe on Windows", () => {
@@ -189,6 +209,30 @@ describe("resolveCommandInvocation", () => {
 				command: "pnpm",
 				args: ["dev"],
 			},
+		);
+	});
+});
+
+describe("imageRepositoryFromRef", () => {
+	it("strips tags while preserving registry ports", () => {
+		assert.equal(
+			imageRepositoryFromRef("ghcr.io/obot-platform/discobot:abc123"),
+			"ghcr.io/obot-platform/discobot",
+		);
+		assert.equal(
+			imageRepositoryFromRef("localhost:5000/discobot:abc123"),
+			"localhost:5000/discobot",
+		);
+		assert.equal(
+			imageRepositoryFromRef("localhost:5000/discobot"),
+			"localhost:5000/discobot",
+		);
+	});
+
+	it("strips digests", () => {
+		assert.equal(
+			imageRepositoryFromRef("ghcr.io/obot-platform/discobot@sha256:abc"),
+			"ghcr.io/obot-platform/discobot",
 		);
 	});
 });
@@ -260,6 +304,41 @@ describe("updateEnvFile", () => {
 		const content = await readFile(envPath, "utf-8");
 		// Should end with newline
 		assert.ok(content.endsWith("\n"));
+	});
+
+	it("updates SANDBOX_IMAGE_REMOTE when provided", async () => {
+		await writeFile(
+			envPath,
+			"SANDBOX_IMAGE=old-local\nSANDBOX_IMAGE_REMOTE=old-remote\n",
+		);
+
+		const result = await updateEnvFile(
+			envPath,
+			"new-local",
+			"ghcr.io/example/discobot:abc123",
+		);
+		assert.equal(result, true);
+
+		const content = await readFile(envPath, "utf-8");
+		assert.ok(content.includes("SANDBOX_IMAGE=new-local"));
+		assert.ok(
+			content.includes("SANDBOX_IMAGE_REMOTE=ghcr.io/example/discobot:abc123"),
+		);
+		assert.ok(!content.includes("old-remote"));
+	});
+
+	it("leaves SANDBOX_IMAGE_REMOTE unchanged when not provided", async () => {
+		await writeFile(
+			envPath,
+			"SANDBOX_IMAGE=old-local\nSANDBOX_IMAGE_REMOTE=existing-remote\n",
+		);
+
+		const result = await updateEnvFile(envPath, "new-local");
+		assert.equal(result, true);
+
+		const content = await readFile(envPath, "utf-8");
+		assert.ok(content.includes("SANDBOX_IMAGE=new-local"));
+		assert.ok(content.includes("SANDBOX_IMAGE_REMOTE=existing-remote"));
 	});
 });
 
@@ -358,8 +437,90 @@ describe("AgentWatcher", () => {
 			);
 			// Result should be the local tag reference
 			assert.ok(
-				result?.startsWith("discobot-local/my-image:"),
+				result?.localImageRef.startsWith("discobot-local/my-image:"),
 				"Should return local tag reference",
+			);
+		});
+
+		it("tags and pushes remote image when configured", async () => {
+			const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+
+			const mockRunner: CommandRunner = async (command, args, cwd) => {
+				calls.push({ command, args, cwd });
+				if (args.includes("inspect")) {
+					return {
+						stdout: "sha256:abcdef1234567890\n",
+						stderr: "",
+						exitCode: 0,
+					};
+				}
+				return { stdout: "", stderr: "", exitCode: 0 };
+			};
+
+			const watcher = new AgentWatcher({
+				agentDir,
+				projectRoot: tempDir,
+				envFilePath: envPath,
+				imageName: "my-image",
+				imageTag: "dev",
+				remoteImageRepository: "ghcr.io/example/discobot",
+				dockerCommand: "docker",
+				debounceMs: 100,
+				runCommand: mockRunner,
+				logger: createSilentLogger(),
+			});
+
+			const result = await watcher.buildImage();
+
+			assert.equal(calls.length, 5);
+			assert.deepEqual(calls[3].args, [
+				"tag",
+				"discobot-local/my-image:abcdef12",
+				"ghcr.io/example/discobot:abcdef12",
+			]);
+			assert.deepEqual(calls[4].args, [
+				"push",
+				"ghcr.io/example/discobot:abcdef12",
+			]);
+			assert.equal(result?.localImageRef, "discobot-local/my-image:abcdef12");
+			assert.equal(result?.remoteImageRef, "ghcr.io/example/discobot:abcdef12");
+		});
+
+		it("doBuild updates SANDBOX_IMAGE_REMOTE after a remote push", async () => {
+			const mockRunner: CommandRunner = async (_command, args) => {
+				if (args.includes("inspect")) {
+					return {
+						stdout: "sha256:abc12345deadbeef\n",
+						stderr: "",
+						exitCode: 0,
+					};
+				}
+				return { stdout: "", stderr: "", exitCode: 0 };
+			};
+
+			const watcher = new AgentWatcher({
+				agentDir,
+				projectRoot: tempDir,
+				envFilePath: envPath,
+				imageName: "test-image",
+				imageTag: "v1",
+				remoteImageRepository: "ghcr.io/example/discobot",
+				dockerCommand: "docker",
+				debounceMs: 100,
+				runCommand: mockRunner,
+				logger: createSilentLogger(),
+			});
+
+			await watcher.doBuild();
+
+			const envContent = await readFile(envPath, "utf-8");
+			assert.ok(
+				envContent.includes("SANDBOX_IMAGE=discobot-local/test-image:abc12345"),
+			);
+			assert.ok(
+				envContent.includes(
+					"SANDBOX_IMAGE_REMOTE=ghcr.io/example/discobot:abc12345",
+				),
 			);
 		});
 
@@ -425,7 +586,8 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "my-image",
 				imageTag: "dev",
-				dockerCommand: "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+				dockerCommand:
+					"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
 				debounceMs: 100,
 				runCommand: mockRunner,
 				logger: createSilentLogger(),

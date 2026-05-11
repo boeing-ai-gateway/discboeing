@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +35,7 @@ func TestCreateSession_ViaChat(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Sessions are created implicitly via the chat endpoint
@@ -96,7 +95,7 @@ func TestCreateSession_ViaChatWithSessionIDPath(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-session-field"
@@ -149,7 +148,7 @@ func TestCreateSession_ViaEmptyChat(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	sessionID := "test-session-id-empty-chat"
@@ -304,7 +303,7 @@ func TestCreateSession_ViaChatWithWorkspace(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Sessions are created implicitly via the chat endpoint with workspace
@@ -346,7 +345,7 @@ func TestCreateSession_NameRemainsEmptyAfterPrompt(t *testing.T) {
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
-	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
+	workspace := ts.CreateTestWorkspaceWithGitRepo(project)
 	client := ts.AuthenticatedClient(user)
 
 	// Session name stays empty until it is populated elsewhere.
@@ -544,44 +543,19 @@ func TestListSessionFiles(t *testing.T) {
 	}
 }
 
-func TestListMessages(t *testing.T) {
+func TestListMessagesRouteNotFound(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
-
-	// Set up mock sandbox HTTP server that responds to /chat
-	mockSandboxServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/chat") && r.Method == "GET" && r.Header.Get("Accept") != "text/event-stream" {
-			// Return empty messages array
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"messages":[]}`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer mockSandboxServer.Close()
-
-	// Create session with sandbox using mock server
-	session := ts.CreateTestSessionWithMockSandbox(workspace, "Test Session", mockSandboxServer.URL)
+	session := ts.CreateTestSession(workspace, "Test Session")
 	client := ts.AuthenticatedClient(user)
 
-	// Get messages from sandbox - returns empty since no messages have been sent
 	resp := client.Get("/api/projects/" + project.ID + "/sessions/" + session.ID + "/messages")
 	defer resp.Body.Close()
 
-	AssertStatus(t, resp, http.StatusOK)
-
-	var result struct {
-		Messages []any `json:"messages"`
-	}
-	ParseJSON(t, resp, &result)
-
-	if len(result.Messages) != 0 {
-		t.Errorf("Expected 0 messages, got %d", len(result.Messages))
-	}
+	AssertStatus(t, resp, http.StatusNotFound)
 }
 
 // ============================================================================
@@ -692,8 +666,10 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
 	client := ts.AuthenticatedClient(user)
 
-	// Set commit status.
+	// Set completed commit status for a commit operation.
 	session.CommitStatus = "completed"
+	commitOperation := "commit"
+	session.CommitOperation = &commitOperation
 	appliedCommit := "def456"
 	session.AppliedCommit = &appliedCommit
 	if err := ts.Store.UpdateSession(context.Background(), session); err != nil {
@@ -714,8 +690,8 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 		t.Fatalf("Expected 1 session, got %d", len(result.Sessions))
 	}
 
-	if result.Sessions[0]["status"] != "completed" {
-		t.Errorf("Expected status 'completed', got %v", result.Sessions[0]["status"])
+	if result.Sessions[0]["status"] != "committed" {
+		t.Errorf("Expected status 'committed', got %v", result.Sessions[0]["status"])
 	}
 	if result.Sessions[0]["appliedCommit"] != "def456" {
 		t.Errorf("Expected appliedCommit 'def456', got %v", result.Sessions[0]["appliedCommit"])

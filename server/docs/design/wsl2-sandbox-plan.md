@@ -298,7 +298,8 @@ Update platform default provider selection to:
 - windows -> `wsl`
 - linux -> `docker`
 
-The existing provider proxy in `server/cmd/server/main.go` can continue to route by workspace provider.
+The provider proxy routes by the session's sandbox provider ID, falling back to
+the project default provider when the session does not select one explicitly.
 
 ## Config Changes
 

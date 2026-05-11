@@ -19,39 +19,9 @@ type Provider interface {
 	// Image returns the configured sandbox image name.
 	Image() string
 
-	// Create creates a new sandbox for the given session.
-	// The sandbox is created but not started.
-	// A single port (3002) is always exposed and assigned a random host port.
-	// If the image doesn't exist locally, it will be pulled automatically.
-	Create(ctx context.Context, sessionID string, opts CreateOptions) (*Sandbox, error)
-
-	// Start starts a previously created sandbox.
-	Start(ctx context.Context, sessionID string) error
-
-	// Stop stops a running sandbox gracefully.
-	// The timeout specifies how long to wait before force-killing.
-	Stop(ctx context.Context, sessionID string, timeout time.Duration) error
-
-	// Remove removes a sandbox and optionally its associated data volumes.
-	// The sandbox must be stopped first.
-	// By default, data volumes are preserved (useful for rebuilds).
-	// Pass RemoveVolumes() to delete all data volumes (for session deletion).
-	Remove(ctx context.Context, sessionID string, opts ...RemoveOption) error
-
-	// Get returns the current state of a sandbox.
-	Get(ctx context.Context, sessionID string) (*Sandbox, error)
-
-	// GetSecret returns the shared secret for the sandbox.
-	// This is the raw secret stored during creation, not the hashed version.
-	GetSecret(ctx context.Context, sessionID string) (string, error)
-
 	// List returns all sandboxes managed by discobot.
 	// This includes sandboxes in any state (running, stopped, failed).
 	List(ctx context.Context) ([]*Sandbox, error)
-
-	// AcquireHTTPClient returns a leased HTTP client configured to communicate with
-	// the sandbox. Callers must release the lease after use.
-	AcquireHTTPClient(ctx context.Context, sessionID string) (*HTTPClientLease, error)
 
 	// Watch returns a channel that receives sandbox state change events.
 	// On subscription, it replays the current state of all existing sandboxes,
@@ -77,6 +47,36 @@ type Provider interface {
 	// This includes cache volumes, BuildKit containers, networks, etc.
 	// Called when a project is deleted.
 	RemoveProject(ctx context.Context, projectID string) error
+
+	// PrepareState returns opaque provider-specific state for a sandbox before it
+	// is created. The service stores non-empty state encrypted and passes it back
+	// on subsequent provider calls. Providers that do not need persistent state
+	// should return nil.
+	PrepareState(ctx context.Context, sessionID string, opts CreateOptions) ([]byte, error)
+
+	// Create creates a new sandbox for the given session.
+	// The returned state replaces the input state when it differs.
+	Create(ctx context.Context, state []byte, sessionID string, opts CreateOptions) (*Sandbox, []byte, error)
+
+	// Start starts a previously created sandbox and returns updated state.
+	Start(ctx context.Context, state []byte, sessionID string) ([]byte, error)
+
+	// Stop stops a running sandbox gracefully and returns updated state.
+	Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error)
+
+	// Remove removes a sandbox and optionally its associated data volumes, and
+	// returns updated state. Returning nil/empty state clears persisted state.
+	Remove(ctx context.Context, state []byte, sessionID string, opts ...RemoveOption) ([]byte, error)
+
+	// Get returns the current state of a sandbox.
+	Get(ctx context.Context, state []byte, sessionID string) (*Sandbox, error)
+
+	// GetSecret returns the raw shared secret from provider state/runtime.
+	GetSecret(ctx context.Context, state []byte, sessionID string) (string, error)
+
+	// AcquireHTTPClient returns a leased HTTP client configured to communicate
+	// with the sandbox.
+	AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*HTTPClientLease, error)
 }
 
 const MetadataImageID = "image_id"
@@ -91,6 +91,13 @@ type CurrentImageIDProvider interface {
 // sandbox images that are no longer referenced after reconciliation.
 type CleanupUnusedImagesProvider interface {
 	CleanupUnusedImages(ctx context.Context) error
+}
+
+// LocalityProvider is an optional provider capability that reports whether a
+// provider runs sandboxes on the same host as Discobot. Local providers can use
+// developer-built local images; remote providers need a remotely pullable image.
+type LocalityProvider interface {
+	IsLocal() bool
 }
 
 // ProjectResourceInfo describes the effective VM resources for a project.
@@ -138,6 +145,36 @@ type ProjectCacheManager interface {
 	ClearCache(ctx context.Context, projectID string) error
 }
 
+// ProviderConfigField describes one configurable value accepted by a registered
+// sandbox driver. These fields configure provider instances, not individual
+// session sandboxes.
+type ProviderConfigField struct {
+	Key                string `json:"key"`
+	Label              string `json:"label"`
+	Type               string `json:"type"`
+	Description        string `json:"description,omitempty"`
+	Placeholder        string `json:"placeholder,omitempty"`
+	Required           bool   `json:"required,omitempty"`
+	Advanced           bool   `json:"advanced,omitempty"`
+	CredentialProvider string `json:"credentialProvider,omitempty"`
+	CredentialAuthType string `json:"credentialAuthType,omitempty"`
+}
+
+// ProviderDefinition describes a registered sandbox driver/adapter. A driver
+// can have many configured provider instances.
+type ProviderDefinition struct {
+	Name         string                `json:"name,omitempty"`
+	Icon         string                `json:"icon,omitempty"`
+	Description  string                `json:"description,omitempty"`
+	ConfigFields []ProviderConfigField `json:"configFields,omitempty"`
+}
+
+// DefinitionProvider is an optional provider capability for reporting driver
+// metadata used to configure provider instances.
+type DefinitionProvider interface {
+	Definition() ProviderDefinition
+}
+
 // DockerProxyProvider is an optional interface that sandbox providers can implement
 // to expose the Docker daemon for debugging. This is used by the debug Docker proxy
 // to forward Docker API requests to the sandbox runtime (e.g., inside a VZ VM).
@@ -152,6 +189,8 @@ type ProviderStatus struct {
 	Available          bool   `json:"available"`
 	State              string `json:"state"` // "ready", "downloading", "failed", "not_available"
 	Message            string `json:"message,omitempty"`
+	SupportsResources  bool   `json:"supportsResources"`
+	SupportsInspection bool   `json:"supportsInspection"`
 	SupportsClearCache bool   `json:"supportsClearCache"`
 	// Details contains provider-specific status information (e.g., download progress, config).
 	Details any `json:"details,omitempty"`
@@ -258,21 +297,23 @@ type CreateOptions struct {
 	Labels map[string]string // Sandbox labels/tags for identification
 
 	// SharedSecret is the secret used for authenticating requests to the sandbox.
-	// The provider stores this secret and makes a salted+hashed version available
-	// to the sandbox via the DISCOBOT_SECRET environment variable.
+	// Providers that need the raw secret for host-side authentication metadata can
+	// store it, but agent-facing secret env vars are passed through Env.
 	SharedSecret string
 
 	// SSHKey contains optional SSH identity material to provision into the sandbox.
 	SSHKey *SSHKeyProvision
 
+	// Env contains environment variables providers must set on the created
+	// sandbox instance.
+	Env map[string]string
+
 	// WorkspacePath is an optional local directory to mount inside the sandbox at
 	// /.workspace. Local workspaces use this; git URL workspaces may leave it empty
 	// and let the agent clone from WorkspaceSource instead.
-	// Sets WORKSPACE_ORIGIN_PATH env var to /.workspace (the mount point) when set.
 	WorkspacePath string
 
 	// WorkspaceSource is the original workspace source (local path or git URL).
-	// Sets WORKSPACE_SOURCE env var to this value.
 	// For local workspaces, this is the local directory path.
 	// For git workspaces, this is the git URL (e.g., https://github.com/user/repo.git).
 	WorkspaceSource string
@@ -280,24 +321,20 @@ type CreateOptions struct {
 	// WorkspaceCommit is an optional workspace commit to check out while bootstrapping
 	// the sandbox repository. It is a sandbox creation input, not persisted session
 	// commit state.
-	// Set as WORKSPACE_COMMIT environment variable.
 	WorkspaceCommit string
 
 	// WorkspaceTargetRef is the git ref the sandbox should clone or check out when
 	// bootstrapping a git URL workspace. Examples: HEAD, main, refs/heads/main.
-	// Set as WORKSPACE_TARGET_REF environment variable.
 	WorkspaceTargetRef string
 
 	// ProjectID is the project this session belongs to.
-	// Set as DISCOBOT_PROJECT_ID environment variable (used by agent for MCP token persistence).
 	ProjectID string
 
 	// MCPOAuthRedirectBase is the base URL for MCP OAuth callbacks.
-	// Set as DISCOBOT_MCP_OAUTH_REDIRECT_BASE environment variable.
 	MCPOAuthRedirectBase string
 
 	// AgentServerURL is the URL the agent uses to reach the Discobot server
-	// (e.g. for posting MCP tokens after OAuth). Set as DISCOBOT_SERVER_URL.
+	// (e.g. for posting MCP tokens after OAuth).
 	AgentServerURL string
 
 	// Resources defines resource limits for the sandbox.

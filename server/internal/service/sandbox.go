@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/conntrack"
+	"github.com/obot-platform/discobot/server/internal/encryption"
 	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -105,6 +108,12 @@ func (s *SandboxService) GetClient(ctx context.Context, sessionID string) (*Sess
 	return s.newSessionClient(ctx, sessionID)
 }
 
+// AcquireHTTPClient returns a leased HTTP client for the session sandbox using
+// persisted provider state when the provider requires it.
+func (s *SandboxService) AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	return s.acquireHTTPClient(ctx, sessionID)
+}
+
 // GetSessionActivityIfRunning returns the sandbox's aggregate thread activity
 // only when the sandbox is already running. It intentionally does not reconcile,
 // start, health-probe, or record idle activity for stopped/unavailable sandboxes.
@@ -117,7 +126,7 @@ func (s *SandboxService) GetSessionActivityIfRunning(ctx context.Context, sessio
 		return nil, sandbox.ErrNotRunning
 	}
 
-	sb, err := s.provider.Get(ctx, sessionID)
+	sb, err := s.getSandbox(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,21 +150,108 @@ func (s *SandboxService) newSessionClient(ctx context.Context, sessionID string)
 func (s *SandboxService) newAgentClient(ctx context.Context) *SandboxAgentClient {
 	gitName, gitEmail := s.getGitConfig(ctx)
 	return NewSandboxAgentClient(s.provider, s.credentialFetcher, &SandboxAgentClientConfig{
-		GitUserName:  gitName,
-		GitUserEmail: gitEmail,
+		GitUserName:       gitName,
+		GitUserEmail:      gitEmail,
+		AcquireHTTPClient: s.acquireHTTPClient,
+		GetSecret:         s.getSandboxSecret,
 	})
 }
 
+func (s *SandboxService) loadProviderState(ctx context.Context, sessionID string) ([]byte, error) {
+	encryptedData, err := s.store.GetSessionSandboxState(ctx, sessionID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	encryptor, err := encryption.NewEncryptor(s.cfg.EncryptionKey)
+	if err != nil {
+		return nil, err
+	}
+	return encryptor.Decrypt(encryptedData)
+}
+
+func (s *SandboxService) saveProviderState(ctx context.Context, sessionID string, state []byte) error {
+	if len(state) == 0 {
+		return s.store.DeleteSessionSandboxState(ctx, sessionID)
+	}
+	encryptor, err := encryption.NewEncryptor(s.cfg.EncryptionKey)
+	if err != nil {
+		return err
+	}
+	encryptedData, err := encryptor.Encrypt(state)
+	if err != nil {
+		return err
+	}
+	return s.store.SaveSessionSandboxState(ctx, sessionID, encryptedData)
+}
+
+func (s *SandboxService) saveProviderStateIfChanged(ctx context.Context, sessionID string, oldState, newState []byte) error {
+	if bytes.Equal(oldState, newState) {
+		return nil
+	}
+	return s.saveProviderState(ctx, sessionID, newState)
+}
+
+func (s *SandboxService) getSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	return s.provider.Get(ctx, state, sessionID)
+}
+
+func (s *SandboxService) acquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	return sandbox.AcquireHTTPClient(ctx, s.provider, state, sessionID)
+}
+
+func (s *SandboxService) getSandboxSecret(ctx context.Context, sessionID string) (string, error) {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	return s.provider.GetSecret(ctx, state, sessionID)
+}
+
+func (s *SandboxService) stopSandbox(ctx context.Context, sessionID string, timeout time.Duration) error {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	newState, err := s.provider.Stop(ctx, state, sessionID, timeout)
+	if err != nil {
+		return err
+	}
+	return s.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+}
+
+func (s *SandboxService) removeSandbox(ctx context.Context, sessionID string, opts ...sandbox.RemoveOption) error {
+	state, err := s.loadProviderState(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load sandbox provider state: %w", err)
+	}
+	newState, err := s.provider.Remove(ctx, state, sessionID, opts...)
+	if err != nil {
+		return err
+	}
+	return s.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+}
+
 // EnsureSandboxReady checks the session state from the database and ensures
-// the sandbox is ready. For states like "stopped" or "error", it triggers reconciliation.
-// For "initializing" states, it waits briefly then reconciles if still not ready.
+// the sandbox is ready. Stopped sessions trigger reconciliation, while errored
+// sessions return their stored error instead of retrying indefinitely.
 func (s *SandboxService) EnsureSandboxReady(ctx context.Context, sessionID string) error {
 	return s.ensureSandboxReady(ctx, sessionID)
 }
 
 // ensureSandboxReady checks the session state from the database and ensures
-// the sandbox is ready. For states like "stopped" or "error", it triggers reconciliation.
-// For "initializing" states, it waits briefly then reconciles if still not ready.
+// the sandbox is ready. Stopped sessions trigger reconciliation, while errored
+// sessions return their stored error instead of retrying indefinitely.
 func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID string) error {
 	sess, err := s.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -165,24 +261,35 @@ func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID strin
 	switch sess.Status {
 	case model.SessionStatusReady, legacySessionStatusRunning:
 		return s.ensureSandboxRunningAndHealthy(ctx, sessionID, sess.Status)
-	case model.SessionStatusStopped, model.SessionStatusError:
+	case model.SessionStatusStopped:
 		return s.ReconcileSandbox(ctx, sessionID)
+	case model.SessionStatusError, model.SessionStatusCreateFailed:
+		return sessionNotReadyError(sess)
 	case model.SessionStatusInitializing, model.SessionStatusReinitializing,
 		model.SessionStatusCloning, model.SessionStatusPullingImage, model.SessionStatusCreatingSandbox:
 		if err := s.waitForSessionReady(ctx, sessionID); err != nil {
-			log.Printf("Session %s wait failed (%v), attempting reconciliation", sessionID, err)
-			return s.ReconcileSandbox(ctx, sessionID)
+			return err
 		}
 		return s.ensureSandboxRunningAndHealthy(ctx, sessionID, model.SessionStatusReady)
 	default:
-		return s.ReconcileSandbox(ctx, sessionID)
+		return sessionNotReadyError(sess)
 	}
+}
+
+func sessionNotReadyError(sess *model.Session) error {
+	if sess != nil && sess.ErrorMessage != nil && *sess.ErrorMessage != "" {
+		return fmt.Errorf("session in %s state: %s", sess.Status, *sess.ErrorMessage)
+	}
+	if sess != nil {
+		return fmt.Errorf("session in %s state", sess.Status)
+	}
+	return fmt.Errorf("session is not ready")
 }
 
 func (s *SandboxService) ensureSandboxRunningAndHealthy(ctx context.Context, sessionID string, sessionStatus string) error {
 	// Session status looks good — verify the container is actually running.
 	// This fast-path check avoids expensive reconciliation when everything is healthy.
-	sb, err := s.provider.Get(ctx, sessionID)
+	sb, err := s.getSandbox(ctx, sessionID)
 	if errors.Is(err, sandbox.ErrNotFound) || (err == nil && sb.Status != sandbox.StatusRunning) {
 		log.Printf("Session %s status is %s but container not running, reconciling", sessionID, sessionStatus)
 		return s.ReconcileSandbox(ctx, sessionID)
@@ -220,8 +327,8 @@ func (s *SandboxService) waitForSessionReady(ctx context.Context, sessionID stri
 		switch sess.Status {
 		case model.SessionStatusReady:
 			return nil
-		case model.SessionStatusError, model.SessionStatusStopped:
-			return fmt.Errorf("session in %s state", sess.Status)
+		case model.SessionStatusError, model.SessionStatusCreateFailed, model.SessionStatusStopped:
+			return sessionNotReadyError(sess)
 		}
 
 		if time.Now().After(deadline) {
@@ -350,6 +457,7 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 	opts := sandbox.CreateOptions{
 		SharedSecret: sharedSecret,
 		SSHKey:       sshKey,
+		Env:          sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspace.Path, workspaceCommit, "", session.ProjectID, s.cfg.MCPOAuthRedirectBase, s.cfg.AgentServerURL),
 		Labels: map[string]string{
 			"discobot.session.id":   sessionID,
 			"discobot.workspace.id": session.WorkspaceID,
@@ -366,20 +474,78 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 		},
 	}
 
+	state, err := s.provider.PrepareState(ctx, sessionID, opts)
+	if err != nil {
+		return fmt.Errorf("failed to prepare sandbox state: %w", err)
+	}
+	if err := s.saveProviderState(ctx, sessionID, state); err != nil {
+		return fmt.Errorf("failed to save sandbox provider state: %w", err)
+	}
+
 	// Create the sandbox
-	_, err = s.provider.Create(ctx, sessionID, opts)
+	_, state, err = s.provider.Create(ctx, state, sessionID, opts)
 	if err != nil {
 		return fmt.Errorf("failed to create sandbox: %w", err)
 	}
+	if err := s.saveProviderState(ctx, sessionID, state); err != nil {
+		return fmt.Errorf("failed to save sandbox provider state: %w", err)
+	}
 
 	// Start the sandbox immediately
-	if err := s.provider.Start(ctx, sessionID); err != nil {
+	state, err = s.provider.Start(ctx, state, sessionID)
+	if err != nil {
 		// Clean up on failure (don't need to remove volumes since this is a new sandbox)
-		_ = s.provider.Remove(ctx, sessionID)
+		_ = s.removeSandbox(ctx, sessionID)
 		return fmt.Errorf("failed to start sandbox: %w", err)
+	}
+	if err := s.saveProviderState(ctx, sessionID, state); err != nil {
+		return fmt.Errorf("failed to save sandbox provider state: %w", err)
 	}
 
 	return nil
+}
+
+func sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspaceSource, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string) map[string]string {
+	env := map[string]string{
+		"SESSION_ID":          sessionID,
+		"DISCOBOT_SESSION_ID": sessionID,
+	}
+	if sharedSecret != "" {
+		env["DISCOBOT_SECRET"] = hashSandboxSecret(sharedSecret)
+	}
+	if workspacePath != "" {
+		env["WORKSPACE_ORIGIN_PATH"] = "/.workspace"
+	}
+	if workspaceSource != "" {
+		env["WORKSPACE_SOURCE"] = workspaceSource
+	}
+	if workspaceCommit != "" {
+		env["WORKSPACE_COMMIT"] = workspaceCommit
+	}
+	if workspaceTargetRef != "" {
+		env["WORKSPACE_TARGET_REF"] = workspaceTargetRef
+	}
+	if projectID != "" {
+		env["DISCOBOT_PROJECT_ID"] = projectID
+	}
+	if mcpOAuthRedirectBase != "" {
+		env["DISCOBOT_MCP_OAUTH_REDIRECT_BASE"] = mcpOAuthRedirectBase
+	}
+	if agentServerURL != "" {
+		env["DISCOBOT_SERVER_URL"] = agentServerURL
+	}
+	return env
+}
+
+func hashSandboxSecret(secret string) string {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		salt = make([]byte, 16)
+	}
+	h := sha256.New()
+	h.Write(salt)
+	h.Write([]byte(secret))
+	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(h.Sum(nil))
 }
 
 // generateSandboxSecret generates a cryptographically secure random hex string.
@@ -394,7 +560,7 @@ func generateSandboxSecret(length int) string {
 
 // GetForSession returns the sandbox state for a session.
 func (s *SandboxService) GetForSession(ctx context.Context, sessionID string) (*sandbox.Sandbox, error) {
-	return s.provider.Get(ctx, sessionID)
+	return s.getSandbox(ctx, sessionID)
 }
 
 // Attach creates an interactive PTY session to the sandbox.
@@ -425,7 +591,7 @@ func (s *SandboxService) ExecStream(ctx context.Context, sessionID string, cmd [
 
 // StopForSession stops the sandbox for a session.
 func (s *SandboxService) StopForSession(ctx context.Context, sessionID string) error {
-	return s.provider.Stop(ctx, sessionID, 10*time.Second)
+	return s.stopSandbox(ctx, sessionID, 10*time.Second)
 }
 
 // probeSandboxHealth does a fast, single-attempt HTTP health check against the
@@ -495,7 +661,7 @@ func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID str
 }
 
 func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID string) (int, error) {
-	httpClientLease, err := sandbox.AcquireHTTPClient(ctx, s.provider, sessionID)
+	httpClientLease, err := s.acquireHTTPClient(ctx, sessionID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get HTTP client: %w", err)
 	}
@@ -524,7 +690,7 @@ func (s *SandboxService) recordSandboxHealthy(sessionID string) {
 // DestroyForSession removes the sandbox when a session is deleted.
 // This is deprecated - use SessionService.PerformDeletion instead which handles volumes.
 func (s *SandboxService) DestroyForSession(ctx context.Context, sessionID string) error {
-	err := s.provider.Remove(ctx, sessionID)
+	err := s.removeSandbox(ctx, sessionID)
 	if errors.Is(err, sandbox.ErrNotFound) {
 		// Already removed, not an error
 		return nil
@@ -628,14 +794,14 @@ func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
 
 			log.Printf("Failed to get session %s, removing orphaned sandbox: %v", sb.SessionID, err)
 			// Preserve volumes for orphaned sandboxes in case of recovery
-			if err := s.provider.Remove(ctx, sb.SessionID); err != nil {
+			if err := s.removeSandbox(ctx, sb.SessionID); err != nil {
 				log.Printf("Failed to remove orphaned sandbox for session %s: %v", sb.SessionID, err)
 			}
 			continue
 		}
 
 		// Remove the old sandbox (preserve volume for image update)
-		if err := s.provider.Remove(ctx, sb.SessionID); err != nil {
+		if err := s.removeSandbox(ctx, sb.SessionID); err != nil {
 			log.Printf("Failed to remove sandbox for session %s: %v", sb.SessionID, err)
 			continue
 		}
@@ -702,7 +868,7 @@ func (s *SandboxService) ReconcileSessionStates(ctx context.Context) error {
 	log.Printf("Reconciling state for %d active/in-progress sessions", len(activeSessions))
 
 	for _, session := range activeSessions {
-		sb, err := s.provider.Get(ctx, session.ID)
+		sb, err := s.getSandbox(ctx, session.ID)
 		if errors.Is(err, sandbox.ErrNotFound) {
 			// Sandbox doesn't exist - mark as stopped, will be recreated on demand
 			log.Printf("Session %s (status: %s) has no sandbox, marking as stopped", session.ID, session.Status)
@@ -763,7 +929,7 @@ type SandboxEndpoint struct {
 // The port is the host port mapped to sandbox port 3002.
 // The secret is the raw shared secret stored during sandbox creation.
 func (s *SandboxService) GetEndpoint(ctx context.Context, sessionID string) (*SandboxEndpoint, error) {
-	sb, err := s.provider.Get(ctx, sessionID)
+	sb, err := s.getSandbox(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sandbox: %w", err)
 	}
@@ -782,7 +948,7 @@ func (s *SandboxService) GetEndpoint(ctx context.Context, sessionID string) (*Sa
 	}
 
 	// Get the raw secret from the provider
-	secret, err := s.provider.GetSecret(ctx, sessionID)
+	secret, err := s.getSandboxSecret(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sandbox secret: %w", err)
 	}
