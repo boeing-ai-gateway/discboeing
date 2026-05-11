@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,8 +63,15 @@ func (r *SandboxProviderResolver) ResolveForSession(ctx context.Context, session
 		return r.manager.GetProvider(r.manager.DefaultProviderName())
 	}
 
-	if session.SandboxProviderID != "" {
-		return r.ResolveProjectProvider(ctx, session.ProjectID, session.SandboxProviderID)
+	providerID, err := r.store.GetSessionSandboxProviderIDIncludingDeleted(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session sandbox provider ID: %w", err)
+	}
+	if !providerID.Valid {
+		return r.manager.GetProvider(r.manager.DefaultProviderName())
+	}
+	if providerID := strings.TrimSpace(providerID.String); providerID != "" {
+		return r.ResolveProjectProvider(ctx, session.ProjectID, providerID)
 	}
 	return r.ResolveProjectDefault(ctx, session.ProjectID)
 }

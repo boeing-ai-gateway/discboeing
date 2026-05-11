@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -441,6 +442,26 @@ func (s *Store) GetSessionByIDIncludingDeleted(ctx context.Context, id string) (
 		return nil, err
 	}
 	return &session, nil
+}
+
+// GetSessionSandboxProviderIDIncludingDeleted returns the raw nullable sandbox
+// provider ID for a session, including soft-deleted rows.
+func (s *Store) GetSessionSandboxProviderIDIncludingDeleted(ctx context.Context, id string) (sql.NullString, error) {
+	var row struct {
+		SandboxProviderID sql.NullString `gorm:"column:sandbox_provider_id"`
+	}
+	if err := s.readDB.WithContext(ctx).
+		Unscoped().
+		Model(&model.Session{}).
+		Select("sandbox_provider_id").
+		Where("id = ?", id).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return sql.NullString{}, ErrNotFound
+		}
+		return sql.NullString{}, err
+	}
+	return row.SandboxProviderID, nil
 }
 
 // ListSessionsByProject returns all sessions for a project.
