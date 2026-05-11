@@ -312,7 +312,7 @@
 
 	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
 		const status = sessionObj.threadStatus?.status;
-		return status || sessionObj.status;
+		return status && status !== "idle" ? status : sessionObj.status;
 	}
 
 	function threadContextDisplayStatus(
