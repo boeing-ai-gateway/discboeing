@@ -32,8 +32,8 @@ func TestGetSystemStatusRefreshesProviderStatusesFirst(t *testing.T) {
 	systemManager.FailTask("wsl-start", errors.New("earlier bootstrap failed"))
 
 	providerCalled := false
-	sandboxManager := sandbox.NewManager()
-	sandboxManager.RegisterProvider("wsl", &statusReportingProvider{
+	sandboxProviderManager := sandbox.NewProviderManager()
+	sandboxProviderManager.RegisterProvider("wsl", &statusReportingProvider{
 		Provider: mocksandbox.NewProvider(),
 		statusFunc: func() sandbox.ProviderStatus {
 			providerCalled = true
@@ -46,7 +46,7 @@ func TestGetSystemStatusRefreshesProviderStatusesFirst(t *testing.T) {
 	})
 
 	sandboxSvc := service.NewSandboxService(nil, nil, nil, nil, nil, nil, nil)
-	sandboxSvc.SetProviderManager(sandboxManager)
+	sandboxSvc.SetProviderManager(sandboxProviderManager)
 
 	h := &Handler{sandboxService: sandboxSvc, systemManager: systemManager}
 	req := httptest.NewRequest("GET", "/api/status", nil)

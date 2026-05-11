@@ -44,7 +44,7 @@ func newSandboxProviderTestHandler(t *testing.T) (*Handler, *service.CredentialS
 		t.Fatalf("failed to create credential service: %v", err)
 	}
 
-	manager := sandbox.NewManager()
+	manager := sandbox.NewProviderManager()
 	mockProvider := mocksandbox.NewProvider()
 	manager.RegisterProvider("mock", mockProvider)
 	manager.SetDefault("mock")
@@ -338,7 +338,7 @@ func TestGetSandboxProviderResources_BuiltinAndInstance(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for built-in provider resources, got %d: %s", w.Code, w.Body.String())
 	}
-	var builtinResources service.ProjectResources
+	var builtinResources service.ProviderResources
 	if err := json.Unmarshal(w.Body.Bytes(), &builtinResources); err != nil {
 		t.Fatalf("failed to decode built-in resources: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestGetSandboxProviderResources_BuiltinAndInstance(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for provider instance resources, got %d: %s", w.Code, w.Body.String())
 	}
-	var instanceResources service.ProjectResources
+	var instanceResources service.ProviderResources
 	if err := json.Unmarshal(w.Body.Bytes(), &instanceResources); err != nil {
 		t.Fatalf("failed to decode instance resources: %v", err)
 	}
@@ -390,7 +390,7 @@ func TestUpdateSandboxProviderResources(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var response service.ProjectResourcesUpdateResult
+	var response service.ProviderResourcesUpdateResult
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}

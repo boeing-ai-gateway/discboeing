@@ -55,14 +55,14 @@ type ProjectInvitation struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// ProjectResources describes project-scoped VM resource settings.
-type ProjectResources struct {
-	Provider string             `json:"provider"`
-	VM       ProjectVMResources `json:"vm"`
+// ProviderResources describes provider VM resource settings.
+type ProviderResources struct {
+	Provider string              `json:"provider"`
+	VM       ProviderVMResources `json:"vm"`
 }
 
-// ProjectVMResources contains the effective VM resources and supported changes.
-type ProjectVMResources struct {
+// ProviderVMResources contains the effective VM resources and supported changes.
+type ProviderVMResources struct {
 	CPUCount                 int  `json:"cpuCount"`
 	MemoryMB                 int  `json:"memoryMB"`
 	DataDiskGB               int  `json:"dataDiskGB"`
@@ -73,18 +73,18 @@ type ProjectVMResources struct {
 	RestartRequiredForMemory bool `json:"restartRequiredForMemory"`
 }
 
-// UpdateProjectResourcesRequest contains project VM resource changes.
-type UpdateProjectResourcesRequest struct {
+// UpdateProviderResourcesRequest contains provider VM resource changes.
+type UpdateProviderResourcesRequest struct {
 	MemoryMB   *int `json:"memoryMB,omitempty"`
 	DataDiskGB *int `json:"dataDiskGB,omitempty"`
 }
 
-// ProjectResourcesUpdateResult describes a project resource update.
-type ProjectResourcesUpdateResult struct {
-	Provider        string             `json:"provider"`
-	Previous        ProjectVMResources `json:"previous"`
-	Current         ProjectVMResources `json:"current"`
-	RestartRequired bool               `json:"restartRequired"`
+// ProviderResourcesUpdateResult describes a provider resource update.
+type ProviderResourcesUpdateResult struct {
+	Provider        string              `json:"provider"`
+	Previous        ProviderVMResources `json:"previous"`
+	Current         ProviderVMResources `json:"current"`
+	RestartRequired bool                `json:"restartRequired"`
 }
 
 // ProjectInspection describes inspection-container access for a project.
@@ -346,12 +346,12 @@ func generateSlug(name string) string {
 	return fmt.Sprintf("%s-%s", slug, hex.EncodeToString(suffix))
 }
 
-func projectVMResourcesFromInfo(info *sandbox.ProjectResourceInfo) ProjectVMResources {
+func providerVMResourcesFromInfo(info *sandbox.ProviderResourceInfo) ProviderVMResources {
 	if info == nil {
-		return ProjectVMResources{}
+		return ProviderVMResources{}
 	}
 
-	return ProjectVMResources{
+	return ProviderVMResources{
 		CPUCount:                 info.CPUCount,
 		MemoryMB:                 info.MemoryMB,
 		DataDiskGB:               info.DataDiskGB,

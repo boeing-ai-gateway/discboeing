@@ -26,12 +26,12 @@ const DefaultMockImage = "mock:latest"
 
 // Provider is a mock sandbox provider for testing.
 type Provider struct {
-	mu               sync.RWMutex
-	sandboxes        map[string]*sandbox.Sandbox
-	secrets          map[string]string // sessionID -> raw secret
-	createOptions    map[string]sandbox.CreateOptions
-	image            string // configured sandbox image
-	projectResources map[string]sandbox.ProjectResourceInfo
+	mu                sync.RWMutex
+	sandboxes         map[string]*sandbox.Sandbox
+	secrets           map[string]string // sessionID -> raw secret
+	createOptions     map[string]sandbox.CreateOptions
+	image             string // configured sandbox image
+	providerResources map[string]sandbox.ProviderResourceInfo
 
 	// Event subscribers for Watch functionality
 	subscribersMu sync.RWMutex
@@ -57,22 +57,22 @@ type Provider struct {
 // NewProvider creates a new mock provider with default behavior.
 func NewProvider() *Provider {
 	return &Provider{
-		sandboxes:        make(map[string]*sandbox.Sandbox),
-		secrets:          make(map[string]string),
-		createOptions:    make(map[string]sandbox.CreateOptions),
-		image:            DefaultMockImage,
-		projectResources: make(map[string]sandbox.ProjectResourceInfo),
+		sandboxes:         make(map[string]*sandbox.Sandbox),
+		secrets:           make(map[string]string),
+		createOptions:     make(map[string]sandbox.CreateOptions),
+		image:             DefaultMockImage,
+		providerResources: make(map[string]sandbox.ProviderResourceInfo),
 	}
 }
 
 // NewProviderWithImage creates a new mock provider with a specific image.
 func NewProviderWithImage(image string) *Provider {
 	return &Provider{
-		sandboxes:        make(map[string]*sandbox.Sandbox),
-		secrets:          make(map[string]string),
-		createOptions:    make(map[string]sandbox.CreateOptions),
-		image:            image,
-		projectResources: make(map[string]sandbox.ProjectResourceInfo),
+		sandboxes:         make(map[string]*sandbox.Sandbox),
+		secrets:           make(map[string]string),
+		createOptions:     make(map[string]sandbox.CreateOptions),
+		image:             image,
+		providerResources: make(map[string]sandbox.ProviderResourceInfo),
 	}
 }
 
@@ -626,34 +626,34 @@ func (p *Provider) RemoveProject(_ context.Context, _ string) error {
 	return nil
 }
 
-// GetProjectResourceInfo returns the stored mock resource info for a project.
-func (p *Provider) GetProjectResourceInfo(_ context.Context, projectID string) (*sandbox.ProjectResourceInfo, error) {
+// GetProviderResourceInfo returns the stored mock resource info for a project.
+func (p *Provider) GetProviderResourceInfo(_ context.Context, projectID string) (*sandbox.ProviderResourceInfo, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	info, ok := p.projectResources[projectID]
+	info, ok := p.providerResources[projectID]
 	if !ok {
-		info = sandbox.ProjectResourceInfo{
+		info = sandbox.ProviderResourceInfo{
 			Provider:   "mock",
 			CPUCount:   4,
 			MemoryMB:   4096,
 			DataDiskGB: 100,
 		}
-		p.projectResources[projectID] = info
+		p.providerResources[projectID] = info
 	}
 
 	infoCopy := info
 	return &infoCopy, nil
 }
 
-// ApplyProjectResourceUpdate updates the stored mock resource info for a project.
-func (p *Provider) ApplyProjectResourceUpdate(_ context.Context, projectID string, req sandbox.UpdateProjectResourcesRequest) error {
+// ApplyProviderResourceUpdate updates the stored mock resource info for a project.
+func (p *Provider) ApplyProviderResourceUpdate(_ context.Context, projectID string, req sandbox.UpdateProviderResourcesRequest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	info, ok := p.projectResources[projectID]
+	info, ok := p.providerResources[projectID]
 	if !ok {
-		info = sandbox.ProjectResourceInfo{
+		info = sandbox.ProviderResourceInfo{
 			Provider:   "mock",
 			CPUCount:   4,
 			MemoryMB:   4096,
@@ -668,7 +668,7 @@ func (p *Provider) ApplyProjectResourceUpdate(_ context.Context, projectID strin
 		info.DataDiskGB = *req.DataDiskGB
 	}
 
-	p.projectResources[projectID] = info
+	p.providerResources[projectID] = info
 	return nil
 }
 

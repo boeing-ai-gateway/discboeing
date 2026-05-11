@@ -63,7 +63,7 @@ This module provides the sandbox runtime abstraction for managing execution envi
 
 ### Provider Types
 
-Provider types are the runtime capabilities known to the sandbox manager, such
+Provider types are the runtime capabilities known to the sandbox provider manager, such
 as `docker`, `vz`, `wsl`, `local`, and `exedev`. Some types are registered as
 process-wide runtime providers, while others may be registered only as
 definitions that can be instantiated from project configuration. User
@@ -75,7 +75,7 @@ may persist `sessions.sandbox_provider_id`; routing resolves that ID to either
 a built-in provider type or a configured instance type. Sessions without a
 provider ID use the project default provider when `projects.default_sandbox_provider_id`
 is set, otherwise they fall back to the process-wide default selected by the
-sandbox manager (`SANDBOX_PROVIDER` or the platform default). Workspaces do not
+sandbox provider manager (`SANDBOX_PROVIDER` or the platform default). Workspaces do not
 own sandbox provider selection.
 
 Provider definitions expose config field metadata. Credential fields may include

@@ -121,25 +121,25 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-// GetProjectResources returns project-scoped VM resources.
-func (h *Handler) GetProjectResources(w http.ResponseWriter, r *http.Request) {
+// GetProviderResources returns provider VM resources.
+func (h *Handler) GetProviderResources(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
-	resources, err := h.sandboxService.GetProjectResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName())
+	resources, err := h.sandboxService.GetProviderResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName())
 	if err != nil {
-		if errors.Is(err, sandbox.ErrProjectResourcesUnsupported) {
+		if errors.Is(err, sandbox.ErrProviderResourcesUnsupported) {
 			h.Error(w, http.StatusNotImplemented, err.Error())
 			return
 		}
-		h.Error(w, http.StatusInternalServerError, "Failed to get project resources")
+		h.Error(w, http.StatusInternalServerError, "Failed to get provider resources")
 		return
 	}
 
 	h.JSON(w, http.StatusOK, resources)
 }
 
-// UpdateProjectResources updates project-scoped VM resources.
-func (h *Handler) UpdateProjectResources(w http.ResponseWriter, r *http.Request) {
+// UpdateProviderResources updates provider VM resources.
+func (h *Handler) UpdateProviderResources(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
 	userID := middleware.GetUserID(r.Context())
@@ -149,22 +149,22 @@ func (h *Handler) UpdateProjectResources(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req service.UpdateProjectResourcesRequest
+	var req service.UpdateProviderResourcesRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	result, err := h.sandboxService.UpdateProjectResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName(), req)
+	result, err := h.sandboxService.UpdateProviderResourcesForProvider(r.Context(), projectID, h.sandboxService.DefaultProviderName(), req)
 	if err != nil {
 		var validationErr *service.RequestValidationError
 		switch {
 		case errors.As(err, &validationErr):
 			h.Error(w, http.StatusBadRequest, err.Error())
-		case errors.Is(err, sandbox.ErrProjectResourcesUnsupported):
+		case errors.Is(err, sandbox.ErrProviderResourcesUnsupported):
 			h.Error(w, http.StatusNotImplemented, err.Error())
 		default:
-			h.Error(w, http.StatusInternalServerError, "Failed to update project resources")
+			h.Error(w, http.StatusInternalServerError, "Failed to update provider resources")
 		}
 		return
 	}

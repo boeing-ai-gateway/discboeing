@@ -505,67 +505,10 @@ func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *
 	}
 }
 
-func TestSessionServicePromoteThreadStatusOnlyRaisesPriority(t *testing.T) {
+func TestSessionThreadStatusSyncerStaleSnapshotDoesNotLowerNewerSnapshot(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
-
-	workspace := &model.Workspace{
-		ID:         "workspace-thread-status",
-		ProjectID:  "project-thread-status",
-		Path:       "/workspace-thread-status",
-		SourceType: "local",
-		Status:     model.WorkspaceStatusReady,
-	}
-	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
-		t.Fatalf("failed to create workspace: %v", err)
-	}
-
-	dbSession := &model.Session{
-		ID:           "session-thread-status",
-		ProjectID:    workspace.ProjectID,
-		WorkspaceID:  workspace.ID,
-		Status:       model.SessionStatusReady,
-		ThreadStatus: model.SessionActivityStatusIdle,
-	}
-	if err := testStore.CreateSession(ctx, dbSession); err != nil {
-		t.Fatalf("failed to create session: %v", err)
-	}
-
-	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusQueued); err != nil {
-		t.Fatalf("failed to promote queued status: %v", err)
-	}
-	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusRunning); err != nil {
-		t.Fatalf("failed to promote running status: %v", err)
-	}
-	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusQueued); err != nil {
-		t.Fatalf("failed to ignore lower queued status: %v", err)
-	}
-
-	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
-	if err != nil {
-		t.Fatalf("failed to reload session: %v", err)
-	}
-	if stored.ThreadStatus != model.SessionActivityStatusRunning {
-		t.Fatalf("thread status = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusRunning)
-	}
-
-	if err := sessionSvc.SetThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusIdle); err != nil {
-		t.Fatalf("failed to set idle status: %v", err)
-	}
-	stored, err = testStore.GetSessionByID(ctx, dbSession.ID)
-	if err != nil {
-		t.Fatalf("failed to reload session after set: %v", err)
-	}
-	if stored.ThreadStatus != model.SessionActivityStatusIdle {
-		t.Fatalf("thread status after full set = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusIdle)
-	}
-}
-
-func TestSessionServiceStaleThreadSnapshotDoesNotLowerPromotion(t *testing.T) {
-	ctx := context.Background()
-	testStore := setupTestStore(t)
-	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil)
+	syncer := NewSessionThreadStatusSyncer(testStore, nil, nil, nil, time.Hour)
 
 	workspace := &model.Workspace{
 		ID:         "workspace-stale-thread-status",
@@ -590,10 +533,15 @@ func TestSessionServiceStaleThreadSnapshotDoesNotLowerPromotion(t *testing.T) {
 	}
 
 	staleObservedAt := time.Now().UTC().Add(-time.Minute)
-	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusRunning); err != nil {
-		t.Fatalf("failed to promote running status: %v", err)
+	newerObservedAt := time.Now().UTC()
+	if err := syncer.applyActivitySnapshot(ctx, workspace.ProjectID, dbSession.ID, &sandboxapi.SessionActivityResponse{
+		Status: model.SessionActivityStatusRunning,
+	}, newerObservedAt); err != nil {
+		t.Fatalf("failed to apply running snapshot: %v", err)
 	}
-	if err := sessionSvc.SetThreadStatusFromThreads(ctx, workspace.ProjectID, dbSession.ID, staleObservedAt, nil); err != nil {
+	if err := syncer.applyActivitySnapshot(ctx, workspace.ProjectID, dbSession.ID, &sandboxapi.SessionActivityResponse{
+		Status: model.SessionActivityStatusIdle,
+	}, staleObservedAt); err != nil {
 		t.Fatalf("failed to apply stale idle snapshot: %v", err)
 	}
 	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
@@ -605,7 +553,9 @@ func TestSessionServiceStaleThreadSnapshotDoesNotLowerPromotion(t *testing.T) {
 	}
 
 	freshObservedAt := time.Now().UTC().Add(time.Minute)
-	if err := sessionSvc.SetThreadStatusFromThreads(ctx, workspace.ProjectID, dbSession.ID, freshObservedAt, nil); err != nil {
+	if err := syncer.applyActivitySnapshot(ctx, workspace.ProjectID, dbSession.ID, &sandboxapi.SessionActivityResponse{
+		Status: model.SessionActivityStatusIdle,
+	}, freshObservedAt); err != nil {
 		t.Fatalf("failed to apply fresh idle snapshot: %v", err)
 	}
 	stored, err = testStore.GetSessionByID(ctx, dbSession.ID)

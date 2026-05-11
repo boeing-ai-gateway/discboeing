@@ -53,8 +53,8 @@ type Provider struct {
 	// sessionProjectResolver looks up session -> project mapping from the database.
 	sessionProjectResolver SessionProjectResolver
 
-	// projectResourceResolver returns the effective VM resources for a project.
-	projectResourceResolver ProjectResourceResolver
+	// providerResourceResolver returns the effective VM resources for a project.
+	providerResourceResolver ProviderResourceResolver
 
 	// hostDockerClient connects to the configured host Docker daemon for image
 	// transfer to VMs. On Windows this can proxy through a user-managed WSL
@@ -104,10 +104,10 @@ func WithIdleTimeout(d time.Duration) Option {
 	}
 }
 
-// WithProjectResourceResolver sets the resolver used for effective project VM resources.
-func WithProjectResourceResolver(resolver ProjectResourceResolver) Option {
+// WithProviderResourceResolver sets the resolver used for effective provider VM resources.
+func WithProviderResourceResolver(resolver ProviderResourceResolver) Option {
 	return func(p *Provider) {
-		p.projectResourceResolver = resolver
+		p.providerResourceResolver = resolver
 	}
 }
 
@@ -252,26 +252,26 @@ func (p *Provider) CleanupUnusedImages(ctx context.Context) error {
 	return firstErr
 }
 
-// GetProjectResourceInfo reports the effective VM resources for a project.
-func (p *Provider) GetProjectResourceInfo(ctx context.Context, projectID string) (*sandbox.ProjectResourceInfo, error) {
+// GetProviderResourceInfo reports the effective VM resources for a project.
+func (p *Provider) GetProviderResourceInfo(ctx context.Context, projectID string) (*sandbox.ProviderResourceInfo, error) {
 	var (
-		resources ProjectResourceConfig
+		resources ProviderResourceConfig
 		err       error
 	)
 
-	if resourceManager, ok := p.vmManager.(ProjectResourceManager); ok {
-		resources, err = resourceManager.ProjectResources(ctx, projectID)
+	if resourceManager, ok := p.vmManager.(ProviderResourceManager); ok {
+		resources, err = resourceManager.ProviderResources(ctx, projectID)
 	} else {
-		if p.projectResourceResolver == nil {
-			return nil, fmt.Errorf("project resources not supported")
+		if p.providerResourceResolver == nil {
+			return nil, fmt.Errorf("provider resources not supported")
 		}
-		resources, err = p.projectResourceResolver(ctx, projectID)
+		resources, err = p.providerResourceResolver(ctx, projectID)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &sandbox.ProjectResourceInfo{
+	return &sandbox.ProviderResourceInfo{
 		Provider:   p.providerName,
 		CPUCount:   resources.CPUCount,
 		MemoryMB:   resources.MemoryMB,
@@ -279,8 +279,8 @@ func (p *Provider) GetProjectResourceInfo(ctx context.Context, projectID string)
 	}, nil
 }
 
-// ApplyProjectResourceUpdate applies project-scoped VM resource changes.
-func (p *Provider) ApplyProjectResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProjectResourcesRequest) error {
+// ApplyProviderResourceUpdate applies provider VM resource changes.
+func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProviderResourcesRequest) error {
 	if err := p.vmManager.RemoveVM(projectID); err != nil {
 		return err
 	}

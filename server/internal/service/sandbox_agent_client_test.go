@@ -27,6 +27,7 @@ type mockSandboxProvider struct {
 	onStop    func(sessionID string) // Callback when Stop is called
 	onAcquire func(sessionID string)
 	status    sandbox.Status
+	watchFunc func(context.Context) (<-chan sandbox.StateEvent, error)
 }
 
 func (m *mockSandboxProvider) ImageExists(_ context.Context) bool {
@@ -131,7 +132,10 @@ func (r *errorReadCloser) Close() error {
 	return nil
 }
 
-func (m *mockSandboxProvider) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {
+func (m *mockSandboxProvider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error) {
+	if m.watchFunc != nil {
+		return m.watchFunc(ctx)
+	}
 	ch := make(chan sandbox.StateEvent)
 	close(ch)
 	return ch, nil
@@ -476,6 +480,43 @@ func TestSandboxAgentClient_GetStream_PreservesEventAndID(t *testing.T) {
 	}
 	if events[2].Event != "done" || !events[2].Done {
 		t.Fatalf("expected final DONE event, got %+v", events[2])
+	}
+}
+
+func TestSandboxAgentClient_StreamSessionActivity(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/threads/activity/stream" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "event: ping\n")
+			fmt.Fprint(w, "data: {}\n\n")
+			fmt.Fprint(w, "event: activity\n")
+			fmt.Fprint(w, "data: {\"status\":\"running\",\"runningCount\":1}\n\n")
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	provider := &mockSandboxProvider{secret: "test-secret", handler: handler}
+	client := NewSandboxAgentClient(provider, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := client.StreamSessionActivity(ctx, "test-session")
+	if err != nil {
+		t.Fatalf("StreamSessionActivity failed: %v", err)
+	}
+
+	var events []*sandboxapi.SessionActivityResponse
+	for event := range ch {
+		events = append(events, event)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 activity event, got %d", len(events))
+	}
+	if events[0].Status != "running" || events[0].RunningCount != 1 {
+		t.Fatalf("unexpected activity event: %+v", events[0])
 	}
 }
 

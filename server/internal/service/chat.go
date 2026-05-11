@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
@@ -28,14 +27,13 @@ type ChatService struct {
 	store          *store.Store
 	sessionService *SessionService
 	jobEnqueuer    JobEnqueuer
-	eventBroker    *events.Broker
 	sandboxService *SandboxService
 	gitService     *GitService
 	encryptor      *encryption.Encryptor
 }
 
 // NewChatService creates a new chat service.
-func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionService, jobEnqueuer JobEnqueuer, eventBroker *events.Broker, sandboxService *SandboxService, gitService *GitService) *ChatService {
+func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionService, jobEnqueuer JobEnqueuer, _ *events.Broker, sandboxService *SandboxService, gitService *GitService) *ChatService {
 	var encryptor *encryption.Encryptor
 	if cfg != nil {
 		enc, err := encryption.NewEncryptor(cfg.EncryptionKey)
@@ -48,7 +46,6 @@ func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionS
 		store:          s,
 		sessionService: sessionService,
 		jobEnqueuer:    jobEnqueuer,
-		eventBroker:    eventBroker,
 		sandboxService: sandboxService,
 		gitService:     gitService,
 		encryptor:      encryptor,
@@ -75,49 +72,6 @@ type CancelCompletionResponse struct {
 
 // ErrNoActiveCompletion is returned when attempting to cancel with no active completion.
 var ErrNoActiveCompletion = errors.New("no active completion to cancel")
-
-func (c *ChatService) promoteSessionThreadStatus(ctx context.Context, projectID, sessionID, status string) {
-	if c == nil || c.sessionService == nil {
-		return
-	}
-	if err := c.sessionService.PromoteThreadStatus(ctx, projectID, sessionID, status); err != nil {
-		log.Printf("Warning: failed to promote thread status for session %s: %v", sessionID, err)
-	}
-}
-
-func (c *ChatService) setSessionThreadStatusFromThreads(ctx context.Context, projectID, sessionID string, observedAt time.Time, threads []sandboxapi.Thread) {
-	if c == nil || c.sessionService == nil {
-		return
-	}
-	if err := c.sessionService.SetThreadStatusFromThreads(ctx, projectID, sessionID, observedAt, threads); err != nil {
-		log.Printf("Warning: failed to persist thread status for session %s: %v", sessionID, err)
-	}
-}
-
-func (c *ChatService) refreshSessionThreadStatus(ctx context.Context, projectID, sessionID string) error {
-	if c == nil || c.sessionService == nil {
-		return nil
-	}
-	if err := c.sessionService.RefreshThreadStatus(ctx, projectID, sessionID); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *ChatService) updateThreadStatusAfterChatStart(ctx context.Context, projectID, sessionID string, started *sandboxapi.ChatStartedResponse) {
-	status := threadStatusFromChatStarted(started)
-	if status == "" {
-		return
-	}
-	c.promoteSessionThreadStatus(ctx, projectID, sessionID, status)
-}
-
-func threadStatusFromChatStarted(started *sandboxapi.ChatStartedResponse) string {
-	if started != nil && started.Status == "queued" {
-		return model.SessionActivityStatusQueued
-	}
-	return model.SessionActivityStatusRunning
-}
 
 // NewSession creates a new chat session and enqueues initialization.
 // Uses the client-provided session ID.
@@ -232,7 +186,6 @@ func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threa
 	if err != nil {
 		return "", nil, err
 	}
-	c.updateThreadStatusAfterChatStart(ctx, projectID, sessionID, started)
 	if err := c.sessionService.ClearTerminalCommitState(ctx, projectID, sessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", sessionID, err)
 	}
@@ -258,7 +211,6 @@ func (c *ChatService) SendToSandbox(ctx context.Context, projectID, sessionID, t
 	if err != nil {
 		return nil, err
 	}
-	c.promoteSessionThreadStatus(ctx, projectID, sessionID, model.SessionActivityStatusRunning)
 	if err := c.sessionService.ClearTerminalCommitState(ctx, projectID, sessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", sessionID, err)
 	}
@@ -298,13 +250,7 @@ func (c *ChatService) ListThreads(ctx context.Context, projectID, sessionID stri
 		return nil, err
 	}
 
-	observedAt := time.Now().UTC()
-	result, err := client.ListThreads(ctx)
-	if err != nil {
-		return nil, err
-	}
-	c.setSessionThreadStatusFromThreads(ctx, projectID, sessionID, observedAt, result.Threads)
-	return result, nil
+	return client.ListThreads(ctx)
 }
 
 // ListCommands retrieves available slash commands for a session from the sandbox agent.
@@ -391,9 +337,6 @@ func (c *ChatService) DeleteQueuedPrompt(ctx context.Context, projectID, session
 	if err != nil {
 		return nil, err
 	}
-	if refreshErr := c.refreshSessionThreadStatus(ctx, projectID, sessionID); refreshErr != nil {
-		log.Printf("Warning: failed to refresh thread status for session %s after queue delete: %v", sessionID, refreshErr)
-	}
 	return result, nil
 }
 
@@ -414,9 +357,6 @@ func (c *ChatService) UpdateQueuedPrompt(ctx context.Context, projectID, session
 	if err != nil {
 		return nil, err
 	}
-	if refreshErr := c.refreshSessionThreadStatus(ctx, projectID, sessionID); refreshErr != nil {
-		log.Printf("Warning: failed to refresh thread status for session %s after queue update: %v", sessionID, refreshErr)
-	}
 	return result, nil
 }
 
@@ -433,13 +373,7 @@ func (c *ChatService) DeleteThread(ctx context.Context, projectID, sessionID, th
 		return nil, err
 	}
 
-	result, err := client.DeleteThread(ctx, threadID)
-	if err == nil {
-		if refreshErr := c.refreshSessionThreadStatus(ctx, projectID, sessionID); refreshErr != nil {
-			log.Printf("Warning: failed to refresh thread status for session %s after thread delete: %v", sessionID, refreshErr)
-		}
-	}
-	return result, err
+	return client.DeleteThread(ctx, threadID)
 }
 
 // CancelCompletion cancels an in-progress chat completion in the sandbox.
@@ -459,9 +393,6 @@ func (c *ChatService) CancelCompletion(ctx context.Context, projectID, sessionID
 	result, err := client.CancelCompletion(ctx, threadID)
 	if err != nil {
 		return nil, err
-	}
-	if refreshErr := c.refreshSessionThreadStatus(ctx, projectID, sessionID); refreshErr != nil {
-		log.Printf("Warning: failed to refresh thread status for session %s after cancellation: %v", sessionID, refreshErr)
 	}
 	return result, nil
 }
@@ -500,13 +431,7 @@ func (c *ChatService) AnswerQuestion(ctx context.Context, projectID, sessionID, 
 	if err != nil {
 		return nil, err
 	}
-	result, err := client.AnswerQuestion(ctx, threadID, req)
-	if err == nil {
-		if refreshErr := c.refreshSessionThreadStatus(ctx, projectID, sessionID); refreshErr != nil {
-			log.Printf("Warning: failed to refresh thread status for session %s after answer: %v", sessionID, refreshErr)
-		}
-	}
-	return result, err
+	return client.AnswerQuestion(ctx, threadID, req)
 }
 
 // ============================================================================

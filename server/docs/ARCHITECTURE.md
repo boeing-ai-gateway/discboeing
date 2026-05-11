@@ -262,23 +262,25 @@ summary on `sessions.thread_status` so project/session lists can show
 `idle`, `queued`, `running`, or `needs_attention` without waking every sandbox or
 maintaining a separate activity table.
 
-Active flows update the summary from observations they already make:
+The background session thread-status syncer owns writes to this summary, but it
+only applies snapshots reported by the sandbox agent. It does not infer activity
+from server-side chat requests or proxied chat stream chunks. The syncer receives
+sandbox lifecycle events through `SandboxService`, whose watch wrapper refreshes
+and resumes provider watches so dynamically created or removed backing providers
+are picked up. Watch replay and `running` events start an agent-go
+`GET /threads/activity/stream` subscription for the running sandbox. The agent
+stream emits one initial aggregate snapshot and then emits another snapshot
+whenever completion lifecycle, prompt queue, thread, or answer state changes. It
+also periodically emits a full snapshot while subscribed, which gives the server
+a lightweight self-healing path without relying on polling as the primary
+mechanism. This keeps visible session lists synchronized even when no UI thread
+stream is open. The syncer cancels the subscription when sandbox watch reports a
+non-running state, and it does not start stopped sandboxes.
 
-- chat start and queued prompt dispatch promote the summary to `running` or
-  `queued`;
-- stream completion-status chunks trigger a one-shot refresh from an already
-  running sandbox when a completion stops;
-- thread actions such as cancel, queue edits, answer, and delete refresh the
-  summary from the running sandbox;
-- thread lists opened by the user can persist their aggregate snapshot, guarded
-  so older snapshots do not overwrite newer prompt-start observations.
-
-A background session thread-status syncer closes the remaining observation gap:
-it periodically queries only ready sessions whose stored summary is non-terminal
-(`queued`, `running`, or `unknown`) and refreshes them from an already-running
-sandbox. Once the refreshed summary reaches a terminal state (`idle` or
-`needs_attention`), that session falls out of the poll set. The syncer does not
-start stopped sandboxes.
+The periodic poll remains only as a recovery fallback for ready sessions whose
+stored summary is non-terminal (`queued`, `running`, or `unknown`), so a missed
+stream event or transient stream failure can still settle back to `idle` or
+`needs_attention`.
 
 ## Authentication
 

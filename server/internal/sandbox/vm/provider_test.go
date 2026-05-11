@@ -6,7 +6,7 @@ import (
 )
 
 type testVMManager struct {
-	resources ProjectResourceConfig
+	resources ProviderResourceConfig
 }
 
 func (m *testVMManager) GetOrCreateVM(context.Context, string) (ProjectVM, error) { return nil, nil }
@@ -20,26 +20,26 @@ func (m *testVMManager) Ready() <-chan struct{} {
 	return ready
 }
 func (m *testVMManager) Err() error { return nil }
-func (m *testVMManager) ProjectResources(context.Context, string) (ProjectResourceConfig, error) {
+func (m *testVMManager) ProviderResources(context.Context, string) (ProviderResourceConfig, error) {
 	return m.resources, nil
 }
 
-func TestGetProjectResourceInfoUsesVMManagerEffectiveResources(t *testing.T) {
+func TestGetProviderResourceInfoUsesVMManagerEffectiveResources(t *testing.T) {
 	provider := &Provider{
 		providerName: "vz",
-		vmManager: &testVMManager{resources: ProjectResourceConfig{
+		vmManager: &testVMManager{resources: ProviderResourceConfig{
 			CPUCount:   8,
 			MemoryMB:   16384,
 			DataDiskGB: 250,
 		}},
-		projectResourceResolver: func(context.Context, string) (ProjectResourceConfig, error) {
-			return ProjectResourceConfig{}, nil
+		providerResourceResolver: func(context.Context, string) (ProviderResourceConfig, error) {
+			return ProviderResourceConfig{}, nil
 		},
 	}
 
-	info, err := provider.GetProjectResourceInfo(context.Background(), "project-1")
+	info, err := provider.GetProviderResourceInfo(context.Background(), "project-1")
 	if err != nil {
-		t.Fatalf("GetProjectResourceInfo failed: %v", err)
+		t.Fatalf("GetProviderResourceInfo failed: %v", err)
 	}
 	if info.Provider != "vz" {
 		t.Fatalf("provider = %q, want vz", info.Provider)

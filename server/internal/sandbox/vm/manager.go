@@ -65,20 +65,20 @@ type StatusReporter interface {
 	Status() sandbox.ProviderStatus
 }
 
-// ProjectResourceConfig contains effective per-project VM resource settings.
-type ProjectResourceConfig struct {
+// ProviderResourceConfig contains effective per-project VM resource settings.
+type ProviderResourceConfig struct {
 	CPUCount   int
 	MemoryMB   int
 	DataDiskGB int
 }
 
-// ProjectResourceResolver resolves effective resource settings for a project.
-type ProjectResourceResolver func(ctx context.Context, projectID string) (ProjectResourceConfig, error)
+// ProviderResourceResolver resolves effective resource settings for a project.
+type ProviderResourceResolver func(ctx context.Context, projectID string) (ProviderResourceConfig, error)
 
-// ProjectResourceManager is an optional VM manager capability for resolving
-// effective project VM resources, including provider defaults.
-type ProjectResourceManager interface {
-	ProjectResources(ctx context.Context, projectID string) (ProjectResourceConfig, error)
+// ProviderResourceManager is an optional VM manager capability for resolving
+// effective provider VM resources, including provider defaults.
+type ProviderResourceManager interface {
+	ProviderResources(ctx context.Context, projectID string) (ProviderResourceConfig, error)
 }
 
 // DiskResizer is an optional VM manager capability for growing project data disks.

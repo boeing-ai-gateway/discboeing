@@ -71,20 +71,20 @@ func (m *VMManager) defaultDataDiskGB() int {
 	return defaultDataDiskGB
 }
 
-func (m *VMManager) projectResources(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
-	resources := vm.ProjectResourceConfig{
+func (m *VMManager) providerResources(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
+	resources := vm.ProviderResourceConfig{
 		CPUCount:   m.defaultCPUCount(),
 		MemoryMB:   m.defaultMemoryMB(),
 		DataDiskGB: m.defaultDataDiskGB(),
 	}
 
-	if m.projectResourceResolver == nil {
+	if m.providerResourceResolver == nil {
 		return resources, nil
 	}
 
-	resolved, err := m.projectResourceResolver(ctx, projectID)
+	resolved, err := m.providerResourceResolver(ctx, projectID)
 	if err != nil {
-		return vm.ProjectResourceConfig{}, err
+		return vm.ProviderResourceConfig{}, err
 	}
 
 	if resolved.CPUCount > 0 {
@@ -100,9 +100,9 @@ func (m *VMManager) projectResources(ctx context.Context, projectID string) (vm.
 	return resources, nil
 }
 
-// ProjectResources returns the effective project VM resources, including defaults.
-func (m *VMManager) ProjectResources(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
-	return m.projectResources(ctx, projectID)
+// ProviderResources returns the effective provider VM resources, including defaults.
+func (m *VMManager) ProviderResources(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
+	return m.providerResources(ctx, projectID)
 }
 
 // vzProjectVM implements vm.ProjectVM for Apple Virtualization framework.
@@ -191,7 +191,7 @@ func (pvm *vzProjectVM) Shutdown() error {
 type VMManager struct {
 	config vm.Config
 
-	projectResourceResolver vm.ProjectResourceResolver
+	providerResourceResolver vm.ProviderResourceResolver
 
 	// projectVMs maps projectID -> vzProjectVM
 	projectVMs  map[string]*vzProjectVM
@@ -295,14 +295,14 @@ func (m *VMManager) Status() sandbox.ProviderStatus {
 // NewVMManager creates a new VZ VM manager.
 // If the config has KernelPath and BaseDiskPath set, the manager is ready immediately.
 // Otherwise, it starts an async download and the manager becomes ready when the download completes.
-func NewVMManager(cfg vm.Config, systemManager vm.SystemManager, resolver vm.ProjectResourceResolver) (*VMManager, error) {
+func NewVMManager(cfg vm.Config, systemManager vm.SystemManager, resolver vm.ProviderResourceResolver) (*VMManager, error) {
 	mgr := &VMManager{
-		config:                  cfg,
-		projectResourceResolver: resolver,
-		projectVMs:              make(map[string]*vzProjectVM),
-		ready:                   make(chan struct{}),
-		systemManager:           systemManager,
-		stopCh:                  make(chan struct{}),
+		config:                   cfg,
+		providerResourceResolver: resolver,
+		projectVMs:               make(map[string]*vzProjectVM),
+		ready:                    make(chan struct{}),
+		systemManager:            systemManager,
+		stopCh:                   make(chan struct{}),
 	}
 
 	needsDownload := cfg.KernelPath == "" || cfg.BaseDiskPath == ""
@@ -602,9 +602,9 @@ func (m *VMManager) Shutdown() {
 
 // createProjectVM creates and starts a new VM for a project.
 func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzProjectVM, error) {
-	resources, err := m.projectResources(ctx, projectID)
+	resources, err := m.providerResources(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve project resources: %w", err)
+		return nil, fmt.Errorf("failed to resolve provider resources: %w", err)
 	}
 
 	// Ensure data directory exists
@@ -692,7 +692,7 @@ func (m *VMManager) createProjectVM(ctx context.Context, projectID string) (*vzP
 
 // buildAndStartVM creates and starts a VM with the given disk images.
 // rootDiskPath is mounted read-only as /dev/vda, dataDiskPath is mounted read-write as /dev/vdb.
-func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string, resources vm.ProjectResourceConfig) (*vz.VirtualMachine, *vz.VirtioSocketDevice, *os.File, *os.File, error) {
+func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string, resources vm.ProviderResourceConfig) (*vz.VirtualMachine, *vz.VirtioSocketDevice, *os.File, *os.File, error) {
 	// Build kernel command line
 	// Root disk is read-only, data disk (/dev/vdb) is where writable data goes
 	cmdLine := []string{

@@ -36,21 +36,6 @@ func normalizeSessionActivityStatus(status string) string {
 	}
 }
 
-func sessionActivityPriority(status string) int {
-	switch normalizeSessionActivityStatus(status) {
-	case model.SessionActivityStatusNeedsAttention:
-		return 4
-	case model.SessionActivityStatusRunning:
-		return 3
-	case model.SessionActivityStatusQueued:
-		return 2
-	case model.SessionActivityStatusUnknown:
-		return 1
-	default:
-		return 0
-	}
-}
-
 func sessionActivityNonTerminalStatuses() []string {
 	return []string{
 		model.SessionActivityStatusQueued,
@@ -85,58 +70,4 @@ func sessionActivityStatusFromSnapshot(snapshot *sandboxapi.SessionActivityRespo
 		UnknownCount:           snapshot.UnknownCount,
 		RepresentativeThreadID: strings.TrimSpace(snapshot.RepresentativeThreadID),
 	}
-}
-
-func sessionActivityStatusFromThreads(threads []sandboxapi.Thread) *SessionActivityStatus {
-	status := &SessionActivityStatus{Status: model.SessionActivityStatusIdle}
-	for _, thread := range threads {
-		threadStatus, reason := threadActivitySummary(thread)
-		if threadStatus == model.SessionActivityStatusIdle {
-			continue
-		}
-		switch threadStatus {
-		case model.SessionActivityStatusNeedsAttention:
-			status.NeedsAttentionCount++
-		case model.SessionActivityStatusRunning:
-			status.RunningCount++
-		case model.SessionActivityStatusQueued:
-			status.QueuedCount++
-		case model.SessionActivityStatusUnknown:
-			status.UnknownCount++
-		}
-		if sessionActivityPriority(threadStatus) > sessionActivityPriority(status.Status) {
-			status.Status = threadStatus
-			status.Reason = reason
-			status.RepresentativeThreadID = strings.TrimSpace(thread.ID)
-		}
-	}
-	return status
-}
-
-func threadActivitySummary(thread sandboxapi.Thread) (string, string) {
-	if thread.ActivityStatus != nil {
-		status := normalizeSessionActivityStatus(thread.ActivityStatus.Status)
-		if status != model.SessionActivityStatusIdle {
-			return status, strings.TrimSpace(thread.ActivityStatus.Reason)
-		}
-	}
-	if thread.PendingQuestion {
-		return model.SessionActivityStatusNeedsAttention, model.SessionActivityReasonPendingQuestion
-	}
-	if strings.TrimSpace(thread.ErrorMessage) != "" {
-		return model.SessionActivityStatusNeedsAttention, model.SessionActivityReasonThreadError
-	}
-	switch strings.TrimSpace(thread.State) {
-	case model.SessionActivityReasonInterrupted:
-		return model.SessionActivityStatusNeedsAttention, model.SessionActivityReasonInterrupted
-	case model.SessionActivityReasonCancelled:
-		return model.SessionActivityStatusNeedsAttention, model.SessionActivityReasonCancelled
-	}
-	if strings.TrimSpace(thread.ActiveCommand) != "" {
-		return model.SessionActivityStatusRunning, model.SessionActivityReasonCompletion
-	}
-	if len(thread.PromptQueue) > 0 {
-		return model.SessionActivityStatusQueued, model.SessionActivityReasonQueuedPrompt
-	}
-	return model.SessionActivityStatusIdle, ""
 }

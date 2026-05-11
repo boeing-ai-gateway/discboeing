@@ -261,7 +261,6 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			h.publishThreadUpdatedEvent(ctx, projectID, sessionID, line)
-			h.observeThreadActivityEvent(ctx, projectID, sessionID, threadID, line)
 			writeStreamEvent(w, line)
 			flusher.Flush()
 		}
@@ -275,14 +274,6 @@ type streamThreadUpdateChunk struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"thread"`
-	} `json:"data"`
-}
-
-type streamCompletionStatusChunk struct {
-	Type string `json:"type"`
-	Data struct {
-		ThreadID  string `json:"threadId"`
-		IsRunning bool   `json:"isRunning"`
 	} `json:"data"`
 }
 
@@ -313,34 +304,6 @@ func (h *Handler) publishThreadUpdatedEvent(ctx context.Context, projectID, sess
 		threadName,
 	); err != nil {
 		log.Printf("[ChatStream] Failed to publish thread update event: %v", err)
-	}
-}
-
-func (h *Handler) observeThreadActivityEvent(ctx context.Context, projectID, sessionID, threadID string, line service.SSELine) {
-	if h.sessionService == nil || line.Event != "chunk" || line.Data == "" {
-		return
-	}
-
-	var chunk streamCompletionStatusChunk
-	if err := json.Unmarshal([]byte(line.Data), &chunk); err != nil {
-		return
-	}
-	if chunk.Type != "data-completion-status" {
-		return
-	}
-	if observedThreadID := strings.TrimSpace(chunk.Data.ThreadID); observedThreadID != "" && observedThreadID != threadID {
-		return
-	}
-
-	updateCtx := context.WithoutCancel(ctx)
-	var err error
-	if chunk.Data.IsRunning {
-		err = h.sessionService.PromoteThreadStatus(updateCtx, projectID, sessionID, model.SessionActivityStatusRunning)
-	} else {
-		err = h.sessionService.RefreshThreadStatus(updateCtx, projectID, sessionID)
-	}
-	if err != nil {
-		log.Printf("[ChatStream] Failed to persist thread activity for session %s: %v", sessionID, err)
 	}
 }
 

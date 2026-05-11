@@ -110,6 +110,7 @@ export type RecentThreadSummary = {
 	sessionId: string;
 	sessionName: string;
 	sessionStatus: SessionStatusValue;
+	sessionThreadStatus?: SessionThreadStatus;
 	threadId: string;
 	threadName: string;
 	state?: ThreadState;

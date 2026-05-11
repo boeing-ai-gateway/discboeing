@@ -384,37 +384,37 @@ func (s *SandboxService) ResolveSandboxRuntimeProvider(ctx context.Context, proj
 	return provider, nil
 }
 
-// GetProjectResources returns project-scoped VM resources for the default provider.
-func (s *SandboxService) GetProjectResources(ctx context.Context, projectID string) (*ProjectResources, error) {
-	return s.getProjectResources(ctx, projectID, s.provider)
+// GetProviderResources returns provider VM resources for the default provider.
+func (s *SandboxService) GetProviderResources(ctx context.Context, projectID string) (*ProviderResources, error) {
+	return s.getProviderResources(ctx, projectID, s.provider)
 }
 
-// GetProjectResourcesForProvider returns project-scoped VM resources for a project-visible provider ID.
-func (s *SandboxService) GetProjectResourcesForProvider(ctx context.Context, projectID, providerID string) (*ProjectResources, error) {
+// GetProviderResourcesForProvider returns provider VM resources for a project-visible provider ID.
+func (s *SandboxService) GetProviderResourcesForProvider(ctx context.Context, projectID, providerID string) (*ProviderResources, error) {
 	provider, err := s.ResolveSandboxRuntimeProvider(ctx, projectID, providerID)
 	if err != nil {
 		return nil, err
 	}
-	return s.getProjectResources(ctx, projectID, provider)
+	return s.getProviderResources(ctx, projectID, provider)
 }
 
-func (s *SandboxService) getProjectResources(ctx context.Context, projectID string, provider sandbox.Provider) (*ProjectResources, error) {
+func (s *SandboxService) getProviderResources(ctx context.Context, projectID string, provider sandbox.Provider) (*ProviderResources, error) {
 	if _, err := s.store.GetProjectByID(ctx, projectID); err != nil {
 		return nil, err
 	}
-	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
+	resourceManager, ok := provider.(sandbox.ProviderResourceManager)
 	if !ok {
-		return nil, sandbox.ErrProjectResourcesUnsupported
+		return nil, sandbox.ErrProviderResourcesUnsupported
 	}
-	info, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	info, err := resourceManager.GetProviderResourceInfo(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
-	return &ProjectResources{Provider: info.Provider, VM: projectVMResourcesFromInfo(info)}, nil
+	return &ProviderResources{Provider: info.Provider, VM: providerVMResourcesFromInfo(info)}, nil
 }
 
-// UpdateProjectResourcesForProvider updates project-scoped VM resources for a project-visible provider ID.
-func (s *SandboxService) UpdateProjectResourcesForProvider(ctx context.Context, projectID, providerID string, req UpdateProjectResourcesRequest) (*ProjectResourcesUpdateResult, error) {
+// UpdateProviderResourcesForProvider updates provider VM resources for a project-visible provider ID.
+func (s *SandboxService) UpdateProviderResourcesForProvider(ctx context.Context, projectID, providerID string, req UpdateProviderResourcesRequest) (*ProviderResourcesUpdateResult, error) {
 	if req.MemoryMB == nil && req.DataDiskGB == nil {
 		return nil, newValidationError("at least one resource must be provided")
 	}
@@ -426,12 +426,12 @@ func (s *SandboxService) UpdateProjectResourcesForProvider(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	resourceManager, ok := provider.(sandbox.ProjectResourceManager)
+	resourceManager, ok := provider.(sandbox.ProviderResourceManager)
 	if !ok {
-		return nil, sandbox.ErrProjectResourcesUnsupported
+		return nil, sandbox.ErrProviderResourcesUnsupported
 	}
 
-	currentInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	currentInfo, err := resourceManager.GetProviderResourceInfo(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -468,22 +468,22 @@ func (s *SandboxService) UpdateProjectResourcesForProvider(ctx context.Context, 
 		project.VZMemoryMB = previousMemory
 		project.VZDataDiskGB = previousDisk
 		if updateErr := s.store.UpdateProject(context.Background(), project); updateErr != nil {
-			log.Printf("Warning: failed to roll back project resources for %s: %v", projectID, updateErr)
+			log.Printf("Warning: failed to roll back provider resources for %s: %v", projectID, updateErr)
 		}
 	}
-	if err := resourceManager.ApplyProjectResourceUpdate(ctx, projectID, sandbox.UpdateProjectResourcesRequest{MemoryMB: req.MemoryMB, DataDiskGB: req.DataDiskGB}); err != nil {
+	if err := resourceManager.ApplyProviderResourceUpdate(ctx, projectID, sandbox.UpdateProviderResourcesRequest{MemoryMB: req.MemoryMB, DataDiskGB: req.DataDiskGB}); err != nil {
 		rollback()
 		return nil, err
 	}
-	updatedInfo, err := resourceManager.GetProjectResourceInfo(ctx, projectID)
+	updatedInfo, err := resourceManager.GetProviderResourceInfo(ctx, projectID)
 	if err != nil {
 		rollback()
 		return nil, err
 	}
-	return &ProjectResourcesUpdateResult{
+	return &ProviderResourcesUpdateResult{
 		Provider:        updatedInfo.Provider,
-		Previous:        projectVMResourcesFromInfo(currentInfo),
-		Current:         projectVMResourcesFromInfo(updatedInfo),
+		Previous:        providerVMResourcesFromInfo(currentInfo),
+		Current:         providerVMResourcesFromInfo(updatedInfo),
 		RestartRequired: true,
 	}, nil
 }

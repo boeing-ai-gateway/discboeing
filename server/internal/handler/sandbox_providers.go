@@ -439,13 +439,13 @@ func (h *Handler) DeleteSandboxProvider(w http.ResponseWriter, r *http.Request) 
 	h.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// GetSandboxProviderResources returns project-scoped resources for a sandbox provider.
+// GetSandboxProviderResources returns provider resources for a sandbox provider.
 func (h *Handler) GetSandboxProviderResources(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 	providerID := chi.URLParam(r, "providerId")
-	resources, err := h.sandboxService.GetProjectResourcesForProvider(r.Context(), projectID, providerID)
+	resources, err := h.sandboxService.GetProviderResourcesForProvider(r.Context(), projectID, providerID)
 	if err != nil {
-		if errors.Is(err, sandbox.ErrProjectResourcesUnsupported) {
+		if errors.Is(err, sandbox.ErrProviderResourcesUnsupported) {
 			h.Error(w, http.StatusNotImplemented, err.Error())
 			return
 		}
@@ -456,7 +456,7 @@ func (h *Handler) GetSandboxProviderResources(w http.ResponseWriter, r *http.Req
 	h.JSON(w, http.StatusOK, resources)
 }
 
-// UpdateSandboxProviderResources updates project-scoped resources for a sandbox provider.
+// UpdateSandboxProviderResources updates provider resources for a sandbox provider.
 func (h *Handler) UpdateSandboxProviderResources(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 	providerID := chi.URLParam(r, "providerId")
@@ -464,19 +464,19 @@ func (h *Handler) UpdateSandboxProviderResources(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var req service.UpdateProjectResourcesRequest
+	var req service.UpdateProviderResourcesRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	result, err := h.sandboxService.UpdateProjectResourcesForProvider(r.Context(), projectID, providerID, req)
+	result, err := h.sandboxService.UpdateProviderResourcesForProvider(r.Context(), projectID, providerID, req)
 	if err != nil {
 		var validationErr *service.RequestValidationError
 		switch {
 		case errors.As(err, &validationErr):
 			h.Error(w, http.StatusBadRequest, err.Error())
-		case errors.Is(err, sandbox.ErrProjectResourcesUnsupported):
+		case errors.Is(err, sandbox.ErrProviderResourcesUnsupported):
 			h.Error(w, http.StatusNotImplemented, err.Error())
 		default:
 			h.Error(w, http.StatusInternalServerError, "Failed to update sandbox provider resources")

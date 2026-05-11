@@ -49,7 +49,6 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 
 	if submission.Status == model.PromptSubmissionStatusAccepted {
 		started := promptSubmissionStartedResponse(submission)
-		c.updateThreadStatusAfterChatStart(ctx, projectID, sessionID, started)
 		return submission, started, nil
 	}
 	if submission.Status == model.PromptSubmissionStatusFailed {
@@ -62,13 +61,11 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		}
 	}
 
-	c.promoteSessionThreadStatus(ctx, projectID, sessionID, model.SessionActivityStatusQueued)
 	c.enqueuePromptDispatch(ctx, submission)
 	if err := c.DispatchPromptSubmission(ctx, submission.ID); err != nil {
 		latest, latestErr := c.store.GetPromptSubmissionByID(ctx, submission.ID)
 		if latestErr == nil && latest.Status == model.PromptSubmissionStatusAccepted {
 			started := promptSubmissionStartedResponse(latest)
-			c.updateThreadStatusAfterChatStart(ctx, projectID, sessionID, started)
 			return latest, started, nil
 		}
 		return latest, nil, err
@@ -82,7 +79,6 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 	if started == nil {
 		switch latest.Status {
 		case model.PromptSubmissionStatusPending, model.PromptSubmissionStatusDispatching:
-			c.promoteSessionThreadStatus(ctx, projectID, sessionID, model.SessionActivityStatusQueued)
 			return latest, &sandboxapi.ChatStartedResponse{Status: "queued"}, nil
 		case model.PromptSubmissionStatusFailed:
 			if latest.ErrorMessage != nil && *latest.ErrorMessage != "" {
@@ -91,7 +87,6 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		}
 		return latest, nil, fmt.Errorf("prompt dispatch did not reach sandbox")
 	}
-	c.updateThreadStatusAfterChatStart(ctx, projectID, sessionID, started)
 	return latest, started, nil
 }
 
@@ -120,7 +115,6 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 	if !claimed {
 		return nil
 	}
-	c.promoteSessionThreadStatus(ctx, submission.ProjectID, submission.SessionID, model.SessionActivityStatusQueued)
 
 	prepared, err := c.prepareChatRequest(ctx, submission.ProjectID, submission.SessionID, submission.Model, submission.Reasoning)
 	if err != nil {
@@ -154,7 +148,6 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 	if err := c.store.MarkPromptSubmissionAccepted(ctx, submission.ID, completionID, queuedPromptID); err != nil {
 		return err
 	}
-	c.updateThreadStatusAfterChatStart(ctx, submission.ProjectID, submission.SessionID, started)
 	if err := c.sessionService.ClearTerminalCommitState(ctx, submission.ProjectID, submission.SessionID); err != nil {
 		log.Printf("Warning: failed to clear terminal commit state for %s: %v", submission.SessionID, err)
 	}
@@ -281,13 +274,11 @@ func (c *ChatService) handlePromptDispatchError(ctx context.Context, submission 
 			if markErr := c.store.MarkPromptSubmissionAccepted(ctx, submission.ID, completionID, nil); markErr != nil {
 				return markErr
 			}
-			c.promoteSessionThreadStatus(ctx, submission.ProjectID, submission.SessionID, model.SessionActivityStatusRunning)
 			return nil
 		case "pending_question_requires_answer":
 			if markErr := c.store.MarkPromptSubmissionFailed(ctx, submission.ID, err.Error()); markErr != nil {
 				return markErr
 			}
-			c.promoteSessionThreadStatus(ctx, submission.ProjectID, submission.SessionID, model.SessionActivityStatusNeedsAttention)
 			return err
 		default:
 			if startErr.StatusCode >= 400 && startErr.StatusCode < 500 {
@@ -302,7 +293,6 @@ func (c *ChatService) handlePromptDispatchError(ctx context.Context, submission 
 	if releaseErr := c.store.ReleasePromptSubmissionToPending(ctx, submission.ID, stringPtr(err.Error())); releaseErr != nil {
 		return releaseErr
 	}
-	c.promoteSessionThreadStatus(ctx, submission.ProjectID, submission.SessionID, model.SessionActivityStatusQueued)
 	return err
 }
 

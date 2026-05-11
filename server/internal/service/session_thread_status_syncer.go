@@ -8,35 +8,46 @@ import (
 	"sync"
 	"time"
 
+	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
 const defaultThreadStatusSyncInterval = 10 * time.Second
 
 // SessionThreadStatusSyncer refreshes persisted session-level thread summaries
-// for sessions that are known to have non-terminal activity. Stream
-// observation handles live UI traffic; this monitor covers the case where work
-// finishes while nobody is watching the stream.
+// while sandboxes are running. Sandbox watch replay starts an agent activity
+// stream for each running sandbox; the stream sends an initial snapshot and then
+// change-driven snapshots. The poll loop remains as a recovery fallback for
+// non-terminal summaries.
 type SessionThreadStatusSyncer struct {
 	store         *store.Store
-	sessionSvc    *SessionService
+	sandboxSvc    *SandboxService
+	eventBroker   *events.Broker
 	logger        *slog.Logger
 	checkInterval time.Duration
 
 	mu           sync.Mutex
 	running      bool
+	stopping     bool
+	streams      map[string]*sessionActivityStream
 	stopChan     chan struct{}
 	wg           sync.WaitGroup
 	shutdownOnce sync.Once
 }
 
-// NewSessionThreadStatusSyncer creates a background syncer for non-terminal
-// session thread summaries.
+type sessionActivityStream struct {
+	cancel context.CancelFunc
+}
+
+// NewSessionThreadStatusSyncer creates a background syncer for session thread
+// summaries observed from running sandboxes.
 func NewSessionThreadStatusSyncer(
 	store *store.Store,
-	sessionSvc *SessionService,
+	sandboxSvc *SandboxService,
+	eventBroker *events.Broker,
 	logger *slog.Logger,
 	checkInterval time.Duration,
 ) *SessionThreadStatusSyncer {
@@ -48,9 +59,11 @@ func NewSessionThreadStatusSyncer(
 	}
 	return &SessionThreadStatusSyncer{
 		store:         store,
-		sessionSvc:    sessionSvc,
+		sandboxSvc:    sandboxSvc,
+		eventBroker:   eventBroker,
 		logger:        logger.With("component", "session_thread_status_syncer"),
 		checkInterval: checkInterval,
+		streams:       make(map[string]*sessionActivityStream),
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -67,6 +80,10 @@ func (s *SessionThreadStatusSyncer) Start(ctx context.Context) {
 
 	s.wg.Add(1)
 	go s.syncLoop(ctx)
+	if s.sandboxSvc != nil {
+		s.wg.Add(1)
+		go s.watchSandboxEvents(ctx)
+	}
 
 	s.logger.Info("session thread status syncer started", "check_interval", s.checkInterval)
 }
@@ -76,7 +93,11 @@ func (s *SessionThreadStatusSyncer) Shutdown(ctx context.Context) error {
 	var err error
 	s.shutdownOnce.Do(func() {
 		s.logger.Info("shutting down session thread status syncer")
+		s.mu.Lock()
+		s.stopping = true
+		s.mu.Unlock()
 		close(s.stopChan)
+		s.stopAllSessionActivityStreams()
 
 		done := make(chan struct{})
 		go func() {
@@ -124,8 +145,46 @@ func (s *SessionThreadStatusSyncer) syncLoop(ctx context.Context) {
 	}
 }
 
+func (s *SessionThreadStatusSyncer) watchSandboxEvents(ctx context.Context) {
+	defer s.wg.Done()
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if s.sandboxSvc == nil {
+		return
+	}
+
+	eventCh, err := s.sandboxSvc.WatchSandboxEvents(watchCtx)
+	if err != nil {
+		s.logger.Warn("failed to watch sandbox events for thread status sync", "error", err)
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("sandbox event sync stopped: context cancelled")
+			return
+		case <-s.stopChan:
+			s.logger.Info("sandbox event sync stopped: shutdown signal")
+			return
+		case event, ok := <-eventCh:
+			if !ok {
+				s.logger.Info("sandbox event sync stopped: event channel closed")
+				return
+			}
+			if event.Status == sandbox.StatusRunning {
+				s.startSessionActivityStream(ctx, event.SessionID)
+			} else {
+				s.stopSessionActivityStream(event.SessionID)
+			}
+		}
+	}
+}
+
 func (s *SessionThreadStatusSyncer) syncNonTerminalSessions(ctx context.Context) error {
-	if s == nil || s.store == nil || s.sessionSvc == nil {
+	if s == nil || s.store == nil || s.sandboxSvc == nil {
 		return nil
 	}
 
@@ -154,7 +213,7 @@ func (s *SessionThreadStatusSyncer) syncNonTerminalSessions(ctx context.Context)
 			"project_id", session.ProjectID,
 			"thread_status", session.ThreadStatus,
 		)
-		if err := s.sessionSvc.RefreshThreadStatus(ctx, session.ProjectID, session.ID); err != nil {
+		if err := s.syncRunningSession(ctx, session.ID); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -168,4 +227,207 @@ func (s *SessionThreadStatusSyncer) syncNonTerminalSessions(ctx context.Context)
 	}
 
 	return nil
+}
+
+func (s *SessionThreadStatusSyncer) syncRunningSession(ctx context.Context, sessionID string) error {
+	if s == nil || s.store == nil || s.sandboxSvc == nil || sessionID == "" {
+		return nil
+	}
+	session, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	observedAt := time.Now().UTC()
+	refreshCtx, cancel := context.WithTimeout(ctx, threadStatusRefreshTimeout)
+	defer cancel()
+	snapshot, err := s.sandboxSvc.GetSessionActivityIfRunning(refreshCtx, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.applyActivitySnapshot(ctx, session.ProjectID, session.ID, snapshot, observedAt)
+}
+
+func (s *SessionThreadStatusSyncer) startSessionActivityStream(ctx context.Context, sessionID string) {
+	if s == nil || s.sandboxSvc == nil || sessionID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	if s.stopping {
+		s.mu.Unlock()
+		return
+	}
+	if _, ok := s.streams[sessionID]; ok {
+		s.mu.Unlock()
+		return
+	}
+	streamCtx, cancel := context.WithCancel(ctx)
+	stream := &sessionActivityStream{cancel: cancel}
+	s.streams[sessionID] = stream
+	s.wg.Add(1)
+	s.mu.Unlock()
+
+	go s.streamSessionActivity(streamCtx, sessionID, stream)
+}
+
+func (s *SessionThreadStatusSyncer) stopSessionActivityStream(sessionID string) {
+	if s == nil || sessionID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	stream := s.streams[sessionID]
+	delete(s.streams, sessionID)
+	s.mu.Unlock()
+
+	if stream != nil {
+		stream.cancel()
+	}
+}
+
+func (s *SessionThreadStatusSyncer) stopAllSessionActivityStreams() {
+	if s == nil {
+		return
+	}
+
+	s.mu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(s.streams))
+	for sessionID, cancel := range s.streams {
+		cancels = append(cancels, cancel.cancel)
+		delete(s.streams, sessionID)
+	}
+	s.mu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
+func (s *SessionThreadStatusSyncer) clearSessionActivityStream(sessionID string, stream *sessionActivityStream) {
+	s.mu.Lock()
+	if current := s.streams[sessionID]; current == stream {
+		delete(s.streams, sessionID)
+	}
+	s.mu.Unlock()
+}
+
+func (s *SessionThreadStatusSyncer) streamSessionActivity(ctx context.Context, sessionID string, stream *sessionActivityStream) {
+	defer s.wg.Done()
+	defer s.clearSessionActivityStream(sessionID, stream)
+
+	session, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			s.logger.Warn("failed to load session for activity stream",
+				"session_id", sessionID,
+				"error", err,
+			)
+		}
+		return
+	}
+	projectID := session.ProjectID
+	retryDelay := min(s.checkInterval, 5*time.Second)
+	if retryDelay <= 0 {
+		retryDelay = 5 * time.Second
+	}
+	logger := s.logger.With("session_id", sessionID, "project_id", projectID)
+
+	for ctx.Err() == nil {
+		activityCh, err := s.sandboxSvc.StreamSessionActivityIfRunning(ctx, sessionID)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			if errors.Is(err, sandbox.ErrNotRunning) || errors.Is(err, store.ErrNotFound) {
+				logger.Debug("activity stream stopped: sandbox not running", "error", err)
+				return
+			}
+			logger.Warn("failed to open activity stream; falling back to snapshot",
+				"error", err,
+			)
+			if syncErr := s.syncRunningSession(ctx, sessionID); syncErr != nil && ctx.Err() == nil &&
+				!errors.Is(syncErr, sandbox.ErrNotRunning) && !errors.Is(syncErr, store.ErrNotFound) {
+				logger.Warn("fallback activity snapshot failed", "error", syncErr)
+			}
+			if !s.waitForStreamRetry(ctx, retryDelay) {
+				return
+			}
+			continue
+		}
+
+		logger.Debug("activity stream connected")
+		for snapshot := range activityCh {
+			if snapshot == nil {
+				continue
+			}
+			if err := s.applyActivitySnapshot(ctx, projectID, sessionID, snapshot, time.Now().UTC()); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Warn("failed to apply activity stream snapshot", "error", err)
+			}
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		logger.Debug("activity stream closed; reconnecting")
+		if !s.waitForStreamRetry(ctx, retryDelay) {
+			return
+		}
+	}
+}
+
+func (s *SessionThreadStatusSyncer) applyActivitySnapshot(ctx context.Context, projectID, sessionID string, snapshot *sandboxapi.SessionActivityResponse, observedAt time.Time) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	activity := sessionActivityStatusFromSnapshot(snapshot)
+	if activity == nil {
+		return nil
+	}
+	status := normalizeSessionActivityStatus(activity.Status)
+	var (
+		changed bool
+		err     error
+	)
+	if observedAt.IsZero() {
+		changed, err = s.store.UpdateSessionThreadStatus(ctx, sessionID, status)
+	} else {
+		changed, err = s.store.UpdateSessionThreadStatusIfUnchangedSince(ctx, sessionID, status, observedAt)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to update session thread status: %w", err)
+	}
+	s.publishSessionThreadStatusChanged(ctx, projectID, sessionID, changed)
+	return nil
+}
+
+func (s *SessionThreadStatusSyncer) publishSessionThreadStatusChanged(ctx context.Context, projectID, sessionID string, changed bool) {
+	if s == nil || !changed || s.eventBroker == nil {
+		return
+	}
+	logger := s.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
+		logger.Warn("failed to publish session thread status event", "error", err)
+	}
+	if err := s.eventBroker.PublishSessionThreadsUpdated(ctx, projectID, sessionID); err != nil {
+		logger.Warn("failed to publish session threads update event", "error", err)
+	}
+}
+
+func (s *SessionThreadStatusSyncer) waitForStreamRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-s.stopChan:
+		return false
+	case <-timer.C:
+		return true
+	}
 }

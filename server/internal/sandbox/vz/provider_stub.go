@@ -13,6 +13,6 @@ import (
 )
 
 // NewProvider returns an error on non-darwin platforms.
-func NewProvider(_ *config.Config, _ *vm.Config, _ vm.SessionProjectResolver, _ vm.ProjectResourceResolver, _ vm.SystemManager) (*vm.Provider, error) {
+func NewProvider(_ *config.Config, _ *vm.Config, _ vm.SessionProjectResolver, _ vm.ProviderResourceResolver, _ vm.SystemManager) (*vm.Provider, error) {
 	return nil, fmt.Errorf("vz sandbox provider is only available on macOS (darwin), current platform: %s", runtime.GOOS)
 }

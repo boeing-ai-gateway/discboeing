@@ -54,8 +54,13 @@ type responseStream struct {
 }
 
 type upgradedResponseStream struct {
-	source    io.ReadWriteCloser
-	recorder  *recorder.UpgradeStreamSession
+	source       io.ReadWriteCloser
+	recorder     *recorder.UpgradeStreamSession
+	recorderDone chan struct{}
+
+	mu        sync.Mutex
+	readDone  bool
+	writeDone bool
 	closeOnce sync.Once
 }
 
@@ -113,7 +118,7 @@ func (s *upgradedResponseStream) Read(p []byte) (int, error) {
 		s.recorder.RecordChunk(recorder.UpgradeStreamServerToClient, p[:n])
 	}
 	if err != nil {
-		s.closeRecorder()
+		s.markDirectionDone(true)
 	}
 	return n, err
 }
@@ -124,14 +129,18 @@ func (s *upgradedResponseStream) Write(p []byte) (int, error) {
 		s.recorder.RecordChunk(recorder.UpgradeStreamClientToServer, p[:n])
 	}
 	if err != nil {
-		s.closeRecorder()
+		s.markDirectionDone(false)
 	}
 	return n, err
 }
 
 func (s *upgradedResponseStream) Close() error {
 	err := s.source.Close()
-	s.closeRecorder()
+	select {
+	case <-s.recorderDone:
+	case <-time.After(250 * time.Millisecond):
+		s.closeRecorder()
+	}
 	return err
 }
 
@@ -172,7 +181,23 @@ func (s *upgradedResponseStream) closeRecorder() {
 		if s.recorder != nil {
 			_ = s.recorder.Close()
 		}
+		close(s.recorderDone)
 	})
+}
+
+func (s *upgradedResponseStream) markDirectionDone(read bool) {
+	s.mu.Lock()
+	if read {
+		s.readDone = true
+	} else {
+		s.writeDone = true
+	}
+	done := s.readDone && s.writeDone
+	s.mu.Unlock()
+
+	if done {
+		s.closeRecorder()
+	}
 }
 
 // NewHTTPProxy creates a new HTTP proxy.
@@ -334,8 +359,9 @@ func (h *HTTPProxy) setupHandlers() {
 						h.logger.Warn("failed to start upgrade stream recording", "path", ctx.Req.URL.Path, "error", err.Error())
 					} else if streamRecorder != nil {
 						resp.Body = &upgradedResponseStream{
-							source:   body,
-							recorder: streamRecorder,
+							source:       body,
+							recorder:     streamRecorder,
+							recorderDone: make(chan struct{}),
 						}
 					}
 				}

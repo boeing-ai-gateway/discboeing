@@ -100,25 +100,25 @@ type LocalityProvider interface {
 	IsLocal() bool
 }
 
-// ProjectResourceInfo describes the effective VM resources for a project.
-type ProjectResourceInfo struct {
+// ProviderResourceInfo describes the effective VM resources for a project.
+type ProviderResourceInfo struct {
 	Provider   string `json:"provider"`
 	CPUCount   int    `json:"cpuCount"`
 	MemoryMB   int    `json:"memoryMB"`
 	DataDiskGB int    `json:"dataDiskGB"`
 }
 
-// UpdateProjectResourcesRequest describes project-scoped VM resource changes.
-type UpdateProjectResourcesRequest struct {
+// UpdateProviderResourcesRequest describes provider VM resource changes.
+type UpdateProviderResourcesRequest struct {
 	MemoryMB   *int `json:"memoryMB,omitempty"`
 	DataDiskGB *int `json:"dataDiskGB,omitempty"`
 }
 
-// ProjectResourceManager is an optional provider capability for managing
-// project-scoped VM resources such as memory and data disk size.
-type ProjectResourceManager interface {
-	GetProjectResourceInfo(ctx context.Context, projectID string) (*ProjectResourceInfo, error)
-	ApplyProjectResourceUpdate(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) error
+// ProviderResourceManager is an optional provider capability for managing
+// provider VM resources such as memory and data disk size.
+type ProviderResourceManager interface {
+	GetProviderResourceInfo(ctx context.Context, projectID string) (*ProviderResourceInfo, error)
+	ApplyProviderResourceUpdate(ctx context.Context, projectID string, req UpdateProviderResourcesRequest) error
 }
 
 // ProjectInspectionInfo describes host-inspection container access for a project.

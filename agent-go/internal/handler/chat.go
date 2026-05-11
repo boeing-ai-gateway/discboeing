@@ -608,6 +608,7 @@ func (h *Handler) PostAnswer(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
+	h.notifyActivityChanged()
 
 	// Track as answered for status polling.
 	h.answeredMu.Lock()

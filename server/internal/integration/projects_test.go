@@ -148,7 +148,7 @@ func TestDeleteProject(t *testing.T) {
 	AssertStatus(t, resp, http.StatusForbidden) // No longer a member since project is deleted
 }
 
-func TestGetProjectResources(t *testing.T) {
+func TestGetProviderResources(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -179,7 +179,7 @@ func TestGetProjectResources(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectResources(t *testing.T) {
+func TestUpdateProviderResources(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -223,7 +223,7 @@ func TestUpdateProjectResources(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectResources_DiskCannotDecrease(t *testing.T) {
+func TestUpdateProviderResources_DiskCannotDecrease(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -238,7 +238,7 @@ func TestUpdateProjectResources_DiskCannotDecrease(t *testing.T) {
 	AssertStatus(t, resp, http.StatusBadRequest)
 }
 
-func TestUpdateProjectResources_MemoryMustBeWholeGiB(t *testing.T) {
+func TestUpdateProviderResources_MemoryMustBeWholeGiB(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")

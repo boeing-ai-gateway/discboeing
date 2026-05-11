@@ -564,8 +564,7 @@ func (s *Store) UpdateSessionThreadStatus(ctx context.Context, id, status string
 
 // UpdateSessionThreadStatusIfUnchangedSince updates the session-level thread
 // summary only when the session row has not changed since the snapshot request
-// started. This prevents older full snapshots from lowering a newer promoted
-// status, such as an idle thread-list response racing with a new prompt start.
+// started. This prevents older snapshots from overwriting newer stream events.
 func (s *Store) UpdateSessionThreadStatusIfUnchangedSince(ctx context.Context, id, status string, observedAt time.Time) (bool, error) {
 	if observedAt.IsZero() {
 		return s.UpdateSessionThreadStatus(ctx, id, status)
@@ -574,40 +573,6 @@ func (s *Store) UpdateSessionThreadStatusIfUnchangedSince(ctx context.Context, i
 	result := s.writeDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where("id = ? AND (updated_at IS NULL OR updated_at <= ?) AND (thread_status IS NULL OR thread_status <> ?)", id, observedAt, status).
-		Updates(map[string]any{
-			"thread_status": status,
-			"updated_at":    now,
-		})
-	if result.Error != nil {
-		return false, result.Error
-	}
-	return result.RowsAffected > 0, nil
-}
-
-// PromoteSessionThreadStatus updates the persisted session-level thread summary
-// only when the new status has a higher priority than the currently stored
-// status. The comparison happens in SQL so concurrent partial observations
-// cannot lower a previously promoted summary.
-func (s *Store) PromoteSessionThreadStatus(ctx context.Context, id, status string, priority int) (bool, error) {
-	now := time.Now().UTC()
-	result := s.writeDB.WithContext(ctx).
-		Model(&model.Session{}).
-		Where(
-			`id = ? AND CASE thread_status
-				WHEN ? THEN ?
-				WHEN ? THEN ?
-				WHEN ? THEN ?
-				WHEN ? THEN ?
-				ELSE ?
-			END < ?`,
-			id,
-			model.SessionActivityStatusNeedsAttention, 4,
-			model.SessionActivityStatusRunning, 3,
-			model.SessionActivityStatusQueued, 2,
-			model.SessionActivityStatusUnknown, 1,
-			0,
-			priority,
-		).
 		Updates(map[string]any{
 			"thread_status": status,
 			"updated_at":    now,

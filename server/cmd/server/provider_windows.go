@@ -15,9 +15,9 @@ import (
 
 func registerPrimarySandboxProvider(
 	cfg *config.Config,
-	sandboxManager *sandbox.Manager,
+	sandboxProviderManager *sandbox.ProviderManager,
 	sessionProjectResolver func(context.Context, string) (string, error),
-	_ vm.ProjectResourceResolver,
+	_ vm.ProviderResourceResolver,
 	systemManager *startup.SystemManager,
 ) {
 	if cfg.WSLRootfsPath != "" {
@@ -32,6 +32,6 @@ func registerPrimarySandboxProvider(
 		return
 	}
 
-	sandboxManager.RegisterProvider("wsl", wslProvider)
+	sandboxProviderManager.RegisterProvider("wsl", wslProvider)
 	log.Printf("WSL sandbox provider initialized (state: %s)", wslProvider.Status().State)
 }

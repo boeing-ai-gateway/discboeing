@@ -98,6 +98,9 @@ export function createAppSessionsDomain(
 						sessionId: savedEntry.sessionId,
 						sessionName: session.displayName || session.name,
 						sessionStatus: session.status,
+						...(session.threadStatus
+							? { sessionThreadStatus: session.threadStatus }
+							: {}),
 						threadId: liveThread.id,
 						threadName: liveThread.name,
 						...(liveThread.state ? { state: liveThread.state } : {}),
@@ -126,6 +129,9 @@ export function createAppSessionsDomain(
 				sessionId: savedEntry.sessionId,
 				sessionName: fallbackSessionName,
 				sessionStatus: fallbackSessionStatus,
+				...(session?.threadStatus
+					? { sessionThreadStatus: session.threadStatus }
+					: {}),
 				threadId: savedEntry.threadId,
 				threadName: fallbackThreadName,
 				lastAccessedAt: savedEntry.lastAccessedAt,

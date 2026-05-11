@@ -149,6 +149,50 @@ func TestGetSessionActivityIfRunningDoesNotStartStoppedSandbox(t *testing.T) {
 	}
 }
 
+func TestSandboxServiceStartSyncsSessionStateFromSandboxEvents(t *testing.T) {
+	ctx := context.Background()
+	st := setupTestStore(t)
+	sessionID := "event-session"
+	createTestSession(t, st, sessionID, t.TempDir())
+
+	events := make(chan sandbox.StateEvent, 1)
+	provider := newImageIDAwareReconcileProvider(testImage, "image-id")
+	provider.watchEvents = events
+	provider.watchStarted = make(chan struct{})
+	svc := NewSandboxService(st, provider, &config.Config{}, nil, nil, nil, nil)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- svc.Start(ctx)
+	}()
+
+	select {
+	case <-provider.watchStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for sandbox service watch to start")
+	}
+
+	events <- sandbox.StateEvent{SessionID: sessionID, Status: sandbox.StatusStopped}
+	close(events)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("sandbox service start returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for sandbox service watch to stop")
+	}
+
+	session, err := st.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("failed to get session: %v", err)
+	}
+	if session.Status != model.SessionStatusStopped {
+		t.Fatalf("session.Status = %q, want %q", session.Status, model.SessionStatusStopped)
+	}
+}
+
 type imageIDAwareReconcileProvider struct {
 	sandboxes         map[string]*sandbox.Sandbox
 	configuredImage   string
@@ -157,6 +201,8 @@ type imageIDAwareReconcileProvider struct {
 	startCount        int
 	removeCount       int
 	cleanupCalls      int
+	watchEvents       chan sandbox.StateEvent
+	watchStarted      chan struct{}
 }
 
 func newImageIDAwareReconcileProvider(image, imageID string) *imageIDAwareReconcileProvider {
@@ -261,7 +307,32 @@ func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ [
 	return &sandbox.HTTPClientLease{Client: &http.Client{}}, nil
 }
 
-func (p *imageIDAwareReconcileProvider) Watch(_ context.Context) (<-chan sandbox.StateEvent, error) {
+func (p *imageIDAwareReconcileProvider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error) {
+	if p.watchEvents != nil {
+		if p.watchStarted != nil {
+			close(p.watchStarted)
+		}
+		out := make(chan sandbox.StateEvent)
+		go func() {
+			defer close(out)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case event, ok := <-p.watchEvents:
+					if !ok {
+						return
+					}
+					select {
+					case out <- event:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}()
+		return out, nil
+	}
 	ch := make(chan sandbox.StateEvent)
 	close(ch)
 	return ch, nil

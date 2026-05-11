@@ -371,6 +371,10 @@
 		if (activityStatus && activityStatus !== "idle") {
 			return activityStatus;
 		}
+		const sessionThreadStatus = threadObj.sessionThreadStatus?.status;
+		if (sessionThreadStatus && sessionThreadStatus !== "idle") {
+			return sessionThreadStatus;
+		}
 		if (threadObj.state === "interrupted" || threadObj.state === "cancelled") {
 			return "needs_attention";
 		}

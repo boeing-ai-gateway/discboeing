@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -12,6 +14,8 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/promptqueue"
 )
+
+const defaultActivityStreamSnapshotInterval = time.Minute
 
 func (h *Handler) requireConversations(w http.ResponseWriter) bool {
 	if h.threadManager == nil {
@@ -143,6 +147,21 @@ func (h *Handler) sessionActivityResponse(threads []api.Thread) api.SessionActiv
 	return resp
 }
 
+func (h *Handler) sessionActivitySnapshot() (api.SessionActivityResponse, error) {
+	infos, err := h.threadManager.ListThreadInfos()
+	if err != nil {
+		return api.SessionActivityResponse{}, err
+	}
+	sort.Slice(infos, func(i, j int) bool { return infos[i].ID < infos[j].ID })
+
+	threads := make([]api.Thread, 0, len(infos))
+	for _, info := range infos {
+		threads = append(threads, h.threadResponse(info))
+	}
+
+	return h.sessionActivityResponse(threads), nil
+}
+
 func (h *Handler) applyThreadStateOverlay(info *agent.ThreadInfo) {
 	if info == nil || h.conversations == nil || strings.TrimSpace(info.ID) == "" {
 		return
@@ -216,19 +235,104 @@ func (h *Handler) GetSessionActivity(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	infos, err := h.threadManager.ListThreadInfos()
+	snapshot, err := h.sessionActivitySnapshot()
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	sort.Slice(infos, func(i, j int) bool { return infos[i].ID < infos[j].ID })
 
-	threads := make([]api.Thread, 0, len(infos))
-	for _, info := range infos {
-		threads = append(threads, h.threadResponse(info))
+	h.JSON(w, http.StatusOK, snapshot)
+}
+
+// StreamSessionActivity handles GET /threads/activity/stream. The stream emits
+// one initial aggregate snapshot, then emits another snapshot whenever agent
+// state changes in a way that may affect session activity.
+func (h *Handler) StreamSessionActivity(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversations(w) {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.Error(w, http.StatusInternalServerError, "streaming not supported")
+		return
 	}
 
-	h.JSON(w, http.StatusOK, h.sessionActivityResponse(threads))
+	var changes <-chan struct{}
+	unsubscribe := func() {}
+	if h.activity != nil {
+		changes, unsubscribe = h.activity.Subscribe()
+	}
+	defer unsubscribe()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	writeSnapshot := func() bool {
+		snapshot, err := h.sessionActivitySnapshot()
+		if err != nil {
+			log.Printf("activity stream: failed to build session activity snapshot: %v", err)
+			data, marshalErr := json.Marshal(api.ErrorResponse{Error: err.Error()})
+			if marshalErr == nil {
+				writeSSEEvent(w, "", "error", data)
+				flusher.Flush()
+			}
+			return false
+		}
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			log.Printf("activity stream: failed to marshal session activity snapshot: %v", err)
+			return false
+		}
+		writeSSEEvent(w, "", "activity", data)
+		flusher.Flush()
+		return true
+	}
+
+	if !writeSnapshot() {
+		return
+	}
+
+	pingEvery := h.chatPingEvery
+	if pingEvery <= 0 {
+		pingEvery = defaultChatStreamPingInterval
+	}
+	pingTicker := time.NewTicker(pingEvery)
+	defer pingTicker.Stop()
+
+	activityEvery := h.activityEvery
+	if activityEvery <= 0 {
+		activityEvery = defaultActivityStreamSnapshotInterval
+	}
+	activityTicker := time.NewTicker(activityEvery)
+	defer activityTicker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-changes:
+			for {
+				select {
+				case <-changes:
+					continue
+				default:
+				}
+				break
+			}
+			if !writeSnapshot() {
+				return
+			}
+		case <-activityTicker.C:
+			if !writeSnapshot() {
+				return
+			}
+		case <-pingTicker.C:
+			writeSSEEvent(w, "", "ping", json.RawMessage(`{}`))
+			flusher.Flush()
+		}
+	}
 }
 
 // CreateThread handles POST /threads — creates a new thread.
@@ -261,6 +365,7 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.notifyActivityChanged()
 	h.JSON(w, http.StatusCreated, h.threadResponse(info))
 }
 
@@ -338,6 +443,7 @@ func (h *Handler) DeleteThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.notifyActivityChanged()
 	h.JSON(w, http.StatusOK, api.DeleteThreadResponse{Success: true})
 }
 

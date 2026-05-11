@@ -165,15 +165,15 @@ func NewTestServer(t *testing.T) *TestServer {
 	}
 	eventBroker := events.NewBroker(s, eventPoller)
 
-	// Create sandbox manager and register mock provider
-	sandboxManager := sandbox.NewManager()
-	sandboxManager.RegisterProvider("mock", mockSandbox)
+	// Create sandbox provider manager and register mock provider
+	sandboxProviderManager := sandbox.NewProviderManager()
+	sandboxProviderManager.RegisterProvider("mock", mockSandbox)
 
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
 
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
-	sandboxSvc.SetProviderManager(sandboxManager)
+	sandboxSvc.SetProviderManager(sandboxProviderManager)
 
 	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
 
@@ -275,8 +275,8 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 			r.Get("/", h.GetProject)
 			r.Put("/", h.UpdateProject)
 			r.Delete("/", h.DeleteProject)
-			r.Get("/resources", h.GetProjectResources)
-			r.Post("/resources", h.UpdateProjectResources)
+			r.Get("/resources", h.GetProviderResources)
+			r.Post("/resources", h.UpdateProviderResources)
 			r.Get("/inspection", h.GetProjectInspection)
 			r.Get("/inspection/terminal/ws", h.ProjectInspectionTerminalWebSocket)
 			r.Get("/sandbox-provider-types", h.ListSandboxProviderTypes)
@@ -472,15 +472,15 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	}
 	eventBroker := events.NewBroker(s, eventPoller)
 
-	// Create sandbox manager and register mock provider
-	sandboxManager := sandbox.NewManager()
-	sandboxManager.RegisterProvider("mock", mockSandbox)
+	// Create sandbox provider manager and register mock provider
+	sandboxProviderManager := sandbox.NewProviderManager()
+	sandboxProviderManager.RegisterProvider("mock", mockSandbox)
 
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
 
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
-	sandboxSvc.SetProviderManager(sandboxManager)
+	sandboxSvc.SetProviderManager(sandboxProviderManager)
 
 	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
 

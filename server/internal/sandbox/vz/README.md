@@ -320,7 +320,7 @@ mount /dev/vdb /var/lib/docker
 
 # Grow the filesystem after the host expands the sparse disk image.
 # The block device can get larger across restarts when the project data
-# disk is increased via the project resources API.
+# disk is increased via the provider resources API.
 resize2fs /dev/vdb || true
 
 # Start Docker daemon (data goes to /var/lib/docker on data disk)

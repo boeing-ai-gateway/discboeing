@@ -5,15 +5,35 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
+
+func setupThreadStatusSyncerAsyncStore(t *testing.T) *store.Store {
+	t.Helper()
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "syncer.db")), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("failed to create test database: %v", err)
+	}
+	if err := db.AutoMigrate(model.AllModels()...); err != nil {
+		t.Fatalf("failed to migrate test database: %v", err)
+	}
+	return store.New(db, nil)
+}
 
 func createThreadStatusSyncerFixtures(ctx context.Context, t *testing.T, st *store.Store) {
 	t.Helper()
@@ -51,8 +71,7 @@ func createThreadStatusSyncerSession(ctx context.Context, t *testing.T, st *stor
 
 func newThreadStatusSyncerForTest(st *store.Store, provider *mockSandboxProvider) *SessionThreadStatusSyncer {
 	sandboxSvc := NewSandboxService(st, provider, &config.Config{}, nil, nil, nil, nil)
-	sessionSvc := NewSessionService(st, nil, sandboxSvc, nil, nil)
-	return NewSessionThreadStatusSyncer(st, sessionSvc, slog.Default(), time.Hour)
+	return NewSessionThreadStatusSyncer(st, sandboxSvc, nil, slog.Default(), time.Hour)
 }
 
 func TestSessionThreadStatusSyncerPollsOnlyNonTerminalSessions(t *testing.T) {
@@ -153,6 +172,75 @@ func TestSessionThreadStatusSyncerStopsPollingTerminalSummary(t *testing.T) {
 	}
 	if got := requests.Load(); got != 1 {
 		t.Fatalf("expected terminal summary to fall out of poll set, got %d requests", got)
+	}
+}
+
+func TestSessionThreadStatusSyncerSyncsRunningSandboxEvent(t *testing.T) {
+	ctx := context.Background()
+	st := setupThreadStatusSyncerAsyncStore(t)
+	createThreadStatusSyncerFixtures(ctx, t, st)
+
+	var requests atomic.Int32
+	events := make(chan sandbox.StateEvent, 1)
+	provider := &mockSandboxProvider{
+		secret: "test-secret",
+		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/threads/activity/stream":
+				requests.Add(1)
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "event: activity\n")
+				fmt.Fprint(w, "data: {\"status\":\"running\",\"runningCount\":1}\n\n")
+			case "/threads/activity":
+				requests.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"status":"running","runningCount":1}`)
+			default:
+				http.NotFound(w, r)
+			}
+		}),
+		watchFunc: func(context.Context) (<-chan sandbox.StateEvent, error) {
+			return events, nil
+		},
+	}
+
+	createThreadStatusSyncerSession(ctx, t, st, "idle-running-session", model.SessionStatusReady, model.SessionActivityStatusIdle)
+
+	syncer := newThreadStatusSyncerForTest(st, provider)
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	syncer.Start(runCtx)
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+		defer shutdownCancel()
+		if err := syncer.Shutdown(shutdownCtx); err != nil {
+			t.Fatalf("syncer shutdown failed: %v", err)
+		}
+	}()
+
+	events <- sandbox.StateEvent{SessionID: "idle-running-session", Status: sandbox.StatusRunning}
+
+	deadline := time.After(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		session, err := st.GetSessionByID(ctx, "idle-running-session")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if session.ThreadStatus == model.SessionActivityStatusRunning {
+			break
+		}
+
+		select {
+		case <-deadline:
+			t.Fatalf("expected running sandbox event to refresh idle summary, got %q", session.ThreadStatus)
+		case <-ticker.C:
+		}
+	}
+
+	if got := requests.Load(); got < 1 {
+		t.Fatalf("expected at least one activity request for running sandbox event, got %d", got)
 	}
 }
 

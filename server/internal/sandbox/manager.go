@@ -2,11 +2,17 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/obot-platform/discobot/server/internal/store"
 )
 
 // PlatformDefaultProvider returns the default sandbox provider for the current OS.
@@ -23,50 +29,102 @@ func PlatformDefaultProvider() string {
 	return "docker"
 }
 
-// Manager manages multiple sandbox providers and routes requests to the appropriate one.
-type Manager struct {
-	providers       map[string]Provider
-	definitions     map[string]ProviderDefinition
-	defaultProvider string // Default provider name
+// ProviderManager manages multiple sandbox providers and routes requests to the appropriate one.
+type ProviderManager struct {
+	mu                 sync.RWMutex
+	store              *store.Store
+	providers          map[string]Provider
+	instanceProviders  map[string]Provider
+	definitions        map[string]ProviderDefinition
+	defaultProvider    string // Default provider name
+	factories          map[string]ProviderFactory
+	cache              map[string]cachedProvider
+	nextProviderSubID  int
+	providerUpdateSubs map[int]chan struct{}
 }
 
-// NewManager creates a new sandbox provider manager.
+// ProviderFactory builds a runtime provider from a project-scoped saved
+// provider instance.
+type ProviderFactory func(ctx context.Context, instance *model.SandboxProviderInstance) (Provider, error)
+
+type cachedProvider struct {
+	provider  Provider
+	updatedAt time.Time
+}
+
+// NewProviderManager creates a new sandbox provider manager.
 // The default provider is determined by the platform: "vz" on macOS, "docker" elsewhere.
-func NewManager() *Manager {
-	return &Manager{
-		providers:       make(map[string]Provider),
-		definitions:     make(map[string]ProviderDefinition),
-		defaultProvider: PlatformDefaultProvider(),
+func NewProviderManager() *ProviderManager {
+	return &ProviderManager{
+		providers:          make(map[string]Provider),
+		instanceProviders:  make(map[string]Provider),
+		definitions:        make(map[string]ProviderDefinition),
+		defaultProvider:    PlatformDefaultProvider(),
+		factories:          make(map[string]ProviderFactory),
+		cache:              make(map[string]cachedProvider),
+		providerUpdateSubs: make(map[int]chan struct{}),
 	}
 }
 
+// SetStore configures the store used to resolve project-scoped provider
+// instances for sessions.
+func (m *ProviderManager) SetStore(s *store.Store) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.store = s
+}
+
 // RegisterProvider registers a provider with the given name.
-func (m *Manager) RegisterProvider(name string, provider Provider) {
+func (m *ProviderManager) RegisterProvider(name string, provider Provider) {
+	m.mu.Lock()
 	m.providers[name] = provider
 	if dp, ok := provider.(DefinitionProvider); ok {
 		m.definitions[name] = dp.Definition()
 	}
+	m.mu.Unlock()
+
+	m.notifyProviderUpdate()
+}
+
+// RegisterFactory registers a factory for project-scoped provider instances of
+// the given type.
+func (m *ProviderManager) RegisterFactory(providerType string, factory ProviderFactory) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if factory == nil {
+		delete(m.factories, providerType)
+		return
+	}
+	m.factories[providerType] = factory
 }
 
 // RegisterProviderDefinition registers configurable provider type metadata
 // without registering a process-wide provider instance.
-func (m *Manager) RegisterProviderDefinition(name string, definition ProviderDefinition) {
+func (m *ProviderManager) RegisterProviderDefinition(name string, definition ProviderDefinition) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.definitions[name] = definition
 }
 
 // SetDefault sets the default provider name.
-func (m *Manager) SetDefault(name string) {
+func (m *ProviderManager) SetDefault(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.defaultProvider = name
 }
 
 // DefaultProviderName returns the name of the current default provider.
-func (m *Manager) DefaultProviderName() string {
+func (m *ProviderManager) DefaultProviderName() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.defaultProvider
 }
 
 // EnsureDefaultAvailable checks that the default provider is registered.
 // If not, it falls back to any registered provider. Returns false if no providers are registered.
-func (m *Manager) EnsureDefaultAvailable() bool {
+func (m *ProviderManager) EnsureDefaultAvailable() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, ok := m.providers[m.defaultProvider]; ok {
 		return true
 	}
@@ -79,7 +137,9 @@ func (m *Manager) EnsureDefaultAvailable() bool {
 }
 
 // GetProvider returns the provider with the given name.
-func (m *Manager) GetProvider(name string) (Provider, error) {
+func (m *ProviderManager) GetProvider(name string) (Provider, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if name == "" {
 		name = m.defaultProvider
 	}
@@ -93,13 +153,15 @@ func (m *Manager) GetProvider(name string) (Provider, error) {
 }
 
 // GetDefault returns the default provider.
-func (m *Manager) GetDefault() Provider {
+func (m *ProviderManager) GetDefault() Provider {
 	provider, _ := m.GetProvider(m.defaultProvider)
 	return provider
 }
 
 // ListProviders returns the names of all registered providers.
-func (m *Manager) ListProviders() []string {
+func (m *ProviderManager) ListProviders() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var names []string
 	for name := range m.providers {
 		names = append(names, name)
@@ -110,8 +172,10 @@ func (m *Manager) ListProviders() []string {
 // GetProviderStatus returns the status of a specific provider.
 // If the provider implements StatusProvider, its Status() is called.
 // Otherwise, a default "ready" status is returned.
-func (m *Manager) GetProviderStatus(name string) (ProviderStatus, bool) {
+func (m *ProviderManager) GetProviderStatus(name string) (ProviderStatus, bool) {
+	m.mu.RLock()
 	provider, ok := m.providers[name]
+	m.mu.RUnlock()
 	if !ok {
 		return ProviderStatus{}, false
 	}
@@ -124,7 +188,7 @@ func (m *Manager) GetProviderStatus(name string) (ProviderStatus, bool) {
 		status = sp.Status()
 	}
 
-	_, status.SupportsResources = provider.(ProjectResourceManager)
+	_, status.SupportsResources = provider.(ProviderResourceManager)
 	_, status.SupportsInspection = provider.(ProjectInspectionManager)
 	_, status.SupportsClearCache = provider.(ProjectCacheManager)
 
@@ -132,11 +196,14 @@ func (m *Manager) GetProviderStatus(name string) (ProviderStatus, bool) {
 }
 
 // GetProviderDefinition returns the driver metadata for a registered provider.
-func (m *Manager) GetProviderDefinition(name string) (ProviderDefinition, bool) {
+func (m *ProviderManager) GetProviderDefinition(name string) (ProviderDefinition, bool) {
+	m.mu.RLock()
 	if definition, ok := m.definitions[name]; ok {
+		m.mu.RUnlock()
 		return definition, true
 	}
 	provider, ok := m.providers[name]
+	m.mu.RUnlock()
 	if !ok {
 		return ProviderDefinition{}, false
 	}
@@ -150,7 +217,9 @@ func (m *Manager) GetProviderDefinition(name string) (ProviderDefinition, bool) 
 }
 
 // ListProviderDefinitions returns all registered provider type definitions.
-func (m *Manager) ListProviderDefinitions() map[string]ProviderDefinition {
+func (m *ProviderManager) ListProviderDefinitions() map[string]ProviderDefinition {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	definitions := make(map[string]ProviderDefinition, len(m.definitions)+len(m.providers))
 	maps.Copy(definitions, m.definitions)
 	for name, provider := range m.providers {
@@ -170,10 +239,20 @@ func (m *Manager) ListProviderDefinitions() map[string]ProviderDefinition {
 }
 
 // ListProviderStatuses returns the status of all registered providers.
-func (m *Manager) ListProviderStatuses() map[string]ProviderStatus {
-	statuses := make(map[string]ProviderStatus, len(m.providers))
-	for name := range m.providers {
-		status, _ := m.GetProviderStatus(name)
+func (m *ProviderManager) ListProviderStatuses() map[string]ProviderStatus {
+	providers := m.snapshotProviders()
+	statuses := make(map[string]ProviderStatus, len(providers))
+	for name, provider := range providers {
+		status := ProviderStatus{
+			Available: true,
+			State:     "ready",
+		}
+		if sp, ok := provider.(StatusProvider); ok {
+			status = sp.Status()
+		}
+		_, status.SupportsResources = provider.(ProviderResourceManager)
+		_, status.SupportsInspection = provider.(ProjectInspectionManager)
+		_, status.SupportsClearCache = provider.(ProjectCacheManager)
 		statuses[name] = status
 	}
 	return statuses
@@ -181,8 +260,8 @@ func (m *Manager) ListProviderStatuses() map[string]ProviderStatus {
 
 // Shutdown gracefully shuts down all providers that support cleanup.
 // Providers implementing a Close() method will have it called.
-func (m *Manager) Shutdown() {
-	for name, provider := range m.providers {
+func (m *ProviderManager) Shutdown() {
+	for name, provider := range m.snapshotWatchProviders() {
 		// Check if provider implements Close() method using type assertion
 		if closer, ok := provider.(interface{ Close() error }); ok {
 			if err := closer.Close(); err != nil {
@@ -194,19 +273,197 @@ func (m *Manager) Shutdown() {
 	}
 }
 
+func (m *ProviderManager) snapshotProviders() map[string]Provider {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	providers := make(map[string]Provider, len(m.providers))
+	maps.Copy(providers, m.providers)
+	return providers
+}
+
+func (m *ProviderManager) snapshotWatchProviders() map[string]Provider {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	providers := make(map[string]Provider, len(m.providers)+len(m.instanceProviders))
+	maps.Copy(providers, m.providers)
+	maps.Copy(providers, m.instanceProviders)
+	return providers
+}
+
+// ResolveForSession returns the provider that should manage a session.
+func (m *ProviderManager) ResolveForSession(ctx context.Context, sessionID string) (Provider, error) {
+	m.mu.RLock()
+	st := m.store
+	m.mu.RUnlock()
+	if st == nil {
+		return nil, fmt.Errorf("sandbox provider manager store unavailable")
+	}
+
+	// Include soft-deleted sessions so deferred sandbox cleanup can still route to
+	// the right provider after the session has been removed from the database.
+	session, err := st.GetSessionByIDIncludingDeleted(ctx, sessionID)
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			return nil, fmt.Errorf("failed to get session: %w", err)
+		}
+		// Session is completely gone (not even soft-deleted) — fall back to the
+		// default provider for best-effort sandbox cleanup.
+		return m.GetProvider(m.DefaultProviderName())
+	}
+
+	providerID, err := st.GetSessionSandboxProviderIDIncludingDeleted(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session sandbox provider ID: %w", err)
+	}
+	if !providerID.Valid {
+		return m.GetProvider(m.DefaultProviderName())
+	}
+	if providerID := strings.TrimSpace(providerID.String); providerID != "" {
+		return m.resolveProjectProvider(ctx, st, session.ProjectID, providerID)
+	}
+	return m.resolveProjectDefault(ctx, st, session.ProjectID)
+}
+
+func (m *ProviderManager) resolveProjectDefault(ctx context.Context, st *store.Store, projectID string) (Provider, error) {
+	project, err := st.GetProjectByID(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+	if project.DefaultSandboxProviderID != "" {
+		return m.resolveProjectProvider(ctx, st, projectID, project.DefaultSandboxProviderID)
+	}
+
+	defaultProvider := m.DefaultProviderName()
+	disabled, err := st.IsSandboxProviderDisabled(ctx, projectID, defaultProvider)
+	if err != nil {
+		return nil, err
+	}
+	if !disabled {
+		return m.GetProvider(defaultProvider)
+	}
+	for providerName, status := range m.ListProviderStatuses() {
+		if !status.Available {
+			continue
+		}
+		disabled, err := st.IsSandboxProviderDisabled(ctx, projectID, providerName)
+		if err != nil {
+			return nil, err
+		}
+		if !disabled {
+			return m.GetProvider(providerName)
+		}
+	}
+	return nil, fmt.Errorf("all built-in sandbox providers are disabled for project %q", projectID)
+}
+
+func (m *ProviderManager) resolveProjectProvider(ctx context.Context, st *store.Store, projectID, providerID string) (Provider, error) {
+	if _, ok := m.GetProviderStatus(providerID); ok {
+		disabled, err := st.IsSandboxProviderDisabled(ctx, projectID, providerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check sandbox provider status: %w", err)
+		}
+		if disabled {
+			return nil, fmt.Errorf("sandbox provider %q is disabled for project %q", providerID, projectID)
+		}
+		return m.GetProvider(providerID)
+	}
+
+	instance, err := st.GetSandboxProviderInstance(ctx, projectID, providerID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, fmt.Errorf("sandbox provider instance %q not found", providerID)
+		}
+		return nil, fmt.Errorf("failed to get sandbox provider instance: %w", err)
+	}
+	if instance.Disabled {
+		return nil, fmt.Errorf("sandbox provider instance %q is disabled for project %q", providerID, projectID)
+	}
+
+	m.mu.RLock()
+	factory := m.factories[instance.Type]
+	m.mu.RUnlock()
+	if factory != nil {
+		return m.cachedProvider(ctx, instance, factory)
+	}
+	return m.GetProvider(instance.Type)
+}
+
+func (m *ProviderManager) cachedProvider(ctx context.Context, instance *model.SandboxProviderInstance, factory ProviderFactory) (Provider, error) {
+	m.mu.RLock()
+	if cached, ok := m.cache[instance.ID]; ok && cached.updatedAt.Equal(instance.UpdatedAt) {
+		provider := cached.provider
+		m.mu.RUnlock()
+		return provider, nil
+	}
+	m.mu.RUnlock()
+
+	provider, err := factory(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+
+	m.mu.Lock()
+	if cached, ok := m.cache[instance.ID]; ok && cached.updatedAt.Equal(instance.UpdatedAt) {
+		provider := cached.provider
+		m.mu.Unlock()
+		return provider, nil
+	}
+	m.cache[instance.ID] = cachedProvider{
+		provider:  provider,
+		updatedAt: instance.UpdatedAt,
+	}
+	m.instanceProviders[instance.ID] = provider
+	m.mu.Unlock()
+
+	m.notifyProviderUpdate()
+	return provider, nil
+}
+
+func (m *ProviderManager) notifyProviderUpdate() {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, ch := range m.providerUpdateSubs {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (m *ProviderManager) subscribeProviderUpdates(ctx context.Context) <-chan struct{} {
+	ch := make(chan struct{}, 1)
+
+	m.mu.Lock()
+	id := m.nextProviderSubID
+	m.nextProviderSubID++
+	m.providerUpdateSubs[id] = ch
+	m.mu.Unlock()
+
+	context.AfterFunc(ctx, func() {
+		m.mu.Lock()
+		if _, ok := m.providerUpdateSubs[id]; ok {
+			delete(m.providerUpdateSubs, id)
+			close(ch)
+		}
+		m.mu.Unlock()
+	})
+
+	return ch
+}
+
 // ProviderProxy implements the Provider interface and routes to the appropriate provider.
 // This is used when we need a single Provider interface but want to support multiple backends.
 type ProviderProxy struct {
-	manager        *Manager
-	providerGetter func(ctx context.Context, sessionID string) (Provider, error)
+	manager *ProviderManager
 }
 
-// NewProviderProxy creates a new provider proxy that uses providerGetter to determine
-// which provider to use for each session.
-func NewProviderProxy(manager *Manager, providerGetter func(ctx context.Context, sessionID string) (Provider, error)) *ProviderProxy {
+// NewProviderProxy creates a new provider proxy.
+func NewProviderProxy(manager *ProviderManager) *ProviderProxy {
 	return &ProviderProxy{
-		manager:        manager,
-		providerGetter: providerGetter,
+		manager: manager,
 	}
 }
 
@@ -239,7 +496,7 @@ func (p *ProviderProxy) DefaultProvider() Provider {
 }
 
 func (p *ProviderProxy) providerForSession(ctx context.Context, sessionID string) (Provider, error) {
-	provider, err := p.providerGetter(ctx, sessionID)
+	provider, err := p.manager.ResolveForSession(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider for session: %w", err)
 	}
@@ -320,7 +577,7 @@ func (p *ProviderProxy) GetSecret(ctx context.Context, state []byte, sessionID s
 func (p *ProviderProxy) List(ctx context.Context) ([]*Sandbox, error) {
 	var allSandboxes []*Sandbox
 
-	for _, provider := range p.manager.providers {
+	for _, provider := range p.manager.snapshotWatchProviders() {
 		sandboxes, err := provider.List(ctx)
 		if err != nil {
 			continue // Skip providers that error
@@ -344,39 +601,53 @@ func (p *ProviderProxy) AcquireHTTPClient(ctx context.Context, state []byte, ses
 // Watch watches all providers and merges events.
 func (p *ProviderProxy) Watch(ctx context.Context) (<-chan StateEvent, error) {
 	merged := make(chan StateEvent, 100)
-
-	// Start watching all providers
-	var channels []<-chan StateEvent
-	for _, provider := range p.manager.providers {
-		ch, err := provider.Watch(ctx)
-		if err != nil {
-			continue // Skip providers that can't be watched
-		}
-		channels = append(channels, ch)
-	}
-
-	// Merge all channels
 	go func() {
-		defer close(merged)
+		watchCtx, cancel := context.WithCancel(ctx)
+		var wg sync.WaitGroup
+		defer func() {
+			cancel()
+			wg.Wait()
+			close(merged)
+		}()
 
-		// Use a WaitGroup to wait for all goroutines
-		cases := make([]<-chan StateEvent, len(channels))
-		copy(cases, channels)
-
-		for _, ch := range cases {
-			go func(c <-chan StateEvent) {
-				for event := range c {
-					select {
-					case merged <- event:
-					case <-ctx.Done():
-						return
-					}
+		providerUpdates := p.manager.subscribeProviderUpdates(watchCtx)
+		watched := map[string]struct{}{}
+		startNewProviderWatches := func() {
+			for name, provider := range p.manager.snapshotWatchProviders() {
+				if _, ok := watched[name]; ok {
+					continue
 				}
-			}(ch)
+				ch, err := provider.Watch(watchCtx)
+				if err != nil {
+					continue // Skip providers that can't be watched.
+				}
+				watched[name] = struct{}{}
+
+				wg.Go(func() {
+					for event := range ch {
+						select {
+						case merged <- event:
+						case <-watchCtx.Done():
+							return
+						}
+					}
+				})
+			}
 		}
 
-		// Wait for context cancellation
-		<-ctx.Done()
+		startNewProviderWatches()
+
+		for {
+			select {
+			case _, ok := <-providerUpdates:
+				if !ok {
+					return
+				}
+				startNewProviderWatches()
+			case <-watchCtx.Done():
+				return
+			}
+		}
 	}()
 
 	return merged, nil
@@ -384,7 +655,7 @@ func (p *ProviderProxy) Watch(ctx context.Context) (<-chan StateEvent, error) {
 
 // Reconcile delegates to all providers.
 func (p *ProviderProxy) Reconcile(ctx context.Context) error {
-	for name, provider := range p.manager.providers {
+	for name, provider := range p.manager.snapshotWatchProviders() {
 		if err := provider.Reconcile(ctx); err != nil {
 			log.Printf("Warning: Failed to reconcile provider %s: %v", name, err)
 		}
@@ -394,42 +665,42 @@ func (p *ProviderProxy) Reconcile(ctx context.Context) error {
 
 // RemoveProject delegates to all providers.
 func (p *ProviderProxy) RemoveProject(ctx context.Context, projectID string) error {
-	for name, provider := range p.manager.providers {
+	for name, provider := range p.manager.snapshotWatchProviders() {
 		if err := provider.RemoveProject(ctx, projectID); err != nil {
-			log.Printf("Warning: Failed to remove project resources for provider %s: %v", name, err)
+			log.Printf("Warning: Failed to remove resources for provider %s: %v", name, err)
 		}
 	}
 	return nil
 }
 
-// GetProjectResourceInfo delegates to the default provider when supported.
-func (p *ProviderProxy) GetProjectResourceInfo(ctx context.Context, projectID string) (*ProjectResourceInfo, error) {
+// GetProviderResourceInfo delegates to the default provider when supported.
+func (p *ProviderProxy) GetProviderResourceInfo(ctx context.Context, projectID string) (*ProviderResourceInfo, error) {
 	provider := p.manager.GetDefault()
 	if provider == nil {
 		return nil, fmt.Errorf("no sandbox provider available")
 	}
 
-	resourceManager, ok := provider.(ProjectResourceManager)
+	resourceManager, ok := provider.(ProviderResourceManager)
 	if !ok {
-		return nil, ErrProjectResourcesUnsupported
+		return nil, ErrProviderResourcesUnsupported
 	}
 
-	return resourceManager.GetProjectResourceInfo(ctx, projectID)
+	return resourceManager.GetProviderResourceInfo(ctx, projectID)
 }
 
-// ApplyProjectResourceUpdate delegates to the default provider when supported.
-func (p *ProviderProxy) ApplyProjectResourceUpdate(ctx context.Context, projectID string, req UpdateProjectResourcesRequest) error {
+// ApplyProviderResourceUpdate delegates to the default provider when supported.
+func (p *ProviderProxy) ApplyProviderResourceUpdate(ctx context.Context, projectID string, req UpdateProviderResourcesRequest) error {
 	provider := p.manager.GetDefault()
 	if provider == nil {
 		return fmt.Errorf("no sandbox provider available")
 	}
 
-	resourceManager, ok := provider.(ProjectResourceManager)
+	resourceManager, ok := provider.(ProviderResourceManager)
 	if !ok {
-		return ErrProjectResourcesUnsupported
+		return ErrProviderResourcesUnsupported
 	}
 
-	return resourceManager.ApplyProjectResourceUpdate(ctx, projectID, req)
+	return resourceManager.ApplyProviderResourceUpdate(ctx, projectID, req)
 }
 
 // GetProjectInspectionInfo delegates to the default provider when supported.

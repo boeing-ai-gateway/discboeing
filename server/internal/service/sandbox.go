@@ -33,7 +33,7 @@ type GitConfigProvider func(ctx context.Context) (name, email string)
 type SandboxService struct {
 	store              *store.Store
 	provider           sandbox.Provider
-	providerManager    *sandbox.Manager
+	providerManager    *sandbox.ProviderManager
 	cfg                *config.Config
 	credentialFetcher  CredentialFetcher
 	credentialService  *CredentialService
@@ -82,7 +82,7 @@ func NewSandboxService(s *store.Store, p sandbox.Provider, cfg *config.Config, c
 
 // SetProviderManager sets the provider manager used for provider catalog and
 // project-scoped capability operations.
-func (s *SandboxService) SetProviderManager(manager *sandbox.Manager) {
+func (s *SandboxService) SetProviderManager(manager *sandbox.ProviderManager) {
 	s.providerManager = manager
 }
 
@@ -101,6 +101,35 @@ func (s *SandboxService) SetSessionInitializer(init SessionInitializer) {
 // The result is cached after the first call.
 func (s *SandboxService) SetGitConfigProvider(provider GitConfigProvider) {
 	s.gitConfigProvider = provider
+}
+
+// Start watches sandbox lifecycle events and keeps persisted session state in
+// sync with provider state. It handles external runtime changes, such as
+// sandboxes being stopped or deleted outside of Discobot.
+func (s *SandboxService) Start(ctx context.Context) error {
+	if s == nil || s.provider == nil {
+		return fmt.Errorf("sandbox provider unavailable")
+	}
+
+	eventCh, err := s.WatchSandboxEvents(ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[SandboxService] Started watching sandbox events")
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[SandboxService] Stopped watching sandbox events")
+			return ctx.Err()
+		case event, ok := <-eventCh:
+			if !ok {
+				log.Printf("[SandboxService] Sandbox event channel closed")
+				return nil
+			}
+			s.handleSandboxEvent(ctx, event)
+		}
+	}
 }
 
 // getGitConfig returns the cached Git user configuration.
@@ -148,25 +177,19 @@ func (s *SandboxService) ListSandboxes(ctx context.Context) ([]*sandbox.Sandbox,
 	return s.provider.List(ctx)
 }
 
-// WatchSandboxEvents returns runtime sandbox state events from the underlying provider.
-func (s *SandboxService) WatchSandboxEvents(ctx context.Context) (<-chan sandbox.StateEvent, error) {
-	return s.provider.Watch(ctx)
-}
-
 // GetSessionActivityIfRunning returns the sandbox's aggregate thread activity
 // only when the sandbox is already running. It intentionally does not reconcile,
 // start, health-probe, or record idle activity for stopped/unavailable sandboxes.
 func (s *SandboxService) GetSessionActivityIfRunning(ctx context.Context, sessionID string) (*sandboxapi.SessionActivityResponse, error) {
-	sess, err := s.store.GetSessionByID(ctx, sessionID)
-	if err != nil {
+	if _, err := s.store.GetSessionByID(ctx, sessionID); err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
-	}
-	if sess.Status != model.SessionStatusReady && sess.Status != legacySessionStatusRunning {
-		return nil, sandbox.ErrNotRunning
 	}
 
 	sb, err := s.getSandbox(ctx, sessionID)
 	if err != nil {
+		if errors.Is(err, sandbox.ErrNotFound) {
+			return nil, sandbox.ErrNotRunning
+		}
 		return nil, err
 	}
 	if sb.Status != sandbox.StatusRunning {
@@ -174,6 +197,99 @@ func (s *SandboxService) GetSessionActivityIfRunning(ctx context.Context, sessio
 	}
 
 	return s.newAgentClient(ctx).GetSessionActivity(ctx, sessionID)
+}
+
+// StreamSessionActivityIfRunning connects to the sandbox activity stream only
+// when the sandbox already exists and is running. It never starts a stopped
+// sandbox.
+func (s *SandboxService) StreamSessionActivityIfRunning(ctx context.Context, sessionID string) (<-chan *sandboxapi.SessionActivityResponse, error) {
+	if _, err := s.store.GetSessionByID(ctx, sessionID); err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+
+	sb, err := s.getSandbox(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, sandbox.ErrNotFound) {
+			return nil, sandbox.ErrNotRunning
+		}
+		return nil, err
+	}
+	if sb.Status != sandbox.StatusRunning {
+		return nil, sandbox.ErrNotRunning
+	}
+
+	return s.newAgentClient(ctx).StreamSessionActivity(ctx, sessionID)
+}
+
+// WatchSandboxEvents delegates sandbox state watching to the configured
+// provider. Provider implementations are responsible for handling any dynamic
+// backing providers they own.
+func (s *SandboxService) WatchSandboxEvents(ctx context.Context) (<-chan sandbox.StateEvent, error) {
+	if s == nil || s.provider == nil {
+		return nil, fmt.Errorf("sandbox provider unavailable")
+	}
+	return s.provider.Watch(ctx)
+}
+
+func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.StateEvent) {
+	session, err := s.store.GetSessionByID(ctx, event.SessionID)
+	if err != nil {
+		// Session doesn't exist - the sandbox is orphaned. This can happen if a
+		// session was deleted but the sandbox wasn't cleaned up.
+		log.Printf("[SandboxService] Session %s not found for sandbox event (status: %s)", event.SessionID, event.Status)
+		return
+	}
+
+	var newStatus string
+	var errMsg *string
+	switch event.Status {
+	case sandbox.StatusRunning:
+		if session.Status != model.SessionStatusReady {
+			newStatus = model.SessionStatusReady
+		}
+	case sandbox.StatusStopped:
+		if session.Status == model.SessionStatusReady ||
+			session.Status == model.SessionStatusInitializing ||
+			session.Status == model.SessionStatusCreatingSandbox {
+			newStatus = model.SessionStatusStopped
+		}
+	case sandbox.StatusFailed:
+		if session.Status != model.SessionStatusError {
+			newStatus = model.SessionStatusError
+			if event.Error != "" {
+				msg := "Sandbox failed: " + event.Error
+				errMsg = &msg
+			}
+		}
+	case sandbox.StatusRemoved:
+		if session.Status == model.SessionStatusReady ||
+			session.Status == model.SessionStatusInitializing ||
+			session.Status == model.SessionStatusCreatingSandbox {
+			newStatus = model.SessionStatusStopped
+			log.Printf("[SandboxService] Sandbox for session %s was removed, marking session as stopped", event.SessionID)
+		}
+	case sandbox.StatusCreated:
+		// Sandbox created but not started; no session status update needed.
+	default:
+		log.Printf("[SandboxService] Unknown sandbox status: %s for session %s", event.Status, event.SessionID)
+		return
+	}
+
+	if newStatus == "" {
+		return
+	}
+
+	log.Printf("[SandboxService] Updating session %s status from %s to %s", event.SessionID, session.Status, newStatus)
+	if err := s.store.UpdateSessionStatus(ctx, event.SessionID, newStatus, errMsg); err != nil {
+		log.Printf("[SandboxService] Failed to update session %s status: %v", event.SessionID, err)
+		return
+	}
+
+	if s.eventBroker != nil {
+		if err := s.eventBroker.PublishSessionUpdated(ctx, session.ProjectID, event.SessionID, newStatus, session.CommitStatus); err != nil {
+			log.Printf("[SandboxService] Failed to publish session update event: %v", err)
+		}
+	}
 }
 
 func (s *SandboxService) newSessionClient(ctx context.Context, sessionID string) (*SessionClient, error) {

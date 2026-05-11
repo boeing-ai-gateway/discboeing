@@ -135,7 +135,7 @@ func main() {
 
 	// Initialize sandbox providers
 	// Create a manager that can route to different providers based on workspace configuration
-	sandboxManager := sandbox.NewManager()
+	sandboxProviderManager := sandbox.NewProviderManager()
 
 	// Create event poller and broker for SSE (needed by startup manager)
 	eventPoller := events.NewPoller(s, events.DefaultPollerConfig())
@@ -159,13 +159,13 @@ func main() {
 		return session.ProjectID, nil
 	}
 
-	projectResourceResolver := func(ctx context.Context, projectID string) (vm.ProjectResourceConfig, error) {
+	providerResourceResolver := func(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
 		project, err := s.GetProjectByID(ctx, projectID)
 		if err != nil {
-			return vm.ProjectResourceConfig{}, err
+			return vm.ProviderResourceConfig{}, err
 		}
 
-		resources := vm.ProjectResourceConfig{}
+		resources := vm.ProviderResourceConfig{}
 		if project.VZMemoryMB != nil {
 			resources.MemoryMB = *project.VZMemoryMB
 		}
@@ -176,34 +176,34 @@ func main() {
 		return resources, nil
 	}
 
-	registerPrimarySandboxProvider(cfg, sandboxManager, sessionProjectResolver, projectResourceResolver, systemManager)
+	registerPrimarySandboxProvider(cfg, sandboxProviderManager, sessionProjectResolver, providerResourceResolver, systemManager)
 	//
 	// Initialize local provider (only if enabled via config)
 	if cfg.LocalProviderEnabled {
 		if localProvider, localErr := local.NewProvider(cfg); localErr != nil {
 			log.Printf("Warning: Failed to initialize local sandbox provider: %v", localErr)
 		} else {
-			sandboxManager.RegisterProvider("local", localProvider)
+			sandboxProviderManager.RegisterProvider("local", localProvider)
 			log.Printf("Local sandbox provider initialized")
 		}
 	}
-	sandboxManager.RegisterProviderDefinition("exedev", exedev.Definition())
+	sandboxProviderManager.RegisterProviderDefinition("exedev", exedev.Definition())
 	if cfg.SandboxProvider != "" {
-		sandboxManager.SetDefault(cfg.SandboxProvider)
+		sandboxProviderManager.SetDefault(cfg.SandboxProvider)
 	}
 
 	// Create provider proxy that routes based on workspace configuration
 	// The proxy will look up the session's workspace and use its provider setting
 	var sandboxProvider sandbox.Provider
-	if sandboxManager.EnsureDefaultAvailable() {
-		log.Printf("Default sandbox provider: %s", sandboxManager.DefaultProviderName())
+	if sandboxProviderManager.EnsureDefaultAvailable() {
+		log.Printf("Default sandbox provider: %s", sandboxProviderManager.DefaultProviderName())
 
-		providerResolver := service.NewSandboxProviderResolver(s, sandboxManager)
-		providerResolver.RegisterFactory("exedev", func(ctx context.Context, instance *model.SandboxProviderInstance) (sandbox.Provider, error) {
+		sandboxProviderManager.SetStore(s)
+		sandboxProviderManager.RegisterFactory("exedev", func(ctx context.Context, instance *model.SandboxProviderInstance) (sandbox.Provider, error) {
 			return newExeDevInstanceProvider(ctx, cfg, credSvc, instance)
 		})
-		sandboxProvider = sandbox.NewProviderProxy(sandboxManager, providerResolver.ResolveForSession)
-		log.Printf("Sandbox provider proxy initialized with %d providers", len(sandboxManager.ListProviders()))
+		sandboxProvider = sandbox.NewProviderProxy(sandboxProviderManager)
+		log.Printf("Sandbox provider proxy initialized with %d providers", len(sandboxProviderManager.ListProviders()))
 	}
 
 	// Create job queue early so it can be passed to services
@@ -217,20 +217,19 @@ func main() {
 	if sandboxProvider != nil {
 		credFetcher := service.MakeCredentialFetcher(s, credSvc)
 		sandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
-		sandboxSvc.SetProviderManager(sandboxManager)
+		sandboxSvc.SetProviderManager(sandboxProviderManager)
 		sandboxSvc.SetCredentialService(credSvc)
 	}
 
-	// Start sandbox watcher to sync session states with sandbox states
-	// This handles external changes (e.g., Docker containers deleted outside Discobot)
-	var sandboxWatcherCancel context.CancelFunc
+	// Start sandbox service event handling to sync session states with sandbox states.
+	// This handles external changes (e.g., Docker containers deleted outside Discobot).
+	var sandboxServiceCancel context.CancelFunc
 	if sandboxSvc != nil {
-		sandboxWatcher := service.NewSandboxWatcher(sandboxSvc, s, eventBroker)
-		var watcherCtx context.Context
-		watcherCtx, sandboxWatcherCancel = context.WithCancel(context.Background())
+		var sandboxServiceCtx context.Context
+		sandboxServiceCtx, sandboxServiceCancel = context.WithCancel(context.Background())
 		go func() {
-			if err := sandboxWatcher.Start(watcherCtx); err != nil && err != context.Canceled {
-				log.Printf("Sandbox watcher stopped with error: %v", err)
+			if err := sandboxSvc.Start(sandboxServiceCtx); err != nil && err != context.Canceled {
+				log.Printf("Sandbox service stopped with error: %v", err)
 			}
 		}()
 	}
@@ -330,7 +329,8 @@ func main() {
 		if sandboxSvc != nil && sessionSvc != nil && cfg.ThreadStatusSyncInterval > 0 {
 			sessionThreadStatusSyncer = service.NewSessionThreadStatusSyncer(
 				s,
-				sessionSvc,
+				dispSandboxSvc,
+				eventBroker,
 				slog.Default(),
 				cfg.ThreadStatusSyncInterval,
 			)
@@ -723,20 +723,20 @@ func main() {
 
 			projReg.Register(r, routes.Route{
 				Method: "GET", Pattern: "/resources",
-				Handler: h.GetProjectResources,
+				Handler: h.GetProviderResources,
 				Meta: routes.Meta{
 					Group:       "Resources",
-					Description: "Get project VM resources",
+					Description: "Get provider VM resources",
 					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
 				},
 			})
 
 			projReg.Register(r, routes.Route{
 				Method: "POST", Pattern: "/resources",
-				Handler: h.UpdateProjectResources,
+				Handler: h.UpdateProviderResources,
 				Meta: routes.Meta{
 					Group:       "Resources",
-					Description: "Update project VM resources",
+					Description: "Update provider VM resources",
 					Params:      []routes.Param{{Name: "projectId", Example: "local"}},
 					Body:        map[string]any{"memoryMB": 8192, "dataDiskGB": 200},
 				},
@@ -1985,15 +1985,15 @@ func main() {
 		shutdownCancel()
 	}
 
-	// Stop sandbox watcher
-	if sandboxWatcherCancel != nil {
-		sandboxWatcherCancel()
+	// Stop sandbox service event handling.
+	if sandboxServiceCancel != nil {
+		sandboxServiceCancel()
 	}
 
-	// Shutdown sandbox manager (gracefully stop all VMs and providers)
-	if sandboxManager != nil {
+	// Shutdown sandbox provider manager (gracefully stop all VMs and providers)
+	if sandboxProviderManager != nil {
 		log.Println("Shutting down sandbox providers...")
-		sandboxManager.Shutdown()
+		sandboxProviderManager.Shutdown()
 		log.Println("Sandbox providers stopped")
 	}
 

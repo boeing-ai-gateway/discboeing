@@ -15,9 +15,9 @@ import (
 
 func registerPrimarySandboxProvider(
 	cfg *config.Config,
-	sandboxManager *sandbox.Manager,
+	sandboxProviderManager *sandbox.ProviderManager,
 	sessionProjectResolver func(context.Context, string) (string, error),
-	_ vm.ProjectResourceResolver,
+	_ vm.ProviderResourceResolver,
 	systemManager *startup.SystemManager,
 ) {
 	providerCfg := configForSandboxProvider(cfg, "docker")
@@ -27,6 +27,6 @@ func registerPrimarySandboxProvider(
 		return
 	}
 
-	sandboxManager.RegisterProvider("docker", dockerProvider)
+	sandboxProviderManager.RegisterProvider("docker", dockerProvider)
 	log.Printf("Docker sandbox provider initialized (image: %s)", providerCfg.SandboxImage)
 }

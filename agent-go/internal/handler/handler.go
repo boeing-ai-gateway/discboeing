@@ -33,6 +33,8 @@ type Handler struct {
 	promptQueue    *promptqueue.Manager
 	sudoAuthorizer sudoauth.Authorizer
 	chatPingEvery  time.Duration
+	activityEvery  time.Duration
+	activity       *activityNotifier
 
 	answeredMu        sync.Mutex
 	answeredQuestions map[string]bool // toolCallID → true (tracks answered questions for status polling)
@@ -77,6 +79,8 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		defaultAgent:      defaultAgent,
 		browserManager:    bm,
 		chatPingEvery:     defaultChatStreamPingInterval,
+		activityEvery:     defaultActivityStreamSnapshotInterval,
+		activity:          newActivityNotifier(),
 		answeredQuestions: make(map[string]bool),
 	}
 	for _, option := range options {
@@ -92,6 +96,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	}
 	if promptQueue != nil {
 		h.promptQueue = promptQueue
+		h.promptQueue.SetChangeFunc(h.onPromptQueueChange)
 	}
 	if hookManager != nil && conversations != nil {
 		hookManager.SetRepromptRunner(conversations, h.promptQueue)
@@ -108,6 +113,7 @@ func (h *Handler) OnTurnStart(threadID string) {
 	if h.promptQueue != nil {
 		h.promptQueue.ClearTimer(threadID)
 	}
+	h.notifyActivityChanged()
 }
 
 // OnTurnComplete handles handler-owned turn completion bookkeeping.
@@ -117,6 +123,17 @@ func (h *Handler) OnTurnComplete(threadID string, _ error) {
 	}
 	if h.promptQueue != nil {
 		go h.promptQueue.StartNext(threadID)
+	}
+	h.notifyActivityChanged()
+}
+
+func (h *Handler) onPromptQueueChange(string, []promptqueue.Prompt) {
+	h.notifyActivityChanged()
+}
+
+func (h *Handler) notifyActivityChanged() {
+	if h != nil && h.activity != nil {
+		h.activity.Notify()
 	}
 }
 
@@ -144,6 +161,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Threads", Description: "List all threads"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads/activity", Handler: h.GetSessionActivity,
 		Meta: routes.Meta{Group: "Threads", Description: "Get session-level thread activity"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads/activity/stream", Handler: h.StreamSessionActivity,
+		Meta: routes.Meta{Group: "Threads", Description: "Stream session-level thread activity"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/threads", Handler: h.CreateThread,
 		Meta: routes.Meta{
 			Group:       "Threads",
