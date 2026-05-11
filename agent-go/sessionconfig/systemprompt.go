@@ -69,13 +69,6 @@ func FormatCredentialChangeReminder(
 	return b.String()
 }
 
-func FormatModeChangeReminder(planMode bool) string {
-	if planMode {
-		return "<system-reminder>\nMode update: the current mode is now plan. This change was triggered by the current prompt request.\n</system-reminder>"
-	}
-	return "<system-reminder>\nMode update: the current mode is now build. Plan mode has been exited. This change was triggered by the current prompt request.\n</system-reminder>"
-}
-
 // FormatUserInstructions formats discovered instruction entries into a
 // <system-reminder> tagged block. Returns empty string if entries is empty.
 func FormatUserInstructions(entries []InstructionEntry) string {

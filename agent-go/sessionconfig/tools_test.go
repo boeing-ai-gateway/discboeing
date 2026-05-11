@@ -31,8 +31,6 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		"TaskOutput", "TaskStop",
 		// User interaction
 		"AskUserQuestion", "RequestUserCredential", "RequestCommitPull",
-		// Plan mode
-		"EnterPlanMode", "ExitPlanMode",
 		// Skills
 		"Skill",
 	}
@@ -61,12 +59,6 @@ func TestBuiltinTools_DefaultSelectionMatchesSystemConfig(t *testing.T) {
 		if tool.Name != cfg.AllowedTools[i] {
 			t.Errorf("tool[%d] = %q, want %q", i, tool.Name, cfg.AllowedTools[i])
 		}
-	}
-	if hasTool(tools, "EnterPlanMode") {
-		t.Fatal("EnterPlanMode should not be included in the default tool set")
-	}
-	if !hasTool(tools, "ExitPlanMode") {
-		t.Fatal("ExitPlanMode should remain available in the default tool set")
 	}
 }
 
@@ -424,13 +416,4 @@ func TestFormatMaxStepsReminder(t *testing.T) {
 	if !strings.Contains(got, "Do not call any more tools") {
 		t.Fatalf("expected no-tools instruction in reminder, got %q", got)
 	}
-}
-
-func hasTool(tools []providers.ToolDefinition, name string) bool {
-	for _, tool := range tools {
-		if tool.Name == name {
-			return true
-		}
-	}
-	return false
 }

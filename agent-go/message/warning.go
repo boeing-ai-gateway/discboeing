@@ -44,8 +44,3 @@ type ResponseMetadata struct {
 	Timestamp *time.Time `json:"timestamp,omitempty"`
 	ModelID   string     `json:"modelId,omitempty"`
 }
-
-// ModeChangeData is the payload for a data-mode-change chunk.
-type ModeChangeData struct {
-	Mode string `json:"mode"`
-}

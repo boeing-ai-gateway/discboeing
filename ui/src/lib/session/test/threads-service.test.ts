@@ -10,9 +10,9 @@ import {
 test("getNextSelectedThreadId picks the next thread after removal", () => {
 	const nextId = getNextSelectedThreadId(
 		[
-			{ id: "a", name: "A", mode: "build" },
-			{ id: "b", name: "B", mode: "build" },
-			{ id: "c", name: "C", mode: "build" },
+			{ id: "a", name: "A" },
+			{ id: "b", name: "B" },
+			{ id: "c", name: "C" },
 		],
 		"b",
 		"b",
@@ -24,8 +24,8 @@ test("getNextSelectedThreadId picks the next thread after removal", () => {
 test("getNextSelectedThreadId falls back to the previous thread", () => {
 	const nextId = getNextSelectedThreadId(
 		[
-			{ id: "a", name: "A", mode: "build" },
-			{ id: "b", name: "B", mode: "build" },
+			{ id: "a", name: "A" },
+			{ id: "b", name: "B" },
 		],
 		"b",
 		"b",
@@ -46,7 +46,6 @@ test("buildImplicitThread derives a single thread from the current session", () 
 		files: [],
 		model: "openai/gpt-5",
 		reasoning: "enabled",
-		mode: "plan",
 	};
 
 	assert.deepEqual(buildImplicitThread(session), [
@@ -55,7 +54,6 @@ test("buildImplicitThread derives a single thread from the current session", () 
 			name: "Friendly session",
 			model: "openai/gpt-5",
 			reasoning: "enabled",
-			mode: "plan",
 			promptQueue: [],
 		},
 	]);

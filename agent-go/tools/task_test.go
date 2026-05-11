@@ -47,7 +47,7 @@ func (m *mockSubAgent) CreateThread(_ context.Context, req agent.CreateThreadReq
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
 }
 func (m *mockSubAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
-	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata}
 	if req.Name != nil {
 		info.Name = *req.Name
 	}
@@ -265,7 +265,7 @@ func (a *recursiveTaskAgent) CreateThread(_ context.Context, req agent.CreateThr
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
 }
 func (a *recursiveTaskAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
-	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata}
 	if req.ErrorMessage != nil {
 		info.ErrorMessage = *req.ErrorMessage
 	}

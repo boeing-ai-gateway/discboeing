@@ -258,6 +258,12 @@ func (db *DB) Migrate() error {
 			return fmt.Errorf("failed to drop Session.active_env_set_ids: %w", err)
 		}
 	}
+	if migrator.HasColumn("prompt_submissions", "mode") {
+		log.Println("Dropping obsolete PromptSubmission.mode column...")
+		if err := migrator.DropColumn("prompt_submissions", "mode"); err != nil {
+			return fmt.Errorf("failed to drop PromptSubmission.mode: %w", err)
+		}
+	}
 	if migrator.HasTable("env_sets") {
 		log.Println("Dropping obsolete env_sets table...")
 		if err := migrator.DropTable("env_sets"); err != nil {

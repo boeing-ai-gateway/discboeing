@@ -33,7 +33,6 @@ import (
 type Flags struct {
 	model     *string
 	reasoning *bool
-	plan      *bool
 	newThread *bool
 	resume    *string
 	maxTurns  *int
@@ -48,10 +47,6 @@ func AddFlags() *Flags {
 	flag.StringVar(model, "model", "", "Model to use, e.g. anthropic/claude-opus-4-6 (overrides DISCOBOT_MODEL env var)")
 	flag.StringVar(model, "m", "", "Alias for --model")
 
-	plan := new(bool)
-	flag.BoolVar(plan, "plan", false, "Start in plan mode")
-	flag.BoolVar(plan, "p", false, "Alias for --plan")
-
 	newThread := new(bool)
 	flag.BoolVar(newThread, "new-thread", false, "Start with a fresh thread ID (default behavior; retained for compatibility)")
 	flag.BoolVar(newThread, "n", false, "Alias for --new-thread")
@@ -63,7 +58,6 @@ func AddFlags() *Flags {
 	return &Flags{
 		model:     model,
 		reasoning: flag.Bool("reasoning", true, "Enable extended thinking / reasoning (default on; use --reasoning=false to disable)"),
-		plan:      plan,
 		newThread: newThread,
 		resume:    resume,
 		maxTurns:  flag.Int("max-turns", 0, "Maximum LLM calls per turn (0 = unlimited)"),
@@ -207,13 +201,6 @@ func Run(cfg *config.Config, flags *Flags) {
 	if *flags.reasoning {
 		reasoning = "enabled"
 	}
-	threadPlanModes := map[string]bool{}
-	planMode := getThreadPlanMode(rootCtx, session, threadID)
-	if *flags.plan {
-		planMode = true
-	}
-	threadPlanModes[threadID] = planMode
-
 	// ── Main input loop ───────────────────────────────────────────────────────
 	showResume, showHistory := startupCommandHints(rootCtx, session, threadID)
 	fmt.Fprintln(os.Stderr, startupMessage(showResume, showHistory))
@@ -224,10 +211,7 @@ func Run(cfg *config.Config, flags *Flags) {
 		fmt.Fprintln(os.Stderr, "Resuming pending approval from previous session...")
 		startTurn(func(ctx context.Context, cancel context.CancelFunc) {
 			if handlePendingQuestion(ctx, session, threadID, pending) {
-				runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
-					planMode = enabled
-					threadPlanModes[threadID] = enabled
-				})
+				runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{}, true)
 			}
 		})
 	}
@@ -238,10 +222,7 @@ func Run(cfg *config.Config, flags *Flags) {
 			return
 		}
 		fmt.Fprintln(os.Stderr, "Recovering interrupted turn...")
-		runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
-			planMode = enabled
-			threadPlanModes[threadID] = enabled
-		})
+		runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{}, true)
 	}
 	consumeFreshContext := func(threadID string) bool {
 		if !pendingFresh[threadID] {
@@ -255,7 +236,7 @@ func Run(cfg *config.Config, flags *Flags) {
 	go watchMCPOAuth(rootCtx, a)
 
 	for {
-		prompt := formatPrompt(model, planMode)
+		prompt := formatPrompt(model)
 		line, err := readLineWithOptions(prompt, hist, commandCompletionOptions(rootCtx, session))
 		if err == io.EOF || err == errInterrupt {
 			break // Ctrl+D or Ctrl+C at idle prompt → exit
@@ -292,16 +273,12 @@ func Run(cfg *config.Config, flags *Flags) {
 				req := agent.PromptRequest{
 					Model:        model,
 					Reasoning:    reasoning,
-					Mode:         planModeRequest(planMode),
 					MaxTurns:     *flags.maxTurns,
 					SubagentType: *flags.subagent,
 					FreshContext: consumeFreshContext(threadID),
 					UserParts:    parts,
 				}
-				runTurnLoop(ctx, cancel, session, threadID, req, false, func(enabled bool) {
-					planMode = enabled
-					threadPlanModes[threadID] = enabled
-				})
+				runTurnLoop(ctx, cancel, session, threadID, req, false)
 			})
 			if rootCtx.Err() != nil {
 				break
@@ -314,24 +291,15 @@ func Run(cfg *config.Config, flags *Flags) {
 		startTurn(func(ctx context.Context, cancel context.CancelFunc) {
 			// Handle slash commands.
 			if strings.HasPrefix(line, "/") {
-				if newID, handled := handleSlashCommand(ctx, line, session, threadID, reg, &model, &planMode, pendingFresh); handled {
+				if newID, handled := handleSlashCommand(ctx, line, session, threadID, reg, &model, pendingFresh); handled {
 					if newID != threadID {
 						threadID = newID
-						if remembered, ok := threadPlanModes[threadID]; ok {
-							planMode = remembered
-						} else {
-							planMode = getThreadPlanMode(ctx, session, threadID)
-							threadPlanModes[threadID] = planMode
-						}
 						fmt.Fprintf(os.Stderr, "Switched to thread %s\n", threadID)
 						printThreadHistory(ctx, session, threadID)
 						if pending, _ := session.PendingQuestion(ctx, threadID); pending != nil {
 							fmt.Fprintln(os.Stderr, "Resuming pending approval...")
 							if handlePendingQuestion(ctx, session, threadID, pending) {
-								runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{Mode: planModeRequest(planMode)}, true, func(enabled bool) {
-									planMode = enabled
-									threadPlanModes[threadID] = enabled
-								})
+								runTurnLoop(ctx, cancel, session, threadID, agent.PromptRequest{}, true)
 							}
 						}
 					}
@@ -343,16 +311,12 @@ func Run(cfg *config.Config, flags *Flags) {
 			req := agent.PromptRequest{
 				Model:        model,
 				Reasoning:    reasoning,
-				Mode:         planModeRequest(planMode),
 				MaxTurns:     *flags.maxTurns,
 				SubagentType: *flags.subagent,
 				FreshContext: consumeFreshContext(threadID),
 				UserParts:    []message.UIPart{message.UITextPart{Text: line}},
 			}
-			runTurnLoop(ctx, cancel, session, threadID, req, false, func(enabled bool) {
-				planMode = enabled
-				threadPlanModes[threadID] = enabled
-			})
+			runTurnLoop(ctx, cancel, session, threadID, req, false)
 		})
 
 		if rootCtx.Err() != nil {

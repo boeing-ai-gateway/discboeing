@@ -16,10 +16,10 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
-func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel, reasoning, mode, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
+func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel, reasoning, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
 	messageID := lastUserMessageID(messages)
 	if messageID == "" {
-		messageID = promptSubmissionFallbackKey(messages, requestModel, reasoning, mode, runAfter)
+		messageID = promptSubmissionFallbackKey(messages, requestModel, reasoning, runAfter)
 	}
 
 	rawMessages, err := json.Marshal(messages)
@@ -40,7 +40,6 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		MessagesEncryptedData: encryptedMessages,
 		Model:                 requestModel,
 		Reasoning:             reasoning,
-		Mode:                  mode,
 		RunAfter:              runAfter,
 		Status:                model.PromptSubmissionStatusPending,
 	})
@@ -123,7 +122,7 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 	}
 	c.promoteSessionThreadStatus(ctx, submission.ProjectID, submission.SessionID, model.SessionActivityStatusQueued)
 
-	prepared, err := c.prepareChatRequest(ctx, submission.ProjectID, submission.SessionID, submission.Model, submission.Reasoning, submission.Mode)
+	prepared, err := c.prepareChatRequest(ctx, submission.ProjectID, submission.SessionID, submission.Model, submission.Reasoning)
 	if err != nil {
 		_ = c.store.ReleasePromptSubmissionToPending(ctx, submission.ID, stringPtr(err.Error()))
 		return err
@@ -224,7 +223,7 @@ func (c *ChatService) getOrCreatePromptSubmission(ctx context.Context, submissio
 		if decryptErr != nil {
 			return nil, decryptErr
 		}
-		if existing.Model != submission.Model || existing.Reasoning != submission.Reasoning || existing.Mode != submission.Mode || existing.RunAfter != submission.RunAfter || !bytes.Equal(existingPayload, submissionPayload) {
+		if existing.Model != submission.Model || existing.Reasoning != submission.Reasoning || existing.RunAfter != submission.RunAfter || !bytes.Equal(existingPayload, submissionPayload) {
 			return nil, fmt.Errorf("prompt submission key reused with different payload")
 		}
 		return existing, nil
@@ -322,12 +321,12 @@ func promptSubmissionStartedResponse(submission *model.PromptSubmission) *sandbo
 	return response
 }
 
-func promptSubmissionFallbackKey(messages []json.RawMessage, requestModel, reasoning, mode, runAfter string) string {
+func promptSubmissionFallbackKey(messages []json.RawMessage, requestModel, reasoning, runAfter string) string {
 	hash := sha256.New()
 	for _, msg := range messages {
 		_, _ = hash.Write(msg)
 	}
-	_, _ = hash.Write([]byte("\x00" + requestModel + "\x00" + reasoning + "\x00" + mode + "\x00" + runAfter))
+	_, _ = hash.Write([]byte("\x00" + requestModel + "\x00" + reasoning + "\x00" + runAfter))
 	return "generated-" + hex.EncodeToString(hash.Sum(nil))
 }
 

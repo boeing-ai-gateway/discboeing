@@ -673,7 +673,6 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		LastTurnState: StateCancelled,
 		Model:         "anthropic/claude-sonnet-4-6",
 		CWD:           "/tmp/project",
-		Mode:          ModeState{Value: "plan"},
 		ActiveLeafID:  "msg-active",
 		ActiveCommand: "discobot-commit",
 		CommunicatedSkillLikeEntries: []CommunicatedSkillLikeEntry{{
@@ -710,9 +709,6 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.CWD != cfg.CWD {
 		t.Errorf("expected cwd=%q, got %q", cfg.CWD, loaded.CWD)
-	}
-	if loaded.Mode.Value != cfg.Mode.Value {
-		t.Errorf("expected mode=%v, got %v", cfg.Mode.Value, loaded.Mode.Value)
 	}
 	if loaded.ActiveLeafID != cfg.ActiveLeafID {
 		t.Errorf("expected activeLeafId=%q, got %q", cfg.ActiveLeafID, loaded.ActiveLeafID)

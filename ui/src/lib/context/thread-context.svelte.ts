@@ -18,7 +18,6 @@ import {
 } from "$lib/conversation-comment-storage";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createConversationDomain } from "$lib/thread/conversation.svelte";
-import { getPlanEntries } from "$lib/session/domains/session-domain.helpers";
 import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
 import type {
 	ConversationComment,
@@ -30,15 +29,6 @@ import type { ThreadSummary } from "$lib/shell-types";
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
 const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
-
-export function normalizeThreadComposerMode(
-	mode: string | null | undefined,
-): "build" | "plan" {
-	if (!mode || mode === "" || mode === "build") {
-		return "build";
-	}
-	return "plan";
-}
 
 export function normalizeThreadComposerReasoning(
 	reasoning: string | null | undefined,
@@ -58,19 +48,16 @@ export function getThreadComposerValues(
 	thread: ThreadSummary | null,
 	defaultModel: string | null,
 ): {
-	mode: "build" | "plan";
 	modelId: string | null;
 	reasoning: string | undefined;
 } {
 	return {
-		mode: normalizeThreadComposerMode(thread?.mode),
 		modelId: thread?.model ?? defaultModel,
 		reasoning: normalizeThreadComposerReasoning(thread?.reasoning),
 	};
 }
 
 export function getThreadComposerValuesKey(values: {
-	mode: "build" | "plan";
 	modelId: string | null;
 	reasoning: string | undefined;
 }): string {
@@ -78,27 +65,21 @@ export function getThreadComposerValuesKey(values: {
 }
 
 export function resolveThreadComposerSubmitValues({
-	mode,
 	modelId,
 	reasoning,
-	nextMode,
 	nextModelId,
 	nextReasoning,
 }: {
-	mode: "build" | "plan";
 	modelId: string | null;
 	reasoning: string | undefined;
-	nextMode: "build" | "plan" | undefined;
 	nextModelId: string | null | undefined;
 	nextReasoning: string | undefined;
 }): {
-	mode: "build" | "plan";
 	modelId: string | null;
 	reasoning: string | undefined;
 } {
 	const resolvedModelId = nextModelId !== undefined ? nextModelId : modelId;
 	return {
-		mode: nextMode ?? mode,
 		modelId: resolvedModelId,
 		reasoning: resolvedModelId
 			? normalizeThreadComposerReasoning(nextReasoning ?? reasoning)
@@ -286,10 +267,8 @@ export function createThreadContext(
 	let sourceComposerValuesKey = $state(
 		getThreadComposerValuesKey(initialComposerValues),
 	);
-	let mode = $state<"build" | "plan">(initialComposerValues.mode);
 	let modelId = $state<string | null>(initialComposerValues.modelId);
 	let reasoning = $state<string | undefined>(initialComposerValues.reasoning);
-	let nextMode = $state<"build" | "plan" | undefined>(undefined);
 	let nextModelId = $state<string | null | undefined>(undefined);
 	let nextReasoning = $state<string | undefined>(undefined);
 	let loadedComposerDraftStorageKey = $state<string | null>(null);
@@ -309,7 +288,6 @@ export function createThreadContext(
 			return;
 		}
 		sourceComposerValuesKey = nextSourceComposerValuesKey;
-		mode = nextSourceComposerValues.mode;
 		modelId = nextSourceComposerValues.modelId;
 		reasoning = nextSourceComposerValues.reasoning;
 	});
@@ -431,7 +409,6 @@ export function createThreadContext(
 	};
 
 	const clearNextComposerValues = () => {
-		nextMode = undefined;
 		nextModelId = undefined;
 		nextReasoning = undefined;
 	};
@@ -446,16 +423,13 @@ export function createThreadContext(
 		runAfter,
 	}) => {
 		const submitValues = resolveThreadComposerSubmitValues({
-			mode,
 			modelId,
 			reasoning,
-			nextMode,
 			nextModelId,
 			nextReasoning,
 		});
 		const result = await conversation.submit({
 			parts,
-			mode: submitValues.mode,
 			modelId: submitValues.modelId,
 			reasoning: submitValues.reasoning,
 			workspaceId,
@@ -465,7 +439,6 @@ export function createThreadContext(
 			allowEmptyPendingMessage,
 			runAfter,
 		});
-		mode = submitValues.mode;
 		modelId = submitValues.modelId;
 		reasoning = submitValues.reasoning;
 		clearNextComposerValues();
@@ -479,26 +452,17 @@ export function createThreadContext(
 		get thread() {
 			return threadSummary;
 		},
-		get mode() {
-			return mode;
-		},
 		get modelId() {
 			return modelId;
 		},
 		get reasoning() {
 			return reasoning;
 		},
-		get nextMode() {
-			return nextMode;
-		},
 		get nextModelId() {
 			return nextModelId;
 		},
 		get nextReasoning() {
 			return nextReasoning;
-		},
-		setNextMode: (value) => {
-			nextMode = value;
 		},
 		setNextModelId: (value) => {
 			nextModelId = value;
@@ -512,9 +476,6 @@ export function createThreadContext(
 		},
 		get browserEventsByTurnId() {
 			return conversation.browserEventsByTurnId;
-		},
-		get planEntries() {
-			return getPlanEntries(conversation.messages);
 		},
 		get promptQueue() {
 			return threadSummary?.promptQueue ?? [];

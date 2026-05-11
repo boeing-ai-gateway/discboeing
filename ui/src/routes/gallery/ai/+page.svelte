@@ -119,14 +119,6 @@
 		PackageInfoVersion,
 		Panel,
 		Persona,
-		Plan,
-		PlanAction,
-		PlanContent,
-		PlanDescription,
-		PlanFooter,
-		PlanHeader,
-		PlanTitle,
-		PlanTrigger,
 		OptimizedToolRenderer,
 		Queue,
 		QueueItem,
@@ -1349,42 +1341,6 @@
 							</TaskItem>
 						</TaskContent>
 					</Task>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Plan</CardTitle>
-					<CardDescription
-						>Collapsible plan card with streaming shimmer.</CardDescription
-					>
-				</CardHeader>
-				<CardContent>
-					<Plan open={true} isStreaming={true}>
-						<PlanHeader>
-							<div>
-								<PlanTitle text="Port AI components to Svelte" />
-								<PlanDescription
-									text="Migrating structure, state, and renderer behavior."
-								/>
-							</div>
-							<PlanAction>
-								<PlanTrigger />
-							</PlanAction>
-						</PlanHeader>
-						<PlanContent>
-							<ul
-								class="list-disc space-y-1 pl-5 text-sm text-muted-foreground"
-							>
-								<li>Port foundational components first.</li>
-								<li>Add each to gallery on completion.</li>
-								<li>Run typecheck after each batch.</li>
-							</ul>
-						</PlanContent>
-						<PlanFooter class="text-xs text-muted-foreground"
-							>Streaming plan preview</PlanFooter
-						>
-					</Plan>
 				</CardContent>
 			</Card>
 

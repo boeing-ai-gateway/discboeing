@@ -89,8 +89,6 @@ func (m *mockAgent) UpdateThread(_ context.Context, threadID string, req UpdateT
 		info.ErrorMessage = *req.ErrorMessage
 	}
 	info.Metadata = req.Metadata
-	info.Mode = req.Mode
-	info.ModeSetBy = req.ModeSetBy
 	return info, nil
 }
 

@@ -33,7 +33,6 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 		ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
 		Model:           info.Model,
 		Reasoning:       info.Reasoning,
-		Mode:            info.Mode,
 		State:           string(info.State),
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   strings.TrimSpace(info.ActiveCommand),
@@ -184,7 +183,6 @@ func queuedPromptResponse(queue []promptqueue.Prompt) []api.QueuedPrompt {
 			Message:   prompt.Message,
 			Model:     prompt.Model,
 			Reasoning: prompt.Reasoning,
-			Mode:      prompt.Mode,
 		})
 	}
 	return items

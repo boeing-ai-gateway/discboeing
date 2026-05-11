@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 )
 
 // Info is the persisted metadata view for a thread.
@@ -17,8 +16,6 @@ type Info struct {
 	ErrorMessage    string
 	Model           string
 	Reasoning       string
-	Mode            string
-	ModeSetBy       string
 	State           State
 	PendingQuestion bool
 	ActiveCommand   string
@@ -42,8 +39,6 @@ type UpdateThreadRequest struct {
 	ErrorMessage      *string
 	ClearErrorMessage bool
 	Metadata          json.RawMessage
-	Mode              string
-	ModeSetBy         string
 }
 
 // ListThreadInfos returns metadata for all threads in the store.
@@ -172,14 +167,6 @@ func (s *Store) UpdateThreadInfo(threadID string, req UpdateThreadRequest) (Info
 		}
 		cfg.Metadata = metadata
 	}
-	if mode := strings.TrimSpace(req.Mode); mode != "" {
-		cfg.Mode.Value = mode
-		cfg.Mode.SetBy = strings.TrimSpace(req.ModeSetBy)
-		if cfg.Mode.SetBy == "" {
-			cfg.Mode.SetBy = "user"
-		}
-		cfg.Mode.ChangedAt = time.Now().UTC()
-	}
 	if err := s.SaveConfig(threadID, cfg); err != nil {
 		return Info{}, err
 	}
@@ -208,10 +195,6 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 	if state, err := s.LoadTurnState(threadID); err == nil && state != nil {
 		pendingQuestion = state.Phase == PhaseWaitingForAnswer
 	}
-	mode := "build"
-	if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan") {
-		mode = "plan"
-	}
 	return Info{
 		ID:              threadID,
 		Name:            strings.TrimSpace(cfg.Name),
@@ -220,8 +203,6 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
 		Model:           cfg.Model,
 		Reasoning:       string(cfg.Reasoning),
-		Mode:            mode,
-		ModeSetBy:       strings.TrimSpace(cfg.Mode.SetBy),
 		State:           cfg.LastTurnState,
 		PendingQuestion: pendingQuestion,
 		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),

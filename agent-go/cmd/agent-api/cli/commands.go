@@ -127,7 +127,7 @@ func imagePartFromRawBytes(input []byte) (message.UIFilePart, bool) {
 // Returns the (possibly changed) threadID and true when handled locally by the
 // CLI, or current threadID and false when the command should be passed through
 // to the agent.
-func handleSlashCommand(ctx context.Context, line string, session clisession.Session, currentThreadID string, reg *providers.ProviderRegistry, currentModel *string, currentPlanMode *bool, pendingFresh map[string]bool) (string, bool) {
+func handleSlashCommand(ctx context.Context, line string, session clisession.Session, currentThreadID string, reg *providers.ProviderRegistry, currentModel *string, pendingFresh map[string]bool) (string, bool) {
 	parts := strings.Fields(line)
 	cmd := parts[0]
 	switch cmd {
@@ -138,15 +138,6 @@ func handleSlashCommand(ctx context.Context, line string, session clisession.Ses
 			pendingFresh[currentThreadID] = true
 		}
 		fmt.Fprintln(os.Stderr, "Next message will start a fresh conversation in this thread.")
-		return currentThreadID, true
-	case "/plan":
-		enabled := !*currentPlanMode
-		*currentPlanMode = enabled
-		if enabled {
-			fmt.Fprintln(os.Stderr, "Plan mode enabled.")
-		} else {
-			fmt.Fprintln(os.Stderr, "Plan mode disabled.")
-		}
 		return currentThreadID, true
 	case "/models":
 		handleModelsCommand(ctx, reg, currentModel)
@@ -166,7 +157,7 @@ func handleSlashCommand(ctx context.Context, line string, session clisession.Ses
 }
 
 // cliBuiltinCommands are slash commands handled directly by the CLI, not by the agent.
-var cliBuiltinCommands = []string{"resume", "clear", "plan", "models", "history", "multiline"}
+var cliBuiltinCommands = []string{"resume", "clear", "models", "history", "multiline"}
 
 // availableCommands returns a sorted list of slash-prefixed command names
 // available to the user (CLI built-ins + agent commands).

@@ -156,7 +156,6 @@ func (s *Remote) Prompt(ctx context.Context, threadID string, req agent.PromptRe
 		Messages:     []message.UIMessage{uiMessage},
 		Model:        req.Model,
 		Reasoning:    req.Reasoning,
-		Mode:         req.Mode,
 		FreshContext: req.FreshContext,
 		SubagentType: req.SubagentType,
 		MaxTurns:     req.MaxTurns,

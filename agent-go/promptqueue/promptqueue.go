@@ -14,7 +14,6 @@ type Prompt struct {
 	Message   message.UIMessage `json:"message"`
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
-	Mode      string            `json:"mode,omitempty"`
 }
 
 // Update describes editable fields for a queued prompt.
@@ -26,7 +25,7 @@ type Update struct {
 }
 
 // FromMessage builds a queued prompt from a user message and chat options.
-func FromMessage(userMessage message.UIMessage, model, reasoning, mode string, runAfter time.Time) Prompt {
+func FromMessage(userMessage message.UIMessage, model, reasoning string, runAfter time.Time) Prompt {
 	queued := Prompt{
 		Message: message.UIMessage{
 			ID:       userMessage.ID,
@@ -36,7 +35,6 @@ func FromMessage(userMessage message.UIMessage, model, reasoning, mode string, r
 		},
 		Model:     model,
 		Reasoning: reasoning,
-		Mode:      mode,
 	}
 	if !runAfter.IsZero() {
 		queued.RunAfter = runAfter.UTC()
@@ -58,7 +56,6 @@ func ToThreadUpdateInfo(queue []Prompt) []message.ThreadQueuedPromptInfo {
 			Message:   prompt.Message,
 			Model:     prompt.Model,
 			Reasoning: prompt.Reasoning,
-			Mode:      prompt.Mode,
 		})
 	}
 	return items

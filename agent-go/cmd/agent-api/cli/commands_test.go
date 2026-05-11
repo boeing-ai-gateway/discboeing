@@ -87,14 +87,11 @@ func TestAddFlags_ShortAliases(t *testing.T) {
 	}()
 
 	flags := AddFlags()
-	if err := flag.CommandLine.Parse([]string{"-m", "anthropic/claude-sonnet-4", "-p", "-r", "thread-123"}); err != nil {
+	if err := flag.CommandLine.Parse([]string{"-m", "anthropic/claude-sonnet-4", "-r", "thread-123"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 	if got := *flags.model; got != "anthropic/claude-sonnet-4" {
 		t.Fatalf("model = %q, want %q", got, "anthropic/claude-sonnet-4")
-	}
-	if !*flags.plan {
-		t.Fatal("expected -p alias to enable plan mode")
 	}
 	if got := *flags.resume; got != "thread-123" {
 		t.Fatalf("resume = %q, want %q", got, "thread-123")
@@ -146,7 +143,7 @@ func TestHandleSlashCommand_ForwardsKnownAgentCommand(t *testing.T) {
 	}
 
 	session := &testSession{commands: []agent.Command{{Name: "deploy"}}}
-	threadID, handled := handleSlashCommand(context.Background(), "/deploy", session, "thread-1", nil, nil, nil, nil)
+	threadID, handled := handleSlashCommand(context.Background(), "/deploy", session, "thread-1", nil, nil, nil)
 	if handled {
 		t.Fatalf("expected /deploy to be forwarded to agent, handled=%v", handled)
 	}
@@ -160,33 +157,12 @@ func TestHandleSlashCommand_UnknownStillHandledLocally(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(root, "home"))
 
 	session := &testSession{}
-	threadID, handled := handleSlashCommand(context.Background(), "/does-not-exist", session, "thread-1", nil, nil, nil, nil)
+	threadID, handled := handleSlashCommand(context.Background(), "/does-not-exist", session, "thread-1", nil, nil, nil)
 	if !handled {
 		t.Fatalf("expected unknown slash command to be handled locally")
 	}
 	if threadID != "thread-1" {
 		t.Fatalf("threadID changed unexpectedly: %q", threadID)
-	}
-}
-
-func TestHandleSlashCommand_PlanDoesNotCreateThreadBeforePrompt(t *testing.T) {
-	threadsDir := t.TempDir()
-	session := &testSession{}
-	planMode := false
-	threadID := "thread-lazy"
-
-	newThreadID, handled := handleSlashCommand(context.Background(), "/plan", session, threadID, nil, nil, &planMode, nil)
-	if !handled {
-		t.Fatalf("expected /plan to be handled locally")
-	}
-	if newThreadID != threadID {
-		t.Fatalf("expected thread id to remain %q, got %q", threadID, newThreadID)
-	}
-	if !planMode {
-		t.Fatalf("expected /plan to toggle plan mode on")
-	}
-	if _, err := os.Stat(filepath.Join(threadsDir, threadID)); !os.IsNotExist(err) {
-		t.Fatalf("expected no thread directory before first prompt, stat err=%v", err)
 	}
 }
 
@@ -204,7 +180,7 @@ func TestHandleSlashCommand_LocalCommandsTakePriority(t *testing.T) {
 
 	pendingFresh := map[string]bool{}
 	session := &testSession{}
-	newThreadID, handled := handleSlashCommand(context.Background(), "/clear", session, "thread-1", nil, nil, nil, pendingFresh)
+	newThreadID, handled := handleSlashCommand(context.Background(), "/clear", session, "thread-1", nil, nil, pendingFresh)
 	if !handled {
 		t.Fatalf("expected /clear to be handled locally")
 	}

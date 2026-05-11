@@ -19,19 +19,8 @@ func promptColorsEnabled() bool {
 	return !noColor && term.IsTerminal(int(os.Stderr.Fd()))
 }
 
-func formatPrompt(model string, planMode bool) string {
-	planTag := ""
-	if planMode {
-		planTag = "[plan]"
-	}
-
+func formatPrompt(model string) string {
 	if model == "" {
-		if planTag != "" {
-			if promptColorsEnabled() {
-				return "\n\033[36m" + planTag + "\033[0m \033[1;36m>\033[0m "
-			}
-			return "\n" + planTag + " > "
-		}
 		if promptColorsEnabled() {
 			return "\n\033[1;36m>\033[0m "
 		}
@@ -39,9 +28,9 @@ func formatPrompt(model string, planMode bool) string {
 	}
 
 	if promptColorsEnabled() {
-		return "\n\033[36m[" + model + "]" + planTag + "\033[0m \033[1;36m>\033[0m "
+		return "\n\033[36m[" + model + "]\033[0m \033[1;36m>\033[0m "
 	}
-	return "\n[" + model + "]" + planTag + " > "
+	return "\n[" + model + "] > "
 }
 
 func formatPromptHint() string {

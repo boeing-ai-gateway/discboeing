@@ -78,7 +78,6 @@ type promptEnvironment struct {
 	systemPrompt     string
 	mcpMgr           *mcp.Manager
 	executor         thread.ToolExecutor
-	planMode         bool
 	currentDepth     int
 	maxSteps         int
 }
@@ -107,11 +106,10 @@ func (a *DefaultAgent) ensureThreadCWD(threadID string, cfg thread.Config) (thre
 	return cfg, true, nil
 }
 
-func (a *DefaultAgent) newToolContext(threadID string, planMode bool, maxSubagentDepth int, providerID, modelID, cwd string) *thread.ToolContext {
+func (a *DefaultAgent) newToolContext(threadID string, maxSubagentDepth int, providerID, modelID, cwd string) *thread.ToolContext {
 	toolCtx := &thread.ToolContext{
 		ThreadID:                threadID,
 		CurrentWorkingDirectory: a.resolveThreadCWD(cwd),
-		PlanMode:                planMode,
 		MaxSubagentDepth:        maxSubagentDepth,
 		ProviderResolver:        a.registry,
 		Agent:                   a,
@@ -227,7 +225,7 @@ func (a *DefaultAgent) promptStream(
 	req agent.PromptRequest,
 	env *promptEnvironment,
 ) iter.Seq2[message.MessageChunk, error] {
-	toolCtx := a.newToolContext(threadID, env.planMode, env.sessionCfg.MaxSubagentDepth, env.modelRef.ProviderID, env.modelRef.ModelID, env.threadCfg.CWD)
+	toolCtx := a.newToolContext(threadID, env.sessionCfg.MaxSubagentDepth, env.modelRef.ProviderID, env.modelRef.ModelID, env.threadCfg.CWD)
 	toolCtx.SubagentDepth = env.currentDepth
 	toolCtx.CurrentTaskID = req.ParentTaskID
 	toolCtx.ResolveTools = func(ctx context.Context) ([]providers.ToolDefinition, error) {
@@ -292,7 +290,6 @@ func (a *DefaultAgent) promptStream(
 			Model:            env.modelRef.ModelID,
 			SupportingModels: compactSupportingModels(env.modelRef, map[providers.SupportingModelType]providers.ModelRef{providers.SupportingModelThreadSummarization: env.threadSummaryRef}),
 			Reasoning:        providers.Reasoning(req.Reasoning),
-			PlanMode:         env.planMode,
 			Metadata:         req.Metadata,
 			UserParts:        message.UIPartsToParts(actualUserParts),
 			OriginalUserText: originalText,
@@ -301,13 +298,6 @@ func (a *DefaultAgent) promptStream(
 			MaxSteps:         env.maxSteps,
 		}
 
-		// Compute if the user explicitly requested a mode change in this PromptRequest.
-		prevMode := strings.TrimSpace(env.threadCfg.Mode.Value)
-		if prevMode == "" {
-			prevMode = "build"
-		}
-		requestedMode := strings.TrimSpace(req.Mode)
-		userChangedMode := requestedMode != "" && !strings.EqualFold(requestedMode, prevMode)
 		currentCommunicatedCredentials, credentialReminder := a.buildCredentialChangeReminder(
 			env.threadCfg.CommunicatedCredentials,
 		)
@@ -322,8 +312,6 @@ func (a *DefaultAgent) promptStream(
 		}
 		workspaceChangeReminder := a.buildWorkspaceChangeReminder(threadID)
 		cfg.PreludeMessages = buildTurnPreludeMessages(
-			userChangedMode,
-			env.planMode,
 			credentialReminder,
 			skillLikeChangeReminder,
 			workspaceChangeReminder,
@@ -338,17 +326,7 @@ func (a *DefaultAgent) promptStream(
 
 		// Persist the resolved model and cwd so new sessions can resume by directory.
 		cwd := a.resolveThreadCWD(env.threadCfg.CWD)
-		// Persist the resolved model, working directory, and canonical mode.
-		modeValue := "build"
-		if env.planMode {
-			modeValue = "plan"
-		}
-		setBy := env.threadCfg.Mode.SetBy
-		changedAt := env.threadCfg.Mode.ChangedAt
-		if userChangedMode {
-			setBy = "user"
-			changedAt = time.Now().UTC()
-		}
+		// Persist the resolved model and working directory.
 		cfgToSave := thread.Config{
 			Name:                         env.threadCfg.Name,
 			NameSource:                   env.threadCfg.NameSource,
@@ -356,7 +334,6 @@ func (a *DefaultAgent) promptStream(
 			Model:                        cfg.ProviderID + "/" + cfg.Model,
 			Reasoning:                    cfg.Reasoning,
 			CWD:                          cwd,
-			Mode:                         thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt},
 			LastTurnState:                "",
 			ActiveLeafID:                 effectiveLeafID,
 			ActiveCommand:                activeCommand,
@@ -368,7 +345,7 @@ func (a *DefaultAgent) promptStream(
 			yield(nil, fmt.Errorf("save thread config: %w", err))
 			return
 		}
-		if userChangedMode || activeCommand != "" {
+		if activeCommand != "" {
 			if !yield(thread.UpdateChunkFromConfig(threadID, cfgToSave), nil) {
 				return
 			}
@@ -484,9 +461,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		log.Printf("agent: warning: thread config: %v", threadCfgErr)
 		threadCfg = thread.Config{}
 	}
-	useThreadConfig := threadCfgErr == nil
-
-	threadCfg, cfgUpdated, err := a.applyResumeOverrides(threadID, state, threadCfg, useThreadConfig, req)
+	threadCfg, cfgUpdated, err := a.applyResumeOverrides(threadID, state, threadCfg, req)
 	if err != nil {
 		return agent.ResumeResult{}, err
 	}
@@ -514,7 +489,7 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 		}
 	}
 
-	toolCtx := a.newToolContext(threadID, state.Config.PlanMode, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
+	toolCtx := a.newToolContext(threadID, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
 	resumeMessageID := a.resolveResumeMessageID(threadID, state)
 
 	executor := thread.ToolExecutor(a.executor)
@@ -609,7 +584,7 @@ func (a *DefaultAgent) closeInterruptedTurnForPrompt(ctx context.Context, thread
 		log.Printf("agent: warning: thread config: %v", err)
 		threadCfg = thread.Config{}
 	}
-	toolCtx := a.newToolContext(threadID, state.Config.PlanMode, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
+	toolCtx := a.newToolContext(threadID, sessionCfg.MaxSubagentDepth, state.Config.ProviderID, state.Config.Model, threadCfg.CWD)
 
 	executor := thread.ToolExecutor(a.executor)
 	if mcpMgr := a.resolveMCPManager(ctx); mcpMgr != nil {
@@ -673,7 +648,6 @@ func (a *DefaultAgent) applyResumeOverrides(
 	threadID string,
 	state *thread.TurnState,
 	threadCfg thread.Config,
-	useThreadConfig bool,
 	req agent.PromptRequest,
 ) (thread.Config, bool, error) {
 	if ref, err := providers.ParseModelRef(state.Config.Model); err == nil {
@@ -715,28 +689,6 @@ func (a *DefaultAgent) applyResumeOverrides(
 		}
 	}
 
-	if mode := strings.TrimSpace(req.Mode); mode != "" {
-		planMode, userChangedMode := resolvePlanMode(mode, threadCfg, useThreadConfig)
-		if state.Config.PlanMode != planMode {
-			state.Config.PlanMode = planMode
-			updated = true
-		}
-		modeValue := "build"
-		if planMode {
-			modeValue = "plan"
-		}
-		setBy := threadCfg.Mode.SetBy
-		changedAt := threadCfg.Mode.ChangedAt
-		if userChangedMode || !useThreadConfig {
-			setBy = "user"
-			changedAt = time.Now().UTC()
-		}
-		if threadCfg.Mode.Value != modeValue || threadCfg.Mode.SetBy != setBy || !threadCfg.Mode.ChangedAt.Equal(changedAt) {
-			threadCfg.Mode = thread.ModeState{Value: modeValue, SetBy: setBy, ChangedAt: changedAt}
-			updated = true
-		}
-	}
-
 	if !updated {
 		return threadCfg, false, nil
 	}
@@ -756,7 +708,6 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 		threadCfg = thread.Config{}
 	}
 	useThreadConfig := threadCfgErr == nil
-	planMode, _ := resolvePlanMode(req.Mode, threadCfg, useThreadConfig)
 	currentDepth := max(req.SubagentDepth, 0)
 
 	sessionCfg, err := sessionconfig.Load(a.cwd)
@@ -836,7 +787,6 @@ func (a *DefaultAgent) resolvePromptEnvironment(ctx context.Context, threadID st
 		systemPrompt:     systemPrompt,
 		mcpMgr:           mcpMgr,
 		executor:         executor,
-		planMode:         planMode,
 		currentDepth:     currentDepth,
 		maxSteps:         maxSteps,
 	}, nil
@@ -953,24 +903,6 @@ func (a *DefaultAgent) resolveMCPManager(ctx context.Context) *mcp.Manager {
 	return a.mcpMgr
 }
 
-func resolvePlanMode(reqMode string, cfg thread.Config, hasConfig bool) (planMode bool, changedByPrompt bool) {
-	previousPlanMode := false
-	if hasConfig {
-		if strings.EqualFold(strings.TrimSpace(cfg.Mode.Value), "plan") {
-			previousPlanMode = true
-			planMode = true
-		} else {
-			previousPlanMode = false
-			planMode = false
-		}
-	}
-	if reqMode == "" {
-		return planMode, false
-	}
-	planMode = reqMode == "plan"
-	return planMode, planMode != previousPlanMode
-}
-
 func lastUserPromptFromUIParts(parts []message.UIPart) string {
 	textParts := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -987,22 +919,8 @@ func lastUserPromptFromUIParts(parts []message.UIPart) string {
 	return strings.TrimSpace(strings.Join(textParts, "\n"))
 }
 
-func buildTurnPreludeMessages(userChangedMode, planMode bool, credentialReminder, skillLikeChangeReminder, workspaceChangeReminder string) []message.Message {
-	prelude := make([]message.Message, 0, 4)
-	if userChangedMode {
-		prelude = append(prelude, message.Message{
-			ID:        "mode-" + agent.GenerateID(),
-			Role:      "user",
-			Synthetic: true,
-			Parts: []message.Part{message.TextPart{
-				Text: sessionconfig.FormatModeChangeReminder(planMode),
-				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
-					ReminderKind: "mode",
-					Mode:         map[bool]string{true: "plan", false: "build"}[planMode],
-				}),
-			}},
-		})
-	}
+func buildTurnPreludeMessages(credentialReminder, skillLikeChangeReminder, workspaceChangeReminder string) []message.Message {
+	prelude := make([]message.Message, 0, 3)
 	if strings.TrimSpace(credentialReminder) != "" {
 		prelude = append(prelude, message.Message{
 			ID:        "credentials-" + agent.GenerateID(),
@@ -2092,8 +2010,6 @@ func threadInfoToAgent(info thread.Info) agent.ThreadInfo {
 		ErrorMessage:    info.ErrorMessage,
 		Model:           info.Model,
 		Reasoning:       info.Reasoning,
-		Mode:            info.Mode,
-		ModeSetBy:       info.ModeSetBy,
 		State:           agent.ThreadState(info.State),
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   info.ActiveCommand,

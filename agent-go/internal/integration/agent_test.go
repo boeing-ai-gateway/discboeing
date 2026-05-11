@@ -48,7 +48,6 @@ func (e *testToolExecutor) Continue(_ context.Context, _ *thread.ToolContext, _ 
 	return thread.ToolExecuteResult{}, fmt.Errorf("continuation not supported in test executor")
 }
 
-func (e *testToolExecutor) SetPlanMode(_ bool)   {}
 func (e *testToolExecutor) SetThreadID(_ string) {}
 
 // seedSystemMessage saves a system prompt into the store and returns its message ID.

@@ -919,13 +919,12 @@ Use a provider-specific task agent.`), 0o644); err != nil {
 	}
 }
 
-func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
+func TestResume_UsesRequestModelReasoningOverrides(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	threadID := "thread-resume-overrides"
 	if err := store.SaveConfig(threadID, thread.Config{
 		Name:       "Pinned",
 		NameSource: thread.ThreadNameSourceUser,
-		Mode:       thread.ModeState{Value: "build", SetBy: "user", ChangedAt: time.Now().UTC()},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -965,7 +964,6 @@ func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
 	resumed, err := agentImpl.Resume(context.Background(), threadID, agent.PromptRequest{
 		Model:     "openai/gpt-5.4",
 		Reasoning: "high",
-		Mode:      "plan",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1022,10 +1020,6 @@ func TestResume_UsesRequestModelReasoningAndModeOverrides(t *testing.T) {
 	if cfg.Reasoning != providers.Reasoning("high") {
 		t.Fatalf("expected thread config reasoning to be updated, got %q", cfg.Reasoning)
 	}
-	if cfg.Mode.Value != "plan" {
-		t.Fatalf("expected thread mode to be updated, got %q", cfg.Mode.Value)
-	}
-
 	state, err = store.LoadTurnState(threadID)
 	if err != nil {
 		t.Fatal(err)

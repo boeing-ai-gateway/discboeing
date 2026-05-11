@@ -16,9 +16,6 @@
 	import ConversationComposerAttachments from "$lib/components/app/parts/ConversationComposerAttachments.svelte";
 	import ConversationComposerHooksControl from "$lib/components/app/parts/ConversationComposerHooksControl.svelte";
 	import ConversationComposerModelControl from "$lib/components/app/parts/ConversationComposerModelControl.svelte";
-	import ConversationComposerModeControl from "$lib/components/app/parts/ConversationComposerModeControl.svelte";
-	import ConversationComposerPlanControl from "$lib/components/app/parts/ConversationComposerPlanControl.svelte";
-	import ConversationComposerQueueControl from "$lib/components/app/parts/ConversationComposerQueueControl.svelte";
 	import ConversationComposerReasoningControl from "$lib/components/app/parts/ConversationComposerReasoningControl.svelte";
 	import ConversationPromptQueuePanel from "$lib/components/app/parts/ConversationPromptQueuePanel.svelte";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
@@ -28,7 +25,6 @@
 	import ConversationComposerTextarea from "$lib/components/app/parts/ConversationComposerTextarea.svelte";
 	import ConversationCredentialsControl from "$lib/components/app/ConversationCredentialsControl.svelte";
 	import ConversationHooksPanel from "$lib/components/app/ConversationHooksPanel.svelte";
-	import ConversationQueuePanel from "$lib/components/app/parts/ConversationQueuePanel.svelte";
 	import ConversationWorkspaceSelector from "$lib/components/app/ConversationWorkspaceSelector.svelte";
 	import {
 		Popover,
@@ -41,7 +37,6 @@
 	} from "$lib/composer-draft-storage";
 	import type {
 		ComposerAttachment,
-		ComposerMode,
 		ConversationComposerTextareaHandle,
 		WorkspaceSelectionResult,
 		WorkspaceSelectorHandle,
@@ -63,7 +58,6 @@
 		buildUserMessageParts,
 		createUserMessageAttachment,
 		formatConversationComments,
-		getLatestPlanState,
 	} from "$lib/session/domains/session-domain.helpers";
 
 	type Props = {
@@ -161,7 +155,6 @@
 		return (left ?? "default") === (right ?? "default");
 	}
 
-	const effectiveMode = $derived.by(() => thread.nextMode ?? thread.mode);
 	const effectiveModelId = $derived.by(
 		() => thread.nextModelId ?? thread.modelId,
 	);
@@ -177,7 +170,6 @@
 	const reasoningLevels = $derived.by(
 		() => selectedModel?.reasoningLevels ?? [],
 	);
-	const latestPlan = $derived.by(() => getLatestPlanState(thread.messages));
 	const hasAvailableModels = $derived.by(() => models.list.length > 0);
 	const awaitingInitialStatus = $derived.by(
 		() => sessions.awaitingInitialStatusId === session.sessionId,
@@ -225,10 +217,6 @@
 		sessionView.setPendingSandboxProviderId(
 			value === sandboxDefaultProviderId ? "" : value,
 		);
-	}
-
-	function handleModeSelect(nextMode: ComposerMode) {
-		thread.setNextMode(nextMode === thread.mode ? undefined : nextMode);
 	}
 
 	function handleModelSelect(nextSelection: string | null) {
@@ -667,11 +655,6 @@
 				onUpdate={handleUpdateQueuedPrompt}
 			/>
 
-			<ConversationQueuePanel
-				expanded={sessionView.queueExpanded}
-				entries={thread.planEntries}
-			/>
-
 			<ConversationHooksPanel
 				expanded={sessionView.hooksExpanded}
 				hooksStatus={sessionHooks.status}
@@ -841,10 +824,6 @@
 								onFilesAdd={addFiles}
 								disabled={composerDisabled}
 							/>
-							<ConversationComposerModeControl
-								value={effectiveMode}
-								onSelect={handleModeSelect}
-							/>
 							{#if !session.isPending}
 								<ConversationCredentialsControl />
 							{/if}
@@ -920,15 +899,6 @@
 								<ConversationComposerHooksControl
 									bind:expanded={sessionView.hooksExpanded}
 									hooksStatus={sessionHooks.status}
-								/>
-								<ConversationComposerQueueControl
-									bind:expanded={sessionView.queueExpanded}
-									entries={thread.planEntries}
-								/>
-								<ConversationComposerPlanControl
-									{latestPlan}
-									sessionId={session.sessionId}
-									threadId={thread.threadId}
 								/>
 							{/if}
 							<Popover bind:open={schedulePopoverOpen}>

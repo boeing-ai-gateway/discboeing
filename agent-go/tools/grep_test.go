@@ -10,11 +10,11 @@ import (
 
 func TestBuildRgArgs_UsesRegexpFlagForPattern(t *testing.T) {
 	got := buildRgArgs(grepInput{
-		Pattern:    "--model|--plan|--max-turns",
+		Pattern:    "--model|--profile|--max-turns",
 		OutputMode: "content",
 	}, "/tmp/search")
 
-	want := []string{"-n", "--regexp", "--model|--plan|--max-turns", "/tmp/search"}
+	want := []string{"-n", "--regexp", "--model|--profile|--max-turns", "/tmp/search"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("buildRgArgs() = %#v, want %#v", got, want)
 	}
@@ -28,7 +28,7 @@ func TestGrep_PatternStartingWithDashWorksWithRipgrep(t *testing.T) {
 	cwd := t.TempDir()
 	content := strings.Join([]string{
 		"--model",
-		"--plan",
+		"--profile",
 		"--max-turns",
 		"--subagent",
 		"--new-thread",
@@ -39,7 +39,7 @@ func TestGrep_PatternStartingWithDashWorksWithRipgrep(t *testing.T) {
 
 	e := New(cwd, t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Grep", map[string]any{
-		"pattern":     "--model|--plan|--max-turns|--subagent|--new-thread",
+		"pattern":     "--model|--profile|--max-turns|--subagent|--new-thread",
 		"path":        cwd,
 		"output_mode": "content",
 	})

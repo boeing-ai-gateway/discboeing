@@ -15,7 +15,6 @@ export interface Thread {
 	errorMessage?: string;
 	model?: string;
 	reasoning?: string;
-	mode: string;
 	state?: ThreadState;
 	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running
@@ -60,7 +59,6 @@ export interface QueuedPrompt {
 	message: QueuedPromptMessage;
 	model?: string;
 	reasoning?: string;
-	mode?: string;
 }
 
 export type ChatSlashCommandMetadata = {
@@ -223,8 +221,6 @@ export interface Session {
 	workspaceId?: string;
 	model?: string;
 	reasoning?: string;
-	/** Permission mode: "plan" for planning mode, or "build" for normal execution */
-	mode?: string;
 }
 
 // Workspace status values representing the lifecycle of a workspace
@@ -1025,7 +1021,6 @@ export interface StartChatRequest {
 	providerId?: string;
 	model?: string;
 	reasoning?: string;
-	mode?: string;
 	runAfter?: string;
 	trigger?: string;
 	messageId?: string;

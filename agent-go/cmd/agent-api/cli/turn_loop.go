@@ -30,7 +30,7 @@ const (
 )
 
 // chunkSection returns the section kind a chunk belongs to, or skNone for
-// chunks that produce no visible output (mode changes, approval requests, …).
+// chunks that produce no visible output (approval requests, …).
 func chunkSection(chunk message.MessageChunk) sectionKind {
 	switch chunk.(type) {
 	case message.TextDeltaChunk:
@@ -66,24 +66,16 @@ func sectionNeedsGap(from, to sectionKind) bool {
 }
 
 // runTurnLoop drives an agent turn to completion, looping to handle
-// intermediate AskUserQuestion / ExitPlanMode approval requests.
+// intermediate AskUserQuestion approval requests.
 //
 // req is the initial PromptRequest. When startWithResume is true, the loop
 // starts by resuming an interrupted turn instead of prompting a new one.
 // On each approval loop iteration, the agent is resumed explicitly so the
 // interrupted turn continues from persisted disk state after the user's answer
 // is saved.
-func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisession.Session, threadID string, req agent.PromptRequest, startWithResume bool, onPlanModeChange func(bool)) {
+func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisession.Session, threadID string, req agent.PromptRequest, startWithResume bool) {
 	toolState := newToolRenderState()
-	pendingPlanToolCalls := map[string]string{}
-	activePlanMode := req.Mode == "plan"
 	resumeOnly := startWithResume
-	setPlanMode := func(enabled bool) {
-		activePlanMode = enabled
-		if onPlanModeChange != nil {
-			onPlanModeChange(enabled)
-		}
-	}
 	for {
 		md := newMarkdownRenderer(os.Stdout, term.IsTerminal(int(os.Stdout.Fd())), !noColor)
 		currentSection := skNone
@@ -133,31 +125,6 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisess
 				return
 			}
 			if chunk != nil {
-				switch c := chunk.(type) {
-				case message.ThreadUpdateChunk:
-					setPlanMode(strings.EqualFold(c.Data.Thread.Mode, "planning") || strings.EqualFold(c.Data.Thread.Mode, "plan"))
-				case message.ToolInputAvailableChunk:
-					if isPlanToolName(c.ToolName) {
-						pendingPlanToolCalls[c.ToolCallID] = c.ToolName
-					}
-				case message.ToolOutputAvailableChunk:
-					if toolName, ok := pendingPlanToolCalls[c.ToolCallID]; ok {
-						switch toolName {
-						case "EnterPlanMode":
-							setPlanMode(true)
-						case "ExitPlanMode":
-							if isExitPlanApproved(extractOutputText(c.Output)) {
-								setPlanMode(false)
-							}
-						}
-						delete(pendingPlanToolCalls, c.ToolCallID)
-					}
-				case message.ToolOutputErrorChunk:
-					delete(pendingPlanToolCalls, c.ToolCallID)
-				case message.ToolOutputDeniedChunk:
-					delete(pendingPlanToolCalls, c.ToolCallID)
-				}
-
 				switch chunk.(type) {
 				case message.TextDeltaChunk,
 					message.ReasoningStartChunk,
@@ -235,12 +202,12 @@ func runTurnLoop(ctx context.Context, cancel context.CancelFunc, session clisess
 			return
 		}
 		resumeOnly = true
-		req = agent.PromptRequest{Mode: planModeRequest(activePlanMode)}
+		req = agent.PromptRequest{}
 	}
 }
 
-// handlePendingQuestion presents a pending AskUserQuestion / ExitPlanMode
-// approval to the user, collects answers, and submits them.
+// handlePendingQuestion presents a pending AskUserQuestion approval to the user,
+// collects answers, and submits them.
 // Returns false if stdin was closed or an error occurred.
 func handlePendingQuestion(ctx context.Context, session clisession.Session, threadID string, pending *agent.PendingQuestion) bool {
 	answers := collectAnswers(ctx, pending.Questions)

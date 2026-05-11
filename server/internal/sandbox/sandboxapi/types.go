@@ -32,8 +32,6 @@ type ChatRequest struct {
 	// reasoning level such as "auto", "low", "medium", "high", "xhigh",
 	// "none", "default", or "" for model/provider default behavior.
 	Reasoning string `json:"reasoning,omitempty"`
-	// Mode is the permission mode: "plan" for planning mode, "" for default (build mode).
-	Mode string `json:"mode,omitempty"`
 	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
 	RunAfter string `json:"runAfter,omitempty"`
 }
@@ -139,7 +137,6 @@ type Thread struct {
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
 	Model           string          `json:"model,omitempty"`           // full "providerId/modelId" ref
 	Reasoning       string          `json:"reasoning,omitempty"`       // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
-	Mode            string          `json:"mode"`                      // "build" or "plan"
 	State           string          `json:"state,omitempty"`           // "interrupted" or "cancelled"
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"` // true when the thread is paused for user input
 	ActiveCommand   string          `json:"activeCommand,omitempty"`   // empty when no command is running
@@ -156,7 +153,6 @@ type QueuedPrompt struct {
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`
-	Mode      string    `json:"mode,omitempty"`
 }
 
 // ListThreadsResponse is the GET /threads response.

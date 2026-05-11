@@ -415,9 +415,6 @@ type RequestOptions struct {
 	// "" for model/provider default behavior.
 	Reasoning string
 
-	// Mode is the permission mode: "plan" for planning mode, "" for default.
-	Mode string
-
 	// RunAfter queues the prompt until the given RFC3339 timestamp.
 	RunAfter string
 
@@ -484,16 +481,13 @@ func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Req
 func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (*sandboxapi.ChatStartedResponse, error) {
 	// Build the request body once - pass messages through as-is
 	reasoning := ""
-	mode := ""
 	if opts != nil {
 		reasoning = opts.Reasoning
-		mode = opts.Mode
 	}
 	reqBody := sandboxapi.ChatRequest{
 		Messages:  messages,
 		Model:     model,
 		Reasoning: reasoning,
-		Mode:      mode,
 		RunAfter:  optsRunAfter(opts),
 	}
 	bodyBytes, err := json.Marshal(reqBody)

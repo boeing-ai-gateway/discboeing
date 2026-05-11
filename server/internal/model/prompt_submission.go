@@ -25,7 +25,6 @@ type PromptSubmission struct {
 	MessagesEncryptedData []byte     `gorm:"column:messages_encrypted_data" json:"-"`
 	Model                 string     `gorm:"type:text" json:"model,omitempty"`
 	Reasoning             string     `gorm:"type:text" json:"reasoning,omitempty"`
-	Mode                  string     `gorm:"type:text" json:"mode,omitempty"`
 	RunAfter              string     `gorm:"column:run_after;type:text" json:"runAfter,omitempty"`
 	Status                string     `gorm:"not null;type:text;default:pending;index" json:"status"`
 	CompletionID          *string    `gorm:"column:completion_id;type:text" json:"completionId,omitempty"`

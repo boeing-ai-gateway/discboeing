@@ -21,7 +21,6 @@ export * from "./snippet";
 export * from "./suggestion";
 export * from "./sources";
 export * from "./task";
-export * from "./plan";
 export * from "./queue";
 export * from "./schema-display";
 export * from "./test-results";

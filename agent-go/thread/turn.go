@@ -57,7 +57,6 @@ type TurnConfig struct {
 	Temperature      *float64                   `json:"temperature,omitempty"`
 	TopP             *float64                   `json:"topP,omitempty"`
 	Reasoning        providers.Reasoning        `json:"reasoning,omitempty"`
-	PlanMode         bool                       `json:"planMode,omitempty"`
 	ProviderOptions  json.RawMessage            `json:"providerOptions,omitempty"`
 	ContextWindow    int                        `json:"contextWindow,omitempty"`   // model context window in tokens
 	MaxOutputTokens  int                        `json:"maxOutputTokens,omitempty"` // model max output tokens
@@ -895,14 +894,6 @@ func (lc *loopContext) handleFreshToolExecution(stepIndex int, tc message.ToolCa
 			return loopStepStop
 		}
 	}
-	if lc.toolCtx.ModeChange != nil {
-		// Tools can request a mode transition; emit the full thread update after the
-		// result so clients observe the same ordering as the persisted events.
-		lc.toolCtx.ModeChange = nil
-		if !YieldThreadUpdate(lc.yield, lc.store, lc.threadID) {
-			return loopStepStop
-		}
-	}
 	return loopStepContinue
 }
 
@@ -1236,12 +1227,6 @@ func (lc *loopContext) runWaitingForAnswerPhase() loopStepResult {
 	}
 	for _, mc := range message.ToolResultToChunks(resolved) {
 		if !lc.yield(mc, nil) {
-			return loopStepStop
-		}
-	}
-	if lc.toolCtx.ModeChange != nil {
-		lc.toolCtx.ModeChange = nil
-		if !YieldThreadUpdate(lc.yield, lc.store, lc.threadID) {
 			return loopStepStop
 		}
 	}

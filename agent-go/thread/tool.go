@@ -47,8 +47,6 @@ type AsyncWaitResult struct {
 type ToolContext struct {
 	ThreadID                   string
 	CurrentWorkingDirectory    string
-	PlanMode                   bool
-	PlanFilePath               string
 	ProviderID                 string
 	ModelID                    string
 	SubagentDepth              int
@@ -59,7 +57,6 @@ type ToolContext struct {
 	ResolveTools               func(context.Context) ([]providers.ToolDefinition, error)
 	EmitChunk                  func(message.MessageChunk, error) bool
 	SetCurrentWorkingDirectory func(string) error
-	ModeChange                 *string // set by a tool that changes the mode; consumed by the turn loop
 }
 
 // AsyncContinuationHandle represents in-flight asynchronous tool work.

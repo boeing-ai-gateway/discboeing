@@ -20,7 +20,6 @@ type ChatRequest struct {
 	Messages     []message.UIMessage `json:"messages"`
 	Model        string              `json:"model,omitempty"`
 	Reasoning    string              `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	Mode         string              `json:"mode,omitempty"`      // "" keeps current thread mode (or defaults to build), "plan" sets plan, "build" sets build
 	RunAfter     string              `json:"runAfter,omitempty"`
 	FreshContext bool                `json:"freshContext,omitempty"`
 	SubagentType string              `json:"subagentType,omitempty"`
@@ -112,7 +111,6 @@ type Thread struct {
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
 	Model           string          `json:"model,omitempty"`     // full "providerId/modelId" ref
 	Reasoning       string          `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	Mode            string          `json:"mode"`                // "build" or "plan"
 	State           string          `json:"state,omitempty"`     // "interrupted" or "cancelled"
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"`
 	ActiveCommand   string          `json:"activeCommand,omitempty"` // empty when no command is running
@@ -128,7 +126,6 @@ type QueuedPrompt struct {
 	Message   message.UIMessage `json:"message"`
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
-	Mode      string            `json:"mode,omitempty"`
 }
 
 // ThreadActivity is the sparse non-idle activity state exposed on thread

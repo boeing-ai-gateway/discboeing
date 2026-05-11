@@ -209,7 +209,6 @@ func (m *Manager) StartNext(threadID string) {
 		Metadata:  queuedPrompt.Message.Metadata,
 		Model:     queuedPrompt.Model,
 		Reasoning: queuedPrompt.Reasoning,
-		Mode:      queuedPrompt.Mode,
 	}
 	if _, err := m.startPromptRequest(threadID, req); err != nil {
 		log.Printf("queue: failed to start queued prompt for %s: %v", threadID, err)

@@ -4,8 +4,6 @@ package tools
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -33,17 +31,6 @@ const (
 type fileRecord struct {
 	modTime time.Time
 	size    int64
-}
-
-// planModeBlockedTools lists tools that are rejected when plan mode is active.
-// Plan mode is read-only: the agent may explore but must not write code or execute commands.
-var planModeBlockedTools = map[string]bool{
-	"Bash":          true,
-	"PowerShell":    true,
-	"Write":         true,
-	"Edit":          true,
-	"apply_patch":   true,
-	"EnterPlanMode": true, // already in plan mode
 }
 
 // Executor implements thread.ToolExecutor with native Go tool implementations.
@@ -289,163 +276,8 @@ func contextThreadID(toolCtx *thread.ToolContext, fallback string) string {
 	return "default"
 }
 
-func isPlanMode(toolCtx *thread.ToolContext) bool {
-	return toolCtx != nil && toolCtx.PlanMode
-}
-
-var planNameAdjectives = []string{
-	"clear",
-	"focused",
-	"steady",
-	"calm",
-	"bright",
-	"swift",
-	"bold",
-	"practical",
-}
-
-var planNameNouns = []string{
-	"outline",
-	"roadmap",
-	"strategy",
-	"approach",
-	"design",
-	"milestone",
-	"workflow",
-	"steps",
-}
-
-func (e *Executor) discobotDataDir() string {
-	home, err := os.UserHomeDir()
-	if err == nil && home != "" {
-		return filepath.Join(home, ".discobot")
-	}
-	return e.dataDir
-}
-
 func (e *Executor) threadDataDir(toolCtx *thread.ToolContext) string {
 	return filepath.Join(e.threadsDir, contextThreadID(toolCtx, e.defaultThreadID))
-}
-
-func (e *Executor) threadPlansDir(toolCtx *thread.ToolContext) string {
-	return filepath.Join(e.threadDataDir(toolCtx), "plans")
-}
-
-func (e *Executor) legacyThreadPlansDir(toolCtx *thread.ToolContext) string {
-	return filepath.Join(e.discobotDataDir(), "plans", contextThreadID(toolCtx, e.defaultThreadID))
-}
-
-func (e *Executor) legacyPlanFilePath(toolCtx *thread.ToolContext) string {
-	return filepath.Join(e.dataDir, "plan", contextThreadID(toolCtx, e.defaultThreadID)+".md")
-}
-
-func randomWord(words []string, fallback string) string {
-	if len(words) == 0 {
-		return fallback
-	}
-	b := make([]byte, 1)
-	if _, err := rand.Read(b); err != nil {
-		return words[int(time.Now().UTC().UnixNano()%int64(len(words)))]
-	}
-	return words[int(b[0])%len(words)]
-}
-
-func randomHex(byteLen int) string {
-	if byteLen <= 0 {
-		byteLen = 2
-	}
-	b := make([]byte, byteLen)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("%x", time.Now().UTC().UnixNano())
-	}
-	return hex.EncodeToString(b)
-}
-
-func llmFriendlyPlanFileName() string {
-	timestamp := time.Now().UTC().Format("20060102-150405")
-	adjective := randomWord(planNameAdjectives, "steady")
-	noun := randomWord(planNameNouns, "outline")
-	return fmt.Sprintf("%s-%s-%s-%s.md", timestamp, adjective, noun, randomHex(2))
-}
-
-func (e *Executor) newPlanFilePath(toolCtx *thread.ToolContext) string {
-	dir := e.threadPlansDir(toolCtx)
-	_ = os.MkdirAll(dir, 0o755)
-	for range 10 {
-		candidate := filepath.Join(dir, llmFriendlyPlanFileName())
-		if _, err := os.Stat(candidate); os.IsNotExist(err) {
-			if toolCtx != nil {
-				toolCtx.PlanFilePath = candidate
-			}
-			return candidate
-		}
-	}
-	fallback := filepath.Join(dir, fmt.Sprintf("%d-%s.md", time.Now().UTC().UnixNano(), randomHex(2)))
-	if toolCtx != nil {
-		toolCtx.PlanFilePath = fallback
-	}
-	return fallback
-}
-
-func (e *Executor) latestThreadPlanFile(toolCtx *thread.ToolContext) string {
-	dir := e.threadPlansDir(toolCtx)
-	return latestPlanFileInDir(dir)
-}
-
-func (e *Executor) latestLegacyThreadPlanFile(toolCtx *thread.ToolContext) string {
-	dir := e.legacyThreadPlansDir(toolCtx)
-	return latestPlanFileInDir(dir)
-}
-
-func latestPlanFileInDir(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-
-	var latestPath string
-	var latestModTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
-			continue
-		}
-		info, infoErr := entry.Info()
-		if infoErr != nil {
-			continue
-		}
-		candidate := filepath.Join(dir, entry.Name())
-		if latestPath == "" || info.ModTime().After(latestModTime) {
-			latestPath = candidate
-			latestModTime = info.ModTime()
-		}
-	}
-	return latestPath
-}
-
-func (e *Executor) resolveActivePlanFile(toolCtx *thread.ToolContext) string {
-	if toolCtx != nil && toolCtx.PlanFilePath != "" {
-		return toolCtx.PlanFilePath
-	}
-	if latest := e.latestThreadPlanFile(toolCtx); latest != "" {
-		if toolCtx != nil {
-			toolCtx.PlanFilePath = latest
-		}
-		return latest
-	}
-	if legacyThreadPlan := e.latestLegacyThreadPlanFile(toolCtx); legacyThreadPlan != "" {
-		if toolCtx != nil {
-			toolCtx.PlanFilePath = legacyThreadPlan
-		}
-		return legacyThreadPlan
-	}
-	legacy := e.legacyPlanFilePath(toolCtx)
-	if _, err := os.Stat(legacy); err == nil {
-		if toolCtx != nil {
-			toolCtx.PlanFilePath = legacy
-		}
-		return legacy
-	}
-	return e.newPlanFilePath(toolCtx)
 }
 
 // Execute dispatches to the appropriate tool handler and enforces output size limits.
@@ -459,14 +291,6 @@ func (e *Executor) Execute(ctx context.Context, toolCtx *thread.ToolContext, cal
 
 // dispatch routes a tool call to its handler.
 func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
-	if isPlanMode(toolCtx) && planModeBlockedTools[call.ToolName] && !e.isPlanFileCall(toolCtx, call) {
-		if call.ToolName == "EnterPlanMode" {
-			return errResult(call, "EnterPlanMode is not available — you are already in plan mode"), nil
-		}
-		planFile := e.resolveActivePlanFile(toolCtx)
-		return errResult(call, fmt.Sprintf("%s is not available in plan mode — use the Write, Edit, or apply_patch tool to write your complete plan to %s (Write, Edit, and apply_patch are allowed for the plan file), then call ExitPlanMode", call.ToolName, planFile)), nil
-	}
-
 	switch call.ToolName {
 	case "Bash", "PowerShell":
 		return e.executeBash(ctx, toolCtx, call)
@@ -492,10 +316,6 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return e.executeRequestUserCredential(call)
 	case "RequestCommitPull":
 		return e.executeRequestCommitPull(toolCtx, call)
-	case "EnterPlanMode":
-		return e.executeEnterPlanMode(toolCtx, call)
-	case "ExitPlanMode":
-		return e.executeExitPlanMode(toolCtx, call)
 	case "Task", "Agent":
 		return e.executeTask(ctx, toolCtx, call)
 	case "TodoWrite":
@@ -592,12 +412,6 @@ func (e *Executor) Continue(ctx context.Context, toolCtx *thread.ToolContext, ca
 			return thread.ToolExecuteResult{}, err
 		}
 		return thread.ToolExecuteResult{Result: result}, nil
-	case "ExitPlanMode":
-		result, err := e.resolveExitPlanMode(toolCtx, call, *req)
-		if err != nil {
-			return thread.ToolExecuteResult{}, err
-		}
-		return thread.ToolExecuteResult{Result: result}, nil
 	case "RequestCommitPull":
 		result, err := e.resolveRequestCommitPull(call, *req)
 		if err != nil {
@@ -690,57 +504,6 @@ func unmarshalInput(call message.ToolCallPart, dst any) error {
 		return fmt.Errorf("invalid input for %s: %w", call.ToolName, err)
 	}
 	return nil
-}
-
-// isPlanFileCall returns true when a Write, Edit, or apply_patch tool call
-// targets only the active plan file for the current thread. These calls are
-// allowed even in plan mode so the agent can write its plan.
-func (e *Executor) isPlanFileCall(toolCtx *thread.ToolContext, call message.ToolCallPart) bool {
-	switch call.ToolName {
-	case "Write", "Edit":
-		return e.isPlanFileWriteCall(toolCtx, call)
-	case "apply_patch":
-		return e.isPlanFilePatchCall(toolCtx, call)
-	default:
-		return false
-	}
-}
-
-func (e *Executor) isPlanFileWriteCall(toolCtx *thread.ToolContext, call message.ToolCallPart) bool {
-	planFile := e.resolveActivePlanFile(toolCtx)
-
-	var input struct {
-		FilePath string `json:"file_path"`
-	}
-	if err := json.Unmarshal([]byte(call.Input), &input); err != nil || input.FilePath == "" {
-		return false
-	}
-	target := resolvePath(e.cwd, input.FilePath)
-	return sameResolvedPath(target, planFile)
-}
-
-func (e *Executor) isPlanFilePatchCall(toolCtx *thread.ToolContext, call message.ToolCallPart) bool {
-	patchText, err := parseApplyPatchInput(call.Input)
-	if err != nil {
-		return false
-	}
-	ops, err := parseApplyPatch(patchText)
-	if err != nil {
-		return false
-	}
-	if len(ops) == 0 {
-		return false
-	}
-	planFile := e.resolveActivePlanFile(toolCtx)
-	for _, op := range ops {
-		if op.kind == patchDeleteFile || op.movePath != "" {
-			return false
-		}
-		if !sameResolvedPath(resolvePath(e.cwd, op.path), planFile) {
-			return false
-		}
-	}
-	return true
 }
 
 func sameResolvedPath(targetPath, expectedPath string) bool {

@@ -82,7 +82,7 @@ func (m *streamTestAgent) CreateThread(_ context.Context, req agent.CreateThread
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
 }
 func (m *streamTestAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
-	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata, Mode: req.Mode, ModeSetBy: req.ModeSetBy}
+	info := agent.ThreadInfo{ID: threadID, Metadata: req.Metadata}
 	if req.Name != nil {
 		info.Name = *req.Name
 	}
@@ -508,7 +508,7 @@ func TestPostChat_StartsCompletion(t *testing.T) {
 		ID:    "msg-1",
 		Role:  "user",
 		Parts: []message.UIPart{message.UITextPart{Text: "Investigate thread metadata", State: "done"}},
-	}}, Model: "openai/gpt-5.4", Reasoning: "high", Mode: "plan"})
+	}}, Model: "openai/gpt-5.4", Reasoning: "high"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,9 +530,6 @@ func TestPostChat_StartsCompletion(t *testing.T) {
 		}
 		if req.Reasoning != "high" {
 			t.Fatalf("expected prompt reasoning to be forwarded, got %+v", req)
-		}
-		if req.Mode != "plan" {
-			t.Fatalf("expected prompt mode to be forwarded, got %+v", req)
 		}
 		if len(req.UserParts) != 1 {
 			t.Fatalf("expected 1 user part, got %d", len(req.UserParts))
@@ -1360,7 +1357,7 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 	ts := newFullHandlerTestServer(t, h)
 	defer ts.Close()
 
-	body, err := json.Marshal(api.ChatRequest{Model: "openai/gpt-5.4", Reasoning: "high", Mode: "plan", Messages: []message.UIMessage{{
+	body, err := json.Marshal(api.ChatRequest{Model: "openai/gpt-5.4", Reasoning: "high", Messages: []message.UIMessage{{
 		ID:    "msg-1",
 		Role:  "user",
 		Parts: []message.UIPart{message.UITextPart{Text: "hi", State: "done"}},
@@ -1397,9 +1394,6 @@ func TestPostChat_UsesResumeForInterruptedTurn(t *testing.T) {
 		}
 		if call.req.Reasoning != "high" {
 			t.Fatalf("expected resume reasoning override, got %#v", call.req)
-		}
-		if call.req.Mode != "plan" {
-			t.Fatalf("expected resume mode override, got %#v", call.req)
 		}
 		if len(call.req.UserParts) != 1 {
 			t.Fatalf("expected resume user parts, got %#v", call.req)
@@ -1614,10 +1608,6 @@ func TestRegisterRoutes_GetThreadMatchesListThreads(t *testing.T) {
 	if len(listed.Threads) != 1 {
 		t.Fatalf("expected 1 listed thread, got %d", len(listed.Threads))
 	}
-	if listed.Threads[0].Mode != "build" {
-		t.Fatalf("expected listed thread mode %q, got %q", "build", listed.Threads[0].Mode)
-	}
-
 	threadResp, err := ts.Client().Get(ts.URL + "/threads/thread-1")
 	if err != nil {
 		t.Fatal(err)
@@ -1634,54 +1624,6 @@ func TestRegisterRoutes_GetThreadMatchesListThreads(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, listed.Threads[0]) {
 		t.Fatalf("expected get thread %+v to match listed thread %+v", got, listed.Threads[0])
-	}
-}
-
-func TestRegisterRoutes_ThreadModeIncludesPlanAndBuild(t *testing.T) {
-	store := thread.NewStore(t.TempDir())
-	ma := &streamTestAgent{listThreadsFn: store.ListThreads}
-	cm := agent.NewConversationManager(ma)
-	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
-	h := New("", cm, nil, nil, defaultAgent)
-	ts := newFullHandlerTestServer(t, h)
-	defer ts.Close()
-
-	if err := store.CreateThread("thread-build"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveConfig("thread-build", thread.Config{Name: "Build Thread", NameSource: thread.ThreadNameSourceUser, Mode: thread.ModeState{Value: "build"}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.CreateThread("thread-plan"); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveConfig("thread-plan", thread.Config{Name: "Plan Thread", NameSource: thread.ThreadNameSourceUser, Mode: thread.ModeState{Value: "plan"}}); err != nil {
-		t.Fatal(err)
-	}
-
-	listResp, err := ts.Client().Get(ts.URL + "/threads")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listResp.Body.Close()
-	if listResp.StatusCode != http.StatusOK {
-		t.Fatalf("expected list status 200, got %d", listResp.StatusCode)
-	}
-
-	var listed api.ListThreadsResponse
-	if err := json.NewDecoder(listResp.Body).Decode(&listed); err != nil {
-		t.Fatal(err)
-	}
-
-	modes := map[string]string{}
-	for _, item := range listed.Threads {
-		modes[item.ID] = item.Mode
-	}
-	if modes["thread-build"] != "build" {
-		t.Fatalf("expected build thread mode %q, got %q", "build", modes["thread-build"])
-	}
-	if modes["thread-plan"] != "plan" {
-		t.Fatalf("expected plan thread mode %q, got %q", "plan", modes["thread-plan"])
 	}
 }
 
@@ -2690,7 +2632,6 @@ func TestChatStream_ForwardsThreadUpdateChunk(t *testing.T) {
 		Data: message.ThreadUpdateData{Thread: message.ThreadUpdateInfo{
 			ID:   "thread-name",
 			Name: "Fix thread naming",
-			Mode: "build",
 		}},
 	}
 	threadUpdateChunkJSON, err := message.MarshalChunk(threadUpdateChunk)

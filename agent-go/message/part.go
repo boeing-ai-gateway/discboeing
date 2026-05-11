@@ -24,8 +24,6 @@ type DiscobotPartMetadata struct {
 	CommandKind string `json:"commandKind,omitempty"`
 	// ReminderKind classifies framework-injected reminder parts.
 	ReminderKind string `json:"reminderKind,omitempty"`
-	// Mode records the current execution mode for mode-reminder parts.
-	Mode string `json:"mode,omitempty"`
 }
 
 // MarshalProviderMetadata encodes a DiscobotPartMetadata value into the
@@ -239,7 +237,7 @@ func (StepStartPart) partType() string { return "step-start" }
 
 // DataPart is a custom data part with a type prefix of "data-".
 type DataPart struct {
-	// DataType is the suffix after "data-" (e.g. "mode-change" for type "data-mode-change").
+	// DataType is the suffix after "data-" (e.g. "progress" for type "data-progress").
 	DataType string          `json:"-"`
 	ID       string          `json:"id,omitempty"`
 	Data     json.RawMessage `json:"data"`

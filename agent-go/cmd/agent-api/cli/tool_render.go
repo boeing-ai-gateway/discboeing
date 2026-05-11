@@ -624,14 +624,6 @@ func normalizeNewlines(s string) string {
 	return s
 }
 
-func isPlanToolName(toolName string) bool {
-	return toolName == "EnterPlanMode" || toolName == "ExitPlanMode"
-}
-
-func isExitPlanApproved(text string) bool {
-	return strings.HasPrefix(strings.TrimSpace(text), "Plan approved")
-}
-
 // toolInputSummary extracts a short human-readable summary from tool input JSON.
 // Returns "" if no suitable field is found.
 func toolInputSummary(toolName string, input json.RawMessage) string {

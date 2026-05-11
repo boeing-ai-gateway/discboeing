@@ -480,25 +480,16 @@ func (m *sessionManager) saveThreadSession(threadID string, session protocol.Ses
 		UpdatedAt:     session.UpdatedAt,
 		ResponseMeta:  existingACP.ResponseMeta,
 		ConfigOptions: existingACP.ConfigOptions,
-		Modes:         existingACP.Modes,
 	}
 	if loadResponse != nil {
 		cfg.Metadata.ACPSession.ResponseMeta = loadResponse.Meta
 		cfg.Metadata.ACPSession.ConfigOptions = nil
-		cfg.Metadata.ACPSession.Modes = nil
 	}
 	if loadResponse != nil && len(loadResponse.ConfigOptions) > 0 {
 		cfg.Metadata.ACPSession.ConfigOptions = make([]json.RawMessage, 0, len(loadResponse.ConfigOptions))
 		for _, option := range loadResponse.ConfigOptions {
 			cfg.Metadata.ACPSession.ConfigOptions = append(cfg.Metadata.ACPSession.ConfigOptions, option.Raw())
 		}
-	}
-	if loadResponse != nil && loadResponse.Modes != nil {
-		data, err := json.Marshal(loadResponse.Modes)
-		if err != nil {
-			return err
-		}
-		cfg.Metadata.ACPSession.Modes = data
 	}
 	return m.store.SaveConfig(threadID, cfg)
 }

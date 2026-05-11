@@ -44,8 +44,6 @@
 		toolPart.toolName === "AskUserQuestion" ||
 		(toolPart.toolName === "RequestCommitPull" &&
 			toolPart.state === "approval-requested") ||
-		(toolPart.toolName === "ExitPlanMode" &&
-			toolPart.state === "approval-requested") ||
 		(toolPart.toolName === "RequestUserCredential" &&
 			toolPart.state === "approval-requested");
 
@@ -60,8 +58,6 @@
 		if (
 			toolPart.toolName === "AskUserQuestion" ||
 			(toolPart.toolName === "RequestCommitPull" &&
-				toolPart.state === "approval-requested") ||
-			(toolPart.toolName === "ExitPlanMode" &&
 				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "RequestUserCredential" &&
 				toolPart.state === "approval-requested")
@@ -79,8 +75,6 @@
 		() =>
 			toolPart.toolName === "AskUserQuestion" ||
 			(toolPart.toolName === "RequestCommitPull" &&
-				toolPart.state === "approval-requested") ||
-			(toolPart.toolName === "ExitPlanMode" &&
 				toolPart.state === "approval-requested") ||
 			(toolPart.toolName === "RequestUserCredential" &&
 				toolPart.state === "approval-requested"),

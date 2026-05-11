@@ -66,10 +66,6 @@ func TestLoad_EndToEnd(t *testing.T) {
 	if len(cfg.Tools) == 0 {
 		t.Error("expected built-in tools")
 	}
-	if hasTool(cfg.Tools, "EnterPlanMode") {
-		t.Error("expected default tool set to exclude EnterPlanMode")
-	}
-
 	// Check MCP servers.
 	if len(cfg.MCPServers) != 1 {
 		t.Errorf("expected 1 MCP server, got %d", len(cfg.MCPServers))
@@ -130,10 +126,6 @@ func TestLoad_EmptyDirectory(t *testing.T) {
 	if len(cfg.Tools) == 0 {
 		t.Error("expected built-in tools even with no config files")
 	}
-	if hasTool(cfg.Tools, "EnterPlanMode") {
-		t.Error("expected default tool set to exclude EnterPlanMode")
-	}
-
 	// MCP and sub-agents should be empty except for built-in agents.
 	if len(cfg.MCPServers) != 0 {
 		t.Errorf("expected 0 MCP servers, got %d", len(cfg.MCPServers))

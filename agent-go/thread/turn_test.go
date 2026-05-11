@@ -84,7 +84,6 @@ func (m *mockExecutor) Continue(ctx context.Context, toolCtx *ToolContext, call 
 	return ToolExecuteResult{}, fmt.Errorf("no continuation in mock executor")
 }
 
-func (m *mockExecutor) SetPlanMode(_ bool)   {}
 func (m *mockExecutor) SetThreadID(_ string) {}
 
 // --- Helper to collect all chunks ---
@@ -803,7 +802,6 @@ func (e *errorExecutor) Continue(ctx context.Context, toolCtx *ToolContext, call
 	return ToolExecuteResult{}, fmt.Errorf("no continuation in error executor")
 }
 
-func (e *errorExecutor) SetPlanMode(_ bool)   {}
 func (e *errorExecutor) SetThreadID(_ string) {}
 
 // --- Crash Recovery Tests ---
@@ -1859,7 +1857,6 @@ func (e *countingExecutor) Continue(ctx context.Context, toolCtx *ToolContext, c
 	return ToolExecuteResult{}, fmt.Errorf("no continuation in counting executor")
 }
 
-func (e *countingExecutor) SetPlanMode(_ bool)   {}
 func (e *countingExecutor) SetThreadID(_ string) {}
 
 // --- Async Executor Mock ---
@@ -1955,7 +1952,6 @@ func (e *asyncMockExecutor) Continue(ctx context.Context, toolCtx *ToolContext, 
 	return e.ResumeAsync(ctx, toolCtx, call, decoded.SubThreadID, nil)
 }
 
-func (e *asyncMockExecutor) SetPlanMode(_ bool)   {}
 func (e *asyncMockExecutor) SetThreadID(_ string) {}
 
 // --- Async Tests ---
@@ -2745,7 +2741,6 @@ func (e *approvalMockExecutor) Continue(ctx context.Context, toolCtx *ToolContex
 	return ToolExecuteResult{}, fmt.Errorf("no continuation in approval mock")
 }
 
-func (e *approvalMockExecutor) SetPlanMode(_ bool)   {}
 func (e *approvalMockExecutor) SetThreadID(_ string) {}
 
 type nestedApprovalContinuation struct {
@@ -2813,7 +2808,6 @@ func (e *nestedApprovalExecutor) Continue(_ context.Context, _ *ToolContext, cal
 	}
 }
 
-func (e *nestedApprovalExecutor) SetPlanMode(_ bool)   {}
 func (e *nestedApprovalExecutor) SetThreadID(_ string) {}
 
 // --- Approval Flow Tests ---
@@ -3221,7 +3215,7 @@ func TestResumeTurn_ApprovalAnswered(t *testing.T) {
 	chunks := collectChunks(t, ResumeTurn(context.Background(), prov, exec, store, turnState))
 
 	// The resolved tool result must be yielded so consumers can observe the
-	// approval outcome (e.g. CLI detecting ExitPlanMode approval).
+	// approval outcome.
 	var hasToolOutput bool
 	for _, c := range chunks {
 		if v, ok := c.(message.ToolOutputAvailableChunk); ok && v.ToolCallID == "tc1" {

@@ -16,7 +16,6 @@ allowedTools:
   - AskUserQuestion
   - RequestUserCredential
   - RequestCommitPull
-  - ExitPlanMode
   - Skill
 ---
 # SYSTEM

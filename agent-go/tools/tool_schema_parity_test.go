@@ -18,8 +18,6 @@ func TestBuiltinToolSchemasMatchImplementationInputFields(t *testing.T) {
 		"AskUserQuestion":       jsonFieldNames(askUserQuestionInput{}),
 		"Bash":                  jsonFieldNames(bashInput{}),
 		"Edit":                  jsonFieldNames(editInput{}),
-		"EnterPlanMode":         jsonFieldNames(struct{}{}),
-		"ExitPlanMode":          jsonFieldNames(exitPlanModeInput{}),
 		"Glob":                  jsonFieldNames(globInput{}),
 		"Grep":                  jsonFieldNames(grepInput{}),
 		"Read":                  jsonFieldNames(readInput{}),

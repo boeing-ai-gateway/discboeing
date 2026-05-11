@@ -212,9 +212,9 @@ test("history replay accepts denied dynamic tool parts", async () => {
 				{
 					type: "dynamic-tool",
 					toolCallId: "tool-denied-1",
-					toolName: "ExitPlanMode",
+					toolName: "Bash",
 					state: "output-denied",
-					input: { allowedPrompts: [] },
+					input: { command: "rm -rf /tmp/demo" },
 					approval: {
 						id: "approval-denied-1",
 						approved: false,
@@ -261,9 +261,9 @@ test("history replay normalizes legacy dynamic tool approvals", async () => {
 				{
 					type: "dynamic-tool",
 					toolCallId: "tool-legacy-approval-1",
-					toolName: "ExitPlanMode",
+					toolName: "AskUserQuestion",
 					state: "output-available",
-					output: "Approved plan:\n\nContinue",
+					output: "Answered.",
 					approval: { id: "approval-legacy-1" },
 				},
 				{
@@ -805,7 +805,6 @@ test("data-thread-update notifies the caller", async () => {
 	const thread: Thread = {
 		id: "thread-1",
 		name: "Fix thread naming",
-		mode: "plan",
 		model: "anthropic/claude-sonnet-4-6",
 		reasoning: "enabled",
 		state: "cancelled",
@@ -1107,7 +1106,6 @@ test("thread update chunks surface thread metadata updates", async () => {
 	const firstThread: Thread = {
 		id: "thread-1",
 		name: "Initial name",
-		mode: "plan",
 		model: "anthropic/claude-sonnet-4-6",
 		reasoning: "enabled",
 	};
@@ -1286,7 +1284,6 @@ test("bindChatStreamEventSource wires EventSource events into the reducer", asyn
 				thread: {
 					id: "assistant-1",
 					name: "Event source thread",
-					mode: "plan",
 					model: "anthropic/claude-sonnet-4-6",
 					reasoning: "enabled",
 				},
@@ -1340,7 +1337,6 @@ test("bindChatStreamEventSource wires EventSource events into the reducer", asyn
 		{
 			id: "assistant-1",
 			name: "Event source thread",
-			mode: "plan",
 			model: "anthropic/claude-sonnet-4-6",
 			reasoning: "enabled",
 		},

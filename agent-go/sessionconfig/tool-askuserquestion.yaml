@@ -2,7 +2,7 @@ name: AskUserQuestion
 description: |-
   Ask the user one or more focused questions during execution.
 
-  Use this to clarify requirements or ask the user to choose among options. In plan mode, use this only for clarification; use ExitPlanMode for plan approval.
+  Use this to clarify requirements or ask the user to choose among options.
 inputSchema:
   type: object
   additionalProperties: false

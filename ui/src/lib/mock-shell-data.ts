@@ -8,7 +8,6 @@ import type {
 import type {
 	HookRunStatus,
 	IdeOption,
-	PlanEntry,
 	ServiceItem,
 	SessionData,
 	SessionSummary,
@@ -310,29 +309,6 @@ function makeSessionFiles(paths: string[]): SessionData["files"] {
 	}));
 }
 
-function makePlanEntries(statusLabel: string): PlanEntry[] {
-	return [
-		{
-			content: `Review ${statusLabel.toLowerCase()} shell spacing`,
-			activeForm: "Reviewing shell spacing",
-			status: "completed",
-			priority: "medium",
-		},
-		{
-			content: "Align thread sidebar interactions",
-			activeForm: "Aligning thread sidebar interactions",
-			status: "in_progress",
-			priority: "high",
-		},
-		{
-			content: "Validate mobile composer parity",
-			activeForm: "Validating mobile composer parity",
-			status: "pending",
-			priority: "low",
-		},
-	];
-}
-
 function makeConversation(statusLabel: string): SessionData["conversation"] {
 	return [
 		{
@@ -433,7 +409,6 @@ const sessionFixtures: SessionData[] = allSessionStatuses.map(
 			workspaceId: "workspace-local",
 			model: "claude-sonnet-4.5",
 			reasoning: index % 2 === 0 ? "high" : undefined,
-			mode: index % 3 === 0 ? "plan" : undefined,
 			baseBranch: index % 2 === 0 ? "discobot-session" : "feature/ui-shell",
 			baseCommit: `${(index + 10).toString(16)}${(index + 11).toString(16)}${(index + 12).toString(16)}${(index + 13).toString(16)}${(index + 14).toString(16)}${(index + 15).toString(16)}${(index + 16).toString(16)}`,
 			references: {
@@ -444,16 +419,13 @@ const sessionFixtures: SessionData[] = allSessionStatuses.map(
 				{
 					id: `thread-${status}-main`,
 					name: `${statusLabel} thread`,
-					mode: index % 3 === 0 ? "plan" : "build",
 				},
 				{
 					id: `thread-${status}-review`,
 					name: "Review follow-up",
-					mode: "build",
 				},
 			],
 			conversation: makeConversation(statusLabel),
-			planEntries: makePlanEntries(statusLabel),
 			hooksStatus: makeHooksStatus(index),
 			hookOutputById: makeHookOutputById(statusLabel),
 			editorFiles: files,

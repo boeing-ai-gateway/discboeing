@@ -53,59 +53,6 @@ func TestFormatRuntimeEnvironmentReminder_IncludesModelName(t *testing.T) {
 	}
 }
 
-func TestFormatModeChangeReminder_IncludesTargetMode(t *testing.T) {
-	plan := sessionconfig.FormatModeChangeReminder(true)
-	if !strings.Contains(plan, "<system-reminder>") || !strings.Contains(plan, "</system-reminder>") {
-		t.Error("plan reminder should be wrapped in <system-reminder> tags")
-	}
-	if !strings.Contains(plan, "mode is now plan") {
-		t.Errorf("expected plan reminder to mention plan mode, got %q", plan)
-	}
-
-	build := sessionconfig.FormatModeChangeReminder(false)
-	if !strings.Contains(build, "mode is now build") {
-		t.Errorf("expected build reminder to mention build mode, got %q", build)
-	}
-	if !strings.Contains(build, "Plan mode has been exited") {
-		t.Errorf("expected build reminder to mention exiting plan mode, got %q", build)
-	}
-}
-
-func TestResolvePlanMode_OnlyChangesOnExplicitRequest(t *testing.T) {
-	cfgPlan := thread.Config{Mode: thread.ModeState{Value: "plan"}}
-	cfgBuild := thread.Config{Mode: thread.ModeState{Value: "build"}}
-
-	planMode, changed := resolvePlanMode("", cfgPlan, true)
-	if !planMode || changed {
-		t.Fatalf("empty mode should keep current mode=true with changed=false, got planMode=%v changed=%v", planMode, changed)
-	}
-
-	planMode, changed = resolvePlanMode("plan", cfgBuild, true)
-	if !planMode || !changed {
-		t.Fatalf("plan request from build should change to plan, got planMode=%v changed=%v", planMode, changed)
-	}
-
-	planMode, changed = resolvePlanMode("plan", cfgPlan, true)
-	if !planMode || changed {
-		t.Fatalf("plan request from plan should not change, got planMode=%v changed=%v", planMode, changed)
-	}
-
-	planMode, changed = resolvePlanMode("", cfgBuild, false)
-	if planMode || changed {
-		t.Fatalf("missing config and empty mode should default to build with changed=false, got planMode=%v changed=%v", planMode, changed)
-	}
-
-	planMode, changed = resolvePlanMode("plan", cfgBuild, false)
-	if !planMode || !changed {
-		t.Fatalf("explicit plan without prior config should set plan and mark changed from default build, got planMode=%v changed=%v", planMode, changed)
-	}
-
-	planMode, changed = resolvePlanMode("build", cfgPlan, true)
-	if planMode || !changed {
-		t.Fatalf("explicit build from plan should change to build, got planMode=%v changed=%v", planMode, changed)
-	}
-}
-
 func TestGeneratedThreadName_UsesFirstMeaningfulText(t *testing.T) {
 	got := generatedThreadName([]message.UIPart{
 		message.UIFilePart{Type: "file", URL: "file:///tmp/input.txt", MediaType: "text/plain"},

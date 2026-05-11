@@ -48,7 +48,7 @@ test("parseChatStreamMessageValue rejects legacy part formats", async () => {
 				{
 					type: "tool-call",
 					toolCallId: "tool-legacy-1",
-					toolName: "EnterPlanMode",
+					toolName: "Bash",
 					input: {},
 				},
 			],
@@ -78,7 +78,7 @@ test("parseChatStreamMessageValue accepts data-* parts", async () => {
 			{
 				type: "data-thread-update",
 				data: {
-					thread: { id: "thread-1", name: "Thread 1", mode: "build" },
+					thread: { id: "thread-1", name: "Thread 1" },
 				},
 			},
 			{
@@ -119,9 +119,9 @@ test("parseChatStreamMessageValue normalizes legacy dynamic-tool approval payloa
 			{
 				type: "dynamic-tool",
 				toolCallId: "tool-legacy-approval-1",
-				toolName: "ExitPlanMode",
+				toolName: "AskUserQuestion",
 				state: "output-available",
-				output: "Plan feedback from user: Continue with your work.",
+				output: "Answered.",
 				approval: { id: "approval-legacy-1" },
 			},
 			{
@@ -169,7 +169,7 @@ test("parseChatStreamMessageValue accepts denied dynamic tools with rejection ap
 			{
 				type: "dynamic-tool",
 				toolCallId: "tool-denied-1",
-				toolName: "ExitPlanMode",
+				toolName: "Bash",
 				state: "output-denied",
 				input: { allowedPrompts: [] },
 				approval: {

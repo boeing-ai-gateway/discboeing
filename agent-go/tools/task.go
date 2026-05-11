@@ -378,7 +378,6 @@ func threadUpdateChunkFromInfo(info agent.ThreadInfo) message.ThreadUpdateChunk 
 				ErrorMessage:  info.ErrorMessage,
 				Model:         info.Model,
 				Reasoning:     info.Reasoning,
-				Mode:          info.Mode,
 				State:         string(info.State),
 				ActiveCommand: info.ActiveCommand,
 				Metadata:      info.Metadata,

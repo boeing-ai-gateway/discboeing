@@ -24,7 +24,6 @@ test("applyStreamedThreadUpdate syncs the primary session title and reloads it",
 			id: "session-1",
 			name: "Fix flaky sidebar refresh",
 			lastMessage: "Fix the delayed sidebar titles",
-			mode: "build",
 		},
 		upsertThread: (thread) => {
 			upserted.push(thread.name);
@@ -54,7 +53,6 @@ test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions",
 			id: "session-1",
 			name: "New streamed title",
 			lastMessage: "latest prompt",
-			mode: "build",
 		},
 		upsertThread: () => {},
 		syncSessionName: () => {},
@@ -72,7 +70,6 @@ test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions",
 			id: "thread-2",
 			name: "Secondary thread",
 			lastMessage: "follow-up prompt",
-			mode: "build",
 		},
 		upsertThread: () => {},
 		syncSessionName: () => {},
@@ -106,31 +103,28 @@ test("clearComposerDraftState clears storage before resetting the in-memory draf
 	assert.equal(composerDraft, "");
 });
 
-test("getThreadComposerValues restores thread mode, model, and reasoning", () => {
+test("getThreadComposerValues restores thread model and reasoning", () => {
 	assert.deepEqual(
 		getThreadComposerValues(
 			{
 				id: "thread-1",
 				name: "Main",
-				mode: "plan",
 				model: "openai/gpt-5",
 				reasoning: "high",
 			},
 			"anthropic/claude-sonnet-4-6",
 		),
 		{
-			mode: "plan",
 			modelId: "openai/gpt-5",
 			reasoning: "high",
 		},
 	);
 });
 
-test("getThreadComposerValues falls back to build mode and the default model", () => {
+test("getThreadComposerValues falls back to the default model", () => {
 	assert.deepEqual(
 		getThreadComposerValues(null, "anthropic/claude-sonnet-4-6"),
 		{
-			mode: "build",
 			modelId: "anthropic/claude-sonnet-4-6",
 			reasoning: undefined,
 		},
@@ -156,15 +150,12 @@ test("parseComposerModelSelection keeps only the model identifier", () => {
 test("resolveThreadComposerSubmitValues falls back to current values when next values are unset", () => {
 	assert.deepEqual(
 		resolveThreadComposerSubmitValues({
-			mode: "plan",
 			modelId: "openai/gpt-5",
 			reasoning: "high",
-			nextMode: undefined,
 			nextModelId: undefined,
 			nextReasoning: undefined,
 		}),
 		{
-			mode: "plan",
 			modelId: "openai/gpt-5",
 			reasoning: "high",
 		},
@@ -174,15 +165,12 @@ test("resolveThreadComposerSubmitValues falls back to current values when next v
 test("resolveThreadComposerSubmitValues clears reasoning when using the default model", () => {
 	assert.deepEqual(
 		resolveThreadComposerSubmitValues({
-			mode: "build",
 			modelId: "openai/gpt-5",
 			reasoning: "high",
-			nextMode: undefined,
 			nextModelId: null,
 			nextReasoning: "default",
 		}),
 		{
-			mode: "build",
 			modelId: null,
 			reasoning: undefined,
 		},
@@ -192,15 +180,12 @@ test("resolveThreadComposerSubmitValues clears reasoning when using the default 
 test("resolveThreadComposerSubmitValues prefers staged next values", () => {
 	assert.deepEqual(
 		resolveThreadComposerSubmitValues({
-			mode: "build",
 			modelId: "anthropic/claude-sonnet-4-6",
 			reasoning: "auto",
-			nextMode: "plan",
 			nextModelId: "openai/gpt-5",
 			nextReasoning: "high",
 		}),
 		{
-			mode: "plan",
 			modelId: "openai/gpt-5",
 			reasoning: "high",
 		},

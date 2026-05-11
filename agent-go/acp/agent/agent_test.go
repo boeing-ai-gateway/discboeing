@@ -717,9 +717,6 @@ func TestAgentUsesStoredACPSessionForThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Metadata.ACPSession.Modes) == 0 {
-		t.Fatal("expected session/load modes to be stored in thread metadata")
-	}
 	if cfg.Metadata.ACPSession.ResponseMeta["source"] != "load" {
 		t.Fatalf("response meta = %#v, want source load", cfg.Metadata.ACPSession.ResponseMeta)
 	}
@@ -905,7 +902,6 @@ func TestAgentCreatesNewSessionWhenStoredSessionCannotBeLoaded(t *testing.T) {
 			ACPSession: thread.ACPSessionMetadata{
 				CWD:       "/workspace",
 				SessionID: "stale-session-1",
-				Modes:     json.RawMessage(`{"currentModeId":"build","availableModes":[]}`),
 			},
 		},
 	}); err != nil {
@@ -927,9 +923,6 @@ func TestAgentCreatesNewSessionWhenStoredSessionCannotBeLoaded(t *testing.T) {
 	}
 	if cfg.Metadata.ACPSession.SessionID != "session-1" {
 		t.Fatalf("stored ACP session id = %q, want session-1", cfg.Metadata.ACPSession.SessionID)
-	}
-	if len(cfg.Metadata.ACPSession.Modes) != 0 {
-		t.Fatalf("stale ACP modes were preserved: %s", cfg.Metadata.ACPSession.Modes)
 	}
 
 	if err := <-serverErr; err != nil {
@@ -1444,13 +1437,6 @@ func servePromptExistingSession(ctx context.Context, ln net.Listener) error {
 	}
 	if err := writeResponse(ctx, rpcConn, loadReq.ID, protocol.LoadSessionResponse{
 		Meta: map[string]any{"source": "load"},
-		Modes: &protocol.SessionModeState{
-			AvailableModes: []protocol.SessionMode{{
-				ID:   "build",
-				Name: "Build",
-			}},
-			CurrentModeID: "build",
-		},
 	}); err != nil {
 		return err
 	}

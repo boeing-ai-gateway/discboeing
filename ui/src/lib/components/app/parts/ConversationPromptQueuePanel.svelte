@@ -297,9 +297,6 @@
 							{#if entry.model}
 								<span>{entry.model}</span>
 							{/if}
-							{#if entry.mode}
-								<span>{entry.mode}</span>
-							{/if}
 							{#if getDisplayedRunAfter(entry)}
 								<span class="font-medium text-foreground/80"
 									>{formatRunAfterStatus(getDisplayedRunAfter(entry))}</span

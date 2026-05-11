@@ -735,8 +735,6 @@ type Config struct {
 	Reasoning providers.Reasoning `json:"reasoning,omitempty"`
 	// CWD is the working directory associated with this thread.
 	CWD string `json:"cwd,omitempty"`
-	// Mode is the canonical durable mode state ("build" | "plan" with metadata).
-	Mode ModeState `json:"mode,omitzero"`
 	// LastTurnState stores the last user-visible terminal turn outcome that
 	// should surface in thread chrome. Empty means no special state.
 	LastTurnState State `json:"lastTurnState,omitempty"`
@@ -782,7 +780,6 @@ type ACPSessionMetadata struct {
 	UpdatedAt     *string           `json:"updatedAt,omitempty"`
 	ResponseMeta  map[string]any    `json:"responseMeta,omitempty"`
 	ConfigOptions []json.RawMessage `json:"configOptions,omitempty"`
-	Modes         json.RawMessage   `json:"modes,omitempty"`
 }
 
 func (m ACPSessionMetadata) IsZero() bool {
@@ -792,8 +789,7 @@ func (m ACPSessionMetadata) IsZero() bool {
 		m.Title == nil &&
 		m.UpdatedAt == nil &&
 		len(m.ResponseMeta) == 0 &&
-		len(m.ConfigOptions) == 0 &&
-		len(m.Modes) == 0
+		len(m.ConfigOptions) == 0
 }
 
 func (m ConfigMetadata) IsZero() bool {
@@ -1084,16 +1080,6 @@ const (
 	StateCancelled   State = "cancelled"
 )
 
-// ModeState captures the current mode with provenance information.
-type ModeState struct {
-	// Value is "build" or "plan".
-	Value string `json:"value,omitempty"`
-	// SetBy indicates who last set the mode: "user", "llm", or "system".
-	SetBy string `json:"setBy,omitempty"`
-	// ChangedAt is when the mode last changed.
-	ChangedAt time.Time `json:"changedAt,omitzero"`
-}
-
 // threadConfigPath returns the path to the thread config file.
 func (s *Store) threadConfigPath(threadID string) string {
 	return filepath.Join(s.baseDir, threadID, "config.json")
@@ -1104,10 +1090,6 @@ func (s *Store) SaveConfig(threadID string, cfg Config) error {
 	dir := filepath.Join(s.baseDir, threadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create thread dir: %w", err)
-	}
-	// Ensure Mode.Value is always set; default to build if empty.
-	if strings.TrimSpace(cfg.Mode.Value) == "" {
-		cfg.Mode.Value = "build"
 	}
 	cfg.CommunicatedCredentials = NormalizeCommunicatedCredentialBindings(cfg.CommunicatedCredentials)
 	cfg.CommunicatedSkillLikeEntries = NormalizeCommunicatedSkillLikeEntries(cfg.CommunicatedSkillLikeEntries)
@@ -1140,7 +1122,6 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ProviderID                   string                          `json:"providerId"`
 		Reasoning                    providers.Reasoning             `json:"reasoning"`
 		CWD                          string                          `json:"cwd"`
-		Mode                         ModeState                       `json:"mode"`
 		LastTurnState                State                           `json:"lastTurnState"`
 		ActiveLeafID                 string                          `json:"activeLeafId"`
 		ActiveCommand                string                          `json:"activeCommand"`
@@ -1156,11 +1137,6 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 	if model != "" && !strings.Contains(model, "/") && raw.ProviderID != "" {
 		model = raw.ProviderID + "/" + model
 	}
-	// Ensure Mode has a value.
-	mode := raw.Mode
-	if strings.TrimSpace(mode.Value) == "" {
-		mode = ModeState{Value: "build"}
-	}
 	return Config{
 		Name:                         raw.Name,
 		NameSource:                   raw.NameSource,
@@ -1169,7 +1145,6 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Model:                        model,
 		Reasoning:                    raw.Reasoning,
 		CWD:                          raw.CWD,
-		Mode:                         mode,
 		LastTurnState:                raw.LastTurnState,
 		ActiveLeafID:                 raw.ActiveLeafID,
 		ActiveCommand:                strings.TrimSpace(raw.ActiveCommand),

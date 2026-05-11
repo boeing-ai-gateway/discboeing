@@ -21,7 +21,6 @@ import type { SessionViewState } from "$lib/session/view/create-session-view-sta
 import type {
 	AsyncStatus,
 	HooksStatus,
-	PlanEntry,
 	ServiceItem,
 	ThreadSummary,
 } from "$lib/shell-types";
@@ -231,19 +230,15 @@ export type ConversationComment = {
 export type ThreadContextValue = {
 	threadId: string;
 	thread: ThreadSummary | null;
-	mode: "build" | "plan";
 	modelId: string | null;
 	reasoning: string | undefined;
-	nextMode: "build" | "plan" | undefined;
 	nextModelId: string | null | undefined;
 	nextReasoning: string | undefined;
-	setNextMode: (mode: "build" | "plan" | undefined) => void;
 	setNextModelId: (modelId: string | null | undefined) => void;
 	setNextReasoning: (reasoning: string | undefined) => void;
 	clearNextComposerValues: () => void;
 	messages: ChatMessage[];
 	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
-	planEntries: PlanEntry[];
 	promptQueue: QueuedPrompt[];
 	status: AsyncStatus | "streaming";
 	error: string | null;

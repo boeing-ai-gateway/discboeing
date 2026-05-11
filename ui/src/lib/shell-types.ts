@@ -138,7 +138,6 @@ export type ThreadSummary = {
 	model?: string;
 	reasoning?: string;
 	errorMessage?: string;
-	mode: string;
 	state?: ThreadState;
 	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running
@@ -215,13 +214,11 @@ export type SessionData = {
 	workspaceId?: Session["workspaceId"];
 	model?: Session["model"];
 	reasoning?: Session["reasoning"];
-	mode?: Session["mode"];
 	baseBranch: string;
 	baseCommit: string;
 	references: SessionReferences;
 	threads: ThreadSummary[];
 	conversation?: SessionConversationMessage[];
-	planEntries?: PlanEntry[];
 	hooksStatus?: HooksStatus;
 	hookOutputById?: Record<string, string>;
 	editorFiles: string[];

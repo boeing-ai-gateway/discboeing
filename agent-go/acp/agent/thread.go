@@ -52,8 +52,6 @@ func threadInfoToAgent(info thread.Info) discobotagent.ThreadInfo {
 		ErrorMessage:    info.ErrorMessage,
 		Model:           info.Model,
 		Reasoning:       info.Reasoning,
-		Mode:            info.Mode,
-		ModeSetBy:       info.ModeSetBy,
 		State:           discobotagent.ThreadState(info.State),
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   info.ActiveCommand,

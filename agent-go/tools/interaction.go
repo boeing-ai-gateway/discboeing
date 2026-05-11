@@ -1,46 +1,15 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
-
-func persistToolContextPlanMode(toolCtx *thread.ToolContext) {
-	if toolCtx == nil || toolCtx.Agent == nil || strings.TrimSpace(toolCtx.ThreadID) == "" {
-		return
-	}
-	newVal := "build"
-	if toolCtx.PlanMode {
-		newVal = "plan"
-	}
-	info, err := toolCtx.Agent.GetThreadInfo(toolCtx.ThreadID)
-	if err == nil && strings.EqualFold(strings.TrimSpace(info.Mode), newVal) {
-		return
-	}
-	updated, err := toolCtx.Agent.UpdateThread(context.Background(), toolCtx.ThreadID, agent.UpdateThreadRequest{
-		Mode:      newVal,
-		ModeSetBy: "llm",
-	})
-	if err == nil || strings.TrimSpace(updated.ID) != "" {
-		return
-	}
-	_, _ = toolCtx.Agent.CreateThread(context.Background(), agent.CreateThreadRequest{
-		ID: toolCtx.ThreadID,
-	})
-	_, _ = toolCtx.Agent.UpdateThread(context.Background(), toolCtx.ThreadID, agent.UpdateThreadRequest{
-		Mode:      newVal,
-		ModeSetBy: "llm",
-	})
-}
 
 // AskUserQuestion — pauses the turn and presents questions to the user.
 // The LLM sends a questions array; we route this through the ApprovalRequest
@@ -243,152 +212,4 @@ func normalizeRequestedCredentials(credentials []api.RequestedCredential) ([]api
 	}
 
 	return normalized, nil
-}
-
-// EnterPlanMode — immediately activates plan mode and returns instructions.
-// No user approval is required; the agent switches to plan mode unconditionally.
-
-func (e *Executor) executeEnterPlanMode(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
-	if toolCtx != nil {
-		toolCtx.PlanMode = true
-		mode := "plan"
-		toolCtx.ModeChange = &mode
-		persistToolContextPlanMode(toolCtx)
-	}
-	planFile := e.newPlanFilePath(toolCtx)
-	result := fmt.Sprintf(`Plan mode activated. Plan file: %s
-
-IMPORTANT: Do NOT output any text to the user right now. Make your next action a tool call (Glob, Grep, Read, etc.) to begin exploring the codebase. Do not narrate or announce your plans.
-
-Workflow:
-1. Use Glob, Grep, Read tools to explore silently
-2. Use AskUserQuestion only if you need to clarify requirements
-3. Write your complete plan to the plan file path above
-4. Call ExitPlanMode when done — it will show the plan to the user for approval
-
-Do NOT write code. Do NOT output text — start immediately with tool calls.`, planFile)
-
-	return thread.ToolExecuteResult{
-		Result: message.ToolResultPart{
-			ToolCallID: call.ToolCallID,
-			ToolName:   call.ToolName,
-			Output:     message.TextOutput{Value: result},
-		},
-	}, nil
-}
-
-// ExitPlanMode — signals the agent is done with the plan and ready to implement.
-
-type exitPlanModeInput struct {
-	AllowedPrompts []json.RawMessage `json:"allowedPrompts"`
-}
-
-func (e *Executor) executeExitPlanMode(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
-	var input exitPlanModeInput
-	_ = json.Unmarshal([]byte(call.Input), &input) // optional fields
-
-	// Read the plan file — it must exist and have non-empty content.
-	planFile := e.resolveActivePlanFile(toolCtx)
-	planContent, err := os.ReadFile(planFile)
-	if err != nil || len(strings.TrimSpace(string(planContent))) == 0 {
-		return errResult(call, fmt.Sprintf(
-			"No plan written yet. Write your complete plan to %s before calling ExitPlanMode.", planFile,
-		)), nil
-	}
-
-	// Determine approval policy from durable config when available:
-	// require approval iff the user put the thread in plan mode.
-	requireApproval := false
-	if toolCtx != nil && toolCtx.Agent != nil && strings.TrimSpace(toolCtx.ThreadID) != "" {
-		if info, loadErr := toolCtx.Agent.GetThreadInfo(toolCtx.ThreadID); loadErr == nil {
-			requireApproval = strings.EqualFold(info.ModeSetBy, "user") && strings.EqualFold(strings.TrimSpace(info.Mode), "plan")
-		}
-	}
-
-	if toolCtx != nil && !requireApproval {
-		toolCtx.PlanMode = false
-		mode := "build"
-		toolCtx.ModeChange = &mode
-		// Persist the mode change so the subsequent ThreadUpdate reflects the
-		// updated state immediately and the UI exits plan mode reliably.
-		persistToolContextPlanMode(toolCtx)
-
-		result := "Plan mode exited. Continue forward and implement the plan now."
-		if len(planContent) > 0 {
-			result = fmt.Sprintf("Plan mode exited. Continue forward and implement the plan now.\n\nCurrent plan:\n\n%s", string(planContent))
-		}
-
-		return thread.ToolExecuteResult{
-			Result: message.ToolResultPart{
-				ToolCallID: call.ToolCallID,
-				ToolName:   call.ToolName,
-				Output:     message.TextOutput{Value: result},
-			},
-		}, nil
-	}
-
-	q := api.AskUserQuestion{
-		Question: "Approve the plan and proceed with implementation?",
-		Header:   "Plan approval",
-		Options: []api.AskUserQuestionOption{
-			{Label: "Approve", Description: "Approve the plan and let the agent implement it"},
-			{Label: "Reject", Description: "Reject the plan and ask the agent to revise it"},
-		},
-		Notes: string(planContent),
-	}
-	prompt, err := json.Marshal([]api.AskUserQuestion{q})
-	if err != nil {
-		return thread.ToolExecuteResult{}, fmt.Errorf("marshal exit plan mode prompt: %w", err)
-	}
-
-	return thread.ToolExecuteResult{
-		Approval: &thread.ApprovalRequest{
-			Questions: prompt,
-		},
-	}, nil
-}
-
-func (e *Executor) resolveExitPlanMode(toolCtx *thread.ToolContext, call message.ToolCallPart, req api.AnswerQuestionRequest) (message.ToolResultPart, error) {
-	approved := false
-	var customFeedback string
-	for _, v := range req.Answers {
-		switch v {
-		case "Approve", "approve", "yes", "true":
-			approved = true
-		case "Reject", "reject", "no", "false", "":
-			// explicit rejection — no feedback
-		default:
-			// Custom text entered via the "Other" option.
-			customFeedback = v
-		}
-	}
-
-	planFile := e.resolveActivePlanFile(toolCtx)
-
-	var result string
-	if approved {
-		if toolCtx != nil {
-			toolCtx.PlanMode = false
-			mode := "build"
-			toolCtx.ModeChange = &mode
-			// Persist the mode change immediately so clients receive a ThreadUpdate
-			// with the correct mode and write tools are unblocked.
-			persistToolContextPlanMode(toolCtx)
-		}
-		if planContent, err := os.ReadFile(planFile); err == nil {
-			result = fmt.Sprintf("Plan approved. Continue forward and implement the plan now.\n\nApproved plan:\n\n%s", string(planContent))
-		} else {
-			result = "Plan approved. Continue forward and implement the plan now."
-		}
-	} else if customFeedback != "" {
-		result = fmt.Sprintf("Plan feedback from user: %s\n\nRevise your plan file and call ExitPlanMode again when ready.", customFeedback)
-	} else {
-		result = "Plan rejected. Revise your plan file and call ExitPlanMode again when ready."
-	}
-
-	return message.ToolResultPart{
-		ToolCallID: call.ToolCallID,
-		ToolName:   call.ToolName,
-		Output:     message.TextOutput{Value: result},
-	}, nil
 }

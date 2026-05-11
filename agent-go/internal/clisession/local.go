@@ -44,7 +44,6 @@ func (s *Local) ListThreads(_ context.Context) ([]api.Thread, error) {
 			ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
 			Model:           info.Model,
 			Reasoning:       info.Reasoning,
-			Mode:            info.Mode,
 			State:           string(info.State),
 			PendingQuestion: info.PendingQuestion,
 			ActiveCommand:   strings.TrimSpace(info.ActiveCommand),

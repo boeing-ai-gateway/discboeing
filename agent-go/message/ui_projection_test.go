@@ -662,9 +662,9 @@ func TestProjectionFieldCoverage_SourceDocumentPart(t *testing.T) {
 // MAINTENANCE: update when adding fields to DataPart or UIDataPart.
 func TestProjectionFieldCoverage_DataPart(t *testing.T) {
 	src := DataPart{
-		DataType: "mode-change",
+		DataType: "progress",
 		ID:       "dp-1",
-		Data:     json.RawMessage(`{"mode":"edit"}`),
+		Data:     json.RawMessage(`{"message":"running"}`),
 	}
 	got, ok := projectAssistantPart(t, src).(UIDataPart)
 	if !ok {

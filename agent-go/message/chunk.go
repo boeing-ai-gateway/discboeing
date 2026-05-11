@@ -320,7 +320,7 @@ func (ToolOutputDeniedChunk) chunkType() string { return "tool-output-denied" }
 
 // DataChunk is a custom data chunk with a type prefix of "data-".
 type DataChunk struct {
-	// DataType is the suffix after "data-" (e.g. "mode-change" for type "data-mode-change").
+	// DataType is the suffix after "data-" (e.g. "progress" for type "data-progress").
 	DataType  string          `json:"-"`
 	ID        string          `json:"id,omitempty"`
 	Data      json.RawMessage `json:"data"`
@@ -339,7 +339,6 @@ type ThreadUpdateInfo struct {
 	ErrorMessage  string                   `json:"errorMessage,omitempty"`
 	Model         string                   `json:"model,omitempty"`
 	Reasoning     string                   `json:"reasoning,omitempty"`
-	Mode          string                   `json:"mode"`
 	State         string                   `json:"state,omitempty"`
 	ActiveCommand string                   `json:"activeCommand,omitempty"`
 	Pending       *bool                    `json:"pending,omitempty"`
@@ -355,7 +354,6 @@ type ThreadQueuedPromptInfo struct {
 	Message   UIMessage `json:"message"`
 	Model     string    `json:"model,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`
-	Mode      string    `json:"mode,omitempty"`
 }
 
 // ThreadUpdateData is the payload for a data-thread-update chunk.

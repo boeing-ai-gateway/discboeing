@@ -192,7 +192,7 @@ type preparedChatRequest struct {
 	opts    *RequestOptions
 }
 
-func (c *ChatService) prepareChatRequest(ctx context.Context, projectID, sessionID string, requestModel string, reasoning string, mode string) (*preparedChatRequest, error) {
+func (c *ChatService) prepareChatRequest(ctx context.Context, projectID, sessionID string, requestModel string, reasoning string) (*preparedChatRequest, error) {
 	// Validate session belongs to project
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
 		return nil, err
@@ -212,20 +212,19 @@ func (c *ChatService) prepareChatRequest(ctx context.Context, projectID, session
 		modelID: requestModel,
 		opts: &RequestOptions{
 			Reasoning: reasoning,
-			Mode:      mode,
 		},
 	}, nil
 }
 
 // StartChat sends messages to the sandbox and returns the message ID and completion metadata.
-func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel string, reasoning string, mode string) (string, *sandboxapi.ChatStartedResponse, error) {
+func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel string, reasoning string) (string, *sandboxapi.ChatStartedResponse, error) {
 	messageID := lastUserMessageID(messages)
 
 	rawMessages, err := json.Marshal(messages)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to marshal messages: %w", err)
 	}
-	prepared, err := c.prepareChatRequest(ctx, projectID, sessionID, requestModel, reasoning, mode)
+	prepared, err := c.prepareChatRequest(ctx, projectID, sessionID, requestModel, reasoning)
 	if err != nil {
 		return "", nil, err
 	}
@@ -249,9 +248,8 @@ func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threa
 // Reasoning can be any supported reasoning level string (for example "auto",
 // "low", "medium", "high", "xhigh", "none", "default") or "" for
 // model/provider default behavior.
-// mode can be "plan" for planning mode, or "" for default (build mode).
-func (c *ChatService) SendToSandbox(ctx context.Context, projectID, sessionID, threadID string, messages json.RawMessage, requestModel string, reasoning string, mode string) (<-chan SSELine, error) {
-	prepared, err := c.prepareChatRequest(ctx, projectID, sessionID, requestModel, reasoning, mode)
+func (c *ChatService) SendToSandbox(ctx context.Context, projectID, sessionID, threadID string, messages json.RawMessage, requestModel string, reasoning string) (<-chan SSELine, error) {
+	prepared, err := c.prepareChatRequest(ctx, projectID, sessionID, requestModel, reasoning)
 	if err != nil {
 		return nil, err
 	}

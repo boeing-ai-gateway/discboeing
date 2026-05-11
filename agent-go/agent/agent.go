@@ -169,8 +169,6 @@ type ThreadInfo struct {
 	ErrorMessage    string
 	Model           string
 	Reasoning       string
-	Mode            string
-	ModeSetBy       string
 	State           ThreadState
 	PendingQuestion bool
 	ActiveCommand   string
@@ -204,8 +202,6 @@ type UpdateThreadRequest struct {
 	ErrorMessage      *string
 	ClearErrorMessage bool
 	Metadata          json.RawMessage
-	Mode              string
-	ModeSetBy         string
 }
 
 // ResumeResult describes a prepared resumed completion.
@@ -237,12 +233,6 @@ type PromptRequest struct {
 
 	// Reasoning controls extended thinking ("enabled" or "").
 	Reasoning string
-
-	// Mode controls the requested permission mode.
-	// "" keeps the current thread mode when one exists, otherwise defaults to build.
-	// "plan" switches to plan mode.
-	// "build" switches to build mode.
-	Mode string
 
 	// FreshContext forces the next prompt to ignore the current leaf and start a
 	// fresh branch within the thread.

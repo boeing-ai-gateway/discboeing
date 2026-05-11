@@ -162,7 +162,6 @@ func TestChunkRoundTrip_Data(t *testing.T) {
 			ErrorMessage: "invalid model",
 			Model:        "anthropic/claude-sonnet-4-6",
 			Reasoning:    "enabled",
-			Mode:         "plan",
 		}},
 	})
 	chunkRoundTrip(t, "ThreadResume", ThreadResumeChunk{
