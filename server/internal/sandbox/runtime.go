@@ -280,16 +280,6 @@ const (
 	StatusRemoved Status = "removed"
 )
 
-// SSHKeyProvision contains SSH key material that should be staged into a sandbox.
-// The private key must only be used for runtime provisioning and must never be
-// exposed via environment variables.
-type SSHKeyProvision struct {
-	Filename   string
-	PrivateKey string
-	PublicKey  string
-	Algorithm  string
-}
-
 // CreateOptions configures sandbox creation.
 // Note: The sandbox image is configured globally via SANDBOX_IMAGE env var,
 // not per-sandbox. The provider uses its configured image for all sandboxes.
@@ -300,9 +290,6 @@ type CreateOptions struct {
 	// Providers that need the raw secret for host-side authentication metadata can
 	// store it, but agent-facing secret env vars are passed through Env.
 	SharedSecret string
-
-	// SSHKey contains optional SSH identity material to provision into the sandbox.
-	SSHKey *SSHKeyProvision
 
 	// Env contains environment variables providers must set on the created
 	// sandbox instance.

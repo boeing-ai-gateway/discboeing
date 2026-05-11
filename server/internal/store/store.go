@@ -745,13 +745,6 @@ func (s *Store) CountSandboxProviderInstancesReferencingCredential(ctx context.C
 	return count, nil
 }
 
-func (s *Store) UpdateSessionSSHKey(ctx context.Context, id string, encryptedData []byte) error {
-	return s.writeDB.WithContext(ctx).
-		Model(&model.Session{}).
-		Where("id = ?", id).
-		Update("ssh_key_encrypted_data", encryptedData).Error
-}
-
 func (s *Store) GetSessionSandboxState(ctx context.Context, sessionID string) ([]byte, error) {
 	var state model.SessionSandboxState
 	if err := s.readDB.WithContext(ctx).First(&state, "session_id = ?", sessionID).Error; err != nil {

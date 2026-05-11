@@ -64,8 +64,6 @@ A chat thread within a workspace, bound to a specific AI agent configuration.
 | agentId | Which agent configuration to use |
 | workspaceId | Parent workspace |
 
-Sessions also persist encrypted sandbox-only secret material when needed. For SSH-enabled sandboxes, Discobot stores a per-session SSH keypair encrypted at rest in the database and reuses it when the sandbox is recreated.
-
 Prompt submissions are also persisted server-side before delivery to the sandbox. This durable handoff lets the server replay pending prompts after a restart or sandbox-creation failure so a submitted user turn is not lost while waiting for the sandbox to become ready. The stored prompt payload is encrypted at rest and is cleared immediately after the sandbox accepts the submission, so the database retains only the minimal metadata needed for idempotent retries and status reporting.
 
 **Session Lifecycle:**
@@ -118,16 +116,6 @@ Encrypted storage for provider authentication and custom thread-assigned environ
 - Credentials can be marked `agentVisible=false` so they remain available to server/agent-go internals without being exposed to the agent tool environment
 
 Credentials are encrypted with AES-256-GCM before storage.
-
-### Sandbox Secret Provisioning
-
-Sandbox secrets follow the same encrypted-at-rest pattern as credentials.
-
-- The server generates per-session SSH identities for sandbox use.
-- Private/public key material is encrypted in the database before being stored on the session record.
-- When a Docker sandbox is created, the decrypted key is copied into a private staging path inside the container (`/.discobot-secrets/ssh/`).
-- During `discobot-agent setup`, the staged files are installed into `/home/discobot/.ssh/` as a named identity (`discobot_sandbox`), not as a default SSH key.
-- Recreated sandboxes reuse the same session keypair so external hosts can continue trusting the same public key.
 
 ## Architecture
 

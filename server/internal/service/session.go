@@ -1075,22 +1075,11 @@ func (s *SessionService) initializeSync(
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
 		}
 
-		var sshKey *sandbox.SSHKeyProvision
-		sessionModel, err := s.store.GetSessionByID(ctx, sessionID)
-		if err != nil {
-			return fmt.Errorf("failed to reload session for sandbox ssh key provisioning: %w", err)
-		}
-		sshKey, err = ensureSessionSSHKey(ctx, s.store, s.sandboxService.cfg, sessionModel)
-		if err != nil {
-			return fmt.Errorf("failed to ensure sandbox ssh key: %w", err)
-		}
-
 		sandboxSecret := generateSecret(32)
 		mcpOAuthRedirectBase := s.sandboxService.cfg.MCPOAuthRedirectBase
 		agentServerURL := s.sandboxService.cfg.AgentServerURL
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
-			SSHKey:       sshKey,
 			Env:          sandboxCreateEnv(sessionID, sandboxSecret, workspacePath, workspace.Path, workspaceCommit, session.TargetRef, projectID, mcpOAuthRedirectBase, agentServerURL),
 			Labels: map[string]string{
 				"discobot.session.id":   sessionID,
