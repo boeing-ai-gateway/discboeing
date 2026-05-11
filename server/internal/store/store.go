@@ -548,10 +548,14 @@ func (s *Store) UpdateSessionErrorMessage(ctx context.Context, id string, errorM
 // UpdateSessionThreadStatus updates the persisted session-level thread summary
 // status. The return value reports whether the stored value changed.
 func (s *Store) UpdateSessionThreadStatus(ctx context.Context, id, status string) (bool, error) {
+	now := time.Now().UTC()
 	result := s.writeDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where("id = ? AND (thread_status IS NULL OR thread_status <> ?)", id, status).
-		Update("thread_status", status)
+		Updates(map[string]any{
+			"thread_status": status,
+			"updated_at":    now,
+		})
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -566,10 +570,14 @@ func (s *Store) UpdateSessionThreadStatusIfUnchangedSince(ctx context.Context, i
 	if observedAt.IsZero() {
 		return s.UpdateSessionThreadStatus(ctx, id, status)
 	}
+	now := time.Now().UTC()
 	result := s.writeDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where("id = ? AND (updated_at IS NULL OR updated_at <= ?) AND (thread_status IS NULL OR thread_status <> ?)", id, observedAt, status).
-		Update("thread_status", status)
+		Updates(map[string]any{
+			"thread_status": status,
+			"updated_at":    now,
+		})
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -581,6 +589,7 @@ func (s *Store) UpdateSessionThreadStatusIfUnchangedSince(ctx context.Context, i
 // status. The comparison happens in SQL so concurrent partial observations
 // cannot lower a previously promoted summary.
 func (s *Store) PromoteSessionThreadStatus(ctx context.Context, id, status string, priority int) (bool, error) {
+	now := time.Now().UTC()
 	result := s.writeDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where(
@@ -599,7 +608,10 @@ func (s *Store) PromoteSessionThreadStatus(ctx context.Context, id, status strin
 			0,
 			priority,
 		).
-		Update("thread_status", status)
+		Updates(map[string]any{
+			"thread_status": status,
+			"updated_at":    now,
+		})
 	if result.Error != nil {
 		return false, result.Error
 	}
