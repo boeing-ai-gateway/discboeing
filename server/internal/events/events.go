@@ -49,21 +49,9 @@ func FromModel(e *model.ProjectEvent) *Event {
 
 // SessionUpdatedData is the payload for session_updated events
 type SessionUpdatedData struct {
-	SessionID    string                     `json:"sessionId"`
-	Status       string                     `json:"status"`
-	CommitStatus string                     `json:"commitStatus,omitempty"`
-	ThreadStatus *SessionActivityStatusData `json:"threadStatus,omitempty"`
-}
-
-type SessionActivityStatusData struct {
-	Status                 string `json:"status"`
-	Reason                 string `json:"reason,omitempty"`
-	NeedsAttentionCount    int    `json:"needsAttentionCount"`
-	RunningCount           int    `json:"runningCount"`
-	QueuedCount            int    `json:"queuedCount"`
-	UnknownCount           int    `json:"unknownCount"`
-	RepresentativeThreadID string `json:"threadId,omitempty"`
-	UpdatedAt              string `json:"updatedAt,omitempty"`
+	SessionID    string `json:"sessionId"`
+	Status       string `json:"status"`
+	CommitStatus string `json:"commitStatus,omitempty"`
 }
 
 // ThreadUpdatedData is the payload for thread_updated events
@@ -173,27 +161,6 @@ func (b *Broker) PublishSessionUpdated(ctx context.Context, projectID, sessionID
 		SessionID:    sessionID,
 		Status:       status,
 		CommitStatus: commitStatus,
-	}
-
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event data: %w", err)
-	}
-
-	event := &Event{
-		ID:        generateEventID(),
-		Type:      EventTypeSessionUpdated,
-		Timestamp: time.Now(),
-		Data:      dataBytes,
-	}
-
-	return b.Publish(ctx, projectID, event)
-}
-
-func (b *Broker) PublishSessionActivityUpdated(ctx context.Context, projectID, sessionID string, threadStatus *SessionActivityStatusData) error {
-	data := SessionUpdatedData{
-		SessionID:    sessionID,
-		ThreadStatus: threadStatus,
 	}
 
 	dataBytes, err := json.Marshal(data)

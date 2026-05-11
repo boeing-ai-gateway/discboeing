@@ -193,10 +193,10 @@ export type SessionThreadActivityStatusValue =
 export interface SessionThreadStatus {
 	status: SessionThreadActivityStatusValue;
 	reason?: string;
-	needsAttentionCount: number;
-	runningCount: number;
-	queuedCount: number;
-	unknownCount: number;
+	needsAttentionCount?: number;
+	runningCount?: number;
+	queuedCount?: number;
+	unknownCount?: number;
 	threadId?: string;
 	updatedAt?: string;
 }
@@ -216,7 +216,7 @@ export interface Session {
 	appliedCommit?: string;
 	/** Error message if status is "error" */
 	errorMessage?: string;
-	/** Aggregated non-idle thread activity for this session. */
+	/** Last known session-level thread activity summary. */
 	threadStatus?: SessionThreadStatus;
 	files: FileNode[];
 	workspaceId?: string;

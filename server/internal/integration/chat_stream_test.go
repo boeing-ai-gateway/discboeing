@@ -116,9 +116,6 @@ func TestChatStream_ValidSession_NoActiveStream(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("expected Content-Type text/event-stream, got %s", ct)
 	}
-	if stream := resp.Header.Get("x-vercel-ai-ui-message-stream"); stream != "v1" {
-		t.Fatalf("expected x-vercel-ai-ui-message-stream v1, got %s", stream)
-	}
 
 	frames, err := readChatSSEFrames(resp.Body)
 	if err != nil {
@@ -513,7 +510,6 @@ func TestChatWebSocket_SubscribeForwardsEvents(t *testing.T) {
 
 		if r.Header.Get("Accept") == "text/event-stream" {
 			w.Header().Set("Content-Type", "text/event-stream")
-			w.Header().Set("x-vercel-ai-ui-message-stream", "v1")
 			w.WriteHeader(http.StatusOK)
 			for index, msg := range messages {
 				_, _ = fmt.Fprintf(w, "id: completion-1:%d\n", index)

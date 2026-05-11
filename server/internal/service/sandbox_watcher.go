@@ -14,10 +14,9 @@ import (
 // It handles cases where sandboxes are modified externally (e.g., Docker
 // containers deleted outside of Discobot).
 type SandboxWatcher struct {
-	provider        sandbox.Provider
-	store           *store.Store
-	broker          *events.Broker
-	activityService *SessionActivityService
+	provider sandbox.Provider
+	store    *store.Store
+	broker   *events.Broker
 }
 
 // NewSandboxWatcher creates a new sandbox watcher.
@@ -27,10 +26,6 @@ func NewSandboxWatcher(provider sandbox.Provider, s *store.Store, broker *events
 		store:    s,
 		broker:   broker,
 	}
-}
-
-func (w *SandboxWatcher) SetActivityService(activityService *SessionActivityService) {
-	w.activityService = activityService
 }
 
 // Start begins watching for sandbox state changes.
@@ -117,12 +112,6 @@ func (w *SandboxWatcher) handleEvent(ctx context.Context, event sandbox.StateEve
 	default:
 		log.Printf("SandboxWatcher: unknown sandbox status: %s for session %s", event.Status, event.SessionID)
 		return
-	}
-
-	if event.Status == sandbox.StatusStopped || event.Status == sandbox.StatusRemoved || event.Status == sandbox.StatusFailed {
-		if w.activityService != nil {
-			w.activityService.MarkSandboxStopped(ctx, event.SessionID)
-		}
 	}
 
 	// Update session status if needed

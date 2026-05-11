@@ -188,12 +188,6 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 			if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", ws.ID).Delete(&model.PromptSubmission{}).Error; err != nil {
 				return err
 			}
-			if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", ws.ID).Delete(&model.SessionThreadState{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", ws.ID).Delete(&model.SessionActivityStatus{}).Error; err != nil {
-				return err
-			}
 			// Delete sessions
 			if err := tx.Unscoped().Where("workspace_id = ?", ws.ID).Delete(&model.Session{}).Error; err != nil {
 				return err
@@ -316,12 +310,6 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 			return err
 		}
 		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.PromptSubmission{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.SessionThreadState{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.SessionActivityStatus{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", id).Delete(&model.SessionCommitLog{}).Error; err != nil {
@@ -484,6 +472,19 @@ func (s *Store) ListSessionsByStatuses(ctx context.Context, statuses []string) (
 	return sessions, err
 }
 
+// ListSessionsByStatusesAndThreadStatuses returns sessions whose lifecycle and
+// persisted thread summary both match the provided sets.
+func (s *Store) ListSessionsByStatusesAndThreadStatuses(ctx context.Context, statuses, threadStatuses []string) ([]*model.Session, error) {
+	var sessions []*model.Session
+	if len(statuses) == 0 || len(threadStatuses) == 0 {
+		return sessions, nil
+	}
+	err := s.readDB.WithContext(ctx).
+		Where("status IN ? AND thread_status IN ?", statuses, threadStatuses).
+		Find(&sessions).Error
+	return sessions, err
+}
+
 // ListSessionsByCommitStatuses returns sessions with the given commit statuses.
 func (s *Store) ListSessionsByCommitStatuses(ctx context.Context, commitStatuses []string) ([]*model.Session, error) {
 	var sessions []*model.Session
@@ -522,6 +523,67 @@ func (s *Store) UpdateSessionErrorMessage(ctx context.Context, id string, errorM
 	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// UpdateSessionThreadStatus updates the persisted session-level thread summary
+// status. The return value reports whether the stored value changed.
+func (s *Store) UpdateSessionThreadStatus(ctx context.Context, id, status string) (bool, error) {
+	result := s.writeDB.WithContext(ctx).
+		Model(&model.Session{}).
+		Where("id = ? AND (thread_status IS NULL OR thread_status <> ?)", id, status).
+		Update("thread_status", status)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+// UpdateSessionThreadStatusIfUnchangedSince updates the session-level thread
+// summary only when the session row has not changed since the snapshot request
+// started. This prevents older full snapshots from lowering a newer promoted
+// status, such as an idle thread-list response racing with a new prompt start.
+func (s *Store) UpdateSessionThreadStatusIfUnchangedSince(ctx context.Context, id, status string, observedAt time.Time) (bool, error) {
+	if observedAt.IsZero() {
+		return s.UpdateSessionThreadStatus(ctx, id, status)
+	}
+	result := s.writeDB.WithContext(ctx).
+		Model(&model.Session{}).
+		Where("id = ? AND (updated_at IS NULL OR updated_at <= ?) AND (thread_status IS NULL OR thread_status <> ?)", id, observedAt, status).
+		Update("thread_status", status)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+// PromoteSessionThreadStatus updates the persisted session-level thread summary
+// only when the new status has a higher priority than the currently stored
+// status. The comparison happens in SQL so concurrent partial observations
+// cannot lower a previously promoted summary.
+func (s *Store) PromoteSessionThreadStatus(ctx context.Context, id, status string, priority int) (bool, error) {
+	result := s.writeDB.WithContext(ctx).
+		Model(&model.Session{}).
+		Where(
+			`id = ? AND CASE thread_status
+				WHEN ? THEN ?
+				WHEN ? THEN ?
+				WHEN ? THEN ?
+				WHEN ? THEN ?
+				ELSE ?
+			END < ?`,
+			id,
+			model.SessionActivityStatusNeedsAttention, 4,
+			model.SessionActivityStatusRunning, 3,
+			model.SessionActivityStatusQueued, 2,
+			model.SessionActivityStatusUnknown, 1,
+			0,
+			priority,
+		).
+		Update("thread_status", status)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
 func (s *Store) CreateSession(ctx context.Context, session *model.Session) error {
 	return s.writeDB.WithContext(ctx).Create(session).Error
 }
@@ -546,167 +608,6 @@ func (s *Store) UpdateSessionWorkspace(ctx context.Context, id, workspacePath, t
 		updates["target_ref"] = strings.TrimSpace(targetRef)
 	}
 	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
-}
-
-func (s *Store) GetSessionActivityStatus(ctx context.Context, sessionID string) (*model.SessionActivityStatus, error) {
-	var status model.SessionActivityStatus
-	if err := s.readDB.WithContext(ctx).First(&status, "session_id = ?", sessionID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	return &status, nil
-}
-
-func (s *Store) ListSessionActivityStatuses(ctx context.Context, sessionIDs []string) (map[string]*model.SessionActivityStatus, error) {
-	result := make(map[string]*model.SessionActivityStatus, len(sessionIDs))
-	if len(sessionIDs) == 0 {
-		return result, nil
-	}
-
-	var statuses []*model.SessionActivityStatus
-	if err := s.readDB.WithContext(ctx).Where("session_id IN ?", sessionIDs).Find(&statuses).Error; err != nil {
-		return nil, err
-	}
-	for _, status := range statuses {
-		result[status.SessionID] = status
-	}
-	return result, nil
-}
-
-func (s *Store) ListSessionThreadStates(ctx context.Context, sessionID string) ([]*model.SessionThreadState, error) {
-	var states []*model.SessionThreadState
-	err := s.readDB.WithContext(ctx).
-		Where("session_id = ?", sessionID).
-		Order("updated_at DESC").
-		Find(&states).Error
-	return states, err
-}
-
-func (s *Store) UpdateSessionThreadActivity(ctx context.Context, sessionID, threadID string, state *model.SessionThreadState) (*model.SessionActivityStatus, bool, error) {
-	var aggregate *model.SessionActivityStatus
-	var changed bool
-	err := s.writeDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if state == nil || state.Status == "" || state.Status == model.SessionActivityStatusIdle {
-			if err := tx.Delete(&model.SessionThreadState{}, "session_id = ? AND thread_id = ?", sessionID, threadID).Error; err != nil {
-				return err
-			}
-		} else {
-			state.SessionID = sessionID
-			state.ThreadID = threadID
-			if err := tx.Save(state).Error; err != nil {
-				return err
-			}
-		}
-
-		next, err := recomputeSessionActivityStatusTx(tx, sessionID)
-		if err != nil {
-			return err
-		}
-
-		var existing model.SessionActivityStatus
-		err = tx.First(&existing, "session_id = ?", sessionID).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if err := tx.Create(next).Error; err != nil {
-				return err
-			}
-			aggregate = next
-			changed = true
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		changed = sessionActivityStatusChanged(&existing, next)
-		if !changed {
-			aggregate = &existing
-			return nil
-		}
-		if err := tx.Model(&model.SessionActivityStatus{}).
-			Where("session_id = ?", sessionID).
-			Updates(map[string]any{
-				"project_id":               next.ProjectID,
-				"status":                   next.Status,
-				"reason":                   next.Reason,
-				"needs_attention_count":    next.NeedsAttentionCount,
-				"running_count":            next.RunningCount,
-				"queued_count":             next.QueuedCount,
-				"unknown_count":            next.UnknownCount,
-				"representative_thread_id": next.RepresentativeThreadID,
-				"updated_at":               time.Now().UTC(),
-			}).Error; err != nil {
-			return err
-		}
-		aggregate = next
-		return nil
-	})
-	return aggregate, changed, err
-}
-
-func recomputeSessionActivityStatusTx(tx *gorm.DB, sessionID string) (*model.SessionActivityStatus, error) {
-	var session model.Session
-	if err := tx.First(&session, "id = ?", sessionID).Error; err != nil {
-		return nil, err
-	}
-
-	var states []*model.SessionThreadState
-	if err := tx.Where("session_id = ?", sessionID).Order("updated_at DESC").Find(&states).Error; err != nil {
-		return nil, err
-	}
-
-	next := &model.SessionActivityStatus{
-		SessionID: sessionID,
-		ProjectID: session.ProjectID,
-		Status:    model.SessionActivityStatusIdle,
-	}
-	for _, state := range states {
-		switch state.Status {
-		case model.SessionActivityStatusNeedsAttention:
-			next.NeedsAttentionCount++
-		case model.SessionActivityStatusRunning:
-			next.RunningCount++
-		case model.SessionActivityStatusQueued:
-			next.QueuedCount++
-		case model.SessionActivityStatusUnknown:
-			next.UnknownCount++
-		}
-	}
-
-	for _, candidate := range []string{
-		model.SessionActivityStatusNeedsAttention,
-		model.SessionActivityStatusRunning,
-		model.SessionActivityStatusQueued,
-		model.SessionActivityStatusUnknown,
-	} {
-		for _, state := range states {
-			if state.Status != candidate {
-				continue
-			}
-			next.Status = state.Status
-			next.Reason = state.Reason
-			threadID := state.ThreadID
-			next.RepresentativeThreadID = &threadID
-			return next, nil
-		}
-	}
-	return next, nil
-}
-
-func sessionActivityStatusChanged(existing, next *model.SessionActivityStatus) bool {
-	if existing.Status != next.Status ||
-		existing.Reason != next.Reason ||
-		existing.NeedsAttentionCount != next.NeedsAttentionCount ||
-		existing.RunningCount != next.RunningCount ||
-		existing.QueuedCount != next.QueuedCount ||
-		existing.UnknownCount != next.UnknownCount {
-		return true
-	}
-	if existing.RepresentativeThreadID == nil || next.RepresentativeThreadID == nil {
-		return existing.RepresentativeThreadID != next.RepresentativeThreadID
-	}
-	return *existing.RepresentativeThreadID != *next.RepresentativeThreadID
 }
 
 func (s *Store) CreateSessionCommitLog(ctx context.Context, entry *model.SessionCommitLog) error {
@@ -734,12 +635,6 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 			return err
 		}
 		if err := tx.Where("session_id = ?", id).Delete(&model.PromptSubmission{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("session_id = ?", id).Delete(&model.SessionThreadState{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("session_id = ?", id).Delete(&model.SessionActivityStatus{}).Error; err != nil {
 			return err
 		}
 

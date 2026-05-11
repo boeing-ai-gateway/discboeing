@@ -58,6 +58,7 @@ const (
 	legacySessionStatusRunning          = "running"
 	defaultSandboxCleanupRetentionDelay = 1 * time.Minute
 	defaultSessionTargetRef             = "HEAD"
+	threadStatusRefreshTimeout          = 2 * time.Second
 )
 
 // sessionIDRegex matches valid session IDs (alphanumeric and hyphens only).
@@ -133,7 +134,6 @@ type SessionService struct {
 	sandboxService  *SandboxService
 	eventBroker     *events.Broker
 	jobEnqueuer     JobEnqueuer
-	activityService *SessionActivityService
 	cleanupDelay    time.Duration
 }
 
@@ -148,10 +148,6 @@ func NewSessionService(s *store.Store, gitSvc *GitService, sandboxProv sandbox.P
 		jobEnqueuer:     jobEnqueuer,
 		cleanupDelay:    defaultSandboxCleanupRetentionDelay,
 	}
-}
-
-func (s *SessionService) SetActivityService(activityService *SessionActivityService) {
-	s.activityService = activityService
 }
 
 // SetSandboxCleanupDelay updates the retention window used before permanently
@@ -170,22 +166,9 @@ func (s *SessionService) ListSessionsByProject(ctx context.Context, projectID st
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	statuses := map[string]*model.SessionActivityStatus{}
-	if s.activityService != nil {
-		sessionIDs := make([]string, 0, len(dbSessions))
-		for _, sess := range dbSessions {
-			sessionIDs = append(sessionIDs, sess.ID)
-		}
-		statuses, err = s.store.ListSessionActivityStatuses(ctx, sessionIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list session activity statuses: %w", err)
-		}
-	}
-
 	sessions := make([]*Session, len(dbSessions))
 	for i, sess := range dbSessions {
-		s.syncSessionNameFromPrimaryThread(ctx, sess)
-		sessions[i] = s.mapSessionWithActivity(sess, statuses[sess.ID])
+		sessions[i] = s.mapSession(sess)
 	}
 	return sessions, nil
 }
@@ -200,7 +183,6 @@ func (s *SessionService) ListSessionsByWorkspace(ctx context.Context, workspaceI
 
 	sessions := make([]*Session, len(dbSessions))
 	for i, sess := range dbSessions {
-		s.syncSessionNameFromPrimaryThread(ctx, sess)
 		sessions[i] = s.mapSession(sess)
 	}
 	return sessions, nil
@@ -215,11 +197,7 @@ func (s *SessionService) GetSession(ctx context.Context, sessionID string) (*Ses
 
 	s.syncSessionNameFromPrimaryThread(ctx, sess)
 
-	var activity *model.SessionActivityStatus
-	if s.activityService != nil {
-		activity, _ = s.store.GetSessionActivityStatus(ctx, sessionID)
-	}
-	return s.mapSessionWithActivity(sess, activity), nil
+	return s.mapSession(sess), nil
 }
 
 func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, sess *model.Session) {
@@ -254,11 +232,12 @@ func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, s
 // If initialMessage is provided, it creates the first user message in the session.
 func (s *SessionService) CreateSession(ctx context.Context, projectID, workspaceID, name, initialMessage string) (*Session, error) {
 	sess := &model.Session{
-		ProjectID:   projectID,
-		WorkspaceID: workspaceID,
-		Name:        name,
-		Description: nil,
-		Status:      model.SessionStatusInitializing,
+		ProjectID:    projectID,
+		WorkspaceID:  workspaceID,
+		Name:         name,
+		Description:  nil,
+		Status:       model.SessionStatusInitializing,
+		ThreadStatus: model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -283,12 +262,13 @@ func (s *SessionService) CreateSession(ctx context.Context, projectID, workspace
 // CreateSessionWithID creates a new session with the provided client ID.
 func (s *SessionService) CreateSessionWithID(ctx context.Context, sessionID, projectID, workspaceID, name string) (*Session, error) {
 	sess := &model.Session{
-		ID:          sessionID, // Use client-provided ID
-		ProjectID:   projectID,
-		WorkspaceID: workspaceID,
-		Name:        name,
-		Description: nil,
-		Status:      model.SessionStatusInitializing,
+		ID:           sessionID, // Use client-provided ID
+		ProjectID:    projectID,
+		WorkspaceID:  workspaceID,
+		Name:         name,
+		Description:  nil,
+		Status:       model.SessionStatusInitializing,
+		ThreadStatus: model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -340,6 +320,97 @@ func (s *SessionService) UpdateErrorMessage(ctx context.Context, projectID, sess
 	}
 
 	return s.mapSession(sess), nil
+}
+
+// SetThreadStatus persists the last known session-level aggregate thread status.
+// It intentionally stores only the aggregate status; per-thread details remain
+// authoritative in the sandbox agent and are fetched from thread endpoints.
+func (s *SessionService) SetThreadStatus(ctx context.Context, projectID, sessionID, status string) error {
+	return s.setThreadStatus(ctx, projectID, sessionID, status, time.Time{})
+}
+
+func (s *SessionService) setThreadStatus(ctx context.Context, projectID, sessionID, status string, observedAt time.Time) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	status = normalizeSessionActivityStatus(status)
+	var (
+		changed bool
+		err     error
+	)
+	if observedAt.IsZero() {
+		changed, err = s.store.UpdateSessionThreadStatus(ctx, sessionID, status)
+	} else {
+		changed, err = s.store.UpdateSessionThreadStatusIfUnchangedSince(ctx, sessionID, status, observedAt)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to update session thread status: %w", err)
+	}
+	if !changed || s.eventBroker == nil {
+		return nil
+	}
+	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
+		log.Printf("Failed to publish session thread status event: %v", err)
+	}
+	return nil
+}
+
+// PromoteThreadStatus records an observed activity status only when it is more
+// important than the stored summary. This avoids lowering a session aggregate
+// from needs_attention/running based on a partial observation from one thread.
+func (s *SessionService) PromoteThreadStatus(ctx context.Context, projectID, sessionID, status string) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	status = normalizeSessionActivityStatus(status)
+	priority := sessionActivityPriority(status)
+	if priority == 0 {
+		return nil
+	}
+	changed, err := s.store.PromoteSessionThreadStatus(ctx, sessionID, status, priority)
+	if err != nil {
+		return fmt.Errorf("failed to promote session thread status: %w", err)
+	}
+	if !changed || s.eventBroker == nil {
+		return nil
+	}
+	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
+		log.Printf("Failed to publish session thread status event: %v", err)
+	}
+	return nil
+}
+
+// RefreshThreadStatus asks an already-running sandbox for the authoritative
+// aggregate and persists that single status on the session. It never reconciles
+// or starts a stopped sandbox.
+func (s *SessionService) RefreshThreadStatus(ctx context.Context, projectID, sessionID string) error {
+	if s == nil || s.sandboxService == nil {
+		return nil
+	}
+	observedAt := time.Now().UTC()
+	ctx, cancel := context.WithTimeout(ctx, threadStatusRefreshTimeout)
+	defer cancel()
+	snapshot, err := s.sandboxService.GetSessionActivityIfRunning(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	activity := sessionActivityStatusFromSnapshot(snapshot)
+	if activity == nil {
+		return nil
+	}
+	return s.setThreadStatus(ctx, projectID, sessionID, activity.Status, observedAt)
+}
+
+// SetThreadStatusFromThreads persists the aggregate status from a thread list
+// response that was already fetched for an active session view. observedAt is
+// when the thread-list request started; older snapshots must not overwrite a
+// newer prompt-start/status observation.
+func (s *SessionService) SetThreadStatusFromThreads(ctx context.Context, projectID, sessionID string, observedAt time.Time, threads []sandboxapi.Thread) error {
+	activity := sessionActivityStatusFromThreads(threads)
+	if activity == nil {
+		return nil
+	}
+	return s.setThreadStatus(ctx, projectID, sessionID, activity.Status, observedAt)
 }
 
 // UpdateSession updates a session and publishes an SSE event.
@@ -623,11 +694,11 @@ func (s *SessionService) PerformDeferredSandboxDeletion(ctx context.Context, ses
 }
 
 func (s *SessionService) mapSession(sess *model.Session) *Session {
-	return s.mapSessionWithActivity(sess, nil)
+	return s.mapSessionWithActivity(sess, sessionThreadStatusFromModel(sess))
 }
 
 // mapSession maps a model Session to a service Session
-func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *model.SessionActivityStatus) *Session {
+func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *SessionActivityStatus) *Session {
 	description := ""
 	if sess.Description != nil {
 		description = *sess.Description
@@ -697,10 +768,20 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *m
 		WorkspaceID:     sess.WorkspaceID,
 		WorkspacePath:   workspacePath,
 	}
-	if s.activityService != nil {
-		session.ThreadStatus = s.activityService.ToAPI(activity)
-	}
+	session.ThreadStatus = activity
 	return session
+}
+
+func sessionThreadStatusFromModel(sess *model.Session) *SessionActivityStatus {
+	if sess == nil {
+		return nil
+	}
+	switch normalizeSessionStatus(sess.Status) {
+	case model.SessionStatusReady:
+		return sessionActivityStatusFromStoredStatus(sess.ThreadStatus)
+	default:
+		return nil
+	}
 }
 
 func trimStringPtr(value *string) string {

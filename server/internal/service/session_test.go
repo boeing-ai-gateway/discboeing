@@ -375,7 +375,7 @@ func TestSessionServiceGetSessionSyncsNameFromPrimaryThread(t *testing.T) {
 	}
 }
 
-func TestSessionServiceListSessionsByProjectSyncsNameFromPrimaryThread(t *testing.T) {
+func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
 	provider := mocksandbox.NewProvider()
@@ -425,8 +425,120 @@ func TestSessionServiceListSessionsByProjectSyncsNameFromPrimaryThread(t *testin
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}
-	if sessions[0].Name != "Listed thread name" {
-		t.Fatalf("expected synced session name from list, got %q", sessions[0].Name)
+	if sessions[0].Name != "" {
+		t.Fatalf("expected list to avoid live thread name sync, got %q", sessions[0].Name)
+	}
+}
+
+func TestSessionServicePromoteThreadStatusOnlyRaisesPriority(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-thread-status",
+		ProjectID:  "project-thread-status",
+		Path:       "/workspace-thread-status",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	dbSession := &model.Session{
+		ID:           "session-thread-status",
+		ProjectID:    workspace.ProjectID,
+		WorkspaceID:  workspace.ID,
+		Status:       model.SessionStatusReady,
+		ThreadStatus: model.SessionActivityStatusIdle,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusQueued); err != nil {
+		t.Fatalf("failed to promote queued status: %v", err)
+	}
+	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusRunning); err != nil {
+		t.Fatalf("failed to promote running status: %v", err)
+	}
+	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusQueued); err != nil {
+		t.Fatalf("failed to ignore lower queued status: %v", err)
+	}
+
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.ThreadStatus != model.SessionActivityStatusRunning {
+		t.Fatalf("thread status = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusRunning)
+	}
+
+	if err := sessionSvc.SetThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusIdle); err != nil {
+		t.Fatalf("failed to set idle status: %v", err)
+	}
+	stored, err = testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session after set: %v", err)
+	}
+	if stored.ThreadStatus != model.SessionActivityStatusIdle {
+		t.Fatalf("thread status after full set = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusIdle)
+	}
+}
+
+func TestSessionServiceStaleThreadSnapshotDoesNotLowerPromotion(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	sessionSvc := NewSessionService(testStore, nil, nil, nil, nil, nil)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-stale-thread-status",
+		ProjectID:  "project-stale-thread-status",
+		Path:       "/workspace-stale-thread-status",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	dbSession := &model.Session{
+		ID:           "session-stale-thread-status",
+		ProjectID:    workspace.ProjectID,
+		WorkspaceID:  workspace.ID,
+		Status:       model.SessionStatusReady,
+		ThreadStatus: model.SessionActivityStatusIdle,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	staleObservedAt := time.Now().UTC().Add(-time.Minute)
+	if err := sessionSvc.PromoteThreadStatus(ctx, workspace.ProjectID, dbSession.ID, model.SessionActivityStatusRunning); err != nil {
+		t.Fatalf("failed to promote running status: %v", err)
+	}
+	if err := sessionSvc.SetThreadStatusFromThreads(ctx, workspace.ProjectID, dbSession.ID, staleObservedAt, nil); err != nil {
+		t.Fatalf("failed to apply stale idle snapshot: %v", err)
+	}
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.ThreadStatus != model.SessionActivityStatusRunning {
+		t.Fatalf("thread status after stale snapshot = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusRunning)
+	}
+
+	freshObservedAt := time.Now().UTC().Add(time.Minute)
+	if err := sessionSvc.SetThreadStatusFromThreads(ctx, workspace.ProjectID, dbSession.ID, freshObservedAt, nil); err != nil {
+		t.Fatalf("failed to apply fresh idle snapshot: %v", err)
+	}
+	stored, err = testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session after fresh snapshot: %v", err)
+	}
+	if stored.ThreadStatus != model.SessionActivityStatusIdle {
+		t.Fatalf("thread status after fresh snapshot = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusIdle)
 	}
 }
 
@@ -450,6 +562,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		DisplayName:     strPtr("Test Display"),
 		Description:     strPtr("Test Description"),
 		Status:          "ready",
+		ThreadStatus:    model.SessionActivityStatusNeedsAttention,
 		CommitStatus:    "committed",
 		CommitOperation: strPtr("rebase"),
 		CommitError:     strPtr("commit error"),
@@ -477,6 +590,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		"DisplayName":     "DisplayName",
 		"Description":     "Description",
 		"Status":          "Status",
+		"ThreadStatus":    "ThreadStatus",
 		"CommitStatus":    "CommitStatus",
 		"CommitOperation": "CommitOperation",
 		"CommitError":     "CommitError",
@@ -555,6 +669,9 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 	}
 	if result.Timestamp != updatedAt.Format(time.RFC3339) {
 		t.Errorf("Timestamp = %q, want %q", result.Timestamp, updatedAt.Format(time.RFC3339))
+	}
+	if result.ThreadStatus == nil || result.ThreadStatus.Status != model.SessionActivityStatusNeedsAttention {
+		t.Errorf("ThreadStatus = %#v, want status %q", result.ThreadStatus, model.SessionActivityStatusNeedsAttention)
 	}
 
 	// Verify Files is initialized (not nil)

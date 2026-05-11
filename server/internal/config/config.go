@@ -75,6 +75,7 @@ type Config struct {
 	SandboxImage               string        // Default sandbox image
 	SandboxIdleTimeout         time.Duration // Auto-stop sandboxes after idle period
 	IdleCheckInterval          time.Duration // How often to check for idle sessions
+	ThreadStatusSyncInterval   time.Duration // How often to poll non-terminal session thread summaries
 	SessionSandboxCleanupDelay time.Duration // Delay before removing a stopped sandbox after session deletion
 
 	// Docker-specific settings
@@ -236,6 +237,7 @@ func Load() (*Config, error) {
 	cfg.SandboxImage = getEnv("SANDBOX_IMAGE", DefaultSandboxImage())
 	cfg.SandboxIdleTimeout = getEnvDuration("SANDBOX_IDLE_TIMEOUT", 1*time.Hour)
 	cfg.IdleCheckInterval = getEnvDuration("IDLE_CHECK_INTERVAL", 5*time.Minute)
+	cfg.ThreadStatusSyncInterval = getEnvDuration("THREAD_STATUS_SYNC_INTERVAL", 10*time.Second)
 	cfg.SessionSandboxCleanupDelay = getEnvDuration("SESSION_SANDBOX_CLEANUP_DELAY", 1*time.Minute)
 
 	// Docker-specific settings

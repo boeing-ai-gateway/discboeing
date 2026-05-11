@@ -98,6 +98,7 @@ golangci-lint run
 | `OIDC_SCOPES` | `openid,email,profile` | OIDC scopes for Discobot login |
 | `WORKSPACE_DIR` | `/tmp/workspaces` | Base directory for workspaces |
 | `SANDBOX_IMAGE` | `ghcr.io/obot-platform/discobot:main` | Default sandbox image |
+| `THREAD_STATUS_SYNC_INTERVAL` | `10s` | Poll interval for non-terminal session thread summaries |
 | `CACHE_ENABLED` | `true` | Enable project-scoped cache volumes |
 | `ENCRYPTION_KEY` | (required) | Key for credential encryption |
 

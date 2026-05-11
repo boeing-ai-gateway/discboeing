@@ -25,7 +25,7 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 	h.applyThreadStateOverlay(&info)
 	queue := h.loadPromptQueue(info.ID)
 
-	return api.Thread{
+	thread := api.Thread{
 		ID:              info.ID,
 		Name:            strings.TrimSpace(info.Name),
 		CWD:             strings.TrimSpace(info.CWD),
@@ -40,6 +40,17 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 		PromptQueue:     queuedPromptResponse(queue),
 		Metadata:        info.Metadata,
 	}
+	if state := h.threadActivityState(thread); state != nil {
+		thread.ActivityStatus = &api.ThreadActivity{
+			Status:       state.Status,
+			Reason:       state.Reason,
+			CompletionID: state.CompletionID,
+			QueueCount:   state.QueueCount,
+			NextRunAfter: state.NextRunAfter,
+			Message:      state.Message,
+		}
+	}
+	return thread
 }
 
 func (h *Handler) threadActivityState(thread api.Thread) *api.SessionThreadActivityState {

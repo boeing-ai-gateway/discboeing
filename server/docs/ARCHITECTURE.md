@@ -230,6 +230,7 @@ type Session struct {
     AgentID     string
     Name        string
     Status      string  // initializing, ready, stopped, error, removing, removed
+    ThreadStatus string // last known idle, queued, running, needs_attention, unknown
     SandboxID   string
 }
 
@@ -252,6 +253,32 @@ type UserPreference struct {
     UpdatedAt time.Time
 }
 ```
+
+### Session Thread Activity Summary
+
+Per-thread activity is authoritative in the sandbox agent and is fetched from the
+thread APIs when a session is open. The server persists only one session-level
+summary on `sessions.thread_status` so project/session lists can show
+`idle`, `queued`, `running`, or `needs_attention` without waking every sandbox or
+maintaining a separate activity table.
+
+Active flows update the summary from observations they already make:
+
+- chat start and queued prompt dispatch promote the summary to `running` or
+  `queued`;
+- stream completion-status chunks trigger a one-shot refresh from an already
+  running sandbox when a completion stops;
+- thread actions such as cancel, queue edits, answer, and delete refresh the
+  summary from the running sandbox;
+- thread lists opened by the user can persist their aggregate snapshot, guarded
+  so older snapshots do not overwrite newer prompt-start observations.
+
+A background session thread-status syncer closes the remaining observation gap:
+it periodically queries only ready sessions whose stored summary is non-terminal
+(`queued`, `running`, or `unknown`) and refreshes them from an already-running
+sandbox. Once the refreshed summary reaches a terminal state (`idle` or
+`needs_attention`), that session falls out of the poll set. The syncer does not
+start stopped sandboxes.
 
 ## Authentication
 

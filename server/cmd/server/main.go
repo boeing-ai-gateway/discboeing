@@ -230,14 +230,12 @@ func main() {
 
 	// Create job queue early so it can be passed to services
 	jobQueue := jobs.NewQueue(s, cfg)
-	activitySvc := service.NewSessionActivityService(s, eventBroker)
 
 	// Start sandbox watcher to sync session states with sandbox states
 	// This handles external changes (e.g., Docker containers deleted outside Discobot)
 	var sandboxWatcherCancel context.CancelFunc
 	if sandboxProvider != nil {
 		sandboxWatcher := service.NewSandboxWatcher(sandboxProvider, s, eventBroker)
-		sandboxWatcher.SetActivityService(activitySvc)
 		var watcherCtx context.Context
 		watcherCtx, sandboxWatcherCancel = context.WithCancel(context.Background())
 		go func() {
@@ -295,6 +293,7 @@ func main() {
 	var dispSandboxSvc *service.SandboxService
 	var dispChatSvc *service.ChatService
 	var sandboxIdleMonitor *service.SandboxIdleMonitor
+	var sessionThreadStatusSyncer *service.SessionThreadStatusSyncer
 	if cfg.DispatcherEnabled {
 		disp = dispatcher.NewService(s, cfg, eventBroker)
 
@@ -313,10 +312,8 @@ func main() {
 			credFetcher := service.MakeCredentialFetcher(s, credSvc)
 			dispSandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
 			sessionSvc = service.NewSessionService(s, gitSvc, sandboxProvider, dispSandboxSvc, eventBroker, jobQueue)
-			sessionSvc.SetActivityService(activitySvc)
 			sessionSvc.SetSandboxCleanupDelay(cfg.SessionSandboxCleanupDelay)
 			dispChatSvc = service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, dispSandboxSvc, gitSvc)
-			dispChatSvc.SetActivityService(activitySvc)
 			dispSandboxSvc.SetSessionInitializer(sessionSvc)
 			disp.RegisterExecutor(dispatcher.NewSessionInitExecutor(sessionSvc))
 			disp.RegisterExecutor(dispatcher.NewSessionDeleteExecutor(sessionSvc))
@@ -348,6 +345,19 @@ func main() {
 			sandboxIdleMonitor.Start(context.Background())
 			log.Printf("Sandbox idle monitor started (timeout: %s, check interval: %s)",
 				cfg.SandboxIdleTimeout, cfg.IdleCheckInterval)
+		}
+
+		// Keep persisted session thread summaries fresh even when no UI stream is connected.
+		if sandboxProvider != nil && sessionSvc != nil && cfg.ThreadStatusSyncInterval > 0 {
+			sessionThreadStatusSyncer = service.NewSessionThreadStatusSyncer(
+				s,
+				sessionSvc,
+				slog.Default(),
+				cfg.ThreadStatusSyncInterval,
+			)
+			sessionThreadStatusSyncer.Start(context.Background())
+			log.Printf("Session thread status syncer started (check interval: %s)",
+				cfg.ThreadStatusSyncInterval)
 		}
 
 		// Start all reconciliation in background after dispatcher is ready
@@ -1873,6 +1883,15 @@ func main() {
 	// Stop debug Docker proxy
 	if debugDockerServer != nil {
 		debugDockerServer.Stop()
+	}
+
+	// Stop session thread status syncer before shutting down sandbox providers.
+	if sessionThreadStatusSyncer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := sessionThreadStatusSyncer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Warning: failed to stop session thread status syncer: %v", err)
+		}
+		shutdownCancel()
 	}
 
 	// Stop sandbox watcher

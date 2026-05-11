@@ -145,7 +145,7 @@ type Thread struct {
 	ActiveCommand   string          `json:"activeCommand,omitempty"`   // empty when no command is running
 	Pending         bool            `json:"pending,omitempty"`         // true when the thread exists in concept but the sandbox hasn't created it yet
 	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
-	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"` // sparse non-idle activity state from /threads/activity
+	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"` // sparse non-idle activity state from the agent snapshot
 	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 

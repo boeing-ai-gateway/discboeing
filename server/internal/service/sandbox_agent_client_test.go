@@ -21,10 +21,12 @@ import (
 // mockSandboxProvider implements sandbox.Provider for testing SandboxAgentClient.
 // Only Get, GetSecret, and AcquireHTTPClient are used by SandboxAgentClient.
 type mockSandboxProvider struct {
-	secret  string
-	client  *http.Client
-	handler http.Handler           // Handler for HTTPClient to use
-	onStop  func(sessionID string) // Callback when Stop is called
+	secret    string
+	client    *http.Client
+	handler   http.Handler           // Handler for HTTPClient to use
+	onStop    func(sessionID string) // Callback when Stop is called
+	onAcquire func(sessionID string)
+	status    sandbox.Status
 }
 
 func (m *mockSandboxProvider) ImageExists(_ context.Context) bool {
@@ -40,8 +42,12 @@ func (m *mockSandboxProvider) Create(_ context.Context, _ string, _ sandbox.Crea
 }
 
 func (m *mockSandboxProvider) Get(_ context.Context, _ string) (*sandbox.Sandbox, error) {
+	status := m.status
+	if status == "" {
+		status = sandbox.StatusRunning
+	}
 	return &sandbox.Sandbox{
-		Status: sandbox.StatusRunning,
+		Status: status,
 	}, nil
 }
 
@@ -68,7 +74,10 @@ func (m *mockSandboxProvider) GetSecret(_ context.Context, _ string) (string, er
 	return m.secret, nil
 }
 
-func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, _ string) (*sandbox.HTTPClientLease, error) {
+func (m *mockSandboxProvider) AcquireHTTPClient(_ context.Context, sessionID string) (*sandbox.HTTPClientLease, error) {
+	if m.onAcquire != nil {
+		m.onAcquire(sessionID)
+	}
 	if m.client != nil {
 		return &sandbox.HTTPClientLease{Client: m.client}, nil
 	}

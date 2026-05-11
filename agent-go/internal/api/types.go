@@ -117,6 +117,7 @@ type Thread struct {
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"`
 	ActiveCommand   string          `json:"activeCommand,omitempty"` // empty when no command is running
 	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
+	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"`
 	Metadata        json.RawMessage `json:"metadata,omitempty"`
 }
 
@@ -128,6 +129,17 @@ type QueuedPrompt struct {
 	Model     string            `json:"model,omitempty"`
 	Reasoning string            `json:"reasoning,omitempty"`
 	Mode      string            `json:"mode,omitempty"`
+}
+
+// ThreadActivity is the sparse non-idle activity state exposed on thread
+// responses.
+type ThreadActivity struct {
+	Status       string `json:"status"`
+	Reason       string `json:"reason,omitempty"`
+	CompletionID string `json:"completionId,omitempty"`
+	QueueCount   int    `json:"queueCount,omitempty"`
+	NextRunAfter string `json:"nextRunAfter,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 // ListThreadsResponse is the GET /threads response.
