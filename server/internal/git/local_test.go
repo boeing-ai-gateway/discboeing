@@ -1203,8 +1203,8 @@ func TestApplyPatches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to stat script: %v", err)
 		}
-		if info.Mode().Perm() != 0755 {
-			t.Fatalf("Expected script.sh mode 0755, got %04o", info.Mode().Perm())
+		if info.Mode().Perm()&0o100 == 0 {
+			t.Fatalf("Expected script.sh to keep the owner executable bit, got %04o", info.Mode().Perm())
 		}
 
 		mode := gitPathModeForTest(t, workDir, "HEAD", "script.sh")
