@@ -48,8 +48,8 @@
 			case "running":
 				return "text-blue-500";
 			case "queued":
-			case "unknown":
 				return "text-yellow-500";
+			case "idle":
 			case "ready":
 			case "completed":
 			case "committed":
@@ -73,7 +73,6 @@
 		switch (normalizedStatus(status)) {
 			case "running":
 			case "queued":
-			case "unknown":
 			case "pending":
 			case "committing":
 			case "initializing":

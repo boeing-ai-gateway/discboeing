@@ -61,11 +61,16 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		source,
 		/isSessionTransitioningStatus\(session\.current\?\.status\)/,
 	);
+	assert.match(source, /session\.threads\.status === "loading"/);
 	assert.doesNotMatch(
 		source,
 		/!showActiveConversation && !session\.isPending && !sandboxReady/,
 	);
 	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
+	assert.match(
+		source,
+		/\(\) => !isLoadingThread && !showActiveConversation && canLoadThreadData/,
+	);
 	assert.match(source, /<ConversationComposerSessionSetupStatus/);
 	assert.match(
 		source,

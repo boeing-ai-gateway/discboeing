@@ -1,56 +1,65 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getRecentThreadDisplayStatus } from "./thread-status";
+import { resolveSidebarThreadStatus } from "./thread-status";
 import {
 	getAvailableSwitcherThreads,
 	getThreadSwitcherThreads,
 	recentThreadKey,
 } from "./thread-switcher";
 
-test("getRecentThreadDisplayStatus prefers thread state over ready session", () => {
+test("resolveSidebarThreadStatus prefers thread state over ready session", () => {
 	assert.equal(
-		getRecentThreadDisplayStatus({
-			sessionId: "session-1",
-			sessionName: "Session One",
+		resolveSidebarThreadStatus({
 			sessionStatus: "ready",
-			threadId: "thread-2",
-			threadName: "Follow-up",
-			state: "interrupted",
-			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+			threadState: "interrupted",
 		}),
 		"needs_attention",
 	);
 });
 
-test("getRecentThreadDisplayStatus prefers active thread activity", () => {
+test("resolveSidebarThreadStatus prefers active session thread status", () => {
 	assert.equal(
-		getRecentThreadDisplayStatus({
-			sessionId: "session-1",
-			sessionName: "Session One",
+		resolveSidebarThreadStatus({
 			sessionStatus: "ready",
-			activityStatus: { status: "running" },
-			threadId: "thread-2",
-			threadName: "Follow-up",
-			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+			sessionActivityStatus: "running",
+			threadActivityStatus: "idle",
 		}),
 		"running",
 	);
 });
 
-test("getRecentThreadDisplayStatus falls back to session status", () => {
+test("resolveSidebarThreadStatus suppresses stale thread activity when session is idle", () => {
 	assert.equal(
-		getRecentThreadDisplayStatus({
-			sessionId: "session-1",
-			sessionName: "Session One",
+		resolveSidebarThreadStatus({
 			sessionStatus: "ready",
-			threadId: "thread-2",
-			threadName: "Follow-up",
-			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+			sessionActivityStatus: "idle",
+			threadActivityStatus: "running",
 		}),
 		"ready",
 	);
 });
+
+test("resolveSidebarThreadStatus still surfaces thread state when session is idle", () => {
+	assert.equal(
+		resolveSidebarThreadStatus({
+			sessionStatus: "ready",
+			sessionActivityStatus: "idle",
+			threadState: "interrupted",
+		}),
+		"needs_attention",
+	);
+});
+
+test("resolveSidebarThreadStatus falls back to session status", () => {
+	assert.equal(
+		resolveSidebarThreadStatus({
+			sessionStatus: "ready",
+		}),
+		"ready",
+	);
+});
+
 test("getAvailableSwitcherThreads includes every session and sorts by last access", () => {
 	const allThreads = getAvailableSwitcherThreads({
 		sessions: [
@@ -77,19 +86,14 @@ test("getAvailableSwitcherThreads includes every session and sorts by last acces
 		recentThreads: [
 			{
 				sessionId: "session-1",
-				sessionName: "Session One",
-				sessionStatus: "ready",
 				threadId: "thread-2",
-				threadName: "Follow-up",
-				lastMessage: "Ship the fix",
+				name: "Follow-up",
 				lastAccessedAt: "2024-01-05T00:00:00.000Z",
 			},
 			{
 				sessionId: "session-2",
-				sessionName: "Session 2",
-				sessionStatus: "ready",
 				threadId: "session-2",
-				threadName: "Session 2",
+				name: "Session 2",
 				lastAccessedAt: "2024-01-04T00:00:00.000Z",
 			},
 		],
@@ -101,9 +105,8 @@ test("getAvailableSwitcherThreads includes every session and sorts by last acces
 		),
 		["session-1:thread-2", "session-2:session-2", "session-3:session-3"],
 	);
-	assert.equal(allThreads[0]?.threadName, "Follow-up");
-	assert.equal(allThreads[0]?.lastMessage, "Ship the fix");
-	assert.equal(allThreads[2]?.threadName, "Session 3");
+	assert.equal(allThreads[0]?.name, "Follow-up");
+	assert.equal(allThreads[2]?.name, "Session 3");
 });
 
 test("getAvailableSwitcherThreads only adds implicit primary entries for sessions missing from recents", () => {
@@ -125,10 +128,8 @@ test("getAvailableSwitcherThreads only adds implicit primary entries for session
 		recentThreads: [
 			{
 				sessionId: "session-1",
-				sessionName: "Session 1",
-				sessionStatus: "ready",
 				threadId: "thread-2",
-				threadName: "Follow-up",
+				name: "Follow-up",
 				lastAccessedAt: "2024-01-03T00:00:00.000Z",
 			},
 		],
@@ -147,26 +148,20 @@ test("getThreadSwitcherThreads keeps the current thread at slot zero", () => {
 		threads: [
 			{
 				sessionId: "session-1",
-				sessionName: "Session One",
-				sessionStatus: "ready",
 				threadId: "thread-2",
-				threadName: "Follow-up",
+				name: "Follow-up",
 				lastAccessedAt: "2024-01-05T00:00:00.000Z",
 			},
 			{
 				sessionId: "session-2",
-				sessionName: "Session 2",
-				sessionStatus: "ready",
 				threadId: "session-2",
-				threadName: "Session 2",
+				name: "Session 2",
 				lastAccessedAt: "2024-01-04T00:00:00.000Z",
 			},
 			{
 				sessionId: "session-1",
-				sessionName: "Session One",
-				sessionStatus: "ready",
 				threadId: "session-1",
-				threadName: "Session One",
+				name: "Session One",
 				lastAccessedAt: "2024-01-01T00:00:00.000Z",
 			},
 		],

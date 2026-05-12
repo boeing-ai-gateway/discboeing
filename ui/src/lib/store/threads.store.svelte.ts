@@ -99,7 +99,7 @@ export class ThreadStore {
 	}
 
 	async fetch(): Promise<void> {
-		await this.#resource.all().ensure();
+		await this.#resource.all().refresh();
 	}
 
 	async fetchOne(threadId: string): Promise<void> {

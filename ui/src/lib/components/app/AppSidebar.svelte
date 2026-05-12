@@ -8,7 +8,7 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
-	import { getRecentThreadDisplayStatus } from "$lib/app/thread-status";
+	import { resolveSidebarThreadStatus } from "$lib/app/thread-status";
 	import type {
 		SessionThreadActivityStatusValue,
 		Thread,
@@ -16,7 +16,6 @@
 	} from "$lib/api-types";
 	import * as Collapsible from "$lib/components/ui/collapsible";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import ThreadStateBadge from "$lib/components/app/parts/ThreadStateBadge.svelte";
 	import {
 		AlertDialog,
 		AlertDialogAction,
@@ -37,6 +36,7 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
+	import type { SessionStatusValue } from "$lib/shell-types";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -286,15 +286,12 @@
 		await sessions.stop(sessionId);
 	}
 
-	function hasRecentThreadSubtitle(
-		threadObj: (typeof sessions.recentThreads)[number],
-	) {
-		return (threadObj.lastMessage ?? "").trim().length > 0;
-	}
-
 	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
 		const status = sessionObj.threadStatus?.status;
-		return status && status !== "idle" ? status : sessionObj.status;
+		if (status && status !== "idle") {
+			return status;
+		}
+		return sessionObj.status === "ready" ? "idle" : sessionObj.status;
 	}
 
 	function threadContextDisplayStatus(
@@ -316,37 +313,53 @@
 	function threadDisplayStatus(
 		sessionId: string,
 		threadObj: Thread,
-	): SessionThreadActivityStatusValue | null {
+	): SessionThreadActivityStatusValue | SessionStatusValue {
+		const session = sessionById(sessionId);
 		const contextStatus = threadContextDisplayStatus(sessionId, threadObj.id);
-		if (contextStatus) {
-			return contextStatus;
-		}
-		const activityStatus = threadObj.activityStatus?.status;
-		if (activityStatus && activityStatus !== "idle") {
-			return activityStatus;
-		}
-		if (
-			threadObj.pendingQuestion ||
-			(threadObj.errorMessage ?? "").trim() ||
-			threadObj.state === "interrupted" ||
-			threadObj.state === "cancelled"
-		) {
-			return "needs_attention";
-		}
-		if ((threadObj.promptQueue?.length ?? 0) > 0) {
-			return "queued";
-		}
-		return null;
+		const status = resolveSidebarThreadStatus({
+			localActivityStatus: contextStatus,
+			threadActivityStatus: threadObj.activityStatus?.status,
+			threadState: threadObj.state,
+			pendingQuestion: threadObj.pendingQuestion,
+			errorMessage: threadObj.errorMessage,
+			promptQueueCount: threadObj.promptQueue?.length,
+			idleFallback: "none",
+		});
+
+		return session?.status === "stopped" && status === "running"
+			? "stopped"
+			: (status ?? "idle");
 	}
 
 	function recentThreadDisplayStatus(
 		threadObj: (typeof sessions.recentThreads)[number],
-	) {
+	): SessionThreadActivityStatusValue | SessionStatusValue {
+		const session = sessionById(threadObj.sessionId);
+		const liveThread = app.sessions.sessionContexts
+			.get(threadObj.sessionId)
+			?.threads.list.find((thread) => thread.id === threadObj.threadId);
+		if (!session || !liveThread) {
+			return "unknown";
+		}
+
 		const contextStatus = threadContextDisplayStatus(
 			threadObj.sessionId,
 			threadObj.threadId,
 		);
-		return contextStatus ?? getRecentThreadDisplayStatus(threadObj);
+		const status = resolveSidebarThreadStatus({
+			localActivityStatus: contextStatus,
+			threadActivityStatus: liveThread.activityStatus?.status,
+			threadState: liveThread.state,
+			pendingQuestion: liveThread.pendingQuestion,
+			errorMessage: liveThread.errorMessage,
+			promptQueueCount: liveThread.promptQueue?.length,
+			idleFallback: "none",
+		});
+
+		if (session.status === "stopped" && status === "running") {
+			return "stopped";
+		}
+		return status ?? "idle";
 	}
 
 	function openRenameDialog(sessionId: string) {
@@ -646,15 +659,11 @@
 				onclick={() => handleSelectRecentThread(sessionId, threadObj.id)}
 				class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionId, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
-				{#if displayStatus}
-					<SessionStatus
-						status={displayStatus}
-						showLabel={false}
-						class="shrink-0"
-					/>
-				{:else if isTaskThread(threadObj)}
-					<GitBranchIcon class="size-3 shrink-0 text-sidebar-foreground/50" />
-				{/if}
+				<SessionStatus
+					status={displayStatus}
+					showLabel={false}
+					class="shrink-0"
+				/>
 				<span class="min-w-0 flex-1 truncate"
 					>{threadObj.name || "New Thread"}</span
 				>
@@ -785,35 +794,13 @@
 		type="button"
 		onclick={() =>
 			handleSelectRecentThread(threadObj.sessionId, threadObj.threadId)}
-		class={`flex w-full min-w-0 items-start gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left transition-colors ${hasRecentThreadSubtitle(threadObj) ? "min-h-10" : ""} ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+		class={`flex min-h-8 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1 text-left text-sm transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 	>
-		<SessionStatus
-			status={displayStatus}
-			showLabel={false}
-			class="mt-0.5 shrink-0"
-		/>
-		<span class="min-w-0 flex-1 overflow-hidden">
-			<span class="flex min-w-0 items-center gap-2 overflow-hidden">
-				<span
-					class={`block text-sm font-medium ${floatingMode ? "whitespace-nowrap" : "truncate"}`}
-					>{threadObj.threadName || "New Thread"}</span
-				>
-				<ThreadStateBadge state={threadObj.state} />
-			</span>
-			{#if hasRecentThreadSubtitle(threadObj)}
-				{#if floatingMode}
-					<span class="relative block h-4">
-						<span class="absolute inset-x-0 truncate text-xs text-current/60"
-							>{threadObj.lastMessage ?? ""}</span
-						>
-					</span>
-				{:else}
-					<span class="block truncate text-xs text-current/60"
-						>{threadObj.lastMessage ?? ""}</span
-					>
-				{/if}
-			{/if}
-		</span>
+		<SessionStatus status={displayStatus} showLabel={false} class="shrink-0" />
+		<span
+			class={`min-w-0 flex-1 font-medium ${floatingMode ? "whitespace-nowrap" : "truncate"}`}
+			>{threadObj.name || "New Thread"}</span
+		>
 	</button>
 {/snippet}
 

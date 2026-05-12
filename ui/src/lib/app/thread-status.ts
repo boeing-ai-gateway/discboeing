@@ -1,9 +1,23 @@
-import type { ThreadState } from "$lib/api-types";
 import type {
-	RecentThreadSummary,
+	SessionThreadActivityStatusValue,
+	ThreadState,
+} from "../api-types";
+import type {
 	SessionActivityStatusValue,
 	SessionStatusValue,
-} from "$lib/shell-types";
+} from "../shell-types";
+
+type SidebarThreadStatusInput = {
+	sessionStatus?: SessionStatusValue | null;
+	sessionActivityStatus?: SessionThreadActivityStatusValue | null;
+	threadActivityStatus?: SessionThreadActivityStatusValue | null;
+	localActivityStatus?: SessionThreadActivityStatusValue | null;
+	threadState?: ThreadState;
+	pendingQuestion?: boolean;
+	errorMessage?: string;
+	promptQueueCount?: number;
+	idleFallback?: "session" | "none";
+};
 
 export function getThreadStateLabel(state: ThreadState | undefined) {
 	if (state === "interrupted") {
@@ -25,19 +39,47 @@ export function getThreadStateTone(state: ThreadState | undefined) {
 	return "";
 }
 
-export function getRecentThreadDisplayStatus(
-	thread: RecentThreadSummary,
-): SessionActivityStatusValue | SessionStatusValue {
-	const activityStatus = thread.activityStatus?.status;
-	if (activityStatus && activityStatus !== "idle") {
-		return activityStatus;
-	}
-	const sessionThreadStatus = thread.sessionThreadStatus?.status;
-	if (sessionThreadStatus && sessionThreadStatus !== "idle") {
-		return sessionThreadStatus;
-	}
-	if (thread.state === "interrupted" || thread.state === "cancelled") {
+export function resolveSidebarThreadStatus({
+	sessionStatus,
+	sessionActivityStatus,
+	threadActivityStatus,
+	localActivityStatus,
+	threadState,
+	pendingQuestion,
+	errorMessage,
+	promptQueueCount,
+	idleFallback = "session",
+}: SidebarThreadStatusInput):
+	| SessionActivityStatusValue
+	| SessionStatusValue
+	| null {
+	if (
+		pendingQuestion ||
+		(errorMessage ?? "").trim().length > 0 ||
+		threadState === "interrupted" ||
+		threadState === "cancelled"
+	) {
 		return "needs_attention";
 	}
-	return thread.sessionStatus;
+
+	if (sessionActivityStatus && sessionActivityStatus !== "idle") {
+		return sessionActivityStatus;
+	}
+
+	const fallbackStatus =
+		idleFallback === "session" ? (sessionStatus ?? null) : null;
+	if (sessionActivityStatus === "idle") {
+		return fallbackStatus;
+	}
+
+	if (localActivityStatus && localActivityStatus !== "idle") {
+		return localActivityStatus;
+	}
+	if (threadActivityStatus && threadActivityStatus !== "idle") {
+		return threadActivityStatus;
+	}
+	if ((promptQueueCount ?? 0) > 0) {
+		return "queued";
+	}
+	return fallbackStatus;
 }

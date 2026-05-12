@@ -82,67 +82,19 @@ export function createAppSessionsDomain(
 	const list = $derived.by(() => toSessionSummaries(store.list));
 
 	const recentThreads = $derived.by(() => {
-		const sessionsById = Object.fromEntries(
-			store.list.map((session) => [session.id, session] as const),
-		);
-
 		return recentThreadStore.entries.flatMap((savedEntry) => {
-			const session = sessionsById[savedEntry.sessionId];
 			const liveThread = sessionContexts
 				.get(savedEntry.sessionId)
 				?.threads.list.find((thread) => thread.id === savedEntry.threadId);
 
-			if (session && liveThread) {
-				return [
-					{
-						sessionId: savedEntry.sessionId,
-						sessionName: session.displayName || session.name,
-						sessionStatus: session.status,
-						...(session.threadStatus
-							? { sessionThreadStatus: session.threadStatus }
-							: {}),
-						threadId: liveThread.id,
-						threadName: liveThread.name,
-						...(liveThread.state ? { state: liveThread.state } : {}),
-						...(liveThread.activityStatus
-							? { activityStatus: liveThread.activityStatus }
-							: {}),
-						lastMessage: liveThread.lastMessage ?? "",
-						lastAccessedAt: savedEntry.lastAccessedAt,
-					},
-				];
-			}
-
-			const fallbackSessionName =
-				session?.displayName || session?.name || savedEntry.sessionName;
-			const fallbackSessionStatus = session?.status ?? savedEntry.sessionStatus;
-			const fallbackThreadName = savedEntry.threadName ?? fallbackSessionName;
-			if (
-				!fallbackSessionName ||
-				!fallbackSessionStatus ||
-				!fallbackThreadName
-			) {
-				return [];
-			}
-
-			const fallbackSummary: RecentThreadSummary = {
-				sessionId: savedEntry.sessionId,
-				sessionName: fallbackSessionName,
-				sessionStatus: fallbackSessionStatus,
-				...(session?.threadStatus
-					? { sessionThreadStatus: session.threadStatus }
-					: {}),
-				threadId: savedEntry.threadId,
-				threadName: fallbackThreadName,
-				lastAccessedAt: savedEntry.lastAccessedAt,
-			};
-			if (savedEntry.state) {
-				fallbackSummary.state = savedEntry.state;
-			}
-			if (savedEntry.lastMessage !== undefined) {
-				fallbackSummary.lastMessage = savedEntry.lastMessage;
-			}
-			return [fallbackSummary];
+			return [
+				{
+					sessionId: savedEntry.sessionId,
+					threadId: savedEntry.threadId,
+					name: liveThread?.name || savedEntry.name,
+					lastAccessedAt: savedEntry.lastAccessedAt,
+				} satisfies RecentThreadSummary,
+			];
 		});
 	});
 	const selected = $derived.by(
@@ -166,31 +118,25 @@ export function createAppSessionsDomain(
 			.get(selectedSessionId)
 			?.threads.list.find((item) => item.id === threadId);
 
-		// Save whatever display data we have now. The sidebar can use live thread
-		// data when a session is in memory, and fall back to this saved snapshot
-		// without waking stopped sessions back up.
 		recentThreadStore.recordSelection({
 			sessionId: selectedSessionId,
 			threadId,
-			...(session
-				? {
-						sessionName: session.displayName || session.name,
-						sessionStatus: session.status,
-					}
-				: {}),
-			...(thread
-				? {
-						threadName: thread.name,
-						...(thread.state ? { state: thread.state } : {}),
-						lastMessage: thread.lastMessage ?? "",
-					}
-				: session
-					? {
-							threadName: session.displayName || session.name,
-						}
-					: {}),
+			name:
+				thread?.name || session?.displayName || session?.name || "New Thread",
 		});
 	});
+
+	function shouldLoadSession(
+		sessionId: string,
+		options?: { includePending?: boolean },
+	): boolean {
+		const session = store.peek(sessionId);
+		return (
+			sessionId === currentSelectedSessionId ||
+			(!!options?.includePending && sessionId === pendingSessionId) ||
+			(!!session && session.status !== "stopped")
+		);
+	}
 
 	function purgeMissingRecentSessions(): void {
 		const validSessionIds = Object.fromEntries(
@@ -289,6 +235,7 @@ export function createAppSessionsDomain(
 			return selected;
 		},
 		peek: (sessionId) => store.peek(sessionId),
+		shouldLoadSession,
 		sessionContexts,
 		select: selectSession,
 		openThread: (sessionId, threadId) => {

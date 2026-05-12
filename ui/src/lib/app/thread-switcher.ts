@@ -1,6 +1,14 @@
-import { compareIsoDatesDesc } from "$lib/app/app-helpers";
-import type { Session } from "$lib/api-types";
-import type { RecentThreadSummary } from "$lib/shell-types";
+import type { Session } from "../api-types";
+import type { RecentThreadSummary } from "../shell-types";
+
+function compareIsoDatesDesc(left: string, right: string) {
+	const leftTime = new Date(left).getTime();
+	const rightTime = new Date(right).getTime();
+	if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+		return 0;
+	}
+	return rightTime - leftTime;
+}
 
 export function recentThreadKey(sessionId: string, threadId: string): string {
 	return `${sessionId}:${threadId}`;
@@ -27,10 +35,8 @@ export function getAvailableSwitcherThreads(args: {
 				: [
 						{
 							sessionId: session.id,
-							sessionName: session.displayName || session.name,
-							sessionStatus: session.status,
 							threadId: session.id,
-							threadName: session.displayName || session.name,
+							name: session.displayName || session.name,
 							lastAccessedAt: session.createdAt,
 						},
 					],

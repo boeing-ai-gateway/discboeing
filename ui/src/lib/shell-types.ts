@@ -6,9 +6,8 @@ import type {
 	SessionThreadActivityStatusValue,
 	SessionThreadStatus,
 	Thread,
-	ThreadActivityStatus,
 	ThreadState,
-} from "$lib/api-types";
+} from "./api-types";
 
 export type CenterPanel =
 	| "chat"
@@ -108,14 +107,8 @@ export type SessionSummary = {
 
 export type RecentThreadSummary = {
 	sessionId: string;
-	sessionName: string;
-	sessionStatus: SessionStatusValue;
-	sessionThreadStatus?: SessionThreadStatus;
 	threadId: string;
-	threadName: string;
-	state?: ThreadState;
-	activityStatus?: ThreadActivityStatus;
-	lastMessage?: string;
+	name: string;
 	lastAccessedAt: string;
 };
 

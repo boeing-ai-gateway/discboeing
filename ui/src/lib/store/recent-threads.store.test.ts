@@ -25,6 +25,22 @@ test("RecentThreadStore can prune a single deleted thread", () => {
 	assert.match(source, /this\.#lastRecordedKey = null;/);
 });
 
+test("initial thread restore is separate from recent entries", () => {
+	const source = readSource("recent-threads.store.svelte.ts");
+
+	assert.match(
+		source,
+		/const ACTIVE_THREAD_SELECTION_STORAGE_KEY = "active\.thread";/,
+	);
+	assert.match(source, /readStorage\(ACTIVE_THREAD_SELECTION_STORAGE_KEY\)/);
+	assert.doesNotMatch(
+		source,
+		/readInitialThreadSelection\(\):[\s\S]*const entries = readEntries\(\);/,
+	);
+	assert.match(source, /writeActiveThreadSelection\(entry\);/);
+	assert.match(source, /writeActiveThreadSelection\(null\);/);
+});
+
 test("session context prunes recent-thread entries when a thread is removed", () => {
 	const source = readSource("../context/session-context.svelte.ts");
 

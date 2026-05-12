@@ -168,6 +168,10 @@ export type AppSessions = {
 	awaitingInitialStatusId: string | null;
 	selected: SessionSummary | null;
 	peek: (sessionId: string) => Session | null;
+	shouldLoadSession: (
+		sessionId: string,
+		options?: { includePending?: boolean },
+	) => boolean;
 	sessionContexts: Map<string, SessionContextValue>;
 	select: (sessionId: string) => void;
 	openThread: (sessionId: string, threadId: string) => void;

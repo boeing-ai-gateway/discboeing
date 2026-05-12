@@ -1,19 +1,14 @@
-import type { ThreadState } from "$lib/api-types";
 import { compareIsoDatesDesc, getCurrentTimestamp } from "$lib/app/app-helpers";
 import { readStorage, writeStorage } from "$lib/local-storage";
-import type { SessionStatusValue } from "$lib/shell-types";
 
 const RECENT_THREADS_STORAGE_KEY = "recent.threads";
+const ACTIVE_THREAD_SELECTION_STORAGE_KEY = "active.thread";
 
 export type SavedRecentThreadEntry = {
 	sessionId: string;
 	threadId: string;
+	name: string;
 	lastAccessedAt: string;
-	sessionName?: string;
-	sessionStatus?: SessionStatusValue;
-	threadName?: string;
-	state?: ThreadState;
-	lastMessage?: string;
 };
 
 function recentThreadKey(sessionId: string, threadId: string): string {
@@ -39,6 +34,9 @@ type LegacyRecentThreadEntry = {
 	sessionId: string;
 	threadId: string;
 	lastAccessedAt: string;
+	name?: string;
+	sessionName?: string;
+	threadName?: string;
 };
 
 function isLegacyRecentThreadEntry(
@@ -71,7 +69,26 @@ function isSavedRecentThreadEntry(
 		candidate.sessionId.length > 0 &&
 		typeof candidate.threadId === "string" &&
 		candidate.threadId.length > 0 &&
+		typeof candidate.name === "string" &&
+		candidate.name.length > 0 &&
 		typeof candidate.lastAccessedAt === "string"
+	);
+}
+
+function isSavedThreadSelection(value: unknown): value is {
+	sessionId: string;
+	threadId: string;
+} {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const candidate = value as Partial<SavedRecentThreadEntry>;
+	return (
+		typeof candidate.sessionId === "string" &&
+		candidate.sessionId.length > 0 &&
+		typeof candidate.threadId === "string" &&
+		candidate.threadId.length > 0
 	);
 }
 
@@ -107,6 +124,8 @@ function readEntries(): SavedRecentThreadEntry[] {
 				parsed.filter(isLegacyRecentThreadEntry).map((entry) => ({
 					sessionId: entry.sessionId,
 					threadId: entry.threadId,
+					name:
+						entry.name || entry.threadName || entry.sessionName || "New Thread",
 					lastAccessedAt: entry.lastAccessedAt,
 				})),
 			);
@@ -120,7 +139,7 @@ function readEntries(): SavedRecentThreadEntry[] {
 			Object.entries(parsed).flatMap(([key, value]) => {
 				const parts = splitRecentThreadKey(key);
 				return typeof value === "string" && parts
-					? [{ ...parts, lastAccessedAt: value }]
+					? [{ ...parts, name: "New Thread", lastAccessedAt: value }]
 					: [];
 			}),
 		);
@@ -135,12 +154,29 @@ export function readInitialThreadSelection(): {
 	sessionId: string;
 	threadId: string;
 } | null {
-	const entries = readEntries();
-	const first = entries[0];
-	if (!first) {
+	const stored = readStorage(ACTIVE_THREAD_SELECTION_STORAGE_KEY);
+	if (!stored) {
 		return null;
 	}
-	return { sessionId: first.sessionId, threadId: first.threadId };
+
+	try {
+		const parsed = JSON.parse(stored) as unknown;
+		if (!isSavedThreadSelection(parsed)) {
+			return null;
+		}
+		return { sessionId: parsed.sessionId, threadId: parsed.threadId };
+	} catch {
+		return null;
+	}
+}
+
+function writeActiveThreadSelection(
+	entry: Pick<SavedRecentThreadEntry, "sessionId" | "threadId"> | null,
+): void {
+	writeStorage(
+		ACTIVE_THREAD_SELECTION_STORAGE_KEY,
+		entry ? JSON.stringify(entry) : null,
+	);
 }
 
 export class RecentThreadStore {
@@ -153,10 +189,12 @@ export class RecentThreadStore {
 
 	clearTrackedSelection(): void {
 		this.#lastRecordedKey = null;
+		writeActiveThreadSelection(null);
 	}
 
 	recordSelection(entry: Omit<SavedRecentThreadEntry, "lastAccessedAt">): void {
 		const key = recentThreadKey(entry.sessionId, entry.threadId);
+		writeActiveThreadSelection(entry);
 		const currentEntry = this.#entries.find(
 			(item) =>
 				item.sessionId === entry.sessionId && item.threadId === entry.threadId,
@@ -204,6 +242,7 @@ export class RecentThreadStore {
 
 		if (this.#lastRecordedKey?.startsWith(`${sessionId}:`)) {
 			this.#lastRecordedKey = null;
+			writeActiveThreadSelection(null);
 		}
 	}
 
@@ -216,6 +255,7 @@ export class RecentThreadStore {
 
 		if (this.#lastRecordedKey === recentThreadKey(sessionId, threadId)) {
 			this.#lastRecordedKey = null;
+			writeActiveThreadSelection(null);
 		}
 	}
 

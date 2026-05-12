@@ -23,6 +23,11 @@ test("app shell renders mounted sessions without owning their contexts", () => {
 		source,
 		/\{#each mountedSessionIds as sessionId \(sessionId\)\}/,
 	);
+	assert.match(
+		source,
+		/\{#if app\.sessions\.shouldLoadSession\(sessionId, \{ includePending: true \}\)\}/,
+	);
+	assert.doesNotMatch(source, /function shouldRenderSessionWorkspace/);
 	assert.match(source, /visible=\{sessionId === currentSelectedSessionId\}/);
 	assert.doesNotMatch(source, /renderedSessionIds/);
 	assert.doesNotMatch(source, /ensureSessionContext/);

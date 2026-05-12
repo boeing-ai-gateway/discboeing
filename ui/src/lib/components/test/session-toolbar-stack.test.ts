@@ -31,5 +31,7 @@ test("session toolbar stack only shows a toolbar for a real selected session", (
 		source,
 		/class=\{sessionId === selectedSessionId \? "contents" : "hidden"\}/,
 	);
+	assert.match(source, /\{#if app\.sessions\.shouldLoadSession\(sessionId\)\}/);
+	assert.doesNotMatch(source, /function shouldRenderSessionToolbar/);
 	assert.doesNotMatch(source, /selectedId \?\? app\.sessions\.pendingId/);
 });

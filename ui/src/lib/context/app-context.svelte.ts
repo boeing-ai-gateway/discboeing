@@ -123,6 +123,8 @@ function startProjectEventsSubscription(app: AppContext) {
 				return;
 			}
 
+			void app.sessions.reloadSession(threadData.sessionId);
+
 			const sessionContext = app.sessions.sessionContexts.get(
 				threadData.sessionId,
 			);

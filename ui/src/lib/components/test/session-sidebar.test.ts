@@ -12,21 +12,13 @@ function readSessionSidebarSource() {
 	return readFileSync(SESSION_SIDEBAR_COMPONENT, "utf-8");
 }
 
-test("session sidebar recent threads render lastMessage as the subtitle", () => {
+test("session sidebar recent threads only render the saved display name", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(source, /function hasRecentThreadSubtitle/);
-	assert.match(source, /threadObj\.lastMessage \?\? ""/);
-	assert.match(source, /\{threadObj\.lastMessage \?\? ""\}/);
-	assert.doesNotMatch(source, /\{threadObj\.sessionName \|\| "New Session"\}/);
-});
-
-test("session sidebar recent threads render a state badge when present", () => {
-	const source = readSessionSidebarSource();
-
-	assert.match(source, /import ThreadStateBadge/);
-	assert.match(source, /<ThreadStateBadge state=\{threadObj\.state\} \/>/);
-	assert.doesNotMatch(source, /function recentThreadStateLabel/);
+	assert.match(source, /\{threadObj\.name \|\| "New Thread"\}/);
+	assert.doesNotMatch(source, /function hasRecentThreadSubtitle/);
+	assert.doesNotMatch(source, /threadObj\.lastMessage/);
+	assert.doesNotMatch(source, /ThreadStateBadge/);
 });
 
 test("session sidebar keys session and recent thread rows", () => {
@@ -144,11 +136,21 @@ test("session sidebar thread rows render live activity status", () => {
 	assert.doesNotMatch(source, /activeCommand[\s\S]*return "running"/);
 });
 
-test("session sidebar recent rows prefer thread activity status", () => {
+test("session sidebar recent rows use live thread status", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /function recentThreadDisplayStatus/);
-	assert.match(source, /getRecentThreadDisplayStatus\(threadObj\)/);
+	assert.match(source, /return "unknown"/);
+	assert.match(source, /return status;/);
+	assert.match(source, /resolveSidebarThreadStatus/);
+	assert.match(source, /liveThread\.activityStatus\?\.status/);
+	assert.match(source, /session\.status === "stopped" && status === "running"/);
+	assert.doesNotMatch(
+		source.match(
+			/function recentThreadDisplayStatus[\s\S]*?\n\tfunction openRenameDialog/,
+		)?.[0] ?? "",
+		/sessionActivityStatus: session\.threadStatus\?\.status/,
+	);
 	assert.match(
 		source,
 		/\{@const displayStatus = recentThreadDisplayStatus\(threadObj\)\}/,
@@ -156,7 +158,7 @@ test("session sidebar recent rows prefer thread activity status", () => {
 	assert.match(source, /status=\{displayStatus\}/);
 });
 
-test("session sidebar nests task threads by parent metadata and renders a task icon", () => {
+test("session sidebar nests task threads and renders a status icon", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /type TaskThreadMetadata = \{/);
@@ -175,8 +177,9 @@ test("session sidebar nests task threads by parent metadata and renders a task i
 	);
 	assert.match(
 		source,
-		/<GitBranchIcon class="size-3 shrink-0 text-sidebar-foreground\/50" \/>/,
+		/\{@render threadItem\(sessionId, childThreadObj, depth \+ 1\)\}/,
 	);
+	assert.match(source, /<SessionStatus\s*status=\{displayStatus\}/);
 });
 
 test("session sidebar thread rows include rename and delete actions", () => {

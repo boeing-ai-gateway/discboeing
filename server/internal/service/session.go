@@ -756,6 +756,11 @@ func sessionThreadStatusFromModel(sess *model.Session) *SessionActivityStatus {
 	switch normalizeSessionStatus(sess.Status) {
 	case model.SessionStatusReady:
 		return sessionActivityStatusFromStoredStatus(sess.ThreadStatus)
+	case model.SessionStatusStopped:
+		if normalizeSessionActivityStatus(sess.ThreadStatus) != model.SessionActivityStatusIdle {
+			return sessionActivityStatusFromStoredStatus(sess.ThreadStatus)
+		}
+		return nil
 	default:
 		return nil
 	}

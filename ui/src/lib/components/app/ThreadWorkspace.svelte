@@ -47,10 +47,11 @@
 		() =>
 			!showActiveConversation &&
 			!session.isPending &&
-			isSessionTransitioningStatus(session.current?.status),
+			(isSessionTransitioningStatus(session.current?.status) ||
+				session.threads.status === "loading"),
 	);
 	const showThreadSelectionPrompt = $derived.by(
-		() => !showActiveConversation && canLoadThreadData,
+		() => !isLoadingThread && !showActiveConversation && canLoadThreadData,
 	);
 </script>
 

@@ -48,3 +48,20 @@ test("setAwaitingInitialStatus immediately kicks off a session reload", () => {
 	assert.match(source, /if \(sessionId\) \{/);
 	assert.match(source, /void reloadSession\(sessionId\);/);
 });
+
+test("app sessions exposes the shared session-load predicate", () => {
+	const source = readSource();
+
+	assert.match(
+		source,
+		/function shouldLoadSession\(\s*sessionId: string,\s*options\?: \{ includePending\?: boolean \},\s*\): boolean \{/,
+	);
+	assert.match(source, /const session = store\.peek\(sessionId\);/);
+	assert.match(source, /sessionId === currentSelectedSessionId/);
+	assert.match(
+		source,
+		/!!options\?\.includePending && sessionId === pendingSessionId/,
+	);
+	assert.match(source, /!!session && session\.status !== "stopped"/);
+	assert.match(source, /shouldLoadSession,/);
+});

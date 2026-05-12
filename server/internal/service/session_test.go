@@ -567,6 +567,29 @@ func TestSessionThreadStatusSyncerStaleSnapshotDoesNotLowerNewerSnapshot(t *test
 	}
 }
 
+func TestStoppedSessionIncludesStoredNeedsAttentionStatus(t *testing.T) {
+	t.Parallel()
+
+	session := sessionThreadStatusFromModel(&model.Session{
+		Status:       model.SessionStatusStopped,
+		ThreadStatus: model.SessionActivityStatusNeedsAttention,
+	})
+	if session == nil {
+		t.Fatal("expected stopped session to include non-idle thread status")
+	}
+	if session.Status != model.SessionActivityStatusNeedsAttention {
+		t.Fatalf("thread status = %q, want %q", session.Status, model.SessionActivityStatusNeedsAttention)
+	}
+
+	idleSession := sessionThreadStatusFromModel(&model.Session{
+		Status:       model.SessionStatusStopped,
+		ThreadStatus: model.SessionActivityStatusIdle,
+	})
+	if idleSession != nil {
+		t.Fatalf("expected stopped idle session to omit thread status, got %#v", idleSession)
+	}
+}
+
 // TestMapSessionFieldCoverage ensures all model.Session fields are properly mapped to service.Session.
 // This test uses reflection to verify complete field mapping and will fail if:
 // 1. A field exists in model.Session but not in service.Session
