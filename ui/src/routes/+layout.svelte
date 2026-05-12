@@ -2,6 +2,7 @@
 	import "../app.css";
 	import "katex/dist/katex.min.css";
 
+	import DevErrorOverlay from "$lib/components/app/parts/DevErrorOverlay.svelte";
 	import StartupGate from "$lib/components/app/StartupGate.svelte";
 	import { Toaster } from "$lib/components/ui/sonner";
 	import { ideOptions, windowControls } from "$lib/app/app-shell-config";
@@ -28,6 +29,7 @@
 </script>
 
 <Toaster />
+<DevErrorOverlay />
 
 <StartupGate {app}>
 	{@render children?.()}
