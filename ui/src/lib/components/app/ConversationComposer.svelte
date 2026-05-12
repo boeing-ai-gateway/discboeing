@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
+	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import XIcon from "@lucide/svelte/icons/x";
 	import { onDestroy, onMount, tick } from "svelte";
 	import { api } from "$lib/api-client";
@@ -10,6 +11,7 @@
 		Select,
 		SelectContent,
 		SelectItem,
+		SelectSeparator,
 		SelectTrigger,
 	} from "$lib/components/ui/select";
 	import ConversationComposerAttachmentButton from "$lib/components/app/parts/ConversationComposerAttachmentButton.svelte";
@@ -88,6 +90,8 @@
 	let sandboxProviders = $state<SandboxProviderInstance[]>([]);
 	let sandboxDefaultProviderId = $state("");
 	let sandboxProvidersError = $state<string | null>(null);
+	let sandboxProviderMobileSelectOpen = $state(false);
+	let sandboxProviderDesktopSelectOpen = $state(false);
 	let schedulePopoverOpen = $state(false);
 	let scheduledRunAfter = $state<string | null>(null);
 	let pendingAutocompleteSessionCreation = $state<Promise<boolean> | null>(
@@ -217,6 +221,13 @@
 		sessionView.setPendingSandboxProviderId(
 			value === sandboxDefaultProviderId ? "" : value,
 		);
+	}
+
+	async function handleManageSandboxProvidersClick() {
+		sandboxProviderMobileSelectOpen = false;
+		sandboxProviderDesktopSelectOpen = false;
+		await tick();
+		ui.openSettings("providers");
 	}
 
 	function handleModelSelect(nextSelection: string | null) {
@@ -679,13 +690,14 @@
 							>
 							<Select
 								type="single"
+								bind:open={sandboxProviderMobileSelectOpen}
 								value={sandboxProviderSelectValue}
 								onValueChange={handleSandboxProviderSelect}
 							>
 								<SelectTrigger
 									id="pending-sandbox-provider-mobile"
 									size="sm"
-									class="h-9 w-full px-3"
+									class="h-9 px-3"
 									title={selectedSandboxProviderTitle}
 								>
 									<ProviderIcon
@@ -693,9 +705,6 @@
 										name={selectedSandboxProvider?.name ?? "Sandbox provider"}
 										class="pointer-events-none size-4 border-0 bg-transparent"
 									/>
-									<span class="truncate">
-										{selectedSandboxProvider?.name ?? "Sandbox provider"}
-									</span>
 								</SelectTrigger>
 								<SelectContent>
 									{#each selectableSandboxProviders as provider (provider.id)}
@@ -715,6 +724,15 @@
 											{/if}
 										</SelectItem>
 									{/each}
+									<SelectSeparator />
+									<button
+										type="button"
+										class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+										onclick={handleManageSandboxProvidersClick}
+									>
+										<SettingsIcon class="size-4" />
+										<span>Manage</span>
+									</button>
 								</SelectContent>
 							</Select>
 						</div>
@@ -853,6 +871,7 @@
 										>
 										<Select
 											type="single"
+											bind:open={sandboxProviderDesktopSelectOpen}
 											value={sandboxProviderSelectValue}
 											onValueChange={handleSandboxProviderSelect}
 										>
@@ -868,9 +887,6 @@
 														"Sandbox provider"}
 													class="pointer-events-none size-4 border-0 bg-transparent"
 												/>
-												<span class="truncate">
-													{selectedSandboxProvider?.name ?? "Sandbox provider"}
-												</span>
 											</SelectTrigger>
 											<SelectContent class="min-w-44">
 												{#each selectableSandboxProviders as provider (provider.id)}
@@ -890,6 +906,15 @@
 														{/if}
 													</SelectItem>
 												{/each}
+												<SelectSeparator />
+												<button
+													type="button"
+													class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden"
+													onclick={handleManageSandboxProvidersClick}
+												>
+													<SettingsIcon class="size-4" />
+													<span>Manage</span>
+												</button>
 											</SelectContent>
 										</Select>
 									{/if}

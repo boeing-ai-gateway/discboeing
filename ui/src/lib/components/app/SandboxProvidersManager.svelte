@@ -621,7 +621,7 @@
 									<button
 										{...props}
 										type="button"
-										class={`${props.class} w-full cursor-pointer text-left hover:bg-accent/50`}
+										class={`${props.class} w-full cursor-pointer gap-3 p-4 text-left hover:bg-accent/50`}
 										disabled={saving}
 										onclick={() => selectDriver(providerType)}
 									>
@@ -879,10 +879,7 @@
 										value={provider.id}
 										disabled={provider.disabled || !provider.available}
 									>
-										{providerName(provider)}{!projectDefaultProviderId &&
-										provider.id === defaultProviderId
-											? " (effective)"
-											: ""}
+										{providerName(provider)}
 									</option>
 								{/each}
 							</NativeSelect>
