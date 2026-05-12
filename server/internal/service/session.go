@@ -383,7 +383,12 @@ func (s *SessionService) StopSession(ctx context.Context, projectID, sessionID s
 	}
 
 	if err := s.sandboxService.StopForSession(ctx, sessionID); err != nil {
-		return nil, fmt.Errorf("failed to stop sandbox: %w", err)
+		if (sess.Status == model.SessionStatusError || sess.Status == model.SessionStatusCreateFailed) &&
+			(errors.Is(err, sandbox.ErrNotFound) || errors.Is(err, sandbox.ErrNotRunning)) {
+			log.Printf("Resetting session %s from %s to stopped after best-effort sandbox stop: %v", sessionID, sess.Status, err)
+		} else {
+			return nil, fmt.Errorf("failed to stop sandbox: %w", err)
+		}
 	}
 
 	return s.UpdateStatus(ctx, projectID, sessionID, model.SessionStatusStopped, nil)

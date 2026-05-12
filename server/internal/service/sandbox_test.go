@@ -197,6 +197,7 @@ type imageIDAwareReconcileProvider struct {
 	sandboxes         map[string]*sandbox.Sandbox
 	configuredImage   string
 	configuredImageID string
+	createErr         error
 	createCount       int
 	startCount        int
 	removeCount       int
@@ -235,6 +236,9 @@ func (p *imageIDAwareReconcileProvider) PrepareState(context.Context, string, sa
 }
 
 func (p *imageIDAwareReconcileProvider) Create(_ context.Context, state []byte, sessionID string, _ sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+	if p.createErr != nil {
+		return nil, state, p.createErr
+	}
 	if _, exists := p.sandboxes[sessionID]; exists {
 		return nil, state, sandbox.ErrAlreadyExists
 	}
@@ -824,6 +828,48 @@ func TestReconcileSandboxes_RemovesStoppedOutdatedSandboxWithoutRestart(t *testi
 	}
 	if provider.removeCount != 1 {
 		t.Fatalf("expected stopped outdated sandbox to be removed once, got %d removes", provider.removeCount)
+	}
+}
+
+func TestReconcileSandboxes_MarksUpgradeCreateFailureRetryable(t *testing.T) {
+	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	provider.createErr = errors.New("no such image")
+	testStore := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: testEncryptionKey}
+	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	svc.SetSessionInitializer(&sandboxCreatingInitializer{sandboxSvc: svc})
+
+	ctx := context.Background()
+	sessionID := "test-session-upgrade-create-failure"
+	createTestSession(t, testStore, sessionID, "/workspace")
+
+	provider.sandboxes[sessionID] = &sandbox.Sandbox{
+		ID:        "old-running-sandbox",
+		SessionID: sessionID,
+		Status:    sandbox.StatusRunning,
+		Image:     provider.configuredImage,
+		CreatedAt: time.Now(),
+		Metadata: map[string]string{
+			sandbox.MetadataImageID: "sha256:old",
+		},
+	}
+
+	if err := svc.ReconcileSandboxes(ctx); err != nil {
+		t.Fatalf("ReconcileSandboxes failed: %v", err)
+	}
+
+	session, err := testStore.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if session.Status != model.SessionStatusStopped {
+		t.Fatalf("expected upgrade create failure to leave session retryable as %q, got %q", model.SessionStatusStopped, session.Status)
+	}
+	if session.ErrorMessage == nil || !strings.Contains(*session.ErrorMessage, "no such image") {
+		t.Fatalf("expected stored image upgrade error, got %v", session.ErrorMessage)
+	}
+	if _, err := provider.Get(ctx, nil, sessionID); !errors.Is(err, sandbox.ErrNotFound) {
+		t.Fatalf("expected failed replacement sandbox to be absent, got %v", err)
 	}
 }
 

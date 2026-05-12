@@ -1054,6 +1054,10 @@ func (s *SandboxService) ReconcileSandboxes(ctx context.Context) error {
 		// This ensures proper serialization with any concurrent user operations.
 		if err := s.ReconcileSandbox(ctx, sb.SessionID); err != nil {
 			log.Printf("Failed to recreate sandbox for session %s: %v", sb.SessionID, err)
+			errorMsg := fmt.Sprintf("sandbox image upgrade failed: %v", err)
+			if statusErr := s.store.UpdateSessionStatus(ctx, sb.SessionID, model.SessionStatusStopped, &errorMsg); statusErr != nil {
+				log.Printf("Failed to mark session %s stopped after sandbox image upgrade failure: %v", sb.SessionID, statusErr)
+			}
 			continue
 		}
 

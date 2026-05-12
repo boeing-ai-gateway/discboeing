@@ -302,6 +302,98 @@ func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 	}
 }
 
+func TestStopSessionResetsCreateFailedWithoutSandbox(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	project := &model.Project{ID: "project-stop-create-failed", Name: "stop create failed project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-stop-create-failed",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	errorMessage := "sandbox creation failed: no such image"
+	dbSession := &model.Session{
+		ID:           "session-stop-create-failed",
+		ProjectID:    project.ID,
+		WorkspaceID:  workspace.ID,
+		Name:         "Stop Create Failed Session",
+		Status:       model.SessionStatusCreateFailed,
+		ErrorMessage: &errorMessage,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	session, err := svc.StopSession(ctx, project.ID, dbSession.ID)
+	if err != nil {
+		t.Fatalf("StopSession failed: %v", err)
+	}
+	if session.Status != model.SessionStatusStopped {
+		t.Fatalf("status = %q, want %q", session.Status, model.SessionStatusStopped)
+	}
+	if session.ErrorMessage != "" {
+		t.Fatalf("expected stop reset to clear error message, got %q", session.ErrorMessage)
+	}
+}
+
+func TestStopSessionResetsErroredNotRunningSandbox(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	project := &model.Project{ID: "project-stop-error", Name: "stop error project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-stop-error",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	errorMessage := "sandbox failed"
+	dbSession := &model.Session{
+		ID:           "session-stop-error",
+		ProjectID:    project.ID,
+		WorkspaceID:  workspace.ID,
+		Name:         "Stop Error Session",
+		Status:       model.SessionStatusError,
+		ErrorMessage: &errorMessage,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	if _, _, err := provider.Create(ctx, nil, dbSession.ID, sandbox.CreateOptions{}); err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+
+	session, err := svc.StopSession(ctx, project.ID, dbSession.ID)
+	if err != nil {
+		t.Fatalf("StopSession failed: %v", err)
+	}
+	if session.Status != model.SessionStatusStopped {
+		t.Fatalf("status = %q, want %q", session.Status, model.SessionStatusStopped)
+	}
+}
+
 func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
