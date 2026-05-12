@@ -61,11 +61,7 @@ func deriveSessionStatusAndError(sess *service.Session) (string, string) {
 	case commitStatus == "":
 		return sess.Status, sessionError
 	case strings.EqualFold(commitStatus, model.CommitStatusFailed), strings.EqualFold(commitStatus, "false"):
-		errorMessage := strings.TrimSpace(sess.CommitError)
-		if errorMessage == "" {
-			errorMessage = sessionError
-		}
-		return model.SessionStatusError, errorMessage
+		return sess.Status, sessionError
 	case strings.EqualFold(commitStatus, model.CommitStatusCompleted) && strings.EqualFold(commitOperation, service.CommitOperationCommit):
 		return "committed", sessionError
 	case strings.EqualFold(commitStatus, model.CommitStatusCompleted):

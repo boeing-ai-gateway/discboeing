@@ -72,6 +72,23 @@ func TestDeriveSessionStatusAndError_MapsCompletedCommitOperation(t *testing.T) 
 	}
 }
 
+func TestDeriveSessionStatusAndError_DoesNotMapCommitFailureToError(t *testing.T) {
+	t.Parallel()
+
+	gotStatus, gotError := deriveSessionStatusAndError(&service.Session{
+		Status:          model.SessionStatusReady,
+		CommitStatus:    model.CommitStatusFailed,
+		CommitOperation: service.CommitOperationCommit,
+		CommitError:     "commit failed",
+	})
+	if gotStatus != model.SessionStatusReady {
+		t.Fatalf("deriveSessionStatusAndError() status = %q, want %q", gotStatus, model.SessionStatusReady)
+	}
+	if gotError != "" {
+		t.Fatalf("deriveSessionStatusAndError() error = %q, want empty", gotError)
+	}
+}
+
 func TestDeriveSessionStatusAndError_RemovingOverridesDerivedCommitStates(t *testing.T) {
 	t.Parallel()
 
