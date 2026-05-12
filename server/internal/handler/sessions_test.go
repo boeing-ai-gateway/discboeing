@@ -29,6 +29,24 @@ func TestMapSessionResponseIncludesThreadStatus(t *testing.T) {
 	}
 }
 
+func TestMapSessionResponseIncludesUnderlyingSandboxStatus(t *testing.T) {
+	t.Parallel()
+
+	response := mapSessionResponse(&service.Session{
+		ID:              "session-1",
+		Status:          model.SessionStatusReady,
+		CommitStatus:    model.CommitStatusCompleted,
+		CommitOperation: service.CommitOperationCommit,
+	})
+
+	if response.Status != "committed" {
+		t.Fatalf("status = %q, want committed", response.Status)
+	}
+	if response.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("sandbox status = %q, want %q", response.SandboxStatus, model.SessionStatusReady)
+	}
+}
+
 func TestDeriveSessionStatusAndError_MapsCompletedCommitOperation(t *testing.T) {
 	t.Parallel()
 

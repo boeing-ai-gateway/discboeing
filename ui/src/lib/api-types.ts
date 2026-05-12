@@ -209,6 +209,8 @@ export interface Session {
 	createdAt: string;
 	timestamp: string;
 	status: SessionStatus;
+	/** Underlying sandbox lifecycle status before commit/thread display overlays. */
+	sandboxStatus?: SessionStatus;
 	/** Workspace commit SHA when commit started (expected parent) */
 	baseCommit?: string;
 	/** Final commit SHA after patches applied to workspace */

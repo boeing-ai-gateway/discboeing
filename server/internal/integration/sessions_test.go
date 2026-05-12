@@ -607,6 +607,9 @@ func TestGetSession_MapsInProgressCommitIntoStatusAndIncludesTargetRef(t *testin
 	if result["status"] != "committing" {
 		t.Errorf("Expected status 'committing', got %v", result["status"])
 	}
+	if result["sandboxStatus"] != "ready" {
+		t.Errorf("Expected sandboxStatus 'ready', got %v", result["sandboxStatus"])
+	}
 	if result["targetRef"] != "HEAD" {
 		t.Errorf("Expected targetRef 'HEAD', got %v", result["targetRef"])
 	}
@@ -692,6 +695,9 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 
 	if result.Sessions[0]["status"] != "committed" {
 		t.Errorf("Expected status 'committed', got %v", result.Sessions[0]["status"])
+	}
+	if result.Sessions[0]["sandboxStatus"] != "ready" {
+		t.Errorf("Expected sandboxStatus 'ready', got %v", result.Sessions[0]["sandboxStatus"])
 	}
 	if result.Sessions[0]["appliedCommit"] != "def456" {
 		t.Errorf("Expected appliedCommit 'def456', got %v", result.Sessions[0]["appliedCommit"])

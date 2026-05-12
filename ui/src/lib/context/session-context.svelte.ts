@@ -38,7 +38,7 @@ export function createSessionContext(
 	const hasSession = $derived.by(() => current !== null);
 	const isPending = $derived.by(() => !hasSession);
 	const canLoadSandboxData = $derived.by(
-		() => current?.status === SessionStatus.READY,
+		() => (current?.sandboxStatus ?? current?.status) === SessionStatus.READY,
 	);
 	const canLoadThreadData = $derived.by(() =>
 		canLoadSessionThreads(current?.status),

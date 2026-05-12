@@ -28,6 +28,7 @@ type sessionResponse struct {
 	CreatedAt     string                         `json:"createdAt"`
 	Timestamp     string                         `json:"timestamp"`
 	Status        string                         `json:"status"`
+	SandboxStatus string                         `json:"sandboxStatus"`
 	TargetRef     string                         `json:"targetRef,omitempty"`
 	AppliedCommit string                         `json:"appliedCommit,omitempty"`
 	ErrorMessage  string                         `json:"errorMessage,omitempty"`
@@ -87,6 +88,7 @@ func mapSessionResponse(sess *service.Session) *sessionResponse {
 		CreatedAt:     sess.CreatedAt,
 		Timestamp:     sess.Timestamp,
 		Status:        status,
+		SandboxStatus: sess.Status,
 		TargetRef:     sess.TargetRef,
 		AppliedCommit: sess.AppliedCommit,
 		ErrorMessage:  errorMessage,
