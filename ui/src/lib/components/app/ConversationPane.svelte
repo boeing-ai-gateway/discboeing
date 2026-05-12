@@ -672,12 +672,12 @@
 		events: BrowserEventChunkData[],
 	): BrowserTimelineStep[] {
 		const steps: BrowserTimelineStep[] = [];
-		let previousArtifactURI: string | null = null;
+		const seenArtifactURIs: string[] = [];
 
 		for (const event of events) {
 			for (const file of event.event.files ?? []) {
 				const artifactURI = getBrowserArtifactURI(file);
-				if (artifactURI === previousArtifactURI) {
+				if (seenArtifactURIs.includes(artifactURI)) {
 					continue;
 				}
 				steps.push({
@@ -686,7 +686,7 @@
 					event,
 					artifactURI,
 				});
-				previousArtifactURI = artifactURI;
+				seenArtifactURIs.push(artifactURI);
 			}
 		}
 
