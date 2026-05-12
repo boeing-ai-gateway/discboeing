@@ -54,6 +54,7 @@
 
 	const DESKTOP_WIDTH = 1280;
 	const DESKTOP_HEIGHT = 1024;
+	const DESKTOP_CONNECT_RETRY_DELAYS = [250, 750, 1500];
 
 	let {
 		sessionId,
@@ -151,16 +152,22 @@
 		connectionStatus = "connecting";
 
 		let disposed = false;
+		let retryTimer: ReturnType<typeof setTimeout> | null = null;
+		let socket: WebSocket | null = null;
 		let rfb: RFBInstance | null = null;
+		let rfbConnected = false;
+		let rfbDisconnected = false;
 
 		const onConnect = () => {
 			if (disposed) {
 				return;
 			}
+			rfbConnected = true;
 			connectionStatus = "connected";
 		};
 
 		const onDisconnect = () => {
+			rfbDisconnected = true;
 			if (disposed) {
 				return;
 			}
@@ -199,22 +206,68 @@
 			}
 		};
 
+		const scheduleConnect = (connect: () => void, delay: number) => {
+			retryTimer = setTimeout(() => {
+				retryTimer = null;
+				connect();
+			}, delay);
+		};
+
 		void import("@novnc/novnc")
 			.then((module) => {
-				if (disposed || reconnectAttempt !== reconnectVersion) {
-					return;
-				}
-
 				const RFB = module.default as unknown as RFBConstructor;
-				rfb = new RFB(host, getDesktopWsUrl(currentSessionId));
-				rfb.scaleViewport = true;
-				rfb.resizeSession = true;
-				rfb.background = "rgb(24, 24, 27)";
-				rfb.addEventListener("connect", onConnect);
-				rfb.addEventListener("disconnect", onDisconnect);
-				rfb.addEventListener("clipboard", onClipboard);
-				rfb.addEventListener("desktopname", onDesktopName);
-				host.addEventListener("keydown", onKeyDown, true);
+				const connect = (attempt: number) => {
+					if (disposed || reconnectAttempt !== reconnectVersion) {
+						return;
+					}
+
+					const nextSocket = new WebSocket(getDesktopWsUrl(currentSessionId));
+					socket = nextSocket;
+
+					nextSocket.addEventListener("open", () => {
+						if (
+							disposed ||
+							reconnectAttempt !== reconnectVersion ||
+							socket !== nextSocket
+						) {
+							nextSocket.close();
+							return;
+						}
+
+						socket = null;
+						rfbDisconnected = false;
+						rfb = new RFB(host, nextSocket);
+						rfb.scaleViewport = true;
+						rfb.resizeSession = true;
+						rfb.background = "rgb(24, 24, 27)";
+						rfb.addEventListener("connect", onConnect);
+						rfb.addEventListener("disconnect", onDisconnect);
+						rfb.addEventListener("clipboard", onClipboard);
+						rfb.addEventListener("desktopname", onDesktopName);
+						host.addEventListener("keydown", onKeyDown, true);
+					});
+
+					nextSocket.addEventListener("close", () => {
+						if (
+							disposed ||
+							reconnectAttempt !== reconnectVersion ||
+							socket !== nextSocket
+						) {
+							return;
+						}
+
+						socket = null;
+						const retryDelay = DESKTOP_CONNECT_RETRY_DELAYS[attempt];
+						if (!rfbConnected && retryDelay !== undefined) {
+							scheduleConnect(() => connect(attempt + 1), retryDelay);
+							return;
+						}
+
+						connectionStatus = "disconnected";
+					});
+				};
+
+				connect(0);
 			})
 			.catch((error) => {
 				if (disposed) {
@@ -226,13 +279,22 @@
 
 		return () => {
 			disposed = true;
+			if (retryTimer) {
+				clearTimeout(retryTimer);
+			}
+			if (socket) {
+				socket.close();
+				socket = null;
+			}
 			host.removeEventListener("keydown", onKeyDown, true);
 			if (rfb) {
 				rfb.removeEventListener("connect", onConnect);
 				rfb.removeEventListener("disconnect", onDisconnect);
 				rfb.removeEventListener("clipboard", onClipboard);
 				rfb.removeEventListener("desktopname", onDesktopName);
-				rfb.disconnect();
+				if (!rfbDisconnected) {
+					rfb.disconnect();
+				}
 				rfb = null;
 			}
 			clearDesktopHost(host);
