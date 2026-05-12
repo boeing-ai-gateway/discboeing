@@ -200,6 +200,10 @@ export function createThreadContext(
 		),
 		refreshThread: async () => {
 			await session.threads.refreshThread(threadId);
+			const refreshedThread = session.stores.threads.get(threadId);
+			if (refreshedThread) {
+				conversation.reconcileThreadSnapshot(refreshedThread);
+			}
 		},
 		applyThreadUpdate: (thread) => {
 			const previousThread = session.stores.threads.get(thread.id);
@@ -227,6 +231,9 @@ export function createThreadContext(
 				},
 				reloadSession: () => app.sessions.reloadSession(session.sessionId),
 			});
+			if (thread.id === threadId) {
+				conversation.reconcileThreadSnapshot(thread);
+			}
 		},
 		applyHooksStatusUpdate: (status) => {
 			return session.hooks.applyStatusUpdate(status);

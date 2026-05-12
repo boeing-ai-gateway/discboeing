@@ -69,6 +69,15 @@ func (h *Handler) threadActivityState(thread api.Thread) *api.SessionThreadActiv
 		state.Message = thread.ErrorMessage
 		return &state
 	}
+	if h.conversations != nil {
+		state.CompletionID = h.conversations.ActiveCompletionID(thread.ID)
+	}
+	if thread.ActiveCommand != "" || state.CompletionID != "" {
+		state.Status = "running"
+		state.Reason = "completion"
+		state.Message = thread.ActiveCommand
+		return &state
+	}
 	switch strings.TrimSpace(thread.State) {
 	case "interrupted":
 		state.Status = "needs_attention"
@@ -77,15 +86,6 @@ func (h *Handler) threadActivityState(thread api.Thread) *api.SessionThreadActiv
 	case "cancelled":
 		state.Status = "needs_attention"
 		state.Reason = "cancelled"
-		return &state
-	}
-	if h.conversations != nil {
-		state.CompletionID = h.conversations.ActiveCompletionID(thread.ID)
-	}
-	if thread.ActiveCommand != "" || state.CompletionID != "" {
-		state.Status = "running"
-		state.Reason = "completion"
-		state.Message = thread.ActiveCommand
 		return &state
 	}
 	if len(thread.PromptQueue) > 0 {

@@ -183,6 +183,31 @@ func TestSessionActivityResponseTreatsTerminalStatesAsNeedsAttention(t *testing.
 	}
 }
 
+func TestSessionActivityResponseTreatsRunningTerminalThreadAsRunning(t *testing.T) {
+	h := &Handler{}
+
+	got := h.sessionActivityResponse([]api.Thread{
+		{
+			ID:            "cancelled-thread",
+			State:         "cancelled",
+			ActiveCommand: "pnpm test",
+		},
+	})
+
+	if got.Status != "running" {
+		t.Fatalf("expected running, got %q", got.Status)
+	}
+	if got.RunningCount != 1 || got.NeedsAttentionCount != 0 {
+		t.Fatalf("unexpected counts: needs=%d running=%d", got.NeedsAttentionCount, got.RunningCount)
+	}
+	if got.RepresentativeThreadID != "cancelled-thread" {
+		t.Fatalf("expected cancelled-thread representative, got %q", got.RepresentativeThreadID)
+	}
+	if len(got.Threads) != 1 || got.Threads[0].Reason != "completion" {
+		t.Fatalf("unexpected thread activity states: %+v", got.Threads)
+	}
+}
+
 func TestStreamSessionActivityEmitsInitialAndChangedSnapshots(t *testing.T) {
 	manager := &activityStreamThreadManager{}
 	h := &Handler{

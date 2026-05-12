@@ -66,6 +66,13 @@ function isLostProjectStreamConnection(error: unknown): boolean {
 	);
 }
 
+function threadSnapshotShowsRunning(thread: Thread): boolean {
+	return (
+		thread.activityStatus?.status === "running" ||
+		(thread.activeCommand ?? "").trim().length > 0
+	);
+}
+
 function sortBrowserEvents(
 	events: BrowserEventChunkData[],
 ): BrowserEventChunkData[] {
@@ -210,6 +217,15 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		args.onActivityStatusChange?.(null);
 		void dismissRetryToast(args.threadId);
 		return runAfterTurnIfNeeded();
+	};
+
+	const reconcileThreadSnapshot = (thread: Thread) => {
+		if (!completionRunning || threadSnapshotShowsRunning(thread)) {
+			return;
+		}
+		completionRunning = false;
+		args.onActivityStatusChange?.(null);
+		void dismissRetryToast(args.threadId);
 	};
 
 	const streamState = createChatStreamState({
@@ -515,6 +531,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		get pendingQuestionId() {
 			return pendingQuestionState.pendingQuestionId;
 		},
+		reconcileThreadSnapshot,
 		connect: load,
 		disconnect,
 		load,
