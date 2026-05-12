@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { recentThreadKey } from "$lib/app/thread-switcher";
+	import { getRecentThreadDisplayStatus } from "$lib/app/thread-status";
 	import type { RecentThreadSummary } from "$lib/shell-types";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
+	import ThreadStateBadge from "$lib/components/app/parts/ThreadStateBadge.svelte";
 
 	type Props = {
 		open: boolean;
@@ -65,13 +67,16 @@
 						onclick={() => onSelect(thread.sessionId, thread.threadId)}
 					>
 						<SessionStatus
-							status={thread.sessionStatus}
+							status={getRecentThreadDisplayStatus(thread)}
 							showLabel={false}
 							class="mt-0.5 shrink-0"
 						/>
 						<span class="min-w-0 flex-1">
-							<span class="block truncate text-sm font-medium">
-								{thread.threadName || "New Thread"}
+							<span class="flex min-w-0 items-center gap-2 overflow-hidden">
+								<span class="block truncate text-sm font-medium">
+									{thread.threadName || "New Thread"}
+								</span>
+								<ThreadStateBadge state={thread.state} />
 							</span>
 							<span class="mt-1 block truncate text-xs text-current/60">
 								{thread.lastMessage?.trim() ||

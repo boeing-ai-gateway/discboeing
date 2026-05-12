@@ -1,12 +1,56 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getRecentThreadDisplayStatus } from "./thread-status";
 import {
 	getAvailableSwitcherThreads,
 	getThreadSwitcherThreads,
 	recentThreadKey,
 } from "./thread-switcher";
 
+test("getRecentThreadDisplayStatus prefers thread state over ready session", () => {
+	assert.equal(
+		getRecentThreadDisplayStatus({
+			sessionId: "session-1",
+			sessionName: "Session One",
+			sessionStatus: "ready",
+			threadId: "thread-2",
+			threadName: "Follow-up",
+			state: "interrupted",
+			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+		}),
+		"needs_attention",
+	);
+});
+
+test("getRecentThreadDisplayStatus prefers active thread activity", () => {
+	assert.equal(
+		getRecentThreadDisplayStatus({
+			sessionId: "session-1",
+			sessionName: "Session One",
+			sessionStatus: "ready",
+			activityStatus: { status: "running" },
+			threadId: "thread-2",
+			threadName: "Follow-up",
+			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+		}),
+		"running",
+	);
+});
+
+test("getRecentThreadDisplayStatus falls back to session status", () => {
+	assert.equal(
+		getRecentThreadDisplayStatus({
+			sessionId: "session-1",
+			sessionName: "Session One",
+			sessionStatus: "ready",
+			threadId: "thread-2",
+			threadName: "Follow-up",
+			lastAccessedAt: "2024-01-05T00:00:00.000Z",
+		}),
+		"ready",
+	);
+});
 test("getAvailableSwitcherThreads includes every session and sorts by last access", () => {
 	const allThreads = getAvailableSwitcherThreads({
 		sessions: [

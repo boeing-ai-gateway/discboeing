@@ -24,10 +24,9 @@ test("session sidebar recent threads render lastMessage as the subtitle", () => 
 test("session sidebar recent threads render a state badge when present", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(source, /function recentThreadStateLabel/);
-	assert.match(source, /threadObj\.state === "interrupted"/);
-	assert.match(source, /threadObj\.state === "cancelled"/);
-	assert.match(source, /\{recentThreadStateLabel\(threadObj\)\}/);
+	assert.match(source, /import ThreadStateBadge/);
+	assert.match(source, /<ThreadStateBadge state=\{threadObj\.state\} \/>/);
+	assert.doesNotMatch(source, /function recentThreadStateLabel/);
 });
 
 test("session sidebar keys session and recent thread rows", () => {
@@ -149,15 +148,12 @@ test("session sidebar recent rows prefer thread activity status", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /function recentThreadDisplayStatus/);
-	assert.match(source, /threadObj\.activityStatus\?\.status/);
+	assert.match(source, /getRecentThreadDisplayStatus\(threadObj\)/);
 	assert.match(
 		source,
 		/\{@const displayStatus = recentThreadDisplayStatus\(threadObj\)\}/,
 	);
-	assert.match(
-		source,
-		/status=\{displayStatus \?\? threadObj\.sessionStatus\}/,
-	);
+	assert.match(source, /status=\{displayStatus\}/);
 });
 
 test("session sidebar nests task threads by parent metadata and renders a task icon", () => {

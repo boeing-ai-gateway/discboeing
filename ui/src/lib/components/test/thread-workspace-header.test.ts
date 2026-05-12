@@ -12,13 +12,15 @@ function readThreadWorkspaceHeaderSource() {
 	return readFileSync(THREAD_WORKSPACE_HEADER_COMPONENT, "utf-8");
 }
 
-test("thread workspace header renders interrupted and cancelled badges", () => {
+test("thread workspace header renders the shared state badge", () => {
 	const source = readThreadWorkspaceHeaderSource();
 
-	assert.match(source, /function threadStateLabel/);
-	assert.match(source, /value === "interrupted"/);
-	assert.match(source, /value === "cancelled"/);
-	assert.match(source, /\{threadStateLabel\(state\)\}/);
+	assert.match(source, /import ThreadStateBadge/);
+	assert.match(
+		source,
+		/<ThreadStateBadge \{state\} class="px-2 text-\[11px\]" \/>/,
+	);
+	assert.doesNotMatch(source, /function threadStateLabel/);
 });
 
 test("thread workspace header can reserve space for the floating sidebar", () => {

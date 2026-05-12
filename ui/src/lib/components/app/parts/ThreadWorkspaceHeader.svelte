@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ThreadState } from "$lib/api-types";
+	import ThreadStateBadge from "$lib/components/app/parts/ThreadStateBadge.svelte";
 
 	type Props = {
 		reserveSidebarSpace?: boolean;
@@ -8,26 +9,6 @@
 	};
 
 	let { reserveSidebarSpace = false, title, state }: Props = $props();
-
-	function threadStateLabel(value: ThreadState | undefined) {
-		if (value === "interrupted") {
-			return "Interrupted";
-		}
-		if (value === "cancelled") {
-			return "Cancelled";
-		}
-		return null;
-	}
-
-	function threadStateClass(value: ThreadState | undefined) {
-		if (value === "interrupted") {
-			return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-		}
-		if (value === "cancelled") {
-			return "border-muted-foreground/20 bg-muted text-muted-foreground";
-		}
-		return "";
-	}
 </script>
 
 <div class="flex h-10 min-w-0 items-center gap-1 bg-background px-3">
@@ -38,14 +19,6 @@
 		<p class="truncate text-sm font-medium">
 			{title}
 		</p>
-		{#if threadStateLabel(state)}
-			<span
-				class={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${threadStateClass(
-					state,
-				)}`}
-			>
-				{threadStateLabel(state)}
-			</span>
-		{/if}
+		<ThreadStateBadge {state} class="px-2 text-[11px]" />
 	</div>
 </div>

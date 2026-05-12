@@ -8,6 +8,7 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
+	import { getRecentThreadDisplayStatus } from "$lib/app/thread-status";
 	import type {
 		SessionThreadActivityStatusValue,
 		Thread,
@@ -15,6 +16,7 @@
 	} from "$lib/api-types";
 	import * as Collapsible from "$lib/components/ui/collapsible";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
+	import ThreadStateBadge from "$lib/components/app/parts/ThreadStateBadge.svelte";
 	import {
 		AlertDialog,
 		AlertDialogAction,
@@ -290,30 +292,6 @@
 		return (threadObj.lastMessage ?? "").trim().length > 0;
 	}
 
-	function recentThreadStateLabel(
-		threadObj: (typeof sessions.recentThreads)[number],
-	) {
-		if (threadObj.state === "interrupted") {
-			return "Interrupted";
-		}
-		if (threadObj.state === "cancelled") {
-			return "Cancelled";
-		}
-		return null;
-	}
-
-	function recentThreadStateClass(
-		threadObj: (typeof sessions.recentThreads)[number],
-	) {
-		if (threadObj.state === "interrupted") {
-			return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-		}
-		if (threadObj.state === "cancelled") {
-			return "border-current/15 bg-current/10 text-current/75";
-		}
-		return "";
-	}
-
 	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
 		const status = sessionObj.threadStatus?.status;
 		return status && status !== "idle" ? status : sessionObj.status;
@@ -363,26 +341,12 @@
 
 	function recentThreadDisplayStatus(
 		threadObj: (typeof sessions.recentThreads)[number],
-	): SessionThreadActivityStatusValue | null {
+	) {
 		const contextStatus = threadContextDisplayStatus(
 			threadObj.sessionId,
 			threadObj.threadId,
 		);
-		if (contextStatus) {
-			return contextStatus;
-		}
-		const activityStatus = threadObj.activityStatus?.status;
-		if (activityStatus && activityStatus !== "idle") {
-			return activityStatus;
-		}
-		const sessionThreadStatus = threadObj.sessionThreadStatus?.status;
-		if (sessionThreadStatus && sessionThreadStatus !== "idle") {
-			return sessionThreadStatus;
-		}
-		if (threadObj.state === "interrupted" || threadObj.state === "cancelled") {
-			return "needs_attention";
-		}
-		return null;
+		return contextStatus ?? getRecentThreadDisplayStatus(threadObj);
 	}
 
 	function openRenameDialog(sessionId: string) {
@@ -824,7 +788,7 @@
 		class={`flex w-full min-w-0 items-start gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left transition-colors ${hasRecentThreadSubtitle(threadObj) ? "min-h-10" : ""} ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 	>
 		<SessionStatus
-			status={displayStatus ?? threadObj.sessionStatus}
+			status={displayStatus}
 			showLabel={false}
 			class="mt-0.5 shrink-0"
 		/>
@@ -834,15 +798,7 @@
 					class={`block text-sm font-medium ${floatingMode ? "whitespace-nowrap" : "truncate"}`}
 					>{threadObj.threadName || "New Thread"}</span
 				>
-				{#if recentThreadStateLabel(threadObj)}
-					<span
-						class={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${recentThreadStateClass(
-							threadObj,
-						)}`}
-					>
-						{recentThreadStateLabel(threadObj)}
-					</span>
-				{/if}
+				<ThreadStateBadge state={threadObj.state} />
 			</span>
 			{#if hasRecentThreadSubtitle(threadObj)}
 				{#if floatingMode}
