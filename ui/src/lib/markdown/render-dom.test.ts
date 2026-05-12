@@ -140,3 +140,28 @@ test("renderMarkdownTree falls back to plain text for unsupported code fence lan
 	expect(codeBlock?.textContent ?? "").toMatch(/dist\//);
 	expect(codeBlock?.textContent ?? "").toMatch(/\.env/);
 });
+
+test("renderMarkdownTree avoids content visibility on incomplete code fences", () => {
+	const container = renderMarkdown("```javascript\nconst value = 1;", {
+		isIncompleteCodeFence: true,
+	});
+	const codeBlock = container.querySelector<HTMLElement>(
+		'[data-streamdown="code-block"]',
+	);
+
+	expect(codeBlock).toBeTruthy();
+	expect(codeBlock?.dataset.incomplete).toBe("true");
+	expect(codeBlock?.style.contentVisibility).toBe("");
+	expect(codeBlock?.style.containIntrinsicSize).toBe("");
+});
+
+test("renderMarkdownTree uses content visibility on complete code fences", () => {
+	const container = renderMarkdown("```javascript\nconst value = 1;\n```");
+	const codeBlock = container.querySelector<HTMLElement>(
+		'[data-streamdown="code-block"]',
+	);
+
+	expect(codeBlock).toBeTruthy();
+	expect(codeBlock?.style.contentVisibility).toBe("auto");
+	expect(codeBlock?.style.containIntrinsicSize).toBe("auto 200px");
+});

@@ -472,8 +472,10 @@ function renderCodeBlock(
 	if (options.isIncompleteCodeFence) {
 		container.dataset.incomplete = "true";
 	}
-	container.style.contentVisibility = "auto";
-	container.style.containIntrinsicSize = "auto 200px";
+	if (!options.isIncompleteCodeFence) {
+		container.style.contentVisibility = "auto";
+		container.style.containIntrinsicSize = "auto 200px";
+	}
 
 	const header = document.createElement("div");
 	header.className = cn("flex h-8 items-center text-muted-foreground text-xs");

@@ -1327,7 +1327,10 @@
 				<ReasoningContent text={part.text} />
 			</Reasoning>
 		{:else if part.type === "text"}
-			<MessageResponse text={part.text} />
+			<MessageResponse
+				text={part.text}
+				isAnimating={isActiveStreamingAssistantMessage(message)}
+			/>
 		{:else if part.type === "dynamic-tool"}
 			<OptimizedToolRenderer
 				toolPart={part as DynamicToolPart}

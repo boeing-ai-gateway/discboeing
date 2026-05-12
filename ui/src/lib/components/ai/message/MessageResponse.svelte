@@ -7,6 +7,7 @@
 		text?: string;
 		class?: string;
 		mode?: MarkdownMode;
+		isAnimating?: boolean;
 		children?: () => any;
 	};
 
@@ -14,6 +15,7 @@
 		text,
 		class: className,
 		mode = "streaming",
+		isAnimating = false,
 		children,
 		...restProps
 	}: Props = $props();
@@ -24,6 +26,7 @@
 		<SvelteStreamdown
 			{text}
 			{mode}
+			{isAnimating}
 			class="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
 		/>
 	{:else}
