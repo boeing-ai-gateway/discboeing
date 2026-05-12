@@ -1,6 +1,7 @@
 import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
+import { isThreadSnapshotRunning } from "$lib/app/thread-status";
 import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
 import type { Thread, ThreadActivityStatus } from "$lib/api-types";
 import {
@@ -29,6 +30,19 @@ import type { ThreadSummary } from "$lib/shell-types";
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
 const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
+
+export function getThreadConversationStatus(
+	thread: ThreadSummary | null,
+	status: ThreadContextValue["status"],
+): ThreadContextValue["status"] {
+	if (status === "loading" || status === "streaming" || status === "error") {
+		return status;
+	}
+	if (isThreadSnapshotRunning(thread)) {
+		return "streaming";
+	}
+	return status;
+}
 
 export function normalizeThreadComposerReasoning(
 	reasoning: string | null | undefined,
@@ -488,7 +502,7 @@ export function createThreadContext(
 			return threadSummary?.promptQueue ?? [];
 		},
 		get status() {
-			return conversation.status;
+			return getThreadConversationStatus(threadSummary, conversation.status);
 		},
 		get error() {
 			return conversation.error ?? threadSummary?.errorMessage ?? null;

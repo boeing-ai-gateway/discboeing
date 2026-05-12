@@ -5,10 +5,12 @@ import {
 	applyStreamedThreadUpdate,
 	clearComposerDraftState,
 	getThreadComposerValues,
+	getThreadConversationStatus,
 	normalizeThreadComposerReasoning,
 	parseComposerModelSelection,
 	resolveThreadComposerSubmitValues,
 } from "./thread-context.svelte";
+import { isThreadSnapshotRunning } from "$lib/app/thread-status";
 
 test("applyStreamedThreadUpdate syncs the primary session title and reloads it", async () => {
 	const upserted: string[] = [];
@@ -189,5 +191,57 @@ test("resolveThreadComposerSubmitValues prefers staged next values", () => {
 			modelId: "openai/gpt-5",
 			reasoning: "high",
 		},
+	);
+});
+
+test("isThreadSnapshotRunning detects server-side activity", () => {
+	assert.equal(
+		isThreadSnapshotRunning({
+			id: "thread-1",
+			name: "Main",
+			activityStatus: { status: "running" },
+		}),
+		true,
+	);
+	assert.equal(
+		isThreadSnapshotRunning({
+			id: "thread-1",
+			name: "Main",
+			activeCommand: "pnpm test",
+		}),
+		true,
+	);
+	assert.equal(
+		isThreadSnapshotRunning({
+			id: "thread-1",
+			name: "Main",
+			activityStatus: { status: "idle" },
+		}),
+		false,
+	);
+});
+
+test("getThreadConversationStatus keeps stop control visible while server says running", () => {
+	assert.equal(
+		getThreadConversationStatus(
+			{
+				id: "thread-1",
+				name: "Main",
+				activityStatus: { status: "running" },
+			},
+			"ready",
+		),
+		"streaming",
+	);
+	assert.equal(
+		getThreadConversationStatus(
+			{
+				id: "thread-1",
+				name: "Main",
+				activityStatus: { status: "running" },
+			},
+			"error",
+		),
+		"error",
 	);
 });

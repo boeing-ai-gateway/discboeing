@@ -19,6 +19,22 @@ type SidebarThreadStatusInput = {
 	idleFallback?: "session" | "none";
 };
 
+type ThreadRunningStatusInput = {
+	activityStatus?: {
+		status: SessionThreadActivityStatusValue;
+	};
+	activeCommand?: string;
+} | null;
+
+export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
+	thread: T,
+): boolean {
+	return (
+		thread?.activityStatus?.status === "running" ||
+		(thread?.activeCommand ?? "").trim().length > 0
+	);
+}
+
 export function getThreadStateLabel(state: ThreadState | undefined) {
 	if (state === "interrupted") {
 		return "Interrupted";

@@ -1,6 +1,7 @@
 import { api } from "$lib/api-client";
 import { StartChatError } from "$lib/api-client";
 import type { AppChatRequest } from "$lib/app/app-context.types";
+import { isThreadSnapshotRunning } from "$lib/app/thread-status";
 import type {
 	BrowserEventChunkData,
 	ChatMessage,
@@ -63,13 +64,6 @@ function getStreamErrorMessage(error: unknown): string {
 function isLostProjectStreamConnection(error: unknown): boolean {
 	return (
 		getStreamErrorMessage(error) === LOST_PROJECT_STREAM_CONNECTION_MESSAGE
-	);
-}
-
-function threadSnapshotShowsRunning(thread: Thread): boolean {
-	return (
-		thread.activityStatus?.status === "running" ||
-		(thread.activeCommand ?? "").trim().length > 0
 	);
 }
 
@@ -220,7 +214,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	};
 
 	const reconcileThreadSnapshot = (thread: Thread) => {
-		if (!completionRunning || threadSnapshotShowsRunning(thread)) {
+		if (!completionRunning || isThreadSnapshotRunning(thread)) {
 			return;
 		}
 		completionRunning = false;
