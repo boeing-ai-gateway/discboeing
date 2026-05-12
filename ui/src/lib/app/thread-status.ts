@@ -35,6 +35,15 @@ export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 	);
 }
 
+type ThreadDisplayStatusInput = Omit<
+	SidebarThreadStatusInput,
+	"sessionActivityStatus" | "idleFallback"
+>;
+
+export type ThreadDisplayStatusValue =
+	| SessionActivityStatusValue
+	| SessionStatusValue;
+
 export function getThreadStateLabel(state: ThreadState | undefined) {
 	if (state === "interrupted") {
 		return "Interrupted";
@@ -98,4 +107,29 @@ export function resolveSidebarThreadStatus({
 		return "queued";
 	}
 	return fallbackStatus;
+}
+
+export function resolveThreadDisplayStatus({
+	sessionStatus,
+	threadActivityStatus,
+	localActivityStatus,
+	threadState,
+	pendingQuestion,
+	errorMessage,
+	promptQueueCount,
+}: ThreadDisplayStatusInput): ThreadDisplayStatusValue {
+	const status = resolveSidebarThreadStatus({
+		localActivityStatus,
+		threadActivityStatus,
+		threadState,
+		pendingQuestion,
+		errorMessage,
+		promptQueueCount,
+		idleFallback: "none",
+	});
+
+	if (sessionStatus === "stopped" && status === "running") {
+		return "stopped";
+	}
+	return status ?? "idle";
 }

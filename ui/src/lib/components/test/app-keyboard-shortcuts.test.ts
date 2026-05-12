@@ -101,8 +101,9 @@ test("recent thread switcher dialog renders the reusable overlay UI", () => {
 
 	assert.match(
 		source,
-		/import SessionStatus from "\$lib\/components\/app\/parts\/SessionStatus\.svelte";/,
+		/import ThreadStatusIcon from "\$lib\/components\/app\/parts\/ThreadStatusIcon\.svelte";/,
 	);
+	assert.match(source, /threadStatuses\[threadKey\] \?\? "unknown"/);
 	assert.match(source, /type Props = \{/);
 	assert.match(source, /helpText: string;/);
 	assert.match(

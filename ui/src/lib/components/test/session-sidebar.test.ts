@@ -141,10 +141,9 @@ test("session sidebar recent rows use live thread status", () => {
 
 	assert.match(source, /function recentThreadDisplayStatus/);
 	assert.match(source, /return "unknown"/);
-	assert.match(source, /return status;/);
-	assert.match(source, /resolveSidebarThreadStatus/);
+	assert.match(source, /return resolveThreadDisplayStatus\(\{/);
 	assert.match(source, /liveThread\.activityStatus\?\.status/);
-	assert.match(source, /session\.status === "stopped" && status === "running"/);
+	assert.match(source, /sessionStatus: session\.status/);
 	assert.doesNotMatch(
 		source.match(
 			/function recentThreadDisplayStatus[\s\S]*?\n\tfunction openRenameDialog/,
@@ -179,7 +178,7 @@ test("session sidebar nests task threads and renders a status icon", () => {
 		source,
 		/\{@render threadItem\(sessionId, childThreadObj, depth \+ 1\)\}/,
 	);
-	assert.match(source, /<SessionStatus\s*status=\{displayStatus\}/);
+	assert.match(source, /<ThreadStatusIcon\s*status=\{displayStatus\}/);
 });
 
 test("session sidebar thread rows include rename and delete actions", () => {
