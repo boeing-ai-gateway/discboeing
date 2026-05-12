@@ -13,6 +13,8 @@
 
 	let errors = $state<DevError[]>([]);
 	let nextId = 1;
+	let copiedId = $state<number | null>(null);
+	let copyResetTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	function stringify(value: unknown) {
 		if (value instanceof Error) {
@@ -56,6 +58,41 @@
 		);
 	}
 
+	function formatError(error: DevError) {
+		return [error.title, error.message, error.stack]
+			.filter(Boolean)
+			.join("\n\n");
+	}
+
+	async function copyError(error: DevError) {
+		const text = formatError(error);
+
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+			} else {
+				const textarea = document.createElement("textarea");
+				textarea.value = text;
+				textarea.style.position = "fixed";
+				textarea.style.opacity = "0";
+				document.body.append(textarea);
+				textarea.select();
+				document.execCommand("copy");
+				textarea.remove();
+			}
+
+			copiedId = error.id;
+			if (copyResetTimeout) {
+				clearTimeout(copyResetTimeout);
+			}
+			copyResetTimeout = setTimeout(() => {
+				copiedId = null;
+			}, 1500);
+		} catch {
+			copiedId = null;
+		}
+	}
+
 	function dismiss(id: number) {
 		errors = errors.filter((error) => error.id !== id);
 	}
@@ -89,6 +126,9 @@
 		window.addEventListener("unhandledrejection", handleUnhandledRejection);
 
 		return () => {
+			if (copyResetTimeout) {
+				clearTimeout(copyResetTimeout);
+			}
 			console.error = originalConsoleError;
 			window.removeEventListener("error", handleError);
 			window.removeEventListener(
@@ -136,13 +176,22 @@
 							<pre
 								class="mt-1 whitespace-pre-wrap break-words font-mono text-xs">{error.message}</pre>
 						</div>
-						<button
-							type="button"
-							class="shrink-0 rounded border border-red-300/30 px-2 py-1 text-xs hover:bg-red-900"
-							onclick={() => dismiss(error.id)}
-						>
-							Dismiss
-						</button>
+						<div class="flex shrink-0 gap-2">
+							<button
+								type="button"
+								class="rounded border border-red-300/30 px-2 py-1 text-xs hover:bg-red-900"
+								onclick={() => copyError(error)}
+							>
+								{copiedId === error.id ? "Copied" : "Copy"}
+							</button>
+							<button
+								type="button"
+								class="rounded border border-red-300/30 px-2 py-1 text-xs hover:bg-red-900"
+								onclick={() => dismiss(error.id)}
+							>
+								Dismiss
+							</button>
+						</div>
 					</div>
 
 					{#if error.stack}
