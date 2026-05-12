@@ -8,7 +8,11 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
-	import { resolveThreadDisplayStatus } from "$lib/app/thread-status";
+	import {
+		resolveSessionDisplayStatus,
+		resolveThreadContextDisplayStatus,
+		resolveThreadDisplayStatus,
+	} from "$lib/app/thread-status";
 	import type {
 		SessionThreadActivityStatusValue,
 		Thread,
@@ -288,11 +292,10 @@
 	}
 
 	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
-		const status = sessionObj.threadStatus?.status;
-		if (status && status !== "idle") {
-			return status;
-		}
-		return sessionObj.status === "ready" ? "idle" : sessionObj.status;
+		return resolveSessionDisplayStatus({
+			sessionStatus: sessionObj.status,
+			sessionActivityStatus: sessionObj.threadStatus?.status,
+		});
 	}
 
 	function threadContextDisplayStatus(
@@ -302,13 +305,7 @@
 		const threadContext = app.sessions.sessionContexts
 			.get(sessionId)
 			?.threadContexts.get(threadId);
-		if (threadContext?.status === "streaming") {
-			return "running";
-		}
-		if (threadContext?.hasPendingQuestion) {
-			return "needs_attention";
-		}
-		return null;
+		return resolveThreadContextDisplayStatus(threadContext);
 	}
 
 	function threadDisplayStatus(
@@ -319,6 +316,7 @@
 		const contextStatus = threadContextDisplayStatus(sessionId, threadObj.id);
 		return resolveThreadDisplayStatus({
 			sessionStatus: session?.status,
+			sessionActivityStatus: session?.threadStatus?.status,
 			localActivityStatus: contextStatus,
 			threadActivityStatus: threadObj.activityStatus?.status,
 			threadState: threadObj.state,
@@ -345,6 +343,7 @@
 		);
 		return resolveThreadDisplayStatus({
 			sessionStatus: session.status,
+			sessionActivityStatus: session.threadStatus?.status,
 			localActivityStatus: contextStatus,
 			threadActivityStatus: liveThread.activityStatus?.status,
 			threadState: liveThread.state,

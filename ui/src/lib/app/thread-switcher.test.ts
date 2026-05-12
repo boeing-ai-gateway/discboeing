@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveSidebarThreadStatus } from "./thread-status";
+import {
+	resolveSessionDisplayStatus,
+	resolveSidebarThreadStatus,
+	resolveThreadDisplayStatus,
+} from "./thread-status";
 import {
 	getAvailableSwitcherThreads,
 	getThreadSwitcherThreads,
@@ -57,6 +61,27 @@ test("resolveSidebarThreadStatus falls back to session status", () => {
 			sessionStatus: "ready",
 		}),
 		"ready",
+	);
+});
+
+test("resolveSessionDisplayStatus normalizes resting ready sessions", () => {
+	assert.equal(
+		resolveSessionDisplayStatus({
+			sessionStatus: "ready",
+			sessionActivityStatus: "idle",
+		}),
+		"idle",
+	);
+});
+
+test("resolveThreadDisplayStatus inherits committed session display", () => {
+	assert.equal(
+		resolveThreadDisplayStatus({
+			sessionStatus: "committed",
+			threadActivityStatus: "running",
+			pendingQuestion: true,
+		}),
+		"committed",
 	);
 });
 

@@ -26,6 +26,14 @@ type ThreadRunningStatusInput = {
 	activeCommand?: string;
 } | null;
 
+type ThreadContextStatusInput =
+	| {
+			status?: string;
+			hasPendingQuestion?: boolean;
+	  }
+	| null
+	| undefined;
+
 export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 	thread: T,
 ): boolean {
@@ -35,14 +43,36 @@ export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 	);
 }
 
-type ThreadDisplayStatusInput = Omit<
-	SidebarThreadStatusInput,
-	"sessionActivityStatus" | "idleFallback"
->;
+type ThreadDisplayStatusInput = Omit<SidebarThreadStatusInput, "idleFallback">;
 
 export type ThreadDisplayStatusValue =
 	| SessionActivityStatusValue
 	| SessionStatusValue;
+
+export function resolveSessionDisplayStatus({
+	sessionStatus,
+	sessionActivityStatus,
+}: Pick<
+	SidebarThreadStatusInput,
+	"sessionStatus" | "sessionActivityStatus"
+>): ThreadDisplayStatusValue {
+	if (sessionActivityStatus && sessionActivityStatus !== "idle") {
+		return sessionActivityStatus;
+	}
+	return sessionStatus === "ready" || !sessionStatus ? "idle" : sessionStatus;
+}
+
+export function resolveThreadContextDisplayStatus(
+	threadContext: ThreadContextStatusInput,
+): SessionThreadActivityStatusValue | null {
+	if (threadContext?.status === "streaming") {
+		return "running";
+	}
+	if (threadContext?.hasPendingQuestion) {
+		return "needs_attention";
+	}
+	return null;
+}
 
 export function getThreadStateLabel(state: ThreadState | undefined) {
 	if (state === "interrupted") {
@@ -111,6 +141,7 @@ export function resolveSidebarThreadStatus({
 
 export function resolveThreadDisplayStatus({
 	sessionStatus,
+	sessionActivityStatus,
 	threadActivityStatus,
 	localActivityStatus,
 	threadState,
@@ -118,6 +149,14 @@ export function resolveThreadDisplayStatus({
 	errorMessage,
 	promptQueueCount,
 }: ThreadDisplayStatusInput): ThreadDisplayStatusValue {
+	const displayedSessionStatus = resolveSessionDisplayStatus({
+		sessionStatus,
+		sessionActivityStatus,
+	});
+	if (displayedSessionStatus === "committed") {
+		return "committed";
+	}
+
 	const status = resolveSidebarThreadStatus({
 		localActivityStatus,
 		threadActivityStatus,
@@ -128,7 +167,7 @@ export function resolveThreadDisplayStatus({
 		idleFallback: "none",
 	});
 
-	if (sessionStatus === "stopped" && status === "running") {
+	if (displayedSessionStatus === "stopped" && status === "running") {
 		return "stopped";
 	}
 	return status ?? "idle";

@@ -7,6 +7,7 @@
 		recentThreadKey,
 	} from "$lib/app/thread-switcher";
 	import {
+		resolveThreadContextDisplayStatus,
 		resolveThreadDisplayStatus,
 		type ThreadDisplayStatusValue,
 	} from "$lib/app/thread-status";
@@ -77,13 +78,7 @@
 		const threadContext = app.sessions.sessionContexts
 			.get(sessionId)
 			?.threadContexts.get(threadId);
-		if (threadContext?.status === "streaming") {
-			return "running";
-		}
-		if (threadContext?.hasPendingQuestion) {
-			return "needs_attention";
-		}
-		return null;
+		return resolveThreadContextDisplayStatus(threadContext);
 	}
 
 	function switcherThreadDisplayStatus(
@@ -99,6 +94,7 @@
 
 		return resolveThreadDisplayStatus({
 			sessionStatus: session.status,
+			sessionActivityStatus: session.threadStatus?.status,
 			localActivityStatus: threadContextDisplayStatus(
 				thread.sessionId,
 				thread.threadId,

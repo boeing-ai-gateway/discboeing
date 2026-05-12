@@ -125,8 +125,7 @@ test("session sidebar thread rows render live activity status", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /function threadContextDisplayStatus/);
-	assert.match(source, /threadContext\?\.status === "streaming"/);
-	assert.match(source, /return "running"/);
+	assert.match(source, /resolveThreadContextDisplayStatus\(threadContext\)/);
 	assert.match(source, /threadObj\.activityStatus\?\.status/);
 	assert.match(
 		source,
@@ -144,10 +143,8 @@ test("session sidebar recent rows use live thread status", () => {
 	assert.match(source, /return resolveThreadDisplayStatus\(\{/);
 	assert.match(source, /liveThread\.activityStatus\?\.status/);
 	assert.match(source, /sessionStatus: session\.status/);
-	assert.doesNotMatch(
-		source.match(
-			/function recentThreadDisplayStatus[\s\S]*?\n\tfunction openRenameDialog/,
-		)?.[0] ?? "",
+	assert.match(
+		source,
 		/sessionActivityStatus: session\.threadStatus\?\.status/,
 	);
 	assert.match(

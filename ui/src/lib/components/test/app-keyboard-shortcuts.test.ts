@@ -45,6 +45,10 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	);
 	assert.match(
 		source,
+		/import \{[\s\S]*resolveThreadContextDisplayStatus,[\s\S]*resolveThreadDisplayStatus,[\s\S]*\} from "\$lib\/app\/thread-status";/,
+	);
+	assert.match(
+		source,
 		/const isMacPlatform = \$derived\.by\(\(\) => detectIsMacPlatform\(\)\)/,
 	);
 	assert.match(
@@ -77,6 +81,19 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	assert.match(source, /<KeyboardShortcutHelpDialog/);
 	assert.doesNotMatch(source, /availableThreads/);
 	assert.doesNotMatch(source, /sessionContext\.ui\.mobileSidebarOpen = false;/);
+});
+
+test("app keyboard shortcuts uses centralized thread status display", () => {
+	const source = readSource(APP_KEYBOARD_SHORTCUTS_COMPONENT);
+
+	assert.match(source, /function switcherThreadDisplayStatus/);
+	assert.match(source, /resolveThreadContextDisplayStatus\(threadContext\)/);
+	assert.match(source, /return resolveThreadDisplayStatus\(\{/);
+	assert.match(source, /sessionStatus: session\.status/);
+	assert.match(
+		source,
+		/sessionActivityStatus: session\.threadStatus\?\.status/,
+	);
 });
 
 test("keyboard shortcut help dialog renders multiple key groups", () => {
