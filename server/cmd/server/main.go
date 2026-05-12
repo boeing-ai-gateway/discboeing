@@ -1199,6 +1199,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "POST", Pattern: "/stop",
+						Handler: h.StopSession,
+						Meta: routes.Meta{
+							Group:       "Sessions",
+							Description: "Stop session sandbox",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "GET", Pattern: "/files",
 						Handler: h.ListSessionFiles,
 						Meta: routes.Meta{

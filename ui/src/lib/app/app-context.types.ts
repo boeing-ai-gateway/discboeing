@@ -178,6 +178,7 @@ export type AppSessions = {
 	reloadSession: (sessionId: string) => Promise<void>;
 	create: (workspaceId?: string) => Promise<string | null>;
 	rename: (sessionId: string, nextName: string) => Promise<boolean>;
+	stop: (sessionId: string) => Promise<boolean>;
 	remove: (sessionId: string) => Promise<boolean>;
 	removeFromMemory: (sessionId: string) => boolean;
 	takeRequestedThreadId: (sessionId: string) => string | null;

@@ -207,6 +207,24 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
+// StopSession stops a session sandbox without deleting the session.
+func (h *Handler) StopSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "sessionId")
+	projectID := middleware.GetProjectID(r.Context())
+
+	session, err := h.sessionService.StopSession(r.Context(), projectID, sessionID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			h.Error(w, http.StatusNotFound, "Session not found")
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, "Failed to stop session")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, mapSessionResponse(session))
+}
+
 // ListSessions returns all sessions for a project.
 func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())

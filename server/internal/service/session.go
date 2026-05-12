@@ -369,6 +369,26 @@ func (s *SessionService) UpdateSession(ctx context.Context, sessionID, name stri
 	return s.mapSession(sess), nil
 }
 
+// StopSession stops a session sandbox and marks the session as stopped.
+func (s *SessionService) StopSession(ctx context.Context, projectID, sessionID string) (*Session, error) {
+	sess, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+	if sess.Status == model.SessionStatusStopped {
+		return s.mapSession(sess), nil
+	}
+	if s.sandboxService == nil {
+		return nil, errors.New("sandbox service is not available")
+	}
+
+	if err := s.sandboxService.StopForSession(ctx, sessionID); err != nil {
+		return nil, fmt.Errorf("failed to stop sandbox: %w", err)
+	}
+
+	return s.UpdateStatus(ctx, projectID, sessionID, model.SessionStatusStopped, nil)
+}
+
 // ClearTerminalCommitState resets terminal commit metadata for a session that is
 // moving back into active editing/chat work.
 func (s *SessionService) ClearTerminalCommitState(ctx context.Context, projectID, sessionID string) error {

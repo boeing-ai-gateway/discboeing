@@ -444,6 +444,10 @@ class ApiClient {
 		});
 	}
 
+	async stopSession(id: string): Promise<Session> {
+		return this.fetch<Session>(`/sessions/${id}/stop`, { method: "POST" });
+	}
+
 	async deleteSession(id: string): Promise<void> {
 		await this.fetch(`/sessions/${id}`, { method: "DELETE" });
 	}

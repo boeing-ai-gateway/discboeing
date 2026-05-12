@@ -379,6 +379,13 @@ export function createAppSessionsDomain(
 			}
 			return true;
 		},
+		stop: async (sessionId) => {
+			if (!list.some((session) => session.id === sessionId)) {
+				return false;
+			}
+			await store.stop(sessionId);
+			return true;
+		},
 		remove: async (sessionId) => {
 			if (!list.some((session) => session.id === sessionId)) {
 				return false;

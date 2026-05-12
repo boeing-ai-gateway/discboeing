@@ -280,6 +280,10 @@
 		onThreadSelect?.();
 	}
 
+	async function handleStopSession(sessionId: string) {
+		await sessions.stop(sessionId);
+	}
+
 	function hasRecentThreadSubtitle(
 		threadObj: (typeof sessions.recentThreads)[number],
 	) {
@@ -781,6 +785,13 @@
 					<DropdownMenuItem onclick={() => openRenameDialog(sessionObj.id)}>
 						Rename
 					</DropdownMenuItem>
+					{#if sessionObj.status !== "stopped"}
+						<DropdownMenuItem
+							onclick={() => void handleStopSession(sessionObj.id)}
+						>
+							Stop
+						</DropdownMenuItem>
+					{/if}
 					<DropdownMenuItem
 						variant="destructive"
 						onclick={() => openDeleteDialog(sessionObj.id)}

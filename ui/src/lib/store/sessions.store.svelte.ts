@@ -131,6 +131,12 @@ export class SessionStore {
 		return this.#resource.update(id, data);
 	}
 
+	async stop(id: string): Promise<Session> {
+		const session = await api.stopSession(id);
+		this.#resource.upsert(session);
+		return session;
+	}
+
 	remove(id: string): Promise<void> {
 		return this.#resource.remove(id);
 	}
