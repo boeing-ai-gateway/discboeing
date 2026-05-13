@@ -230,6 +230,7 @@ Handles initial home directory setup:
 - Recursive copy with symlink support
 - Later starts only sync in missing image-provided files so persisted workspace data is preserved
 - Obsolete bundled home-level Discobot scripts, commands, and built-in skills are removed so system-level config under `/opt/discobot` and other image paths takes precedence cleanly
+- Built-in Discobot slash-command scripts are embedded in `discobot-agent-api` and written to `/opt/discobot/scripts` when the agent API starts
 
 ### Workspace Manager
 

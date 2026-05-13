@@ -270,57 +270,6 @@ func TestSyncNewFilesPreservesExistingWorkspaceAndAddsMissingFiles(t *testing.T)
 	}
 }
 
-func TestInstallCommitCommandVariant(t *testing.T) {
-	scriptsDir := t.TempDir()
-	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
-		t.Fatalf("mkdir scripts dir: %v", err)
-	}
-
-	defaultBody := "default script\n"
-	remoteBody := "remote script\n"
-	defaultPath := filepath.Join(scriptsDir, "discobot-commit")
-	remotePath := filepath.Join(scriptsDir, "discobot-commit-remote")
-	if err := os.WriteFile(defaultPath, []byte(defaultBody), 0o755); err != nil {
-		t.Fatalf("write default script: %v", err)
-	}
-	if err := os.WriteFile(remotePath, []byte(remoteBody), 0o755); err != nil {
-		t.Fatalf("write remote script: %v", err)
-	}
-
-	if err := installCommitCommandVariant(scriptsDir, false, nil); err != nil {
-		t.Fatalf("installCommitCommandVariant(false) failed: %v", err)
-	}
-
-	got, err := os.ReadFile(defaultPath)
-	if err != nil {
-		t.Fatalf("read default script after local install: %v", err)
-	}
-	if string(got) != defaultBody {
-		t.Fatalf("local installed script = %q, want %q", string(got), defaultBody)
-	}
-	if _, err := os.Stat(remotePath); !os.IsNotExist(err) {
-		t.Fatalf("expected remote variant to be removed after install, err=%v", err)
-	}
-
-	if err := os.WriteFile(remotePath, []byte(remoteBody), 0o755); err != nil {
-		t.Fatalf("rewrite remote script: %v", err)
-	}
-	if err := installCommitCommandVariant(scriptsDir, true, nil); err != nil {
-		t.Fatalf("installCommitCommandVariant(true) failed: %v", err)
-	}
-
-	got, err = os.ReadFile(defaultPath)
-	if err != nil {
-		t.Fatalf("read installed script: %v", err)
-	}
-	if string(got) != remoteBody {
-		t.Fatalf("installed script = %q, want %q", string(got), remoteBody)
-	}
-	if _, err := os.Stat(remotePath); !os.IsNotExist(err) {
-		t.Fatalf("expected remote variant to be removed after remote install, err=%v", err)
-	}
-}
-
 func TestRemoveObsoleteBundledHomeConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	scriptsDir := filepath.Join(homeDir, ".discobot", "scripts")

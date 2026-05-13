@@ -218,8 +218,8 @@ RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
 # /.data      - persistent storage (Docker volume or VZ disk)
 # /.workspace - base workspace (read-only)
 # /workspace  - project root (writable)
-RUN mkdir -p /.data /.workspace /opt/discobot/bin \
-    && chown discobot:discobot /.data
+RUN mkdir -p /.data /.workspace /opt/discobot/bin /opt/discobot/scripts \
+    && chown discobot:discobot /.data /opt/discobot/scripts
 
 # Add discobot binaries, user-local bin, and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
@@ -376,9 +376,7 @@ COPY container-assets/systemd/ /etc/systemd/system/
 # Copy code-server default profile templates
 COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-defaults/
 
-# Copy container-specific agent configuration (Discobot scripts, docs, etc.)
-# into system-level Discobot directories for session config discovery.
-COPY container-assets/discobot/scripts/ /opt/discobot/scripts/
+# Copy container-specific Discobot docs.
 COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
 
 # Stage 3d: Minimal runtime without graphical tools

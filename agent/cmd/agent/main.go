@@ -50,10 +50,6 @@ const (
 	overlayFSDir = "/.data/.overlayfs"
 	mountHome    = "/home/discobot" // Where overlayfs mounts
 	symlinkPath  = "/workspace"     // Symlink to /home/discobot/workspace
-
-	systemScriptsDir           = "/opt/discobot/scripts"
-	defaultCommitScriptRelPath = "discobot-commit"
-	remoteCommitScriptRelPath  = "discobot-commit-remote"
 )
 
 func main() {
@@ -132,9 +128,6 @@ func runSetup() error {
 	}
 	if err := removeObsoleteBundledHomeConfig(baseHomeDir); err != nil {
 		return fmt.Errorf("obsolete bundled config cleanup failed: %w", err)
-	}
-	if err := installCommitCommandVariant(systemScriptsDir, isGitURL(workspaceSource), userInfo); err != nil {
-		return fmt.Errorf("commit script setup failed: %w", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
 
@@ -642,37 +635,6 @@ func removeObsoleteBundledHomeConfig(homeDir string) error {
 	legacyDir := filepath.Join(homeDir, ".claude", "commands")
 	if err := os.RemoveAll(legacyDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove legacy commands dir: %w", err)
-	}
-
-	return nil
-}
-
-func installCommitCommandVariant(scriptsDir string, useRemoteVariant bool, u *userInfo) error {
-	scriptPath := filepath.Join(scriptsDir, defaultCommitScriptRelPath)
-	remoteVariantPath := filepath.Join(scriptsDir, remoteCommitScriptRelPath)
-	sourcePath := scriptPath
-	if useRemoteVariant {
-		sourcePath = remoteVariantPath
-	}
-
-	if _, err := os.Stat(sourcePath); err != nil {
-		return fmt.Errorf("commit script variant %s not found: %w", sourcePath, err)
-	}
-
-	if sourcePath != scriptPath {
-		if err := copyFile(sourcePath, scriptPath); err != nil {
-			return fmt.Errorf("copy commit script variant: %w", err)
-		}
-	}
-
-	if u != nil {
-		if err := os.Chown(scriptPath, u.uid, u.gid); err != nil {
-			return fmt.Errorf("chown commit script variant: %w", err)
-		}
-	}
-
-	if err := os.Remove(remoteVariantPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove remote commit script variant: %w", err)
 	}
 
 	return nil

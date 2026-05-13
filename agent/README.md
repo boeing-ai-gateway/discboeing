@@ -4,7 +4,7 @@ The `discobot-agent` binary is a minimal PID 1 init process for container enviro
 
 ## Features
 
-- **Home Directory Setup**: Copies `/home/discobot` to persistent storage on first run, syncs in new image-provided files on later starts without overwriting existing files, refreshes bundled `.discobot/scripts`, and removes migrated legacy bundled commands
+- **Home Directory Setup**: Copies `/home/discobot` to persistent storage on first run, syncs in new image-provided files on later starts without overwriting existing files, and removes migrated legacy bundled commands
 - **Workspace Cloning**: Clones git repositories to persistent storage with atomic staging
 - **AgentFS Integration**: Initializes and mounts copy-on-write filesystem directly over `/home/discobot`
 - **PID 1 Process Reaping**: Collects zombie processes to prevent resource leaks
