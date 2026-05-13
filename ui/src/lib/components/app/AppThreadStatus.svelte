@@ -28,19 +28,13 @@
 		}
 
 		return resolveThreadDisplayStatus({
-			sessionStatus: session.status,
-			sessionActivityStatus:
+			session,
+			sessionThreadStatus:
 				session.threadStatus?.threadId === threadId
-					? session.threadStatus.status
+					? session.threadStatus
 					: undefined,
-			commitStatus: session.commitStatus,
-			commitOperation: session.commitOperation,
+			thread,
 			localActivityStatus: resolveThreadContextDisplayStatus(threadContext),
-			threadActivityStatus: thread?.activityStatus?.status,
-			threadState: thread?.state,
-			pendingQuestion: thread?.pendingQuestion,
-			errorMessage: thread?.errorMessage,
-			promptQueueCount: thread?.promptQueue?.length,
 		});
 	});
 </script>

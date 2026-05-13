@@ -26,12 +26,7 @@
 			return "unknown";
 		}
 
-		return resolveSessionDisplayStatus({
-			sessionStatus: session.status,
-			sessionActivityStatus: session.threadStatus?.status,
-			commitStatus: session.commitStatus,
-			commitOperation: session.commitOperation,
-		});
+		return resolveSessionDisplayStatus(session);
 	});
 </script>
 

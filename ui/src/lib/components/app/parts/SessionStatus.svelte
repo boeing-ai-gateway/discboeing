@@ -4,11 +4,11 @@
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import MessageCircleQuestionMarkIcon from "@lucide/svelte/icons/message-circle-question-mark";
-	import type { DisplayStatusValue } from "$lib/app/thread-status";
+	import type { SessionDisplayStatus } from "$lib/api-types";
 	import { cn } from "$lib/utils";
 
 	type Props = {
-		status: DisplayStatusValue;
+		status: SessionDisplayStatus;
 		class?: string;
 		iconClass?: string;
 		labelClass?: string;
@@ -23,17 +23,17 @@
 		showLabel = true,
 	}: Props = $props();
 
-	function normalizedStatus(status: DisplayStatusValue): string {
+	function normalizedStatus(status: SessionDisplayStatus): string {
 		return status.toLowerCase();
 	}
 
-	function statusLabel(status: DisplayStatusValue): string {
+	function statusLabel(status: SessionDisplayStatus): string {
 		return status
 			.replace(/_/g, " ")
 			.replace(/\b\w/g, (char) => char.toUpperCase());
 	}
 
-	function statusTone(status: DisplayStatusValue): string {
+	function statusTone(status: SessionDisplayStatus): string {
 		switch (normalizedStatus(status)) {
 			case "error":
 			case "create_failed":
@@ -64,7 +64,7 @@
 		}
 	}
 
-	function isSpinningStatus(status: DisplayStatusValue): boolean {
+	function isSpinningStatus(status: SessionDisplayStatus): boolean {
 		switch (normalizedStatus(status)) {
 			case "running":
 			case "queued":

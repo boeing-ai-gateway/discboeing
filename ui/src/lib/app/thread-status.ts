@@ -1,50 +1,15 @@
 import { CommitOperation, CommitStatus } from "../api-constants";
 import type {
-	CommitOperation as CommitOperationValue,
-	CommitStatus as CommitStatusValue,
-	SessionStatus,
-	SessionThreadActivityStatusValue,
-	ThreadState,
+	Session,
+	SessionDisplayStatus,
+	SessionThreadStatus,
+	Thread,
+	ThreadActivityStatus,
 } from "../api-types";
+import type { ThreadContextValue } from "$lib/session/session-context.types";
 
-type SidebarThreadStatusInput = {
-	sessionStatus?: SessionStatus | null;
-	sessionActivityStatus?: SessionThreadActivityStatusValue | null;
-	threadActivityStatus?: SessionThreadActivityStatusValue | null;
-	localActivityStatus?: SessionThreadActivityStatusValue | null;
-	threadState?: ThreadState;
-	pendingQuestion?: boolean;
-	errorMessage?: string;
-	promptQueueCount?: number;
-	idleFallback?: "session" | "none";
-};
-
-type SessionDisplayStatusInput = Pick<
-	SidebarThreadStatusInput,
-	"sessionStatus" | "sessionActivityStatus"
-> & {
-	commitStatus?: CommitStatusValue | null;
-	commitOperation?: CommitOperationValue | null;
-};
-
-type ThreadRunningStatusInput = {
-	activityStatus?: {
-		status: SessionThreadActivityStatusValue;
-	};
-	activeCommand?: string;
-} | null;
-
-type ThreadContextStatusInput =
-	| {
-			status?: string;
-			isStreaming?: boolean;
-			hasPendingQuestion?: boolean;
-	  }
-	| null
-	| undefined;
-
-export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
-	thread: T,
+export function isThreadSnapshotRunning(
+	thread: Partial<Thread> | null | undefined,
 ): boolean {
 	return (
 		thread?.activityStatus?.status === "running" ||
@@ -52,26 +17,19 @@ export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 	);
 }
 
-type ThreadDisplayStatusInput = Omit<SidebarThreadStatusInput, "idleFallback"> &
-	SessionDisplayStatusInput;
+export function resolveSessionDisplayStatus(
+	session: Partial<
+		Pick<
+			Session,
+			"status" | "threadStatus" | "commitStatus" | "commitOperation"
+		>
+	> | null,
+): SessionDisplayStatus {
+	const sessionStatus = session?.status;
+	const sessionActivityStatus = session?.threadStatus?.status;
+	const commitStatus = session?.commitStatus;
+	const commitOperation = session?.commitOperation;
 
-export type DisplayStatusValue =
-	| SessionStatus
-	| SessionThreadActivityStatusValue
-	| "pending"
-	| "committing"
-	| "completed"
-	| "committed"
-	| "unknown";
-
-export type ThreadDisplayStatusValue = DisplayStatusValue;
-
-export function resolveSessionDisplayStatus({
-	sessionStatus,
-	sessionActivityStatus,
-	commitStatus,
-	commitOperation,
-}: SessionDisplayStatusInput): ThreadDisplayStatusValue {
 	if (sessionStatus === "removing" || sessionStatus === "removed") {
 		return sessionStatus;
 	}
@@ -100,18 +58,21 @@ export function resolveSessionDisplayStatus({
 }
 
 export function resolveThreadContextDisplayStatus(
-	threadContext: ThreadContextStatusInput,
-): SessionThreadActivityStatusValue | null {
-	if (threadContext?.isStreaming || threadContext?.status === "streaming") {
-		return "running";
+	threadContext:
+		| Pick<ThreadContextValue, "status" | "isStreaming" | "hasPendingQuestion">
+		| null
+		| undefined,
+): ThreadActivityStatus | null {
+	if (threadContext?.isStreaming) {
+		return { status: "running" };
 	}
 	if (threadContext?.hasPendingQuestion) {
-		return "needs_attention";
+		return { status: "needs_attention" };
 	}
 	return null;
 }
 
-export function getThreadStateLabel(state: ThreadState | undefined) {
+export function getThreadStateLabel(state: Thread["state"] | undefined) {
 	if (state === "interrupted") {
 		return "Interrupted";
 	}
@@ -121,7 +82,7 @@ export function getThreadStateLabel(state: ThreadState | undefined) {
 	return null;
 }
 
-export function getThreadStateTone(state: ThreadState | undefined) {
+export function getThreadStateTone(state: Thread["state"] | undefined) {
 	if (state === "interrupted") {
 		return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 	}
@@ -132,24 +93,35 @@ export function getThreadStateTone(state: ThreadState | undefined) {
 }
 
 export function resolveSidebarThreadStatus({
-	sessionStatus,
-	sessionActivityStatus,
-	threadActivityStatus,
+	session,
+	sessionThreadStatus,
+	thread,
 	localActivityStatus,
-	threadState,
-	pendingQuestion,
-	errorMessage,
-	promptQueueCount,
 	idleFallback = "session",
-}: SidebarThreadStatusInput):
-	| SessionThreadActivityStatusValue
-	| SessionStatus
-	| null {
+}: {
+	session?: Pick<Session, "status" | "threadStatus"> | null;
+	sessionThreadStatus?: SessionThreadStatus | null;
+	thread?: Pick<
+		Thread,
+		| "activityStatus"
+		| "state"
+		| "pendingQuestion"
+		| "errorMessage"
+		| "promptQueue"
+	> | null;
+	localActivityStatus?: ThreadActivityStatus | null;
+	idleFallback?: "session" | "none";
+}): ThreadActivityStatus["status"] | Session["status"] | null {
+	const sessionActivityStatus = (sessionThreadStatus ?? session?.threadStatus)
+		?.status;
+	const fallbackStatus =
+		idleFallback === "session" ? (session?.status ?? null) : null;
+
 	if (
-		pendingQuestion ||
-		(errorMessage ?? "").trim().length > 0 ||
-		threadState === "interrupted" ||
-		threadState === "cancelled"
+		thread?.pendingQuestion ||
+		(thread?.errorMessage ?? "").trim().length > 0 ||
+		thread?.state === "interrupted" ||
+		thread?.state === "cancelled"
 	) {
 		return "needs_attention";
 	}
@@ -158,53 +130,59 @@ export function resolveSidebarThreadStatus({
 		return sessionActivityStatus;
 	}
 
-	const fallbackStatus =
-		idleFallback === "session" ? (sessionStatus ?? null) : null;
 	if (sessionActivityStatus === "idle") {
 		return fallbackStatus;
 	}
 
-	if (localActivityStatus && localActivityStatus !== "idle") {
-		return localActivityStatus;
+	if (localActivityStatus?.status && localActivityStatus.status !== "idle") {
+		return localActivityStatus.status;
 	}
-	if (threadActivityStatus && threadActivityStatus !== "idle") {
-		return threadActivityStatus;
+	if (
+		thread?.activityStatus?.status &&
+		thread.activityStatus.status !== "idle"
+	) {
+		return thread.activityStatus.status;
 	}
-	if ((promptQueueCount ?? 0) > 0) {
+	if ((thread?.promptQueue?.length ?? 0) > 0) {
 		return "queued";
 	}
 	return fallbackStatus;
 }
 
 export function resolveThreadDisplayStatus({
-	sessionStatus,
-	sessionActivityStatus,
-	commitStatus,
-	commitOperation,
-	threadActivityStatus,
+	session,
+	sessionThreadStatus,
+	thread,
 	localActivityStatus,
-	threadState,
-	pendingQuestion,
-	errorMessage,
-	promptQueueCount,
-}: ThreadDisplayStatusInput): ThreadDisplayStatusValue {
+}: {
+	session?: Pick<
+		Session,
+		"status" | "threadStatus" | "commitStatus" | "commitOperation"
+	> | null;
+	sessionThreadStatus?: SessionThreadStatus | null;
+	thread?: Pick<
+		Thread,
+		| "activityStatus"
+		| "state"
+		| "pendingQuestion"
+		| "errorMessage"
+		| "promptQueue"
+	> | null;
+	localActivityStatus?: ThreadActivityStatus | null;
+}): SessionDisplayStatus {
 	const displayedSessionStatus = resolveSessionDisplayStatus({
-		sessionStatus,
-		sessionActivityStatus,
-		commitStatus,
-		commitOperation,
+		...session,
+		threadStatus: sessionThreadStatus ?? session?.threadStatus,
 	});
 	if (displayedSessionStatus === "committed") {
 		return "committed";
 	}
 
 	const status = resolveSidebarThreadStatus({
+		session,
+		sessionThreadStatus,
+		thread,
 		localActivityStatus,
-		threadActivityStatus,
-		threadState,
-		pendingQuestion,
-		errorMessage,
-		promptQueueCount,
 		idleFallback: "none",
 	});
 

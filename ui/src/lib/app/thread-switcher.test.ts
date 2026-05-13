@@ -15,8 +15,8 @@ import {
 test("resolveSidebarThreadStatus prefers thread state over ready session", () => {
 	assert.equal(
 		resolveSidebarThreadStatus({
-			sessionStatus: "ready",
-			threadState: "interrupted",
+			session: { status: "ready" },
+			thread: { state: "interrupted" },
 		}),
 		"needs_attention",
 	);
@@ -25,9 +25,9 @@ test("resolveSidebarThreadStatus prefers thread state over ready session", () =>
 test("resolveSidebarThreadStatus prefers active session thread status", () => {
 	assert.equal(
 		resolveSidebarThreadStatus({
-			sessionStatus: "ready",
-			sessionActivityStatus: "running",
-			threadActivityStatus: "idle",
+			session: { status: "ready" },
+			sessionThreadStatus: { status: "running" },
+			thread: { activityStatus: { status: "idle" } },
 		}),
 		"running",
 	);
@@ -36,9 +36,9 @@ test("resolveSidebarThreadStatus prefers active session thread status", () => {
 test("resolveSidebarThreadStatus suppresses stale thread activity when session is idle", () => {
 	assert.equal(
 		resolveSidebarThreadStatus({
-			sessionStatus: "ready",
-			sessionActivityStatus: "idle",
-			threadActivityStatus: "running",
+			session: { status: "ready" },
+			sessionThreadStatus: { status: "idle" },
+			thread: { activityStatus: { status: "running" } },
 		}),
 		"ready",
 	);
@@ -47,9 +47,9 @@ test("resolveSidebarThreadStatus suppresses stale thread activity when session i
 test("resolveSidebarThreadStatus still surfaces thread state when session is idle", () => {
 	assert.equal(
 		resolveSidebarThreadStatus({
-			sessionStatus: "ready",
-			sessionActivityStatus: "idle",
-			threadState: "interrupted",
+			session: { status: "ready" },
+			sessionThreadStatus: { status: "idle" },
+			thread: { state: "interrupted" },
 		}),
 		"needs_attention",
 	);
@@ -58,7 +58,7 @@ test("resolveSidebarThreadStatus still surfaces thread state when session is idl
 test("resolveSidebarThreadStatus falls back to session status", () => {
 	assert.equal(
 		resolveSidebarThreadStatus({
-			sessionStatus: "ready",
+			session: { status: "ready" },
 		}),
 		"ready",
 	);
@@ -67,8 +67,8 @@ test("resolveSidebarThreadStatus falls back to session status", () => {
 test("resolveSessionDisplayStatus normalizes resting ready sessions", () => {
 	assert.equal(
 		resolveSessionDisplayStatus({
-			sessionStatus: "ready",
-			sessionActivityStatus: "idle",
+			status: "ready",
+			threadStatus: { status: "idle" },
 		}),
 		"idle",
 	);
@@ -77,11 +77,15 @@ test("resolveSessionDisplayStatus normalizes resting ready sessions", () => {
 test("resolveThreadDisplayStatus inherits committed session display", () => {
 	assert.equal(
 		resolveThreadDisplayStatus({
-			sessionStatus: "ready",
-			commitStatus: "completed",
-			commitOperation: "commit",
-			threadActivityStatus: "running",
-			pendingQuestion: true,
+			session: {
+				status: "ready",
+				commitStatus: "completed",
+				commitOperation: "commit",
+			},
+			thread: {
+				activityStatus: { status: "running" },
+				pendingQuestion: true,
+			},
 		}),
 		"committed",
 	);
