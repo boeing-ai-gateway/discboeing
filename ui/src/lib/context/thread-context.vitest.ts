@@ -248,10 +248,9 @@ test("isThreadSnapshotRunning detects server-side activity", () => {
 	).toBe(false);
 });
 
-test("getThreadIsStreaming keeps stop control visible while server says running", () => {
+test("getThreadIsStreaming follows local stream and thread snapshot state", () => {
 	expect(
 		getThreadIsStreaming(
-			"thread-1",
 			{
 				id: "thread-1",
 				name: "Main",
@@ -263,24 +262,20 @@ test("getThreadIsStreaming keeps stop control visible while server says running"
 	expect(getThreadConversationStatus("error")).toBe("error");
 	expect(
 		getThreadIsStreaming(
-			"thread-1",
 			{
 				id: "thread-1",
 				name: "Main",
 			},
-			false,
-			{ status: "running", threadId: "thread-1" },
+			true,
 		),
 	).toBe(true);
 	expect(
 		getThreadIsStreaming(
-			"thread-2",
 			{
 				id: "thread-2",
 				name: "Other",
 			},
 			false,
-			{ status: "running", threadId: "thread-1" },
 		),
 	).toBe(false);
 });

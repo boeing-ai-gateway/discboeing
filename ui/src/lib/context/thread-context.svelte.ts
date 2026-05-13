@@ -7,7 +7,7 @@ import {
 	isSessionTransitioningStatus,
 	SessionStatus,
 } from "$lib/api-constants";
-import type { Session, Thread, ThreadActivityStatus } from "$lib/api-types";
+import type { Thread, ThreadActivityStatus } from "$lib/api-types";
 import {
 	clearComposerDraft,
 	readComposerDraft,
@@ -35,21 +35,10 @@ const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
 const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
 export function getThreadIsStreaming(
-	threadId: string,
 	thread: Thread | null,
 	isStreaming: boolean,
-	sessionThreadStatus?: Session["threadStatus"] | null,
 ): boolean {
-	if (isStreaming || isThreadSnapshotRunning(thread)) {
-		return true;
-	}
-
-	const sessionActivityThreadId = sessionThreadStatus?.threadId?.trim() ?? "";
-	return (
-		sessionActivityThreadId === threadId &&
-		(sessionThreadStatus?.status === "running" ||
-			sessionThreadStatus?.status === "queued")
-	);
+	return isStreaming || isThreadSnapshotRunning(thread);
 }
 
 export function getThreadConversationStatus(
@@ -563,12 +552,7 @@ export function createThreadContext(
 		},
 		get isStreaming() {
 			return (
-				getThreadIsStreaming(
-					threadId,
-					getThread(),
-					conversation.isStreaming,
-					session.current?.threadStatus,
-				) ||
+				getThreadIsStreaming(getThread(), conversation.isStreaming) ||
 				(!hasSession &&
 					(isSessionTransitioningStatus(session.current?.status) ||
 						conversation.messages.some(
