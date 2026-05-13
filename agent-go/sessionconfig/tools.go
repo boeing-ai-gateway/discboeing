@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -32,6 +33,16 @@ var (
 )
 
 const windowsShellToolName = "PowerShell"
+
+const (
+	discobotRealSudoPath = "/usr/lib/discobot/sudo.real"
+	sudoGuidance         = "Commands that invoke `sudo` require explicit user approval through RequestUserCredential. Request a sudo approval credential with envVar `DISCOBOT_SUDO_TOKEN` and an approved use describing the exact privileged action, then retry the Bash command with the returned `credentialUses` binding."
+)
+
+var statDiscobotRealSudo = func() bool {
+	info, err := os.Stat(discobotRealSudoPath)
+	return err == nil && !info.IsDir()
+}
 
 // BuiltinTools returns the default embedded tool set in SYSTEM.md order.
 func BuiltinTools(_ string) []providers.ToolDefinition {
@@ -100,6 +111,9 @@ func adaptToolForRuntime(goos string, tool providers.ToolDefinition) providers.T
 	adapted, err := applyRuntimeToolOverride(goos, tool)
 	if err != nil {
 		panic("sessionconfig: apply runtime tool override: " + err.Error())
+	}
+	if strings.TrimSpace(strings.ToLower(goos)) != "windows" && adapted.Name == "Bash" && statDiscobotRealSudo() {
+		adapted.Description = strings.TrimSpace(adapted.Description) + "\n\n" + sudoGuidance
 	}
 	return adapted
 }

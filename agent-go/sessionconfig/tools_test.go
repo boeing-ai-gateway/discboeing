@@ -311,6 +311,23 @@ func TestAdaptToolsForRuntime_WindowsAppliesEmbeddedOverride(t *testing.T) {
 	}
 }
 
+func TestAdaptToolsForRuntime_AppendsBashSudoGuidanceWithDiscobotSudo(t *testing.T) {
+	oldStatDiscobotRealSudo := statDiscobotRealSudo
+	t.Cleanup(func() { statDiscobotRealSudo = oldStatDiscobotRealSudo })
+
+	statDiscobotRealSudo = func() bool { return false }
+	tools := AdaptToolsForRuntime("linux", []providers.ToolDefinition{findTool(t, "Bash")})
+	if strings.Contains(tools[0].Description, sudoGuidance) {
+		t.Fatalf("did not expect sudo guidance without %s", discobotRealSudoPath)
+	}
+
+	statDiscobotRealSudo = func() bool { return true }
+	tools = AdaptToolsForRuntime("linux", []providers.ToolDefinition{findTool(t, "Bash")})
+	if !strings.Contains(tools[0].Description, sudoGuidance) {
+		t.Fatalf("expected sudo guidance with %s", discobotRealSudoPath)
+	}
+}
+
 func TestAdaptToolsForRuntime_OverlayMergesNestedMaps(t *testing.T) {
 	merged := mergeToolDefinitionMaps(
 		map[string]any{
