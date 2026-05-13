@@ -71,6 +71,19 @@ function startProjectEventsSubscription(app: AppContext) {
 		},
 	});
 
+	const refreshSessionArtifacts = (sessionId: string) => {
+		const sessionContext = app.sessions.sessionContexts.get(sessionId);
+		if (!sessionContext) {
+			return;
+		}
+
+		sessionContext.services.invalidate();
+		sessionContext.hooks.invalidate();
+		void sessionContext.files.refresh().catch((error) => {
+			console.error("[WS] Failed to refresh session files:", error);
+		});
+	};
+
 	const handleSessionUpdated = (event: MessageEvent<string>) => {
 		try {
 			const payload = JSON.parse(
@@ -137,6 +150,7 @@ function startProjectEventsSubscription(app: AppContext) {
 				return;
 			}
 
+			refreshSessionArtifacts(threadData.sessionId);
 			void sessionContext.threads.refresh();
 		} catch (error) {
 			console.error("[WS] Failed to parse thread_updated event:", error);
