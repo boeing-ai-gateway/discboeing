@@ -21,6 +21,8 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/browser"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
+	controlfeatures "github.com/obot-platform/discobot/agent-go/internal/controlfeatures"
+	controlsocket "github.com/obot-platform/discobot/agent-go/internal/controlsocket"
 	"github.com/obot-platform/discobot/agent-go/internal/credentials"
 	"github.com/obot-platform/discobot/agent-go/internal/handler"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
@@ -211,9 +213,22 @@ func Run(cfg *config.Config) {
 		return credMgr.ServicesSnapshot()
 	})
 
+	// ── Control socket ────────────────────────────────────────────────────────
+	controlCtx, cancelControl := context.WithCancel(context.Background())
+	var controlSocket *controlsocket.Client
+	if os.Getenv("DISCOBOT_ENABLE_GIT_CONTROL_SOCKET") == "true" {
+		controlSocket = controlsocket.New()
+		gitTunnel := controlfeatures.NewGitTunnel(controlSocket)
+		if gitRemoteURL, err := gitTunnel.StartEndpoint(controlCtx); err != nil {
+			log.Printf("warn: git control endpoint: %v", err)
+		} else {
+			controlfeatures.ConfigureGitRemote(controlCtx, cfg.AgentCwd, gitRemoteURL, cfg.SessionID)
+		}
+	}
+
 	// ── HTTP handler ─────────────────────────────────────────────────────────
 	sudoAuthorizer := credentials.NewSudoAuthorizer(authorizer, credMgr)
-	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr, processMgr, sudoAuthorizer)
+	h := handler.New(cfg.AgentCwd, conversations, hookMgr, svcMgr, a, promptQueue, browserMgr, processMgr, sudoAuthorizer, controlSocket)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -283,6 +298,7 @@ func Run(cfg *config.Config) {
 	<-quit
 
 	log.Println("agent-api: shutting down...")
+	cancelControl()
 
 	// Close MCP server connections.
 	a.Close()

@@ -236,6 +236,15 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	if opts.Env["WORKSPACE_SOURCE"] != workspace.Path {
 		t.Fatalf("Env[WORKSPACE_SOURCE] = %q, want %q", opts.Env["WORKSPACE_SOURCE"], workspace.Path)
 	}
+	if opts.Env["WORKSPACE_SOURCE_TYPE"] != model.WorkspaceSourceTypeGit {
+		t.Fatalf("Env[WORKSPACE_SOURCE_TYPE] = %q, want %q", opts.Env["WORKSPACE_SOURCE_TYPE"], model.WorkspaceSourceTypeGit)
+	}
+	if opts.Env["DISCOBOT_WORKSPACE_SOURCE_TYPE"] != model.WorkspaceSourceTypeGit {
+		t.Fatalf("Env[DISCOBOT_WORKSPACE_SOURCE_TYPE] = %q, want %q", opts.Env["DISCOBOT_WORKSPACE_SOURCE_TYPE"], model.WorkspaceSourceTypeGit)
+	}
+	if opts.Env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"] != "" {
+		t.Fatalf("Env[DISCOBOT_ENABLE_GIT_CONTROL_SOCKET] = %q, want empty for sandbox-cloned git URL workspace", opts.Env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"])
+	}
 	if opts.Env["WORKSPACE_TARGET_REF"] != defaultSessionTargetRef {
 		t.Fatalf("Env[WORKSPACE_TARGET_REF] = %q, want %q", opts.Env["WORKSPACE_TARGET_REF"], defaultSessionTargetRef)
 	}

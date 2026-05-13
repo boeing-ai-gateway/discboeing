@@ -12,6 +12,7 @@ import (
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
 	"github.com/obot-platform/discobot/agent-go/browser"
+	controlsocket "github.com/obot-platform/discobot/agent-go/internal/controlsocket"
 	"github.com/obot-platform/discobot/agent-go/internal/hooks"
 	"github.com/obot-platform/discobot/agent-go/internal/processes"
 	"github.com/obot-platform/discobot/agent-go/internal/routes"
@@ -32,6 +33,7 @@ type Handler struct {
 	browserManager *browser.Manager
 	promptQueue    *promptqueue.Manager
 	sudoAuthorizer sudoauth.Authorizer
+	controlSocket  *controlsocket.Client
 	chatPingEvery  time.Duration
 	activityEvery  time.Duration
 	activity       *activityNotifier
@@ -54,6 +56,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	var pq *promptqueue.Store
 	var promptQueue *promptqueue.Manager
 	var processManager *processes.Manager
+	var controlSocket *controlsocket.Client
 	for _, option := range options {
 		switch value := option.(type) {
 		case *browser.Manager:
@@ -64,6 +67,8 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 			promptQueue = value
 		case *processes.Manager:
 			processManager = value
+		case *controlsocket.Client:
+			controlSocket = value
 		}
 	}
 	if processManager == nil {
@@ -78,6 +83,7 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		processManager:    processManager,
 		defaultAgent:      defaultAgent,
 		browserManager:    bm,
+		controlSocket:     controlSocket,
 		chatPingEvery:     defaultChatStreamPingInterval,
 		activityEvery:     defaultActivityStreamSnapshotInterval,
 		activity:          newActivityNotifier(),
@@ -151,6 +157,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Health", Description: "Current user info"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/commands", Handler: h.ListCommands,
 		Meta: routes.Meta{Group: "Commands", Description: "List available slash commands"}})
+	if h.controlSocket != nil {
+		reg.Register(r, routes.Route{Method: "GET", Pattern: "/control/ws", Handler: h.ControlSocket,
+			Meta: routes.Meta{Group: "Control", Description: "Server-initiated sandbox control WebSocket"}})
+	}
 	if h.browserManager != nil {
 		reg.Register(r, routes.Route{Method: "GET", Pattern: "/sessions/{sessionId}/browser", Handler: h.GetBrowserSession,
 			Meta: routes.Meta{Group: "Browser", Description: "Get session-scoped browser runtime info"}})

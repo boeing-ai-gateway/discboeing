@@ -17,6 +17,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/conntrack"
 	"github.com/obot-platform/discobot/server/internal/encryption"
 	"github.com/obot-platform/discobot/server/internal/events"
+	"github.com/obot-platform/discobot/server/internal/git"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
@@ -28,6 +29,10 @@ import (
 // GitConfigProvider retrieves the git user name and email configuration.
 // It is called once and the result is cached.
 type GitConfigProvider func(ctx context.Context) (name, email string)
+
+// SandboxEventHandler observes sandbox runtime lifecycle events after the
+// session has been resolved. Handlers must not mutate the event.
+type SandboxEventHandler func(ctx context.Context, event sandbox.StateEvent, session *model.Session)
 
 // SandboxService manages sandbox lifecycle for sessions.
 type SandboxService struct {
@@ -106,7 +111,7 @@ func (s *SandboxService) SetGitConfigProvider(provider GitConfigProvider) {
 // Start watches sandbox lifecycle events and keeps persisted session state in
 // sync with provider state. It handles external runtime changes, such as
 // sandboxes being stopped or deleted outside of Discobot.
-func (s *SandboxService) Start(ctx context.Context) error {
+func (s *SandboxService) Start(ctx context.Context, handlers ...SandboxEventHandler) error {
 	if s == nil || s.provider == nil {
 		return fmt.Errorf("sandbox provider unavailable")
 	}
@@ -127,7 +132,7 @@ func (s *SandboxService) Start(ctx context.Context) error {
 				log.Printf("[SandboxService] Sandbox event channel closed")
 				return nil
 			}
-			s.handleSandboxEvent(ctx, event)
+			s.handleSandboxEvent(ctx, event, handlers...)
 		}
 	}
 }
@@ -231,13 +236,18 @@ func (s *SandboxService) WatchSandboxEvents(ctx context.Context) (<-chan sandbox
 	return s.provider.Watch(ctx)
 }
 
-func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.StateEvent) {
+func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.StateEvent, handlers ...SandboxEventHandler) {
 	session, err := s.store.GetSessionByID(ctx, event.SessionID)
 	if err != nil {
 		// Session doesn't exist - the sandbox is orphaned. This can happen if a
 		// session was deleted but the sandbox wasn't cleaned up.
 		log.Printf("[SandboxService] Session %s not found for sandbox event (status: %s)", event.SessionID, event.Status)
 		return
+	}
+	for _, handler := range handlers {
+		if handler != nil {
+			handler(ctx, event, session)
+		}
 	}
 
 	var newStatus string
@@ -672,7 +682,8 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 	// Note: The sandbox image is configured globally on the provider via SANDBOX_IMAGE env var
 	opts := sandbox.CreateOptions{
 		SharedSecret: sharedSecret,
-		Env:          sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspace.Path, workspaceCommit, "", session.ProjectID, s.cfg.MCPOAuthRedirectBase, s.cfg.AgentServerURL),
+		Env: sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, "",
+			session.ProjectID, s.cfg.MCPOAuthRedirectBase, s.cfg.AgentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
 		Labels: map[string]string{
 			"discobot.session.id":   sessionID,
 			"discobot.workspace.id": session.WorkspaceID,
@@ -720,7 +731,14 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 	return nil
 }
 
-func sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspaceSource, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string) map[string]string {
+func sandboxGitControlSocketEnabled(workspace *model.Workspace, workspacePath string) bool {
+	if workspace == nil || workspacePath == "" {
+		return false
+	}
+	return isLocalWorkspaceSourceType(workspace.SourceType) && !git.IsGitURL(workspace.Path)
+}
+
+func sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspaceSource, workspaceSourceType, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string, enableGitControlSocket bool) map[string]string {
 	env := map[string]string{
 		"SESSION_ID":          sessionID,
 		"DISCOBOT_SESSION_ID": sessionID,
@@ -733,6 +751,13 @@ func sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspaceSource, w
 	}
 	if workspaceSource != "" {
 		env["WORKSPACE_SOURCE"] = workspaceSource
+	}
+	if workspaceSourceType != "" {
+		env["WORKSPACE_SOURCE_TYPE"] = workspaceSourceType
+		env["DISCOBOT_WORKSPACE_SOURCE_TYPE"] = workspaceSourceType
+	}
+	if enableGitControlSocket {
+		env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"] = "true"
 	}
 	if workspaceCommit != "" {
 		env["WORKSPACE_COMMIT"] = workspaceCommit

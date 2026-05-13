@@ -96,6 +96,29 @@ func setupTestStore(t *testing.T) *store.Store {
 	return store.New(db, nil)
 }
 
+func TestSandboxGitControlSocketEnabled(t *testing.T) {
+	t.Parallel()
+
+	localWorkspace := &model.Workspace{
+		Path:       "/home/user/repo",
+		SourceType: model.WorkspaceSourceTypeLocal,
+	}
+	if !sandboxGitControlSocketEnabled(localWorkspace, "/home/user/repo") {
+		t.Fatal("expected local filesystem workspace with a workspace path to enable git control socket")
+	}
+
+	gitURLWorkspace := &model.Workspace{
+		Path:       "https://example.com/org/repo.git",
+		SourceType: model.WorkspaceSourceTypeGit,
+	}
+	if sandboxGitControlSocketEnabled(gitURLWorkspace, "") {
+		t.Fatal("expected sandbox-cloned git URL workspace without a workspace path to disable git control socket")
+	}
+	if sandboxGitControlSocketEnabled(gitURLWorkspace, "/tmp/server-clone") {
+		t.Fatal("expected remote git URL workspace to disable git control socket")
+	}
+}
+
 // createTestSession creates a session with the given workspace path for testing
 func createTestSession(t *testing.T, s *store.Store, sessionID, workspacePath string) {
 	t.Helper()

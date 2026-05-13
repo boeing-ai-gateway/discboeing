@@ -214,25 +214,19 @@ func main() {
 	connTracker := conntrack.New()
 
 	var sandboxSvc *service.SandboxService
+	var sandboxControlSvc *service.SandboxControlSocketService
+	var sandboxEventHandlers []service.SandboxEventHandler
 	if sandboxProvider != nil {
 		credFetcher := service.MakeCredentialFetcher(s, credSvc)
 		sandboxSvc = service.NewSandboxService(s, sandboxProvider, cfg, credFetcher, eventBroker, jobQueue, connTracker)
 		sandboxSvc.SetProviderManager(sandboxProviderManager)
 		sandboxSvc.SetCredentialService(credSvc)
+		sandboxControlSvc = service.NewSandboxControlSocketService(s, sandboxSvc)
+		if sandboxControlSvc != nil {
+			sandboxEventHandlers = append(sandboxEventHandlers, sandboxControlSvc.HandleSandboxEvent)
+		}
 	}
-
-	// Start sandbox service event handling to sync session states with sandbox states.
-	// This handles external changes (e.g., Docker containers deleted outside Discobot).
 	var sandboxServiceCancel context.CancelFunc
-	if sandboxSvc != nil {
-		var sandboxServiceCtx context.Context
-		sandboxServiceCtx, sandboxServiceCancel = context.WithCancel(context.Background())
-		go func() {
-			if err := sandboxSvc.Start(sandboxServiceCtx); err != nil && err != context.Canceled {
-				log.Printf("Sandbox service stopped with error: %v", err)
-			}
-		}()
-	}
 
 	// Start SSH server for VS Code Remote SSH and other SSH-based workflows
 	var sshServer *ssh.Server
@@ -388,6 +382,18 @@ func main() {
 		}
 	} else {
 		log.Println("Job dispatcher disabled")
+	}
+
+	// Start sandbox service event handling to sync session states with sandbox states.
+	// This handles external changes (e.g., Docker containers deleted outside Discobot).
+	if sandboxSvc != nil {
+		var sandboxServiceCtx context.Context
+		sandboxServiceCtx, sandboxServiceCancel = context.WithCancel(context.Background())
+		go func() {
+			if err := sandboxSvc.Start(sandboxServiceCtx, sandboxEventHandlers...); err != nil && err != context.Canceled {
+				log.Printf("Sandbox service stopped with error: %v", err)
+			}
+		}()
 	}
 
 	// Create router

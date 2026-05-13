@@ -1018,7 +1018,8 @@ func (s *SessionService) initializeSync(
 		agentServerURL := s.sandboxService.cfg.AgentServerURL
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
-			Env:          sandboxCreateEnv(sessionID, sandboxSecret, workspacePath, workspace.Path, workspaceCommit, session.TargetRef, projectID, mcpOAuthRedirectBase, agentServerURL),
+			Env: sandboxCreateEnv(sessionID, sandboxSecret, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, session.TargetRef,
+				projectID, mcpOAuthRedirectBase, agentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
 			Labels: map[string]string{
 				"discobot.session.id":   sessionID,
 				"discobot.workspace.id": workspace.ID,

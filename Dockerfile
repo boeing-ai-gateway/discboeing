@@ -8,7 +8,9 @@ FROM golang:1.26 AS root-go-deps
 WORKDIR /build
 
 # Copy module files first for better caching
-# modelsdev/go.mod is needed by the replace directive in the root go.mod
+# modelsdev/go.mod and controlsocket module files are needed by replace
+# directives in the root go.mod
+COPY controlsocket/go.mod controlsocket/go.sum ./controlsocket/
 COPY modelsdev/go.mod ./modelsdev/
 COPY go.mod go.sum ./
 
@@ -45,8 +47,10 @@ FROM golang:1.26 AS agent-go-deps
 
 WORKDIR /build
 
-# Copy modelsdev module files first — needed by the replace directive in agent-go/go.mod
-# (replace ../modelsdev resolves to /modelsdev relative to WORKDIR /build)
+# Copy shared module files first — needed by replace directives in
+# agent-go/go.mod. replace ../modelsdev resolves to /modelsdev relative to
+# WORKDIR /build; replace ../controlsocket resolves to /controlsocket.
+COPY controlsocket/go.mod controlsocket/go.sum /controlsocket/
 COPY modelsdev/go.mod /modelsdev/
 
 # Copy module files first for better layer caching
@@ -61,6 +65,7 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
 FROM agent-go-deps AS agent-go-builder
 
 # Copy modelsdev source (required for compilation, not just module resolution)
+COPY controlsocket/ /controlsocket/
 COPY modelsdev/ /modelsdev/
 
 # Copy agent-go source
