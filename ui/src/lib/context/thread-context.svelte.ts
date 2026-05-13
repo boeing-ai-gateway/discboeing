@@ -25,22 +25,33 @@ import type {
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
-import type { ThreadSummary } from "$lib/shell-types";
+import type { SessionSummary, ThreadSummary } from "$lib/shell-types";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
 const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
-export function getThreadConversationStatus(
+export function getThreadIsStreaming(
+	threadId: string,
 	thread: ThreadSummary | null,
+	isStreaming: boolean,
+	sessionThreadStatus?: SessionSummary["threadStatus"] | null,
+): boolean {
+	if (isStreaming || isThreadSnapshotRunning(thread)) {
+		return true;
+	}
+
+	const sessionActivityThreadId = sessionThreadStatus?.threadId?.trim() ?? "";
+	return (
+		sessionActivityThreadId === threadId &&
+		(sessionThreadStatus?.status === "running" ||
+			sessionThreadStatus?.status === "queued")
+	);
+}
+
+export function getThreadConversationStatus(
 	status: ThreadContextValue["status"],
 ): ThreadContextValue["status"] {
-	if (status === "loading" || status === "streaming" || status === "error") {
-		return status;
-	}
-	if (isThreadSnapshotRunning(thread)) {
-		return "streaming";
-	}
 	return status;
 }
 
@@ -544,7 +555,15 @@ export function createThreadContext(
 			return threadSummary?.promptQueue ?? [];
 		},
 		get status() {
-			return getThreadConversationStatus(threadSummary, conversation.status);
+			return getThreadConversationStatus(conversation.status);
+		},
+		get isStreaming() {
+			return getThreadIsStreaming(
+				threadId,
+				threadSummary,
+				conversation.isStreaming,
+				session.current?.threadStatus,
+			);
 		},
 		get error() {
 			return conversation.error ?? threadSummary?.errorMessage ?? null;

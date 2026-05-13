@@ -313,7 +313,7 @@
 		}
 	});
 	const operationState = $derived.by(() => {
-		const isPending = session.current?.status === "pending";
+		const isPending = session.current?.commitStatus === "pending";
 		const activeCommandName = normalizeActiveCommandName(
 			session.threads.selected?.activeCommand,
 		);

@@ -1,14 +1,16 @@
 import type { CommitOperation, Session } from "../../api-types";
-import { SessionStatus } from "../../api-constants";
+import { CommitStatus } from "../../api-constants";
+
+export type SessionToolbarAction = CommitOperation | "rebase";
 
 export type SessionToolbarOperationState = {
 	hasChanges: boolean;
 	showSplitButton: boolean;
-	primaryAction: CommitOperation;
+	primaryAction: SessionToolbarAction;
 	primaryLabel: string;
-	secondaryAction: CommitOperation | null;
+	secondaryAction: SessionToolbarAction | null;
 	secondaryLabel: string | null;
-	activeOperation: CommitOperation;
+	activeOperation: SessionToolbarAction;
 	showPending: boolean;
 	showBusy: boolean;
 	buttonLabel: string;
@@ -17,12 +19,12 @@ export type SessionToolbarOperationState = {
 export function getSessionToolbarOperationState(args: {
 	filesChanged: number;
 	session: Session | null;
-	startingOperation: CommitOperation | null;
+	startingOperation: SessionToolbarAction | null;
 }): SessionToolbarOperationState {
 	const hasChanges = args.filesChanged > 0;
 	const primaryAction = "commit";
 	const primaryLabel = "Commit";
-	const isPending = args.session?.status === SessionStatus.PENDING;
+	const isPending = args.session?.commitStatus === CommitStatus.PENDING;
 	const showBusy = args.startingOperation !== null || isPending;
 	const activeOperation = args.startingOperation ?? primaryAction;
 	const progressLabel =

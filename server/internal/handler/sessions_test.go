@@ -29,7 +29,7 @@ func TestMapSessionResponseIncludesThreadStatus(t *testing.T) {
 	}
 }
 
-func TestMapSessionResponseIncludesUnderlyingSandboxStatus(t *testing.T) {
+func TestMapSessionResponseKeepsLifecycleAndCommitStatusSeparate(t *testing.T) {
 	t.Parallel()
 
 	response := mapSessionResponse(&service.Session{
@@ -39,123 +39,56 @@ func TestMapSessionResponseIncludesUnderlyingSandboxStatus(t *testing.T) {
 		CommitOperation: service.CommitOperationCommit,
 	})
 
-	if response.Status != "committed" {
-		t.Fatalf("status = %q, want committed", response.Status)
+	if response.Status != model.SessionStatusReady {
+		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusReady)
 	}
 	if response.SandboxStatus != model.SessionStatusReady {
 		t.Fatalf("sandbox status = %q, want %q", response.SandboxStatus, model.SessionStatusReady)
 	}
-}
-
-func TestDeriveSessionStatusAndError_MapsCompletedCommitOperation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		session    *service.Session
-		wantStatus string
-	}{
-		{
-			name: "commit completion maps to committed",
-			session: &service.Session{
-				Status:          "ready",
-				CommitStatus:    "completed",
-				CommitOperation: service.CommitOperationCommit,
-			},
-			wantStatus: "committed",
-		},
-		{
-			name: "unknown completed operation falls back to session status",
-			session: &service.Session{
-				Status:          "ready",
-				CommitStatus:    "completed",
-				CommitOperation: "rebase",
-			},
-			wantStatus: "ready",
-		},
+	if response.CommitStatus != model.CommitStatusCompleted {
+		t.Fatalf("commit status = %q, want %q", response.CommitStatus, model.CommitStatusCompleted)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotStatus, gotError := deriveSessionStatusAndError(tt.session)
-			if gotStatus != tt.wantStatus {
-				t.Fatalf("deriveSessionStatusAndError() status = %q, want %q", gotStatus, tt.wantStatus)
-			}
-			if gotError != "" {
-				t.Fatalf("deriveSessionStatusAndError() error = %q, want empty", gotError)
-			}
-		})
+	if response.CommitOperation != service.CommitOperationCommit {
+		t.Fatalf("commit operation = %q, want %q", response.CommitOperation, service.CommitOperationCommit)
 	}
 }
 
-func TestDeriveSessionStatusAndError_DoesNotMapCommitFailureToError(t *testing.T) {
+func TestMapSessionResponsePreservesRemovingStatusWithCommitFields(t *testing.T) {
 	t.Parallel()
 
-	gotStatus, gotError := deriveSessionStatusAndError(&service.Session{
+	response := mapSessionResponse(&service.Session{
+		ID:              "session-1",
+		Status:          model.SessionStatusRemoving,
+		CommitStatus:    model.CommitStatusCompleted,
+		CommitOperation: service.CommitOperationCommit,
+	})
+
+	if response.Status != model.SessionStatusRemoving {
+		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusRemoving)
+	}
+	if response.CommitStatus != model.CommitStatusCompleted {
+		t.Fatalf("commit status = %q, want %q", response.CommitStatus, model.CommitStatusCompleted)
+	}
+}
+
+func TestMapSessionResponseDoesNotMapCommitFailureToSessionError(t *testing.T) {
+	t.Parallel()
+
+	response := mapSessionResponse(&service.Session{
+		ID:              "session-1",
 		Status:          model.SessionStatusReady,
 		CommitStatus:    model.CommitStatusFailed,
 		CommitOperation: service.CommitOperationCommit,
 		CommitError:     "commit failed",
 	})
-	if gotStatus != model.SessionStatusReady {
-		t.Fatalf("deriveSessionStatusAndError() status = %q, want %q", gotStatus, model.SessionStatusReady)
+
+	if response.Status != model.SessionStatusReady {
+		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusReady)
 	}
-	if gotError != "" {
-		t.Fatalf("deriveSessionStatusAndError() error = %q, want empty", gotError)
+	if response.ErrorMessage != "" {
+		t.Fatalf("error message = %q, want empty", response.ErrorMessage)
 	}
-}
-
-func TestDeriveSessionStatusAndError_RemovingOverridesDerivedCommitStates(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		session    *service.Session
-		wantStatus string
-	}{
-		{
-			name: "removing overrides committed",
-			session: &service.Session{
-				Status:          model.SessionStatusRemoving,
-				CommitStatus:    model.CommitStatusCompleted,
-				CommitOperation: service.CommitOperationCommit,
-			},
-			wantStatus: model.SessionStatusRemoving,
-		},
-		{
-			name: "removing overrides commit failure",
-			session: &service.Session{
-				Status:          model.SessionStatusRemoving,
-				CommitStatus:    model.CommitStatusFailed,
-				CommitOperation: service.CommitOperationCommit,
-				CommitError:     "commit failed",
-			},
-			wantStatus: model.SessionStatusRemoving,
-		},
-		{
-			name: "removed overrides completed unknown operation",
-			session: &service.Session{
-				Status:          model.SessionStatusRemoved,
-				CommitStatus:    model.CommitStatusCompleted,
-				CommitOperation: "rebase",
-			},
-			wantStatus: model.SessionStatusRemoved,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotStatus, gotError := deriveSessionStatusAndError(tt.session)
-			if gotStatus != tt.wantStatus {
-				t.Fatalf("deriveSessionStatusAndError() status = %q, want %q", gotStatus, tt.wantStatus)
-			}
-			if gotError != "" {
-				t.Fatalf("deriveSessionStatusAndError() error = %q, want empty", gotError)
-			}
-		})
+	if response.CommitError != "commit failed" {
+		t.Fatalf("commit error = %q, want commit failed", response.CommitError)
 	}
 }

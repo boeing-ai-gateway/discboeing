@@ -349,7 +349,7 @@
 	const submitStatus = $derived.by(() => {
 		if (session.isPending) return "ready" as const;
 		if (thread.status === "loading") return "submitted" as const;
-		if (thread.status === "streaming") return "streaming" as const;
+		if (thread.isStreaming) return "streaming" as const;
 		if (thread.status === "error") return "error" as const;
 		return "ready" as const;
 	});
@@ -366,8 +366,7 @@
 
 	function isGenerating() {
 		return (
-			!session.isPending &&
-			(thread.status === "loading" || thread.status === "streaming")
+			!session.isPending && (thread.status === "loading" || thread.isStreaming)
 		);
 	}
 

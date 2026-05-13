@@ -1,11 +1,11 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { expect, test } from "vitest";
 
 import {
 	applyStreamedThreadUpdate,
 	clearComposerDraftState,
 	getThreadComposerValues,
 	getThreadConversationStatus,
+	getThreadIsStreaming,
 	normalizeThreadComposerReasoning,
 	normalizeThreadComposerServiceTier,
 	parseComposerModelSelection,
@@ -39,9 +39,9 @@ test("applyStreamedThreadUpdate syncs the primary session title and reloads it",
 		},
 	});
 
-	assert.deepEqual(upserted, ["Fix flaky sidebar refresh"]);
-	assert.deepEqual(synced, ["Fix flaky sidebar refresh"]);
-	assert.equal(reloaded, true);
+	expect(upserted).toEqual(["Fix flaky sidebar refresh"]);
+	expect(synced).toEqual(["Fix flaky sidebar refresh"]);
+	expect(reloaded).toBe(true);
 });
 
 test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions", () => {
@@ -81,7 +81,7 @@ test("applyStreamedThreadUpdate avoids reloading renamed or secondary sessions",
 		},
 	});
 
-	assert.equal(reloadCount, 0);
+	expect(reloadCount).toBe(0);
 });
 
 test("clearComposerDraftState clears storage before resetting the in-memory draft", () => {
@@ -94,7 +94,7 @@ test("clearComposerDraftState clears storage before resetting the in-memory draf
 		},
 		clearStoredDraft: () => {
 			calls.push("storage");
-			assert.equal(composerDraft, "Start a new session with this prompt");
+			expect(composerDraft).toBe("Start a new session with this prompt");
 		},
 		clearInMemoryDraft: () => {
 			calls.push("memory");
@@ -102,12 +102,12 @@ test("clearComposerDraftState clears storage before resetting the in-memory draf
 		},
 	});
 
-	assert.deepEqual(calls, ["cancel", "storage", "memory"]);
-	assert.equal(composerDraft, "");
+	expect(calls).toEqual(["cancel", "storage", "memory"]);
+	expect(composerDraft).toBe("");
 });
 
 test("getThreadComposerValues restores thread model and reasoning", () => {
-	assert.deepEqual(
+	expect(
 		getThreadComposerValues(
 			{
 				id: "thread-1",
@@ -118,50 +118,46 @@ test("getThreadComposerValues restores thread model and reasoning", () => {
 			},
 			"anthropic/claude-sonnet-4-6",
 		),
-		{
-			modelId: "openai/gpt-5",
-			reasoning: "high",
-			serviceTier: "priority",
-		},
-	);
+	).toEqual({
+		modelId: "openai/gpt-5",
+		reasoning: "high",
+		serviceTier: "priority",
+	});
 });
 
 test("getThreadComposerValues falls back to the default model", () => {
-	assert.deepEqual(
-		getThreadComposerValues(null, "anthropic/claude-sonnet-4-6"),
-		{
-			modelId: "anthropic/claude-sonnet-4-6",
-			reasoning: undefined,
-			serviceTier: undefined,
-		},
-	);
+	expect(getThreadComposerValues(null, "anthropic/claude-sonnet-4-6")).toEqual({
+		modelId: "anthropic/claude-sonnet-4-6",
+		reasoning: undefined,
+		serviceTier: undefined,
+	});
 });
 
 test("normalizeThreadComposerReasoning keeps explicit levels and drops empty values", () => {
-	assert.equal(normalizeThreadComposerReasoning("default"), "default");
-	assert.equal(normalizeThreadComposerReasoning("medium"), "medium");
-	assert.equal(normalizeThreadComposerReasoning(""), undefined);
-	assert.equal(normalizeThreadComposerReasoning(undefined), undefined);
+	expect(normalizeThreadComposerReasoning("default")).toBe("default");
+	expect(normalizeThreadComposerReasoning("medium")).toBe("medium");
+	expect(normalizeThreadComposerReasoning("")).toBe(undefined);
+	expect(normalizeThreadComposerReasoning(undefined)).toBe(undefined);
 });
 
 test("normalizeThreadComposerServiceTier keeps explicit tiers and drops empty values", () => {
-	assert.equal(normalizeThreadComposerServiceTier("priority"), "priority");
-	assert.equal(normalizeThreadComposerServiceTier("fast"), "priority");
-	assert.equal(normalizeThreadComposerServiceTier(""), undefined);
-	assert.equal(normalizeThreadComposerServiceTier(undefined), undefined);
+	expect(normalizeThreadComposerServiceTier("priority")).toBe("priority");
+	expect(normalizeThreadComposerServiceTier("fast")).toBe("priority");
+	expect(normalizeThreadComposerServiceTier("")).toBe(undefined);
+	expect(normalizeThreadComposerServiceTier(undefined)).toBe(undefined);
 });
 
 test("parseComposerModelSelection keeps only the model identifier", () => {
-	assert.deepEqual(parseComposerModelSelection("openai/gpt-5"), {
+	expect(parseComposerModelSelection("openai/gpt-5")).toEqual({
 		modelId: "openai/gpt-5",
 	});
-	assert.deepEqual(parseComposerModelSelection(null), {
+	expect(parseComposerModelSelection(null)).toEqual({
 		modelId: null,
 	});
 });
 
 test("resolveThreadComposerSubmitValues falls back to current values when next values are unset", () => {
-	assert.deepEqual(
+	expect(
 		resolveThreadComposerSubmitValues({
 			modelId: "openai/gpt-5",
 			reasoning: "high",
@@ -170,16 +166,15 @@ test("resolveThreadComposerSubmitValues falls back to current values when next v
 			nextReasoning: undefined,
 			nextServiceTier: undefined,
 		}),
-		{
-			modelId: "openai/gpt-5",
-			reasoning: "high",
-			serviceTier: "priority",
-		},
-	);
+	).toEqual({
+		modelId: "openai/gpt-5",
+		reasoning: "high",
+		serviceTier: "priority",
+	});
 });
 
 test("resolveThreadComposerSubmitValues clears reasoning when using the default model", () => {
-	assert.deepEqual(
+	expect(
 		resolveThreadComposerSubmitValues({
 			modelId: "openai/gpt-5",
 			reasoning: "high",
@@ -188,16 +183,15 @@ test("resolveThreadComposerSubmitValues clears reasoning when using the default 
 			nextReasoning: "default",
 			nextServiceTier: "priority",
 		}),
-		{
-			modelId: null,
-			reasoning: undefined,
-			serviceTier: undefined,
-		},
-	);
+	).toEqual({
+		modelId: null,
+		reasoning: undefined,
+		serviceTier: undefined,
+	});
 });
 
 test("resolveThreadComposerSubmitValues prefers staged next values", () => {
-	assert.deepEqual(
+	expect(
 		resolveThreadComposerSubmitValues({
 			modelId: "anthropic/claude-sonnet-4-6",
 			reasoning: "auto",
@@ -206,16 +200,15 @@ test("resolveThreadComposerSubmitValues prefers staged next values", () => {
 			nextReasoning: "high",
 			nextServiceTier: "priority",
 		}),
-		{
-			modelId: "openai/gpt-5",
-			reasoning: "high",
-			serviceTier: "priority",
-		},
-	);
+	).toEqual({
+		modelId: "openai/gpt-5",
+		reasoning: "high",
+		serviceTier: "priority",
+	});
 });
 
 test("resolveThreadComposerSubmitValues allows staged standard service tier", () => {
-	assert.deepEqual(
+	expect(
 		resolveThreadComposerSubmitValues({
 			modelId: "codex/gpt-5.5",
 			reasoning: "default",
@@ -224,62 +217,70 @@ test("resolveThreadComposerSubmitValues allows staged standard service tier", ()
 			nextReasoning: undefined,
 			nextServiceTier: null,
 		}),
-		{
-			modelId: "codex/gpt-5.5",
-			reasoning: "default",
-			serviceTier: undefined,
-		},
-	);
+	).toEqual({
+		modelId: "codex/gpt-5.5",
+		reasoning: "default",
+		serviceTier: undefined,
+	});
 });
 
 test("isThreadSnapshotRunning detects server-side activity", () => {
-	assert.equal(
+	expect(
 		isThreadSnapshotRunning({
 			id: "thread-1",
 			name: "Main",
 			activityStatus: { status: "running" },
 		}),
-		true,
-	);
-	assert.equal(
+	).toBe(true);
+	expect(
 		isThreadSnapshotRunning({
 			id: "thread-1",
 			name: "Main",
 			activeCommand: "pnpm test",
 		}),
-		true,
-	);
-	assert.equal(
+	).toBe(true);
+	expect(
 		isThreadSnapshotRunning({
 			id: "thread-1",
 			name: "Main",
 			activityStatus: { status: "idle" },
 		}),
-		false,
-	);
+	).toBe(false);
 });
 
-test("getThreadConversationStatus keeps stop control visible while server says running", () => {
-	assert.equal(
-		getThreadConversationStatus(
+test("getThreadIsStreaming keeps stop control visible while server says running", () => {
+	expect(
+		getThreadIsStreaming(
+			"thread-1",
 			{
 				id: "thread-1",
 				name: "Main",
 				activityStatus: { status: "running" },
 			},
-			"ready",
+			false,
 		),
-		"streaming",
-	);
-	assert.equal(
-		getThreadConversationStatus(
+	).toBe(true);
+	expect(getThreadConversationStatus("error")).toBe("error");
+	expect(
+		getThreadIsStreaming(
+			"thread-1",
 			{
 				id: "thread-1",
 				name: "Main",
-				activityStatus: { status: "running" },
 			},
-			"error",
+			false,
+			{ status: "running", threadId: "thread-1" },
 		),
-		"error",
-	);
+	).toBe(true);
+	expect(
+		getThreadIsStreaming(
+			"thread-2",
+			{
+				id: "thread-2",
+				name: "Other",
+			},
+			false,
+			{ status: "running", threadId: "thread-1" },
+		),
+	).toBe(false);
 });

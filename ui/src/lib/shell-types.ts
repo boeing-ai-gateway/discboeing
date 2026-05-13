@@ -1,4 +1,6 @@
 import type {
+	CommitOperation,
+	CommitStatus,
 	QueuedPrompt,
 	ServiceStatus,
 	Session,
@@ -51,7 +53,17 @@ export type AsyncStatus = "idle" | "loading" | "ready" | "error";
 export type WorkspaceSourceType = "local" | "git" | "managed";
 export type WorkspaceStatus = "ready" | "loading" | "error";
 export type SessionStatusValue = SessionStatus;
+export type SessionSandboxStatusValue = SessionStatus;
+export type SessionCommitStatusValue = CommitStatus;
+export type SessionCommitOperationValue = CommitOperation;
 export type SessionActivityStatusValue = SessionThreadActivityStatusValue;
+export type SessionDisplayStatusValue =
+	| SessionStatusValue
+	| SessionActivityStatusValue
+	| "pending"
+	| "committing"
+	| "completed"
+	| "committed";
 export type ConversationRole = "user" | "assistant";
 export type SessionFileState = "active" | "edited" | "linked";
 export type PlanEntryStatus = "pending" | "in_progress" | "completed";
@@ -101,6 +113,10 @@ export type SessionSummary = {
 	name: string;
 	isRecent: boolean;
 	status: SessionStatusValue;
+	sandboxStatus?: SessionSandboxStatusValue;
+	commitStatus?: SessionCommitStatusValue;
+	commitOperation?: SessionCommitOperationValue;
+	commitError?: string;
 	threadStatus?: SessionThreadStatus;
 	workspaceId?: string;
 };

@@ -18,6 +18,7 @@ These constants MUST be kept in sync manually when changes are made.
 Represents the lifecycle of a session (sandbox container state).
 
 **Go constants** (server/internal/model/model.go):
+
 ```go
 const (
 	SessionStatusInitializing    = "initializing"
@@ -25,6 +26,7 @@ const (
 	SessionStatusCloning         = "cloning"
 	SessionStatusPullingImage    = "pulling_image"
 	SessionStatusCreatingSandbox = "creating_sandbox"
+	SessionStatusCreateFailed    = "create_failed"
 	SessionStatusReady           = "ready"
 	SessionStatusStopped         = "stopped"
 	SessionStatusError           = "error"
@@ -34,18 +36,20 @@ const (
 ```
 
 **TypeScript constants** (ui/src/lib/api-constants.ts):
+
 ```typescript
 export const SessionStatus = {
-	INITIALIZING: "initializing",
-	REINITIALIZING: "reinitializing",
-	CLONING: "cloning",
-	PULLING_IMAGE: "pulling_image",
-	CREATING_SANDBOX: "creating_sandbox",
-	READY: "ready",
-	STOPPED: "stopped",
-	ERROR: "error",
-	REMOVING: "removing",
-	REMOVED: "removed",
+  INITIALIZING: "initializing",
+  REINITIALIZING: "reinitializing",
+  CLONING: "cloning",
+  PULLING_IMAGE: "pulling_image",
+  CREATING_SANDBOX: "creating_sandbox",
+  CREATE_FAILED: "create_failed",
+  READY: "ready",
+  STOPPED: "stopped",
+  ERROR: "error",
+  REMOVING: "removing",
+  REMOVED: "removed",
 } as const;
 ```
 
@@ -54,6 +58,7 @@ export const SessionStatus = {
 Represents the commit state of a session (orthogonal to session status).
 
 **Go constants** (server/internal/model/model.go):
+
 ```go
 const (
 	CommitStatusNone       = ""           // No commit in progress (default)
@@ -65,13 +70,34 @@ const (
 ```
 
 **TypeScript constants** (ui/src/lib/api-constants.ts):
+
 ```typescript
 export const CommitStatus = {
-	NONE: "",
-	PENDING: "pending",
-	COMMITTING: "committing",
-	COMPLETED: "completed",
-	FAILED: "failed",
+  NONE: "",
+  PENDING: "pending",
+  COMMITTING: "committing",
+  COMPLETED: "completed",
+  FAILED: "failed",
+} as const;
+```
+
+### Commit Operation
+
+Represents the backend operation associated with `commitStatus`.
+
+**Go constants** (server/internal/model/model.go):
+
+```go
+const (
+	CommitOperationCommit = "commit"
+)
+```
+
+**TypeScript constants** (ui/src/lib/api-constants.ts):
+
+```typescript
+export const CommitOperation = {
+  COMMIT: "commit",
 } as const;
 ```
 
@@ -80,22 +106,26 @@ export const CommitStatus = {
 Represents the lifecycle of a workspace.
 
 **Go constants** (server/internal/model/model.go):
+
 ```go
 const (
 	WorkspaceStatusInitializing = "initializing"
 	WorkspaceStatusCloning      = "cloning"
 	WorkspaceStatusReady        = "ready"
+	WorkspaceStatusRemoving     = "removing"
 	WorkspaceStatusError        = "error"
 )
 ```
 
 **TypeScript constants** (ui/src/lib/api-constants.ts):
+
 ```typescript
 export const WorkspaceStatus = {
-	INITIALIZING: "initializing",
-	CLONING: "cloning",
-	READY: "ready",
-	ERROR: "error",
+  INITIALIZING: "initializing",
+  CLONING: "cloning",
+  READY: "ready",
+  REMOVING: "removing",
+  ERROR: "error",
 } as const;
 ```
 
@@ -106,10 +136,14 @@ export const WorkspaceStatus = {
 Import and use the constants instead of hardcoded strings:
 
 ```typescript
-import { SessionStatus, WorkspaceStatus } from "$lib/api-constants";
+import {
+  CommitStatus,
+  SessionStatus,
+  WorkspaceStatus,
+} from "$lib/api-constants";
 
 // Good ✓
-if (session.status === SessionStatus.COMPLETED) {
+if (session.commitStatus === CommitStatus.COMPLETED) {
   // ...
 }
 
@@ -139,13 +173,14 @@ The TypeScript types in `ui/src/lib/api-types.ts` are derived from the constants
 
 ```typescript
 export type SessionStatus =
-	| (typeof SessionStatusConstants)[keyof typeof SessionStatusConstants];
+  (typeof SessionStatusConstants)[keyof typeof SessionStatusConstants];
 
 export type WorkspaceStatus =
-	| (typeof WorkspaceStatusConstants)[keyof typeof WorkspaceStatusConstants];
+  (typeof WorkspaceStatusConstants)[keyof typeof WorkspaceStatusConstants];
 ```
 
 This ensures that:
+
 1. TypeScript will catch any mismatches at compile time
 2. The type system reflects the actual valid values
 3. Refactoring tools can safely rename constants
@@ -162,9 +197,11 @@ When adding, removing, or renaming a status value:
 ## Files Using Status Constants
 
 ### Frontend
+
 - `ui/src/lib/` - Status constant definitions and type derivations
 
 ### Backend
+
 - `server/internal/service/session.go` - Session lifecycle management
 - `server/internal/service/perform_commit_test.go` - Commit status tests
 - `server/internal/handler/chat.go` - Commit status validation
@@ -173,6 +210,7 @@ When adding, removing, or renaming a status value:
 ## Migration Notes
 
 If you encounter hardcoded status strings in the codebase:
+
 1. Replace them with the appropriate constant
 2. Import the constants from `$lib/api-constants` (TypeScript) or `model` package (Go)
 3. This improves type safety and makes refactoring easier

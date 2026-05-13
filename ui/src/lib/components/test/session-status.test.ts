@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+	SessionDisplayStatus,
 	SessionStatus,
 	isSessionTransitioningStatus,
 } from "../../api-constants";
@@ -25,14 +26,16 @@ function readSessionSetupStatusSource() {
 	return readFileSync(SESSION_SETUP_STATUS_COMPONENT, "utf-8");
 }
 
-test("session status constants include committed", () => {
-	assert.equal(SessionStatus.COMMITTED, "committed");
+test("session display status constants include committed", () => {
+	assert.equal(SessionDisplayStatus.COMMITTED, "committed");
 });
 
-test("session transitioning status helper only flags non-resting states", () => {
+test("session transitioning status helper only flags non-resting lifecycle states", () => {
 	assert.equal(isSessionTransitioningStatus(SessionStatus.INITIALIZING), true);
-	assert.equal(isSessionTransitioningStatus(SessionStatus.PENDING), true);
-	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTING), true);
+	assert.equal(
+		isSessionTransitioningStatus(SessionStatus.CREATING_SANDBOX),
+		true,
+	);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.REMOVING), true);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.ERROR), false);
 	assert.equal(
@@ -40,7 +43,7 @@ test("session transitioning status helper only flags non-resting states", () => 
 		false,
 	);
 	assert.equal(isSessionTransitioningStatus(SessionStatus.STOPPED), false);
-	assert.equal(isSessionTransitioningStatus(SessionStatus.COMMITTED), false);
+	assert.equal(isSessionTransitioningStatus(SessionStatus.READY), false);
 	assert.equal(isSessionTransitioningStatus(null), false);
 });
 

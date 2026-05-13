@@ -172,9 +172,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let rejectPendingLoad: ((error?: unknown) => void) | null = null;
 
 	const status = $derived.by(() => {
-		if (completionRunning) {
-			return "streaming" as const;
-		}
 		if (loadStatus === "loading") {
 			return "loading" as const;
 		}
@@ -516,6 +513,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		get status() {
 			return status;
 		},
+		get isStreaming() {
+			return completionRunning;
+		},
 		get error() {
 			return error;
 		},
@@ -565,7 +565,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			const nextReasoning = reasoning ?? "";
 			const nextServiceTier = serviceTier ?? "";
 			const submittingWhileGenerating =
-				args.hasSession() && (status === "streaming" || status === "loading");
+				args.hasSession() && (completionRunning || status === "loading");
 			const shouldOptimisticallyInsert =
 				!submittingWhileGenerating && !runAfter;
 			const userMessage = hasMessageContent

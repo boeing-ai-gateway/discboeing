@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/obot-platform/discobot/server/internal/model"
 )
 
 func TestListSessionsByProject_Empty(t *testing.T) {
@@ -660,7 +662,7 @@ func TestGetSession_MapsFailedCommitIntoStatusAndError(t *testing.T) {
 	}
 }
 
-func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
+func TestListSessions_SeparatesLifecycleAndCommitStatus(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServer(t)
 	user := ts.CreateTestUser("test@example.com")
@@ -669,9 +671,8 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 	session := ts.CreateTestSessionWithSandbox(workspace, "Test Session")
 	client := ts.AuthenticatedClient(user)
 
-	// Set completed commit status for a commit operation.
-	session.CommitStatus = "completed"
-	commitOperation := "commit"
+	session.CommitStatus = model.CommitStatusCompleted
+	commitOperation := model.CommitOperationCommit
 	session.CommitOperation = &commitOperation
 	appliedCommit := "def456"
 	session.AppliedCommit = &appliedCommit
@@ -693,17 +694,20 @@ func TestListSessions_MapsCommitStatusIntoStatus(t *testing.T) {
 		t.Fatalf("Expected 1 session, got %d", len(result.Sessions))
 	}
 
-	if result.Sessions[0]["status"] != "committed" {
-		t.Errorf("Expected status 'committed', got %v", result.Sessions[0]["status"])
+	if result.Sessions[0]["status"] != model.SessionStatusReady {
+		t.Errorf("Expected status %q, got %v", model.SessionStatusReady, result.Sessions[0]["status"])
 	}
-	if result.Sessions[0]["sandboxStatus"] != "ready" {
-		t.Errorf("Expected sandboxStatus 'ready', got %v", result.Sessions[0]["sandboxStatus"])
+	if result.Sessions[0]["sandboxStatus"] != model.SessionStatusReady {
+		t.Errorf("Expected sandboxStatus %q, got %v", model.SessionStatusReady, result.Sessions[0]["sandboxStatus"])
+	}
+	if result.Sessions[0]["commitStatus"] != model.CommitStatusCompleted {
+		t.Errorf("Expected commitStatus %q, got %v", model.CommitStatusCompleted, result.Sessions[0]["commitStatus"])
+	}
+	if result.Sessions[0]["commitOperation"] != model.CommitOperationCommit {
+		t.Errorf("Expected commitOperation %q, got %v", model.CommitOperationCommit, result.Sessions[0]["commitOperation"])
 	}
 	if result.Sessions[0]["appliedCommit"] != "def456" {
 		t.Errorf("Expected appliedCommit 'def456', got %v", result.Sessions[0]["appliedCommit"])
-	}
-	if _, ok := result.Sessions[0]["commitStatus"]; ok {
-		t.Errorf("Expected commitStatus to be omitted, got %v", result.Sessions[0]["commitStatus"])
 	}
 	if _, ok := result.Sessions[0]["commitError"]; ok {
 		t.Errorf("Expected commitError to be omitted, got %v", result.Sessions[0]["commitError"])

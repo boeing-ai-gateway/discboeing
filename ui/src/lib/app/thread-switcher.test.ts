@@ -77,7 +77,9 @@ test("resolveSessionDisplayStatus normalizes resting ready sessions", () => {
 test("resolveThreadDisplayStatus inherits committed session display", () => {
 	assert.equal(
 		resolveThreadDisplayStatus({
-			sessionStatus: "committed",
+			sessionStatus: "ready",
+			commitStatus: "completed",
+			commitOperation: "commit",
 			threadActivityStatus: "running",
 			pendingQuestion: true,
 		}),

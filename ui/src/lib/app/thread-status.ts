@@ -1,9 +1,13 @@
+import { CommitOperation, CommitStatus } from "../api-constants";
 import type {
 	SessionThreadActivityStatusValue,
 	ThreadState,
 } from "../api-types";
 import type {
 	SessionActivityStatusValue,
+	SessionCommitOperationValue,
+	SessionCommitStatusValue,
+	SessionDisplayStatusValue,
 	SessionStatusValue,
 } from "../shell-types";
 
@@ -19,6 +23,14 @@ type SidebarThreadStatusInput = {
 	idleFallback?: "session" | "none";
 };
 
+type SessionDisplayStatusInput = Pick<
+	SidebarThreadStatusInput,
+	"sessionStatus" | "sessionActivityStatus"
+> & {
+	commitStatus?: SessionCommitStatusValue | null;
+	commitOperation?: SessionCommitOperationValue | null;
+};
+
 type ThreadRunningStatusInput = {
 	activityStatus?: {
 		status: SessionThreadActivityStatusValue;
@@ -29,6 +41,7 @@ type ThreadRunningStatusInput = {
 type ThreadContextStatusInput =
 	| {
 			status?: string;
+			isStreaming?: boolean;
 			hasPendingQuestion?: boolean;
 	  }
 	| null
@@ -43,19 +56,38 @@ export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 	);
 }
 
-type ThreadDisplayStatusInput = Omit<SidebarThreadStatusInput, "idleFallback">;
+type ThreadDisplayStatusInput = Omit<SidebarThreadStatusInput, "idleFallback"> &
+	SessionDisplayStatusInput;
 
-export type ThreadDisplayStatusValue =
-	| SessionActivityStatusValue
-	| SessionStatusValue;
+export type ThreadDisplayStatusValue = SessionDisplayStatusValue;
 
 export function resolveSessionDisplayStatus({
 	sessionStatus,
 	sessionActivityStatus,
-}: Pick<
-	SidebarThreadStatusInput,
-	"sessionStatus" | "sessionActivityStatus"
->): ThreadDisplayStatusValue {
+	commitStatus,
+	commitOperation,
+}: SessionDisplayStatusInput): ThreadDisplayStatusValue {
+	if (sessionStatus === "removing" || sessionStatus === "removed") {
+		return sessionStatus;
+	}
+	if (sessionStatus === "error" || sessionStatus === "create_failed") {
+		return sessionStatus;
+	}
+	if (commitStatus === CommitStatus.PENDING) {
+		return "pending";
+	}
+	if (commitStatus === CommitStatus.COMMITTING) {
+		return "committing";
+	}
+	if (
+		commitStatus === CommitStatus.COMPLETED &&
+		commitOperation === CommitOperation.COMMIT
+	) {
+		return "committed";
+	}
+	if (commitStatus === CommitStatus.COMPLETED) {
+		return "completed";
+	}
 	if (sessionActivityStatus && sessionActivityStatus !== "idle") {
 		return sessionActivityStatus;
 	}
@@ -65,7 +97,7 @@ export function resolveSessionDisplayStatus({
 export function resolveThreadContextDisplayStatus(
 	threadContext: ThreadContextStatusInput,
 ): SessionThreadActivityStatusValue | null {
-	if (threadContext?.status === "streaming") {
+	if (threadContext?.isStreaming || threadContext?.status === "streaming") {
 		return "running";
 	}
 	if (threadContext?.hasPendingQuestion) {
@@ -142,6 +174,8 @@ export function resolveSidebarThreadStatus({
 export function resolveThreadDisplayStatus({
 	sessionStatus,
 	sessionActivityStatus,
+	commitStatus,
+	commitOperation,
 	threadActivityStatus,
 	localActivityStatus,
 	threadState,
@@ -152,6 +186,8 @@ export function resolveThreadDisplayStatus({
 	const displayedSessionStatus = resolveSessionDisplayStatus({
 		sessionStatus,
 		sessionActivityStatus,
+		commitStatus,
+		commitOperation,
 	});
 	if (displayedSessionStatus === "committed") {
 		return "committed";

@@ -138,16 +138,20 @@ bundle for audit/debugging.
 
 ### REST API Projection
 
-The REST API does not expose `commitStatus` or `commitError` directly on session responses.
-Instead it flattens commit state into the existing session fields:
+The REST API exposes session lifecycle and commit state as separate fields on
+session responses:
 
-| Internal state                                              | REST `status`              | REST `errorMessage`                    |
-| ----------------------------------------------------------- | -------------------------- | -------------------------------------- |
-| `commitStatus = "pending"`                                  | `pending`                  | omitted                                |
-| `commitStatus = "committing"`                               | `committing`               | omitted                                |
-| `commitStatus = "completed"` + `commitOperation = "commit"` | `committed`                | omitted                                |
-| `commitStatus = "failed"`                                   | `error`                    | `commitError`                          |
-| no commit in progress                                       | session lifecycle `status` | session `errorMessage` when applicable |
+| Field             | Meaning                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `status`          | Canonical session lifecycle state                         |
+| `sandboxStatus`   | Current sandbox lifecycle state; currently mirrors status |
+| `commitStatus`    | Orthogonal commit state, omitted when empty               |
+| `commitOperation` | Active operation (`commit`)                             |
+| `commitError`     | Error message if `commitStatus = "failed"`               |
+| `errorMessage`    | Session lifecycle error message when applicable           |
+
+UI code derives presentation-only labels such as `committed` from this split
+state. Those labels are not backend session lifecycle statuses.
 
 ---
 

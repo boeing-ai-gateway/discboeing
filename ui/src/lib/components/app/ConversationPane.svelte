@@ -74,7 +74,7 @@
 		getTodoWriteEntries,
 	} from "$lib/session/domains/session-domain.helpers";
 
-	type ConversationPaneStatus = ThreadContextValue["status"];
+	type ConversationPaneStatus = ThreadContextValue["status"] | "streaming";
 	type ConversationPaneErrorBannerKey = "session" | "thread";
 	type BrowserActivityViewMode = "simple" | "details";
 	type BrowserTimelineStep = {
@@ -88,6 +88,7 @@
 		contentTopPadding?: number;
 		messages?: ChatMessage[];
 		status?: ConversationPaneStatus;
+		isStreaming?: boolean;
 		threadError?: string | null;
 		sessionError?: string | null;
 		chatWidthMode?: ChatWidthMode;
@@ -104,6 +105,7 @@
 		contentTopPadding = 0,
 		messages,
 		status,
+		isStreaming: isStreamingOverride,
 		threadError: threadErrorOverride = null,
 		sessionError: sessionErrorOverride = null,
 		chatWidthMode,
@@ -122,9 +124,10 @@
 	const conversationMessages = $derived.by(
 		() => messages ?? thread?.messages ?? [],
 	);
-	const conversationStatus = $derived.by(
-		() => status ?? thread?.status ?? "ready",
-	);
+	const conversationStatus = $derived.by(() => {
+		const nextStatus = status ?? thread?.status ?? "ready";
+		return nextStatus === "streaming" ? "ready" : nextStatus;
+	});
 	const conversationTurns = $derived.by(() =>
 		groupMessagesIntoTurns(conversationMessages),
 	);
@@ -166,7 +169,11 @@
 	);
 	const hasMessages = $derived.by(() => conversationMessages.length > 0);
 	const isLoading = $derived.by(() => conversationStatus === "loading");
-	const isStreaming = $derived.by(() => conversationStatus === "streaming");
+	const isStreaming = $derived.by(
+		() =>
+			isStreamingOverride ??
+			(status === "streaming" ? true : (thread?.isStreaming ?? false)),
+	);
 	const sessionError = $derived.by(() =>
 		getErrorMessage(sessionErrorOverride ?? session?.current?.errorMessage),
 	);
@@ -1018,7 +1025,7 @@
 		if (!viewport || conversationMessages.length === 0) {
 			return;
 		}
-		if (conversationStatus !== "ready" && conversationStatus !== "streaming") {
+		if (conversationStatus !== "ready") {
 			return;
 		}
 		if (savedScrollTop !== null) {

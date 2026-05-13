@@ -62,11 +62,11 @@ test("keeps commit as the primary action while a dropdown-triggered rebase is st
 	assert.equal(state.buttonLabel, "Rebasing...");
 });
 
-test("shows pending state from the public session status", () => {
+test("shows pending state from the session commit status", () => {
 	const state = getSessionToolbarOperationState({
 		filesChanged: 1,
 		session: makeSession({
-			status: "pending",
+			commitStatus: "pending",
 		}),
 		startingOperation: null,
 	});
@@ -80,7 +80,7 @@ test("does not show command progress for committing status without an active ope
 	const state = getSessionToolbarOperationState({
 		filesChanged: 1,
 		session: makeSession({
-			status: "committing",
+			commitStatus: "committing",
 		}),
 		startingOperation: null,
 	});

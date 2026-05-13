@@ -41,7 +41,7 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import type { SessionStatusValue } from "$lib/shell-types";
+	import type { SessionDisplayStatusValue } from "$lib/shell-types";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -295,6 +295,8 @@
 		return resolveSessionDisplayStatus({
 			sessionStatus: sessionObj.status,
 			sessionActivityStatus: sessionObj.threadStatus?.status,
+			commitStatus: sessionObj.commitStatus,
+			commitOperation: sessionObj.commitOperation,
 		});
 	}
 
@@ -311,12 +313,14 @@
 	function threadDisplayStatus(
 		sessionId: string,
 		threadObj: Thread,
-	): SessionThreadActivityStatusValue | SessionStatusValue {
+	): SessionDisplayStatusValue {
 		const session = sessionById(sessionId);
 		const contextStatus = threadContextDisplayStatus(sessionId, threadObj.id);
 		return resolveThreadDisplayStatus({
 			sessionStatus: session?.status,
 			sessionActivityStatus: session?.threadStatus?.status,
+			commitStatus: session?.commitStatus,
+			commitOperation: session?.commitOperation,
 			localActivityStatus: contextStatus,
 			threadActivityStatus: threadObj.activityStatus?.status,
 			threadState: threadObj.state,
@@ -328,7 +332,7 @@
 
 	function recentThreadDisplayStatus(
 		threadObj: (typeof sessions.recentThreads)[number],
-	): SessionThreadActivityStatusValue | SessionStatusValue {
+	): SessionDisplayStatusValue {
 		const session = sessionById(threadObj.sessionId);
 		const liveThread = app.sessions.sessionContexts
 			.get(threadObj.sessionId)
@@ -344,6 +348,8 @@
 		return resolveThreadDisplayStatus({
 			sessionStatus: session.status,
 			sessionActivityStatus: session.threadStatus?.status,
+			commitStatus: session.commitStatus,
+			commitOperation: session.commitOperation,
 			localActivityStatus: contextStatus,
 			threadActivityStatus: liveThread.activityStatus?.status,
 			threadState: liveThread.state,

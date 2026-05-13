@@ -95,6 +95,8 @@
 		return resolveThreadDisplayStatus({
 			sessionStatus: session.status,
 			sessionActivityStatus: session.threadStatus?.status,
+			commitStatus: session.commitStatus,
+			commitOperation: session.commitOperation,
 			localActivityStatus: threadContextDisplayStatus(
 				thread.sessionId,
 				thread.threadId,

@@ -19,23 +19,26 @@ import (
 )
 
 type sessionResponse struct {
-	ID            string                         `json:"id"`
-	ProjectID     string                         `json:"projectId"`
-	ProviderID    string                         `json:"providerId,omitempty"`
-	Name          string                         `json:"name"`
-	DisplayName   string                         `json:"displayName,omitempty"`
-	Description   string                         `json:"description"`
-	CreatedAt     string                         `json:"createdAt"`
-	Timestamp     string                         `json:"timestamp"`
-	Status        string                         `json:"status"`
-	SandboxStatus string                         `json:"sandboxStatus"`
-	TargetRef     string                         `json:"targetRef,omitempty"`
-	AppliedCommit string                         `json:"appliedCommit,omitempty"`
-	ErrorMessage  string                         `json:"errorMessage,omitempty"`
-	ThreadStatus  *service.SessionActivityStatus `json:"threadStatus,omitempty"`
-	Files         []service.FileNode             `json:"files"`
-	WorkspaceID   string                         `json:"workspaceId,omitempty"`
-	WorkspacePath string                         `json:"workspacePath,omitempty"`
+	ID              string                         `json:"id"`
+	ProjectID       string                         `json:"projectId"`
+	ProviderID      string                         `json:"providerId,omitempty"`
+	Name            string                         `json:"name"`
+	DisplayName     string                         `json:"displayName,omitempty"`
+	Description     string                         `json:"description"`
+	CreatedAt       string                         `json:"createdAt"`
+	Timestamp       string                         `json:"timestamp"`
+	Status          string                         `json:"status"`
+	SandboxStatus   string                         `json:"sandboxStatus"`
+	CommitStatus    string                         `json:"commitStatus,omitempty"`
+	CommitOperation string                         `json:"commitOperation,omitempty"`
+	CommitError     string                         `json:"commitError,omitempty"`
+	TargetRef       string                         `json:"targetRef,omitempty"`
+	AppliedCommit   string                         `json:"appliedCommit,omitempty"`
+	ErrorMessage    string                         `json:"errorMessage,omitempty"`
+	ThreadStatus    *service.SessionActivityStatus `json:"threadStatus,omitempty"`
+	Files           []service.FileNode             `json:"files"`
+	WorkspaceID     string                         `json:"workspaceId,omitempty"`
+	WorkspacePath   string                         `json:"workspacePath,omitempty"`
 }
 
 type workspaceResponse struct {
@@ -50,52 +53,32 @@ type workspaceResponse struct {
 	Sessions      []*sessionResponse `json:"sessions"`
 }
 
-func deriveSessionStatusAndError(sess *service.Session) (string, string) {
-	if sess.Status == model.SessionStatusRemoving || sess.Status == model.SessionStatusRemoved {
-		return sess.Status, ""
-	}
-
-	commitStatus := strings.TrimSpace(sess.CommitStatus)
-	commitOperation := strings.TrimSpace(sess.CommitOperation)
-	sessionError := strings.TrimSpace(sess.ErrorMessage)
-	switch {
-	case commitStatus == "":
-		return sess.Status, sessionError
-	case strings.EqualFold(commitStatus, model.CommitStatusFailed), strings.EqualFold(commitStatus, "false"):
-		return sess.Status, sessionError
-	case strings.EqualFold(commitStatus, model.CommitStatusCompleted) && strings.EqualFold(commitOperation, service.CommitOperationCommit):
-		return "committed", sessionError
-	case strings.EqualFold(commitStatus, model.CommitStatusCompleted):
-		return sess.Status, sessionError
-	default:
-		return commitStatus, sessionError
-	}
-}
-
 func mapSessionResponse(sess *service.Session) *sessionResponse {
 	if sess == nil {
 		return nil
 	}
 
-	status, errorMessage := deriveSessionStatusAndError(sess)
 	return &sessionResponse{
-		ID:            sess.ID,
-		ProjectID:     sess.ProjectID,
-		ProviderID:    sess.ProviderID,
-		Name:          sess.Name,
-		DisplayName:   sess.DisplayName,
-		Description:   sess.Description,
-		CreatedAt:     sess.CreatedAt,
-		Timestamp:     sess.Timestamp,
-		Status:        status,
-		SandboxStatus: sess.Status,
-		TargetRef:     sess.TargetRef,
-		AppliedCommit: sess.AppliedCommit,
-		ErrorMessage:  errorMessage,
-		ThreadStatus:  sess.ThreadStatus,
-		Files:         sess.Files,
-		WorkspaceID:   sess.WorkspaceID,
-		WorkspacePath: sess.WorkspacePath,
+		ID:              sess.ID,
+		ProjectID:       sess.ProjectID,
+		ProviderID:      sess.ProviderID,
+		Name:            sess.Name,
+		DisplayName:     sess.DisplayName,
+		Description:     sess.Description,
+		CreatedAt:       sess.CreatedAt,
+		Timestamp:       sess.Timestamp,
+		Status:          sess.Status,
+		SandboxStatus:   sess.Status,
+		CommitStatus:    sess.CommitStatus,
+		CommitOperation: sess.CommitOperation,
+		CommitError:     sess.CommitError,
+		TargetRef:       sess.TargetRef,
+		AppliedCommit:   sess.AppliedCommit,
+		ErrorMessage:    strings.TrimSpace(sess.ErrorMessage),
+		ThreadStatus:    sess.ThreadStatus,
+		Files:           sess.Files,
+		WorkspaceID:     sess.WorkspaceID,
+		WorkspacePath:   sess.WorkspacePath,
 	}
 }
 

@@ -200,7 +200,8 @@ export type SessionCommandsDomain = {
 export type SessionConversationDomain = {
 	messages: ChatMessage[];
 	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
-	status: AsyncStatus | "streaming";
+	status: AsyncStatus;
+	isStreaming: boolean;
 	error: string | null;
 	hasPendingQuestion: boolean;
 	pendingQuestionId: string | null;
@@ -243,7 +244,8 @@ export type ThreadContextValue = {
 	messages: ChatMessage[];
 	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
 	promptQueue: QueuedPrompt[];
-	status: AsyncStatus | "streaming";
+	status: AsyncStatus;
+	isStreaming: boolean;
 	error: string | null;
 	hasPendingQuestion: boolean;
 	pendingQuestionId: string | null;

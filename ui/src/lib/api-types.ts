@@ -1,6 +1,9 @@
 // API Types - shared between client and server
 
 import type {
+	CommitOperation as CommitOperationConstants,
+	CommitStatus as CommitStatusConstants,
+	SessionSandboxStatus as SessionSandboxStatusConstants,
 	SessionStatus as SessionStatusConstants,
 	WorkspaceStatus as WorkspaceStatusConstants,
 } from "./api-constants";
@@ -179,9 +182,16 @@ export interface FileNode {
 // Session status values representing the lifecycle of a session
 export type SessionStatus =
 	(typeof SessionStatusConstants)[keyof typeof SessionStatusConstants];
+export type SessionSandboxStatus =
+	(typeof SessionSandboxStatusConstants)[keyof typeof SessionSandboxStatusConstants];
 
-// Commit operation values representing which operation owns local UI state
-export type CommitOperation = "commit" | "rebase";
+// Commit status values representing the commit state of a session.
+export type CommitStatus =
+	(typeof CommitStatusConstants)[keyof typeof CommitStatusConstants];
+
+// Commit operation values returned by the backend API.
+export type CommitOperation =
+	(typeof CommitOperationConstants)[keyof typeof CommitOperationConstants];
 
 export type SessionThreadActivityStatusValue =
 	| "idle"
@@ -210,9 +220,14 @@ export interface Session {
 	description: string;
 	createdAt: string;
 	timestamp: string;
+	/** Canonical backend session lifecycle status. */
 	status: SessionStatus;
-	/** Underlying sandbox lifecycle status before commit/thread display overlays. */
-	sandboxStatus?: SessionStatus;
+	/** Underlying sandbox lifecycle status. */
+	sandboxStatus?: SessionSandboxStatus;
+	/** Orthogonal commit operation status. */
+	commitStatus?: CommitStatus;
+	commitOperation?: CommitOperation;
+	commitError?: string;
 	/** Workspace commit SHA when commit started (expected parent) */
 	baseCommit?: string;
 	/** Final commit SHA after patches applied to workspace */

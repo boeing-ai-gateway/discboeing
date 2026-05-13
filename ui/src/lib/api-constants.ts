@@ -1,7 +1,7 @@
 // API Constants - shared string constants that must match the public REST API
 
-// Session status constants representing the lifecycle of a session plus
-// commit progress states surfaced through the public status field.
+// Session lifecycle constants. These values must match
+// server/internal/model SessionStatus* constants.
 export const SessionStatus = {
 	INITIALIZING: "initializing",
 	REINITIALIZING: "reinitializing",
@@ -11,13 +11,36 @@ export const SessionStatus = {
 	CREATE_FAILED: "create_failed",
 	READY: "ready",
 	STOPPED: "stopped",
+	ERROR: "error",
+	REMOVING: "removing",
+	REMOVED: "removed",
+} as const;
+
+export const SessionSandboxStatus = SessionStatus;
+
+export const CommitStatus = {
+	NONE: "",
+	PENDING: "pending",
+	COMMITTING: "committing",
+	COMPLETED: "completed",
+	FAILED: "failed",
+} as const;
+
+export const CommitOperation = {
+	COMMIT: "commit",
+} as const;
+
+export const SessionDisplayStatus = {
+	...SessionStatus,
+	IDLE: "idle",
+	QUEUED: "queued",
+	RUNNING: "running",
+	NEEDS_ATTENTION: "needs_attention",
+	UNKNOWN: "unknown",
 	PENDING: "pending",
 	COMMITTING: "committing",
 	COMPLETED: "completed",
 	COMMITTED: "committed",
-	ERROR: "error",
-	REMOVING: "removing",
-	REMOVED: "removed",
 } as const;
 
 type SessionStatusValue = (typeof SessionStatus)[keyof typeof SessionStatus];
@@ -28,17 +51,12 @@ const SESSION_TRANSITIONING_STATUSES = new Set<SessionStatusValue>([
 	SessionStatus.CLONING,
 	SessionStatus.PULLING_IMAGE,
 	SessionStatus.CREATING_SANDBOX,
-	SessionStatus.PENDING,
-	SessionStatus.COMMITTING,
 	SessionStatus.REMOVING,
 ]);
 
 const SESSION_THREAD_ACCESSIBLE_STATUSES = new Set<SessionStatusValue>([
 	SessionStatus.READY,
 	SessionStatus.STOPPED,
-	SessionStatus.COMPLETED,
-	SessionStatus.COMMITTED,
-	SessionStatus.COMMITTING,
 	SessionStatus.ERROR,
 ]);
 
@@ -63,5 +81,6 @@ export const WorkspaceStatus = {
 	INITIALIZING: "initializing",
 	CLONING: "cloning",
 	READY: "ready",
+	REMOVING: "removing",
 	ERROR: "error",
 } as const;
