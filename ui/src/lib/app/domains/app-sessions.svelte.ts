@@ -102,30 +102,6 @@ export function createAppSessionsDomain(
 			list.find((session) => session.id === currentSelectedSessionId) ?? null,
 	);
 
-	$effect(() => {
-		const selectedSessionId = currentSelectedSessionId;
-		if (!selectedSessionId) {
-			recentThreadStore.clearTrackedSelection();
-			return;
-		}
-
-		const session = store.peek(selectedSessionId);
-		const selectedThreadId =
-			sessionContexts.get(selectedSessionId)?.threads.selectedId ?? null;
-		const threadId = selectedThreadId ?? selectedSessionId;
-
-		const thread = sessionContexts
-			.get(selectedSessionId)
-			?.threads.list.find((item) => item.id === threadId);
-
-		recentThreadStore.recordSelection({
-			sessionId: selectedSessionId,
-			threadId,
-			name:
-				thread?.name || session?.displayName || session?.name || "New Thread",
-		});
-	});
-
 	function shouldLoadSession(
 		sessionId: string,
 		options?: { includePending?: boolean },
@@ -273,6 +249,7 @@ export function createAppSessionsDomain(
 			currentSelectedSessionId = null;
 			awaitingInitialStatusId = null;
 			clearInitialStatusRetry();
+			recentThreadStore.clearTrackedSelection();
 		},
 		setAwaitingInitialStatus: (sessionId) => {
 			awaitingInitialStatusId = sessionId;
