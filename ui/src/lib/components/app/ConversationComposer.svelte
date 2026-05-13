@@ -222,16 +222,13 @@
 	);
 	const serviceTiers = $derived.by(() => selectedModel?.serviceTiers ?? []);
 	const hasAvailableModels = $derived.by(() => models.list.length > 0);
-	const awaitingInitialStatus = $derived.by(
-		() => sessions.awaitingInitialStatusId === session.sessionId,
-	);
 	const sessionSetupDisabled = $derived.by(
 		() =>
 			sessionView.pendingWorkspaceRequiresSourceInput &&
 			!sessionView.pendingWorkspaceSourceIsValid,
 	);
 	const showPendingWorkspaceSelector = $derived.by(
-		() => session.isPending && !awaitingInitialStatus,
+		() => session.isPending && !thread.isStreaming,
 	);
 	const availableCommands = $derived.by(() =>
 		session.isPending ? [] : sessionCommands.list,
@@ -519,20 +516,6 @@
 		}
 	}
 
-	function finalizePendingSessionStart(sessionId: string, threadId: string) {
-		const optimisticMessages = thread.messages.filter(
-			(message) => message.provisional === true,
-		);
-		if (optimisticMessages.length > 0) {
-			sessions.stageOptimisticMessages(sessionId, threadId, optimisticMessages);
-		}
-		if (mounted) {
-			sessions.openThread(sessionId, threadId);
-		}
-		thread.clearNextComposerValues();
-		sessionView.resetPendingWorkspaceSetup();
-	}
-
 	function movePendingDraftToThread(threadId: string, draft: string) {
 		moveComposerDraft({
 			fromStorageKey: resolveComposerDraftStorageKey({
@@ -672,21 +655,21 @@
 		}
 
 		try {
-			if (wasPending) {
-				sessions.setAwaitingInitialStatus(session.sessionId);
-			}
 			const result = await thread.submit({
 				parts: nextMessageParts,
 				allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
 				...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
 				...pendingSubmitOptions,
 			});
-			if (wasPending && result?.materialized) {
-				sessions.setAwaitingInitialStatus(result.sessionId);
+			if (wasPending && result) {
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
 				}
-				finalizePendingSessionStart(result.sessionId, result.threadId);
+				if (mounted) {
+					sessions.openThread(result.sessionId, result.threadId);
+				}
+				thread.clearNextComposerValues();
+				sessionView.resetPendingWorkspaceSetup();
 			}
 			if (!preserveDraft) {
 				thread.clearNextComposerValues();
@@ -702,7 +685,6 @@
 			return true;
 		} catch (err) {
 			if (wasPending) {
-				sessions.setAwaitingInitialStatus(null);
 				pendingSubmitError =
 					err instanceof Error ? err.message : "Failed to start chat";
 			}

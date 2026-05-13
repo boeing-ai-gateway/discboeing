@@ -235,10 +235,6 @@ export function createThreadContext(
 		threadId,
 		startChat,
 		chatStreams: app.chatStreams,
-		initialMessages: app.sessions.takeOptimisticMessages(
-			session.sessionId,
-			threadId,
-		),
 		refreshThread: async () => {
 			await session.threads.refreshThread(threadId);
 			const refreshedThread = session.stores.threads.get(threadId);

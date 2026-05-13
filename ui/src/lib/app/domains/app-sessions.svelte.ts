@@ -2,15 +2,12 @@ import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
-import type { ChatMessage } from "$lib/api-types";
 import type { AppSessions } from "$lib/app/app-context.types";
 import { sortSessionsByCreatedAt } from "$lib/app/domains/app-sessions.helpers";
 import type { SessionContextValue } from "$lib/session/session-context.types";
 import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import type { SessionStore } from "$lib/store/sessions.store.svelte";
-
-const INITIAL_SESSION_STATUS_RETRY_DELAYS_MS = [150, 300, 500, 1000];
 
 type CreateAppSessionsDomainArgs = {
 	store: SessionStore;
@@ -27,10 +24,7 @@ export function createAppSessionsDomain(
 		args.initialSelectedSessionId ?? null,
 	);
 	let pendingSessionId = $state<string>(generateId());
-	let awaitingInitialStatusId = $state<string | null>(null);
-	let initialStatusRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	const requestedThreadIdBySession = new SvelteMap<string, string>();
-	const optimisticMessagesByThread = new SvelteMap<string, ChatMessage[]>();
 	const sessionContexts = new SvelteMap<string, SessionContextValue>();
 
 	if (args.initialSelectedSessionId && args.initialSelectedThreadId) {
@@ -38,39 +32,6 @@ export function createAppSessionsDomain(
 			args.initialSelectedSessionId,
 			args.initialSelectedThreadId,
 		);
-	}
-
-	function getOptimisticMessagesKey(
-		sessionId: string,
-		threadId: string,
-	): string {
-		return `${sessionId}:${threadId}`;
-	}
-
-	function clearInitialStatusRetry(): void {
-		if (initialStatusRetryTimer !== null) {
-			clearTimeout(initialStatusRetryTimer);
-			initialStatusRetryTimer = null;
-		}
-	}
-
-	function scheduleInitialStatusRetry(sessionId: string, attempt = 0): void {
-		if (awaitingInitialStatusId !== sessionId) {
-			return;
-		}
-		const delay = INITIAL_SESSION_STATUS_RETRY_DELAYS_MS[attempt];
-		if (delay === undefined) {
-			return;
-		}
-
-		clearInitialStatusRetry();
-		initialStatusRetryTimer = setTimeout(() => {
-			initialStatusRetryTimer = null;
-			if (awaitingInitialStatusId !== sessionId) {
-				return;
-			}
-			void reloadSession(sessionId, attempt + 1);
-		}, delay);
 	}
 
 	const selectSession = (sessionId: string) => {
@@ -154,11 +115,6 @@ export function createAppSessionsDomain(
 			pendingSessionId = generateId();
 		}
 
-		if (sessionId === awaitingInitialStatusId) {
-			awaitingInitialStatusId = null;
-			clearInitialStatusRetry();
-		}
-
 		if (!store.list.some((session) => session.id === sessionId)) {
 			return false;
 		}
@@ -172,20 +128,8 @@ export function createAppSessionsDomain(
 		purgeMissingRecentSessions();
 	};
 
-	const reloadSession = async (sessionId: string, attempt = 0) => {
+	const reloadSession = async (sessionId: string) => {
 		await store.fetchOne(sessionId);
-		if (awaitingInitialStatusId !== sessionId) {
-			return;
-		}
-
-		const session = store.peek(sessionId);
-		if (session?.status) {
-			awaitingInitialStatusId = null;
-			clearInitialStatusRetry();
-			return;
-		}
-
-		scheduleInitialStatusRetry(sessionId, attempt);
 	};
 
 	return {
@@ -203,9 +147,6 @@ export function createAppSessionsDomain(
 		},
 		get pendingId() {
 			return pendingSessionId;
-		},
-		get awaitingInitialStatusId() {
-			return awaitingInitialStatusId;
 		},
 		get selected() {
 			return selected;
@@ -247,16 +188,7 @@ export function createAppSessionsDomain(
 		startNew: () => {
 			pendingSessionId = generateId();
 			currentSelectedSessionId = null;
-			awaitingInitialStatusId = null;
-			clearInitialStatusRetry();
 			recentThreadStore.clearTrackedSelection();
-		},
-		setAwaitingInitialStatus: (sessionId) => {
-			awaitingInitialStatusId = sessionId;
-			clearInitialStatusRetry();
-			if (sessionId) {
-				void reloadSession(sessionId);
-			}
 		},
 		refresh,
 		reloadSession,
@@ -322,10 +254,6 @@ export function createAppSessionsDomain(
 			if (sessionId === currentSelectedSessionId) {
 				currentSelectedSessionId = null;
 			}
-			if (sessionId === awaitingInitialStatusId) {
-				awaitingInitialStatusId = null;
-				clearInitialStatusRetry();
-			}
 			return true;
 		},
 		removeFromMemory,
@@ -333,20 +261,6 @@ export function createAppSessionsDomain(
 			const threadId = requestedThreadIdBySession.get(sessionId) ?? null;
 			requestedThreadIdBySession.delete(sessionId);
 			return threadId;
-		},
-		stageOptimisticMessages: (sessionId, threadId, messages) => {
-			const key = getOptimisticMessagesKey(sessionId, threadId);
-			if (messages.length === 0) {
-				optimisticMessagesByThread.delete(key);
-				return;
-			}
-			optimisticMessagesByThread.set(key, messages);
-		},
-		takeOptimisticMessages: (sessionId, threadId) => {
-			const key = getOptimisticMessagesKey(sessionId, threadId);
-			const messages = optimisticMessagesByThread.get(key) ?? [];
-			optimisticMessagesByThread.delete(key);
-			return messages;
 		},
 	};
 }

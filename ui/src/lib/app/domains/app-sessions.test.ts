@@ -10,21 +10,6 @@ function readSource() {
 	);
 }
 
-test("app sessions retries the initial session reload after materializing a pending session", () => {
-	const source = readSource();
-
-	assert.match(
-		source,
-		/const INITIAL_SESSION_STATUS_RETRY_DELAYS_MS = \[150, 300, 500, 1000\];/,
-	);
-	assert.match(
-		source,
-		/function scheduleInitialStatusRetry\(sessionId: string, attempt = 0\): void \{/,
-	);
-	assert.match(source, /void reloadSession\(sessionId, attempt \+ 1\);/);
-	assert.match(source, /scheduleInitialStatusRetry\(sessionId, attempt\);/);
-});
-
 test("app sessions prune stale recent-session entries after a successful session list refresh", () => {
 	const source = readSource();
 
@@ -38,15 +23,6 @@ test("app sessions prune stale recent-session entries after a successful session
 		source,
 		/await store\.fetch\(\);\s*purgeMissingRecentSessions\(\);/,
 	);
-});
-
-test("setAwaitingInitialStatus immediately kicks off a session reload", () => {
-	const source = readSource();
-
-	assert.match(source, /setAwaitingInitialStatus: \(sessionId\) => \{/);
-	assert.match(source, /clearInitialStatusRetry\(\);/);
-	assert.match(source, /if \(sessionId\) \{/);
-	assert.match(source, /void reloadSession\(sessionId\);/);
 });
 
 test("app sessions exposes the shared session-load predicate", () => {
@@ -64,4 +40,12 @@ test("app sessions exposes the shared session-load predicate", () => {
 	);
 	assert.match(source, /!!session && session\.status !== "stopped"/);
 	assert.match(source, /shouldLoadSession,/);
+});
+
+test("app sessions does not track a separate materialization state", () => {
+	const source = readSource();
+
+	assert.doesNotMatch(source, /awaitingInitialStatus/);
+	assert.doesNotMatch(source, /INITIAL_SESSION_STATUS_RETRY_DELAYS_MS/);
+	assert.doesNotMatch(source, /stageOptimisticMessages/);
 });

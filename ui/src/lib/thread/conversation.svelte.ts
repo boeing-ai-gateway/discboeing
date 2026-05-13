@@ -34,7 +34,6 @@ type CreateConversationDomainArgs = {
 	threadId: string;
 	startChat: (data: AppChatRequest) => Promise<StartChatResponse>;
 	chatStreams: ChatStreamManager;
-	initialMessages?: ChatMessage[];
 	refreshThread: () => Promise<void>;
 	applyThreadUpdate?: (thread: Thread) => void;
 	applyHooksStatusUpdate?: (
@@ -155,7 +154,7 @@ export function getStartChatErrorDetails(error: unknown): {
 }
 
 export function createConversationDomain(args: CreateConversationDomainArgs) {
-	let messages = $state<ChatMessage[]>(args.initialMessages ?? []);
+	let messages = $state<ChatMessage[]>([]);
 	let historyReplayVersion = $state(0);
 	let streamError = $state<string | null>(null);
 	let fatalStreamError = $state(false);
@@ -604,7 +603,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					return {
 						sessionId: response.sessionId,
 						threadId: response.threadId,
-						materialized: true,
 						queued: response.status === "queued",
 					};
 				}
@@ -637,7 +635,6 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				return {
 					sessionId: args.sessionId,
 					threadId: args.threadId,
-					materialized: false,
 					queued: response.status === "queued",
 				};
 			} catch (error) {

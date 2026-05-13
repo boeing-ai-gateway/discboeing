@@ -237,7 +237,6 @@ export type SessionConversationDomain = {
 export type ThreadSubmitResult = {
 	sessionId: string;
 	threadId: string;
-	materialized: boolean;
 	queued?: boolean;
 };
 

@@ -58,11 +58,15 @@ test("session status component renders a dedicated git icon for committed", () =
 	assert.match(source, /<GitCommitIcon class="size-3\.5" \/>/);
 });
 
-test("session setup status distinguishes creating from restoring", () => {
+test("session setup status shows creation while pending chat is starting", () => {
 	const source = readSessionSetupStatusSource();
 
+	assert.match(source, /const thread = useThreadContext\(\);/);
 	assert.match(
 		source,
-		/session\.isPending \? "Creating session" : "Restoring session"/,
+		/const pendingSessionStarted = \$derived\.by\(\n\t\t\(\) => session\.isPending && thread\.isStreaming,\n\t\);/,
 	);
+	assert.match(source, /\{#if pendingSessionStarted && !sessionStatus\}/);
+	assert.match(source, /<span>Creating session<\/span>/);
+	assert.doesNotMatch(source, /Restoring session/);
 });

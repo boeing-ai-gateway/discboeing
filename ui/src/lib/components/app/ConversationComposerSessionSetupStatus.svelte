@@ -3,14 +3,13 @@
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import { useThreadContext } from "$lib/context/thread-context.svelte";
 
 	const app = useAppContext();
 	const ui = app.ui;
 	const workspaces = app.workspaces;
 	const session = useSessionContext();
-	const awaitingInitialStatus = $derived.by(
-		() => app.sessions.awaitingInitialStatusId === session.sessionId,
-	);
+	const thread = useThreadContext();
 	const sessionStatus = $derived.by(() => session.current?.status ?? null);
 	const sessionErrorMessage = $derived.by(
 		() => session.current?.errorMessage?.trim() ?? "",
@@ -18,25 +17,19 @@
 	const showSessionStatus = $derived.by(
 		() => sessionStatus !== null && sessionStatus !== "ready",
 	);
-	const initialStatusLabel = $derived.by(() =>
-		session.isPending ? "Creating session" : "Restoring session",
+	const pendingSessionStarted = $derived.by(
+		() => session.isPending && thread.isStreaming,
 	);
-
-	$effect(() => {
-		if (awaitingInitialStatus && sessionStatus) {
-			app.sessions.setAwaitingInitialStatus(null);
-		}
-	});
 </script>
 
 {#if session.isPending || showSessionStatus}
 	<div class="mb-2 px-1">
-		{#if awaitingInitialStatus && !sessionStatus}
+		{#if pendingSessionStarted && !sessionStatus}
 			<div
 				class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground"
 			>
 				<Loader2Icon class="size-3.5 animate-spin" />
-				<span>{initialStatusLabel}</span>
+				<span>Creating session</span>
 			</div>
 		{:else if showSessionStatus && sessionStatus}
 			<SessionStatus

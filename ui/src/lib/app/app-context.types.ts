@@ -34,7 +34,6 @@ import type {
 	OAuthRefreshResponse,
 	CredentialAuthType,
 	CredentialEnvVar,
-	ChatMessage,
 	Session,
 	StartChatRequest,
 	StartupTask,
@@ -161,7 +160,6 @@ export type AppSessions = {
 	recentThreads: RecentThreadEntry[];
 	selectedId: string | null;
 	pendingId: string;
-	awaitingInitialStatusId: string | null;
 	selected: Session | null;
 	peek: (sessionId: string) => Session | null;
 	shouldLoadSession: (
@@ -173,7 +171,6 @@ export type AppSessions = {
 	openThread: (sessionId: string, threadId: string) => void;
 	createThread: (sessionId: string) => Promise<string | null>;
 	startNew: () => void;
-	setAwaitingInitialStatus: (sessionId: string | null) => void;
 	refresh: () => Promise<void>;
 	reloadSession: (sessionId: string) => Promise<void>;
 	create: (workspaceId?: string) => Promise<string | null>;
@@ -182,15 +179,6 @@ export type AppSessions = {
 	remove: (sessionId: string) => Promise<boolean>;
 	removeFromMemory: (sessionId: string) => boolean;
 	takeRequestedThreadId: (sessionId: string) => string | null;
-	stageOptimisticMessages: (
-		sessionId: string,
-		threadId: string,
-		messages: ChatMessage[],
-	) => void;
-	takeOptimisticMessages: (
-		sessionId: string,
-		threadId: string,
-	) => ChatMessage[];
 };
 
 export type AppWorkspaces = {
