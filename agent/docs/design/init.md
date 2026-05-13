@@ -28,7 +28,6 @@ A custom Go-based init process that combines:
 - Home directory initialization (copy template)
 - Workspace initialization (git clone)
 - Filesystem detection and mount (OverlayFS for new sessions, AgentFS for existing)
-- Symlink creation for /workspace convenience
 - Minimal init responsibilities (reaping, signal forwarding)
 - User switching (`setuid`/`setgid`)
 - Pdeathsig setup for reliable child termination
@@ -223,25 +222,6 @@ The AgentFS mount runs as the discobot user because:
 
 If OverlayFS mount fails (e.g., unsupported kernel), the init process automatically falls back to AgentFS
 
-### Workspace Symlink
-
-A symlink provides convenient access to the workspace:
-
-```go
-func createWorkspaceSymlink() error {
-    target := filepath.Join(mountHome, "workspace")
-
-    // Remove existing symlink if present
-    if _, err := os.Lstat(symlinkPath); err == nil {
-        os.Remove(symlinkPath)
-    }
-
-    return os.Symlink(target, symlinkPath)
-}
-```
-
-This creates `/workspace -> /home/discobot/workspace` for tools that expect `/workspace`.
-
 ### User Switching
 
 ```go
@@ -382,7 +362,7 @@ docker run --rm \
     discobot
 
 # Verify filesystem layout
-docker exec -u discobot <container> ls -la /home/discobot /workspace
+docker exec -u discobot <container> ls -la /home/discobot /home/discobot/workspace
 
 # Test copy-on-write
 docker exec -u discobot <container> touch /home/discobot/workspace/test.txt

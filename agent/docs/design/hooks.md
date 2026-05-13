@@ -4,7 +4,7 @@ Session hooks are scripts in `.discobot/hooks/` with `type: session` that run on
 
 ## Execution Point
 
-Session hooks run after the workspace and filesystem are fully set up (step 5 — workspace symlink created) but before the agent-api process is forked (step 9). This means:
+Session hooks run after the workspace and filesystem are fully set up but before the agent-api process is forked. This means:
 
 - The workspace is cloned and available at `/home/discobot/workspace`
 - The overlay filesystem is mounted

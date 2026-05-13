@@ -20,8 +20,7 @@ The `discobot-agent` binary is a minimal PID 1 init process for container enviro
 2. Clone workspace to /.data/discobot/workspace (if WORKSPACE_ORIGIN_PATH set)
 3. Initialize AgentFS database (if not exists)
 4. Mount AgentFS over /home/discobot with -a --allow-root
-5. Create /workspace symlink to /home/discobot/workspace
-6. Run discobot-agent-api as discobot user
+5. Run discobot-agent-api as discobot user
 ```
 
 ## Usage
@@ -65,7 +64,6 @@ After setup, the filesystem is configured as:
 |-------------|--------|-------------|
 | `/home/discobot` | AgentFS mount | COW overlay of `/.data/discobot` |
 | `/nix` | Image directory | Writable Nix store root owned by `discobot` |
-| `/workspace` | Symlink | Points to `/home/discobot/workspace` |
 
 The AgentFS mount provides copy-on-write semantics - reads come from the base layer (`/.data/discobot`), writes are captured in the SQLite database.
 
@@ -95,7 +93,6 @@ Container Start (root)
 │   2. Clone repo   │
 │   3. Init AgentFS │
 │   4. Mount AgentFS│
-│   5. Create symlink│
 └─────────┬─────────┘
           │
           │  fork + setuid(discobot)
@@ -106,7 +103,6 @@ Container Start (root)
 │                   │
 │ Sees:             │
 │ /home/discobot(COW)│
-│ /workspace (link) │
 └───────────────────┘
 ```
 

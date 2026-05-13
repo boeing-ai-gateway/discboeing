@@ -54,12 +54,11 @@ Container Start (PID 1: agent init)
 1. Base home setup
 2. Workspace cloning
 3. Filesystem setup (OverlayFS/AgentFS)
-4. Create /workspace symlink
-5. >>> Setup proxy config <<<
-6. >>> Generate CA cert & install in system trust ← NEW!
-7. >>> Start proxy daemon <<<
-8. Start Docker daemon (with proxy env vars) ← Docker uses proxy!
-9. Start agent-api (with proxy env vars)
+4. >>> Setup proxy config <<<
+5. >>> Generate CA cert & install in system trust ← NEW!
+6. >>> Start proxy daemon <<<
+7. Start Docker daemon (with proxy env vars) ← Docker uses proxy!
+8. Start agent-api (with proxy env vars)
 ```
 
 **Environment Variables Set:**

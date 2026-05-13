@@ -226,7 +226,6 @@ RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
 # Create directory structure per filesystem design
 # /.data      - persistent storage (Docker volume or VZ disk)
 # /.workspace - base workspace (read-only)
-# /workspace  - project root (writable)
 RUN mkdir -p /.data /.workspace /opt/discobot/bin /opt/discobot/scripts \
     && chown discobot:discobot /.data /opt/discobot/scripts
 
@@ -240,7 +239,7 @@ ENV PNPM_HOME="/.data/pnpm"
 ENV PATH="/home/discobot/.cargo/bin:/usr/local/go/bin:/home/discobot/.local/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
 ENV WORKSPACE_PATH=/home/discobot/workspace
 
-WORKDIR /workspace
+WORKDIR /home/discobot
 
 EXPOSE 3002
 
@@ -569,8 +568,8 @@ RUN useradd -m -s /bin/bash -u 1000 discobot || \
 
 # Create minimal directory structure for VM
 # /Users is for macOS host home directory VirtioFS mounts (root is read-only squashfs)
-RUN mkdir -p /.data /.workspace /workspace /Users \
-    && chown discobot:discobot /.data /workspace
+RUN mkdir -p /.data /.workspace /Users \
+    && chown discobot:discobot /.data
 
 # Stage 5: Extract kernel and initrd, create root filesystem image
 FROM ubuntu:24.04 AS vz-image-builder

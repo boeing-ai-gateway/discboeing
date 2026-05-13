@@ -119,14 +119,6 @@ The `discobot-agent` binary serves as the container's PID 1 process, providing:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Step 6: Create Workspace Symlink                           │
-│  ───────────────────────────────                            │
-│  • Create /workspace -> /home/discobot/workspace symlink     │
-│  • Provides convenient access to project directory          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
 │  Step 7: Setup Proxy Configuration                          │
 │  ────────────────────────────────                           │
 │  • Use embedded default config only (security: no workspace │
@@ -320,7 +312,6 @@ Responsible for:
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  /home/discobot  ─────► AgentFS FUSE mount (COW layer)       │
-│  /workspace     ─────► symlink to /home/discobot/workspace   │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 
@@ -353,8 +344,6 @@ Responsible for:
 │  └── workspace/                 (COW of /.data/discobot/ws)  │
 │                                                             │
 │  /nix                            (writable Nix store root)   │
-│                                                             │
-│  /workspace -> /home/discobot/workspace (symlink)            │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```

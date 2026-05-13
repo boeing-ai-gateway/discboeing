@@ -49,7 +49,6 @@ const (
 	stagingDir   = "/.data/discobot/workspace.staging"
 	overlayFSDir = "/.data/.overlayfs"
 	mountHome    = "/home/discobot" // Where overlayfs mounts
-	symlinkPath  = "/workspace"     // Symlink to /home/discobot/workspace
 )
 
 func main() {
@@ -156,13 +155,6 @@ func runSetup() error {
 		fmt.Printf("discobot-agent: Cache mount failed: %v\n", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
-
-	// Step 5: Create /workspace symlink
-	stepStart = time.Now()
-	if err := createWorkspaceSymlink(); err != nil {
-		return fmt.Errorf("symlink creation failed: %w", err)
-	}
-	fmt.Printf("discobot-agent: [%.3fs] workspace symlink created\n", time.Since(stepStart).Seconds())
 
 	// Step 5.5: Run session hooks
 	// In oneshot mode we must wait for background hooks before the process exits.
@@ -504,7 +496,6 @@ func setupGitSafeDirectories(workspacePath string) error {
 		workspaceDir,                          // /.data/discobot/workspace
 		stagingDir,                            // /.data/discobot/workspace.staging (used during clone)
 		filepath.Join(mountHome, "workspace"), // /home/discobot/workspace (after overlayfs mount)
-		symlinkPath,                           // /workspace symlink
 	}
 
 	// Add the specific workspacePath if provided and different from /.workspace
@@ -1004,25 +995,6 @@ func mountOverlayFS(sessionID string) error {
 	}
 
 	fmt.Printf("discobot-agent: overlayfs mounted successfully\n")
-	return nil
-}
-
-// createWorkspaceSymlink creates /workspace -> /home/discobot/workspace symlink
-func createWorkspaceSymlink() error {
-	target := filepath.Join(mountHome, "workspace")
-
-	// Remove existing symlink or file if present
-	if _, err := os.Lstat(symlinkPath); err == nil {
-		if err := os.Remove(symlinkPath); err != nil {
-			return fmt.Errorf("failed to remove existing %s: %w", symlinkPath, err)
-		}
-	}
-
-	fmt.Printf("discobot-agent: creating symlink %s -> %s\n", symlinkPath, target)
-	if err := os.Symlink(target, symlinkPath); err != nil {
-		return fmt.Errorf("failed to create symlink: %w", err)
-	}
-
 	return nil
 }
 
