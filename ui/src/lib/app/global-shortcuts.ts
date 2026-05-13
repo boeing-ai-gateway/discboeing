@@ -6,8 +6,10 @@ export type GlobalShortcut = {
 
 type ShortcutKeyboardEvent = Pick<
 	KeyboardEvent,
-	"altKey" | "ctrlKey" | "key" | "metaKey" | "repeat" | "shiftKey"
->;
+	"altKey" | "ctrlKey" | "metaKey" | "repeat" | "shiftKey"
+> & {
+	key?: string;
+};
 
 export type SwitcherCommitModifier = "Control" | "Meta";
 
@@ -60,6 +62,10 @@ export function getPrimaryModifierLabel(isMacPlatform: boolean): string {
 	return isMacPlatform ? "Cmd" : "Ctrl";
 }
 
+function getEventKey(event: Pick<ShortcutKeyboardEvent, "key">): string {
+	return typeof event.key === "string" ? event.key : "";
+}
+
 function usesPrimaryShortcutModifier(
 	event: ShortcutKeyboardEvent,
 	isMacPlatform: boolean,
@@ -71,8 +77,9 @@ function getTabSwitcherCommitModifier(
 	event: ShortcutKeyboardEvent,
 	isMacPlatform: boolean,
 ): SwitcherCommitModifier | null {
-	const key = event.key.toLowerCase();
-	if (event.key === "Tab" && event.ctrlKey && !event.metaKey && !event.altKey) {
+	const eventKey = getEventKey(event);
+	const key = eventKey.toLowerCase();
+	if (eventKey === "Tab" && event.ctrlKey && !event.metaKey && !event.altKey) {
 		return "Control";
 	}
 	if (isMacPlatform) {
@@ -169,6 +176,7 @@ export function matchGlobalShortcutKeydown(
 		return null;
 	}
 
+	const eventKey = getEventKey(event);
 	const switcherCommitModifier = getTabSwitcherCommitModifier(
 		event,
 		isMacPlatform,
@@ -176,12 +184,12 @@ export function matchGlobalShortcutKeydown(
 	if (switcherCommitModifier) {
 		return {
 			id: "switch-recent-thread",
-			reverse: event.key === "Tab" && event.shiftKey,
+			reverse: eventKey === "Tab" && event.shiftKey,
 			commitModifier: switcherCommitModifier,
 		};
 	}
 
-	const key = event.key.toLowerCase();
+	const key = eventKey.toLowerCase();
 	if (usesWorkspaceViewShortcutModifier(event, isMacPlatform)) {
 		if (key === "t" && !event.shiftKey) {
 			return { id: "toggle-terminal" };
@@ -224,8 +232,8 @@ export function matchGlobalShortcutKeydown(
 }
 
 export function shouldCommitTabSwitcherOnKeyup(
-	event: Pick<KeyboardEvent, "key">,
+	event: { key?: string },
 	commitModifier: SwitcherCommitModifier | null,
 ): boolean {
-	return commitModifier !== null && event.key === commitModifier;
+	return commitModifier !== null && getEventKey(event) === commitModifier;
 }

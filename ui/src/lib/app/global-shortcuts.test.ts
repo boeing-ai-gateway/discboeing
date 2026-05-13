@@ -31,6 +31,23 @@ function assertShortcutAction(
 	assert.deepEqual(action, expected);
 }
 
+test("matchGlobalShortcutKeydown ignores event-like objects without a key", () => {
+	assert.equal(
+		matchGlobalShortcutKeydown(
+			{
+				altKey: false,
+				ctrlKey: true,
+				metaKey: false,
+				repeat: false,
+				shiftKey: false,
+			},
+			false,
+		),
+		null,
+	);
+	assert.equal(shouldCommitTabSwitcherOnKeyup({}, "Control"), false);
+});
+
 test("matchGlobalShortcutKeydown tracks Control release for macOS Ctrl+Tab switching", () => {
 	assertShortcutAction(
 		matchGlobalShortcutKeydown(
