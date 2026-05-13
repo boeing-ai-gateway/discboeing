@@ -7,7 +7,7 @@
 	import VenusAndMarsIcon from "@lucide/svelte/icons/venus-and-mars";
 	import VenusIcon from "@lucide/svelte/icons/venus";
 	import { cn } from "$lib/utils";
-	import type { Component } from "svelte";
+	import type { Component, Snippet } from "svelte";
 
 	type VoiceGender =
 		| "male"
@@ -20,7 +20,7 @@
 	type Props = {
 		value?: VoiceGender;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { value, class: className, children, ...restProps }: Props = $props();

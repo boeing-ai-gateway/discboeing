@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CommandItem } from "$lib/components/ui/command";
 	import { useMicSelectorContext } from "./context";
 
 	type Props = {
 		value: string;
 		onselect?: (value: string) => void;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { value, onselect, children, ...restProps }: Props = $props();

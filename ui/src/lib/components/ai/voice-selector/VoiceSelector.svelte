@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Dialog } from "$lib/components/ui/dialog";
 	import { setVoiceSelectorContext } from "./context";
 
@@ -7,7 +8,7 @@
 		open?: boolean;
 		onValueChange?: (value: string | undefined) => void;
 		onOpenChange?: (open: boolean) => void;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

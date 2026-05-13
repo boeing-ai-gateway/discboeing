@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import BrainIcon from "@lucide/svelte/icons/brain";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import { CollapsibleTrigger } from "$lib/components/ui/collapsible";
@@ -9,7 +10,7 @@
 	type Props = {
 		getThinkingMessage?: (isStreaming: boolean, duration?: number) => string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	const defaultGetThinkingMessage = (

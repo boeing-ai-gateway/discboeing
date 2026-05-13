@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CollapsibleContent } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		maxHeight?: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

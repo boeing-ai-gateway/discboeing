@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
-		children?: () => any;
-		as?: keyof HTMLElementTagNameMap;
+		children?: Snippet;
+		as?: keyof globalThis.HTMLElementTagNameMap;
 		class?: string;
 		duration?: number;
 		spread?: number;

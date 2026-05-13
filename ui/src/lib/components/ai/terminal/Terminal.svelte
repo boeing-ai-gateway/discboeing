@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import TerminalActions from "./TerminalActions.svelte";
 	import TerminalClearButton from "./TerminalClearButton.svelte";
@@ -15,7 +16,7 @@
 		autoScroll?: boolean;
 		onClear?: () => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

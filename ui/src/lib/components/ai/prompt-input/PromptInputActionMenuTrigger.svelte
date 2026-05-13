@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { DropdownMenuTrigger } from "$lib/components/ui/dropdown-menu";
 	import PromptInputButton from "./PromptInputButton.svelte";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 </script>
 

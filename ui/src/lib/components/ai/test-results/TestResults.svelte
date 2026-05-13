@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setTestResultsContext, type TestResultsSummary } from "./context";
 
 	type Props = {
 		summary?: TestResultsSummary;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { summary, class: className, children, ...restProps }: Props = $props();

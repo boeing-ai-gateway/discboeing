@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
 	import type { ComponentProps } from "svelte";
 	import { Button } from "$lib/components/ui/button";
@@ -6,7 +7,7 @@
 
 	type Props = ComponentProps<typeof Button> & {
 		seekOffset?: number;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { seekOffset = 10, onclick, children, ...restProps }: Props = $props();

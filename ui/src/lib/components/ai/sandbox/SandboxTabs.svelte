@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { ComponentProps } from "svelte";
 	import { Tabs } from "$lib/components/ui/tabs";
 	import { cn } from "$lib/utils";
 
 	type Props = ComponentProps<typeof Tabs> & {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

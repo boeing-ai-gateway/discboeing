@@ -1,7 +1,7 @@
 <script lang="ts">
 	import FileIcon from "@lucide/svelte/icons/file";
 	import { cn } from "$lib/utils";
-	import type { Component } from "svelte";
+	import type { Component, Snippet } from "svelte";
 	import FileTreeIcon from "./FileTreeIcon.svelte";
 	import FileTreeName from "./FileTreeName.svelte";
 	import { useFileTreeContext } from "./context";
@@ -11,7 +11,7 @@
 		name: string;
 		icon?: Component<{ class?: string }>;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

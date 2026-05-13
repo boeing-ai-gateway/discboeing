@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import type { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
 	import type {
@@ -19,7 +20,7 @@
 		menuAriaLabel: string;
 		class?: string;
 		contentClass?: string;
-		children?: () => any;
+		children?: Snippet;
 		onclick?: ButtonProps["onclick"];
 		variant?: ButtonVariant;
 		size?: ButtonSize;

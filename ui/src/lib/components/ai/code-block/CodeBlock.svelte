@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { setCodeBlockContext } from "./context";
 	import CodeBlockContainer from "./CodeBlockContainer.svelte";
 	import CodeBlockContent from "./CodeBlockContent.svelte";
@@ -8,7 +9,7 @@
 		language: string;
 		showLineNumbers?: boolean;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

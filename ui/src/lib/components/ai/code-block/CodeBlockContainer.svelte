@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { cn } from "$lib/utils";
 
 	type Props = HTMLAttributes<HTMLDivElement> & {
 		language: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

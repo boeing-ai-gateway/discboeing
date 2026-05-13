@@ -1,6 +1,7 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children, ...restProps }: Props = $props();

@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { useTerminalContext } from "./context";
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

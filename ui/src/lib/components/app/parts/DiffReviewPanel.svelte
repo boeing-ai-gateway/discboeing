@@ -145,7 +145,7 @@
 	let listReady = $state(false);
 	let expandedPath = $state<string | null>(null);
 	let refreshing = $state(false);
-	let diffTargetDraft = $state("");
+	let diffTargetDraft = $derived(diffTarget === "HEAD" ? "" : diffTarget);
 	let loadGeneration = 0;
 	let diffStyle = $state<DiffStyle>("unified");
 	let ignoreWhitespaceByPath = $state<Record<string, boolean>>({});
@@ -198,7 +198,6 @@
 	onMount(() => {
 		approvedBySession = readApprovalState();
 		diffStyle = readDiffStyle();
-		diffTargetDraft = diffTarget === "HEAD" ? "" : diffTarget;
 		storageLoaded = true;
 
 		const frameId = requestAnimationFrame(() => {

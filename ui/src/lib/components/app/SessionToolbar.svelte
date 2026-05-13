@@ -529,7 +529,7 @@
 					</DropdownMenuTrigger>
 				</div>
 				<DropdownMenuContent align="end" sideOffset={8} class="min-w-[8rem]">
-					{#each groupedSecondaryCommands as group, index}
+					{#each groupedSecondaryCommands as group, index (index)}
 						{#if index > 0}
 							<DropdownMenuSeparator />
 						{/if}
@@ -541,7 +541,7 @@
 									{group.label}
 								</DropdownMenuLabel>
 							{/if}
-							{#each group.commands as command}
+							{#each group.commands as command, __key1 (__key1)}
 								<DropdownMenuItem
 									onclick={() => handleCommand(command)}
 									class="gap-2"
@@ -599,7 +599,7 @@
 			>
 				Preferred IDE
 			</DropdownMenuLabel>
-			{#each standardIdeOptions as option}
+			{#each standardIdeOptions as option, __key2 (__key2)}
 				<DropdownMenuItem
 					onclick={() => preferences.setPreferredIde(option.id)}
 					class="justify-between gap-3"
@@ -618,7 +618,7 @@
 					{/if}
 				</DropdownMenuSubTrigger>
 				<DropdownMenuSubContent class="min-w-[13rem]">
-					{#each jetbrainsIdeOptions as option}
+					{#each jetbrainsIdeOptions as option, __key3 (__key3)}
 						<DropdownMenuItem
 							onclick={() => preferences.setPreferredIde(option.id)}
 							class="justify-between gap-3"

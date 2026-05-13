@@ -15,7 +15,7 @@ export type SidebarStateProps = {
 	/**
 	 * A function that sets the open state of the sidebar. To support `bind:open`, we need
 	 * a source of truth for changing the open state to ensure it will be synced throughout
-	 * the sub-components and any `bind:` references.
+	 * the sub-components and unknown `bind:` references.
 	 */
 	setOpen: (open: boolean) => void;
 };

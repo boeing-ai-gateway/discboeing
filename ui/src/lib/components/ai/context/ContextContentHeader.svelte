@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { useContextUsageContext } from "./context";
 	import { Progress } from "$lib/components/ui/progress";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const ctx = useContextUsageContext();
 

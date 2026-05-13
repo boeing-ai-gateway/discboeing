@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CollapsibleContent } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import { useToolContext } from "./context";
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

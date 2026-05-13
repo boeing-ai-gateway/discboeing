@@ -37,8 +37,8 @@ export type * from "./create-entity-store.types";
 export function createEntityStore<
 	TItem,
 	TId extends EntityKey = never,
-	TArgs extends CreateEntityStoreArgs<TItem, TId, any, any> =
-		CreateEntityStoreArgs<TItem, TId, any, any>,
+	TArgs extends CreateEntityStoreArgs<TItem, TId, never, never> =
+		CreateEntityStoreArgs<TItem, TId, never, never>,
 >(args: TArgs): EntityStoreFromArgs<TItem, TId, TArgs> {
 	const enabled = args.enabled ?? (() => true);
 	const getIndexedKey = args.indexed?.getKey as
@@ -400,7 +400,7 @@ export function createEntityStore<
 		Object.assign(store, {
 			async create(createArgs: unknown) {
 				const startedAt = now();
-				const item = await args.create!.run(createArgs);
+				const item = await args.create!.run(createArgs as never);
 				switch (args.create!.after ?? "merge") {
 					case "merge": {
 						const getKey =
@@ -437,7 +437,7 @@ export function createEntityStore<
 		Object.assign(store, {
 			async update(id: TId, updateArgs: unknown) {
 				const startedAt = now();
-				const item = await args.update!.run(id, updateArgs);
+				const item = await args.update!.run(id, updateArgs as never);
 				switch (args.update!.after ?? "merge") {
 					case "merge":
 						mergeListInternal([item], { markFresh: true, freshAt: startedAt });

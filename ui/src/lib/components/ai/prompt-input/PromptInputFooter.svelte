@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { InputGroupAddon } from "$lib/components/ui/input-group";
 	import { cn } from "$lib/utils";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 </script>
 

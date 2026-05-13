@@ -9,7 +9,7 @@ import type { Component, ComponentProps, Snippet } from "svelte";
  *
  * @example
  * ```svelte
- * {@const result = content(context as any)}
+ * {@const result = content(context as unknown)}
  * {#if result instanceof RenderComponentConfig}
  *   {@const { component: Component, props } = result}
  *   <Component {...props} />
@@ -36,7 +36,7 @@ export class RenderComponentConfig<TComponent extends Component> {
  *
  * @example
  * ```svelte
- * {@const result = content(context as any)}
+ * {@const result = content(context as unknown)}
  * {#if result instanceof RenderSnippetConfig}
  *   {@const { snippet, params } = result}
  *   {@render snippet(params)}
@@ -75,7 +75,7 @@ export class RenderSnippetConfig<TProps> {
  * @see {@link https://tanstack.com/table/latest/docs/guide/column-defs}
  */
 export function renderComponent<
-	T extends Component<any>,
+	T extends Component<Record<string, unknown>>,
 	Props extends ComponentProps<T>,
 >(component: T, props: Props = {} as Props) {
 	return new RenderComponentConfig(component, props);

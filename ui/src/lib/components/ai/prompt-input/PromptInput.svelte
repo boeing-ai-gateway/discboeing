@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { nanoid } from "nanoid";
 	import { onDestroy } from "svelte";
 	import { InputGroup } from "$lib/components/ui/input-group";
@@ -27,7 +28,7 @@
 			event: SubmitEvent,
 		) => void | Promise<void>;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {
@@ -145,9 +146,15 @@
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
+		const messageFiles = files.map((file) => ({
+			type: file.type,
+			url: file.url,
+			mediaType: file.mediaType,
+			filename: file.filename,
+		}));
 		const message: PromptInputSubmitMessage = {
 			text,
-			files: files.map(({ id: _id, ...file }) => file),
+			files: messageFiles,
 		};
 
 		try {

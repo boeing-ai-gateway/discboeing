@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		completed?: boolean;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

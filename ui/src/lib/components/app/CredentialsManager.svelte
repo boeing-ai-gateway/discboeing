@@ -1533,7 +1533,7 @@
 										{/if}
 										{#if availableOAuthKinds.length > 1}
 											<div class="flex flex-wrap gap-2">
-												{#each availableOAuthKinds as oauthKind}
+												{#each availableOAuthKinds as oauthKind, __key0 (__key0)}
 													<Button
 														variant={selectedOAuthKind === oauthKind
 															? "default"
@@ -2012,7 +2012,7 @@
 						>
 							<div class="mb-2 text-sm font-medium">Summary</div>
 							<ul class="w-max min-w-full space-y-1 text-sm">
-								{#each pendingBulkEnvVarPaste.entries as entry}
+								{#each pendingBulkEnvVarPaste.entries as entry, __key1 (__key1)}
 									<li class="font-mono">{entry.key}={entry.value}</li>
 								{/each}
 							</ul>

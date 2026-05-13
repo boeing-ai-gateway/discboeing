@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { useSchemaDisplayContext } from "./context";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const schemaDisplay = useSchemaDisplayContext();
 </script>

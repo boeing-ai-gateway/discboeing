@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from "$app/paths";
 	import GlobeIcon from "@lucide/svelte/icons/globe";
 	import { MessageResponse } from "$lib/components/ai/message";
 	import {
@@ -102,9 +103,9 @@
 
 			{#if validOutput?.results?.length}
 				<div class="rounded-md border bg-muted/20 p-2">
-					{#each validOutput.results as result}
+					{#each validOutput.results as result, __key0 (__key0)}
 						<a
-							href={result.url}
+							href={resolve(result.url as Parameters<typeof resolve>[0])}
 							target="_blank"
 							rel="noreferrer"
 							class="block rounded-sm border-b px-2 py-2 last:border-b-0 hover:bg-muted/40"

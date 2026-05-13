@@ -245,7 +245,7 @@ export type EmptyCapability = Record<never, never>;
 export type EntityStoreFromArgs<
 	TItem,
 	TId extends EntityKey,
-	TArgs extends CreateEntityStoreArgs<TItem, TId, any, any>,
+	TArgs extends CreateEntityStoreArgs<TItem, TId, never, never>,
 > = EntityStoreBase<TItem> &
 	(TArgs extends { indexed: EntityIndexedDefinition<TItem, TId> }
 		? EntityStoreIndexedCapability<TItem, TId>
@@ -281,6 +281,6 @@ export type EntityStoreFromArgs<
 export declare function createEntityStore<
 	TItem,
 	TId extends EntityKey = never,
-	TArgs extends CreateEntityStoreArgs<TItem, TId, any, any> =
-		CreateEntityStoreArgs<TItem, TId, any, any>,
+	TArgs extends CreateEntityStoreArgs<TItem, TId, never, never> =
+		CreateEntityStoreArgs<TItem, TId, never, never>,
 >(args: TArgs): EntityStoreFromArgs<TItem, TId, TArgs>;

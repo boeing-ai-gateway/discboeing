@@ -65,7 +65,7 @@
 		{#if useBulletSummary}
 			<div class="space-y-2">
 				<ul class="space-y-1 text-sm text-muted-foreground">
-					{#each defaultOptions as scopeOption}
+					{#each defaultOptions as scopeOption, __key0 (__key0)}
 						<li class="flex gap-2">
 							<span
 								class="mt-[0.45rem] size-1 rounded-full bg-muted-foreground/60"
@@ -97,7 +97,7 @@
 			<div
 				class="max-h-[min(24rem,50vh)] space-y-2 overflow-y-auto rounded-md border border-border bg-muted/40 p-3"
 			>
-				{#each simpleOptions as scopeOption}
+				{#each simpleOptions as scopeOption, __key1 (__key1)}
 					<label class="flex items-start gap-2 text-sm">
 						<input
 							type="checkbox"
@@ -127,7 +127,7 @@
 			class:text-sm={!useBulletSummary}
 			class="max-h-[18rem] space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3"
 		>
-			{#each advancedGroups as scopeGroup}
+			{#each advancedGroups as scopeGroup, __key2 (__key2)}
 				<div class="space-y-2">
 					<div
 						class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
@@ -135,7 +135,7 @@
 						{scopeGroup.group}
 					</div>
 					<div class="space-y-2">
-						{#each scopeGroup.scopes as scopeOption}
+						{#each scopeGroup.scopes as scopeOption, __key3 (__key3)}
 							<label class="flex items-start gap-2 text-sm">
 								<input
 									type="checkbox"

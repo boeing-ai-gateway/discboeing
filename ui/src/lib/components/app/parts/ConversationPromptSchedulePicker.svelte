@@ -49,11 +49,7 @@
 		return toDateTimeLocalValue(new Date(Date.now() + 60 * 60 * 1000));
 	}
 
-	let customLaterValue = $state(getDefaultCustomLaterValue());
-
-	$effect(() => {
-		customLaterValue = getDefaultCustomLaterValue();
-	});
+	let customLaterValue = $derived(getDefaultCustomLaterValue());
 
 	async function saveCustomLater() {
 		const value = customLaterValue.trim();

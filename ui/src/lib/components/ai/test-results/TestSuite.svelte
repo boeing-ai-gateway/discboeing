@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Collapsible } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import { setTestSuiteContext, type TestStatus } from "./context";
@@ -8,7 +9,7 @@
 		status: TestStatus;
 		open?: boolean;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

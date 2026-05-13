@@ -29,10 +29,7 @@
 
 	const hasChildren = $derived.by(() => !!(properties?.length || items));
 	const paddingLeft = $derived.by(() => 40 + depth * 16);
-	let open = $state(false);
-	$effect(() => {
-		open = depth < 2;
-	});
+	let open = $derived(depth < 2);
 </script>
 
 {#if hasChildren}

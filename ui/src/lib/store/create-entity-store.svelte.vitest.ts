@@ -248,7 +248,7 @@ describe("createEntityStore concurrency", () => {
 		}
 	});
 
-	it("allows invalidate(id) before any item state exists without creating a rune-backed item resource", async () => {
+	it("allows invalidate(id) before unknown item state exists without creating a rune-backed item resource", async () => {
 		const { store, cleanup } = createStore(() =>
 			createEntityStore<Item, string>({
 				owner: "EntityStoreRaceTest",

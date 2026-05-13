@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import {
 		setSchemaDisplayContext,
@@ -15,7 +16,7 @@
 		requestBody?: SchemaProperty[];
 		responseBody?: SchemaProperty[];
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

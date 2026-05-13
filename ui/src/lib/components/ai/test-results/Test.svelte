@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setTestContext, type TestStatus } from "./context";
 
@@ -7,7 +8,7 @@
 		status: TestStatus;
 		duration?: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

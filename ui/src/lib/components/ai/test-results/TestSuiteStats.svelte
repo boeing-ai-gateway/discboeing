@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
@@ -6,7 +7,7 @@
 		failed?: number;
 		skipped?: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

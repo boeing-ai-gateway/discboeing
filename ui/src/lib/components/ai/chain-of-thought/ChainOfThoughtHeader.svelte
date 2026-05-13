@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import BrainIcon from "@lucide/svelte/icons/brain";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import {
@@ -10,7 +11,7 @@
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

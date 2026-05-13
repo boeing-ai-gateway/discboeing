@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		caption?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { caption, class: className, children, ...restProps }: Props = $props();

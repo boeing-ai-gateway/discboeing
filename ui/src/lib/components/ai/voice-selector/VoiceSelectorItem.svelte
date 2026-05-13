@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CommandItem } from "$lib/components/ui/command";
 	import { cn } from "$lib/utils";
 	import { useVoiceSelectorContext } from "./context";
@@ -7,7 +8,7 @@
 		value: string;
 		onselect?: (value: string) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

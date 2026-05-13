@@ -1,7 +1,8 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { useConfirmationContext } from "./context";
 
-	type Props = { children?: () => any };
+	type Props = { children?: Snippet };
 	let { children }: Props = $props();
 	const confirmation = useConfirmationContext();
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CollapsibleContent } from "$lib/components/ui/collapsible";
 	import { SvelteStreamdown } from "$lib/components/ai/streamdown";
 	import { cn } from "$lib/utils";
@@ -7,7 +8,7 @@
 	type Props = {
 		text?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	const MAX_PREVIEW_LENGTH = 80;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Collapsible } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 
@@ -6,7 +7,7 @@
 		open?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

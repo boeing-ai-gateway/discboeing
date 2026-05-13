@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		class?: string;
 		position?: "top" | "right" | "bottom" | "left";
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

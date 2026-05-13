@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { HoverCard } from "$lib/components/ui/hover-card";
 	import type { LanguageModelUsage } from "$lib/components/ai/types";
 	import { setContextUsageContext } from "./context";
@@ -8,7 +9,7 @@
 		maxTokens: number;
 		usage?: LanguageModelUsage;
 		modelId?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { usedTokens, maxTokens, usage, modelId, children, ...restProps }: Props =

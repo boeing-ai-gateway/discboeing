@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import { Button } from "$lib/components/ui/button";
 	import {
@@ -18,7 +19,7 @@
 	type Props = {
 		logs?: WebPreviewLog[];
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { logs = [], class: className, children, ...restProps }: Props = $props();

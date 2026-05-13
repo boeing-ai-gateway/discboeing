@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import {
 		ScrollArea,
 		ScrollAreaScrollbar,
@@ -7,7 +8,7 @@
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children }: Props = $props();

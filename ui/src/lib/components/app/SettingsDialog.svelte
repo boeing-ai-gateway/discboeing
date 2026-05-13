@@ -660,8 +660,8 @@
 												<p class="text-sm font-medium">Project cache</p>
 												<p class="text-sm text-muted-foreground">
 													Delete the Docker cache volume for this project and
-													any containers attached to it. No other named volumes
-													are removed.
+													unknown containers attached to it. No other named
+													volumes are removed.
 												</p>
 												{#if clearCacheError}
 													<p class="text-sm text-destructive">
@@ -737,9 +737,9 @@
 			<AlertDialogHeader>
 				<AlertDialogTitle>Clear project cache?</AlertDialogTitle>
 				<AlertDialogDescription>
-					This deletes the Docker cache volume for this project and removes any
-					containers currently attached to it. No other named volumes will be
-					deleted.
+					This deletes the Docker cache volume for this project and removes
+					unknown containers currently attached to it. No other named volumes
+					will be deleted.
 				</AlertDialogDescription>
 			</AlertDialogHeader>
 			<AlertDialogFooter>

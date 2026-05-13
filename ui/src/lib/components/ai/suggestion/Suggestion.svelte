@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { ButtonProps } from "$lib/components/ui/button";
 	import { Button } from "$lib/components/ui/button";
 	import { cn } from "$lib/utils";
@@ -6,7 +7,7 @@
 	type Props = Omit<ButtonProps, "onclick"> & {
 		suggestion: string;
 		onclick?: (suggestion: string) => void;
-		children?: () => any;
+		children?: Snippet;
 		class?: string;
 	};
 

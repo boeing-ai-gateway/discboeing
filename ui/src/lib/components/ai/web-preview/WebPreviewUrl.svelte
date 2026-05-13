@@ -18,11 +18,7 @@
 	}: Props = $props();
 
 	const webPreview = useWebPreviewContext();
-	let inputValue = $state(webPreview.url);
-
-	$effect(() => {
-		inputValue = webPreview.url;
-	});
+	let inputValue = $derived(webPreview.url);
 
 	function handleInput(event: Event) {
 		const target = event.currentTarget as HTMLInputElement;

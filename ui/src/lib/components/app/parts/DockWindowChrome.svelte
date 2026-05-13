@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type Props = {
@@ -13,9 +14,9 @@
 		headerClass?: string;
 		contentClass?: string;
 		maximizeRingOffsetClass?: string;
-		title?: () => any;
-		actions?: () => any;
-		children?: () => any;
+		title?: Snippet;
+		actions?: Snippet;
+		children?: Snippet;
 	};
 
 	let {

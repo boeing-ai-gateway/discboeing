@@ -25,7 +25,8 @@ export function getSelectedFileFromView(activeView: SessionActiveView): string {
 }
 
 export function getSelectedServiceIdFromView(
-	_activeView: SessionActiveView,
+	activeView: SessionActiveView,
 ): string | null {
+	void activeView;
 	return null;
 }

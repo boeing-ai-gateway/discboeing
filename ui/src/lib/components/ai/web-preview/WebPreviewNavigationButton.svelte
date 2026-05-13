@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Button } from "$lib/components/ui/button";
 
 	type Props = {
@@ -6,7 +7,7 @@
 		disabled?: boolean;
 		onclick?: (event: MouseEvent) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

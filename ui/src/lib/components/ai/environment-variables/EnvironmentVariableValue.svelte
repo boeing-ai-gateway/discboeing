@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import {
 		useEnvironmentVariableContext,
 		useEnvironmentVariablesContext,
 	} from "./context";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const environmentVariable = useEnvironmentVariableContext();
 	const environment = useEnvironmentVariablesContext();

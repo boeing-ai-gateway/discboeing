@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import { Badge } from "$lib/components/ui/badge";
 	import {
@@ -10,7 +11,7 @@
 	import { useSchemaDisplayContext } from "./context";
 	import SchemaDisplayParameter from "./SchemaDisplayParameter.svelte";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const schemaDisplay = useSchemaDisplayContext();
 	let open = $state(true);

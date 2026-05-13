@@ -107,7 +107,8 @@ async function dismissRetryToast(threadId: string): Promise<void> {
 }
 
 export function getSubmitMessages(userMessage: ChatMessage): ChatMessage[] {
-	const { provisional: _provisional, ...submittedMessage } = userMessage;
+	const submittedMessage = { ...userMessage };
+	delete submittedMessage.provisional;
 	return [submittedMessage];
 }
 

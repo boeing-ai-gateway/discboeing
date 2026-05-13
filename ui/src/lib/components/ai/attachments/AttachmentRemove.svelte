@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import XIcon from "@lucide/svelte/icons/x";
 	import { Button } from "$lib/components/ui/button";
 	import { cn } from "$lib/utils";
@@ -7,7 +8,7 @@
 	type Props = {
 		label?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

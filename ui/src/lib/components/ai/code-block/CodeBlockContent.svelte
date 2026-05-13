@@ -32,7 +32,7 @@
 				"font-mono text-sm whitespace-normal",
 				showLineNumbers && "[counter-increment:line_0] [counter-reset:line]",
 			)}>
-			{#each lines as line}
+			{#each lines as line, __key0 (__key0)}
 				<span
 					class={showLineNumbers ? lineNumberClasses : "block whitespace-pre"}
 					>{line || "\n"}</span

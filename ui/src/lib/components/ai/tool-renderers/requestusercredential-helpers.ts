@@ -43,8 +43,9 @@ export function credentialDisplayName(credential: CredentialInfo): string {
 export function findCredentialMatches(
 	envVar: string,
 	credentials: CredentialInfo[],
-	_assignments: SessionCredentialAssignment[],
+	assignments: SessionCredentialAssignment[],
 ): CredentialMatch[] {
+	void assignments;
 	return credentials
 		.filter((credential) => credential.envKeys?.includes(envVar))
 		.map((credential) => ({ credential }))
@@ -68,8 +69,9 @@ export function findPreferredCredentialId(
 
 export function listAnyCredentials(
 	credentials: CredentialInfo[],
-	_assignments: SessionCredentialAssignment[],
+	assignments: SessionCredentialAssignment[],
 ): CredentialMatch[] {
+	void assignments;
 	return [...credentials]
 		.map((credential) => ({ credential }))
 		.sort((left, right) =>

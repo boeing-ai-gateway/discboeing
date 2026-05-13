@@ -154,7 +154,7 @@ export function clearComposerDraftState({
 
 export function applyStreamedThreadUpdate({
 	sessionId,
-	sessionName: _sessionName,
+	sessionName,
 	sessionDisplayName,
 	previousThreadName,
 	thread,
@@ -171,6 +171,7 @@ export function applyStreamedThreadUpdate({
 	syncSessionName: (name: string) => void;
 	reloadSession: () => void | Promise<void>;
 }): void {
+	void sessionName;
 	upsertThread(thread);
 
 	if (

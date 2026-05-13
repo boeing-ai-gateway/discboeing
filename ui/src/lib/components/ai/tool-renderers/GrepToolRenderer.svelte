@@ -110,7 +110,7 @@
 
 			{#if validOutput?.matches?.length}
 				<div class="rounded-md border bg-muted/20 p-2">
-					{#each validOutput.matches as match}
+					{#each validOutput.matches as match, __key0 (__key0)}
 						<div class="border-b px-2 py-2 text-xs last:border-b-0">
 							<div class="font-mono text-muted-foreground">
 								{shortenPath(match.file)}:{match.line}
@@ -125,7 +125,7 @@
 				</div>
 			{:else if validOutput?.files?.length}
 				<div class="rounded-md border bg-muted/20 p-2">
-					{#each validOutput.files as file}
+					{#each validOutput.files as file, __key1 (__key1)}
 						<div class="border-b px-2 py-1 font-mono text-xs last:border-b-0">
 							{shortenPath(file)}
 						</div>

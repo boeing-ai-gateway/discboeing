@@ -280,8 +280,9 @@
 
 	function runtimeDisabled(
 		assignment: SessionCredentialAssignment,
-		_key?: keyof CredentialVisibility,
+		key?: keyof CredentialVisibility,
 	) {
+		void key;
 		return assignment.credential.inactive;
 	}
 

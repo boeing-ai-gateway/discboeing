@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import CopyIcon from "@lucide/svelte/icons/copy";
 	import { Button } from "$lib/components/ui/button";
@@ -10,7 +11,7 @@
 		onError?: (error: Error) => void;
 		timeout?: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import "../app.css";
 	import "katex/dist/katex.min.css";
 
@@ -10,7 +11,7 @@
 	import { readInitialThreadSelection } from "$lib/store/recent-threads.store.svelte";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children }: Props = $props();

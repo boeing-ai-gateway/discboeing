@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { onMount } from "svelte";
 	import { fade } from "svelte/transition";
 	import { api } from "$lib/api-client";
@@ -16,7 +17,7 @@
 
 	type Props = {
 		app: AppContext;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	type StartupPhase =

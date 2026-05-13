@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
+	import { resolve } from "$app/paths";
 	import BookIcon from "@lucide/svelte/icons/book";
 	import { cn } from "$lib/utils";
 
@@ -6,7 +8,7 @@
 		href: string;
 		title?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {
@@ -20,7 +22,7 @@
 
 <a
 	class={cn("flex items-center gap-2", className)}
-	{href}
+	href={resolve(href as Parameters<typeof resolve>[0])}
 	rel="noreferrer"
 	target="_blank"
 	{...restProps}

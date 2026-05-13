@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { cn } from "$lib/utils";
 
@@ -7,7 +8,7 @@
 		url?: string;
 		description?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

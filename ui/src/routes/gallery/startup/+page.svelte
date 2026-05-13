@@ -498,7 +498,7 @@
 
 			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 				<div class="flex flex-wrap gap-2">
-					{#each scenarios as item}
+					{#each scenarios as item, __key0 (__key0)}
 						<Button
 							variant={item.id === selectedScenarioId ? "default" : "outline"}
 							size="sm"

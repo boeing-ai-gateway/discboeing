@@ -583,7 +583,8 @@ export function createSessionFilesDomain(
 		if (!(path in fileRecords)) {
 			return;
 		}
-		const { [path]: _removed, ...nextRecords } = fileRecords;
+		const nextRecords = { ...fileRecords };
+		delete nextRecords[path];
 		fileRecords = nextRecords;
 	}
 
@@ -591,7 +592,8 @@ export function createSessionFilesDomain(
 		if (!(path in buffers)) {
 			return;
 		}
-		const { [path]: _removed, ...nextBuffers } = buffers;
+		const nextBuffers = { ...buffers };
+		delete nextBuffers[path];
 		buffers = nextBuffers;
 	}
 

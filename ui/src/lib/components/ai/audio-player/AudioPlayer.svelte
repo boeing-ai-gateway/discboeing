@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { cn } from "$lib/utils";
 	import { setAudioPlayerContext } from "./context";
 
 	type Props = HTMLAttributes<HTMLDivElement> & {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, style, ...restProps }: Props = $props();

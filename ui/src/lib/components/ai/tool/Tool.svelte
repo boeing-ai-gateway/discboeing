@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Collapsible } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import { setToolContext } from "./context";
@@ -9,7 +10,7 @@
 		queued?: boolean;
 		showBorder?: boolean;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

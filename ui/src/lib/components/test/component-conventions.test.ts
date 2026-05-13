@@ -22,7 +22,7 @@ import test from "node:test";
 
 const COMPONENTS_ROOT = path.resolve(import.meta.dirname, "..");
 
-// Matches any import from the three global context modules
+// Matches unknown import from the three global context modules
 const GLOBAL_CONTEXT_IMPORT =
 	/from\s+["'][$]lib\/context\/(app|session|thread)-context(?:\.svelte)?["']/;
 

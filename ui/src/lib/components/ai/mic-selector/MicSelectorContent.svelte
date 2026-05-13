@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Command } from "$lib/components/ui/command";
 	import { PopoverContent } from "$lib/components/ui/popover";
 	import { cn } from "$lib/utils";
@@ -6,7 +7,7 @@
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

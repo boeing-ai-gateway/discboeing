@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Popover } from "$lib/components/ui/popover";
 	import { onMount } from "svelte";
 	import {
@@ -12,7 +13,7 @@
 		open?: boolean;
 		onValueChange?: (value: string | undefined) => void;
 		onOpenChange?: (open: boolean) => void;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

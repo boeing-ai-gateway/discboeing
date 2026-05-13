@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Command } from "$lib/components/ui/command";
 	import { DialogContent, DialogTitle } from "$lib/components/ui/dialog";
 	import { cn } from "$lib/utils";
@@ -6,7 +7,7 @@
 	type Props = {
 		title?: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

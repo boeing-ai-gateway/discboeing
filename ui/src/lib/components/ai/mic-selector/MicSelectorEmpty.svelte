@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CommandEmpty } from "$lib/components/ui/command";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children, ...restProps }: Props = $props();

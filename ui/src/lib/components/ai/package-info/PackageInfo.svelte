@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setPackageInfoContext, type ChangeType } from "./context";
 
@@ -8,7 +9,7 @@
 		newVersion?: string;
 		changeType?: ChangeType;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

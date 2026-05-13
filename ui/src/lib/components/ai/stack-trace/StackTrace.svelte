@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Collapsible } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import { parseStackTrace } from "./parse";
@@ -15,7 +16,7 @@
 			column?: number,
 		) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

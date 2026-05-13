@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type {
 		AttachmentData,
 		AttachmentMediaCategory,
@@ -12,7 +13,7 @@
 		data: AttachmentData;
 		onRemove?: () => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

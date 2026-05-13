@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 
 	type Props = {
@@ -11,7 +12,7 @@
 			| "link";
 		size?: "xs" | "sm" | "icon-xs" | "icon-sm";
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

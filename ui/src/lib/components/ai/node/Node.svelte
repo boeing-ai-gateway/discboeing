@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Card } from "$lib/components/ui/card";
 	import { cn } from "$lib/utils";
 
@@ -8,7 +9,7 @@
 			source: boolean;
 		};
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { handles, class: className, children, ...restProps }: Props = $props();

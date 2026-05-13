@@ -1051,7 +1051,7 @@ test("tool approval requests finalize the active assistant message", async () =>
 	);
 });
 
-test("finish finalizes any still-streaming text and reasoning parts", async () => {
+test("finish finalizes unknown still-streaming text and reasoning parts", async () => {
 	const harness = createHarness();
 
 	await harness.state.handleStreamEvent({

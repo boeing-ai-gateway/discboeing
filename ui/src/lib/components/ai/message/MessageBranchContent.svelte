@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { useMessageBranchContext } from "./context";
 
 	type Props = {
 		branch: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { branch, class: className, children, ...restProps }: Props = $props();

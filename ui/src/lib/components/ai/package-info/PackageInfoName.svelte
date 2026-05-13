@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import PackageIcon from "@lucide/svelte/icons/package";
 	import { cn } from "$lib/utils";
 	import { usePackageInfoContext } from "./context";
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

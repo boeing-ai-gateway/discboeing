@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import EnvironmentVariableName from "./EnvironmentVariableName.svelte";
 	import EnvironmentVariableValue from "./EnvironmentVariableValue.svelte";
 	import { cn } from "$lib/utils";
@@ -8,7 +9,7 @@
 		name: string;
 		value: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

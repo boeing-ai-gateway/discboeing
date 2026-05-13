@@ -588,7 +588,8 @@
 		try {
 			return await loadPromise;
 		} finally {
-			const { [artifactURI]: _, ...rest } = browserScreenshotLoadPromises;
+			const rest = { ...browserScreenshotLoadPromises };
+			delete rest[artifactURI];
 			browserScreenshotLoadPromises = rest;
 		}
 	}
@@ -626,7 +627,8 @@
 					[artifactURI]: nextURL,
 				};
 				if (browserScreenshotLoadErrors[artifactURI]) {
-					const { [artifactURI]: _, ...rest } = browserScreenshotLoadErrors;
+					const rest = { ...browserScreenshotLoadErrors };
+					delete rest[artifactURI];
 					browserScreenshotLoadErrors = rest;
 				}
 				return nextURL;
@@ -833,7 +835,7 @@
 		);
 	}
 
-	function scrollToBottom(behavior: ScrollBehavior = "auto") {
+	function scrollToBottom(behavior: globalThis.ScrollBehavior = "auto") {
 		const element = viewport;
 		if (!element) {
 			return;
@@ -1247,7 +1249,7 @@
 										Files
 									</div>
 									<div class="space-y-1 font-mono text-foreground text-xs">
-										{#each metadata.files as file}
+										{#each metadata.files as file, __key0 (__key0)}
 											<div class="break-all">{file}</div>
 										{/each}
 										{#if metadata.extraFileCount}

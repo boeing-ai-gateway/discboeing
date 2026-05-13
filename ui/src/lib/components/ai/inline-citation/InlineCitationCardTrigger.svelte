@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { ComponentProps } from "svelte";
 	import { Badge } from "$lib/components/ui/badge";
 	import { HoverCardTrigger } from "$lib/components/ui/hover-card";
@@ -7,7 +8,7 @@
 	type Props = ComponentProps<typeof Badge> & {
 		sources: string[];
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { sources, class: className, children, ...restProps }: Props = $props();

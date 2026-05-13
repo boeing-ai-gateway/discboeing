@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import CopyIcon from "@lucide/svelte/icons/copy";
 	import type { ButtonProps } from "$lib/components/ui/button";
@@ -12,7 +13,7 @@
 		timeout?: number;
 		copyFormat?: "name" | "value" | "export";
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

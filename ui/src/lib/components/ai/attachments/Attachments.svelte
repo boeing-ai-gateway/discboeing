@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { AttachmentVariant } from "$lib/components/ai/types";
 	import { cn } from "$lib/utils";
 	import { setAttachmentsContext } from "./context";
@@ -6,7 +7,7 @@
 	type Props = {
 		variant?: AttachmentVariant;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

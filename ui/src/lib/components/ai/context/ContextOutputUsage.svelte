@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { estimateCostUSD, useContextUsageContext } from "./context";
 	import TokensWithCost from "./TokensWithCost.svelte";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const ctx = useContextUsageContext();
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import FolderIcon from "@lucide/svelte/icons/folder";
 	import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
@@ -16,7 +17,7 @@
 		path: string;
 		name: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

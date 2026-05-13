@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { Accordion } from "$lib/components/ui/accordion";
 	import { cn } from "$lib/utils";
@@ -8,7 +9,7 @@
 		defaultValue?: string[];
 		onValueChange?: (value: string[]) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

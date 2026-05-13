@@ -37,7 +37,7 @@
 	let selectedComponentName = uiComponentCatalog[0]?.name ?? "button";
 	const formPreviewNotes = `Workspace goals:\n- mobile ready\n- shell first\n- preserve backend contracts`;
 
-	$: runtimeLabel =
+	const runtimeLabel =
 		getDesktopRuntimeKind() === "tauri"
 			? "Tauri"
 			: getDesktopRuntimeKind() === "electron"
@@ -59,7 +59,7 @@
 			!normalizedSearch || haystack.includes(normalizedSearch);
 		return matchesCategory && matchesSearch;
 	});
-	$: categorySummary = uiComponentFilters
+	const categorySummary = uiComponentFilters
 		.filter((filter): filter is UiComponentCategory => filter !== "all")
 		.map((category) => ({
 			category,
@@ -172,7 +172,7 @@
 			</div>
 
 			<div class="flex flex-wrap gap-2">
-				{#each uiComponentFilters as filter}
+				{#each uiComponentFilters as filter, __key0 (__key0)}
 					<Button
 						variant={activeCategory === filter ? "default" : "outline"}
 						size="sm"
@@ -185,7 +185,7 @@
 		</header>
 
 		<section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			{#each categorySummary as summary}
+			{#each categorySummary as summary, __key1 (__key1)}
 				<Card>
 					<CardHeader class="gap-1 pb-3">
 						<CardDescription>{summary.label}</CardDescription>
@@ -382,7 +382,7 @@
 							</div>
 						{:else}
 							<div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-								{#each filteredCatalog as component}
+								{#each filteredCatalog as component, __key2 (__key2)}
 									<button
 										type="button"
 										on:click={() => selectComponent(component.name)}

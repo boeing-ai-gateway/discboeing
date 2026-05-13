@@ -1,3 +1,4 @@
+import type { HighlightOptions as StreamdownHighlightOptions } from "@streamdown/code";
 import type { Pluggable } from "unified";
 
 export type MarkdownMode = "static" | "streaming";
@@ -20,9 +21,11 @@ export type HighlightResult = {
 
 export type CodeTheme = string | object;
 
+export type CodeLanguage = StreamdownHighlightOptions["language"];
+
 export type HighlightOptions = {
 	code: string;
-	language: any;
+	language: CodeLanguage;
 	themes: [CodeTheme, CodeTheme];
 };
 
@@ -50,7 +53,7 @@ export type CodeHighlighterPlugin = {
 		callback?: (result: HighlightResult) => void,
 	): HighlightResult | null;
 	name: "shiki";
-	supportsLanguage?: (language: any) => boolean;
+	supportsLanguage?: (language: CodeLanguage) => boolean;
 	type: "code-highlighter";
 };
 

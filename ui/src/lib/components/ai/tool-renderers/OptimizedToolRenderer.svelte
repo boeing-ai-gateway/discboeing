@@ -47,12 +47,8 @@
 		(toolPart.toolName === "RequestUserCredential" &&
 			toolPart.state === "approval-requested");
 
-	let isRaw = $state(false);
+	let isRaw = $derived(forceRaw);
 	let open = $state(getInitialOpen());
-
-	$effect(() => {
-		isRaw = forceRaw;
-	});
 
 	$effect(() => {
 		if (

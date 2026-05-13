@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import CheckCircle2Icon from "@lucide/svelte/icons/check-circle-2";
 	import CircleDotIcon from "@lucide/svelte/icons/circle-dot";
 	import CircleIcon from "@lucide/svelte/icons/circle";
@@ -6,7 +7,7 @@
 	import { cn } from "$lib/utils";
 	import { useTestContext } from "./context";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const test = useTestContext();
 </script>

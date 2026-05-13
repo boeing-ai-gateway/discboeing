@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import {
 		type TranscriptionSegmentData,
@@ -10,7 +11,7 @@
 		currentTime?: number;
 		onSeek?: (time: number) => void;
 		class?: string;
-		children?: (segment: TranscriptionSegmentData, index: number) => any;
+		children?: Snippet<[segment: TranscriptionSegmentData, index: number]>;
 	};
 
 	let {

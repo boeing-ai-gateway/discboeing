@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { type WebPreviewViewport, useWebPreviewContext } from "./context";
 
 	type Props = {
 		src?: string;
 		class?: string;
-		loading?: () => any;
+		loading?: Snippet;
 	};
 
 	let { src, class: className, loading, ...restProps }: Props = $props();

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import SearchIcon from "@lucide/svelte/icons/search";
 	import { CollapsibleTrigger } from "$lib/components/ui/collapsible";
@@ -7,7 +8,7 @@
 	type Props = {
 		title: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { title, class: className, children, ...restProps }: Props = $props();

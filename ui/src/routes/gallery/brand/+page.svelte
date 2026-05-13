@@ -176,7 +176,7 @@
 			</div>
 
 			<div class="grid gap-4 lg:grid-cols-3">
-				{#each lockups as lockup}
+				{#each lockups as lockup, __key0 (__key0)}
 					<Card>
 						<CardHeader class="pb-3">
 							<CardTitle class="text-base">{lockup.label}</CardTitle>
@@ -207,7 +207,7 @@
 			</div>
 
 			<div class="grid gap-4 lg:grid-cols-3">
-				{#each marks as mark}
+				{#each marks as mark, __key1 (__key1)}
 					<Card>
 						<CardHeader class="pb-3">
 							<CardTitle class="text-base">{mark.label}</CardTitle>

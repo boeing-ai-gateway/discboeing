@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import { cn } from "$lib/utils";
 
@@ -6,7 +7,7 @@
 		count?: number;
 		label: string;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

@@ -180,7 +180,7 @@
 
 		{#if detailsOpen && steps.length > 0}
 			<div class="w-full space-y-2 text-left">
-				{#each steps as step}
+				{#each steps as step, __key0 (__key0)}
 					<div class="rounded-xl border border-border px-3 py-2.5">
 						<div class="flex items-start gap-2.5">
 							<div

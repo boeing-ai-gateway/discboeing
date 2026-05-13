@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { MessageRole } from "$lib/components/ai/types";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		from: MessageRole;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 		"data-conversation-message-id"?: string;
 	};
 

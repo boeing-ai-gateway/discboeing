@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import PauseIcon from "@lucide/svelte/icons/pause";
 	import PlayIcon from "@lucide/svelte/icons/play";
 	import type { ComponentProps } from "svelte";
@@ -8,7 +9,7 @@
 
 	type Props = ComponentProps<typeof Button> & {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, onclick, children, ...restProps }: Props = $props();

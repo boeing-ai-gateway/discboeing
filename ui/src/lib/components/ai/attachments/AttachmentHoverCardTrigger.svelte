@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { HoverCardTrigger } from "$lib/components/ui/hover-card";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children, ...restProps }: Props = $props();

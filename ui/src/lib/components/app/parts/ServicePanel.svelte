@@ -638,7 +638,7 @@
 				}}
 				onkeydown={handlePathKeydown}
 			/>
-			{#each VIEWPORT_OPTIONS as option}
+			{#each VIEWPORT_OPTIONS as option, __key0 (__key0)}
 				<Button
 					variant={viewport === option.value ? "secondary" : "ghost"}
 					size="icon-xs"

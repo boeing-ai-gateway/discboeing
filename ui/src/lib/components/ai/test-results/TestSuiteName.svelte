@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import CheckCircle2Icon from "@lucide/svelte/icons/check-circle-2";
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import CircleDotIcon from "@lucide/svelte/icons/circle-dot";
@@ -8,7 +9,7 @@
 	import { cn } from "$lib/utils";
 	import { useTestSuiteContext } from "./context";
 
-	type Props = { class?: string; children?: () => any };
+	type Props = { class?: string; children?: Snippet };
 	let { class: className, children, ...restProps }: Props = $props();
 	const testSuite = useTestSuiteContext();
 </script>

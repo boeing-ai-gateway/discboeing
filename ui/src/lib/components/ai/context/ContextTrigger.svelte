@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { HoverCardTrigger } from "$lib/components/ui/hover-card";
 	import { Button } from "$lib/components/ui/button";
 	import { useContextUsageContext } from "./context";
 
-	type Props = { children?: () => any };
+	type Props = { children?: Snippet };
 	let { children, ...restProps }: Props = $props();
 	const ctx = useContextUsageContext();
 

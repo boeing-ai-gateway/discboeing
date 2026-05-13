@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { type WebPreviewViewport, setWebPreviewContext } from "./context";
 
@@ -6,7 +7,7 @@
 		defaultUrl?: string;
 		onUrlChange?: (url: string) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

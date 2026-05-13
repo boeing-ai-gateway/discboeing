@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import { Button } from "$lib/components/ui/button";
 	import { cn } from "$lib/utils";
@@ -6,7 +7,7 @@
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

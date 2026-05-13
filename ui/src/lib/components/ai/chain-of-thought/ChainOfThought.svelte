@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setChainOfThoughtContext } from "./context";
 
@@ -7,7 +8,7 @@
 		defaultOpen?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

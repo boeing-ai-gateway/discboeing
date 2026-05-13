@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { DropdownMenu } from "$lib/components/ui/dropdown-menu";
 	import { setOpenInChatContext } from "./context";
 
 	type Props = {
 		query: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { query, children, ...restProps }: Props = $props();

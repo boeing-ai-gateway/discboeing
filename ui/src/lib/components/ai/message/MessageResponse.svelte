@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { SvelteStreamdown } from "$lib/components/ai/streamdown";
 	import type { MarkdownMode } from "$lib/markdown/types";
 	import { cn } from "$lib/utils";
@@ -8,7 +9,7 @@
 		class?: string;
 		mode?: MarkdownMode;
 		isAnimating?: boolean;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

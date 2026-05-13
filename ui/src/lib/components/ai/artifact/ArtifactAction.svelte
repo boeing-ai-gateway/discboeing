@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Component } from "svelte";
+	import type { Component, Snippet } from "svelte";
 	import type { ButtonProps } from "$lib/components/ui/button";
 	import { Button } from "$lib/components/ui/button";
 	import { cn } from "$lib/utils";
@@ -8,7 +8,7 @@
 		tooltip?: string;
 		label?: string;
 		icon?: Component<{ class?: string }>;
-		children?: () => any;
+		children?: Snippet;
 		class?: string;
 	};
 

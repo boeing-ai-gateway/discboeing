@@ -540,7 +540,8 @@
 		promptSubmissionHistory = [summary, ...promptSubmissionHistory].slice(0, 3);
 	}
 
-	async function handleAudioRecorded(_audioBlob: Blob): Promise<string> {
+	async function handleAudioRecorded(audioBlob: Blob): Promise<string> {
+		void audioBlob;
 		return "Transcribed from recorded audio";
 	}
 
@@ -1063,7 +1064,7 @@
 						class="w-full"
 					/>
 					<Transcription
-						segments={demoTranscriptionSegments as any}
+						segments={demoTranscriptionSegments}
 						bind:currentTime={demoTranscriptionTime}
 						onSeek={(time) => (demoTranscriptionTime = time)}
 					>

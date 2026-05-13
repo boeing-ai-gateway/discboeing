@@ -254,7 +254,7 @@
 
 <div class="relative inline-flex items-center justify-center">
 	{#if isListening}
-		{#each [0, 1, 2] as ring}
+		{#each [0, 1, 2] as ring, __key0 (__key0)}
 			<div
 				class="absolute inset-0 animate-ping rounded-full border-2 border-red-400/30"
 				style={`animation-delay: ${ring * 0.3}s; animation-duration: 2s;`}

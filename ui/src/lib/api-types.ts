@@ -574,7 +574,7 @@ export interface Icon {
 	mimeType?: string;
 	/**
 	 * Optional array of strings that specify sizes at which the icon can be used.
-	 * Each string should be in WxH format (e.g., "48x48", "96x96") or "any" for scalable formats like SVG.
+	 * Each string should be in WxH format (e.g., "48x48", "96x96") or "unknown" for scalable formats like SVG.
 	 */
 	sizes?: string[];
 	/**
@@ -599,7 +599,7 @@ export type CredentialAuthType = "api_key" | "id" | "oauth";
 export interface CredentialEnvVar {
 	key: string;
 	value: string;
-	// originalKey is the key as it was stored before any in-form rename.
+	// originalKey is the key as it was stored before unknown in-form rename.
 	// When set and key !== originalKey, the backend uses originalKey to look up the
 	// existing secret value so a rename does not silently drop it.
 	originalKey?: string;

@@ -92,7 +92,7 @@ type Intersection<T extends readonly unknown[]> = (T extends [
  *
  * Proxy-based to avoid known WebKit recursion issue.
  */
-export function mergeObjects<Sources extends readonly MaybeThunk<any>[]>(
+export function mergeObjects<Sources extends readonly MaybeThunk<object>[]>(
 	...sources: Sources
 ): Intersection<{ [K in keyof Sources]: Sources[K] }> {
 	const resolve = <T extends object>(src: MaybeThunk<T>): T | undefined =>
@@ -137,7 +137,7 @@ export function mergeObjects<Sources extends readonly MaybeThunk<any>[]>(
 			return {
 				configurable: true,
 				enumerable: true,
-				value: (src as any)[key],
+				value: (src as Record<PropertyKey, unknown>)[key],
 				writable: true,
 			};
 		},

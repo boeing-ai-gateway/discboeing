@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type FileStatus = "added" | "modified" | "deleted" | "renamed";
@@ -20,7 +21,7 @@
 	type Props = {
 		status: FileStatus;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { status, class: className, children, ...restProps }: Props = $props();

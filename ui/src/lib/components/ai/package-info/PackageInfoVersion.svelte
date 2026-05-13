@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
 	import { cn } from "$lib/utils";
 	import { usePackageInfoContext } from "./context";
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

@@ -756,7 +756,7 @@
 						: "The agent can use these credentials for the approved purposes below."}
 				</p>
 			</div>
-			{#each grantedCredentialDetails as granted}
+			{#each grantedCredentialDetails as granted, __key0 (__key0)}
 				<div class="space-y-3 rounded-md border border-amber-500/30 p-3">
 					<div class="space-y-1">
 						<p class="font-medium text-sm">{granted.credentialName}</p>
@@ -788,7 +788,7 @@
 								Approved uses
 							</p>
 							<ul class="space-y-2">
-								{#each granted.uses as use}
+								{#each granted.uses as use, __key1 (__key1)}
 									<li class="space-y-1 rounded-md bg-muted/30 p-2">
 										<p class="text-sm">{use.description}</p>
 										<p class="text-muted-foreground text-xs">
@@ -903,7 +903,7 @@
 											Allowed uses
 										</p>
 										<ul class="list-disc space-y-1 pl-5 text-sm">
-											{#each formatApprovedUses(request) as futureUse}
+											{#each formatApprovedUses(request) as futureUse, __key2 (__key2)}
 												<li>{futureUse}</li>
 											{/each}
 										</ul>
@@ -1222,7 +1222,7 @@
 		<div class="space-y-4 p-4 pt-3">
 			{#if requestedCredentials.length > 0}
 				<div class="space-y-3">
-					{#each requestedCredentials as request}
+					{#each requestedCredentials as request, __key3 (__key3)}
 						<div class="space-y-1">
 							<p class="font-medium text-sm">{request.name}</p>
 							<p class="text-muted-foreground text-sm">
@@ -1235,7 +1235,7 @@
 								<ul
 									class="list-disc space-y-1 pl-5 text-muted-foreground text-sm"
 								>
-									{#each formatApprovedUses(request) as futureUse}
+									{#each formatApprovedUses(request) as futureUse, __key4 (__key4)}
 										<li>{futureUse}</li>
 									{/each}
 								</ul>
@@ -1266,7 +1266,7 @@
 					>
 						Granted ids
 					</h4>
-					{#each grantedCredentials as granted}
+					{#each grantedCredentials as granted, __key5 (__key5)}
 						<div class="space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
 							<p class="font-medium">{granted.name}</p>
 							<p class="font-mono text-xs text-muted-foreground">

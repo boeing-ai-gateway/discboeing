@@ -366,7 +366,7 @@
 								class="overflow-x-auto p-3 font-mono text-xs text-foreground"
 							>
 								<div class="grid min-w-max grid-cols-[auto_1fr] gap-x-3">
-									{#each parsedStdout.lines as line}
+									{#each parsedStdout.lines as line, __key0 (__key0)}
 										<div
 											class="select-none text-muted-foreground/60 text-right"
 										>

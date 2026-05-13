@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		count: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { count, class: className, children, ...restProps }: Props = $props();

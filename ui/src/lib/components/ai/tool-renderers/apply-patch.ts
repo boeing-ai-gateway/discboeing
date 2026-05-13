@@ -534,7 +534,7 @@ function parseChunk(
 	if (chunkLines.length === 0) {
 		return {
 			nextCursor,
-			error: "Update hunk does not contain any lines.",
+			error: "Update hunk does not contain unknown lines.",
 		};
 	}
 

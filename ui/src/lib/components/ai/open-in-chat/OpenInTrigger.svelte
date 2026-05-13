@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import { Button } from "$lib/components/ui/button";
 	import { DropdownMenuTrigger } from "$lib/components/ui/dropdown-menu";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 	let { children, ...restProps }: Props = $props();
 </script>

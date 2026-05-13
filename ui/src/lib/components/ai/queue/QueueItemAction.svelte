@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { cn } from "$lib/utils";
 
 	type Props = {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 		[key: string]: unknown;
 	};
 

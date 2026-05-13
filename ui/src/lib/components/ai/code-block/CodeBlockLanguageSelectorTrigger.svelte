@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import type { ComponentProps } from "svelte";
 	import { SelectTrigger } from "$lib/components/ui/select";
 	import { cn } from "$lib/utils";
 
 	type Props = ComponentProps<typeof SelectTrigger> & {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { class: className, children, ...restProps }: Props = $props();

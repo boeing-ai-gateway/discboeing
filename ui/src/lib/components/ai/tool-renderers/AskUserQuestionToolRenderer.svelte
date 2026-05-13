@@ -281,7 +281,7 @@
 			{:else if approvalStatus === "answered"}
 				{#if summaryQuestions.length > 0 && resolvedAnswers}
 					<div class="space-y-2">
-						{#each summaryQuestions as question}
+						{#each summaryQuestions as question, __key0 (__key0)}
 							<div class="space-y-1">
 								<p class="font-medium text-sm">{question.question}</p>
 								<p class="text-muted-foreground text-sm">
@@ -346,7 +346,7 @@
 			{#if questions.length > 0}
 				<div class="space-y-2">
 					{#if resolvedAnswers}
-						{#each questions as question}
+						{#each questions as question, __key1 (__key1)}
 							<div class="space-y-1">
 								<p class="font-medium text-sm">{question.question}</p>
 								<p class="text-muted-foreground text-sm">
@@ -356,7 +356,7 @@
 						{/each}
 					{:else}
 						<ul class="list-disc space-y-1 pl-5 text-sm">
-							{#each questions as question}
+							{#each questions as question, __key2 (__key2)}
 								<li>{question.question}</li>
 							{/each}
 						</ul>

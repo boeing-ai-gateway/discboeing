@@ -155,7 +155,7 @@
 				</div>
 			{:else}
 				<div class="space-y-3">
-					{#each parsedPatch.operations as operation}
+					{#each parsedPatch.operations as operation, __key0 (__key0)}
 						<div class="overflow-hidden rounded-md border bg-muted/20">
 							<div
 								class="flex flex-wrap items-start justify-between gap-3 border-b bg-background/70 px-3 py-3"
@@ -222,7 +222,7 @@
 										<div
 											class="overflow-hidden rounded-md border bg-background/70"
 										>
-											{#each operation.addLines as line}
+											{#each operation.addLines as line, __key1 (__key1)}
 												<div
 													class="grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b last:border-b-0 bg-emerald-500/10 font-mono text-xs"
 												>
@@ -241,7 +241,7 @@
 										</div>
 									{/if}
 								{:else}
-									{#each operation.chunks as chunk, chunkIndex}
+									{#each operation.chunks as chunk, chunkIndex (chunkIndex)}
 										<div class="space-y-2">
 											<div
 												class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
@@ -264,7 +264,7 @@
 											<div
 												class="overflow-hidden rounded-md border bg-background/70"
 											>
-												{#each chunk.lines as line}
+												{#each chunk.lines as line, __key3 (__key3)}
 													<div
 														class={cn(
 															"grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b font-mono text-xs last:border-b-0",
@@ -309,7 +309,7 @@
 						>
 					</div>
 					<div class="grid gap-2 md:grid-cols-2">
-						{#each parsedOutput.entries as entry}
+						{#each parsedOutput.entries as entry, __key4 (__key4)}
 							<div
 								class="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2 text-sm"
 							>

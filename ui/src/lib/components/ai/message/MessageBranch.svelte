@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setMessageBranchContext } from "./context";
 
@@ -7,7 +8,7 @@
 		totalBranches?: number;
 		onBranchChange?: (branchIndex: number) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Collapsible } from "$lib/components/ui/collapsible";
 	import { cn } from "$lib/utils";
 	import { setReasoningContext } from "./context";
@@ -12,7 +13,7 @@
 		onOpenChange?: (open: boolean) => void;
 		duration?: number;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import CornerDownLeftIcon from "@lucide/svelte/icons/corner-down-left";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import PlusIcon from "@lucide/svelte/icons/plus";
@@ -13,7 +14,7 @@
 		onStop?: () => void;
 		onCreateSession?: () => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { CommandList } from "$lib/components/ui/command";
 	import MicSelectorEmpty from "./MicSelectorEmpty.svelte";
 	import MicSelectorItem from "./MicSelectorItem.svelte";
@@ -6,7 +7,7 @@
 	import { useMicSelectorContext } from "./context";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children, ...restProps }: Props = $props();

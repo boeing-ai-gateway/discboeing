@@ -168,7 +168,7 @@
 									Allowed uses
 								</p>
 								<ul class="list-disc space-y-1 pl-5 text-sm">
-									{#each uses as use}
+									{#each uses as use, __key0 (__key0)}
 										<li>{use}</li>
 									{/each}
 								</ul>

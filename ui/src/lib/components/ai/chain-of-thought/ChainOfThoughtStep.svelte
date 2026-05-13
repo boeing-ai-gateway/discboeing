@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DotIcon from "@lucide/svelte/icons/dot";
-	import type { Component } from "svelte";
+	import type { Component, Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 
 	type StepStatus = "complete" | "active" | "pending";
@@ -11,7 +11,7 @@
 		description?: string;
 		status?: StepStatus;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

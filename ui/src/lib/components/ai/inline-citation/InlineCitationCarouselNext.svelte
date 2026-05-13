@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
 	import type { HTMLButtonAttributes } from "svelte/elements";
 	import { getEmblaContext } from "$lib/components/ui/carousel/context.js";
@@ -6,7 +7,7 @@
 
 	type Props = HTMLButtonAttributes & {
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	type ButtonMouseEvent = MouseEvent & {

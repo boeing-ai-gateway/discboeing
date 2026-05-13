@@ -1,8 +1,9 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { DialogTrigger } from "$lib/components/ui/dialog";
 
 	type Props = {
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let { children, ...restProps }: Props = $props();

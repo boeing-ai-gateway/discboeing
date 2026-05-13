@@ -12,21 +12,21 @@ type Item = {
 	name: string;
 };
 
-const _listOnlyArgs = {
+const listOnlyArgs = {
 	owner: "ListOnly",
 	list: {
 		load: async (): Promise<Item[]> => [],
 	},
 } satisfies CreateEntityStoreArgs<Item>;
 
-type ListOnlyStore = EntityStoreFromArgs<Item, never, typeof _listOnlyArgs>;
+type ListOnlyStore = EntityStoreFromArgs<Item, never, typeof listOnlyArgs>;
 
-type _ListOnlyHasAll = Assert<HasKey<ListOnlyStore, "all">>;
-type _ListOnlyHasMergeList = Assert<HasKey<ListOnlyStore, "mergeList">>;
-type _ListOnlyHasNoGet = Assert<Not<HasKey<ListOnlyStore, "get">>>;
-type _ListOnlyHasNoCreate = Assert<Not<HasKey<ListOnlyStore, "create">>>;
+type ListOnlyHasAll = Assert<HasKey<ListOnlyStore, "all">>;
+type ListOnlyHasMergeList = Assert<HasKey<ListOnlyStore, "mergeList">>;
+type ListOnlyHasNoGet = Assert<Not<HasKey<ListOnlyStore, "get">>>;
+type ListOnlyHasNoCreate = Assert<Not<HasKey<ListOnlyStore, "create">>>;
 
-const _indexedArgs = {
+const indexedArgs = {
 	owner: "Indexed",
 	list: {
 		load: async (): Promise<Item[]> => [],
@@ -36,14 +36,14 @@ const _indexedArgs = {
 	},
 } satisfies CreateEntityStoreArgs<Item, string>;
 
-type IndexedStore = EntityStoreFromArgs<Item, string, typeof _indexedArgs>;
+type IndexedStore = EntityStoreFromArgs<Item, string, typeof indexedArgs>;
 
-type _IndexedHasGet = Assert<HasKey<IndexedStore, "get">>;
-type _IndexedHasPeek = Assert<HasKey<IndexedStore, "peek">>;
-type _IndexedHasUpsert = Assert<HasKey<IndexedStore, "upsert">>;
-type _IndexedHasNoUpdate = Assert<Not<HasKey<IndexedStore, "update">>>;
+type IndexedHasGet = Assert<HasKey<IndexedStore, "get">>;
+type IndexedHasPeek = Assert<HasKey<IndexedStore, "peek">>;
+type IndexedHasUpsert = Assert<HasKey<IndexedStore, "upsert">>;
+type IndexedHasNoUpdate = Assert<Not<HasKey<IndexedStore, "update">>>;
 
-const _crudArgs = {
+const crudArgs = {
 	owner: "Crud",
 	list: {
 		load: async (): Promise<Item[]> => [],
@@ -64,7 +64,9 @@ const _crudArgs = {
 		}),
 	},
 	remove: {
-		run: async (_id: string): Promise<void> => {},
+		run: async (id: string): Promise<void> => {
+			void id;
+		},
 	},
 } satisfies CreateEntityStoreArgs<
 	Item,
@@ -73,10 +75,26 @@ const _crudArgs = {
 	{ name: string }
 >;
 
-type CrudStore = EntityStoreFromArgs<Item, string, typeof _crudArgs>;
+type CrudStore = EntityStoreFromArgs<Item, string, typeof crudArgs>;
 
-type _CrudHasCreate = Assert<HasKey<CrudStore, "create">>;
-type _CrudHasUpdate = Assert<HasKey<CrudStore, "update">>;
-type _CrudHasRemove = Assert<HasKey<CrudStore, "remove">>;
+type CrudHasCreate = Assert<HasKey<CrudStore, "create">>;
+type CrudHasUpdate = Assert<HasKey<CrudStore, "update">>;
+type CrudHasRemove = Assert<HasKey<CrudStore, "remove">>;
 
-export {};
+void listOnlyArgs;
+void indexedArgs;
+void crudArgs;
+
+export type StoreTypeAssertions = [
+	ListOnlyHasAll,
+	ListOnlyHasMergeList,
+	ListOnlyHasNoGet,
+	ListOnlyHasNoCreate,
+	IndexedHasGet,
+	IndexedHasPeek,
+	IndexedHasUpsert,
+	IndexedHasNoUpdate,
+	CrudHasCreate,
+	CrudHasUpdate,
+	CrudHasRemove,
+];

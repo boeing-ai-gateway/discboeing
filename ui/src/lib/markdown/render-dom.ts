@@ -8,7 +8,11 @@ import type {
 } from "hast";
 import { downloadFile } from "$lib/shell";
 import { cn } from "$lib/utils";
-import type { HighlightResult, RenderMarkdownOptions } from "./types";
+import type {
+	CodeLanguage,
+	HighlightResult,
+	RenderMarkdownOptions,
+} from "./types";
 
 const languagePattern = /language-([^\s]+)/;
 const startLinePattern = /startLine=(\d+)/;
@@ -223,13 +227,15 @@ function shouldHighlightCode(
 		return true;
 	}
 
+	const bundledLanguage = language as CodeLanguage;
+
 	if (codePlugin.supportsLanguage) {
-		return codePlugin.supportsLanguage(language);
+		return codePlugin.supportsLanguage(bundledLanguage);
 	}
 
 	const supportedLanguages = codePlugin.getSupportedLanguages?.();
 	if (supportedLanguages) {
-		return supportedLanguages.includes(language);
+		return supportedLanguages.includes(bundledLanguage);
 	}
 
 	return true;
@@ -521,10 +527,11 @@ function renderCodeBlock(
 		"github-light",
 		"github-dark",
 	];
+	const bundledLanguage = language as CodeLanguage;
 	const highlightedResult = options.plugins?.code?.highlight(
 		{
 			code,
-			language,
+			language: bundledLanguage,
 			themes,
 		},
 		(result) => {

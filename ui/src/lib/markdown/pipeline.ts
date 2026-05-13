@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import type { Root } from "hast";
-import type { Pluggable } from "unified";
 import { unified } from "unified";
 import type { MarkdownPluginConfig } from "./types";
 import { remarkCodeMeta } from "./remark-code-meta";
@@ -24,19 +23,6 @@ const sanitizeSchema = {
 	},
 };
 
-function applyPluggable(processor: any, plugin: Pluggable) {
-	if (Array.isArray(plugin)) {
-		if (plugin.length === 0) {
-			return;
-		}
-		const [pluginFunction, ...parameters] = plugin;
-		processor.use(pluginFunction as any, ...(parameters as any[]));
-		return;
-	}
-
-	processor.use(plugin as any);
-}
-
 export function parseMarkdownToHast(
 	markdown: string,
 	plugins?: MarkdownPluginConfig,
@@ -45,7 +31,7 @@ export function parseMarkdownToHast(
 
 	if (plugins?.cjk) {
 		for (const plugin of plugins.cjk.remarkPluginsBefore) {
-			applyPluggable(processor, plugin);
+			processor.use([plugin]);
 		}
 	}
 
@@ -57,12 +43,12 @@ export function parseMarkdownToHast(
 
 	if (plugins?.cjk) {
 		for (const plugin of plugins.cjk.remarkPluginsAfter) {
-			applyPluggable(processor, plugin);
+			processor.use([plugin]);
 		}
 	}
 
 	if (plugins?.math) {
-		applyPluggable(processor, plugins.math.remarkPlugin);
+		processor.use([plugins.math.remarkPlugin]);
 	}
 
 	processor
@@ -78,7 +64,7 @@ export function parseMarkdownToHast(
 		});
 
 	if (plugins?.math) {
-		applyPluggable(processor, plugins.math.rehypePlugin);
+		processor.use([plugins.math.rehypePlugin]);
 	}
 
 	return processor.runSync(processor.parse(markdown)) as Root;

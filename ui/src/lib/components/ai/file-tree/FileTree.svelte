@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setFileTreeContext } from "./context";
 
@@ -9,7 +10,7 @@
 		onSelect?: (path: string) => void;
 		onExpandedChange?: (expandedPaths: string[]) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

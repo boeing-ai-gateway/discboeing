@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { cn } from "$lib/utils";
 	import { setEnvironmentVariablesContext } from "./context";
 
@@ -7,7 +8,7 @@
 		defaultShowValues?: boolean;
 		onShowValuesChange?: (show: boolean) => void;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {

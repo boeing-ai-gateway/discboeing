@@ -96,7 +96,7 @@
 						{validOutput.files.length} files matched
 					</p>
 					<div class="rounded-md border bg-muted/20 p-2">
-						{#each validOutput.files as file}
+						{#each validOutput.files as file, __key0 (__key0)}
 							<div class="border-b px-2 py-1 font-mono text-xs last:border-b-0">
 								{shortenPath(file)}
 							</div>

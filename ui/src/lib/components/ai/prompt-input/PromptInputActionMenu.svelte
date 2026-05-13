@@ -1,7 +1,8 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { DropdownMenu } from "$lib/components/ui/dropdown-menu";
 
-	type Props = { children?: () => any };
+	type Props = { children?: Snippet };
 	let { children, ...restProps }: Props = $props();
 </script>
 

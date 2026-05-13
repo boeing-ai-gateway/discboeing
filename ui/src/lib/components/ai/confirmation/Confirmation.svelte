@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { Alert } from "$lib/components/ui/alert";
 	import { cn } from "$lib/utils";
 	import type { ToolApproval, ToolState } from "$lib/components/ai/types";
@@ -8,7 +9,7 @@
 		approval?: ToolApproval;
 		state: ToolState;
 		class?: string;
-		children?: () => any;
+		children?: Snippet;
 	};
 
 	let {
