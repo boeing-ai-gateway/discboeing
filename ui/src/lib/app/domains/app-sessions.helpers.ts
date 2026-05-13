@@ -1,8 +1,22 @@
 import type { Session } from "$lib/api-types";
-import type { SessionSummary } from "$lib/shell-types";
+
+function compareIsoDatesDesc(left: string, right: string) {
+	const leftTime = new Date(left).getTime();
+	const rightTime = new Date(right).getTime();
+	if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+		return 0;
+	}
+	return rightTime - leftTime;
+}
+
+export function sortSessionsByCreatedAt(sessions: Session[]): Session[] {
+	return [...sessions].sort((a, b) =>
+		compareIsoDatesDesc(a.createdAt, b.createdAt),
+	);
+}
 
 export function getNextSelectedSessionId(
-	sessions: SessionSummary[],
+	sessions: Pick<Session, "id">[],
 	removedSessionId: string,
 	currentSelectedSessionId: string | null,
 ): string | null {
@@ -16,7 +30,7 @@ export function getNextSelectedSessionId(
 }
 
 export function getReconciledSelectedSessionId(
-	sessions: SessionSummary[],
+	sessions: Pick<Session, "id">[],
 	currentSelectedSessionId: string | null,
 	explicitSelectedSessionId?: string | null,
 ): string | null {

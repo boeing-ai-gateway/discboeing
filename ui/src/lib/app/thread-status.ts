@@ -1,18 +1,14 @@
 import { CommitOperation, CommitStatus } from "../api-constants";
 import type {
+	CommitOperation as CommitOperationValue,
+	CommitStatus as CommitStatusValue,
+	SessionStatus,
 	SessionThreadActivityStatusValue,
 	ThreadState,
 } from "../api-types";
-import type {
-	SessionActivityStatusValue,
-	SessionCommitOperationValue,
-	SessionCommitStatusValue,
-	SessionDisplayStatusValue,
-	SessionStatusValue,
-} from "../shell-types";
 
 type SidebarThreadStatusInput = {
-	sessionStatus?: SessionStatusValue | null;
+	sessionStatus?: SessionStatus | null;
 	sessionActivityStatus?: SessionThreadActivityStatusValue | null;
 	threadActivityStatus?: SessionThreadActivityStatusValue | null;
 	localActivityStatus?: SessionThreadActivityStatusValue | null;
@@ -27,8 +23,8 @@ type SessionDisplayStatusInput = Pick<
 	SidebarThreadStatusInput,
 	"sessionStatus" | "sessionActivityStatus"
 > & {
-	commitStatus?: SessionCommitStatusValue | null;
-	commitOperation?: SessionCommitOperationValue | null;
+	commitStatus?: CommitStatusValue | null;
+	commitOperation?: CommitOperationValue | null;
 };
 
 type ThreadRunningStatusInput = {
@@ -59,7 +55,16 @@ export function isThreadSnapshotRunning<T extends ThreadRunningStatusInput>(
 type ThreadDisplayStatusInput = Omit<SidebarThreadStatusInput, "idleFallback"> &
 	SessionDisplayStatusInput;
 
-export type ThreadDisplayStatusValue = SessionDisplayStatusValue;
+export type DisplayStatusValue =
+	| SessionStatus
+	| SessionThreadActivityStatusValue
+	| "pending"
+	| "committing"
+	| "completed"
+	| "committed"
+	| "unknown";
+
+export type ThreadDisplayStatusValue = DisplayStatusValue;
 
 export function resolveSessionDisplayStatus({
 	sessionStatus,
@@ -137,8 +142,8 @@ export function resolveSidebarThreadStatus({
 	promptQueueCount,
 	idleFallback = "session",
 }: SidebarThreadStatusInput):
-	| SessionActivityStatusValue
-	| SessionStatusValue
+	| SessionThreadActivityStatusValue
+	| SessionStatus
 	| null {
 	if (
 		pendingQuestion ||

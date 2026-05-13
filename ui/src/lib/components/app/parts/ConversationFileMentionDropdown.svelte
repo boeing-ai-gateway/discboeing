@@ -133,7 +133,7 @@
 						path: result.path,
 						type: result.type,
 					}));
-				} catch (error) {
+				} catch {
 					if (controller.signal.aborted || requestSequence !== requestId) {
 						return;
 					}

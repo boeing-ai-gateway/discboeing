@@ -34,26 +34,27 @@ test("getNextSelectedThreadId falls back to the previous thread", () => {
 	assert.equal(nextId, "a");
 });
 
-test("buildImplicitThread derives a single thread from the current session", () => {
+test("buildImplicitThread uses the active thread id while threads are unavailable", () => {
 	const session: Session = {
 		id: "session-1",
 		name: "Session",
-		displayName: "Friendly session",
 		description: "",
 		createdAt: "2026-03-10T00:00:00.000Z",
 		timestamp: "2026-03-11T00:00:00.000Z",
-		status: "ready",
+		status: "creating_sandbox",
 		files: [],
-		model: "openai/gpt-5",
-		reasoning: "enabled",
+		threadStatus: {
+			status: "running",
+			threadId: "thread-1",
+		},
 	};
 
 	assert.deepEqual(buildImplicitThread(session), [
 		{
-			id: "session-1",
-			name: "Friendly session",
-			model: "openai/gpt-5",
-			reasoning: "enabled",
+			id: "thread-1",
+			name: "Session",
+			model: undefined,
+			reasoning: undefined,
 			promptQueue: [],
 		},
 	]);

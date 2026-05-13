@@ -3,7 +3,7 @@ import { SvelteSet } from "svelte/reactivity";
 
 import { api, ApiError } from "$lib/api-client";
 import type { Session, UpdateSessionRequest } from "$lib/api-types";
-import type { AsyncStatus } from "$lib/shell-types";
+import type { AsyncStatus } from "$lib/resource/types";
 
 import {
 	createEntityStore,

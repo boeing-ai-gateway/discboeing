@@ -17,7 +17,6 @@ declare global {
 
 const DEFAULT_SSH_PORT = 3333;
 const DEFAULT_HTTP_PORT = 3001;
-const API_READY_POLL_INTERVAL_MS = 1000;
 const desktopLocalhost = "localhost";
 const sameOriginAPIPath = "/api";
 
@@ -28,66 +27,6 @@ let serverConfig: {
 	httpsPort: number | null;
 	httpsTLSMode: "ephemeral" | "static" | "acme" | null;
 } | null = null;
-
-function wait(ms: number, signal?: AbortSignal): Promise<void> {
-	return new Promise((resolve, reject) => {
-		if (signal?.aborted) {
-			reject(signal.reason ?? new Error("aborted"));
-			return;
-		}
-
-		const timeoutId = window.setTimeout(() => {
-			signal?.removeEventListener("abort", onAbort);
-			resolve();
-		}, ms);
-
-		const onAbort = () => {
-			window.clearTimeout(timeoutId);
-			reject(signal?.reason ?? new Error("aborted"));
-		};
-
-		signal?.addEventListener("abort", onAbort, { once: true });
-	});
-}
-
-/**
- * Wait until the backend API responds successfully.
- */
-export async function waitForApiReady(options?: {
-	signal?: AbortSignal;
-	onRetry?: (retryCount: number) => void;
-}): Promise<void> {
-	const { signal, onRetry } = options ?? {};
-	let retryCount = 0;
-
-	for (;;) {
-		if (signal?.aborted) {
-			throw signal.reason ?? new Error("aborted");
-		}
-
-		try {
-			const response = await fetch(
-				appendAuthToken(`${getApiRootBase()}/status`),
-				{
-					credentials: "include",
-					cache: "no-store",
-					signal,
-				},
-			);
-			if (response.ok) {
-				return;
-			}
-		} catch (error) {
-			if (signal?.aborted) {
-				throw error;
-			}
-		}
-
-		retryCount += 1;
-		onRetry?.(retryCount);
-		await wait(API_READY_POLL_INTERVAL_MS, signal);
-	}
-}
 
 /**
  * Append the desktop auth token to a URL when a desktop runtime has provided one.

@@ -123,7 +123,7 @@ A current audit of the Tauri-specific desktop surface area, plus a dual-runtime 
 | `@novnc/novnc`             | VNC display                                            |
 | `@pierre/diffs`            | Diff rendering                                         |
 | `bits-ui`                  | Headless UI primitives                                 |
-| `lucide-svelte`            | Icons                                                  |
+| `@lucide/svelte`           | Icons                                                  |
 | `tailwindcss`              | Styling                                                |
 | `remend` / `unified`       | Markdown processing                                    |
 

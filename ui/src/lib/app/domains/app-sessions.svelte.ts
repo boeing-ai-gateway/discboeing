@@ -3,10 +3,10 @@ import { SvelteMap } from "svelte/reactivity";
 
 import { api } from "$lib/api-client";
 import type { ChatMessage } from "$lib/api-types";
-import { toSessionSummaries } from "$lib/app/app-helpers";
 import type { AppSessions } from "$lib/app/app-context.types";
+import { sortSessionsByCreatedAt } from "$lib/app/domains/app-sessions.helpers";
 import type { SessionContextValue } from "$lib/session/session-context.types";
-import type { RecentThreadSummary } from "$lib/shell-types";
+import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import type { SessionStore } from "$lib/store/sessions.store.svelte";
 
@@ -79,7 +79,7 @@ export function createAppSessionsDomain(
 		void reloadSession(sessionId);
 	};
 
-	const list = $derived.by(() => toSessionSummaries(store.list));
+	const list = $derived.by(() => sortSessionsByCreatedAt(store.list));
 
 	const recentThreads = $derived.by(() => {
 		return recentThreadStore.entries.flatMap((savedEntry) => {
@@ -93,7 +93,7 @@ export function createAppSessionsDomain(
 					threadId: savedEntry.threadId,
 					name: liveThread?.name || savedEntry.name,
 					lastAccessedAt: savedEntry.lastAccessedAt,
-				} satisfies RecentThreadSummary,
+				} satisfies RecentThreadEntry,
 			];
 		});
 	});
@@ -239,11 +239,10 @@ export function createAppSessionsDomain(
 		sessionContexts,
 		select: selectSession,
 		openThread: (sessionId, threadId) => {
+			requestedThreadIdBySession.set(sessionId, threadId);
 			const sessionContext = sessionContexts.get(sessionId);
 			if (sessionContext) {
 				sessionContext.threads.select(threadId);
-			} else {
-				requestedThreadIdBySession.set(sessionId, threadId);
 			}
 			selectSession(sessionId);
 		},

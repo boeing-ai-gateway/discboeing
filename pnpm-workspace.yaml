@@ -2,7 +2,7 @@ packages:
   - ui
 
 allowBuilds:
-  '@sentry/cli': true
+  "@sentry/cli": true
   electron-winstaller: true
   esbuild: true
 

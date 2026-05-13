@@ -1,4 +1,4 @@
-import type { IdeOption } from "$lib/shell-types";
+import type { IdeOption } from "$lib/app/ide-options";
 
 export const windowControls = ["_", "□", "×"];
 

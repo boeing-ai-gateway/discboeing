@@ -20,14 +20,8 @@
 		sidebarOpen?: boolean;
 	};
 
-	let {
-		threadId,
-		visible,
-		mainClass,
-		reserveSidebarSpace,
-		mode,
-		sidebarOpen,
-	}: Props = $props();
+	let { threadId, visible, mainClass, reserveSidebarSpace, mode }: Props =
+		$props();
 	const session = useSessionContext();
 	const thread = session.ensureThread(untrack(() => threadId));
 	setThreadContext(thread);
@@ -37,7 +31,8 @@
 	const hasSelectedThread = $derived.by(
 		() =>
 			session.isPending ||
-			(canLoadThreadData && session.threads.selectedId !== null),
+			session.threads.selectedId !== null ||
+			isSessionTransitioningStatus(session.current?.status),
 	);
 	const hasConversationMessages = $derived.by(() => thread.messages.length > 0);
 	const showActiveConversation = $derived.by(

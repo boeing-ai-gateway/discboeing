@@ -2,17 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Session } from "$lib/api-types";
-import type { SessionSummary } from "$lib/shell-types";
-import { toSessionSummaries } from "../app-helpers";
 import {
 	getNextSelectedSessionId,
+	sortSessionsByCreatedAt,
 	upsertSession,
 } from "../domains/app-sessions.helpers";
 
-const sessions: SessionSummary[] = [
-	{ id: "session-1", name: "One", isRecent: true, status: "ready" },
-	{ id: "session-2", name: "Two", isRecent: true, status: "ready" },
-	{ id: "session-3", name: "Three", isRecent: false, status: "error" },
+const sessions = [
+	{ id: "session-1" },
+	{ id: "session-2" },
+	{ id: "session-3" },
 ];
 
 function makeSession(overrides: Partial<Session> = {}): Session {
@@ -44,17 +43,13 @@ test("getNextSelectedSessionId falls back to the first remaining session", () =>
 
 test("getNextSelectedSessionId returns null when the last session is deleted", () => {
 	assert.equal(
-		getNextSelectedSessionId(
-			[{ id: "session-1", name: "Only", isRecent: true, status: "ready" }],
-			"session-1",
-			"session-1",
-		),
+		getNextSelectedSessionId([{ id: "session-1" }], "session-1", "session-1"),
 		null,
 	);
 });
 
-test("toSessionSummaries sorts all sessions by createdAt descending", () => {
-	const summaries = toSessionSummaries([
+test("sortSessionsByCreatedAt sorts all sessions by createdAt descending", () => {
+	const sorted = sortSessionsByCreatedAt([
 		makeSession({
 			id: "session-1",
 			name: "Oldest",
@@ -73,15 +68,13 @@ test("toSessionSummaries sorts all sessions by createdAt descending", () => {
 	]);
 
 	assert.deepEqual(
-		summaries.map((session) => session.id),
+		sorted.map((session) => session.id),
 		["session-2", "session-3", "session-1"],
 	);
-	assert.ok(summaries.every((session) => session.isRecent === false));
-	assert.equal(summaries[0]?.workspaceId, undefined);
 });
 
-test("toSessionSummaries preserves workspace ids", () => {
-	const summaries = toSessionSummaries([
+test("sortSessionsByCreatedAt preserves session objects", () => {
+	const sorted = sortSessionsByCreatedAt([
 		makeSession({
 			id: "session-1",
 			name: "Workspace session",
@@ -89,7 +82,7 @@ test("toSessionSummaries preserves workspace ids", () => {
 		}),
 	]);
 
-	assert.equal(summaries[0]?.workspaceId, "workspace-1");
+	assert.equal(sorted[0]?.workspaceId, "workspace-1");
 });
 
 test("upsertSession replaces an existing session in place", () => {

@@ -6,7 +6,7 @@ import type {
 	CredentialType,
 } from "$lib/api-types";
 import { createResource } from "$lib/resource/create-resource.svelte";
-import type { AsyncStatus } from "$lib/shell-types";
+import type { AsyncStatus } from "$lib/resource/types";
 
 import {
 	createEntityStore,

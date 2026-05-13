@@ -39,7 +39,15 @@ export default tseslint.config(
 	{
 		rules: {
 			"@typescript-eslint/no-explicit-any": "off",
-			"@typescript-eslint/no-unused-vars": "off",
+			"@typescript-eslint/no-unused-vars": [
+				"error",
+				{
+					argsIgnorePattern: "^_",
+					caughtErrorsIgnorePattern: "^_",
+					destructuredArrayIgnorePattern: "^_",
+					varsIgnorePattern: "^_",
+				},
+			],
 			"no-undef": "off",
 			"no-useless-assignment": "off",
 			"svelte/no-immutable-reactive-statements": "off",

@@ -14,7 +14,10 @@
 		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
-	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
+	import {
+		DESKTOP_SERVICE_ID,
+		VSCODE_SERVICE_ID,
+	} from "$lib/session/service-ids";
 
 	type DockPanelKind = Exclude<SessionActiveView["kind"], "chat">;
 

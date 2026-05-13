@@ -292,19 +292,6 @@
 		return assignment.credential.visibility[key];
 	}
 
-	function lockedGlobalContexts(assignment: SessionCredentialAssignment) {
-		const contexts: Array<{ key: keyof CredentialVisibility; label: string }> =
-			[
-				{ key: "tools", label: "Tools" },
-				{ key: "console", label: "Console / SSH / IDE" },
-				{ key: "services", label: "Services" },
-				{ key: "hooks", label: "Hooks" },
-			];
-		return contexts.filter(
-			(context) => assignment.credential.visibility[context.key],
-		);
-	}
-
 	function openGlobalVisibilityDialog(
 		assignment: SessionCredentialAssignment,
 		contexts: string[],
@@ -536,7 +523,6 @@
 		{:else}
 			<div class="space-y-1.5 p-2">
 				{#each assignments as assignment (assignmentKey(assignment))}
-					{@const credential = assignment.credential}
 					{@const effective = effectiveVisibility(assignment)}
 					{@const allVisibilityState = allVisibilityCheckedState(effective)}
 					<div

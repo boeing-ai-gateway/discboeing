@@ -399,27 +399,6 @@
 		},
 	};
 
-	const demoWebSearchToolPart: DynamicToolPart = {
-		type: "dynamic-tool",
-		toolCallId: "tool-126",
-		toolName: "WebSearch",
-		state: "output-available",
-		input: {
-			query: "Svelte 5 rune docs",
-			allowed_domains: ["svelte.dev"],
-			blocked_domains: ["example.com"],
-		},
-		output: {
-			results: [
-				{
-					title: "Svelte 5 documentation",
-					url: "https://svelte.dev/docs/svelte/overview",
-					snippet: "Learn runes, $state, $derived, and $effect.",
-				},
-			],
-		},
-	};
-
 	const demoAskUserQuestionToolPart: DynamicToolPart = {
 		type: "dynamic-tool",
 		toolCallId: "tool-127",

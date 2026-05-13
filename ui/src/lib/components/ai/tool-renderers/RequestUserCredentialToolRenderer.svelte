@@ -246,9 +246,6 @@
 			toolPart.state === "approval-requested",
 	);
 	const requestedCredentials = $derived.by(() => validInput?.credentials ?? []);
-	const summaryCredentials = $derived.by(
-		() => pendingCredentialRequest?.credentials ?? requestedCredentials,
-	);
 	const grantedCredentials = $derived.by(
 		() => validOutput?.grantedCredentials ?? localGrantedCredentials,
 	);

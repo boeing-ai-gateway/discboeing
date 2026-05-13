@@ -8,19 +8,10 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
-	import {
-		resolveSessionDisplayStatus,
-		resolveThreadContextDisplayStatus,
-		resolveThreadDisplayStatus,
-	} from "$lib/app/thread-status";
-	import type {
-		SessionThreadActivityStatusValue,
-		Thread,
-		Workspace,
-	} from "$lib/api-types";
+	import type { Thread, Workspace } from "$lib/api-types";
+	import AppSessionStatus from "$lib/components/app/AppSessionStatus.svelte";
+	import AppThreadStatus from "$lib/components/app/AppThreadStatus.svelte";
 	import * as Collapsible from "$lib/components/ui/collapsible";
-	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import ThreadStatusIcon from "$lib/components/app/parts/ThreadStatusIcon.svelte";
 	import {
 		AlertDialog,
 		AlertDialogAction,
@@ -41,7 +32,6 @@
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
-	import type { SessionDisplayStatusValue } from "$lib/shell-types";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -198,10 +188,6 @@
 		return metadata as TaskThreadMetadata;
 	}
 
-	function isTaskThread(threadObj: Thread) {
-		return threadMetadata(threadObj)?.type === "task";
-	}
-
 	function threadParentId(threadObj: Thread) {
 		const parentThreadId = threadMetadata(threadObj)?.parentThreadId;
 		return typeof parentThreadId === "string" && parentThreadId.length > 0
@@ -225,10 +211,6 @@
 		return visibleThreadsForSession(sessionId).filter(
 			(threadObj) => threadParentId(threadObj) === parentThreadId,
 		);
-	}
-
-	function isSessionSelected(sessionId: string) {
-		return sessions.selectedId === sessionId;
 	}
 
 	function isSessionThreadSelected(sessionId: string, threadId: string) {
@@ -289,74 +271,6 @@
 
 	async function handleStopSession(sessionId: string) {
 		await sessions.stop(sessionId);
-	}
-
-	function sessionDisplayStatus(sessionObj: (typeof sessions.list)[number]) {
-		return resolveSessionDisplayStatus({
-			sessionStatus: sessionObj.status,
-			sessionActivityStatus: sessionObj.threadStatus?.status,
-			commitStatus: sessionObj.commitStatus,
-			commitOperation: sessionObj.commitOperation,
-		});
-	}
-
-	function threadContextDisplayStatus(
-		sessionId: string,
-		threadId: string,
-	): SessionThreadActivityStatusValue | null {
-		const threadContext = app.sessions.sessionContexts
-			.get(sessionId)
-			?.threadContexts.get(threadId);
-		return resolveThreadContextDisplayStatus(threadContext);
-	}
-
-	function threadDisplayStatus(
-		sessionId: string,
-		threadObj: Thread,
-	): SessionDisplayStatusValue {
-		const session = sessionById(sessionId);
-		const contextStatus = threadContextDisplayStatus(sessionId, threadObj.id);
-		return resolveThreadDisplayStatus({
-			sessionStatus: session?.status,
-			sessionActivityStatus: session?.threadStatus?.status,
-			commitStatus: session?.commitStatus,
-			commitOperation: session?.commitOperation,
-			localActivityStatus: contextStatus,
-			threadActivityStatus: threadObj.activityStatus?.status,
-			threadState: threadObj.state,
-			pendingQuestion: threadObj.pendingQuestion,
-			errorMessage: threadObj.errorMessage,
-			promptQueueCount: threadObj.promptQueue?.length,
-		});
-	}
-
-	function recentThreadDisplayStatus(
-		threadObj: (typeof sessions.recentThreads)[number],
-	): SessionDisplayStatusValue {
-		const session = sessionById(threadObj.sessionId);
-		const liveThread = app.sessions.sessionContexts
-			.get(threadObj.sessionId)
-			?.threads.list.find((thread) => thread.id === threadObj.threadId);
-		if (!session || !liveThread) {
-			return "unknown";
-		}
-
-		const contextStatus = threadContextDisplayStatus(
-			threadObj.sessionId,
-			threadObj.threadId,
-		);
-		return resolveThreadDisplayStatus({
-			sessionStatus: session.status,
-			sessionActivityStatus: session.threadStatus?.status,
-			commitStatus: session.commitStatus,
-			commitOperation: session.commitOperation,
-			localActivityStatus: contextStatus,
-			threadActivityStatus: liveThread.activityStatus?.status,
-			threadState: liveThread.state,
-			pendingQuestion: liveThread.pendingQuestion,
-			errorMessage: liveThread.errorMessage,
-			promptQueueCount: liveThread.promptQueue?.length,
-		});
 	}
 
 	function openRenameDialog(sessionId: string) {
@@ -648,7 +562,6 @@
 </script>
 
 {#snippet threadItem(sessionId: string, threadObj: Thread, depth: number)}
-	{@const displayStatus = threadDisplayStatus(sessionId, threadObj)}
 	<div class="space-y-0.5">
 		<div class="group flex min-w-0 items-center gap-0.5">
 			<button
@@ -656,7 +569,7 @@
 				onclick={() => handleSelectRecentThread(sessionId, threadObj.id)}
 				class={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors ${isSessionThreadSelected(sessionId, threadObj.id) ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
-				<ThreadStatusIcon status={displayStatus} class="shrink-0" />
+				<AppThreadStatus {sessionId} threadId={threadObj.id} class="shrink-0" />
 				<span class="min-w-0 flex-1 truncate"
 					>{threadObj.name || "New Thread"}</span
 				>
@@ -718,13 +631,13 @@
 				onclick={() => handleSelectSession(sessionObj.id)}
 				class={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 			>
-				<SessionStatus
-					status={sessionDisplayStatus(sessionObj)}
+				<AppSessionStatus
+					sessionId={sessionObj.id}
 					showLabel={false}
 					class="shrink-0"
 				/>
 				<span class={floatingMode ? "whitespace-nowrap" : "truncate"}
-					>{sessionObj.name || "New Session"}</span
+					>{sessionObj.displayName || sessionObj.name || "New Session"}</span
 				>
 			</button>
 
@@ -734,7 +647,7 @@
 						variant="ghost"
 						size="icon-xs"
 						class={`h-8 w-7 rounded-md transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
-						aria-label={`Session actions for ${sessionObj.name || "New Session"}`}
+						aria-label={`Session actions for ${sessionObj.displayName || sessionObj.name || "New Session"}`}
 						onclick={(event) => event.stopPropagation()}
 					>
 						<EllipsisIcon
@@ -782,14 +695,17 @@
 	threadObj: (typeof sessions.recentThreads)[number],
 	isSelected: boolean,
 )}
-	{@const displayStatus = recentThreadDisplayStatus(threadObj)}
 	<button
 		type="button"
 		onclick={() =>
 			handleSelectRecentThread(threadObj.sessionId, threadObj.threadId)}
 		class={`flex min-h-8 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1 text-left text-sm transition-colors ${isSelected ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-inner" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
 	>
-		<ThreadStatusIcon status={displayStatus} class="shrink-0" />
+		<AppThreadStatus
+			sessionId={threadObj.sessionId}
+			threadId={threadObj.threadId}
+			class="shrink-0"
+		/>
 		<span
 			class={`min-w-0 flex-1 font-medium ${floatingMode ? "whitespace-nowrap" : "truncate"}`}
 			>{threadObj.name || "New Thread"}</span

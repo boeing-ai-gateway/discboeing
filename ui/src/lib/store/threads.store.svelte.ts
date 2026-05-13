@@ -6,7 +6,7 @@ import type {
 	Thread,
 	UpdateThreadRequest,
 } from "$lib/api-types";
-import type { AsyncStatus } from "$lib/shell-types";
+import type { AsyncStatus } from "$lib/resource/types";
 
 import {
 	createEntityStore,

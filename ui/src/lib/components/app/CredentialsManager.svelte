@@ -33,7 +33,6 @@
 		ItemTitle,
 	} from "$lib/components/ui/item";
 	import { Label } from "$lib/components/ui/label";
-	import { NativeSelect } from "$lib/components/ui/native-select";
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { openUrl, writeClipboardText } from "$lib/shell";

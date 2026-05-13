@@ -4,7 +4,7 @@
 	import ZapIcon from "@lucide/svelte/icons/zap";
 	import { Button } from "$lib/components/ui/button";
 	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
-	import type { HooksStatus } from "$lib/shell-types";
+	import type { HooksStatus } from "$lib/session/session-context.types";
 
 	type Props = {
 		expanded?: boolean;

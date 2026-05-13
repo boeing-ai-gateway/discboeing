@@ -11,7 +11,7 @@
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
 	import type { HookOutputState } from "$lib/session/session-context.types";
-	import type { HooksStatus } from "$lib/shell-types";
+	import type { HooksStatus } from "$lib/session/session-context.types";
 	import { downloadFile } from "$lib/shell";
 
 	type Props = {

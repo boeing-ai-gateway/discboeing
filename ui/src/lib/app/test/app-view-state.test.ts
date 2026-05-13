@@ -4,12 +4,9 @@ import test from "node:test";
 import { getReconciledSelectedSessionId } from "../domains/app-sessions.helpers";
 import { getVisibleRecentThreads } from "../view/create-app-view-state.svelte";
 import type { Session } from "$lib/api-types";
-import type { RecentThreadSummary, SessionSummary } from "$lib/shell-types";
+import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 
-const sessions: SessionSummary[] = [
-	{ id: "session-1", name: "One", isRecent: true, status: "ready" },
-	{ id: "session-2", name: "Two", isRecent: false, status: "ready" },
-];
+const sessions = [{ id: "session-1" }, { id: "session-2" }];
 
 test("getReconciledSelectedSessionId prefers an explicit valid session", () => {
 	assert.equal(
@@ -88,7 +85,7 @@ test("getVisibleRecentThreads picks the most recently accessed threads before st
 });
 
 test("getVisibleRecentThreads keeps same-session rows stable when access times change", () => {
-	const recentThreadsA: RecentThreadSummary[] = [
+	const recentThreadsA: RecentThreadEntry[] = [
 		{
 			sessionId: "session-1",
 			threadId: "thread-b",
@@ -108,7 +105,7 @@ test("getVisibleRecentThreads keeps same-session rows stable when access times c
 			lastAccessedAt: "2024-01-03T00:00:00.000Z",
 		},
 	];
-	const recentThreadsB: RecentThreadSummary[] = [
+	const recentThreadsB: RecentThreadEntry[] = [
 		{
 			sessionId: "session-1",
 			threadId: "thread-a",

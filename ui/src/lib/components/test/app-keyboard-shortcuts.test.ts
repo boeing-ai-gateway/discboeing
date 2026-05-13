@@ -13,7 +13,7 @@ const KEYBOARD_SHORTCUT_HELP_DIALOG_COMPONENT = path.resolve(
 );
 const RECENT_THREAD_SWITCHER_DIALOG_COMPONENT = path.resolve(
 	import.meta.dirname,
-	"../app/parts/RecentThreadSwitcherDialog.svelte",
+	"../app/RecentThreadSwitcherDialog.svelte",
 );
 const GLOBAL_SHORTCUTS_MODULE = path.resolve(
 	import.meta.dirname,
@@ -29,7 +29,7 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 
 	assert.match(
 		source,
-		/import RecentThreadSwitcherDialog from "\$lib\/components\/app\/parts\/RecentThreadSwitcherDialog\.svelte";/,
+		/import RecentThreadSwitcherDialog from "\$lib\/components\/app\/RecentThreadSwitcherDialog\.svelte";/,
 	);
 	assert.match(
 		source,
@@ -43,10 +43,7 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 		source,
 		/import \{[\s\S]*getAvailableSwitcherThreads,[\s\S]*getThreadSwitcherThreads,[\s\S]*recentThreadKey,[\s\S]*\} from "\$lib\/app\/thread-switcher";/,
 	);
-	assert.match(
-		source,
-		/import \{[\s\S]*resolveThreadContextDisplayStatus,[\s\S]*resolveThreadDisplayStatus,[\s\S]*\} from "\$lib\/app\/thread-status";/,
-	);
+	assert.doesNotMatch(source, /resolveThreadDisplayStatus/);
 	assert.match(
 		source,
 		/const isMacPlatform = \$derived\.by\(\(\) => detectIsMacPlatform\(\)\)/,
@@ -83,17 +80,12 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	assert.doesNotMatch(source, /sessionContext\.ui\.mobileSidebarOpen = false;/);
 });
 
-test("app keyboard shortcuts uses centralized thread status display", () => {
+test("app keyboard shortcuts lets the switcher render thread status", () => {
 	const source = readSource(APP_KEYBOARD_SHORTCUTS_COMPONENT);
 
-	assert.match(source, /function switcherThreadDisplayStatus/);
-	assert.match(source, /resolveThreadContextDisplayStatus\(threadContext\)/);
-	assert.match(source, /return resolveThreadDisplayStatus\(\{/);
-	assert.match(source, /sessionStatus: session\.status/);
-	assert.match(
-		source,
-		/sessionActivityStatus: session\.threadStatus\?\.status/,
-	);
+	assert.doesNotMatch(source, /switcherThreadStatuses/);
+	assert.doesNotMatch(source, /function switcherThreadDisplayStatus/);
+	assert.doesNotMatch(source, /threadStatuses=/);
 });
 
 test("keyboard shortcut help dialog renders multiple key groups", () => {
@@ -118,9 +110,11 @@ test("recent thread switcher dialog renders the reusable overlay UI", () => {
 
 	assert.match(
 		source,
-		/import ThreadStatusIcon from "\$lib\/components\/app\/parts\/ThreadStatusIcon\.svelte";/,
+		/import AppThreadStatus from "\$lib\/components\/app\/AppThreadStatus\.svelte";/,
 	);
-	assert.match(source, /threadStatuses\[threadKey\] \?\? "unknown"/);
+	assert.match(source, /<AppThreadStatus/);
+	assert.match(source, /sessionId=\{thread\.sessionId\}/);
+	assert.match(source, /threadId=\{thread\.threadId\}/);
 	assert.match(source, /type Props = \{/);
 	assert.match(source, /helpText: string;/);
 	assert.match(

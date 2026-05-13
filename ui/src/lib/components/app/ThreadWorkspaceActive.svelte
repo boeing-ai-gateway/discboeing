@@ -4,6 +4,7 @@
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
+	import { isSessionTransitioningStatus } from "$lib/api-constants";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
@@ -37,6 +38,17 @@
 		(props.mode ?? "full") === "full" && !isChatView(session.ui.activeView),
 	);
 	const dockMaximized = $derived(showDock && session.ui.dockMaximized);
+	const headerTitle = $derived.by(() => {
+		if (session.threads.selected?.name) {
+			return session.threads.selected.name;
+		}
+		if (session.isPending) {
+			return "";
+		}
+		return isSessionTransitioningStatus(session.current?.status)
+			? "Loading thread"
+			: "No thread selected";
+	});
 </script>
 
 {#if showDock && dockMaximized}
@@ -53,8 +65,7 @@
 			<div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
 				<ThreadWorkspaceHeader
 					reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-					title={session.threads.selected?.name ??
-						(session.isPending ? "" : "No thread selected")}
+					title={headerTitle}
 					state={session.threads.selected?.state}
 				/>
 				<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -74,8 +85,7 @@
 {:else}
 	<ThreadWorkspaceHeader
 		reserveSidebarSpace={props.reserveSidebarSpace ?? false}
-		title={session.threads.selected?.name ??
-			(session.isPending ? "" : "No thread selected")}
+		title={headerTitle}
 		state={session.threads.selected?.state}
 	/>
 

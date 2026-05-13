@@ -580,6 +580,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 			try {
 				if (!args.hasSession()) {
+					if (!runAfter) {
+						handleCompletionStart();
+					}
 					const response = await args.startChat({
 						sessionId: args.sessionId,
 						threadId: args.threadId,

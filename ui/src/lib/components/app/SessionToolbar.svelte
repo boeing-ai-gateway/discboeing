@@ -38,12 +38,11 @@
 	import { setSessionContext } from "$lib/context/session-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/shell";
+	import type { IdeOption, JetBrainsIdeOption } from "$lib/app/ide-options";
 	import {
 		DESKTOP_SERVICE_ID,
 		VSCODE_SERVICE_ID,
-		type IdeOption,
-		type JetBrainsIdeOption,
-	} from "$lib/shell-types";
+	} from "$lib/session/service-ids";
 
 	type Props = {
 		sessionId: string;

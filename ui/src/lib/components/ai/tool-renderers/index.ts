@@ -34,11 +34,6 @@ export {
 	WriteToolRenderer,
 };
 
-export {
-	getToolRenderer,
-	getToolTitle,
-	hasOptimizedRenderer,
-	shortenPath,
-} from "./registry";
+export { getToolRenderer, getToolTitle, shortenPath } from "./registry";
 
 export type { ToolRendererComponentProps } from "./types";

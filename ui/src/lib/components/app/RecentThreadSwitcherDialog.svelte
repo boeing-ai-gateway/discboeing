@@ -1,28 +1,19 @@
 <script lang="ts">
 	import { recentThreadKey } from "$lib/app/thread-switcher";
-	import type { ThreadDisplayStatusValue } from "$lib/app/thread-status";
-	import type { RecentThreadSummary } from "$lib/shell-types";
-	import ThreadStatusIcon from "$lib/components/app/parts/ThreadStatusIcon.svelte";
+	import AppThreadStatus from "$lib/components/app/AppThreadStatus.svelte";
+	import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 
 	type Props = {
 		open: boolean;
-		threads: RecentThreadSummary[];
-		threadStatuses: Record<string, ThreadDisplayStatusValue>;
+		threads: RecentThreadEntry[];
 		selectedKey: string | null;
 		helpText: string;
 		onHover: (sessionId: string, threadId: string) => void;
 		onSelect: (sessionId: string, threadId: string) => void;
 	};
 
-	let {
-		open,
-		threads,
-		threadStatuses,
-		selectedKey,
-		helpText,
-		onHover,
-		onSelect,
-	}: Props = $props();
+	let { open, threads, selectedKey, helpText, onHover, onSelect }: Props =
+		$props();
 	let listRef = $state<HTMLDivElement | null>(null);
 
 	$effect(() => {
@@ -77,8 +68,9 @@
 						onmouseenter={() => onHover(thread.sessionId, thread.threadId)}
 						onclick={() => onSelect(thread.sessionId, thread.threadId)}
 					>
-						<ThreadStatusIcon
-							status={threadStatuses[threadKey] ?? "unknown"}
+						<AppThreadStatus
+							sessionId={thread.sessionId}
+							threadId={thread.threadId}
 							class="mt-0.5 shrink-0"
 						/>
 						<span class="min-w-0 flex-1">

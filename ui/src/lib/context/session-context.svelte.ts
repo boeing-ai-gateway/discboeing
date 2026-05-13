@@ -14,7 +14,10 @@ import type {
 	SessionStores,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
-import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/shell-types";
+import {
+	DESKTOP_SERVICE_ID,
+	VSCODE_SERVICE_ID,
+} from "$lib/session/service-ids";
 import { createSessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 import { ThreadStore } from "$lib/store/threads.store.svelte";
 import {

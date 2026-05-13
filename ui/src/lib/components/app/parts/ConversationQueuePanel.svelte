@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
-	import type { PlanEntry } from "$lib/shell-types";
+	import type { PlanEntry } from "$lib/app/plan-entry";
 
 	type Props = {
 		expanded: boolean;

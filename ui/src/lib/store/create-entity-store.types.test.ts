@@ -12,21 +12,21 @@ type Item = {
 	name: string;
 };
 
-const listOnlyArgs = {
+const _listOnlyArgs = {
 	owner: "ListOnly",
 	list: {
 		load: async (): Promise<Item[]> => [],
 	},
 } satisfies CreateEntityStoreArgs<Item>;
 
-type ListOnlyStore = EntityStoreFromArgs<Item, never, typeof listOnlyArgs>;
+type ListOnlyStore = EntityStoreFromArgs<Item, never, typeof _listOnlyArgs>;
 
 type _ListOnlyHasAll = Assert<HasKey<ListOnlyStore, "all">>;
 type _ListOnlyHasMergeList = Assert<HasKey<ListOnlyStore, "mergeList">>;
 type _ListOnlyHasNoGet = Assert<Not<HasKey<ListOnlyStore, "get">>>;
 type _ListOnlyHasNoCreate = Assert<Not<HasKey<ListOnlyStore, "create">>>;
 
-const indexedArgs = {
+const _indexedArgs = {
 	owner: "Indexed",
 	list: {
 		load: async (): Promise<Item[]> => [],
@@ -36,14 +36,14 @@ const indexedArgs = {
 	},
 } satisfies CreateEntityStoreArgs<Item, string>;
 
-type IndexedStore = EntityStoreFromArgs<Item, string, typeof indexedArgs>;
+type IndexedStore = EntityStoreFromArgs<Item, string, typeof _indexedArgs>;
 
 type _IndexedHasGet = Assert<HasKey<IndexedStore, "get">>;
 type _IndexedHasPeek = Assert<HasKey<IndexedStore, "peek">>;
 type _IndexedHasUpsert = Assert<HasKey<IndexedStore, "upsert">>;
 type _IndexedHasNoUpdate = Assert<Not<HasKey<IndexedStore, "update">>>;
 
-const crudArgs = {
+const _crudArgs = {
 	owner: "Crud",
 	list: {
 		load: async (): Promise<Item[]> => [],
@@ -73,7 +73,7 @@ const crudArgs = {
 	{ name: string }
 >;
 
-type CrudStore = EntityStoreFromArgs<Item, string, typeof crudArgs>;
+type CrudStore = EntityStoreFromArgs<Item, string, typeof _crudArgs>;
 
 type _CrudHasCreate = Assert<HasKey<CrudStore, "create">>;
 type _CrudHasUpdate = Assert<HasKey<CrudStore, "update">>;

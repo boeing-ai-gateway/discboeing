@@ -121,37 +121,29 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	);
 });
 
-test("session sidebar thread rows render live activity status", () => {
+test("session sidebar thread rows render context-aware status", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(source, /function threadContextDisplayStatus/);
-	assert.match(source, /resolveThreadContextDisplayStatus\(threadContext\)/);
-	assert.match(source, /threadObj\.activityStatus\?\.status/);
 	assert.match(
 		source,
-		/\{@const displayStatus = threadDisplayStatus\(sessionId, threadObj\)\}/,
+		/import AppThreadStatus from "\$lib\/components\/app\/AppThreadStatus\.svelte";/,
 	);
-	assert.match(source, /status=\{displayStatus\}/);
+	assert.match(source, /<AppThreadStatus[\s\S]*\{sessionId\}/);
+	assert.match(source, /threadId=\{threadObj\.id\}/);
+	assert.doesNotMatch(source, /function threadDisplayStatus/);
 	assert.doesNotMatch(source, /activeCommand[\s\S]*return "running"/);
 });
 
-test("session sidebar recent rows use live thread status", () => {
+test("session sidebar recent rows render context-aware status", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(source, /function recentThreadDisplayStatus/);
-	assert.match(source, /return "unknown"/);
-	assert.match(source, /return resolveThreadDisplayStatus\(\{/);
-	assert.match(source, /liveThread\.activityStatus\?\.status/);
-	assert.match(source, /sessionStatus: session\.status/);
+	assert.doesNotMatch(source, /function recentThreadDisplayStatus/);
+	assert.doesNotMatch(source, /resolveThreadDisplayStatus/);
 	assert.match(
 		source,
-		/sessionActivityStatus: session\.threadStatus\?\.status/,
+		/<AppThreadStatus[\s\S]*sessionId=\{threadObj\.sessionId\}/,
 	);
-	assert.match(
-		source,
-		/\{@const displayStatus = recentThreadDisplayStatus\(threadObj\)\}/,
-	);
-	assert.match(source, /status=\{displayStatus\}/);
+	assert.match(source, /threadId=\{threadObj\.threadId\}/);
 });
 
 test("session sidebar nests task threads and renders a status icon", () => {
@@ -159,8 +151,6 @@ test("session sidebar nests task threads and renders a status icon", () => {
 
 	assert.match(source, /type TaskThreadMetadata = \{/);
 	assert.match(source, /function threadMetadata\(threadObj: Thread\)/);
-	assert.match(source, /function isTaskThread\(threadObj: Thread\)/);
-	assert.match(source, /threadMetadata\(threadObj\)\?\.type === "task"/);
 	assert.match(source, /function threadParentId\(threadObj: Thread\)/);
 	assert.match(source, /threadMetadata\(threadObj\)\?\.parentThreadId/);
 	assert.match(
@@ -175,7 +165,7 @@ test("session sidebar nests task threads and renders a status icon", () => {
 		source,
 		/\{@render threadItem\(sessionId, childThreadObj, depth \+ 1\)\}/,
 	);
-	assert.match(source, /<ThreadStatusIcon\s*status=\{displayStatus\}/);
+	assert.match(source, /<AppThreadStatus[\s\S]*threadId=\{threadObj\.id\}/);
 });
 
 test("session sidebar thread rows include rename and delete actions", () => {

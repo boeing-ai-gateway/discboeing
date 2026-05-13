@@ -5,7 +5,7 @@
 	import { Button } from "$lib/components/ui/button";
 	import { syncEditorTheme } from "$lib/editor-control";
 	import type { ResolvedTheme } from "$lib/theme";
-	import type { ServiceItem } from "$lib/shell-types";
+	import type { ServiceItem } from "$lib/session/session-context.types";
 
 	type Props = {
 		dockMaximized: boolean;

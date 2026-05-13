@@ -6,20 +6,17 @@ import type {
 	HooksStatusResponse,
 	Service,
 	Session,
+	Thread,
 } from "$lib/api-types";
 import type { DynamicToolPart } from "$lib/components/ai/types";
 import type {
 	ConversationComment,
-	HookOutputState,
-} from "$lib/session/session-context.types";
-import type {
-	HookLastResult,
 	HookRunStatus,
 	HooksStatus,
-	PlanEntry,
+	HookOutputState,
 	ServiceItem,
-	ThreadSummary,
-} from "$lib/shell-types";
+} from "$lib/session/session-context.types";
+import type { PlanEntry } from "$lib/app/plan-entry";
 
 type UserTextPart = Extract<ChatMessage["parts"][number], { type: "text" }>;
 type UserFilePart = Extract<ChatMessage["parts"][number], { type: "file" }>;
@@ -30,14 +27,16 @@ export type UserMessageAttachment = {
 	url: string;
 };
 
-export function buildImplicitThread(session: Session | null): ThreadSummary[] {
+export function buildImplicitThread(session: Session | null): Thread[] {
 	if (!session) {
 		return [];
 	}
 
+	const activeThreadId = session.threadStatus?.threadId?.trim();
+
 	return [
 		{
-			id: session.id,
+			id: activeThreadId || session.id,
 			name: session.displayName || session.name,
 			model: session.model,
 			reasoning: session.reasoning,
@@ -47,7 +46,7 @@ export function buildImplicitThread(session: Session | null): ThreadSummary[] {
 }
 
 export function getNextSelectedThreadId(
-	threads: ThreadSummary[],
+	threads: Thread[],
 	removedThreadId: string,
 	currentSelectedId: string | null,
 ): string | null {
@@ -184,30 +183,6 @@ export async function createUserMessageAttachment(
 		mediaType,
 		url: `data:${mediaType};base64,${base64}`,
 	};
-}
-
-export function getMessageText(message: ChatMessage): string {
-	return message.parts
-		.filter(
-			(part): part is Extract<ChatMessage["parts"][number], { type: "text" }> =>
-				part.type === "text",
-		)
-		.map((part) => part.text)
-		.join("\n")
-		.trim();
-}
-
-export function getReasoningText(message: ChatMessage): string {
-	return message.parts
-		.filter(
-			(
-				part,
-			): part is Extract<ChatMessage["parts"][number], { type: "reasoning" }> =>
-				part.type === "reasoning",
-		)
-		.map((part) => part.text)
-		.join("\n")
-		.trim();
 }
 
 export function getDynamicToolParts(message: ChatMessage): DynamicToolPart[] {
@@ -425,7 +400,7 @@ export function toHooksStatus(
 export function getHookDisplayState(
 	hook: HookRunStatus,
 	pendingHookIds: ReadonlySet<string>,
-): HookLastResult {
+): HookRunStatus["lastResult"] {
 	if (hook.lastResult === "running" || hook.lastResult === "failure") {
 		return hook.lastResult;
 	}

@@ -4,10 +4,8 @@
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import MessageCircleQuestionMarkIcon from "@lucide/svelte/icons/message-circle-question-mark";
-	import type { SessionDisplayStatusValue } from "$lib/shell-types";
+	import type { DisplayStatusValue } from "$lib/app/thread-status";
 	import { cn } from "$lib/utils";
-
-	type DisplayStatusValue = SessionDisplayStatusValue;
 
 	type Props = {
 		status: DisplayStatusValue;

@@ -1,6 +1,6 @@
 import { SvelteMap } from "svelte/reactivity";
 
-import type { AsyncStatus } from "../shell-types";
+import type { AsyncStatus } from "../resource/types";
 
 const RETRY_INITIAL_DELAY_MS = 1_000;
 const RETRY_MAX_DELAY_MS = 30_000;

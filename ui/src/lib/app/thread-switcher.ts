@@ -1,5 +1,11 @@
 import type { Session } from "../api-types";
-import type { RecentThreadSummary } from "../shell-types";
+
+export type RecentThreadEntry = {
+	sessionId: string;
+	threadId: string;
+	name: string;
+	lastAccessedAt: string;
+};
 
 function compareIsoDatesDesc(left: string, right: string) {
 	const leftTime = new Date(left).getTime();
@@ -21,8 +27,8 @@ type ThreadSwitcherSession = Pick<
 
 export function getAvailableSwitcherThreads(args: {
 	sessions: ThreadSwitcherSession[];
-	recentThreads: RecentThreadSummary[];
-}): RecentThreadSummary[] {
+	recentThreads: RecentThreadEntry[];
+}): RecentThreadEntry[] {
 	const trackedSessionIds = Object.fromEntries(
 		args.recentThreads.map((thread) => [thread.sessionId, true] as const),
 	);
@@ -47,9 +53,9 @@ export function getAvailableSwitcherThreads(args: {
 }
 
 export function getThreadSwitcherThreads(args: {
-	threads: RecentThreadSummary[];
+	threads: RecentThreadEntry[];
 	selectedThreadKey: string | null;
-}): RecentThreadSummary[] {
+}): RecentThreadEntry[] {
 	const sortedThreads = [...args.threads].sort((left, right) =>
 		compareIsoDatesDesc(left.lastAccessedAt, right.lastAccessedAt),
 	);

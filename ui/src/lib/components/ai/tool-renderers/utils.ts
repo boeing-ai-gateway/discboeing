@@ -23,15 +23,6 @@ export function getToolInputString(
 	return typeof field === "string" ? field : undefined;
 }
 
-export function getToolInputArrayLength(
-	value: unknown,
-	key: string,
-): number | undefined {
-	const record = getToolInputRecord(value);
-	const field = record?.[key];
-	return Array.isArray(field) ? field.length : undefined;
-}
-
 export function renderToolValue(value: unknown): string {
 	if (typeof value === "string") {
 		return value;

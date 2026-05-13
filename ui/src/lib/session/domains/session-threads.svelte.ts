@@ -56,6 +56,15 @@ export function createSessionThreadsDomain(
 			return;
 		}
 
+		const activeThreadId = args.getSession()?.threadStatus?.threadId;
+		if (
+			activeThreadId &&
+			nextList.some((thread) => thread.id === activeThreadId)
+		) {
+			args.setSelectedId(activeThreadId);
+			return;
+		}
+
 		if (nextList.length === 1) {
 			args.setSelectedId(nextList[0]?.id ?? null);
 			return;

@@ -30,7 +30,7 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /threadId: string;/);
 	assert.match(source, /sidebarOpen\?: boolean;/);
 	assert.match(source, /let \{/);
-	assert.match(source, /\}: Props = \$props\(\);/);
+	assert.match(source, /\}: Props =\s*\$props\(\);/);
 	assert.match(
 		source,
 		/const thread = session\.ensureThread\(untrack\(\(\) => threadId\)\);/,
@@ -40,7 +40,7 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
 		source,
-		/session\.isPending \|\|\s*\(canLoadThreadData && session\.threads\.selectedId !== null\)/,
+		/session\.isPending \|\|\s*session\.threads\.selectedId !== null \|\|\s*isSessionTransitioningStatus\(session\.current\?\.status\)/,
 	);
 	assert.match(
 		source,
@@ -114,9 +114,16 @@ test("active thread workspace keeps the stream live while inactive conversation 
 		source,
 		/\$effect\(\(\) => \{[\s\S]*void thread\.connect\(\);[\s\S]*\}\);/,
 	);
+	assert.match(source, /const headerTitle = \$derived\.by/);
+	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
 	assert.match(
 		source,
-		/\{#if props\.visible\}\s*<ConversationPane visible=\{props\.visible\} \/>\s*\{\/if\}/,
+		/isSessionTransitioningStatus\(session\.current\?\.status\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
+	);
+	assert.match(source, /title=\{headerTitle\}/);
+	assert.doesNotMatch(
+		source,
+		/title=\{session\.threads\.selected\?\.name \?\?/,
 	);
 	assert.equal(
 		source.match(/<ConversationPane visible=\{props\.visible\} \/>/g)?.length,

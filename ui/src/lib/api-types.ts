@@ -21,7 +21,7 @@ export interface Thread {
 	serviceTier?: string;
 	state?: ThreadState;
 	pendingQuestion?: boolean;
-	activeCommand?: string; // empty or omitted when no command is running
+	activeCommand?: string; // empty or omitted when no command is running for the current completion
 	pending?: boolean;
 	promptQueue?: QueuedPrompt[];
 	activityStatus?: ThreadActivityStatus;

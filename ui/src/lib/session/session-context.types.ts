@@ -6,8 +6,10 @@ import type {
 	CredentialInfo,
 	CredentialType,
 	FileStatus,
+	HookRunStatus as ApiHookRunStatus,
 	HooksStatusResponse,
 	QueuedPrompt,
+	ServiceStatus,
 	Session,
 	SessionCredentialAssignment,
 	SessionDiffFileEntry,
@@ -18,12 +20,7 @@ import type {
 } from "$lib/api-types";
 import type { ThreadStore } from "$lib/store/threads.store.svelte";
 import type { SessionViewState } from "$lib/session/view/create-session-view-state.svelte";
-import type {
-	AsyncStatus,
-	HooksStatus,
-	ServiceItem,
-	ThreadSummary,
-} from "$lib/shell-types";
+import type { AsyncStatus } from "$lib/resource/types";
 
 export type SessionStores = {
 	threads: ThreadStore;
@@ -34,6 +31,34 @@ export type HookOutputState = {
 	sizeBytes: number;
 	displayedBytes: number;
 	tooLarge: boolean;
+};
+
+export type HookRunStatus = Pick<
+	ApiHookRunStatus,
+	"hookId" | "hookName" | "type" | "lastResult" | "runCount" | "failCount"
+> & {
+	command?: string;
+	lastRunAt?: string;
+	lastExitCode?: number;
+};
+
+export type HooksStatus = {
+	hooks: HookRunStatus[];
+	pendingHookIds: string[];
+};
+
+export type ServiceItem = {
+	id: string;
+	label: string;
+	target: string;
+	description?: string;
+	order?: number;
+	http?: number;
+	https?: number;
+	urlPath?: string;
+	status: ServiceStatus;
+	passive?: boolean;
+	exitCode?: number;
 };
 
 export type SessionHooksService = {
@@ -230,7 +255,7 @@ export type ConversationComment = {
 
 export type ThreadContextValue = {
 	threadId: string;
-	thread: ThreadSummary | null;
+	thread: Thread | null;
 	modelId: string | null;
 	reasoning: string | undefined;
 	serviceTier: string | undefined;

@@ -1,4 +1,4 @@
-import type { AsyncStatus } from "../shell-types";
+import type { AsyncStatus } from "../resource/types";
 
 /**
  * Identifies an entity inside the cache.

@@ -24,11 +24,6 @@ type ProjectStreamEventSource<EventName extends string = string> = {
 	) => void;
 };
 
-type StreamSubscriptionCallbacks = {
-	onOpen?: () => void;
-	onError?: (error: unknown) => void;
-};
-
 type BaseSubscription<EventSource> = {
 	eventSource: EventSource;
 	unsubscribe: () => void;

@@ -5,7 +5,7 @@ import {
 	removePromptHistoryEntry,
 } from "$lib/prompt-history-storage";
 import { readStorage, writeStorage } from "$lib/local-storage";
-import { isPreferredIde, type PreferredIde } from "$lib/shell-types";
+import { isPreferredIde, type PreferredIde } from "$lib/app/ide-options";
 
 export const PREFERRED_IDE_STORAGE_KEY = "preferred.ide";
 export const CHAT_WIDTH_MODE_STORAGE_KEY = "chat.width.mode";

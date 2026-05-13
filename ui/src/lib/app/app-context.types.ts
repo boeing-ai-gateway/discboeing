@@ -49,14 +49,10 @@ import type {
 	SubmitPromptResult,
 } from "$lib/session/session-context.types";
 import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
-import type {
-	AsyncStatus,
-	IdeOption,
-	PreferredIde,
-	RecentThreadSummary,
-	SessionSummary,
-	WindowControlsSide,
-} from "$lib/shell-types";
+import type { RecentThreadEntry } from "$lib/app/thread-switcher";
+import type { IdeOption, PreferredIde } from "$lib/app/ide-options";
+import type { WindowControlsSide } from "$lib/desktop/types";
+import type { AsyncStatus } from "$lib/resource/types";
 import type { ThemeMetadata, ThemeMode, ResolvedTheme } from "$lib/theme";
 import type { DesktopRuntimeKind } from "$lib/desktop/types";
 
@@ -94,7 +90,7 @@ export type AppUI = {
 	supportInfoDialogOpen: boolean;
 	desktopSidebarOpen: boolean;
 	mobileSidebarOpen: boolean;
-	visibleRecentThreads: RecentThreadSummary[];
+	visibleRecentThreads: RecentThreadEntry[];
 	mountedSessionIds: string[];
 	settingsDialog: {
 		open: boolean;
@@ -161,12 +157,12 @@ export type AppEnvironment = {
 
 export type AppSessions = {
 	sessions: Session[];
-	list: SessionSummary[];
-	recentThreads: RecentThreadSummary[];
+	list: Session[];
+	recentThreads: RecentThreadEntry[];
 	selectedId: string | null;
 	pendingId: string;
 	awaitingInitialStatusId: string | null;
-	selected: SessionSummary | null;
+	selected: Session | null;
 	peek: (sessionId: string) => Session | null;
 	shouldLoadSession: (
 		sessionId: string,

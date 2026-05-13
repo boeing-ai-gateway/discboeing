@@ -1,6 +1,6 @@
 import { api } from "$lib/api-client";
 import type { ModelInfo } from "$lib/api-types";
-import type { AsyncStatus } from "$lib/shell-types";
+import type { AsyncStatus } from "$lib/resource/types";
 
 import {
 	createEntityStore,

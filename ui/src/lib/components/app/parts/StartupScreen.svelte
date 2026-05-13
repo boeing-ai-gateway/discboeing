@@ -54,7 +54,6 @@
 		headline,
 		detail,
 		statusLabel = "Starting",
-		statusVariant = "outline",
 		progress = 0,
 		apiState = "offline",
 		retryCount,

@@ -2,8 +2,12 @@ import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
 import { isThreadSnapshotRunning } from "$lib/app/thread-status";
-import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
-import type { Thread, ThreadActivityStatus } from "$lib/api-types";
+import {
+	canLoadSessionThreads,
+	isSessionTransitioningStatus,
+	SessionStatus,
+} from "$lib/api-constants";
+import type { Session, Thread, ThreadActivityStatus } from "$lib/api-types";
 import {
 	clearComposerDraft,
 	readComposerDraft,
@@ -25,7 +29,6 @@ import type {
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
-import type { SessionSummary, ThreadSummary } from "$lib/shell-types";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
@@ -33,9 +36,9 @@ const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
 export function getThreadIsStreaming(
 	threadId: string,
-	thread: ThreadSummary | null,
+	thread: Thread | null,
 	isStreaming: boolean,
-	sessionThreadStatus?: SessionSummary["threadStatus"] | null,
+	sessionThreadStatus?: Session["threadStatus"] | null,
 ): boolean {
 	if (isStreaming || isThreadSnapshotRunning(thread)) {
 		return true;
@@ -80,7 +83,7 @@ export function parseComposerModelSelection(
 }
 
 export function getThreadComposerValues(
-	thread: ThreadSummary | null,
+	thread: Thread | null,
 	defaultModel: string | null,
 ): {
 	modelId: string | null;
@@ -151,7 +154,7 @@ export function clearComposerDraftState({
 
 export function applyStreamedThreadUpdate({
 	sessionId,
-	sessionName,
+	sessionName: _sessionName,
 	sessionDisplayName,
 	previousThreadName,
 	thread,
@@ -306,17 +309,17 @@ export function createThreadContext(
 		conversation.disconnect();
 	});
 
-	const threadSummary = $derived.by(
-		() => session.threads.list.find((t) => t.id === threadId) ?? null,
-	);
+	function getThread() {
+		return (
+			session.threads.list.find((thread) => thread.id === threadId) ?? null
+		);
+	}
+
 	const sourceComposerValues = $derived.by(() =>
-		getThreadComposerValues(
-			threadSummary,
-			app.preferences.defaultModel || null,
-		),
+		getThreadComposerValues(getThread(), app.preferences.defaultModel || null),
 	);
 	const initialComposerValues = getThreadComposerValues(
-		session.threads.list.find((t) => t.id === threadId) ?? null,
+		getThread(),
 		app.preferences.defaultModel || null,
 	);
 	let sourceComposerValuesKey = $state(
@@ -515,7 +518,7 @@ export function createThreadContext(
 			return threadId;
 		},
 		get thread() {
-			return threadSummary;
+			return getThread();
 		},
 		get modelId() {
 			return modelId;
@@ -552,21 +555,28 @@ export function createThreadContext(
 			return conversation.browserEventsByTurnId;
 		},
 		get promptQueue() {
-			return threadSummary?.promptQueue ?? [];
+			return getThread()?.promptQueue ?? [];
 		},
 		get status() {
 			return getThreadConversationStatus(conversation.status);
 		},
 		get isStreaming() {
-			return getThreadIsStreaming(
-				threadId,
-				threadSummary,
-				conversation.isStreaming,
-				session.current?.threadStatus,
+			return (
+				getThreadIsStreaming(
+					threadId,
+					getThread(),
+					conversation.isStreaming,
+					session.current?.threadStatus,
+				) ||
+				(!hasSession &&
+					(isSessionTransitioningStatus(session.current?.status) ||
+						conversation.messages.some(
+							(message) => message.provisional === true,
+						)))
 			);
 		},
 		get error() {
-			return conversation.error ?? threadSummary?.errorMessage ?? null;
+			return conversation.error ?? getThread()?.errorMessage ?? null;
 		},
 		get hasPendingQuestion() {
 			return conversation.hasPendingQuestion;

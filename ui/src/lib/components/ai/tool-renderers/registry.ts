@@ -47,10 +47,6 @@ export function getToolRenderer(
 	return TOOL_RENDERERS[toolName];
 }
 
-export function hasOptimizedRenderer(toolName: string): boolean {
-	return getToolRenderer(toolName) !== undefined;
-}
-
 export function getToolTitle(toolPart: DynamicToolPart): string | undefined {
 	const { toolName, input } = toolPart;
 

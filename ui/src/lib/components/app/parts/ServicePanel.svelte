@@ -14,7 +14,6 @@
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
 	import XCircleIcon from "@lucide/svelte/icons/x-circle";
 	import { tick, untrack } from "svelte";
-	import { api } from "$lib/api-client";
 	import { getApiRootBase } from "$lib/api-config";
 	import type { ServiceOutputEvent } from "$lib/api-types";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
@@ -25,7 +24,7 @@
 		ToggleGroup,
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
-	import type { ServiceItem } from "$lib/shell-types";
+	import type { ServiceItem } from "$lib/session/session-context.types";
 	import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 	import { openUrl } from "$lib/shell";
 	import { cn } from "$lib/utils";

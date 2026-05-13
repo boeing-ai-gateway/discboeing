@@ -205,6 +205,15 @@ test("conversation submit retries the stream after chat starts if subscribe went
 	);
 });
 
+test("conversation submit marks pending session starts as running immediately", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(
+		source,
+		/if \(!args\.hasSession\(\)\) \{\s*if \(!runAfter\) \{\s*handleCompletionStart\(\);\s*\}\s*const response = await args\.startChat\(/,
+	);
+});
+
 test("conversation loader falls back to stream finish when completion status never clears", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 

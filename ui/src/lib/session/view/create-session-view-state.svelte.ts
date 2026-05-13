@@ -1,9 +1,5 @@
 import type { WorkspaceValidationResult } from "$lib/api-types";
 import type { SessionActiveView } from "$lib/session/session-view.types";
-import {
-	getDefaultActiveView,
-	getSelectedFileFromView,
-} from "$lib/session/session-view.types";
 
 type CreateSessionViewStateArgs = {
 	getFiles: () => string[];
@@ -365,8 +361,4 @@ export function createSessionViewState(
 
 export function isChatView(activeView: SessionActiveView): boolean {
 	return activeView.kind === "chat";
-}
-
-export function getSelectedFile(activeView: SessionActiveView): string {
-	return getSelectedFileFromView(activeView);
 }

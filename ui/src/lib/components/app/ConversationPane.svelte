@@ -24,7 +24,6 @@
 		getHookPathDisplayLabel,
 		getUserMessageRenderableParts,
 		isAssistantToolPartQueued,
-		isConversationPaneMessageStreaming,
 	} from "$lib/components/app/conversation-pane-message-parts";
 	import {
 		Attachment,
@@ -810,10 +809,6 @@
 			message.role === "assistant" &&
 			message.id === latestConversationMessageId
 		);
-	}
-
-	function isActiveStreamingTurn(turnId: string): boolean {
-		return isStreaming && turnId === activeTurnId;
 	}
 
 	function updateIsNearBottom() {

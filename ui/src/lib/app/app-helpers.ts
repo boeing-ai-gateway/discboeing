@@ -1,4 +1,3 @@
-import type { Session } from "$lib/api-types";
 import { getApiBase } from "$lib/api-config";
 import {
 	getDesktopRuntimeKind,
@@ -6,7 +5,7 @@ import {
 	supportsAppUpdates,
 	supportsNativeWindowControls,
 } from "$lib/shell";
-import { type SessionSummary, type WindowControlsSide } from "$lib/shell-types";
+import type { WindowControlsSide } from "$lib/desktop/types";
 
 export function detectWindowControlsSide(): WindowControlsSide {
 	if (typeof navigator === "undefined") {
@@ -26,10 +25,6 @@ export function getCurrentTimestamp(): string {
 	return new Date().toISOString();
 }
 
-export async function delay(ms: number) {
-	await new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
 export function compareIsoDatesDesc(left: string, right: string) {
 	const leftTime = new Date(left).getTime();
 	const rightTime = new Date(right).getTime();
@@ -37,23 +32,6 @@ export function compareIsoDatesDesc(left: string, right: string) {
 		return 0;
 	}
 	return rightTime - leftTime;
-}
-
-export function toSessionSummaries(sessions: Session[]): SessionSummary[] {
-	return [...sessions]
-		.sort((a, b) => compareIsoDatesDesc(a.createdAt, b.createdAt))
-		.map((session) => ({
-			id: session.id,
-			name: session.displayName || session.name,
-			status: session.status,
-			sandboxStatus: session.sandboxStatus,
-			commitStatus: session.commitStatus,
-			commitOperation: session.commitOperation,
-			commitError: session.commitError,
-			threadStatus: session.threadStatus,
-			isRecent: false,
-			workspaceId: session.workspaceId,
-		}));
 }
 
 export function getAppEnvironment() {

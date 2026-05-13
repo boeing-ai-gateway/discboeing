@@ -259,12 +259,6 @@ export function summarizeApplyPatchTitle(input: unknown): string | undefined {
 	return `${fileName} (+${operationCount - 1})`;
 }
 
-export function getApplyPatchDisplayPath(
-	operation: ApplyPatchOperation,
-): string {
-	return operation.movePath || operation.path;
-}
-
 function emptyParseResult(raw: string, error: string): ApplyPatchParseResult {
 	return {
 		raw,

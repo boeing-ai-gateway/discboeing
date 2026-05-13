@@ -1,22 +1,15 @@
 <script lang="ts">
 	import KeyboardShortcutHelpDialog from "$lib/components/app/parts/KeyboardShortcutHelpDialog.svelte";
-	import RecentThreadSwitcherDialog from "$lib/components/app/parts/RecentThreadSwitcherDialog.svelte";
+	import RecentThreadSwitcherDialog from "$lib/components/app/RecentThreadSwitcherDialog.svelte";
 	import {
 		getAvailableSwitcherThreads,
 		getThreadSwitcherThreads,
 		recentThreadKey,
 	} from "$lib/app/thread-switcher";
 	import {
-		resolveThreadContextDisplayStatus,
-		resolveThreadDisplayStatus,
-		type ThreadDisplayStatusValue,
-	} from "$lib/app/thread-status";
-	import type { SessionThreadActivityStatusValue } from "$lib/api-types";
-	import {
 		DESKTOP_SERVICE_ID,
-		type RecentThreadSummary,
 		VSCODE_SERVICE_ID,
-	} from "$lib/shell-types";
+	} from "$lib/session/service-ids";
 	import {
 		detectIsMacPlatform,
 		getGlobalShortcuts,
@@ -55,59 +48,12 @@
 			selectedThreadKey,
 		}),
 	);
-	const switcherThreadStatuses = $derived.by(
-		(): Record<string, ThreadDisplayStatusValue> =>
-			Object.fromEntries(
-				switcherThreads.map((thread) => [
-					recentThreadKey(thread.sessionId, thread.threadId),
-					switcherThreadDisplayStatus(thread),
-				]),
-			),
-	);
 	const switcherHelpText =
 		"Hold the shortcut modifier, tap to cycle, release to switch";
 	let tabSwitcherOpen = $state(false);
 	let tabSwitcherSelectedKey = $state<string | null>(null);
 	let tabSwitcherCommitModifier = $state<SwitcherCommitModifier | null>(null);
 	let keyboardHelpOpen = $state(false);
-
-	function threadContextDisplayStatus(
-		sessionId: string,
-		threadId: string,
-	): SessionThreadActivityStatusValue | null {
-		const threadContext = app.sessions.sessionContexts
-			.get(sessionId)
-			?.threadContexts.get(threadId);
-		return resolveThreadContextDisplayStatus(threadContext);
-	}
-
-	function switcherThreadDisplayStatus(
-		thread: RecentThreadSummary,
-	): ThreadDisplayStatusValue {
-		const session = app.sessions.peek(thread.sessionId);
-		const liveThread = app.sessions.sessionContexts
-			.get(thread.sessionId)
-			?.threads.list.find((item) => item.id === thread.threadId);
-		if (!session || !liveThread) {
-			return "unknown";
-		}
-
-		return resolveThreadDisplayStatus({
-			sessionStatus: session.status,
-			sessionActivityStatus: session.threadStatus?.status,
-			commitStatus: session.commitStatus,
-			commitOperation: session.commitOperation,
-			localActivityStatus: threadContextDisplayStatus(
-				thread.sessionId,
-				thread.threadId,
-			),
-			threadActivityStatus: liveThread.activityStatus?.status,
-			threadState: liveThread.state,
-			pendingQuestion: liveThread.pendingQuestion,
-			errorMessage: liveThread.errorMessage,
-			promptQueueCount: liveThread.promptQueue?.length,
-		});
-	}
 
 	function getTabSwitcherSelectedIndex() {
 		if (!switcherThreads.length) {
@@ -369,7 +315,6 @@
 <RecentThreadSwitcherDialog
 	open={tabSwitcherOpen}
 	threads={switcherThreads}
-	threadStatuses={switcherThreadStatuses}
 	selectedKey={tabSwitcherSelectedKey}
 	helpText={switcherHelpText}
 	onHover={handleTabSwitcherHover}
