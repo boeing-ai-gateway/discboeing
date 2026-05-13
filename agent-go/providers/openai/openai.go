@@ -161,6 +161,9 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 			body["reasoning"] = reasoning
 			body["include"] = []string{"reasoning.encrypted_content"}
 		}
+		if serviceTier := resolveOpenAIServiceTier(req.ServiceTier, req.Model.ProviderID, req.Model.ModelID); serviceTier != "" {
+			body["service_tier"] = serviceTier
+		}
 
 		if p.ws != nil {
 			prevRespID := lastAssistantID(req.Messages)
@@ -208,6 +211,20 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 
 		parseSSEStream(resp.Body, yield)
 	}
+}
+
+func resolveOpenAIServiceTier(tier, providerID, modelID string) string {
+	switch strings.TrimSpace(strings.ToLower(tier)) {
+	case "fast", "priority":
+		tier = "priority"
+	default:
+		return ""
+	}
+	modelInfo := modelsdev.Lookup(providerID, modelID)
+	if modelInfo == nil || !modelInfo.SupportsServiceTier(tier) {
+		return ""
+	}
+	return tier
 }
 
 func buildWebSocketIncrementalBody(baseBody map[string]any, msgs []message.Message, customToolNames map[string]struct{}, prevRespID string) (map[string]any, error) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Info is the persisted metadata view for a thread.
@@ -16,6 +17,7 @@ type Info struct {
 	ErrorMessage    string
 	Model           string
 	Reasoning       string
+	ServiceTier     string
 	State           State
 	PendingQuestion bool
 	ActiveCommand   string
@@ -195,6 +197,10 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 	if state, err := s.LoadTurnState(threadID); err == nil && state != nil {
 		pendingQuestion = state.Phase == PhaseWaitingForAnswer
 	}
+	serviceTier := cfg.ServiceTier
+	if strings.TrimSpace(serviceTier) == "" {
+		serviceTier = s.serviceTierFromTurnHistory(threadID, cfg)
+	}
 	return Info{
 		ID:              threadID,
 		Name:            strings.TrimSpace(cfg.Name),
@@ -203,9 +209,49 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
 		Model:           cfg.Model,
 		Reasoning:       string(cfg.Reasoning),
+		ServiceTier:     serviceTier,
 		State:           cfg.LastTurnState,
 		PendingQuestion: pendingQuestion,
 		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
 		Metadata:        cfg.Metadata.RawMessage(),
 	}
+}
+
+func (s *Store) serviceTierFromTurnHistory(threadID string, cfg Config) string {
+	if strings.TrimSpace(cfg.ActiveLeafID) != "" {
+		if turnIDs, err := s.HistoryTurnIDs(threadID); err == nil {
+			if turnID := turnIDs[cfg.ActiveLeafID]; strings.TrimSpace(turnID) != "" {
+				if state, err := s.LoadTurnRecord(threadID, turnID); err == nil && state != nil {
+					return strings.TrimSpace(state.Config.ServiceTier)
+				}
+			}
+		}
+	}
+
+	entries, err := os.ReadDir(s.turnsDir(threadID))
+	if err != nil {
+		return ""
+	}
+	var latestTime time.Time
+	latestTier := ""
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		state, err := s.LoadTurnRecord(threadID, entry.Name())
+		if err != nil || state == nil || strings.TrimSpace(state.Config.ServiceTier) == "" {
+			continue
+		}
+		updatedAt := state.StartedAt
+		if state.UpdatedAt != nil {
+			updatedAt = state.UpdatedAt
+		}
+		if latestTier == "" || (updatedAt != nil && updatedAt.After(latestTime)) {
+			if updatedAt != nil {
+				latestTime = *updatedAt
+			}
+			latestTier = strings.TrimSpace(state.Config.ServiceTier)
+		}
+	}
+	return latestTier
 }

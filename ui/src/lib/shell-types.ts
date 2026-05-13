@@ -131,6 +131,7 @@ export type ThreadSummary = {
 	name: string;
 	model?: string;
 	reasoning?: string;
+	serviceTier?: string;
 	errorMessage?: string;
 	state?: ThreadState;
 	pendingQuestion?: boolean;

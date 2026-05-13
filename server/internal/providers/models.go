@@ -16,6 +16,7 @@ type ModelInfo struct {
 	Reasoning          bool     `json:"reasoning"` // Whether model supports extended thinking
 	ReasoningLevels    []string `json:"reasoningLevels,omitempty"`
 	DefaultReasonLevel string   `json:"defaultReasonLevel,omitempty"`
+	ServiceTiers       []string `json:"serviceTiers,omitempty"`
 }
 
 func rawModelID(modelID string) string {
@@ -36,6 +37,7 @@ func toServerModelInfo(providerID, providerName string, md modelsdev.ModelInfo) 
 		Reasoning:          md.Reasoning,
 		ReasoningLevels:    append([]string(nil), md.ReasoningLevels...),
 		DefaultReasonLevel: md.DefaultReasonLevel,
+		ServiceTiers:       append([]string(nil), md.Capabilities.ServiceTiers...),
 	}
 }
 

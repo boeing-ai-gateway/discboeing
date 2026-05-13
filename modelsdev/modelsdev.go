@@ -42,6 +42,7 @@ var overlayJSON []byte
 // request fields whose support varies across models.
 type ModelCapabilities struct {
 	ReasoningSummary *bool // nil = enabled by default for reasoning models
+	ServiceTiers     []string
 }
 
 // ModelCost holds the per-token cost for a model.
@@ -93,7 +94,8 @@ type providerEntry struct {
 }
 
 type modelCapabilities struct {
-	ReasoningSummary *bool `json:"reasoningSummary"`
+	ReasoningSummary *bool    `json:"reasoningSummary"`
+	ServiceTiers     []string `json:"serviceTiers"`
 }
 
 type modelMetadata struct {
@@ -255,6 +257,9 @@ func applyOverlay() {
 				if ov.Capabilities.ReasoningSummary != nil {
 					m.Capabilities.ReasoningSummary = ov.Capabilities.ReasoningSummary
 				}
+				if len(ov.Capabilities.ServiceTiers) > 0 {
+					m.Capabilities.ServiceTiers = append([]string(nil), ov.Capabilities.ServiceTiers...)
+				}
 			}
 			if len(ov.ReasoningLevels) > 0 {
 				m.ReasoningLevels = append([]string(nil), ov.ReasoningLevels...)
@@ -412,6 +417,24 @@ func (m *ModelInfo) SupportsReasoningSummary() bool {
 	return m.Reasoning
 }
 
+// SupportsServiceTier reports whether the model accepts the requested
+// service_tier value.
+func (m *ModelInfo) SupportsServiceTier(tier string) bool {
+	if m == nil {
+		return false
+	}
+	tier = strings.TrimSpace(strings.ToLower(tier))
+	if tier == "" {
+		return false
+	}
+	for _, candidate := range m.Capabilities.ServiceTiers {
+		if strings.EqualFold(candidate, tier) {
+			return true
+		}
+	}
+	return false
+}
+
 func toModelInfo(m modelMetadata) *ModelInfo {
 	return &ModelInfo{
 		ID:                 m.ID,
@@ -428,6 +451,7 @@ func toModelInfo(m modelMetadata) *ModelInfo {
 		CustomTools:        m.CustomTools,
 		Capabilities: ModelCapabilities{
 			ReasoningSummary: m.Capabilities.ReasoningSummary,
+			ServiceTiers:     append([]string(nil), m.Capabilities.ServiceTiers...),
 		},
 		Cost: ModelCost{Input: m.Cost.Input, Output: m.Cost.Output},
 	}

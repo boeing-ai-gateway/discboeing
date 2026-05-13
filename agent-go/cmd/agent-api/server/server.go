@@ -319,6 +319,7 @@ func threadUpdateChunk(conversations *agent.ConversationManager, info agent.Thre
 				ErrorMessage:  info.ErrorMessage,
 				Model:         info.Model,
 				Reasoning:     info.Reasoning,
+				ServiceTier:   info.ServiceTier,
 				State:         string(info.State),
 				ActiveCommand: info.ActiveCommand,
 				Metadata:      info.Metadata,

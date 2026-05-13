@@ -205,10 +205,11 @@ func (m *Manager) StartNext(threadID string) {
 	m.notifyChange(threadID, queue)
 
 	req := agent.PromptRequest{
-		UserParts: append([]message.UIPart{}, queuedPrompt.Message.Parts...),
-		Metadata:  queuedPrompt.Message.Metadata,
-		Model:     queuedPrompt.Model,
-		Reasoning: queuedPrompt.Reasoning,
+		UserParts:   append([]message.UIPart{}, queuedPrompt.Message.Parts...),
+		Metadata:    queuedPrompt.Message.Metadata,
+		Model:       queuedPrompt.Model,
+		Reasoning:   queuedPrompt.Reasoning,
+		ServiceTier: queuedPrompt.ServiceTier,
 	}
 	if _, err := m.startPromptRequest(threadID, req); err != nil {
 		log.Printf("queue: failed to start queued prompt for %s: %v", threadID, err)

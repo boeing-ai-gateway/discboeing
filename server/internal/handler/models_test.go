@@ -67,18 +67,20 @@ func TestModelConversion(t *testing.T) {
 		{
 			name: "model with all fields",
 			serviceModel: service.Model{
-				ID:          "anthropic/claude-opus-4",
-				Name:        "Claude Opus 4",
-				Provider:    "Anthropic",
-				Description: "Most capable model",
-				Reasoning:   true,
+				ID:           "anthropic/claude-opus-4",
+				Name:         "Claude Opus 4",
+				Provider:     "Anthropic",
+				Description:  "Most capable model",
+				Reasoning:    true,
+				ServiceTiers: []string{"priority"},
 			},
 			expectedInfo: ModelInfo{
-				ID:          "anthropic/claude-opus-4",
-				Name:        "Claude Opus 4",
-				Provider:    "Anthropic",
-				Description: "Most capable model",
-				Reasoning:   true,
+				ID:           "anthropic/claude-opus-4",
+				Name:         "Claude Opus 4",
+				Provider:     "Anthropic",
+				Description:  "Most capable model",
+				Reasoning:    true,
+				ServiceTiers: []string{"priority"},
 			},
 		},
 		{
@@ -117,11 +119,14 @@ func TestModelConversion(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// This is how the conversion is done in the handler
 			result := ModelInfo{
-				ID:          tc.serviceModel.ID,
-				Name:        tc.serviceModel.Name,
-				Provider:    tc.serviceModel.Provider,
-				Description: tc.serviceModel.Description,
-				Reasoning:   tc.serviceModel.Reasoning,
+				ID:               tc.serviceModel.ID,
+				Name:             tc.serviceModel.Name,
+				Provider:         tc.serviceModel.Provider,
+				Description:      tc.serviceModel.Description,
+				Reasoning:        tc.serviceModel.Reasoning,
+				ReasoningLevels:  tc.serviceModel.ReasoningLevels,
+				DefaultReasoning: tc.serviceModel.DefaultReasoning,
+				ServiceTiers:     tc.serviceModel.ServiceTiers,
 			}
 
 			// Compare all fields

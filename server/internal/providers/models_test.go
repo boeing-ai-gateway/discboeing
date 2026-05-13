@@ -15,6 +15,7 @@ func TestGetModelsForProvidersUsesProviderSpecificModels(t *testing.T) {
 	}
 
 	foundSpark := false
+	foundPriorityTier := false
 	for _, model := range models {
 		if !strings.HasPrefix(model.ID, "codex/") {
 			t.Fatalf("expected codex-qualified model ID, got %q", model.ID)
@@ -25,9 +26,17 @@ func TestGetModelsForProvidersUsesProviderSpecificModels(t *testing.T) {
 		if model.ID == "codex/gpt-5.3-codex-spark" {
 			foundSpark = true
 		}
+		for _, tier := range model.ServiceTiers {
+			if tier == "priority" {
+				foundPriorityTier = true
+			}
+		}
 	}
 	if !foundSpark {
 		t.Fatal("expected codex/gpt-5.3-codex-spark to be listed")
+	}
+	if !foundPriorityTier {
+		t.Fatal("expected codex models to report priority service tier")
 	}
 }
 

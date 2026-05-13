@@ -57,6 +57,7 @@ type TurnConfig struct {
 	Temperature      *float64                   `json:"temperature,omitempty"`
 	TopP             *float64                   `json:"topP,omitempty"`
 	Reasoning        providers.Reasoning        `json:"reasoning,omitempty"`
+	ServiceTier      string                     `json:"serviceTier,omitempty"`
 	ProviderOptions  json.RawMessage            `json:"providerOptions,omitempty"`
 	ContextWindow    int                        `json:"contextWindow,omitempty"`   // model context window in tokens
 	MaxOutputTokens  int                        `json:"maxOutputTokens,omitempty"` // model max output tokens
@@ -1656,6 +1657,7 @@ func runCompletion(
 		Temperature:     cfg.Temperature,
 		TopP:            cfg.TopP,
 		Reasoning:       cfg.Reasoning,
+		ServiceTier:     cfg.ServiceTier,
 		ProviderOptions: cfg.ProviderOptions,
 	}
 

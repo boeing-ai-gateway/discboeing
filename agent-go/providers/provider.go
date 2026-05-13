@@ -114,6 +114,10 @@ type CompleteRequest struct {
 	// Providers translate this to their native API format.
 	Reasoning Reasoning `json:"reasoning,omitempty"`
 
+	// ServiceTier selects an optional provider latency/cost tier. Providers
+	// omit unsupported tiers for the selected model.
+	ServiceTier string `json:"serviceTier,omitempty"`
+
 	// ProviderOptions is an opaque JSON blob for provider-specific parameters
 	// that don't fit the common fields.
 	ProviderOptions json.RawMessage `json:"providerOptions,omitempty"`

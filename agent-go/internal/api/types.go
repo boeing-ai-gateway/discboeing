@@ -20,6 +20,7 @@ type ChatRequest struct {
 	Messages     []message.UIMessage `json:"messages"`
 	Model        string              `json:"model,omitempty"`
 	Reasoning    string              `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
+	ServiceTier  string              `json:"serviceTier,omitempty"`
 	RunAfter     string              `json:"runAfter,omitempty"`
 	FreshContext bool                `json:"freshContext,omitempty"`
 	SubagentType string              `json:"subagentType,omitempty"`
@@ -109,9 +110,10 @@ type Thread struct {
 	CWD             string          `json:"cwd,omitempty"`
 	LastMessage     string          `json:"lastMessage,omitempty"`
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
-	Model           string          `json:"model,omitempty"`     // full "providerId/modelId" ref
-	Reasoning       string          `json:"reasoning,omitempty"` // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
-	State           string          `json:"state,omitempty"`     // "interrupted" or "cancelled"
+	Model           string          `json:"model,omitempty"`       // full "providerId/modelId" ref
+	Reasoning       string          `json:"reasoning,omitempty"`   // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
+	ServiceTier     string          `json:"serviceTier,omitempty"` // provider latency tier, such as "priority"
+	State           string          `json:"state,omitempty"`       // "interrupted" or "cancelled"
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"`
 	ActiveCommand   string          `json:"activeCommand,omitempty"` // empty when no command is running
 	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
@@ -120,12 +122,13 @@ type Thread struct {
 }
 
 type QueuedPrompt struct {
-	ID        string            `json:"id"`
-	CreatedAt string            `json:"createdAt,omitempty"`
-	RunAfter  string            `json:"runAfter,omitempty"`
-	Message   message.UIMessage `json:"message"`
-	Model     string            `json:"model,omitempty"`
-	Reasoning string            `json:"reasoning,omitempty"`
+	ID          string            `json:"id"`
+	CreatedAt   string            `json:"createdAt,omitempty"`
+	RunAfter    string            `json:"runAfter,omitempty"`
+	Message     message.UIMessage `json:"message"`
+	Model       string            `json:"model,omitempty"`
+	Reasoning   string            `json:"reasoning,omitempty"`
+	ServiceTier string            `json:"serviceTier,omitempty"`
 }
 
 // ThreadActivity is the sparse non-idle activity state exposed on thread

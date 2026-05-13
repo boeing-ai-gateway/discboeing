@@ -533,6 +533,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			parts,
 			modelId,
 			reasoning,
+			serviceTier,
 			workspaceId,
 			providerId,
 			workspaceType,
@@ -543,6 +544,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			parts: ChatMessage["parts"];
 			modelId: string | null;
 			reasoning: string | undefined;
+			serviceTier: string | undefined;
 			workspaceId?: string;
 			providerId?: string;
 			workspaceType?: "local" | "git" | null;
@@ -561,6 +563,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			streamError = null;
 			const nextModel = normalizeModelId(modelId ?? null) ?? "";
 			const nextReasoning = reasoning ?? "";
+			const nextServiceTier = serviceTier ?? "";
 			const submittingWhileGenerating =
 				args.hasSession() && (status === "streaming" || status === "loading");
 			const shouldOptimisticallyInsert =
@@ -591,6 +594,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 							: {}),
 						model: nextModel,
 						reasoning: nextReasoning,
+						serviceTier: nextServiceTier,
 						...(runAfter ? { runAfter } : {}),
 					});
 					return {
@@ -616,6 +620,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					messages: userMessage ? getSubmitMessages(userMessage) : [],
 					model: nextModel,
 					reasoning: nextReasoning,
+					serviceTier: nextServiceTier,
 					...(runAfter ? { runAfter } : {}),
 				});
 				if ((activeSubscription?.getState() ?? "idle") === "idle") {

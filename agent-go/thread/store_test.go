@@ -672,6 +672,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		ErrorMessage:  "invalid model",
 		LastTurnState: StateCancelled,
 		Model:         "anthropic/claude-sonnet-4-6",
+		ServiceTier:   "priority",
 		CWD:           "/tmp/project",
 		ActiveLeafID:  "msg-active",
 		ActiveCommand: "discobot-commit",
@@ -691,6 +692,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.Model != cfg.Model {
 		t.Errorf("expected model=%q, got %q", cfg.Model, loaded.Model)
+	}
+	if loaded.ServiceTier != cfg.ServiceTier {
+		t.Errorf("expected serviceTier=%q, got %q", cfg.ServiceTier, loaded.ServiceTier)
 	}
 	if loaded.Name != cfg.Name {
 		t.Errorf("expected name=%q, got %q", cfg.Name, loaded.Name)
@@ -718,6 +722,39 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if len(loaded.CommunicatedSkillLikeEntries) != 1 || loaded.CommunicatedSkillLikeEntries[0] != cfg.CommunicatedSkillLikeEntries[0] {
 		t.Errorf("expected communicatedSkillLikeEntries=%#v, got %#v", cfg.CommunicatedSkillLikeEntries, loaded.CommunicatedSkillLikeEntries)
+	}
+}
+
+func TestThreadInfoFromConfigFallsBackToTurnServiceTier(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread1"
+	assistantID := "assistant1"
+
+	if err := store.SaveMessage(threadID, StoredMessage{
+		ID:       assistantID,
+		ParentID: "user1",
+		Message:  message.Message{Role: "assistant"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveTurnState(threadID, TurnState{
+		ID:     "turn1",
+		Config: TurnConfig{ServiceTier: "priority"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult(threadID, "turn1", 0, StepResult{
+		AssistantMessageID: assistantID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	info := store.ThreadInfoFromConfig(threadID, Config{
+		Model:        "codex/gpt-5.5",
+		ActiveLeafID: assistantID,
+	})
+	if info.ServiceTier != "priority" {
+		t.Fatalf("expected service tier from turn history, got %q", info.ServiceTier)
 	}
 }
 

@@ -339,6 +339,7 @@ type ThreadUpdateInfo struct {
 	ErrorMessage  string                   `json:"errorMessage,omitempty"`
 	Model         string                   `json:"model,omitempty"`
 	Reasoning     string                   `json:"reasoning,omitempty"`
+	ServiceTier   string                   `json:"serviceTier,omitempty"`
 	State         string                   `json:"state,omitempty"`
 	ActiveCommand string                   `json:"activeCommand,omitempty"`
 	Pending       *bool                    `json:"pending,omitempty"`
@@ -348,12 +349,13 @@ type ThreadUpdateInfo struct {
 
 // ThreadQueuedPromptInfo summarizes one queued prompt for thread chrome.
 type ThreadQueuedPromptInfo struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt,omitzero"`
-	RunAfter  time.Time `json:"runAfter,omitzero"`
-	Message   UIMessage `json:"message"`
-	Model     string    `json:"model,omitempty"`
-	Reasoning string    `json:"reasoning,omitempty"`
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"createdAt,omitzero"`
+	RunAfter    time.Time `json:"runAfter,omitzero"`
+	Message     UIMessage `json:"message"`
+	Model       string    `json:"model,omitempty"`
+	Reasoning   string    `json:"reasoning,omitempty"`
+	ServiceTier string    `json:"serviceTier,omitempty"`
 }
 
 // ThreadUpdateData is the payload for a data-thread-update chunk.

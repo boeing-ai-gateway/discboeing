@@ -19,6 +19,7 @@
 	import ConversationComposerHooksControl from "$lib/components/app/parts/ConversationComposerHooksControl.svelte";
 	import ConversationComposerModelControl from "$lib/components/app/parts/ConversationComposerModelControl.svelte";
 	import ConversationComposerReasoningControl from "$lib/components/app/parts/ConversationComposerReasoningControl.svelte";
+	import ConversationComposerServiceTierControl from "$lib/components/app/parts/ConversationComposerServiceTierControl.svelte";
 	import ConversationPromptQueuePanel from "$lib/components/app/parts/ConversationPromptQueuePanel.svelte";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ConversationComposerSubmitButton from "$lib/components/app/parts/ConversationComposerSubmitButton.svelte";
@@ -53,6 +54,7 @@
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import {
 		normalizeThreadComposerReasoning,
+		normalizeThreadComposerServiceTier,
 		parseComposerModelSelection,
 		useThreadContext,
 	} from "$lib/context/thread-context.svelte";
@@ -159,6 +161,43 @@
 		return (left ?? "default") === (right ?? "default");
 	}
 
+	function normalizeServiceTierForModel(
+		model: ModelInfo | null,
+		serviceTier: string | undefined,
+	): string | undefined {
+		const normalizedTier = normalizeThreadComposerServiceTier(serviceTier);
+		if (!normalizedTier) {
+			return undefined;
+		}
+		const serviceTiers = model?.serviceTiers ?? [];
+		return serviceTiers.some(
+			(tier) => tier.toLowerCase() === normalizedTier.toLowerCase(),
+		)
+			? normalizedTier
+			: undefined;
+	}
+
+	function getServiceTierForModel(
+		model: ModelInfo | null,
+		preferredServiceTier: string | null | undefined,
+		fallbackServiceTier: string | undefined,
+	): string | undefined {
+		if (preferredServiceTier !== undefined) {
+			return normalizeServiceTierForModel(
+				model,
+				preferredServiceTier ?? undefined,
+			);
+		}
+		return normalizeServiceTierForModel(model, fallbackServiceTier);
+	}
+
+	function isSameServiceTierSelection(
+		left: string | undefined,
+		right: string | undefined,
+	): boolean {
+		return (left ?? "") === (right ?? "");
+	}
+
 	const effectiveModelId = $derived.by(
 		() => thread.nextModelId ?? thread.modelId,
 	);
@@ -171,9 +210,17 @@
 	const effectiveReasoning = $derived.by(() =>
 		getReasoningForModel(selectedModel, thread.nextReasoning, thread.reasoning),
 	);
+	const effectiveServiceTier = $derived.by(() =>
+		getServiceTierForModel(
+			selectedModel,
+			thread.nextServiceTier,
+			thread.serviceTier,
+		),
+	);
 	const reasoningLevels = $derived.by(
 		() => selectedModel?.reasoningLevels ?? [],
 	);
+	const serviceTiers = $derived.by(() => selectedModel?.serviceTiers ?? []);
 	const hasAvailableModels = $derived.by(() => models.list.length > 0);
 	const awaitingInitialStatus = $derived.by(
 		() => sessions.awaitingInitialStatusId === session.sessionId,
@@ -240,6 +287,11 @@
 			thread.nextReasoning,
 			thread.reasoning,
 		);
+		const nextServiceTier = getServiceTierForModel(
+			nextModel,
+			thread.nextServiceTier,
+			thread.serviceTier,
+		);
 
 		if (parsedSelection.modelId === thread.modelId) {
 			thread.setNextModelId(undefined);
@@ -248,11 +300,17 @@
 					? undefined
 					: nextReasoning,
 			);
+			thread.setNextServiceTier(
+				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
+					? undefined
+					: nextServiceTier,
+			);
 			return;
 		}
 
 		thread.setNextModelId(parsedSelection.modelId);
 		thread.setNextReasoning(nextReasoning);
+		thread.setNextServiceTier(nextServiceTier);
 	}
 
 	function handleReasoningSelect(nextReasoning: string | undefined) {
@@ -276,6 +334,15 @@
 				isSameReasoningSelection(nextReasoning, thread.reasoning)
 				? undefined
 				: nextReasoning,
+		);
+	}
+
+	function handleServiceTierSelect(nextServiceTier: string | undefined) {
+		thread.setNextServiceTier(
+			thread.nextModelId === undefined &&
+				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
+				? undefined
+				: (nextServiceTier ?? null),
 		);
 	}
 
@@ -858,6 +925,13 @@
 									defaultValue={selectedModel.defaultReasoning}
 									levels={reasoningLevels}
 									onSelect={handleReasoningSelect}
+								/>
+							{/if}
+							{#if serviceTiers.length > 0}
+								<ConversationComposerServiceTierControl
+									value={effectiveServiceTier}
+									tiers={serviceTiers}
+									onSelect={handleServiceTierSelect}
 								/>
 							{/if}
 						</div>

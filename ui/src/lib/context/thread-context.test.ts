@@ -7,6 +7,7 @@ import {
 	getThreadComposerValues,
 	getThreadConversationStatus,
 	normalizeThreadComposerReasoning,
+	normalizeThreadComposerServiceTier,
 	parseComposerModelSelection,
 	resolveThreadComposerSubmitValues,
 } from "./thread-context.svelte";
@@ -113,12 +114,14 @@ test("getThreadComposerValues restores thread model and reasoning", () => {
 				name: "Main",
 				model: "openai/gpt-5",
 				reasoning: "high",
+				serviceTier: "priority",
 			},
 			"anthropic/claude-sonnet-4-6",
 		),
 		{
 			modelId: "openai/gpt-5",
 			reasoning: "high",
+			serviceTier: "priority",
 		},
 	);
 });
@@ -129,6 +132,7 @@ test("getThreadComposerValues falls back to the default model", () => {
 		{
 			modelId: "anthropic/claude-sonnet-4-6",
 			reasoning: undefined,
+			serviceTier: undefined,
 		},
 	);
 });
@@ -138,6 +142,13 @@ test("normalizeThreadComposerReasoning keeps explicit levels and drops empty val
 	assert.equal(normalizeThreadComposerReasoning("medium"), "medium");
 	assert.equal(normalizeThreadComposerReasoning(""), undefined);
 	assert.equal(normalizeThreadComposerReasoning(undefined), undefined);
+});
+
+test("normalizeThreadComposerServiceTier keeps explicit tiers and drops empty values", () => {
+	assert.equal(normalizeThreadComposerServiceTier("priority"), "priority");
+	assert.equal(normalizeThreadComposerServiceTier("fast"), "priority");
+	assert.equal(normalizeThreadComposerServiceTier(""), undefined);
+	assert.equal(normalizeThreadComposerServiceTier(undefined), undefined);
 });
 
 test("parseComposerModelSelection keeps only the model identifier", () => {
@@ -154,12 +165,15 @@ test("resolveThreadComposerSubmitValues falls back to current values when next v
 		resolveThreadComposerSubmitValues({
 			modelId: "openai/gpt-5",
 			reasoning: "high",
+			serviceTier: "priority",
 			nextModelId: undefined,
 			nextReasoning: undefined,
+			nextServiceTier: undefined,
 		}),
 		{
 			modelId: "openai/gpt-5",
 			reasoning: "high",
+			serviceTier: "priority",
 		},
 	);
 });
@@ -169,12 +183,15 @@ test("resolveThreadComposerSubmitValues clears reasoning when using the default 
 		resolveThreadComposerSubmitValues({
 			modelId: "openai/gpt-5",
 			reasoning: "high",
+			serviceTier: "priority",
 			nextModelId: null,
 			nextReasoning: "default",
+			nextServiceTier: "priority",
 		}),
 		{
 			modelId: null,
 			reasoning: undefined,
+			serviceTier: undefined,
 		},
 	);
 });
@@ -184,12 +201,33 @@ test("resolveThreadComposerSubmitValues prefers staged next values", () => {
 		resolveThreadComposerSubmitValues({
 			modelId: "anthropic/claude-sonnet-4-6",
 			reasoning: "auto",
+			serviceTier: undefined,
 			nextModelId: "openai/gpt-5",
 			nextReasoning: "high",
+			nextServiceTier: "priority",
 		}),
 		{
 			modelId: "openai/gpt-5",
 			reasoning: "high",
+			serviceTier: "priority",
+		},
+	);
+});
+
+test("resolveThreadComposerSubmitValues allows staged standard service tier", () => {
+	assert.deepEqual(
+		resolveThreadComposerSubmitValues({
+			modelId: "codex/gpt-5.5",
+			reasoning: "default",
+			serviceTier: "priority",
+			nextModelId: undefined,
+			nextReasoning: undefined,
+			nextServiceTier: null,
+		}),
+		{
+			modelId: "codex/gpt-5.5",
+			reasoning: "default",
+			serviceTier: undefined,
 		},
 	);
 });

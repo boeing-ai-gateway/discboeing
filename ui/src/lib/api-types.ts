@@ -15,6 +15,7 @@ export interface Thread {
 	errorMessage?: string;
 	model?: string;
 	reasoning?: string;
+	serviceTier?: string;
 	state?: ThreadState;
 	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running
@@ -59,6 +60,7 @@ export interface QueuedPrompt {
 	message: QueuedPromptMessage;
 	model?: string;
 	reasoning?: string;
+	serviceTier?: string;
 }
 
 export type ChatSlashCommandMetadata = {
@@ -462,6 +464,7 @@ export interface ModelInfo {
 	reasoning?: boolean;
 	reasoningLevels?: string[];
 	defaultReasoning?: string;
+	serviceTiers?: string[];
 }
 
 export interface ModelsResponse {
@@ -1023,6 +1026,7 @@ export interface StartChatRequest {
 	providerId?: string;
 	model?: string;
 	reasoning?: string;
+	serviceTier?: string;
 	runAfter?: string;
 	trigger?: string;
 	messageId?: string;

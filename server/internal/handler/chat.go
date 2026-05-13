@@ -50,6 +50,8 @@ type ChatRequest struct {
 	// reasoning level such as "auto", "low", "medium", "high", "xhigh",
 	// "none", "default", or "" for model/provider default behavior.
 	Reasoning string `json:"reasoning,omitempty"`
+	// ServiceTier optionally selects a provider latency tier, such as "fast".
+	ServiceTier string `json:"serviceTier,omitempty"`
 	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
 	RunAfter string `json:"runAfter,omitempty"`
 }
@@ -168,7 +170,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	// client aborts the request. The explicit cancel endpoint
 	// (/sessions/{sessionId}/threads/{threadId}/cancel) remains the way to stop a running chat completion.
 	sendCtx := context.WithoutCancel(ctx)
-	submission, started, err := h.chatService.SubmitPrompt(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.RunAfter)
+	submission, started, err := h.chatService.SubmitPrompt(sendCtx, projectID, sessionID, threadID, req.Messages, req.Model, req.Reasoning, req.ServiceTier, req.RunAfter)
 	if err != nil {
 		log.Printf("[Chat] Failed to start chat for session %s: %v", sessionID, err)
 		var startErr *service.SandboxChatStartError

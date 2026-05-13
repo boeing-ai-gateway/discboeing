@@ -8,12 +8,13 @@ import (
 
 // Prompt stores one queued user submission for a thread.
 type Prompt struct {
-	ID        string            `json:"id"`
-	CreatedAt time.Time         `json:"createdAt,omitzero"`
-	RunAfter  time.Time         `json:"runAfter,omitzero"`
-	Message   message.UIMessage `json:"message"`
-	Model     string            `json:"model,omitempty"`
-	Reasoning string            `json:"reasoning,omitempty"`
+	ID          string            `json:"id"`
+	CreatedAt   time.Time         `json:"createdAt,omitzero"`
+	RunAfter    time.Time         `json:"runAfter,omitzero"`
+	Message     message.UIMessage `json:"message"`
+	Model       string            `json:"model,omitempty"`
+	Reasoning   string            `json:"reasoning,omitempty"`
+	ServiceTier string            `json:"serviceTier,omitempty"`
 }
 
 // Update describes editable fields for a queued prompt.
@@ -25,7 +26,7 @@ type Update struct {
 }
 
 // FromMessage builds a queued prompt from a user message and chat options.
-func FromMessage(userMessage message.UIMessage, model, reasoning string, runAfter time.Time) Prompt {
+func FromMessage(userMessage message.UIMessage, model, reasoning, serviceTier string, runAfter time.Time) Prompt {
 	queued := Prompt{
 		Message: message.UIMessage{
 			ID:       userMessage.ID,
@@ -33,8 +34,9 @@ func FromMessage(userMessage message.UIMessage, model, reasoning string, runAfte
 			Parts:    append([]message.UIPart{}, userMessage.Parts...),
 			Metadata: userMessage.Metadata,
 		},
-		Model:     model,
-		Reasoning: reasoning,
+		Model:       model,
+		Reasoning:   reasoning,
+		ServiceTier: serviceTier,
 	}
 	if !runAfter.IsZero() {
 		queued.RunAfter = runAfter.UTC()
@@ -50,12 +52,13 @@ func ToThreadUpdateInfo(queue []Prompt) []message.ThreadQueuedPromptInfo {
 	items := make([]message.ThreadQueuedPromptInfo, 0, len(queue))
 	for _, prompt := range queue {
 		items = append(items, message.ThreadQueuedPromptInfo{
-			ID:        prompt.ID,
-			CreatedAt: prompt.CreatedAt,
-			RunAfter:  prompt.RunAfter,
-			Message:   prompt.Message,
-			Model:     prompt.Model,
-			Reasoning: prompt.Reasoning,
+			ID:          prompt.ID,
+			CreatedAt:   prompt.CreatedAt,
+			RunAfter:    prompt.RunAfter,
+			Message:     prompt.Message,
+			Model:       prompt.Model,
+			Reasoning:   prompt.Reasoning,
+			ServiceTier: prompt.ServiceTier,
 		})
 	}
 	return items

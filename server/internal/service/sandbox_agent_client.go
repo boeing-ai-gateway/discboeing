@@ -415,6 +415,9 @@ type RequestOptions struct {
 	// "" for model/provider default behavior.
 	Reasoning string
 
+	// ServiceTier optionally selects a provider latency tier, such as "fast".
+	ServiceTier string
+
 	// RunAfter queues the prompt until the given RFC3339 timestamp.
 	RunAfter string
 
@@ -481,14 +484,17 @@ func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Req
 func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (*sandboxapi.ChatStartedResponse, error) {
 	// Build the request body once - pass messages through as-is
 	reasoning := ""
+	serviceTier := ""
 	if opts != nil {
 		reasoning = opts.Reasoning
+		serviceTier = opts.ServiceTier
 	}
 	reqBody := sandboxapi.ChatRequest{
-		Messages:  messages,
-		Model:     model,
-		Reasoning: reasoning,
-		RunAfter:  optsRunAfter(opts),
+		Messages:    messages,
+		Model:       model,
+		Reasoning:   reasoning,
+		ServiceTier: serviceTier,
+		RunAfter:    optsRunAfter(opts),
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

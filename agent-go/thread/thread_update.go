@@ -17,6 +17,7 @@ func UpdateChunkFromConfig(threadID string, cfg Config) message.ThreadUpdateChun
 				ErrorMessage:  cfg.ErrorMessage,
 				Model:         cfg.Model,
 				Reasoning:     string(cfg.Reasoning),
+				ServiceTier:   cfg.ServiceTier,
 				State:         string(cfg.LastTurnState),
 				ActiveCommand: cfg.ActiveCommand,
 				Metadata:      cfg.Metadata.RawMessage(),

@@ -32,6 +32,8 @@ type ChatRequest struct {
 	// reasoning level such as "auto", "low", "medium", "high", "xhigh",
 	// "none", "default", or "" for model/provider default behavior.
 	Reasoning string `json:"reasoning,omitempty"`
+	// ServiceTier optionally selects a provider latency tier, such as "fast".
+	ServiceTier string `json:"serviceTier,omitempty"`
 	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
 	RunAfter string `json:"runAfter,omitempty"`
 }
@@ -137,6 +139,7 @@ type Thread struct {
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
 	Model           string          `json:"model,omitempty"`           // full "providerId/modelId" ref
 	Reasoning       string          `json:"reasoning,omitempty"`       // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
+	ServiceTier     string          `json:"serviceTier,omitempty"`     // provider latency tier, such as "priority"
 	State           string          `json:"state,omitempty"`           // "interrupted" or "cancelled"
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"` // true when the thread is paused for user input
 	ActiveCommand   string          `json:"activeCommand,omitempty"`   // empty when no command is running
@@ -147,12 +150,13 @@ type Thread struct {
 }
 
 type QueuedPrompt struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt,omitzero"`
-	RunAfter  time.Time `json:"runAfter,omitzero"`
-	Message   UIMessage `json:"message"`
-	Model     string    `json:"model,omitempty"`
-	Reasoning string    `json:"reasoning,omitempty"`
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"createdAt,omitzero"`
+	RunAfter    time.Time `json:"runAfter,omitzero"`
+	Message     UIMessage `json:"message"`
+	Model       string    `json:"model,omitempty"`
+	Reasoning   string    `json:"reasoning,omitempty"`
+	ServiceTier string    `json:"serviceTier,omitempty"`
 }
 
 // ListThreadsResponse is the GET /threads response.

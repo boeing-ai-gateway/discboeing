@@ -22,6 +22,7 @@ type ModelInfo struct {
 	Reasoning        bool     `json:"reasoning,omitempty"` // Whether model supports extended thinking
 	ReasoningLevels  []string `json:"reasoningLevels,omitempty"`
 	DefaultReasoning string   `json:"defaultReasoning,omitempty"`
+	ServiceTiers     []string `json:"serviceTiers,omitempty"`
 }
 
 // toModelInfos converts service models to API response models.
@@ -36,6 +37,7 @@ func toModelInfos(models []service.Model) []ModelInfo {
 			Reasoning:        m.Reasoning,
 			ReasoningLevels:  m.ReasoningLevels,
 			DefaultReasoning: m.DefaultReasoning,
+			ServiceTiers:     append([]string(nil), m.ServiceTiers...),
 		}
 	}
 	return modelInfos

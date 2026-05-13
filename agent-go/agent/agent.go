@@ -169,6 +169,7 @@ type ThreadInfo struct {
 	ErrorMessage    string
 	Model           string
 	Reasoning       string
+	ServiceTier     string
 	State           ThreadState
 	PendingQuestion bool
 	ActiveCommand   string
@@ -233,6 +234,9 @@ type PromptRequest struct {
 
 	// Reasoning controls extended thinking ("enabled" or "").
 	Reasoning string
+
+	// ServiceTier optionally selects a provider latency tier, such as "fast".
+	ServiceTier string
 
 	// FreshContext forces the next prompt to ignore the current leaf and start a
 	// fresh branch within the thread.

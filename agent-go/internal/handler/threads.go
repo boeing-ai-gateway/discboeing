@@ -37,6 +37,7 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 		ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
 		Model:           info.Model,
 		Reasoning:       info.Reasoning,
+		ServiceTier:     info.ServiceTier,
 		State:           string(info.State),
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   strings.TrimSpace(info.ActiveCommand),
@@ -196,12 +197,13 @@ func queuedPromptResponse(queue []promptqueue.Prompt) []api.QueuedPrompt {
 			runAfter = prompt.RunAfter.UTC().Format(time.RFC3339Nano)
 		}
 		items = append(items, api.QueuedPrompt{
-			ID:        prompt.ID,
-			CreatedAt: prompt.CreatedAt.UTC().Format(time.RFC3339Nano),
-			RunAfter:  runAfter,
-			Message:   prompt.Message,
-			Model:     prompt.Model,
-			Reasoning: prompt.Reasoning,
+			ID:          prompt.ID,
+			CreatedAt:   prompt.CreatedAt.UTC().Format(time.RFC3339Nano),
+			RunAfter:    runAfter,
+			Message:     prompt.Message,
+			Model:       prompt.Model,
+			Reasoning:   prompt.Reasoning,
+			ServiceTier: prompt.ServiceTier,
 		})
 	}
 	return items

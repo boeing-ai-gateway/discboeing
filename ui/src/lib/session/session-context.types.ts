@@ -232,10 +232,13 @@ export type ThreadContextValue = {
 	thread: ThreadSummary | null;
 	modelId: string | null;
 	reasoning: string | undefined;
+	serviceTier: string | undefined;
 	nextModelId: string | null | undefined;
 	nextReasoning: string | undefined;
+	nextServiceTier: string | null | undefined;
 	setNextModelId: (modelId: string | null | undefined) => void;
 	setNextReasoning: (reasoning: string | undefined) => void;
+	setNextServiceTier: (serviceTier: string | null | undefined) => void;
 	clearNextComposerValues: () => void;
 	messages: ChatMessage[];
 	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;

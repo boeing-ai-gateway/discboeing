@@ -17,6 +17,7 @@ type Model struct {
 	Reasoning        bool     `json:"reasoning,omitempty"` // Whether model supports extended thinking
 	ReasoningLevels  []string `json:"reasoningLevels,omitempty"`
 	DefaultReasoning string   `json:"defaultReasoning,omitempty"`
+	ServiceTiers     []string `json:"serviceTiers,omitempty"`
 }
 
 // ModelsService handles model listing operations
@@ -75,6 +76,7 @@ func (s *ModelsService) GetModelsForProject(ctx context.Context, projectID strin
 			Reasoning:        pm.Reasoning,
 			ReasoningLevels:  pm.ReasoningLevels,
 			DefaultReasoning: pm.DefaultReasonLevel,
+			ServiceTiers:     append([]string(nil), pm.ServiceTiers...),
 		}
 	}
 

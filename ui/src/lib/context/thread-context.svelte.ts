@@ -50,6 +50,16 @@ export function normalizeThreadComposerReasoning(
 	return reasoning && reasoning.length > 0 ? reasoning : undefined;
 }
 
+export function normalizeThreadComposerServiceTier(
+	serviceTier: string | null | undefined,
+): string | undefined {
+	const normalized = serviceTier?.trim().toLowerCase();
+	if (!normalized) {
+		return undefined;
+	}
+	return normalized === "fast" ? "priority" : normalized;
+}
+
 export function parseComposerModelSelection(
 	modelId: string | null | undefined,
 ): { modelId: string | null } {
@@ -64,16 +74,19 @@ export function getThreadComposerValues(
 ): {
 	modelId: string | null;
 	reasoning: string | undefined;
+	serviceTier: string | undefined;
 } {
 	return {
 		modelId: thread?.model ?? defaultModel,
 		reasoning: normalizeThreadComposerReasoning(thread?.reasoning),
+		serviceTier: normalizeThreadComposerServiceTier(thread?.serviceTier),
 	};
 }
 
 export function getThreadComposerValuesKey(values: {
 	modelId: string | null;
 	reasoning: string | undefined;
+	serviceTier: string | undefined;
 }): string {
 	return JSON.stringify(values);
 }
@@ -81,22 +94,32 @@ export function getThreadComposerValuesKey(values: {
 export function resolveThreadComposerSubmitValues({
 	modelId,
 	reasoning,
+	serviceTier,
 	nextModelId,
 	nextReasoning,
+	nextServiceTier,
 }: {
 	modelId: string | null;
 	reasoning: string | undefined;
+	serviceTier: string | undefined;
 	nextModelId: string | null | undefined;
 	nextReasoning: string | undefined;
+	nextServiceTier: string | null | undefined;
 }): {
 	modelId: string | null;
 	reasoning: string | undefined;
+	serviceTier: string | undefined;
 } {
 	const resolvedModelId = nextModelId !== undefined ? nextModelId : modelId;
 	return {
 		modelId: resolvedModelId,
 		reasoning: resolvedModelId
 			? normalizeThreadComposerReasoning(nextReasoning ?? reasoning)
+			: undefined,
+		serviceTier: resolvedModelId
+			? normalizeThreadComposerServiceTier(
+					nextServiceTier !== undefined ? nextServiceTier : serviceTier,
+				)
 			: undefined,
 	};
 }
@@ -290,8 +313,12 @@ export function createThreadContext(
 	);
 	let modelId = $state<string | null>(initialComposerValues.modelId);
 	let reasoning = $state<string | undefined>(initialComposerValues.reasoning);
+	let serviceTier = $state<string | undefined>(
+		initialComposerValues.serviceTier,
+	);
 	let nextModelId = $state<string | null | undefined>(undefined);
 	let nextReasoning = $state<string | undefined>(undefined);
+	let nextServiceTier = $state<string | null | undefined>(undefined);
 	let loadedComposerDraftStorageKey = $state<string | null>(null);
 	let lastStoredComposerDraft = $state("");
 	let pendingComments = $state<ConversationComment[]>([]);
@@ -311,6 +338,7 @@ export function createThreadContext(
 		sourceComposerValuesKey = nextSourceComposerValuesKey;
 		modelId = nextSourceComposerValues.modelId;
 		reasoning = nextSourceComposerValues.reasoning;
+		serviceTier = nextSourceComposerValues.serviceTier;
 	});
 
 	const composerDraftStorageKey = $derived.by(() =>
@@ -432,6 +460,7 @@ export function createThreadContext(
 	const clearNextComposerValues = () => {
 		nextModelId = undefined;
 		nextReasoning = undefined;
+		nextServiceTier = undefined;
 	};
 
 	const submit: ThreadContextValue["submit"] = async ({
@@ -446,13 +475,16 @@ export function createThreadContext(
 		const submitValues = resolveThreadComposerSubmitValues({
 			modelId,
 			reasoning,
+			serviceTier,
 			nextModelId,
 			nextReasoning,
+			nextServiceTier,
 		});
 		const result = await conversation.submit({
 			parts,
 			modelId: submitValues.modelId,
 			reasoning: submitValues.reasoning,
+			serviceTier: submitValues.serviceTier,
 			workspaceId,
 			providerId,
 			workspaceType,
@@ -462,6 +494,7 @@ export function createThreadContext(
 		});
 		modelId = submitValues.modelId;
 		reasoning = submitValues.reasoning;
+		serviceTier = submitValues.serviceTier;
 		clearNextComposerValues();
 		return result;
 	};
@@ -479,17 +512,26 @@ export function createThreadContext(
 		get reasoning() {
 			return reasoning;
 		},
+		get serviceTier() {
+			return serviceTier;
+		},
 		get nextModelId() {
 			return nextModelId;
 		},
 		get nextReasoning() {
 			return nextReasoning;
 		},
+		get nextServiceTier() {
+			return nextServiceTier;
+		},
 		setNextModelId: (value) => {
 			nextModelId = value;
 		},
 		setNextReasoning: (value) => {
 			nextReasoning = value;
+		},
+		setNextServiceTier: (value) => {
+			nextServiceTier = value;
 		},
 		clearNextComposerValues,
 		get messages() {

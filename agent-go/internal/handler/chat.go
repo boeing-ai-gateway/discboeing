@@ -61,6 +61,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 	promptReq := agent.PromptRequest{
 		Model:        req.Model,
 		Reasoning:    req.Reasoning,
+		ServiceTier:  req.ServiceTier,
 		FreshContext: req.FreshContext,
 		SubagentType: req.SubagentType,
 		MaxTurns:     req.MaxTurns,
@@ -69,7 +70,7 @@ func (h *Handler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.promptQueue != nil {
-		result, err := h.promptQueue.StartOrQueue(threadID, promptReq, promptqueue.FromMessage(userMessage, req.Model, req.Reasoning, runAfter))
+		result, err := h.promptQueue.StartOrQueue(threadID, promptReq, promptqueue.FromMessage(userMessage, req.Model, req.Reasoning, req.ServiceTier, runAfter))
 		if err != nil {
 			if h.writeChatStartError(w, err) {
 				return

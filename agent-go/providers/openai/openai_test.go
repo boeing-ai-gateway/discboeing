@@ -54,6 +54,54 @@ func TestProviderID(t *testing.T) {
 	}
 }
 
+func TestResolveOpenAIServiceTier(t *testing.T) {
+	tests := []struct {
+		name       string
+		tier       string
+		providerID string
+		modelID    string
+		want       string
+	}{
+		{
+			name:       "maps fast to priority for supported codex model",
+			tier:       "fast",
+			providerID: "codex",
+			modelID:    "gpt-5.1-codex",
+			want:       "priority",
+		},
+		{
+			name:       "keeps priority for supported codex model",
+			tier:       "priority",
+			providerID: "codex",
+			modelID:    "gpt-5.1-codex",
+			want:       "priority",
+		},
+		{
+			name:       "omits unsupported model",
+			tier:       "fast",
+			providerID: "openai",
+			modelID:    "gpt-4o",
+			want:       "",
+		},
+		{
+			name:       "omits unknown tier",
+			tier:       "standard",
+			providerID: "codex",
+			modelID:    "gpt-5.1-codex",
+			want:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveOpenAIServiceTier(tt.tier, tt.providerID, tt.modelID)
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestExtractInstructionsFromMessages(t *testing.T) {
 	t.Run("extracts first system message and removes it", func(t *testing.T) {
 		msgs := []message.Message{

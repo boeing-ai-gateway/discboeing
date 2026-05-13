@@ -16,10 +16,10 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
-func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel, reasoning, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
+func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel, reasoning, serviceTier, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
 	messageID := lastUserMessageID(messages)
 	if messageID == "" {
-		messageID = promptSubmissionFallbackKey(messages, requestModel, reasoning, runAfter)
+		messageID = promptSubmissionFallbackKey(messages, requestModel, reasoning, serviceTier, runAfter)
 	}
 
 	rawMessages, err := json.Marshal(messages)
@@ -40,6 +40,7 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		MessagesEncryptedData: encryptedMessages,
 		Model:                 requestModel,
 		Reasoning:             reasoning,
+		ServiceTier:           serviceTier,
 		RunAfter:              runAfter,
 		Status:                model.PromptSubmissionStatusPending,
 	})
@@ -116,7 +117,7 @@ func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID
 		return nil
 	}
 
-	prepared, err := c.prepareChatRequest(ctx, submission.ProjectID, submission.SessionID, submission.Model, submission.Reasoning)
+	prepared, err := c.prepareChatRequest(ctx, submission.ProjectID, submission.SessionID, submission.Model, submission.Reasoning, submission.ServiceTier)
 	if err != nil {
 		_ = c.store.ReleasePromptSubmissionToPending(ctx, submission.ID, stringPtr(err.Error()))
 		return err
@@ -311,12 +312,12 @@ func promptSubmissionStartedResponse(submission *model.PromptSubmission) *sandbo
 	return response
 }
 
-func promptSubmissionFallbackKey(messages []json.RawMessage, requestModel, reasoning, runAfter string) string {
+func promptSubmissionFallbackKey(messages []json.RawMessage, requestModel, reasoning, serviceTier, runAfter string) string {
 	hash := sha256.New()
 	for _, msg := range messages {
 		_, _ = hash.Write(msg)
 	}
-	_, _ = hash.Write([]byte("\x00" + requestModel + "\x00" + reasoning + "\x00" + runAfter))
+	_, _ = hash.Write([]byte("\x00" + requestModel + "\x00" + reasoning + "\x00" + serviceTier + "\x00" + runAfter))
 	return "generated-" + hex.EncodeToString(hash.Sum(nil))
 }
 

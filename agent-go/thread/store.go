@@ -733,6 +733,8 @@ type Config struct {
 	Model string `json:"model,omitempty"`
 	// Reasoning is the extended thinking setting (e.g. "", "auto", "low", "medium", "high", "none").
 	Reasoning providers.Reasoning `json:"reasoning,omitempty"`
+	// ServiceTier is the provider latency tier selected for this thread.
+	ServiceTier string `json:"serviceTier,omitempty"`
 	// CWD is the working directory associated with this thread.
 	CWD string `json:"cwd,omitempty"`
 	// LastTurnState stores the last user-visible terminal turn outcome that
@@ -1121,6 +1123,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Model                        string                          `json:"model"`
 		ProviderID                   string                          `json:"providerId"`
 		Reasoning                    providers.Reasoning             `json:"reasoning"`
+		ServiceTier                  string                          `json:"serviceTier"`
 		CWD                          string                          `json:"cwd"`
 		LastTurnState                State                           `json:"lastTurnState"`
 		ActiveLeafID                 string                          `json:"activeLeafId"`
@@ -1144,6 +1147,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ErrorMessage:                 raw.ErrorMessage,
 		Model:                        model,
 		Reasoning:                    raw.Reasoning,
+		ServiceTier:                  raw.ServiceTier,
 		CWD:                          raw.CWD,
 		LastTurnState:                raw.LastTurnState,
 		ActiveLeafID:                 raw.ActiveLeafID,

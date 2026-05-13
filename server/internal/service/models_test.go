@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/obot-platform/discobot/server/internal/config"
@@ -74,4 +75,49 @@ func TestGetModelsForProject_SkipsInactiveCredentials(t *testing.T) {
 	if !foundAnthropic {
 		t.Fatal("expected active anthropic credential to contribute models")
 	}
+}
+
+func TestGetModelsForProject_IncludesServiceTiers(t *testing.T) {
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}
+
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	modelsSvc := NewModelsService(credSvc)
+	ctx := context.Background()
+	projectID := "test-project"
+
+	_, err = credSvc.SetAPIKeyWithMetadata(
+		ctx,
+		projectID,
+		ProviderCodex,
+		"ChatGPT Codex",
+		"",
+		"codex-test-token",
+		CredentialVisibility{},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create codex credential: %v", err)
+	}
+
+	models, err := modelsSvc.GetModelsForProject(ctx, projectID)
+	if err != nil {
+		t.Fatalf("GetModelsForProject returned error: %v", err)
+	}
+
+	for _, model := range models {
+		if model.ID == "codex/gpt-5.3-codex-spark" {
+			if !slices.Contains(model.ServiceTiers, "priority") {
+				t.Fatalf("expected priority service tier, got %v", model.ServiceTiers)
+			}
+			return
+		}
+	}
+	t.Fatal("expected codex/gpt-5.3-codex-spark to be listed")
 }
