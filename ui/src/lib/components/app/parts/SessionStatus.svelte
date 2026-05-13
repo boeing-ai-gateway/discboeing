@@ -99,6 +99,8 @@
 			<GitCommitIcon class="size-3.5" />
 		{:else if ["ready", "completed"].includes(normalizedStatus(status))}
 			<CircleCheckIcon class="size-3.5" />
+		{:else if normalizedStatus(status) === "unknown"}
+			<CircleIcon class="size-3.5" />
 		{:else}
 			<CircleIcon class="size-2.5 fill-current" />
 		{/if}

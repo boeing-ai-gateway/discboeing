@@ -1,6 +1,11 @@
 packages:
   - ui
 
+allowBuilds:
+  '@sentry/cli': true
+  electron-winstaller: true
+  esbuild: true
+
 onlyBuiltDependencies:
   - "@sentry/cli"
   - "@tailwindcss/oxide"
