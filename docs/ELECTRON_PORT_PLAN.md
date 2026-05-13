@@ -141,8 +141,6 @@ Representative renderer consumers:
 | Environment shape      | App environment stores `runtime` plus window control placement.                                                          | `ui/src/lib/app/app-helpers.ts:48-54`, `ui/src/lib/app/domains/app-environment.ts:14-20`, `ui/src/lib/app/app-context.types.ts:138-143`          |
 | Local directory picker | The workspace input only exposes a native directory chooser in Tauri.                                                    | `ui/src/lib/components/app/ConversationWorkspaceSelector.svelte:97-99`, `ui/src/lib/components/app/ConversationWorkspaceSelector.svelte:705-717` |
 | Desktop update UI      | The settings update tab is suppressed outside Tauri.                                                                     | `ui/src/lib/components/app/SettingsDialog.svelte:116`, `ui/src/lib/components/app/SettingsDialog.svelte:427-550`                                 |
-| Startup flow copy      | Startup gallery documentation explicitly describes Tauri config initialization.                                          | `ui/src/routes/gallery/startup/+page.svelte:47-61`                                                                                               |
-| Runtime indicator      | The gallery shows “Tauri” vs “Browser”.                                                                                  | `ui/src/routes/gallery/+page.svelte:208-210`                                                                                                     |
 
 ### 9. Low-value Tauri-specific items that can probably be cleaned up during the port
 

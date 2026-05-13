@@ -29,6 +29,6 @@ export function useContextUsageContext(): ContextUsageValue {
 }
 
 export function estimateCostUSD(tokens: number): number {
-	// Lightweight Svelte-side fallback for gallery/demo usage.
+	// Lightweight Svelte-side fallback for demo usage.
 	return tokens * 0.000001;
 }
