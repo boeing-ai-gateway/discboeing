@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 )
 
@@ -14,7 +13,6 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_SECRET", "secret-hash")
 	t.Setenv("DISCOBOT_AGENT_CWD", "/tmp/workspace")
 	t.Setenv("DISCOBOT_MODEL", "openai/gpt-5.4")
-	t.Setenv("DISCOBOT_BASH_ENV_ALLOWLIST", "FOO, BAR,FOO")
 	t.Setenv("DISCOBOT_DATA_DIR", "/tmp/discobot-data")
 	t.Setenv("DISCOBOT_THREADS_DIR", "/tmp/discobot-threads")
 	t.Setenv("DISCOBOT_HOOKS_ENABLED", "true")
@@ -36,9 +34,6 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	}
 	if cfg.Model != "openai/gpt-5.4" {
 		t.Fatalf("expected model to load from DISCOBOT_MODEL, got %q", cfg.Model)
-	}
-	if want := []string{"FOO", "BAR"}; !reflect.DeepEqual(cfg.BashEnvAllowlist, want) {
-		t.Fatalf("expected bash env allowlist %v, got %v", want, cfg.BashEnvAllowlist)
 	}
 	if cfg.DataDir != "/tmp/discobot-data" {
 		t.Fatalf("expected data dir to load from DISCOBOT_DATA_DIR, got %q", cfg.DataDir)
@@ -70,7 +65,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("PORT", "4123")
 	t.Setenv("AGENT_CWD", "/tmp/workspace")
 	t.Setenv("MODEL", "openai/gpt-5.4")
-	t.Setenv("BASH_ENV_ALLOWLIST", "FOO,BAR")
 	t.Setenv("DATA_DIR", "/tmp/discobot-data")
 	t.Setenv("THREADS_DIR", "/tmp/discobot-threads")
 	t.Setenv("SESSION_ID", "session-123")
@@ -79,7 +73,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_PORT", "")
 	t.Setenv("DISCOBOT_AGENT_CWD", "")
 	t.Setenv("DISCOBOT_MODEL", "")
-	t.Setenv("DISCOBOT_BASH_ENV_ALLOWLIST", "")
 	t.Setenv("DISCOBOT_DATA_DIR", "")
 	t.Setenv("DISCOBOT_THREADS_DIR", "")
 	t.Setenv("DISCOBOT_SESSION_ID", "")
@@ -99,9 +92,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	}
 	if cfg.Model != "" {
 		t.Fatalf("expected empty model when DISCOBOT_MODEL is unset, got %q", cfg.Model)
-	}
-	if len(cfg.BashEnvAllowlist) != 0 {
-		t.Fatalf("expected empty bash env allowlist when DISCOBOT_BASH_ENV_ALLOWLIST is unset, got %v", cfg.BashEnvAllowlist)
 	}
 	if want := filepath.Join(homeDir, ".discobot"); cfg.DataDir != want {
 		t.Fatalf("expected default data dir %q, got %q", want, cfg.DataDir)

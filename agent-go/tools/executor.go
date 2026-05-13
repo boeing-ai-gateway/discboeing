@@ -54,10 +54,6 @@ type Executor struct {
 	fileReadsMu sync.RWMutex
 	fileReads   map[string]fileRecord // keyed by absolute path
 
-	// bashEnvAllowlist limits which environment variables are passed to Bash.
-	// Empty means pass through the full process environment.
-	bashEnvAllowlist []string
-
 	// envLookup is an optional secondary source for environment variable
 	// lookups (e.g. per-request credentials). It is consulted first; os.Getenv
 	// is the fallback.
@@ -154,29 +150,6 @@ func (e *Executor) checkRecordedRead(info os.FileInfo, absPath, displayPath stri
 	return nil
 }
 
-// SetBashEnvAllowlist configures a strict allowlist of env var names passed to
-// Bash executions. When empty, Bash receives the full process environment.
-func (e *Executor) SetBashEnvAllowlist(keys []string) {
-	if len(keys) == 0 {
-		e.bashEnvAllowlist = nil
-		return
-	}
-	seen := map[string]struct{}{}
-	filtered := make([]string, 0, len(keys))
-	for _, key := range keys {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		filtered = append(filtered, key)
-	}
-	e.bashEnvAllowlist = filtered
-}
-
 // SetEnvLookup sets an optional function used to look up environment variables
 // from a secondary source (e.g. per-request credentials). It is consulted
 // before os.Getenv so that request-scoped values take precedence.
@@ -242,28 +215,7 @@ func (e *Executor) currentEnv() map[string]string {
 }
 
 func (e *Executor) bashEnv() []string {
-	if len(e.bashEnvAllowlist) == 0 {
-		return workspaceenv.List(e.currentEnv())
-	}
-
-	current := e.currentEnv()
-
-	env := make([]string, 0, len(e.bashEnvAllowlist))
-	pathAdded := false
-	for _, key := range e.bashEnvAllowlist {
-		if value, ok := current[key]; ok {
-			env = append(env, key+"="+value)
-			if key == "PATH" {
-				pathAdded = true
-			}
-		}
-	}
-	if !pathAdded {
-		if value, ok := current["PATH"]; ok {
-			env = append(env, "PATH="+value)
-		}
-	}
-	return env
+	return workspaceenv.List(e.currentEnv())
 }
 
 func contextThreadID(toolCtx *thread.ToolContext, fallback string) string {

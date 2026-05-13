@@ -520,23 +520,6 @@ func TestBash_DefaultPassesProcessEnv(t *testing.T) {
 	}
 }
 
-func TestBash_AllowlistFiltersEnv(t *testing.T) {
-	skipOnWindows(t)
-	t.Setenv("DISCOBOT_BASH_ENV_TEST_ALLOWED", "yes")
-	t.Setenv("DISCOBOT_BASH_ENV_TEST_BLOCKED", "no")
-
-	e := New(t.TempDir(), t.TempDir(), t.Name())
-	e.SetBashEnvAllowlist([]string{"DISCOBOT_BASH_ENV_TEST_ALLOWED"})
-
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_ALLOWED}|${DISCOBOT_BASH_ENV_TEST_BLOCKED}\""})
-	if !ok {
-		t.Fatalf("unexpected error output: %s", out)
-	}
-	if !strings.Contains(out, "→yes|") {
-		t.Errorf("expected only allowlisted env var in output, got: %q", out)
-	}
-}
-
 func TestBash_RequestScopedEnvVisible(t *testing.T) {
 	skipOnWindows(t)
 
@@ -554,27 +537,6 @@ func TestBash_RequestScopedEnvVisible(t *testing.T) {
 	}
 }
 
-func TestBash_RequestScopedEnvRespectsAllowlist(t *testing.T) {
-	skipOnWindows(t)
-
-	e := New(t.TempDir(), t.TempDir(), t.Name())
-	e.SetBashEnvAllowlist([]string{"DISCOBOT_BASH_ENV_TEST_ALLOWED_REQUEST"})
-	e.SetEnvSnapshot(func() map[string]string {
-		return map[string]string{
-			"DISCOBOT_BASH_ENV_TEST_ALLOWED_REQUEST": "allowed-request",
-			"DISCOBOT_BASH_ENV_TEST_BLOCKED_REQUEST": "blocked-request",
-		}
-	})
-
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_ALLOWED_REQUEST}|${DISCOBOT_BASH_ENV_TEST_BLOCKED_REQUEST}\""})
-	if !ok {
-		t.Fatalf("unexpected error output: %s", out)
-	}
-	if !strings.Contains(out, "→allowed-request|") {
-		t.Errorf("expected only allowlisted request-scoped env var in output, got: %q", out)
-	}
-}
-
 func TestBash_PATHAlwaysIncludesHelperBin(t *testing.T) {
 	skipOnWindows(t)
 	home := t.TempDir()
@@ -582,7 +544,6 @@ func TestBash_PATHAlwaysIncludesHelperBin(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
-	e.SetBashEnvAllowlist([]string{"DISCOBOT_BASH_ENV_TEST_ALLOWED"})
 
 	out, ok := runBash(t, e, map[string]any{"command": "echo \"$PATH\""})
 	if !ok {

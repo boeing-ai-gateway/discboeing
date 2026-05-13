@@ -107,7 +107,6 @@ func Run(cfg *config.Config) {
 	// output spill files and is set per-turn by tools that need it.
 	exec := tools.New(cfg.AgentCwd, cfg.DataDir, "")
 	exec.SetThreadsDir(cfg.ThreadsDir)
-	exec.SetBashEnvAllowlist(cfg.BashEnvAllowlist)
 	// Internal tool lookups may use request-scoped credentials even when they are
 	// not agent-visible. Bash still receives only the visible snapshot below.
 	exec.SetEnvLookup(func(key string) string {

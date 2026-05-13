@@ -14,9 +14,8 @@ type Config struct {
 	SecretHash string // Auth secret for API access (DISCOBOT_SECRET)
 
 	// Agent settings
-	AgentCwd         string   // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
-	Model            string   // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
-	BashEnvAllowlist []string // Optional CSV allowlist of env var names passed to Bash (DISCOBOT_BASH_ENV_ALLOWLIST, default: pass all env)
+	AgentCwd string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
+	Model    string // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
 
 	// Storage
 	DataDir    string // Root data directory (DISCOBOT_DATA_DIR, default: ~/.discobot)
@@ -46,7 +45,6 @@ func Load() *Config {
 	// Agent
 	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", cwd)
 	cfg.Model = getEnv("DISCOBOT_MODEL", "")
-	cfg.BashEnvAllowlist = getEnvCSV("DISCOBOT_BASH_ENV_ALLOWLIST")
 
 	// Storage — default to ~/.discobot
 	home, _ := os.UserHomeDir()
@@ -117,27 +115,4 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
-}
-
-func getEnvCSV(key string) []string {
-	value := os.Getenv(key)
-	if value == "" {
-		return nil
-	}
-
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	seen := map[string]struct{}{}
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		if _, ok := seen[part]; ok {
-			continue
-		}
-		seen[part] = struct{}{}
-		out = append(out, part)
-	}
-	return out
 }

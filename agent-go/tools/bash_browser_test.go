@@ -11,7 +11,6 @@ func TestBashEnvForToolUsesBrowserEnvCallback(t *testing.T) {
 	t.Parallel()
 
 	exec := New(t.TempDir(), t.TempDir(), "")
-	exec.SetBashEnvAllowlist([]string{"PATH"})
 	exec.SetEnvForThread(func(threadID string) map[string]string {
 		if threadID != "thread-1" {
 			t.Fatalf("expected thread-1, got %q", threadID)

@@ -166,7 +166,6 @@ func Run(cfg *config.Config, flags *Flags) {
 	store := thread.NewStore(cfg.ThreadsDir)
 	exec := tools.New(cfg.AgentCwd, cfg.DataDir, "")
 	exec.SetThreadsDir(cfg.ThreadsDir)
-	exec.SetBashEnvAllowlist(cfg.BashEnvAllowlist)
 
 	mcpCfg := agentimpl.NewMCPConfig(
 		oauthBase,
