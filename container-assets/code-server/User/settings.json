@@ -21,5 +21,6 @@
 		"<C-s>": false,
 		"<C-z>": false
 	},
-	"terminal.integrated.initialHint": false
+	"terminal.integrated.initialHint": false,
+	"update.showReleaseNotes": false
 }
