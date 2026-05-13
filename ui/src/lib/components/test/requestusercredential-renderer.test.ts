@@ -70,3 +70,18 @@ test("sudo credential requests use approval-only UI", () => {
 	);
 	assert.match(source, /\{#if !isSudoCredentialRequest\(request\)\}/);
 });
+
+test("credential denial form is not reset for the same pending request", () => {
+	const source = readRequestUserCredentialRendererSource();
+
+	assert.match(
+		source,
+		/let activeCredentialRequestKey = \$state<string \| null>\(null\);/,
+	);
+	assert.match(source, /function preparePendingCredentialRequest/);
+	assert.match(source, /if \(nextKey !== activeCredentialRequestKey\) \{/);
+	assert.doesNotMatch(
+		source,
+		/approvalError = null;\s*showRejectionForm = false;\s*isSubmittingApproval = false;\s*isSubmittingRejection = false;/,
+	);
+});

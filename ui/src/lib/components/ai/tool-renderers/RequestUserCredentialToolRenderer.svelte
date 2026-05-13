@@ -94,6 +94,7 @@
 	let showRejectionForm = $state(false);
 	let isSubmittingApproval = $state(false);
 	let isSubmittingRejection = $state(false);
+	let activeCredentialRequestKey = $state<string | null>(null);
 
 	const validityPresets: Array<{
 		value: CredentialValidityPreset;
@@ -175,6 +176,27 @@
 		) as Record<string, "hours" | "days" | "weeks" | "never">;
 		isSubmittingApproval = false;
 		isSubmittingRejection = false;
+	}
+
+	function credentialRequestKey(request: PendingCredentialLike): string {
+		return JSON.stringify({
+			toolUseID: request.toolUseID,
+			credentials: request.credentials.map((credential) => ({
+				envVar: credential.envVar,
+				name: credential.name,
+				justification: credential.justification,
+				approvedUses: credential.approvedUses.map((use) => use.description),
+			})),
+		});
+	}
+
+	function preparePendingCredentialRequest(request: PendingCredentialLike) {
+		const nextKey = credentialRequestKey(request);
+		pendingCredentialRequest = request;
+		if (nextKey !== activeCredentialRequestKey) {
+			activeCredentialRequestKey = nextKey;
+			initializeDrafts(request.credentials);
+		}
 	}
 
 	async function fetchPendingQuestion(
@@ -338,24 +360,21 @@
 			showRejectionForm = false;
 			isSubmittingApproval = false;
 			isSubmittingRejection = false;
+			activeCredentialRequestKey = null;
 			return;
 		}
 
 		approvalError = null;
-		showRejectionForm = false;
-		isSubmittingApproval = false;
-		isSubmittingRejection = false;
 
 		if (requestedCredentials.length > 0) {
 			const nextRequest = {
 				toolUseID: approvalId ?? toolPart.toolCallId,
 				credentials: requestedCredentials,
 			};
-			pendingCredentialRequest = nextRequest;
 			approvalStatus = "loading";
 			void loadCredentialContext()
 				.then(() => {
-					initializeDrafts(nextRequest.credentials);
+					preparePendingCredentialRequest(nextRequest);
 					approvalStatus = "pending";
 				})
 				.catch((error) => {
@@ -388,10 +407,9 @@
 					Array.isArray(result.question.credentials) &&
 					result.question.credentials.length > 0
 				) {
-					pendingCredentialRequest = result.question;
 					try {
 						await loadCredentialContext();
-						initializeDrafts(result.question.credentials);
+						preparePendingCredentialRequest(result.question);
 						if (!cancelled) {
 							approvalStatus = "pending";
 						}
@@ -407,6 +425,7 @@
 					return;
 				}
 				pendingCredentialRequest = null;
+				activeCredentialRequestKey = null;
 				approvalStatus = "answered";
 			})
 			.catch((error) => {
