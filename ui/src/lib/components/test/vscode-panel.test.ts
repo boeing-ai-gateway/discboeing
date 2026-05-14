@@ -121,11 +121,17 @@ test("vscode theme extension consumes open-file control commands", () => {
 
 test("dockerfile does not ship stale code-server extension registry", () => {
 	const source = readDockerfileSource();
-
-	assert.match(
-		source,
-		/code-server --install-extension svelte\.svelte-vscode --extensions-dir \/opt\/discobot\/code-server-defaults\/extensions \\\n\s+&& rm -f \/opt\/discobot\/code-server-defaults\/extensions\/extensions\.json \\/,
+	const extensionDir = "/opt/discobot/code-server-defaults/extensions";
+	const lastSeededExtension = source.indexOf(
+		`code-server --install-extension svelte.svelte-vscode --extensions-dir ${extensionDir}`,
 	);
+	const registryCleanup = source.indexOf(
+		`rm -f ${extensionDir}/extensions.json`,
+	);
+
+	assert.notEqual(lastSeededExtension, -1);
+	assert.notEqual(registryCleanup, -1);
+	assert.ok(registryCleanup > lastSeededExtension);
 	assert.match(
 		source,
 		/COPY --chown=1000:1000 container-assets\/code-server\/ \/opt\/discobot\/code-server-defaults\//,

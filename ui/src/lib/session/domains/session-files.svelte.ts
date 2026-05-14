@@ -522,28 +522,30 @@ export function createSessionFilesDomain(
 			syncSelectedFile(list, searchable);
 			return null;
 		}
-		const promise = (
-			force ? metadataResource.refresh() : metadataResource.ensure()
-		)
-			.then(async (nextMetadata) => {
-				childrenCache.clear();
-				for (const path of expandedPaths.filter((entry) => entry !== ".")) {
-					await loadDirectory(path, { force: true });
-				}
-				syncSelectedFile(
-					uniquePaths([
-						...openPaths,
-						...nextMetadata.diff.files.map((file) => file.path),
-						...nextMetadata.searchable.slice(0, 20),
-					]),
-					nextMetadata.searchable,
-				);
-			})
-			.finally(() => {
-				if (refreshPromise === promise) {
-					refreshPromise = null;
-				}
-			});
+		const promise = (async () => {
+			if (force) {
+				await metadataResource.refresh();
+			} else {
+				await metadataResource.ensure();
+			}
+			const nextMetadata = metadataResource.peek();
+			childrenCache.clear();
+			for (const path of expandedPaths.filter((entry) => entry !== ".")) {
+				await loadDirectory(path, { force: true });
+			}
+			syncSelectedFile(
+				uniquePaths([
+					...openPaths,
+					...nextMetadata.diff.files.map((file) => file.path),
+					...nextMetadata.searchable.slice(0, 20),
+				]),
+				nextMetadata.searchable,
+			);
+		})().finally(() => {
+			if (refreshPromise === promise) {
+				refreshPromise = null;
+			}
+		});
 		refreshPromise = promise;
 		return promise;
 	}

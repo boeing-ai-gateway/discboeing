@@ -50,7 +50,7 @@ export type ResourceState<TData> = {
 	fetchedAt: number | null;
 	peek: () => TData;
 	ensure: () => Promise<TData>;
-	refresh: () => Promise<TData>;
+	refresh: () => Promise<void>;
 	invalidate: () => void;
 	reset: () => void;
 	setData: (nextData: TData, options?: ResourceMutationOptions) => void;
@@ -357,7 +357,9 @@ export function createResource<TData>(
 		},
 		peek: () => data,
 		ensure: () => ensure(false),
-		refresh: () => ensure(true),
+		refresh: async () => {
+			await ensure(true).catch(() => undefined);
+		},
 		invalidate,
 		reset,
 		setData: applyData,
