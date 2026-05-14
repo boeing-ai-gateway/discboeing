@@ -264,10 +264,13 @@ exit 1
 	ma := &streamTestAgent{
 		promptFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			reqThreadCh <- threadID
-			return func(_ func(message.MessageChunk, error) bool) {}
+			return func(yield func(message.MessageChunk, error) bool) {
+				yield(message.StartChunk{MessageID: "assistant-1"}, nil)
+			}
 		},
 	}
-	_ = New("", agent.NewConversationManager(ma), hookManager, nil, nil)
+	cm := agent.NewConversationManager(ma)
+	_ = New("", cm, hookManager, nil, nil)
 
 	hookManager.OnTurnComplete("thread-1")
 	select {
@@ -278,6 +281,7 @@ exit 1
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for first hook notification")
 	}
+	waitForCompletionDone(t, cm, "thread-1")
 
 	time.Sleep(1100 * time.Millisecond)
 	if err := os.WriteFile(mainPath, []byte("package main\n\nvar _ = 1\n"), 0o644); err != nil {
