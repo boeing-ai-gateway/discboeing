@@ -670,7 +670,7 @@
 					<DropdownMenuItem onclick={() => openRenameDialog(sessionObj.id)}>
 						Rename
 					</DropdownMenuItem>
-					{#if sessionObj.status !== "stopped"}
+					{#if sessionObj.sandboxStatus !== "stopped"}
 						<DropdownMenuItem
 							onclick={() => void handleStopSession(sessionObj.id)}
 						>

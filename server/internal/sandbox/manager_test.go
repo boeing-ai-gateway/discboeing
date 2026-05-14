@@ -140,11 +140,11 @@ func TestProviderManagerResolveSessionUsesGlobalDefaultWhenSessionProviderIDNull
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -201,7 +201,7 @@ func TestProviderManagerResolveInstanceProviderAddsWatchProvider(t *testing.T) {
 		ProjectID:         project.ID,
 		WorkspaceID:       workspace.ID,
 		Name:              "Test Session",
-		Status:            model.SessionStatusReady,
+		SandboxStatus:     model.SessionStatusReady,
 		SandboxProviderID: instance.ID,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {

@@ -36,7 +36,7 @@ const appSessions: Session[] = [
 		description: "",
 		createdAt: "2024-01-01T00:00:00.000Z",
 		timestamp: "2024-01-01T00:00:00.000Z",
-		status: "ready",
+		sandboxStatus: "ready",
 		files: [],
 	},
 	{
@@ -45,7 +45,7 @@ const appSessions: Session[] = [
 		description: "",
 		createdAt: "2024-01-02T00:00:00.000Z",
 		timestamp: "2024-01-02T00:00:00.000Z",
-		status: "ready",
+		sandboxStatus: "ready",
 		files: [],
 	},
 ];

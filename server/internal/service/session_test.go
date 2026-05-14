@@ -197,11 +197,11 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	}
 
 	dbSession := &model.Session{
-		ID:          "session-git",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Git Session",
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-git",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Git Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -286,11 +286,11 @@ func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	dbSession := &model.Session{
-		ID:          "session-create-failed",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Create Failed Session",
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-create-failed",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Create Failed Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -303,8 +303,8 @@ func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if stored.Status != model.SessionStatusCreateFailed {
-		t.Fatalf("status = %q, want %q", stored.Status, model.SessionStatusCreateFailed)
+	if stored.SandboxStatus != model.SessionStatusCreateFailed {
+		t.Fatalf("status = %q, want %q", stored.SandboxStatus, model.SessionStatusCreateFailed)
 	}
 	if stored.ErrorMessage == nil || !strings.Contains(*stored.ErrorMessage, "provider quota exceeded") {
 		t.Fatalf("error message = %v", stored.ErrorMessage)
@@ -334,12 +334,12 @@ func TestStopSessionResetsCreateFailedWithoutSandbox(t *testing.T) {
 	}
 	errorMessage := "sandbox creation failed: no such image"
 	dbSession := &model.Session{
-		ID:           "session-stop-create-failed",
-		ProjectID:    project.ID,
-		WorkspaceID:  workspace.ID,
-		Name:         "Stop Create Failed Session",
-		Status:       model.SessionStatusCreateFailed,
-		ErrorMessage: &errorMessage,
+		ID:            "session-stop-create-failed",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Stop Create Failed Session",
+		SandboxStatus: model.SessionStatusCreateFailed,
+		ErrorMessage:  &errorMessage,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -349,8 +349,8 @@ func TestStopSessionResetsCreateFailedWithoutSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StopSession failed: %v", err)
 	}
-	if session.Status != model.SessionStatusStopped {
-		t.Fatalf("status = %q, want %q", session.Status, model.SessionStatusStopped)
+	if session.SandboxStatus != model.SessionStatusStopped {
+		t.Fatalf("status = %q, want %q", session.SandboxStatus, model.SessionStatusStopped)
 	}
 	if session.ErrorMessage != "" {
 		t.Fatalf("expected stop reset to clear error message, got %q", session.ErrorMessage)
@@ -380,12 +380,12 @@ func TestStopSessionResetsErroredNotRunningSandbox(t *testing.T) {
 	}
 	errorMessage := "sandbox failed"
 	dbSession := &model.Session{
-		ID:           "session-stop-error",
-		ProjectID:    project.ID,
-		WorkspaceID:  workspace.ID,
-		Name:         "Stop Error Session",
-		Status:       model.SessionStatusError,
-		ErrorMessage: &errorMessage,
+		ID:            "session-stop-error",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Stop Error Session",
+		SandboxStatus: model.SessionStatusError,
+		ErrorMessage:  &errorMessage,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -398,8 +398,8 @@ func TestStopSessionResetsErroredNotRunningSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StopSession failed: %v", err)
 	}
-	if session.Status != model.SessionStatusStopped {
-		t.Fatalf("status = %q, want %q", session.Status, model.SessionStatusStopped)
+	if session.SandboxStatus != model.SessionStatusStopped {
+		t.Fatalf("status = %q, want %q", session.SandboxStatus, model.SessionStatusStopped)
 	}
 }
 
@@ -432,11 +432,11 @@ func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 	}
 
 	dbSession := &model.Session{
-		ID:          "session-stale",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Stale Session",
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-stale",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Stale Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -510,10 +510,10 @@ func TestSessionServiceGetSessionSyncsNameFromPrimaryThread(t *testing.T) {
 	}
 
 	dbSession := &model.Session{
-		ID:          "session-1",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
+		ID:            "session-1",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -570,10 +570,10 @@ func TestSessionServiceListSessionsByProjectDoesNotSyncNameFromPrimaryThread(t *
 	}
 
 	dbSession := &model.Session{
-		ID:          "session-2",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
+		ID:            "session-2",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -623,11 +623,11 @@ func TestSessionThreadStatusSyncerStaleSnapshotDoesNotLowerNewerSnapshot(t *test
 	}
 
 	dbSession := &model.Session{
-		ID:           "session-stale-thread-status",
-		ProjectID:    workspace.ProjectID,
-		WorkspaceID:  workspace.ID,
-		Status:       model.SessionStatusReady,
-		ThreadStatus: model.SessionActivityStatusIdle,
+		ID:            "session-stale-thread-status",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		ThreadStatus:  model.SessionActivityStatusIdle,
 	}
 	if err := testStore.CreateSession(ctx, dbSession); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -672,8 +672,8 @@ func TestStoppedSessionIncludesStoredNeedsAttentionStatus(t *testing.T) {
 	t.Parallel()
 
 	session := sessionThreadStatusFromModel(&model.Session{
-		Status:       model.SessionStatusStopped,
-		ThreadStatus: model.SessionActivityStatusNeedsAttention,
+		SandboxStatus: model.SessionStatusStopped,
+		ThreadStatus:  model.SessionActivityStatusNeedsAttention,
 	})
 	if session == nil {
 		t.Fatal("expected stopped session to include non-idle thread status")
@@ -683,8 +683,8 @@ func TestStoppedSessionIncludesStoredNeedsAttentionStatus(t *testing.T) {
 	}
 
 	idleSession := sessionThreadStatusFromModel(&model.Session{
-		Status:       model.SessionStatusStopped,
-		ThreadStatus: model.SessionActivityStatusIdle,
+		SandboxStatus: model.SessionStatusStopped,
+		ThreadStatus:  model.SessionActivityStatusIdle,
 	})
 	if idleSession != nil {
 		t.Fatalf("expected stopped idle session to omit thread status, got %#v", idleSession)
@@ -710,7 +710,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		Name:            "test-name",
 		DisplayName:     strPtr("Test Display"),
 		Description:     strPtr("Test Description"),
-		Status:          "ready",
+		SandboxStatus:   "ready",
 		ThreadStatus:    model.SessionActivityStatusNeedsAttention,
 		CommitStatus:    model.CommitStatusCompleted,
 		CommitOperation: strPtr(model.CommitOperationCommit),
@@ -739,7 +739,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		"Name":              "Name",
 		"DisplayName":       "DisplayName",
 		"Description":       "Description",
-		"Status":            "Status",
+		"SandboxStatus":     "SandboxStatus",
 		"ThreadStatus":      "ThreadStatus",
 		"CommitStatus":      "CommitStatus",
 		"CommitOperation":   "CommitOperation",
@@ -846,10 +846,10 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 	}
 
 	session := &model.Session{
-		ID:          "session-delete-1",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
+		ID:            "session-delete-1",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -915,11 +915,11 @@ func TestSessionServiceDeleteSession_RequeuesRemovingSession(t *testing.T) {
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "session-delete-requeue",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Delete Requeue",
-		Status:      model.SessionStatusRemoving,
+		ID:            "session-delete-requeue",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Delete Requeue",
+		SandboxStatus: model.SessionStatusRemoving,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -959,11 +959,11 @@ func TestSessionServiceDeleteSessionMarksCreateFailedPayload(t *testing.T) {
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "session-delete-create-failed-payload",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Delete Create Failed Payload",
-		Status:      model.SessionStatusCreateFailed,
+		ID:            "session-delete-create-failed-payload",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Delete Create Failed Payload",
+		SandboxStatus: model.SessionStatusCreateFailed,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -1004,10 +1004,10 @@ func TestSessionServicePerformDeletion_RemovesCreateFailedSandboxImmediately(t *
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "session-delete-create-failed",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusRemoving,
+		ID:            "session-delete-create-failed",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusRemoving,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -1062,10 +1062,10 @@ func TestSessionServicePerformDeletion_ContinuesWhenSandboxStopFails(t *testing.
 	}
 
 	session := &model.Session{
-		ID:          "session-delete-stop-fails",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusRemoving,
+		ID:            "session-delete-stop-fails",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusRemoving,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -1117,10 +1117,10 @@ func TestSessionServicePerformDeferredSandboxDeletion_SkipsWhenSessionExists(t *
 	}
 
 	session := &model.Session{
-		ID:          "session-delete-2",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
+		ID:            "session-delete-2",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)

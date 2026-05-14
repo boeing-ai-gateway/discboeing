@@ -21,7 +21,7 @@ export function resolveSessionDisplayStatus(
 	session: Partial<
 		Pick<
 			Session,
-			"status" | "threadStatus" | "commitStatus" | "commitOperation"
+			"sandboxStatus" | "threadStatus" | "commitStatus" | "commitOperation"
 		>
 	> | null,
 ): SessionDisplayStatus {
@@ -150,7 +150,7 @@ export function resolveThreadDisplayStatus({
 }: {
 	session?: Pick<
 		Session,
-		"status" | "threadStatus" | "commitStatus" | "commitOperation"
+		"sandboxStatus" | "threadStatus" | "commitStatus" | "commitOperation"
 	> | null;
 	sessionThreadStatus?: SessionThreadStatus | null;
 	thread?: Pick<

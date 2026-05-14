@@ -102,7 +102,7 @@ type Session struct {
 	Description     string                 `json:"description"`
 	CreatedAt       string                 `json:"createdAt"`
 	Timestamp       string                 `json:"timestamp"`
-	Status          string                 `json:"status"`
+	SandboxStatus   string                 `json:"sandboxStatus"`
 	CommitStatus    string                 `json:"commitStatus,omitempty"`
 	CommitOperation string                 `json:"commitOperation,omitempty"`
 	CommitError     string                 `json:"commitError,omitempty"`
@@ -202,7 +202,7 @@ func (s *SessionService) syncSessionNameFromPrimaryThread(ctx context.Context, s
 	if sess == nil || strings.TrimSpace(sess.Name) != "" || s.sandboxService == nil {
 		return
 	}
-	if normalizeSessionStatus(sess.Status) != model.SessionStatusReady {
+	if normalizeSessionStatus(sess.SandboxStatus) != model.SessionStatusReady {
 		return
 	}
 
@@ -243,7 +243,7 @@ func (s *SessionService) CreateSessionWithProvider(ctx context.Context, projectI
 		SandboxProviderID: strings.TrimSpace(providerID),
 		Name:              name,
 		Description:       nil,
-		Status:            model.SessionStatusInitializing,
+		SandboxStatus:     model.SessionStatusInitializing,
 		ThreadStatus:      model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
@@ -280,7 +280,7 @@ func (s *SessionService) CreateSessionWithIDAndProvider(ctx context.Context, ses
 		SandboxProviderID: strings.TrimSpace(providerID),
 		Name:              name,
 		Description:       nil,
-		Status:            model.SessionStatusInitializing,
+		SandboxStatus:     model.SessionStatusInitializing,
 		ThreadStatus:      model.SessionActivityStatusIdle,
 	}
 	if err := s.store.CreateSession(ctx, sess); err != nil {
@@ -327,7 +327,7 @@ func (s *SessionService) UpdateErrorMessage(ctx context.Context, projectID, sess
 	}
 
 	if s.eventBroker != nil {
-		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, normalizeSessionStatus(sess.Status), ""); err != nil {
+		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, normalizeSessionStatus(sess.SandboxStatus), ""); err != nil {
 			log.Printf("Failed to publish session update event: %v", err)
 		}
 	}
@@ -354,14 +354,14 @@ func (s *SessionService) UpdateSession(ctx context.Context, sessionID, name stri
 		}
 	}
 	if status != "" {
-		sess.Status = normalizeSessionStatus(status)
+		sess.SandboxStatus = normalizeSessionStatus(status)
 	}
 	if err := s.store.UpdateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to update session: %w", err)
 	}
 
 	if s.eventBroker != nil {
-		if err := s.eventBroker.PublishSessionUpdated(ctx, sess.ProjectID, sessionID, sess.Status, sess.CommitStatus); err != nil {
+		if err := s.eventBroker.PublishSessionUpdated(ctx, sess.ProjectID, sessionID, sess.SandboxStatus, sess.CommitStatus); err != nil {
 			log.Printf("Failed to publish session update event: %v", err)
 		}
 	}
@@ -375,7 +375,7 @@ func (s *SessionService) StopSession(ctx context.Context, projectID, sessionID s
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
-	if sess.Status == model.SessionStatusStopped {
+	if sess.SandboxStatus == model.SessionStatusStopped {
 		return s.mapSession(sess), nil
 	}
 	if s.sandboxService == nil {
@@ -383,9 +383,9 @@ func (s *SessionService) StopSession(ctx context.Context, projectID, sessionID s
 	}
 
 	if err := s.sandboxService.StopForSession(ctx, sessionID); err != nil {
-		if (sess.Status == model.SessionStatusError || sess.Status == model.SessionStatusCreateFailed) &&
+		if (sess.SandboxStatus == model.SessionStatusError || sess.SandboxStatus == model.SessionStatusCreateFailed) &&
 			(errors.Is(err, sandbox.ErrNotFound) || errors.Is(err, sandbox.ErrNotRunning)) {
-			log.Printf("Resetting session %s from %s to stopped after best-effort sandbox stop: %v", sessionID, sess.Status, err)
+			log.Printf("Resetting session %s from %s to stopped after best-effort sandbox stop: %v", sessionID, sess.SandboxStatus, err)
 		} else {
 			return nil, fmt.Errorf("failed to stop sandbox: %w", err)
 		}
@@ -425,10 +425,10 @@ func (s *SessionService) DeleteSession(ctx context.Context, projectID, sessionID
 		return fmt.Errorf("session not found: %w", err)
 	}
 
-	wasCreateFailed := sess.Status == model.SessionStatusCreateFailed
-	if sess.Status != model.SessionStatusRemoving {
+	wasCreateFailed := sess.SandboxStatus == model.SessionStatusCreateFailed
+	if sess.SandboxStatus != model.SessionStatusRemoving {
 		// Update status to "removing"
-		sess.Status = model.SessionStatusRemoving
+		sess.SandboxStatus = model.SessionStatusRemoving
 		if err := s.store.UpdateSession(ctx, sess); err != nil {
 			return fmt.Errorf("failed to update session status: %w", err)
 		}
@@ -594,7 +594,7 @@ func (s *SessionService) performDeletion(ctx context.Context, projectID, session
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
-	removeSandboxNow := createFailed || sess.Status == model.SessionStatusCreateFailed
+	removeSandboxNow := createFailed || sess.SandboxStatus == model.SessionStatusCreateFailed
 
 	// Step 1: Stop the sandbox immediately so the session is inactive during the
 	// recovery window, but keep the sandbox itself for deferred deletion. If
@@ -739,7 +739,7 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *S
 		Description:     description,
 		CreatedAt:       createdAt,
 		Timestamp:       timestamp,
-		Status:          normalizeSessionStatus(sess.Status),
+		SandboxStatus:   normalizeSessionStatus(sess.SandboxStatus),
 		CommitStatus:    sess.CommitStatus,
 		CommitOperation: commitOperation,
 		CommitError:     commitError,
@@ -758,7 +758,7 @@ func sessionThreadStatusFromModel(sess *model.Session) *SessionActivityStatus {
 	if sess == nil {
 		return nil
 	}
-	switch normalizeSessionStatus(sess.Status) {
+	switch normalizeSessionStatus(sess.SandboxStatus) {
 	case model.SessionStatusReady:
 		return sessionActivityStatusFromStoredStatus(sess.ThreadStatus)
 	case model.SessionStatusStopped:
@@ -1075,9 +1075,9 @@ func (s *SessionService) updateStatusWithEvent(ctx context.Context, projectID, s
 		log.Printf("Failed to load session %s before status update to %s: %v", sessionID, status, err)
 		return
 	}
-	if (current.Status == model.SessionStatusRemoving || current.Status == model.SessionStatusRemoved) &&
+	if (current.SandboxStatus == model.SessionStatusRemoving || current.SandboxStatus == model.SessionStatusRemoved) &&
 		status != model.SessionStatusRemoving && status != model.SessionStatusRemoved {
-		log.Printf("Skipping session %s status update to %s because current status is %s", sessionID, status, current.Status)
+		log.Printf("Skipping session %s status update to %s because current status is %s", sessionID, status, current.SandboxStatus)
 		return
 	}
 

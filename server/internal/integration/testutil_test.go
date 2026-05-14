@@ -686,7 +686,7 @@ func (ts *TestServer) CreateTestSession(workspace *model.Workspace, name string)
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          name,
-		Status:        "open",
+		SandboxStatus: model.SessionStatusReady,
 		WorkspacePath: &workspacePath, // Set workspace path for CreateForSession
 	}
 
@@ -719,7 +719,7 @@ func (ts *TestServer) CreateTestSessionWithMockSandbox(workspace *model.Workspac
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          name,
-		Status:        model.SessionStatusReady, // Session is ready
+		SandboxStatus: model.SessionStatusReady, // Session is ready
 		WorkspacePath: &workspacePath,
 	}
 
@@ -756,7 +756,7 @@ func (ts *TestServer) CreateTestSessionWithSandbox(workspace *model.Workspace, n
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          name,
-		Status:        model.SessionStatusReady, // Session is ready
+		SandboxStatus: model.SessionStatusReady, // Session is ready
 		WorkspacePath: &workspacePath,
 	}
 

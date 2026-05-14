@@ -191,10 +191,17 @@ func (db *DB) migrateModels() []any {
 func (db *DB) Migrate() error {
 	log.Println("Running GORM AutoMigrate...")
 
+	migrator := db.Migrator()
+	hadLegacySessionStatus := migrator.HasColumn("sessions", "status")
+	hadSessionSandboxStatus := migrator.HasColumn("sessions", "sandbox_status")
+
 	// First run AutoMigrate to add new columns/tables.
 	// On SQLite, skip the deprecated Agent model entirely to avoid unsafe table
 	// rebuilds on legacy databases during startup.
 	if err := db.AutoMigrate(db.migrateModels()...); err != nil {
+		return err
+	}
+	if err := db.migrateSessionStatusToSandboxStatus(hadLegacySessionStatus, hadSessionSandboxStatus); err != nil {
 		return err
 	}
 	if err := dropObsoleteCredentialIndexes(db); err != nil {
@@ -219,8 +226,6 @@ func (db *DB) Migrate() error {
 		log.Println("Skipping obsolete column cleanup on SQLite for migration compatibility")
 		return nil
 	}
-
-	migrator := db.Migrator()
 
 	// Drop obsolete Agent columns (removed when simplifying agent configuration)
 	obsoleteAgentCols := []string{"name", "description", "system_prompt"}
@@ -271,6 +276,20 @@ func (db *DB) Migrate() error {
 		}
 	}
 
+	return nil
+}
+
+func (db *DB) migrateSessionStatusToSandboxStatus(hadLegacyStatus, hadSandboxStatus bool) error {
+	if !hadLegacyStatus || hadSandboxStatus {
+		return nil
+	}
+	if !db.Migrator().HasColumn("sessions", "sandbox_status") {
+		return nil
+	}
+	log.Println("Migrating sessions.status to sessions.sandbox_status...")
+	if err := db.Exec("UPDATE sessions SET sandbox_status = status WHERE status IS NOT NULL AND status <> ''").Error; err != nil {
+		return fmt.Errorf("failed to migrate sessions.status to sessions.sandbox_status: %w", err)
+	}
 	return nil
 }
 

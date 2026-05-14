@@ -180,7 +180,7 @@ export interface FileNode {
 	status?: FileStatus;
 }
 
-// Session status values representing the lifecycle of a session
+// Sandbox status values representing the lifecycle of the sandbox backing a session
 export type SessionStatus =
 	(typeof SessionStatusConstants)[keyof typeof SessionStatusConstants];
 export type SessionSandboxStatus =
@@ -224,10 +224,8 @@ export interface Session {
 	description: string;
 	createdAt: string;
 	timestamp: string;
-	/** Canonical backend session lifecycle status. */
-	status: SessionStatus;
-	/** Underlying sandbox lifecycle status. */
-	sandboxStatus?: SessionSandboxStatus;
+	/** Lifecycle status of the sandbox backing the session. */
+	sandboxStatus: SessionSandboxStatus;
 	/** Orthogonal commit operation status. */
 	commitStatus?: CommitStatus;
 	commitOperation?: CommitOperation;
@@ -546,7 +544,7 @@ export interface CreateSessionRequest {
 export interface UpdateSessionRequest {
 	name?: string;
 	displayName?: string | null;
-	status?: SessionStatus;
+	sandboxStatus?: SessionSandboxStatus;
 }
 
 export interface TerminalExecuteRequest {

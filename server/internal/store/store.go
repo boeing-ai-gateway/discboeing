@@ -487,22 +487,22 @@ func (s *Store) ListSessionsByWorkspaceIncludingDeleted(ctx context.Context, wor
 	return sessions, err
 }
 
-// ListSessionsByStatuses returns all sessions with any of the given statuses.
+// ListSessionsByStatuses returns all sessions with any of the given sandbox statuses.
 func (s *Store) ListSessionsByStatuses(ctx context.Context, statuses []string) ([]*model.Session, error) {
 	var sessions []*model.Session
-	err := s.readDB.WithContext(ctx).Where("status IN ?", statuses).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("sandbox_status IN ?", statuses).Find(&sessions).Error
 	return sessions, err
 }
 
-// ListSessionsByStatusesAndThreadStatuses returns sessions whose lifecycle and
-// persisted thread summary both match the provided sets.
+// ListSessionsByStatusesAndThreadStatuses returns sessions whose sandbox and
+// persisted thread summary statuses both match the provided sets.
 func (s *Store) ListSessionsByStatusesAndThreadStatuses(ctx context.Context, statuses, threadStatuses []string) ([]*model.Session, error) {
 	var sessions []*model.Session
 	if len(statuses) == 0 || len(threadStatuses) == 0 {
 		return sessions, nil
 	}
 	err := s.readDB.WithContext(ctx).
-		Where("status IN ? AND thread_status IN ?", statuses, threadStatuses).
+		Where("sandbox_status IN ? AND thread_status IN ?", statuses, threadStatuses).
 		Find(&sessions).Error
 	return sessions, err
 }
@@ -514,17 +514,17 @@ func (s *Store) ListSessionsByCommitStatuses(ctx context.Context, commitStatuses
 	return sessions, err
 }
 
-// GetSessionsByStatus returns all sessions with the given status.
+// GetSessionsByStatus returns all sessions with the given sandbox status.
 func (s *Store) GetSessionsByStatus(ctx context.Context, status string) ([]model.Session, error) {
 	var sessions []model.Session
-	err := s.readDB.WithContext(ctx).Where("status = ?", status).Find(&sessions).Error
+	err := s.readDB.WithContext(ctx).Where("sandbox_status = ?", status).Find(&sessions).Error
 	return sessions, err
 }
 
-// UpdateSessionStatus updates only the status and error message fields for a session.
+// UpdateSessionStatus updates only the sandbox status and error message fields for a session.
 func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, errorMessage *string) error {
 	updates := map[string]any{
-		"status": status,
+		"sandbox_status": status,
 	}
 	if errorMessage != nil {
 		updates["error_message"] = *errorMessage
@@ -676,7 +676,7 @@ func (s *Store) CountSessionsReferencingSandboxProvider(ctx context.Context, pro
 	err := s.readDB.WithContext(ctx).
 		Model(&model.Session{}).
 		Where("project_id = ? AND sandbox_provider_id = ?", projectID, providerID).
-		Where("status NOT IN ?", []string{model.SessionStatusRemoved}).
+		Where("sandbox_status NOT IN ?", []string{model.SessionStatusRemoved}).
 		Count(&count).Error
 	return count, err
 }

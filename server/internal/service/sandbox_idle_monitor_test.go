@@ -128,11 +128,11 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 
 	// Create a session with old updated_at (simulating idle)
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
-		UpdatedAt:   time.Now().Add(-2 * time.Second), // Older than idle timeout
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		UpdatedAt:     time.Now().Add(-2 * time.Second), // Older than idle timeout
 	}
 
 	if err := testStore.CreateSession(ctx, session); err != nil {
@@ -160,8 +160,8 @@ func TestSandboxIdleMonitor_StopsIdleSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if updatedSession.Status != model.SessionStatusStopped {
-		t.Errorf("Expected session status %q, got %q", model.SessionStatusStopped, updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusStopped {
+		t.Errorf("Expected session status %q, got %q", model.SessionStatusStopped, updatedSession.SandboxStatus)
 	}
 }
 
@@ -220,11 +220,11 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 
 	// Create a ready session with old updated_at
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
-		UpdatedAt:   time.Now().Add(-2 * time.Second), // Older than idle timeout
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		UpdatedAt:     time.Now().Add(-2 * time.Second), // Older than idle timeout
 	}
 
 	if err := testStore.CreateSession(ctx, session); err != nil {
@@ -252,8 +252,8 @@ func TestSandboxIdleMonitor_SkipsRunningCompletions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.SandboxStatus)
 	}
 }
 
@@ -308,11 +308,11 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 	}
 
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
-		UpdatedAt:   time.Now().Add(-2 * time.Second),
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		UpdatedAt:     time.Now().Add(-2 * time.Second),
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatal(err)
@@ -333,8 +333,8 @@ func TestSandboxIdleMonitor_SkipsRunningCompletionsOnSecondaryThread(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.SandboxStatus)
 	}
 }
 
@@ -386,11 +386,11 @@ func TestSandboxIdleMonitor_SkipsQueuedPrompts(t *testing.T) {
 	}
 
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
-		UpdatedAt:   time.Now().Add(-2 * time.Second),
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		UpdatedAt:     time.Now().Add(-2 * time.Second),
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatal(err)
@@ -411,8 +411,8 @@ func TestSandboxIdleMonitor_SkipsQueuedPrompts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.SandboxStatus)
 	}
 }
 
@@ -470,11 +470,11 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 
 	// Create session with old updated_at (would be idle)
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusReady,
-		UpdatedAt:   time.Now().Add(-2 * time.Second),
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		UpdatedAt:     time.Now().Add(-2 * time.Second),
 	}
 
 	if err := testStore.CreateSession(ctx, session); err != nil {
@@ -505,8 +505,8 @@ func TestSandboxIdleMonitor_ActivityResetsTimer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session to stay ready, got %q", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session to stay ready, got %q", updatedSession.SandboxStatus)
 	}
 }
 
@@ -565,11 +565,11 @@ func TestSandboxIdleMonitor_IgnoresStoppedSessions(t *testing.T) {
 
 	// Create stopped session with old updated_at
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusStopped, // Already stopped
-		UpdatedAt:   time.Now().Add(-2 * time.Second),
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusStopped, // Already stopped
+		UpdatedAt:     time.Now().Add(-2 * time.Second),
 	}
 
 	if err := testStore.CreateSession(ctx, session); err != nil {
@@ -692,11 +692,11 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		sessionID := "idle-session-" + string(rune('0'+i))
 		session := &model.Session{
-			ID:          sessionID,
-			ProjectID:   project.ID,
-			WorkspaceID: workspace.ID,
-			Status:      model.SessionStatusReady,
-			UpdatedAt:   time.Now().Add(-2 * time.Second),
+			ID:            sessionID,
+			ProjectID:     project.ID,
+			WorkspaceID:   workspace.ID,
+			SandboxStatus: model.SessionStatusReady,
+			UpdatedAt:     time.Now().Add(-2 * time.Second),
 		}
 
 		if err := testStore.CreateSession(ctx, session); err != nil {
@@ -726,9 +726,9 @@ func TestSandboxIdleMonitor_MultipleIdleSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if updatedSession.Status != model.SessionStatusStopped {
+		if updatedSession.SandboxStatus != model.SessionStatusStopped {
 			t.Errorf("Session %s: expected status %q, got %q",
-				sessionID, model.SessionStatusStopped, updatedSession.Status)
+				sessionID, model.SessionStatusStopped, updatedSession.SandboxStatus)
 		}
 	}
 }

@@ -58,12 +58,12 @@ func createThreadStatusSyncerSession(ctx context.Context, t *testing.T, st *stor
 	t.Helper()
 
 	if err := st.CreateSession(ctx, &model.Session{
-		ID:           id,
-		ProjectID:    "test-project",
-		WorkspaceID:  "test-workspace",
-		Name:         id,
-		Status:       status,
-		ThreadStatus: threadStatus,
+		ID:            id,
+		ProjectID:     "test-project",
+		WorkspaceID:   "test-workspace",
+		Name:          id,
+		SandboxStatus: status,
+		ThreadStatus:  threadStatus,
 	}); err != nil {
 		t.Fatal(err)
 	}

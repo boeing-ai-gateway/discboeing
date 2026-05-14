@@ -222,13 +222,13 @@ func (e *testEnv) createTestSession(t *testing.T, projectID, workspaceID, baseCo
 	_ = baseCommit
 	targetRef := defaultSessionTargetRef
 	session := &model.Session{
-		ID:           "test-session",
-		ProjectID:    projectID,
-		WorkspaceID:  workspaceID,
-		Name:         "Test Session",
-		Status:       model.SessionStatusReady,
-		CommitStatus: model.CommitStatusNone,
-		TargetRef:    &targetRef,
+		ID:            "test-session",
+		ProjectID:     projectID,
+		WorkspaceID:   workspaceID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
+		CommitStatus:  model.CommitStatusNone,
+		TargetRef:     &targetRef,
 	}
 	if err := e.store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)

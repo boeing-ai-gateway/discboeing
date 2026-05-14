@@ -305,7 +305,7 @@ func TestDeleteSandboxProvider_RejectsProviderUsedBySession(t *testing.T) {
 		WorkspaceID:       "workspace-1",
 		SandboxProviderID: instance.ID,
 		Name:              "Session",
-		Status:            model.SessionStatusReady,
+		SandboxStatus:     model.SessionStatusReady,
 		ThreadStatus:      model.SessionActivityStatusIdle,
 	}); err != nil {
 		t.Fatalf("failed to create session: %v", err)

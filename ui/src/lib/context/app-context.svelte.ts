@@ -50,7 +50,7 @@ type ProjectEvent<TData> = {
 
 type SessionUpdatedEventData = {
 	sessionId: string;
-	status?: string;
+	sandboxStatus?: string;
 };
 
 type ThreadUpdatedEventData = {
@@ -94,7 +94,7 @@ function startProjectEventsSubscription(app: AppContext) {
 				return;
 			}
 
-			if (sessionData.status === "removed") {
+			if (sessionData.sandboxStatus === "removed") {
 				app.sessions.removeFromMemory(sessionData.sessionId);
 				return;
 			}

@@ -1556,11 +1556,11 @@ func TestSessionCredentialVisibility_UsesGlobalAndSessionCombination(t *testing.
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -1649,11 +1649,11 @@ func TestCredentialService_SetSessionAssignments_AllowsMultipleEnvVarBindingsFor
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -1747,11 +1747,11 @@ func TestCredentialService_SetSessionAssignments_RemovesDeletedUse(t *testing.T)
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -1839,11 +1839,11 @@ func TestCredentialService_GetVisibleEnvVarsForSession_LatestBindingWins(t *test
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "test-session",
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ID:            "test-session",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)

@@ -41,7 +41,7 @@ test("buildImplicitThread uses the session id while threads are unavailable", ()
 		description: "",
 		createdAt: "2026-03-10T00:00:00.000Z",
 		timestamp: "2026-03-11T00:00:00.000Z",
-		status: "creating_sandbox",
+		sandboxStatus: "creating_sandbox",
 		files: [],
 		threadStatus: {
 			status: "running",

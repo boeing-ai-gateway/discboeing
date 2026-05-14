@@ -183,7 +183,7 @@ export function createThreadContext(
 	threadId: string,
 ): ThreadContextValue {
 	const hasSession = $derived.by(() =>
-		canLoadSessionThreads(session.current?.status),
+		canLoadSessionThreads(session.current?.sandboxStatus),
 	);
 	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",
@@ -191,7 +191,7 @@ export function createThreadContext(
 		retry: { mode: "background" },
 	});
 	const shouldIgnoreClosedStreamError = () => {
-		switch (session.current?.status) {
+		switch (session.current?.sandboxStatus) {
 			case SessionStatus.INITIALIZING:
 			case SessionStatus.REINITIALIZING:
 			case SessionStatus.CLONING:
@@ -564,7 +564,7 @@ export function createThreadContext(
 			return (
 				getThreadIsStreaming(getThread(), conversation.isStreaming) ||
 				(!hasSession &&
-					(isSessionTransitioningStatus(session.current?.status) ||
+					(isSessionTransitioningStatus(session.current?.sandboxStatus) ||
 						conversation.messages.some(
 							(message) => message.provisional === true,
 						)))

@@ -58,7 +58,7 @@ test("resolveSidebarThreadStatus does not fall back to session status", () => {
 test("resolveSessionDisplayStatus normalizes resting ready sessions", () => {
 	assert.equal(
 		resolveSessionDisplayStatus({
-			status: "ready",
+			sandboxStatus: "ready",
 			threadStatus: { status: "idle" },
 		}),
 		"idle",
@@ -69,7 +69,7 @@ test("resolveThreadDisplayStatus inherits committed session display", () => {
 	assert.equal(
 		resolveThreadDisplayStatus({
 			session: {
-				status: "ready",
+				sandboxStatus: "ready",
 				commitStatus: "completed",
 				commitOperation: "commit",
 			},
@@ -86,7 +86,7 @@ test("resolveThreadDisplayStatus only applies matching session thread status", (
 	assert.equal(
 		resolveThreadDisplayStatus({
 			session: {
-				status: "ready",
+				sandboxStatus: "ready",
 				threadStatus: { status: "running", threadId: "thread-active" },
 			},
 			thread: { activityStatus: { status: "idle" } },
@@ -96,7 +96,7 @@ test("resolveThreadDisplayStatus only applies matching session thread status", (
 	assert.equal(
 		resolveThreadDisplayStatus({
 			session: {
-				status: "ready",
+				sandboxStatus: "ready",
 				threadStatus: { status: "running", threadId: "thread-active" },
 			},
 			sessionThreadStatus: { status: "running", threadId: "thread-active" },
@@ -114,19 +114,19 @@ test("getAvailableSwitcherThreads includes every session and sorts by last acces
 				name: "Session 1",
 				displayName: "Session One",
 				createdAt: "2024-01-01T00:00:00.000Z",
-				status: "ready",
+				sandboxStatus: "ready",
 			},
 			{
 				id: "session-2",
 				name: "Session 2",
 				createdAt: "2024-01-02T00:00:00.000Z",
-				status: "ready",
+				sandboxStatus: "ready",
 			},
 			{
 				id: "session-3",
 				name: "Session 3",
 				createdAt: "2024-01-03T00:00:00.000Z",
-				status: "ready",
+				sandboxStatus: "ready",
 			},
 		],
 		recentThreads: [
@@ -162,13 +162,13 @@ test("getAvailableSwitcherThreads only adds implicit primary entries for session
 				id: "session-1",
 				name: "Session 1",
 				createdAt: "2024-01-01T00:00:00.000Z",
-				status: "ready",
+				sandboxStatus: "ready",
 			},
 			{
 				id: "session-2",
 				name: "Session 2",
 				createdAt: "2024-01-02T00:00:00.000Z",
-				status: "ready",
+				sandboxStatus: "ready",
 			},
 		],
 		recentThreads: [

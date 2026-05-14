@@ -22,7 +22,7 @@ export function recentThreadKey(sessionId: string, threadId: string): string {
 
 type ThreadSwitcherSession = Pick<
 	Session,
-	"id" | "name" | "displayName" | "createdAt" | "status"
+	"id" | "name" | "displayName" | "createdAt" | "sandboxStatus"
 >;
 
 export function getAvailableSwitcherThreads(args: {

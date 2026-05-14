@@ -184,7 +184,7 @@ func (w *Workspace) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
-// Session status constants representing the lifecycle of a session
+// Session sandbox status constants representing the lifecycle of the sandbox backing a session
 const (
 	SessionStatusInitializing    = "initializing"     // Session just created, starting setup
 	SessionStatusReinitializing  = "reinitializing"   // Recreating sandbox after it was deleted
@@ -222,7 +222,7 @@ type Session struct {
 	Name              string         `gorm:"not null;type:text" json:"name"`
 	DisplayName       *string        `gorm:"column:display_name;type:text" json:"displayName,omitempty"`
 	Description       *string        `gorm:"type:text" json:"description,omitempty"`
-	Status            string         `gorm:"not null;type:text;default:initializing" json:"status"`
+	SandboxStatus     string         `gorm:"column:sandbox_status;not null;type:text;default:initializing" json:"sandboxStatus"`
 	ThreadStatus      string         `gorm:"column:thread_status;not null;type:text;default:idle" json:"threadStatus,omitempty"`
 	CommitStatus      string         `gorm:"column:commit_status;type:text;default:''" json:"commitStatus"`
 	CommitOperation   *string        `gorm:"column:commit_operation;type:text" json:"commitOperation,omitempty"`

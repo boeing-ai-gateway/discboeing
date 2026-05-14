@@ -199,7 +199,7 @@ func (s *testSandboxSetup) createTestSession(t *testing.T, workspace *model.Work
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          name,
-		Status:        model.SessionStatusReady,
+		SandboxStatus: model.SessionStatusReady,
 		WorkspacePath: &workspacePath, // Set workspace path for CreateForSession
 	}
 	if err := s.store.CreateSession(context.Background(), session); err != nil {
@@ -557,8 +557,8 @@ func TestReconcileSessionStates_MarksFailedSandboxAsError(t *testing.T) {
 
 	// Session should be marked as error if sandbox failed, or still running if it was just stopped
 	if sb.Status == sandbox.StatusFailed {
-		if updatedSession.Status != model.SessionStatusError {
-			t.Errorf("Expected session status 'error', got '%s'", updatedSession.Status)
+		if updatedSession.SandboxStatus != model.SessionStatusError {
+			t.Errorf("Expected session status 'error', got '%s'", updatedSession.SandboxStatus)
 		}
 		if updatedSession.ErrorMessage == nil || *updatedSession.ErrorMessage == "" {
 			t.Error("Expected session to have an error message")
@@ -566,7 +566,7 @@ func TestReconcileSessionStates_MarksFailedSandboxAsError(t *testing.T) {
 		t.Logf("Session correctly marked as error: %s", *updatedSession.ErrorMessage)
 	} else {
 		// If it was just stopped (not failed), status should remain running
-		t.Logf("Sandbox was stopped (not failed), session status: %s", updatedSession.Status)
+		t.Logf("Sandbox was stopped (not failed), session status: %s", updatedSession.SandboxStatus)
 	}
 }
 
@@ -607,8 +607,8 @@ func TestReconcileSessionStates_KeepsRunningSessionWithRunningSandbox(t *testing
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session status 'ready', got '%s'", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session status 'ready', got '%s'", updatedSession.SandboxStatus)
 	}
 
 	t.Log("Session correctly kept as ready")
@@ -647,8 +647,8 @@ func TestReconcileSessionStates_MarksStoppedSessionWithNoSandbox(t *testing.T) {
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.Status != model.SessionStatusStopped {
-		t.Errorf("Expected session status 'stopped', got '%s'", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusStopped {
+		t.Errorf("Expected session status 'stopped', got '%s'", updatedSession.SandboxStatus)
 	}
 
 	t.Log("Session correctly marked as stopped (no sandbox, will be created on demand)")
@@ -696,8 +696,8 @@ func TestReconcileSessionStates_MarksStoppedSessionWithStoppedSandbox(t *testing
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.Status != model.SessionStatusStopped {
-		t.Errorf("Expected session status 'stopped', got '%s'", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusStopped {
+		t.Errorf("Expected session status 'stopped', got '%s'", updatedSession.SandboxStatus)
 	}
 
 	t.Log("Session correctly marked as stopped (sandbox can be restarted on demand)")
@@ -872,8 +872,8 @@ func TestReconcileSessionStates_HandlesExternallyDeletedContainer(t *testing.T) 
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.Status != model.SessionStatusStopped {
-		t.Errorf("Expected session status 'stopped' after external deletion, got '%s'", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusStopped {
+		t.Errorf("Expected session status 'stopped' after external deletion, got '%s'", updatedSession.SandboxStatus)
 	}
 
 	t.Log("Session correctly marked as stopped after external container deletion")
@@ -895,7 +895,7 @@ func TestReconcileSessionStates_ResetsRunningSessionWithNoActiveChat(t *testing.
 		ProjectID:     project.ID,
 		WorkspaceID:   workspace.ID,
 		Name:          "Running Session Test",
-		Status:        "running", // Marked as legacy running
+		SandboxStatus: "running", // Marked as legacy running
 		WorkspacePath: &workspacePath,
 	}
 	if err := setup.store.CreateSession(ctx, session); err != nil {
@@ -935,8 +935,8 @@ func TestReconcileSessionStates_ResetsRunningSessionWithNoActiveChat(t *testing.
 		t.Fatalf("Failed to get session: %v", err)
 	}
 
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session status to be reset to ready, got: %s", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session status to be reset to ready, got: %s", updatedSession.SandboxStatus)
 	}
 
 	t.Log("Session correctly reset from running to ready (no active chat)")

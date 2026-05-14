@@ -86,11 +86,11 @@ func TestDispatchPromptSubmissionSkipsRemovingSession(t *testing.T) {
 		t.Fatalf("failed to create workspace: %v", err)
 	}
 	session := &model.Session{
-		ID:          "session-removing",
-		ProjectID:   "project-1",
-		WorkspaceID: workspace.ID,
-		Name:        "Removing Session",
-		Status:      model.SessionStatusRemoving,
+		ID:            "session-removing",
+		ProjectID:     "project-1",
+		WorkspaceID:   workspace.ID,
+		Name:          "Removing Session",
+		SandboxStatus: model.SessionStatusRemoving,
 	}
 	if err := st.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)

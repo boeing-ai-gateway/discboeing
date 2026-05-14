@@ -11,8 +11,8 @@ func TestMapSessionResponseIncludesThreadStatus(t *testing.T) {
 	t.Parallel()
 
 	response := mapSessionResponse(&service.Session{
-		ID:     "session-1",
-		Status: model.SessionStatusReady,
+		ID:            "session-1",
+		SandboxStatus: model.SessionStatusReady,
 		ThreadStatus: &service.SessionActivityStatus{
 			Status:                 model.SessionActivityStatusNeedsAttention,
 			Reason:                 model.SessionActivityReasonPendingQuestion,
@@ -34,13 +34,13 @@ func TestMapSessionResponseKeepsLifecycleAndCommitStatusSeparate(t *testing.T) {
 
 	response := mapSessionResponse(&service.Session{
 		ID:              "session-1",
-		Status:          model.SessionStatusReady,
+		SandboxStatus:   model.SessionStatusReady,
 		CommitStatus:    model.CommitStatusCompleted,
 		CommitOperation: service.CommitOperationCommit,
 	})
 
-	if response.Status != model.SessionStatusReady {
-		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusReady)
+	if response.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("status = %q, want %q", response.SandboxStatus, model.SessionStatusReady)
 	}
 	if response.SandboxStatus != model.SessionStatusReady {
 		t.Fatalf("sandbox status = %q, want %q", response.SandboxStatus, model.SessionStatusReady)
@@ -58,13 +58,13 @@ func TestMapSessionResponsePreservesRemovingStatusWithCommitFields(t *testing.T)
 
 	response := mapSessionResponse(&service.Session{
 		ID:              "session-1",
-		Status:          model.SessionStatusRemoving,
+		SandboxStatus:   model.SessionStatusRemoving,
 		CommitStatus:    model.CommitStatusCompleted,
 		CommitOperation: service.CommitOperationCommit,
 	})
 
-	if response.Status != model.SessionStatusRemoving {
-		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusRemoving)
+	if response.SandboxStatus != model.SessionStatusRemoving {
+		t.Fatalf("status = %q, want %q", response.SandboxStatus, model.SessionStatusRemoving)
 	}
 	if response.CommitStatus != model.CommitStatusCompleted {
 		t.Fatalf("commit status = %q, want %q", response.CommitStatus, model.CommitStatusCompleted)
@@ -76,14 +76,14 @@ func TestMapSessionResponseDoesNotMapCommitFailureToSessionError(t *testing.T) {
 
 	response := mapSessionResponse(&service.Session{
 		ID:              "session-1",
-		Status:          model.SessionStatusReady,
+		SandboxStatus:   model.SessionStatusReady,
 		CommitStatus:    model.CommitStatusFailed,
 		CommitOperation: service.CommitOperationCommit,
 		CommitError:     "commit failed",
 	})
 
-	if response.Status != model.SessionStatusReady {
-		t.Fatalf("status = %q, want %q", response.Status, model.SessionStatusReady)
+	if response.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("status = %q, want %q", response.SandboxStatus, model.SessionStatusReady)
 	}
 	if response.ErrorMessage != "" {
 		t.Fatalf("error message = %q, want empty", response.ErrorMessage)

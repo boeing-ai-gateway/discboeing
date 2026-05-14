@@ -327,8 +327,8 @@ func TestBroker_PublishSessionUpdated(t *testing.T) {
 		if data.SessionID != "session-123" {
 			t.Errorf("Expected sessionId 'session-123', got '%s'", data.SessionID)
 		}
-		if data.Status != "ready" {
-			t.Errorf("Expected status 'ready', got '%s'", data.Status)
+		if data.SandboxStatus != "ready" {
+			t.Errorf("Expected status 'ready', got '%s'", data.SandboxStatus)
 		}
 	case <-time.After(1 * time.Second):
 		t.Error("Timeout waiting for event")
@@ -376,8 +376,8 @@ func TestBroker_PublishSessionUpdated_WithCommitStatus(t *testing.T) {
 		if data.SessionID != "session-456" {
 			t.Errorf("Expected sessionId 'session-456', got '%s'", data.SessionID)
 		}
-		if data.Status != "ready" {
-			t.Errorf("Expected status 'ready', got '%s'", data.Status)
+		if data.SandboxStatus != "ready" {
+			t.Errorf("Expected status 'ready', got '%s'", data.SandboxStatus)
 		}
 		if data.CommitStatus != "committing" {
 			t.Errorf("Expected commitStatus 'committing', got '%s'", data.CommitStatus)
@@ -429,8 +429,8 @@ func TestBroker_PublishSessionUpdated_CommitStatusOnly(t *testing.T) {
 		if data.SessionID != "session-789" {
 			t.Errorf("Expected sessionId 'session-789', got '%s'", data.SessionID)
 		}
-		if data.Status != "" {
-			t.Errorf("Expected empty status, got '%s'", data.Status)
+		if data.SandboxStatus != "" {
+			t.Errorf("Expected empty status, got '%s'", data.SandboxStatus)
 		}
 		if data.CommitStatus != "completed" {
 			t.Errorf("Expected commitStatus 'completed', got '%s'", data.CommitStatus)

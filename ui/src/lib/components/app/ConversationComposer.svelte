@@ -716,7 +716,7 @@
 			/>
 		{/if}
 
-		{#if session.isPending || session.current?.status !== "ready"}
+		{#if session.isPending || session.current?.sandboxStatus !== "ready"}
 			<ConversationComposerSessionSetupStatus />
 			{#if showPendingWorkspaceSelector}
 				<div class="mb-2 flex w-full flex-col gap-2 px-1 md:hidden">

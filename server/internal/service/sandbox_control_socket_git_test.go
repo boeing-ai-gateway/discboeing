@@ -302,7 +302,7 @@ func createControlSocketGitFixturesWithSource(ctx context.Context, t *testing.T,
 		WorkspaceID:   workspaceID,
 		WorkspacePath: &workspacePath,
 		Name:          sessionID,
-		Status:        model.SessionStatusReady,
+		SandboxStatus: model.SessionStatusReady,
 	}); err != nil {
 		t.Fatal(err)
 	}

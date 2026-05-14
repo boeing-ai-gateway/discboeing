@@ -143,7 +143,7 @@ func createTestSession(t *testing.T, s *store.Store, sessionID, workspacePath st
 		ProjectID:     "test-project",
 		WorkspaceID:   "test-workspace",
 		Name:          "Test Session",
-		Status:        model.SessionStatusReady,
+		SandboxStatus: model.SessionStatusReady,
 		WorkspacePath: &workspacePath,
 	}
 	if err := s.CreateSession(ctx, session); err != nil {
@@ -211,8 +211,8 @@ func TestSandboxServiceStartSyncsSessionStateFromSandboxEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get session: %v", err)
 	}
-	if session.Status != model.SessionStatusStopped {
-		t.Fatalf("session.Status = %q, want %q", session.Status, model.SessionStatusStopped)
+	if session.SandboxStatus != model.SessionStatusStopped {
+		t.Fatalf("session.SandboxStatus = %q, want %q", session.SandboxStatus, model.SessionStatusStopped)
 	}
 }
 
@@ -654,10 +654,10 @@ func TestSessionService_Initialize_WaitsForSandboxHealthAfterStart(t *testing.T)
 	}
 
 	session := &model.Session{
-		ID:          "session-health-wait",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-health-wait",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -671,8 +671,8 @@ func TestSessionService_Initialize_WaitsForSandboxHealthAfterStart(t *testing.T)
 	if err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, updatedSession.SandboxStatus)
 	}
 }
 
@@ -705,10 +705,10 @@ func TestSessionService_Initialize_WaitsBeyondGenericRetryBudgetForSandboxHealth
 	}
 
 	session := &model.Session{
-		ID:          "session-health-wait-long",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-health-wait-long",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -742,10 +742,10 @@ func TestSessionService_Initialize_FailsWhenSandboxHealthProbeFails(t *testing.T
 	}
 
 	session := &model.Session{
-		ID:          "session-health-fail",
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Status:      model.SessionStatusInitializing,
+		ID:            "session-health-fail",
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -763,8 +763,8 @@ func TestSessionService_Initialize_FailsWhenSandboxHealthProbeFails(t *testing.T
 	if err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if updatedSession.Status != model.SessionStatusError {
-		t.Fatalf("expected session status %q, got %q", model.SessionStatusError, updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusError {
+		t.Fatalf("expected session status %q, got %q", model.SessionStatusError, updatedSession.SandboxStatus)
 	}
 }
 
@@ -885,8 +885,8 @@ func TestReconcileSandboxes_MarksUpgradeCreateFailureRetryable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if session.Status != model.SessionStatusStopped {
-		t.Fatalf("expected upgrade create failure to leave session retryable as %q, got %q", model.SessionStatusStopped, session.Status)
+	if session.SandboxStatus != model.SessionStatusStopped {
+		t.Fatalf("expected upgrade create failure to leave session retryable as %q, got %q", model.SessionStatusStopped, session.SandboxStatus)
 	}
 	if session.ErrorMessage == nil || !strings.Contains(*session.ErrorMessage, "no such image") {
 		t.Fatalf("expected stored image upgrade error, got %v", session.ErrorMessage)
@@ -1256,11 +1256,11 @@ func TestSandboxService_CreateForSession_NoWorkspacePath(t *testing.T) {
 
 	// Create session WITHOUT workspace path (simulating a session that hasn't been initialized)
 	session := &model.Session{
-		ID:          sessionID,
-		ProjectID:   "test-project",
-		WorkspaceID: "test-workspace-2",
-		Name:        "Test Session",
-		Status:      model.SessionStatusInitializing,
+		ID:            sessionID,
+		ProjectID:     "test-project",
+		WorkspaceID:   "test-workspace-2",
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusInitializing,
 		// WorkspacePath is nil - not set
 	}
 	if err := testStore.CreateSession(ctx, session); err != nil {

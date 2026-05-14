@@ -163,9 +163,9 @@ func (c *ChatService) finishPromptDispatchForClosedSession(ctx context.Context, 
 		}
 		return false, err
 	}
-	switch sess.Status {
+	switch sess.SandboxStatus {
 	case model.SessionStatusRemoving, model.SessionStatusRemoved:
-		return true, c.store.MarkPromptSubmissionFailed(ctx, submission.ID, fmt.Sprintf("session is %s", sess.Status))
+		return true, c.store.MarkPromptSubmissionFailed(ctx, submission.ID, fmt.Sprintf("session is %s", sess.SandboxStatus))
 	default:
 		return false, nil
 	}

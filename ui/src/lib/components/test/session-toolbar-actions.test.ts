@@ -12,7 +12,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 		description: "",
 		createdAt: new Date().toISOString(),
 		timestamp: new Date().toISOString(),
-		status: "ready",
+		sandboxStatus: "ready",
 		files: [],
 		...overrides,
 	};

@@ -92,7 +92,7 @@ func seedSession(t *testing.T, s *store.Store, sessionID string) {
 		ProjectID:     testProjectID,
 		WorkspaceID:   "test-workspace",
 		Name:          "Test Session",
-		Status:        model.SessionStatusReady,
+		SandboxStatus: model.SessionStatusReady,
 		WorkspacePath: &workspacePath,
 	}
 	if err := s.CreateSession(ctx, session); err != nil {
@@ -390,9 +390,9 @@ func TestChat_StartsCompletion_StatusBecomesRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get session: %v", err)
 	}
-	if session.Status != model.SessionStatusReady {
+	if session.SandboxStatus != model.SessionStatusReady {
 		t.Errorf("expected session status to remain %q after chat start, got %q",
-			model.SessionStatusReady, session.Status)
+			model.SessionStatusReady, session.SandboxStatus)
 	}
 }
 
@@ -470,8 +470,8 @@ func TestChat_PersistsChatStartErrorsOnTheSession(t *testing.T) {
 		t.Fatalf("failed to load session through the service: %v", err)
 	}
 	response := mapSessionResponse(serviceSession)
-	if response.Status != model.SessionStatusReady {
-		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, response.Status)
+	if response.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, response.SandboxStatus)
 	}
 	if response.ErrorMessage != "sandbox returned status 400: invalid_api_key" {
 		t.Fatalf("expected response error message %q, got %q", "sandbox returned status 400: invalid_api_key", response.ErrorMessage)

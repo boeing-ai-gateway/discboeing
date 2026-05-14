@@ -24,10 +24,10 @@ func TestSessionInitialize_SetsTargetRefOnFirstInit(t *testing.T) {
 	expectedCommit := getGitHead(t, workspace.Path)
 
 	session := &model.Session{
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusInitializing,
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -82,10 +82,10 @@ func TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile(t *test
 	initialCommit := getGitHead(t, workspace.Path)
 
 	session := &model.Session{
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusInitializing,
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -123,7 +123,7 @@ func TestSessionInitialize_UsesCurrentWorkspaceCommitForSandboxReconcile(t *test
 		t.Fatal("Expected new commit to be different from initial commit")
 	}
 
-	afterFirstInit.Status = model.SessionStatusError
+	afterFirstInit.SandboxStatus = model.SessionStatusError
 	if err := ts.Store.UpdateSession(ctx, afterFirstInit); err != nil {
 		t.Fatalf("Failed to update session status: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          "Test Session",
-		Status:        model.SessionStatusError,
+		SandboxStatus: model.SessionStatusError,
 		WorkspacePath: &workspacePath,
 		TargetRef:     &targetRef,
 	}
@@ -197,8 +197,8 @@ func TestSessionInitialize_EnsuresWorkspaceOnReconcile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get session: %v", err)
 	}
-	if updatedSession.Status != model.SessionStatusReady {
-		t.Errorf("Expected session status to be 'ready', got '%s'", updatedSession.Status)
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Errorf("Expected session status to be 'ready', got '%s'", updatedSession.SandboxStatus)
 	}
 	assertSessionTargetRef(t, updatedSession, expectedSessionTargetRef)
 
@@ -225,7 +225,7 @@ func TestMapSession_IncludesTargetRefAndWorkspacePath(t *testing.T) {
 		ProjectID:     workspace.ProjectID,
 		WorkspaceID:   workspace.ID,
 		Name:          "Test Session",
-		Status:        model.SessionStatusReady,
+		SandboxStatus: model.SessionStatusReady,
 		WorkspacePath: &workspacePath,
 		TargetRef:     &targetRef,
 	}
@@ -258,10 +258,10 @@ func TestSessionInitialize_NoGitService(t *testing.T) {
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspace(project, "/some/local/path")
 	session := &model.Session{
-		ProjectID:   workspace.ProjectID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusInitializing,
+		ProjectID:     workspace.ProjectID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusInitializing,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)

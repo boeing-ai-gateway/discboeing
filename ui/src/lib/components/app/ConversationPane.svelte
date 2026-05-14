@@ -177,7 +177,7 @@
 		getErrorMessage(sessionErrorOverride ?? session?.current?.errorMessage),
 	);
 	const shouldShowSessionError = $derived.by(
-		() => !isSessionTransitioningStatus(session?.current?.status),
+		() => !isSessionTransitioningStatus(session?.current?.sandboxStatus),
 	);
 	const visibleSessionError = $derived.by(() =>
 		shouldShowSessionError ? sessionError : null,

@@ -10,7 +10,9 @@
 	const workspaces = app.workspaces;
 	const session = useSessionContext();
 	const thread = useThreadContext();
-	const sessionStatus = $derived.by(() => session.current?.status ?? null);
+	const sessionStatus = $derived.by(
+		() => session.current?.sandboxStatus ?? null,
+	);
 	const sessionErrorMessage = $derived.by(
 		() => session.current?.errorMessage?.trim() ?? "",
 	);

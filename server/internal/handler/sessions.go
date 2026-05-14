@@ -27,7 +27,6 @@ type sessionResponse struct {
 	Description     string                         `json:"description"`
 	CreatedAt       string                         `json:"createdAt"`
 	Timestamp       string                         `json:"timestamp"`
-	Status          string                         `json:"status"`
 	SandboxStatus   string                         `json:"sandboxStatus"`
 	CommitStatus    string                         `json:"commitStatus,omitempty"`
 	CommitOperation string                         `json:"commitOperation,omitempty"`
@@ -67,8 +66,7 @@ func mapSessionResponse(sess *service.Session) *sessionResponse {
 		Description:     sess.Description,
 		CreatedAt:       sess.CreatedAt,
 		Timestamp:       sess.Timestamp,
-		Status:          sess.Status,
-		SandboxStatus:   sess.Status,
+		SandboxStatus:   sess.SandboxStatus,
 		CommitStatus:    sess.CommitStatus,
 		CommitOperation: sess.CommitOperation,
 		CommitError:     sess.CommitError,
@@ -147,7 +145,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 
 	// Extract fields
 	name, _ := rawReq["name"].(string)
-	status, _ := rawReq["status"].(string)
+	sandboxStatus, _ := rawReq["sandboxStatus"].(string)
 
 	// Handle displayName: only process if key is present
 	var displayName *string
@@ -161,7 +159,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	session, err := h.sessionService.UpdateSession(r.Context(), sessionID, name, displayName, status)
+	session, err := h.sessionService.UpdateSession(r.Context(), sessionID, name, displayName, sandboxStatus)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to update session")
 		return

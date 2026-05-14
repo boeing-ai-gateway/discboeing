@@ -45,7 +45,7 @@
 		if (session.isPending) {
 			return "";
 		}
-		return isSessionTransitioningStatus(session.current?.status)
+		return isSessionTransitioningStatus(session.current?.sandboxStatus)
 			? "Loading thread"
 			: "No thread selected";
 	});

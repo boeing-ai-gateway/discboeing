@@ -21,7 +21,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 		description: "",
 		createdAt: "2026-01-01T00:00:00Z",
 		timestamp: "2026-01-01T00:00:00Z",
-		status: "ready",
+		sandboxStatus: "ready",
 		files: [],
 		...overrides,
 	};
@@ -101,7 +101,7 @@ test("upsertSession replaces an existing session in place", () => {
 
 	const nextSession: Session = {
 		...existingSessions[1],
-		status: "error",
+		sandboxStatus: "error",
 		errorMessage: "boom",
 	};
 

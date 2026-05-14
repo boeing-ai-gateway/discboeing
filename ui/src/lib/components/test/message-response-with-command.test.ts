@@ -73,7 +73,7 @@ test("conversation pane suppresses session errors while the session is transitio
 	);
 	assert.match(
 		source,
-		/const shouldShowSessionError = \$derived\.by\(\s*\(\) => !isSessionTransitioningStatus\(session\?\.current\?\.status\),/,
+		/const shouldShowSessionError = \$derived\.by\(\s*\(\) => !isSessionTransitioningStatus\(session\?\.current\?\.sandboxStatus\),/,
 	);
 	assert.match(
 		source,

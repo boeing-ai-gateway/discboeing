@@ -134,8 +134,8 @@ func TestEvents_ReceivesSessionUpdates(t *testing.T) {
 			if sessionData.SessionID != "session-123" {
 				t.Errorf("Expected session ID 'session-123', got '%s'", sessionData.SessionID)
 			}
-			if sessionData.Status != "ready" {
-				t.Errorf("Expected status 'ready', got '%s'", sessionData.Status)
+			if sessionData.SandboxStatus != "ready" {
+				t.Errorf("Expected status 'ready', got '%s'", sessionData.SandboxStatus)
 			}
 			return // Test passed
 		case <-timeout:

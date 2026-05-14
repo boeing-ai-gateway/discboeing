@@ -254,17 +254,17 @@ func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.S
 	var errMsg *string
 	switch event.Status {
 	case sandbox.StatusRunning:
-		if session.Status != model.SessionStatusReady {
+		if session.SandboxStatus != model.SessionStatusReady {
 			newStatus = model.SessionStatusReady
 		}
 	case sandbox.StatusStopped:
-		if session.Status == model.SessionStatusReady ||
-			session.Status == model.SessionStatusInitializing ||
-			session.Status == model.SessionStatusCreatingSandbox {
+		if session.SandboxStatus == model.SessionStatusReady ||
+			session.SandboxStatus == model.SessionStatusInitializing ||
+			session.SandboxStatus == model.SessionStatusCreatingSandbox {
 			newStatus = model.SessionStatusStopped
 		}
 	case sandbox.StatusFailed:
-		if session.Status != model.SessionStatusError {
+		if session.SandboxStatus != model.SessionStatusError {
 			newStatus = model.SessionStatusError
 			if event.Error != "" {
 				msg := "Sandbox failed: " + event.Error
@@ -272,9 +272,9 @@ func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.S
 			}
 		}
 	case sandbox.StatusRemoved:
-		if session.Status == model.SessionStatusReady ||
-			session.Status == model.SessionStatusInitializing ||
-			session.Status == model.SessionStatusCreatingSandbox {
+		if session.SandboxStatus == model.SessionStatusReady ||
+			session.SandboxStatus == model.SessionStatusInitializing ||
+			session.SandboxStatus == model.SessionStatusCreatingSandbox {
 			newStatus = model.SessionStatusStopped
 			log.Printf("[SandboxService] Sandbox for session %s was removed, marking session as stopped", event.SessionID)
 		}
@@ -289,7 +289,7 @@ func (s *SandboxService) handleSandboxEvent(ctx context.Context, event sandbox.S
 		return
 	}
 
-	log.Printf("[SandboxService] Updating session %s status from %s to %s", event.SessionID, session.Status, newStatus)
+	log.Printf("[SandboxService] Updating session %s status from %s to %s", event.SessionID, session.SandboxStatus, newStatus)
 	if err := s.store.UpdateSessionStatus(ctx, event.SessionID, newStatus, errMsg); err != nil {
 		log.Printf("[SandboxService] Failed to update session %s status: %v", event.SessionID, err)
 		return
@@ -490,9 +490,9 @@ func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID strin
 		return fmt.Errorf("session not found: %w", err)
 	}
 
-	switch sess.Status {
+	switch sess.SandboxStatus {
 	case model.SessionStatusReady, legacySessionStatusRunning:
-		return s.ensureSandboxRunningAndHealthy(ctx, sessionID, sess.Status)
+		return s.ensureSandboxRunningAndHealthy(ctx, sessionID, sess.SandboxStatus)
 	case model.SessionStatusStopped:
 		return s.ReconcileSandbox(ctx, sessionID)
 	case model.SessionStatusError, model.SessionStatusCreateFailed:
@@ -510,10 +510,10 @@ func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID strin
 
 func sessionNotReadyError(sess *model.Session) error {
 	if sess != nil && sess.ErrorMessage != nil && *sess.ErrorMessage != "" {
-		return fmt.Errorf("session in %s state: %s", sess.Status, *sess.ErrorMessage)
+		return fmt.Errorf("session in %s state: %s", sess.SandboxStatus, *sess.ErrorMessage)
 	}
 	if sess != nil {
-		return fmt.Errorf("session in %s state", sess.Status)
+		return fmt.Errorf("session in %s state", sess.SandboxStatus)
 	}
 	return fmt.Errorf("session is not ready")
 }
@@ -556,7 +556,7 @@ func (s *SandboxService) waitForSessionReady(ctx context.Context, sessionID stri
 			return fmt.Errorf("session not found: %w", err)
 		}
 
-		switch sess.Status {
+		switch sess.SandboxStatus {
 		case model.SessionStatusReady:
 			return nil
 		case model.SessionStatusError, model.SessionStatusCreateFailed, model.SessionStatusStopped:
@@ -564,7 +564,7 @@ func (s *SandboxService) waitForSessionReady(ctx context.Context, sessionID stri
 		}
 
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timeout waiting for session to be ready (status: %s)", sess.Status)
+			return fmt.Errorf("timeout waiting for session to be ready (status: %s)", sess.SandboxStatus)
 		}
 
 		select {
@@ -1138,7 +1138,7 @@ func (s *SandboxService) ReconcileSessionStates(ctx context.Context) error {
 		sb, err := s.getSandbox(ctx, session.ID)
 		if errors.Is(err, sandbox.ErrNotFound) {
 			// Sandbox doesn't exist - mark as stopped, will be recreated on demand
-			log.Printf("Session %s (status: %s) has no sandbox, marking as stopped", session.ID, session.Status)
+			log.Printf("Session %s (status: %s) has no sandbox, marking as stopped", session.ID, session.SandboxStatus)
 			if err := s.store.UpdateSessionStatus(ctx, session.ID, model.SessionStatusStopped, nil); err != nil {
 				log.Printf("Failed to update session %s status: %v", session.ID, err)
 			}
@@ -1171,8 +1171,8 @@ func (s *SandboxService) ReconcileSessionStates(ctx context.Context) error {
 		// Sandbox exists and is running
 		if sb.Status == sandbox.StatusRunning {
 			// Update session status if it was in intermediate state
-			if session.Status != model.SessionStatusReady {
-				log.Printf("Session %s was in %s state but sandbox is running, updating to ready", session.ID, session.Status)
+			if session.SandboxStatus != model.SessionStatusReady {
+				log.Printf("Session %s was in %s state but sandbox is running, updating to ready", session.ID, session.SandboxStatus)
 				if err := s.store.UpdateSessionStatus(ctx, session.ID, model.SessionStatusReady, nil); err != nil {
 					log.Printf("Failed to update session %s status: %v", session.ID, err)
 				}
@@ -1180,7 +1180,7 @@ func (s *SandboxService) ReconcileSessionStates(ctx context.Context) error {
 			continue
 		}
 
-		log.Printf("Session %s (status: %s) sandbox status: %s", session.ID, session.Status, sb.Status)
+		log.Printf("Session %s (status: %s) sandbox status: %s", session.ID, session.SandboxStatus, sb.Status)
 	}
 
 	return nil

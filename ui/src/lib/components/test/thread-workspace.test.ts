@@ -102,7 +102,7 @@ test("active thread workspace keeps the stream live while inactive conversation 
 	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
 	assert.match(
 		source,
-		/isSessionTransitioningStatus\(session\.current\?\.status\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
+		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
 	);
 	assert.match(source, /title=\{headerTitle\}/);
 	assert.doesNotMatch(

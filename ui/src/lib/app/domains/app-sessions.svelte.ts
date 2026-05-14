@@ -71,7 +71,7 @@ export function createAppSessionsDomain(
 		return (
 			sessionId === currentSelectedSessionId ||
 			(!!options?.includePending && sessionId === pendingSessionId) ||
-			(!!session && session.status !== "stopped")
+			(!!session && session.sandboxStatus !== "stopped")
 		);
 	}
 

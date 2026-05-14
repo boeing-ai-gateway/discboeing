@@ -274,10 +274,10 @@ func TestDeleteWorkspace(t *testing.T) {
 	project := ts.CreateTestProject(user, "Test Project")
 	workspace := ts.CreateTestWorkspace(project, "/home/user/code")
 	session := &model.Session{
-		ProjectID:   project.ID,
-		WorkspaceID: workspace.ID,
-		Name:        "Test Session",
-		Status:      model.SessionStatusReady,
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Test Session",
+		SandboxStatus: model.SessionStatusReady,
 	}
 	if err := ts.Store.CreateSession(context.Background(), session); err != nil {
 		t.Fatalf("Failed to create session: %v", err)
