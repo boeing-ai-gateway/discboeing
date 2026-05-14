@@ -19,6 +19,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/agentimpl"
+	"github.com/obot-platform/discobot/agent-go/assets"
 	"github.com/obot-platform/discobot/agent-go/browser"
 	"github.com/obot-platform/discobot/agent-go/internal/config"
 	controlfeatures "github.com/obot-platform/discobot/agent-go/internal/controlfeatures"
@@ -90,6 +91,10 @@ func (r credentialUseAuthorizerResolver) CompleteText(ctx context.Context, model
 
 // Run starts the HTTP API server and blocks until SIGINT/SIGTERM.
 func Run(cfg *config.Config) {
+	if err := assets.InstallSystemScripts("/opt/discobot/scripts", cfg.WorkspaceSource); err != nil {
+		fmt.Fprintf(os.Stderr, "discobot-agent-api: warning: failed to install embedded system scripts: %v\n", err)
+	}
+
 	// ── Credential manager ───────────────────────────────────────────────────
 	credMgr := credentials.NewManager()
 

@@ -14,8 +14,9 @@ type Config struct {
 	SecretHash string // Auth secret for API access (DISCOBOT_SECRET)
 
 	// Agent settings
-	AgentCwd string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
-	Model    string // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
+	AgentCwd        string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
+	Model           string // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
+	WorkspaceSource string // Workspace source path or git URL (WORKSPACE_SOURCE)
 
 	// Storage
 	DataDir    string // Root data directory (DISCOBOT_DATA_DIR, default: ~/.discobot)
@@ -45,6 +46,7 @@ func Load() *Config {
 	// Agent
 	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", cwd)
 	cfg.Model = getEnv("DISCOBOT_MODEL", "")
+	cfg.WorkspaceSource = getEnv("WORKSPACE_SOURCE", "")
 
 	// Storage — default to ~/.discobot
 	home, _ := os.UserHomeDir()

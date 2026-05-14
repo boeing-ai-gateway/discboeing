@@ -2,14 +2,12 @@ package agentimpl
 
 import (
 	"embed"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/assets"
 	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
 	"github.com/obot-platform/discobot/agent-go/thread"
 )
@@ -66,10 +64,6 @@ func embeddedScriptContent(path string) string {
 }
 
 func (a *DefaultAgent) ensureHelperScripts() {
-	if err := assets.InstallSystemScripts("/opt/discobot/scripts", os.Getenv("WORKSPACE_SOURCE")); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent-api: warning: failed to install embedded system scripts: %v\n", err)
-	}
-
 	a.ensureStagedScripts([]stagedScript{
 		{SourcePath: helperScriptSourcePath("read-thread"), TargetName: "read-thread"},
 		{SourcePath: helperScriptSourcePath("list-threads"), TargetName: "list-threads"},

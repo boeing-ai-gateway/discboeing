@@ -58,7 +58,7 @@ This ensures:
 - Subsequent starts preserve persisted workspace and home state
 - New image-provided files are added without overwriting existing files
 - Obsolete bundled home-level Discobot scripts, commands, and built-in skills are removed so system-level config under `/opt/discobot` and other image paths takes over cleanly
-- Built-in Discobot slash-command scripts are embedded in `discobot-agent-api` and written to `/opt/discobot/scripts` by the agent API startup path
+- Built-in Discobot slash-command scripts are embedded in `discobot-agent-api` and written to `/opt/discobot/scripts` by the agent API server-mode startup path
 - File permissions and ownership are preserved
 
 ### Workspace Cloning

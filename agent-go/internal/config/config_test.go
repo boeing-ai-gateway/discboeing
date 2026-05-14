@@ -13,6 +13,7 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_SECRET", "secret-hash")
 	t.Setenv("DISCOBOT_AGENT_CWD", "/tmp/workspace")
 	t.Setenv("DISCOBOT_MODEL", "openai/gpt-5.4")
+	t.Setenv("WORKSPACE_SOURCE", "https://example.com/repo.git")
 	t.Setenv("DISCOBOT_DATA_DIR", "/tmp/discobot-data")
 	t.Setenv("DISCOBOT_THREADS_DIR", "/tmp/discobot-threads")
 	t.Setenv("DISCOBOT_HOOKS_ENABLED", "true")
@@ -34,6 +35,9 @@ func TestLoadUsesDiscobotEnvVars(t *testing.T) {
 	}
 	if cfg.Model != "openai/gpt-5.4" {
 		t.Fatalf("expected model to load from DISCOBOT_MODEL, got %q", cfg.Model)
+	}
+	if cfg.WorkspaceSource != "https://example.com/repo.git" {
+		t.Fatalf("expected workspace source to load from WORKSPACE_SOURCE, got %q", cfg.WorkspaceSource)
 	}
 	if cfg.DataDir != "/tmp/discobot-data" {
 		t.Fatalf("expected data dir to load from DISCOBOT_DATA_DIR, got %q", cfg.DataDir)
