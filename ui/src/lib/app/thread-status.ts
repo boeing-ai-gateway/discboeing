@@ -25,7 +25,7 @@ export function resolveSessionDisplayStatus(
 		>
 	> | null,
 ): SessionDisplayStatus {
-	const sessionStatus = session?.status;
+	const sessionStatus = session?.sandboxStatus;
 	const sessionActivityStatus = session?.threadStatus?.status;
 	const commitStatus = session?.commitStatus;
 	const commitOperation = session?.commitOperation;
@@ -93,13 +93,10 @@ export function getThreadStateTone(state: Thread["state"] | undefined) {
 }
 
 export function resolveSidebarThreadStatus({
-	session,
 	sessionThreadStatus,
 	thread,
 	localActivityStatus,
-	idleFallback = "session",
 }: {
-	session?: Pick<Session, "status" | "threadStatus"> | null;
 	sessionThreadStatus?: SessionThreadStatus | null;
 	thread?: Pick<
 		Thread,
@@ -110,12 +107,8 @@ export function resolveSidebarThreadStatus({
 		| "promptQueue"
 	> | null;
 	localActivityStatus?: ThreadActivityStatus | null;
-	idleFallback?: "session" | "none";
-}): ThreadActivityStatus["status"] | Session["status"] | null {
-	const sessionActivityStatus = (sessionThreadStatus ?? session?.threadStatus)
-		?.status;
-	const fallbackStatus =
-		idleFallback === "session" ? (session?.status ?? null) : null;
+}): ThreadActivityStatus["status"] | null {
+	const sessionActivityStatus = sessionThreadStatus?.status;
 
 	if (
 		thread?.pendingQuestion ||
@@ -131,7 +124,7 @@ export function resolveSidebarThreadStatus({
 	}
 
 	if (sessionActivityStatus === "idle") {
-		return fallbackStatus;
+		return null;
 	}
 
 	if (localActivityStatus?.status && localActivityStatus.status !== "idle") {
@@ -146,7 +139,7 @@ export function resolveSidebarThreadStatus({
 	if ((thread?.promptQueue?.length ?? 0) > 0) {
 		return "queued";
 	}
-	return fallbackStatus;
+	return null;
 }
 
 export function resolveThreadDisplayStatus({
@@ -172,18 +165,16 @@ export function resolveThreadDisplayStatus({
 }): SessionDisplayStatus {
 	const displayedSessionStatus = resolveSessionDisplayStatus({
 		...session,
-		threadStatus: sessionThreadStatus ?? session?.threadStatus,
+		threadStatus: sessionThreadStatus ?? undefined,
 	});
 	if (displayedSessionStatus === "committed") {
 		return "committed";
 	}
 
 	const status = resolveSidebarThreadStatus({
-		session,
 		sessionThreadStatus,
 		thread,
 		localActivityStatus,
-		idleFallback: "none",
 	});
 
 	if (displayedSessionStatus === "stopped" && status === "running") {
