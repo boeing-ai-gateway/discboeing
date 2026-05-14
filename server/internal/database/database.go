@@ -204,6 +204,9 @@ func (db *DB) Migrate() error {
 	if err := db.migrateSessionStatusToSandboxStatus(hadLegacySessionStatus, hadSessionSandboxStatus); err != nil {
 		return err
 	}
+	if err := db.syncLegacySessionStatusFromSandboxStatus(); err != nil {
+		return err
+	}
 	if err := dropObsoleteCredentialIndexes(db); err != nil {
 		return err
 	}
@@ -289,6 +292,23 @@ func (db *DB) migrateSessionStatusToSandboxStatus(hadLegacyStatus, hadSandboxSta
 	log.Println("Migrating sessions.status to sessions.sandbox_status...")
 	if err := db.Exec("UPDATE sessions SET sandbox_status = status WHERE status IS NOT NULL AND status <> ''").Error; err != nil {
 		return fmt.Errorf("failed to migrate sessions.status to sessions.sandbox_status: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) syncLegacySessionStatusFromSandboxStatus() error {
+	if !db.Migrator().HasColumn("sessions", "status") {
+		return nil
+	}
+	if !db.Migrator().HasColumn("sessions", "sandbox_status") {
+		return nil
+	}
+
+	// SQLite keeps the obsolete sessions.status column for compatibility, so keep
+	// it aligned with the canonical sandbox_status field when both exist.
+	log.Println("Syncing legacy sessions.status from sessions.sandbox_status...")
+	if err := db.Exec("UPDATE sessions SET status = sandbox_status WHERE sandbox_status IS NOT NULL AND sandbox_status <> '' AND (status IS NULL OR status <> sandbox_status)").Error; err != nil {
+		return fmt.Errorf("failed to sync sessions.status from sessions.sandbox_status: %w", err)
 	}
 	return nil
 }

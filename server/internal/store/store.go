@@ -526,6 +526,9 @@ func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, erro
 	updates := map[string]any{
 		"sandbox_status": status,
 	}
+	if s.writeDB.Migrator().HasColumn("sessions", "status") {
+		updates["status"] = status
+	}
 	if errorMessage != nil {
 		updates["error_message"] = *errorMessage
 	} else {
