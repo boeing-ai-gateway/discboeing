@@ -29,6 +29,15 @@ func setupThreadStatusSyncerAsyncStore(t *testing.T) *store.Store {
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("failed to get underlying sql.DB: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Fatalf("failed to close test database: %v", err)
+		}
+	})
 	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}

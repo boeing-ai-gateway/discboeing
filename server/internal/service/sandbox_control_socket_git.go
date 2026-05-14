@@ -359,7 +359,7 @@ func runGitHTTPBackend(ctx context.Context, workspacePath, sessionID string, sta
 }
 
 func gitHTTPBackendEnv(workspacePath, sessionID string, start gitHTTPRequest) []string {
-	projectRoot := filepath.Dir(workspacePath)
+	projectRoot := filepath.ToSlash(filepath.Dir(workspacePath))
 	repoName := filepath.Base(workspacePath)
 	pathInfo := "/" + repoName + gitSuffixPath(start.Path)
 

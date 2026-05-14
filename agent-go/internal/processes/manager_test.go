@@ -40,8 +40,17 @@ func TestManagerUsesConfiguredDefaultWorkDir(t *testing.T) {
 			output.WriteString(event.Data)
 		}
 	}
-	if got := strings.TrimSpace(output.String()); got != workDir {
-		t.Fatalf("pwd output = %q, want %q", got, workDir)
+	got := strings.TrimSpace(output.String())
+	gotPath, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q) failed: %v", got, err)
+	}
+	wantPath, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q) failed: %v", workDir, err)
+	}
+	if gotPath != wantPath {
+		t.Fatalf("pwd output = %q, want %q", gotPath, wantPath)
 	}
 }
 

@@ -3,6 +3,7 @@ package assets
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -42,8 +43,10 @@ func TestInstallSystemScripts(t *testing.T) {
 	if !strings.Contains(string(content), "Discobot remote commit context") {
 		t.Fatalf("installed commit script did not contain remote flow")
 	}
-	if info, err := os.Stat(commitPath); err != nil || info.Mode().Perm() != 0o755 {
-		t.Fatalf("commit script mode = %v, %v; want 0755", info, err)
+	if info, err := os.Stat(commitPath); err != nil {
+		t.Fatalf("stat commit script: %v", err)
+	} else if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
+		t.Fatalf("commit script mode = %v; want 0755", info.Mode().Perm())
 	}
 	if _, err := os.Stat(filepath.Join(dir, "discobot-commit-remote")); !os.IsNotExist(err) {
 		t.Fatalf("remote variant should not be installed separately, err=%v", err)

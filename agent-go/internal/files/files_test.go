@@ -36,6 +36,7 @@ func TestTildePathsResolveUnderHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", homeRoot)
+	t.Setenv("USERPROFILE", homeRoot)
 
 	write, fileErr := WriteFile("~/.discobot/editor/control.json", `{"type":"openFile"}`, "utf8", workspaceRoot)
 	if fileErr != nil {
@@ -86,6 +87,7 @@ func TestTildePathsCannotEscapeHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", homeRoot)
+	t.Setenv("USERPROFILE", homeRoot)
 
 	if _, err := ValidatePath("~/../escape", workspaceRoot); err == nil {
 		t.Fatal("ValidatePath() expected traversal error")
@@ -102,6 +104,7 @@ func TestRelativePathsStillResolveUnderWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", homeRoot)
+	t.Setenv("USERPROFILE", homeRoot)
 
 	write, fileErr := WriteFile("notes/todo.txt", "ship it", "utf8", workspaceRoot)
 	if fileErr != nil {
