@@ -7,7 +7,7 @@
 	import ServerIcon from "@lucide/svelte/icons/server";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
-	import { api } from "$lib/api-client";
+	import { ApiError, api } from "$lib/api-client";
 	import type {
 		CredentialVisibility,
 		SessionCredentialAssignment,
@@ -62,11 +62,21 @@
 			assignments = [];
 			return;
 		}
+		const sessionId = session.sessionId;
 		loading = true;
 		try {
-			const response = await api.getSessionCredentials(session.sessionId);
+			const response = await api.getSessionCredentials(sessionId);
+			if (session.sessionId !== sessionId || session.isPending) {
+				return;
+			}
 			assignments = response.credentials;
 			await app.credentials.refresh();
+		} catch (error) {
+			if (error instanceof ApiError && error.status === 404) {
+				assignments = [];
+				return;
+			}
+			assignments = [];
 		} finally {
 			loading = false;
 		}
