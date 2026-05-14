@@ -73,7 +73,6 @@
 	const app = useAppContext();
 	const models = app.models;
 	const preferences = app.preferences;
-	const sessions = app.sessions;
 	const ui = app.ui;
 	const session = useSessionContext();
 	const thread = useThreadContext();
@@ -99,7 +98,6 @@
 	let pendingAutocompleteSessionCreation = $state<Promise<boolean> | null>(
 		null,
 	);
-	let mounted = true;
 
 	function findModelById(modelId: string | null): ModelInfo | null {
 		if (!modelId) {
@@ -457,7 +455,6 @@
 
 	onDestroy(() => {
 		onContainerChange?.(null);
-		mounted = false;
 	});
 
 	async function getPendingWorkspaceSelection() {
@@ -664,9 +661,6 @@
 			if (wasPending && result) {
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
-				}
-				if (mounted) {
-					sessions.openThread(result.sessionId, result.threadId);
 				}
 				thread.clearNextComposerValues();
 				sessionView.resetPendingWorkspaceSetup();

@@ -8,7 +8,6 @@
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { setThreadContext } from "$lib/context/thread-context.svelte";
 
@@ -23,7 +22,6 @@
 
 	let { threadId, visible, mainClass, reserveSidebarSpace, mode }: Props =
 		$props();
-	const app = useAppContext();
 	const session = useSessionContext();
 	const thread = session.ensureThread(untrack(() => threadId));
 	setThreadContext(thread);
@@ -50,22 +48,6 @@
 	const showThreadSelectionPrompt = $derived.by(
 		() => !isLoadingThread && !showActiveConversation && canLoadThreadData,
 	);
-
-	$effect(() => {
-		if (!visible || thread.messages.length === 0) {
-			return;
-		}
-
-		app.stores.recentThreads.recordSelection({
-			sessionId: session.sessionId,
-			threadId: thread.threadId,
-			name:
-				thread.thread?.name ||
-				session.current?.displayName ||
-				session.current?.name ||
-				"New Thread",
-		});
-	});
 </script>
 
 <main class={mainClass}>

@@ -492,6 +492,20 @@ export function createThreadContext(
 			allowEmptyPendingMessage,
 			runAfter,
 		});
+		if (result) {
+			const submittedThread = session.threads.list.find(
+				(thread) => thread.id === result.threadId,
+			);
+			app.stores.recentThreads.recordSelection({
+				sessionId: result.sessionId,
+				threadId: result.threadId,
+				name:
+					submittedThread?.name ||
+					session.current?.displayName ||
+					session.current?.name ||
+					"New Thread",
+			});
+		}
 		modelId = submitValues.modelId;
 		reasoning = submitValues.reasoning;
 		serviceTier = submitValues.serviceTier;
