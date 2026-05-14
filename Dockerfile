@@ -158,6 +158,10 @@ RUN if [ -n "${UBUNTU_MIRROR}" ]; then \
     # Seed bundled code-server extensions
     && mkdir -p /opt/discobot/code-server-defaults/extensions \
     && code-server --install-extension vscodevim.vim --extensions-dir /opt/discobot/code-server-defaults/extensions \
+    && code-server --install-extension golang.go --extensions-dir /opt/discobot/code-server-defaults/extensions \
+    && code-server --install-extension rust-lang.rust-analyzer --extensions-dir /opt/discobot/code-server-defaults/extensions \
+    && code-server --install-extension ms-python.python --extensions-dir /opt/discobot/code-server-defaults/extensions \
+    && code-server --install-extension svelte.svelte-vscode --extensions-dir /opt/discobot/code-server-defaults/extensions \
     && rm -f /opt/discobot/code-server-defaults/extensions/extensions.json \
     # Install Claude Code CLI and OpenCode CLI
     && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp pnpm opencode-ai \
