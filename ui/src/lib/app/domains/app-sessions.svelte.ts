@@ -132,6 +132,15 @@ export function createAppSessionsDomain(
 		await store.fetchOne(sessionId);
 	};
 
+	const openThread = (sessionId: string, threadId: string) => {
+		requestedThreadIdBySession.set(sessionId, threadId);
+		const sessionContext = sessionContexts.get(sessionId);
+		if (sessionContext) {
+			sessionContext.threads.select(threadId);
+		}
+		selectSession(sessionId);
+	};
+
 	return {
 		get sessions() {
 			return store.list;
@@ -155,35 +164,24 @@ export function createAppSessionsDomain(
 		shouldLoadSession,
 		sessionContexts,
 		select: selectSession,
-		openThread: (sessionId, threadId) => {
-			requestedThreadIdBySession.set(sessionId, threadId);
-			const sessionContext = sessionContexts.get(sessionId);
-			if (sessionContext) {
-				sessionContext.threads.select(threadId);
-			}
-			selectSession(sessionId);
-		},
+		openThread,
 		createThread: async (sessionId) => {
 			if (!list.some((session) => session.id === sessionId)) {
 				return null;
 			}
 
-			const { threads } = await api.getThreads(sessionId);
-			const created = await api.createThread(sessionId, {
-				id: threads.some((thread) => thread.id === sessionId)
-					? generateId()
-					: sessionId,
-			});
-			const thread = await api.getThread(sessionId, created.id);
 			const sessionContext = sessionContexts.get(sessionId);
-			if (sessionContext) {
-				sessionContext.stores.threads.upsert(thread);
-				sessionContext.threads.select(thread.id);
-			} else {
-				requestedThreadIdBySession.set(sessionId, thread.id);
+			if (!sessionContext) {
+				selectSession(sessionId);
+				return null;
 			}
-			selectSession(sessionId);
-			return thread.id;
+
+			const threadId = await sessionContext.threads.create();
+			if (!threadId) {
+				return null;
+			}
+			openThread(sessionId, threadId);
+			return threadId;
 		},
 		startNew: () => {
 			pendingSessionId = generateId();

@@ -34,7 +34,7 @@ test("getNextSelectedThreadId falls back to the previous thread", () => {
 	assert.equal(nextId, "a");
 });
 
-test("buildImplicitThread uses the active thread id while threads are unavailable", () => {
+test("buildImplicitThread uses the session id while threads are unavailable", () => {
 	const session: Session = {
 		id: "session-1",
 		name: "Session",
@@ -51,7 +51,7 @@ test("buildImplicitThread uses the active thread id while threads are unavailabl
 
 	assert.deepEqual(buildImplicitThread(session), [
 		{
-			id: "thread-1",
+			id: "session-1",
 			name: "Session",
 			model: undefined,
 			reasoning: undefined,

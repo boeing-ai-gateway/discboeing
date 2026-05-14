@@ -83,7 +83,13 @@ test("session sidebar session actions include new thread", () => {
 		source,
 		/async function handleCreateThread\(sessionId: string\)/,
 	);
+	assert.match(source, /sessions\.select\(sessionId\)/);
+	assert.match(source, /app\.ensureSession\(sessionId\)/);
 	assert.match(source, /sessions\.createThread\(sessionId\)/);
+	assert.doesNotMatch(
+		source,
+		/app\.ensureSession\(sessionId\)\.threads\.create\(\)/,
+	);
 	assert.match(source, /New thread/);
 });
 

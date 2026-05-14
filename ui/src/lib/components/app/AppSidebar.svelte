@@ -261,6 +261,12 @@
 	}
 
 	async function handleCreateThread(sessionId: string) {
+		if (!sessions.peek(sessionId)) {
+			return;
+		}
+
+		sessions.select(sessionId);
+		app.ensureSession(sessionId);
 		const createdThreadId = await sessions.createThread(sessionId);
 		if (!createdThreadId) {
 			return;

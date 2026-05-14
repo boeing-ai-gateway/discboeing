@@ -32,11 +32,9 @@ export function buildImplicitThread(session: Session | null): Thread[] {
 		return [];
 	}
 
-	const activeThreadId = session.threadStatus?.threadId?.trim();
-
 	return [
 		{
-			id: activeThreadId || session.id,
+			id: session.id,
 			name: session.displayName || session.name,
 			model: session.model,
 			reasoning: session.reasoning,

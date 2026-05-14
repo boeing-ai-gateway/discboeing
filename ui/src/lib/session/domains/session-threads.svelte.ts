@@ -45,32 +45,29 @@ export function createSessionThreadsDomain(
 		}
 	}
 
-	function syncSelectedThread(nextList = currentList()) {
+	function resolveSelectedThreadId(nextList = currentList()) {
+		if (
+			args.hasSession() &&
+			store.list.length === 0 &&
+			store.status !== "ready"
+		) {
+			return null;
+		}
+
 		if (nextList.length === 0) {
-			args.setSelectedId(null);
-			return;
+			return null;
 		}
 
 		const selectedId = args.getSelectedId();
 		if (selectedId && nextList.some((thread) => thread.id === selectedId)) {
-			return;
+			return selectedId;
 		}
 
-		const activeThreadId = args.getSession()?.threadStatus?.threadId;
-		if (
-			activeThreadId &&
-			nextList.some((thread) => thread.id === activeThreadId)
-		) {
-			args.setSelectedId(activeThreadId);
-			return;
-		}
+		return nextList[0]?.id ?? null;
+	}
 
-		if (nextList.length === 1) {
-			args.setSelectedId(nextList[0]?.id ?? null);
-			return;
-		}
-
-		args.setSelectedId(null);
+	function syncSelectedThread(nextList = currentList()) {
+		args.setSelectedId(resolveSelectedThreadId(nextList));
 	}
 
 	function notifyThreadsUpdated(nextList = currentList()) {
@@ -129,11 +126,12 @@ export function createSessionThreadsDomain(
 		},
 		get selectedId() {
 			scheduleEnsureLoaded();
-			return args.getSelectedId();
+			return resolveSelectedThreadId(list);
 		},
 		get selected() {
 			scheduleEnsureLoaded();
-			return list.find((thread) => thread.id === args.getSelectedId()) ?? null;
+			const selectedId = resolveSelectedThreadId(list);
+			return list.find((thread) => thread.id === selectedId) ?? null;
 		},
 		refresh: async () => {
 			if (!args.hasSession()) {
@@ -158,21 +156,28 @@ export function createSessionThreadsDomain(
 				args.setSelectedId(threadId);
 			}
 		},
-		create: (name?: string) => {
-			void (async () => {
-				if (!args.hasSession()) {
-					return;
-				}
+		create: async (name?: string) => {
+			if (!args.hasSession()) {
+				return null;
+			}
 
-				const trimmedName = name?.trim();
-				const threadId =
-					store.list.length === 0 ? args.sessionId : generateId();
-				const created = await store.create({
-					id: threadId,
-					name: trimmedName && trimmedName.length > 0 ? trimmedName : undefined,
+			if (store.status !== "ready") {
+				await store.fetch();
+			}
+
+			if (!store.list.some((thread) => thread.id === args.sessionId)) {
+				await store.create({
+					id: args.sessionId,
 				});
-				args.setSelectedId(created.id);
-			})();
+			}
+
+			const trimmedName = name?.trim();
+			const created = await store.create({
+				id: generateId(),
+				name: trimmedName && trimmedName.length > 0 ? trimmedName : undefined,
+			});
+			args.setSelectedId(created.id);
+			return created.id;
 		},
 		rename: async (threadId: string, nextName: string): Promise<boolean> => {
 			const trimmedName = nextName.trim();
