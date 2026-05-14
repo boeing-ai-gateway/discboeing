@@ -65,6 +65,9 @@ test.beforeEach(() => {
 				hostname: "localhost",
 				protocol: "http:",
 			},
+			__DISCOBOT_CONFIG__: {
+				apiRoot: "http://localhost:3001/api",
+			},
 			setTimeout,
 			clearTimeout,
 		},
@@ -369,5 +372,46 @@ test("chat stream manager routes project events over the shared websocket", () =
 		type: "unsubscribe",
 		stream: "project-events",
 	});
+	manager.dispose();
+});
+
+test("chat stream manager reconnects after socket close without reporting a stream error", async () => {
+	const manager = createChatStreamManager();
+	let errors = 0;
+	const subscription = manager.subscribeProjectEvents({
+		afterId: "event-1",
+		onError: () => {
+			errors += 1;
+		},
+	});
+
+	const firstSocket = MockWebSocket.instances[0];
+	firstSocket.emitOpen();
+	firstSocket.emitMessage({
+		type: "subscribed",
+		stream: "project-events",
+	});
+	firstSocket.emitMessage({
+		type: "event",
+		stream: "project-events",
+		event: "session_updated",
+		data: '{"id":"event-2","type":"session_updated"}',
+		id: "event-2",
+	});
+
+	firstSocket.emitClose();
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+
+	assert.equal(errors, 0);
+	assert.equal(MockWebSocket.instances.length, 2);
+	const secondSocket = MockWebSocket.instances[1];
+	secondSocket.emitOpen();
+	assert.deepEqual(JSON.parse(secondSocket.sent[0]), {
+		type: "subscribe",
+		stream: "project-events",
+		afterId: "event-2",
+	});
+
+	subscription.unsubscribe();
 	manager.dispose();
 });

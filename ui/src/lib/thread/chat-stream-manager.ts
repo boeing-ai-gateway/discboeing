@@ -323,11 +323,7 @@ export function createChatStreamManager(): ChatStreamManager {
 			}
 			socket = null;
 			for (const entry of entries.values()) {
-				const wasActive = entry.state !== "idle";
 				entry.state = "idle";
-				if (wasActive) {
-					notifyError(entry, new Error("Lost project stream connection"));
-				}
 			}
 			scheduleReconnect();
 		};
@@ -541,6 +537,9 @@ export function createChatStreamManager(): ChatStreamManager {
 								stream: "project-events",
 							}),
 							handleEvent: (message) => {
+								if (message.id) {
+									afterId = message.id;
+								}
 								if (message.event && typeof message.data === "string") {
 									source.dispatch(message.event, message.data);
 								}
