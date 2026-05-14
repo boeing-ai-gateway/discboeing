@@ -179,7 +179,9 @@ func (s *platformStream) waitConPTY(ctx context.Context) (int, error) {
 	}
 	done := make(chan waitResult, 1)
 	go func() {
-		defer windows.CloseHandle(s.processHandle)
+		defer func() {
+			_ = windows.CloseHandle(s.processHandle)
+		}()
 		event, err := windows.WaitForSingleObject(s.processHandle, windows.INFINITE)
 		if err != nil {
 			done <- waitResult{code: -1, err: err}

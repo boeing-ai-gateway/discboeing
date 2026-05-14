@@ -196,7 +196,7 @@ func TestVZProvider_CreateBeforeReady(t *testing.T) {
 
 	// Try to create a sandbox immediately - should fail
 	ctx := context.Background()
-	_, err = provider.Create(ctx, "test-session", sandbox.CreateOptions{})
+	_, _, err = provider.Create(ctx, nil, "test-session", sandbox.CreateOptions{})
 
 	if err == nil {
 		t.Error("Expected Create to fail when provider not ready")
