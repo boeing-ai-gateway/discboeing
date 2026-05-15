@@ -39,8 +39,9 @@ test("thread workspace owns only thread context and conversation UI", () => {
 	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
 	assert.match(
 		source,
-		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
+		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: ""/,
 	);
+	assert.doesNotMatch(source, /No thread selected/);
 	assert.match(source, /\{#if mode === "conversation"\}/);
 	assert.match(source, /<ThreadWorkspaceHeader/);
 	assert.match(source, /title=\{headerTitle\}/);
