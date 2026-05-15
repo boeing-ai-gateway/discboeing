@@ -215,10 +215,14 @@ test("project stream manager does not reconnect completed chat streams", async (
 
 test("project stream manager reconnects active streams", async () => {
 	const manager = createProjectStreamManager();
+	const errors: unknown[] = [];
 	const subscription = manager.subscribe({
 		sessionId: "session-2",
 		threadId: "thread-2",
 		replay: true,
+		onError: (error) => {
+			errors.push(error);
+		},
 	});
 
 	const firstSocket = MockWebSocket.instances[0];
@@ -234,6 +238,7 @@ test("project stream manager reconnects active streams", async () => {
 	firstSocket.emitClose();
 	await new Promise((resolve) => setTimeout(resolve, 1100));
 
+	assert.deepEqual(errors, []);
 	assert.equal(MockWebSocket.instances.length, 2);
 	const secondSocket = MockWebSocket.instances[1];
 	secondSocket.emitOpen();

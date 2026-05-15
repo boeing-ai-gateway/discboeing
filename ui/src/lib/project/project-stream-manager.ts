@@ -350,9 +350,6 @@ export function createProjectStreamManager(): ProjectStreamManager {
 				return;
 			}
 			socket = null;
-			for (const entry of entries.values()) {
-				notifyError(entry, new Error("Lost project stream connection"));
-			}
 			scheduleReconnect();
 		};
 	};

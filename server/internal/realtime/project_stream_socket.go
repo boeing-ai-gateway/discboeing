@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -445,33 +446,31 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 		return
 	}
 
-	if req.AfterID != "" {
-		history, err := s.eventBroker.GetEventsAfterID(streamCtx, s.projectID, req.AfterID)
+	history, err := s.projectEventHistory(streamCtx, req.AfterID)
+	if err != nil {
+		_ = s.writeMessage(projectStreamSocketMessage{
+			Type:   "error",
+			Stream: "project-events",
+			Error:  "failed to get historical events",
+		})
+		s.cancelSubscription(key)
+		return
+	}
+	for _, event := range history {
+		data, err := json.Marshal(event)
 		if err != nil {
-			_ = s.writeMessage(projectStreamSocketMessage{
-				Type:   "error",
-				Stream: "project-events",
-				Error:  "failed to get historical events",
-			})
+			continue
+		}
+		sentEventIDs[event.ID] = true
+		if !s.writeMessage(projectStreamSocketMessage{
+			Type:   "event",
+			Stream: "project-events",
+			Event:  string(event.Type),
+			Data:   string(data),
+			ID:     event.ID,
+		}) {
 			s.cancelSubscription(key)
 			return
-		}
-		for _, event := range history {
-			data, err := json.Marshal(event)
-			if err != nil {
-				continue
-			}
-			sentEventIDs[event.ID] = true
-			if !s.writeMessage(projectStreamSocketMessage{
-				Type:   "event",
-				Stream: "project-events",
-				Event:  string(event.Type),
-				Data:   string(data),
-				ID:     event.ID,
-			}) {
-				s.cancelSubscription(key)
-				return
-			}
 		}
 	}
 
@@ -510,4 +509,11 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 			}
 		}
 	}()
+}
+
+func (s *ProjectStreamSocket) projectEventHistory(ctx context.Context, afterID string) ([]*events.Event, error) {
+	if afterID != "" {
+		return s.eventBroker.GetEventsAfterID(ctx, s.projectID, afterID)
+	}
+	return s.eventBroker.GetEventsSince(ctx, s.projectID, time.Time{})
 }
