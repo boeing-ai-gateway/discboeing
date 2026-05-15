@@ -1823,6 +1823,38 @@
 								{/if}
 							</div>
 						{/each}
+						{#if thread?.pendingQuestionToolPart}
+							<Message
+								data-conversation-message-id={`fallback-pending-${thread.pendingQuestionToolPart.toolCallId}`}
+								from="assistant"
+							>
+								<MessageContent>
+									<OptimizedToolRenderer
+										toolPart={thread.pendingQuestionToolPart}
+										queued={false}
+										sessionId={activeSessionId}
+										threadId={activeThreadId}
+										resolvedTheme={app?.preferences.resolvedTheme ?? "light"}
+										onToolApprovalResponse={thread?.addToolApprovalResponse}
+										defaultOpen={toolDefaultOpen}
+									/>
+								</MessageContent>
+							</Message>
+						{:else if thread?.pendingQuestionLoading}
+							<Message from="assistant">
+								<MessageContent>
+									<div class="text-muted-foreground">
+										<Loader size={18} />
+									</div>
+								</MessageContent>
+							</Message>
+						{:else if thread?.pendingQuestionError}
+							<Alert variant="destructive">
+								<AlertDescription>
+									{thread.pendingQuestionError}
+								</AlertDescription>
+							</Alert>
+						{/if}
 					</div>
 				</div>
 				<ConversationSelectionComment

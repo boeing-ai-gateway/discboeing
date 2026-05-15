@@ -1345,7 +1345,10 @@ func (c *SandboxAgentClient) GetQuestion(ctx context.Context, sessionID, threadI
 		defer lease.Release()
 		client := lease.Client
 
-		url := c.threadURL(threadID, "/chat/question/"+toolUseID)
+		url := c.threadURL(threadID, "/chat/question")
+		if toolUseID != "" {
+			url = c.threadURL(threadID, "/chat/question/"+toolUseID)
+		}
 
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {

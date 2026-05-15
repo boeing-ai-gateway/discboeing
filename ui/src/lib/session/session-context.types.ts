@@ -18,6 +18,7 @@ import type {
 	Thread,
 	UpdateQueuedPromptRequest,
 } from "$lib/api-types";
+import type { DynamicToolPart } from "$lib/components/ai/types";
 import type { SessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 import type { AsyncStatus } from "$lib/resource/types";
 
@@ -265,6 +266,9 @@ export type ThreadContextValue = {
 	isStreaming: boolean;
 	error: string | null;
 	hasPendingQuestion: boolean;
+	pendingQuestionToolPart: DynamicToolPart | null;
+	pendingQuestionLoading: boolean;
+	pendingQuestionError: string | null;
 	clearComposerDraft: (storageKey?: string) => void;
 	submit: (payload: {
 		parts: ChatMessage["parts"];

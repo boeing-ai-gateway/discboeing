@@ -1342,6 +1342,35 @@ func TestSandboxAgentClient_GetQuestion_PreservesQuestionNotes(t *testing.T) {
 	}
 }
 
+func TestSandboxAgentClient_GetQuestion_UsesPendingQuestionEndpointWithoutQuestionID(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/threads/test-session/chat/question" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"pending","question":{"toolUseID":"tool-123"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	provider := &mockSandboxProvider{handler: handler}
+	client := NewSandboxAgentClient(provider, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := client.GetQuestion(ctx, "test-session", "test-session", "")
+	if err != nil {
+		t.Fatalf("GetQuestion failed: %v", err)
+	}
+	if result == nil || result.Question == nil {
+		t.Fatal("Expected pending question response")
+	}
+	if result.Question.ToolUseID != "tool-123" {
+		t.Fatalf("Expected toolUseID %q, got %q", "tool-123", result.Question.ToolUseID)
+	}
+}
+
 func TestSandboxAgentClient_ListFiles_EncodesPathQuery(t *testing.T) {
 	var gotPath string
 	var gotHidden string

@@ -319,6 +319,28 @@ func writeStreamEvent(w http.ResponseWriter, line service.SSELine) {
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", line.Data)
 }
 
+// ChatCurrentQuestion returns the current pending AskUserQuestion for a session thread.
+// GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/question
+// Returns { status: "pending", question: {...} } if a question is waiting.
+// Returns { status: "answered", question: null } if no question is pending.
+func (h *Handler) ChatCurrentQuestion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID, threadID, _, ok := h.resolveSessionAndThread(w, r, projectID, false)
+	if !ok {
+		return
+	}
+
+	result, err := h.chatService.GetQuestion(ctx, projectID, sessionID, threadID, "")
+	if err != nil {
+		log.Printf("[ChatCurrentQuestion] Error: %v", err)
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
 // ChatQuestion returns the current pending AskUserQuestion for a session thread.
 // GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/question/{questionId}
 // Returns { status: "pending", question: {...} } if that question is still waiting

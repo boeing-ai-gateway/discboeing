@@ -127,7 +127,10 @@ export function createThreadContext(
 		setDraft: session.ui.setComposerDraft,
 	});
 	const pendingQuestion = createThreadPendingQuestionState({
+		sessionId: session.sessionId,
+		threadId,
 		getMessages: () => conversation.messages,
+		getThreadPendingQuestion: () => Boolean(getThread()?.pendingQuestion),
 	});
 
 	const start = () => {
@@ -250,6 +253,15 @@ export function createThreadContext(
 		},
 		get hasPendingQuestion() {
 			return pendingQuestion.hasPendingQuestion;
+		},
+		get pendingQuestionToolPart() {
+			return pendingQuestion.pendingQuestionToolPart;
+		},
+		get pendingQuestionLoading() {
+			return pendingQuestion.pendingQuestionLoading;
+		},
+		get pendingQuestionError() {
+			return pendingQuestion.pendingQuestionError;
 		},
 		clearComposerDraft: composer.clearDraft,
 		submit,

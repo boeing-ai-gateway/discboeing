@@ -1441,6 +1441,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/threads/{threadId}/question",
+						Handler: h.ChatCurrentQuestion,
+						Meta: routes.Meta{
+							Group:       "Chat",
+							Description: "Get the current pending AskUserQuestion for a specific session thread",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "GET", Pattern: "/threads/{threadId}/question/{questionId}",
 						Handler: h.ChatQuestion,
 						Meta: routes.Meta{
