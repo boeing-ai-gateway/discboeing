@@ -102,28 +102,7 @@
 			"name": "ChatGPT Codex"
 		},
 		"codex-auto-review": {
-			"capabilities": {
-				"serviceTiers": [
-					"priority"
-				]
-			},
-			"contextWindow": 272000,
-			"customTools": true,
-			"defaultReasonLevel": "medium",
-			"inputModalities": [
-				"text",
-				"image"
-			],
-			"name": "Codex Auto Review",
-			"reasoning": true,
-			"reasoningLevels": [
-				"none",
-				"low",
-				"medium",
-				"high",
-				"xhigh"
-			],
-			"tool_call": true
+			"remove": true
 		},
 		"gpt-5": {
 			"capabilities": {
