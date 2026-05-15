@@ -170,6 +170,7 @@
 		() => chatWidthMode ?? app?.preferences.chatWidthMode ?? "full",
 	);
 	const hasMessages = $derived.by(() => conversationMessages.length > 0);
+	const hasSession = $derived.by(() => Boolean(session?.current));
 	const isLoading = $derived.by(() => conversationStatus === "loading");
 	const isStreaming = $derived.by(
 		() =>
@@ -1679,9 +1680,9 @@
 		</div>
 	{/if}
 	<div
-		class={`flex min-h-0 flex-1 flex-col transition-all duration-300 ease-out ${hasMessages ? "" : "justify-end md:justify-center"}`}
+		class={`flex min-h-0 flex-1 flex-col transition-all duration-300 ease-out ${hasSession ? "" : "justify-end md:justify-center"}`}
 	>
-		{#if hasMessages}
+		{#if hasSession}
 			<div class="relative min-h-0 min-w-0 flex-1">
 				<div
 					bind:this={viewport}
