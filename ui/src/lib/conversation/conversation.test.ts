@@ -167,7 +167,7 @@ test("conversation loader falls back to stream finish when completion status nev
 	assert.match(source, /onStart: \(\) => \{[\s\S]*handleCompletionStart\(\);/);
 	assert.match(
 		source,
-		/onCompletionStatus: \(\{ isRunning \}\) => \{[\s\S]*if \(isRunning\) \{[\s\S]*handleCompletionStart\(\);[\s\S]*return;[\s\S]*\}[\s\S]*handleCompletionFinish\(\);/,
+		/onCompletionStatus: \(\{ isRunning, history \}\) => \{[\s\S]*historyReplaying = isRunning;[\s\S]*if \(isRunning\) \{[\s\S]*handleCompletionStart\(\);[\s\S]*return;[\s\S]*\}[\s\S]*handleCompletionFinish\(\);/,
 	);
 	assert.match(
 		source,
@@ -180,7 +180,7 @@ test("conversation loader clears the running flag when disposed", () => {
 
 	assert.match(
 		source,
-		/dispose: \(\) => \{[\s\S]*completionRunning = false;[\s\S]*disconnectStream\(\);/,
+		/dispose: \(\) => \{[\s\S]*completionRunning = false;[\s\S]*historyReplaying = false;[\s\S]*disconnectStream\(\);/,
 	);
 	assert.doesNotMatch(source, /function disconnect\(\)/);
 });

@@ -98,6 +98,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let messages = $state<ChatMessage[]>([]);
 	let streamError = $state<string | null>(null);
 	let completionRunning = $state(false);
+	let historyReplaying = $state(false);
 	let browserEventsByTurnId = $state<Record<string, BrowserEventChunkData[]>>(
 		{},
 	);
@@ -134,7 +135,11 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		onStart: () => {
 			handleCompletionStart();
 		},
-		onCompletionStatus: ({ isRunning }) => {
+		onCompletionStatus: ({ isRunning, history }) => {
+			if (history) {
+				historyReplaying = isRunning;
+				return;
+			}
 			if (isRunning) {
 				handleCompletionStart();
 				return;
@@ -279,7 +284,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			return getStatus();
 		},
 		get isStreaming() {
-			return completionRunning;
+			return completionRunning || historyReplaying;
 		},
 		get error() {
 			return streamError;
@@ -391,6 +396,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		},
 		dispose: () => {
 			completionRunning = false;
+			historyReplaying = false;
 			browserEventsByTurnId = {};
 			void dismissRetryToast(args.threadId);
 			disconnectStream();

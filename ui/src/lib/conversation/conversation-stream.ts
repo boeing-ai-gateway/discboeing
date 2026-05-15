@@ -28,6 +28,7 @@ export type ChatStreamStateOptions = {
 		threadId?: string;
 		completionId?: string;
 		isRunning: boolean;
+		history?: boolean;
 	}) => void | Promise<void>;
 	onHistoryReplayStart?: () => void | Promise<void>;
 	onHistoryReplayEnd?: () => void | Promise<void>;
@@ -56,6 +57,10 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 
 	const beginHistoryReplay = () => {
 		historyMessages = [];
+		runCallbackInBackground("onCompletionStatus", options.onCompletionStatus, {
+			isRunning: true,
+			history: true,
+		});
 		runCallbackInBackground(
 			"onHistoryReplayStart",
 			options.onHistoryReplayStart,
@@ -68,6 +73,10 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 		}
 		options.setMessages(historyMessages);
 		historyMessages = null;
+		runCallbackInBackground("onCompletionStatus", options.onCompletionStatus, {
+			isRunning: false,
+			history: true,
+		});
 		runCallbackInBackground("onHistoryReplayEnd", options.onHistoryReplayEnd);
 	};
 
