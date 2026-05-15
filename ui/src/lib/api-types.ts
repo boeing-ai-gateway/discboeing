@@ -3,6 +3,7 @@
 import type {
 	CommitOperation as CommitOperationConstants,
 	CommitStatus as CommitStatusConstants,
+	SessionDisplayStatus as SessionDisplayStatusConstants,
 	SessionSandboxStatus as SessionSandboxStatusConstants,
 	SessionStatus as SessionStatusConstants,
 	WorkspaceStatus as WorkspaceStatusConstants,
@@ -184,6 +185,9 @@ export type SessionStatus =
 	(typeof SessionStatusConstants)[keyof typeof SessionStatusConstants];
 export type SessionSandboxStatus =
 	(typeof SessionSandboxStatusConstants)[keyof typeof SessionSandboxStatusConstants];
+
+export type SessionDisplayStatus =
+	(typeof SessionDisplayStatusConstants)[keyof typeof SessionDisplayStatusConstants];
 
 // Commit status values representing the commit state of a session.
 export type CommitStatus =
@@ -1070,7 +1074,7 @@ export type StartChatErrorResponse =
 	| StartChatConflictResponse
 	| StartChatTurnStateConflictResponse;
 
-export type ProjectStreamSocketEventName =
+export type ChatStreamSocketEventName =
 	| "history-start"
 	| "history-message"
 	| "history-end"
@@ -1112,6 +1116,11 @@ export type ProjectStreamSocketMessage = {
 	error?: string;
 	replay?: boolean;
 };
+
+export type ProjectStreamSubscriptionState =
+	| "idle"
+	| "subscribing"
+	| "streaming";
 
 // ============================================================================
 // Session File System Types

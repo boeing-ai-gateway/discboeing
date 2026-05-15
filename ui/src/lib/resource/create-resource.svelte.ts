@@ -1,3 +1,5 @@
+import { SvelteMap } from "svelte/reactivity";
+
 import type { AsyncStatus } from "../resource/types";
 
 const RETRY_INITIAL_DELAY_MS = 1_000;
@@ -17,9 +19,15 @@ export type RetryPolicy = {
 	maxDelayMs?: number;
 };
 
+type CreateRetrySchedulerArgs = {
+	owner: string;
+	enabled: () => boolean;
+	retry?: RetryPolicy;
+};
+
 type CreateResourceArgs<TData> = {
 	owner: string;
-	enabled?: () => boolean;
+	enabled: () => boolean;
 	load: () => Promise<TData>;
 	createEmptyValue: () => TData;
 	staleAfterMs?: number;
@@ -42,7 +50,7 @@ export type ResourceState<TData> = {
 	fetchedAt: number | null;
 	peek: () => TData;
 	ensure: () => Promise<TData>;
-	refresh: () => Promise<void>;
+	refresh: () => Promise<TData>;
 	invalidate: () => void;
 	reset: () => void;
 	setData: (nextData: TData, options?: ResourceMutationOptions) => void;
@@ -52,10 +60,71 @@ export type ResourceState<TData> = {
 	) => void;
 };
 
+export function createRetryScheduler(args: CreateRetrySchedulerArgs) {
+	const retryTimers = new SvelteMap<string, ReturnType<typeof setTimeout>>();
+	const retryAttempts = new SvelteMap<string, number>();
+
+	function clear(key: string) {
+		const existingTimer = retryTimers.get(key);
+		if (existingTimer !== undefined) {
+			clearTimeout(existingTimer);
+			retryTimers.delete(key);
+		}
+		retryAttempts.delete(key);
+	}
+
+	function dispose() {
+		for (const timer of retryTimers.values()) {
+			clearTimeout(timer);
+		}
+		retryTimers.clear();
+		retryAttempts.clear();
+	}
+
+	function schedule(key: string, action: () => Promise<void>) {
+		if (
+			args.retry?.mode !== "background" ||
+			retryTimers.has(key) ||
+			!args.enabled()
+		) {
+			return;
+		}
+		const attempt = (retryAttempts.get(key) ?? 0) + 1;
+		retryAttempts.set(key, attempt);
+		const baseDelay = args.retry?.initialDelayMs ?? RETRY_INITIAL_DELAY_MS;
+		const maxDelay = args.retry?.maxDelayMs ?? RETRY_MAX_DELAY_MS;
+		const delay = Math.min(baseDelay * 2 ** (attempt - 1), maxDelay);
+		const timer = setTimeout(() => {
+			retryTimers.delete(key);
+			void run(key, action);
+		}, delay);
+		retryTimers.set(key, timer);
+	}
+
+	async function run(key: string, action: () => Promise<void>) {
+		if (!args.enabled()) {
+			clear(key);
+			return;
+		}
+		try {
+			await action();
+			clear(key);
+		} catch (error) {
+			console.warn(`[${args.owner}] Failed to load ${key}`, error);
+			schedule(key, action);
+		}
+	}
+
+	return {
+		run,
+		clear,
+		dispose,
+	};
+}
+
 export function createResource<TData>(
 	args: CreateResourceArgs<TData>,
 ): ResourceState<TData> {
-	const enabled = args.enabled ?? (() => true);
 	let data = $state<TData>(args.createEmptyValue());
 	let status = $state<AsyncStatus>("idle");
 	let error = $state<string | null>(null);
@@ -121,7 +190,7 @@ export function createResource<TData>(
 		if (
 			args.retry?.mode !== "background" ||
 			retryTimer !== null ||
-			!enabled()
+			!args.enabled()
 		) {
 			return;
 		}
@@ -138,7 +207,7 @@ export function createResource<TData>(
 	function scheduleEnsure(force = false) {
 		if (
 			ensureScheduled ||
-			!enabled() ||
+			!args.enabled() ||
 			loadingPromise !== null ||
 			(!force && !isStale())
 		) {
@@ -168,16 +237,8 @@ export function createResource<TData>(
 		loadingPromise = null;
 	}
 
-	function settleDisabledRequest() {
-		if (fetchedAt === null) {
-			status = "idle";
-			error = null;
-		}
-		return data;
-	}
-
 	function isStale() {
-		if (!enabled()) {
+		if (!args.enabled()) {
 			return false;
 		}
 		if (fetchedAt === null) {
@@ -193,15 +254,16 @@ export function createResource<TData>(
 	}
 
 	function invalidate() {
-		if (!enabled()) {
+		if (!args.enabled()) {
 			return;
 		}
 		invalidatedAt = now();
 	}
 
 	async function ensure(force = false): Promise<TData> {
-		if (!enabled()) {
-			return settleDisabledRequest();
+		if (!args.enabled()) {
+			reset();
+			return data;
 		}
 		if (!force && !isStale()) {
 			return data;
@@ -233,17 +295,11 @@ export function createResource<TData>(
 		const promise = args
 			.load()
 			.then((nextData) => {
-				if (!enabled()) {
-					return settleDisabledRequest();
-				}
 				applyData(nextData, { markFresh: true, freshAt: startedAt });
 				clearRetry();
 				return nextData;
 			})
 			.catch((nextError) => {
-				if (!enabled()) {
-					return settleDisabledRequest();
-				}
 				error = toErrorMessage(nextError);
 				if (!hasData) {
 					status = "error";
@@ -272,11 +328,15 @@ export function createResource<TData>(
 		return promise;
 	}
 
+	$effect(() => {
+		const enabled = args.enabled();
+		if (!enabled) {
+			reset();
+		}
+	});
+
 	return {
 		get data() {
-			if (!enabled()) {
-				return data;
-			}
 			scheduleEnsure(false);
 			return data;
 		},
@@ -297,9 +357,7 @@ export function createResource<TData>(
 		},
 		peek: () => data,
 		ensure: () => ensure(false),
-		refresh: async () => {
-			await ensure(true).catch(() => undefined);
-		},
+		refresh: () => ensure(true),
 		invalidate,
 		reset,
 		setData: applyData,

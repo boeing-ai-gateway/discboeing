@@ -7,12 +7,20 @@ const THREAD_WORKSPACE_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/ThreadWorkspace.svelte",
 );
+const THREAD_WORKSPACE_ACTIVE_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ThreadWorkspaceActive.svelte",
+);
 
 function readThreadWorkspaceSource() {
 	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("thread workspace owns only thread context and conversation UI", () => {
+function readThreadWorkspaceActiveSource() {
+	return readFileSync(THREAD_WORKSPACE_ACTIVE_COMPONENT, "utf-8");
+}
+
+test("thread workspace always renders the active conversation view", () => {
 	const source = readThreadWorkspaceSource();
 
 	assert.doesNotMatch(source, /let sessionsMenuOpen = \$state\(false\)/);
@@ -20,38 +28,26 @@ test("thread workspace owns only thread context and conversation UI", () => {
 	assert.doesNotMatch(source, /<Popover\.Root/);
 	assert.match(source, /type Props = \{/);
 	assert.match(source, /threadId: string;/);
-	assert.match(source, /visible: boolean;/);
-	assert.match(source, /reserveSidebarSpace\?: boolean;/);
-	assert.match(source, /mode\?: "conversation" \| "connection-only";/);
+	assert.match(source, /sidebarOpen\?: boolean;/);
 	assert.match(source, /let \{/);
-	assert.match(source, /mode = "conversation",/);
 	assert.match(source, /\}: Props =\s*\$props\(\);/);
 	assert.match(
 		source,
 		/const thread = session\.ensureThread\(untrack\(\(\) => threadId\)\);/,
 	);
 	assert.match(source, /setThreadContext\(thread\);/);
-	assert.match(source, /if \(!visible \|\| !session\.current\) \{/);
-	assert.match(source, /void thread\.start\(\);/);
-	assert.match(source, /onDestroy\(\(\) => \{/);
-	assert.match(source, /thread\.dispose\(\);/);
-	assert.match(source, /const headerTitle = \$derived\.by/);
-	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
 	assert.match(
 		source,
-		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: ""/,
+		/<ThreadWorkspaceActive \{visible\} \{reserveSidebarSpace\} \{mode\} \/>/,
 	);
-	assert.doesNotMatch(source, /No thread selected/);
-	assert.match(source, /\{#if mode === "conversation"\}/);
-	assert.match(source, /<ThreadWorkspaceHeader/);
-	assert.match(source, /title=\{headerTitle\}/);
-	assert.match(source, /<ConversationPane \{visible\} \/>/);
-	assert.doesNotMatch(source, /ThreadWorkspaceActive/);
-	assert.doesNotMatch(source, /DockPanel/);
 	assert.doesNotMatch(source, /const hasSelectedThread = \$derived\.by/);
 	assert.doesNotMatch(source, /const hasConversationMessages = \$derived\.by/);
 	assert.doesNotMatch(source, /const showActiveConversation = \$derived\.by/);
 	assert.doesNotMatch(source, /const isLoadingThread = \$derived\.by/);
+	assert.doesNotMatch(
+		source,
+		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
+	);
 	assert.doesNotMatch(source, /canLoadSessionThreads/);
 	assert.doesNotMatch(source, /session\.threads\.status === "idle"/);
 	assert.doesNotMatch(source, /session\.threads\.status === "loading"/);
@@ -68,7 +64,7 @@ test("thread workspace owns only thread context and conversation UI", () => {
 	assert.doesNotMatch(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
 	assert.doesNotMatch(
 		source,
-		/title=\{session\.threads\.selected\?\.name \?\?/,
+		/title=\{isLoadingThread \? "Loading thread" : "No thread selected"\}/,
 	);
 	assert.doesNotMatch(
 		source,
@@ -76,33 +72,45 @@ test("thread workspace owns only thread context and conversation UI", () => {
 	);
 });
 
-test("thread context refreshes session state without its own retry scheduler", () => {
+test("thread context stops sandbox refreshes when a session is not ready", () => {
 	const source = readFileSync(
 		path.resolve(import.meta.dirname, "../../context/thread-context.svelte.ts"),
 		"utf-8",
 	);
 
-	assert.match(source, /const refreshSessionState = async \(\) => \{/);
-	assert.doesNotMatch(source, /hasSession/);
-	assert.match(source, /session\.files\.refresh\(\)\.catch\(\(\) => \{\}\)/);
-	assert.match(source, /app\.sessions\.reloadSession\(session\.sessionId\)/);
-	assert.doesNotMatch(source, /createRetryScheduler/);
-	assert.doesNotMatch(source, /retryScheduler/);
-	assert.match(source, /conversation\.dispose\(\);/);
-	assert.doesNotMatch(source, /conversation\.disconnect\(\);/);
 	assert.match(
 		source,
-		/afterTurn: async \(\) => \{\s*await session\.threads\.refreshThread\(threadId\);/,
+		/const refreshSessionState = async \(\) => \{\s*if \(!hasSession\) \{/,
 	);
+	assert.match(
+		source,
+		/retryScheduler\.dispose\(\);\s*conversation\.disconnect\(\);/,
+	);
+	assert.match(source, /afterTurn: async \(\) => \{\s*if \(!hasSession\) \{/);
 });
 
-test("thread workspace keeps the stream live while conversation nodes are hidden", () => {
-	const source = readThreadWorkspaceSource();
+test("active thread workspace keeps the stream live while inactive conversation nodes are unmounted", () => {
+	const source = readThreadWorkspaceActiveSource();
 
+	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
+	assert.match(source, /void thread\.connect\(\);/);
 	assert.match(
 		source,
-		/\$effect\(\(\) => \{[\s\S]*void thread\.start\(\);[\s\S]*\}\);/,
+		/\$effect\(\(\) => \{[\s\S]*void thread\.connect\(\);[\s\S]*\}\);/,
 	);
-	assert.match(source, /\{#if mode === "conversation"\}/);
-	assert.match(source, /<ConversationPane \{visible\} \/>/);
+	assert.match(source, /const headerTitle = \$derived\.by/);
+	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
+	assert.match(
+		source,
+		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
+	);
+	assert.match(source, /title=\{headerTitle\}/);
+	assert.doesNotMatch(
+		source,
+		/title=\{session\.threads\.selected\?\.name \?\?/,
+	);
+	assert.equal(
+		source.match(/<ConversationPane visible=\{props\.visible\} \/>/g)?.length,
+		2,
+	);
 });

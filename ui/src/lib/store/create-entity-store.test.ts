@@ -31,7 +31,7 @@ test("createEntityStore composes createResource for list and per-item SWR state"
 	assert.match(source, /retry: args\.list\.cache\?\.retry,/);
 	assert.match(
 		source,
-		/syncItemResourcesFromList\(mergedItems, \{[\s\S]*markFresh: true,[\s\S]*clearMissing: true,[\s\S]*freshAt: startedAt,/,
+		/syncItemResourcesFromList\(items, \{ markFresh: true, clearMissing: true \}\);/,
 	);
 });
 
@@ -41,26 +41,24 @@ test("createEntityStore keeps indexed item resources synchronized with collectio
 	assert.match(source, /function syncItemResourcesFromList\(/);
 	assert.match(
 		source,
-		/for \(const \[id, resource\] of itemResources\) \{[\s\S]*resource\.setData\(nextItem, \{[\s\S]*markFresh: options\.markFresh,[\s\S]*freshAt: options\.freshAt,[\s\S]*\}\);/,
+		/for \(const \[id, resource\] of itemResources\) \{[\s\S]*resource\.setData\(nextItem, \{ markFresh: options\.markFresh \}\);/,
 	);
 	assert.match(source, /function setListInternal\(/);
 	assert.match(
 		source,
-		/listResource\.setData\(mergedItems, \{[\s\S]*markFresh: options\.markFresh,[\s\S]*freshAt: options\.freshAt,[\s\S]*\}\);/,
+		/listResource\.setData\(items, \{ markFresh: options\.markFresh \}\);/,
 	);
-	assert.match(source, /syncItemResourcesFromList\(mergedItems, options\);/);
+	assert.match(source, /syncItemResourcesFromList\(items, options\);/);
 	assert.match(source, /function mergeListInternal\(/);
 	assert.match(source, /mergeByKey\(current, items, getIndexedKey\)/);
 	assert.match(
 		source,
 		/itemResources\.get\(id\)\?\.setData\(item, \{[\s\S]*markFresh: options\.markFresh,[\s\S]*\}\);/,
 	);
-	assert.match(source, /const tombstones = new SvelteMap<TId, number>\(\);/);
-	assert.match(source, /function evictInternal\([\s\S]*id: TId,/);
-	assert.match(source, /tombstones\.set\(id, options\.freshAt \?\? now\(\)\);/);
+	assert.match(source, /function evictInternal\(id: TId/);
 	assert.match(
 		source,
-		/itemResources\.get\(id\)\?\.setData\(null, \{[\s\S]*markFresh: options\.markFresh,[\s\S]*freshAt: options\.freshAt,[\s\S]*\}\);/,
+		/itemResources\.get\(id\)\?\.setData\(null, \{ markFresh: options\.markFresh \}\);/,
 	);
 });
 
@@ -78,11 +76,11 @@ test("createEntityStore builds per-item resources with indexed and list-backed l
 	);
 	assert.match(
 		source,
-		/const item = await args\.indexed\.load\(id\);[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true, freshAt: startedAt \}\);[\s\S]*return item;/,
+		/const item = await args\.indexed\.load\(id\);[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true \}\);[\s\S]*return item;/,
 	);
 	assert.match(
 		source,
-		/if \(args\.indexed\?\.isNotFoundError\?\.\(error\)\) \{[\s\S]*if \(args\.indexed\.notFound === "evict"\) \{[\s\S]*evictInternal\(id, \{ markFresh: true, freshAt: startedAt \}\);[\s\S]*\} else \{[\s\S]*resource\.setData\(null, \{[\s\S]*markFresh: true,[\s\S]*freshAt: startedAt,/,
+		/if \(args\.indexed\?\.isNotFoundError\?\.\(error\)\) \{[\s\S]*if \(args\.indexed\.notFound === "evict"\) \{[\s\S]*evictInternal\(id, \{ markFresh: true \}\);[\s\S]*\} else \{[\s\S]*resource\.setData\(null, \{ markFresh: true \}\);/,
 	);
 	assert.match(
 		source,
@@ -122,7 +120,7 @@ test("createEntityStore conditionally wires create, update, and remove cache rec
 	assert.match(source, /switch \(args\.create!\.after \?\? "merge"\) \{/);
 	assert.match(
 		source,
-		/case "merge": \{[\s\S]*create\.after "merge" requires indexed\.getKey or create\.getKey[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true, freshAt: startedAt \}\);/,
+		/case "merge": \{[\s\S]*create\.after "merge" requires indexed\.getKey or create\.getKey[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true \}\);/,
 	);
 	assert.match(source, /case "refresh-list":/);
 	assert.match(source, /await listResource\.refresh\(\);/);
@@ -135,7 +133,7 @@ test("createEntityStore conditionally wires create, update, and remove cache rec
 	assert.match(source, /switch \(args\.update!\.after \?\? "merge"\) \{/);
 	assert.match(
 		source,
-		/case "merge":[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true, freshAt: startedAt \}\);[\s\S]*itemResources\.get\(id\)\?\.setData\(item, \{[\s\S]*markFresh: true,[\s\S]*freshAt: startedAt,[\s\S]*\}\);/,
+		/case "merge":[\s\S]*mergeListInternal\(\[item\], \{ markFresh: true \}\);[\s\S]*getItemResource\(id\)\.setData\(item, \{ markFresh: true \}\);/,
 	);
 	assert.match(
 		source,
@@ -146,7 +144,7 @@ test("createEntityStore conditionally wires create, update, and remove cache rec
 	assert.match(source, /switch \(args\.remove!\.after \?\? "evict"\) \{/);
 	assert.match(
 		source,
-		/case "evict":[\s\S]*evictInternal\(id, \{ markFresh: true, freshAt: startedAt \}\);/,
+		/case "evict":[\s\S]*evictInternal\(id, \{ markFresh: true \}\);/,
 	);
 	assert.match(
 		source,

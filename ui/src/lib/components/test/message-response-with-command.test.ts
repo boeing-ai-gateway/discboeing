@@ -69,7 +69,7 @@ test("conversation pane suppresses session errors while the session is transitio
 
 	assert.match(
 		source,
-		/import \{ isSessionTransitioningStatus \} from "\$lib\/session\/session-status"/,
+		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
 	);
 	assert.match(
 		source,

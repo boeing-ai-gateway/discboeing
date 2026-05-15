@@ -8,7 +8,9 @@
 </script>
 
 {#each mountedSessionIds as sessionId (sessionId)}
-	{#if sessionId === selectedSessionId}
-		<SessionToolbar {sessionId} />
+	{#if app.sessions.shouldLoadSession(sessionId)}
+		<div class={sessionId === selectedSessionId ? "contents" : "hidden"}>
+			<SessionToolbar {sessionId} />
+		</div>
 	{/if}
 {/each}

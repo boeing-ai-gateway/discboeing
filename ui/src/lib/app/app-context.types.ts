@@ -1,8 +1,8 @@
 import type { SessionStore } from "$lib/store/sessions.store.svelte";
 import type { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
-import type { ModelStore } from "$lib/store/models.store";
-import type { CredentialStore } from "$lib/store/credentials.store";
-import type { StartupTaskStore } from "$lib/store/startup-tasks.store";
+import type { ModelStore } from "$lib/store/models.store.svelte";
+import type { CredentialStore } from "$lib/store/credentials.store.svelte";
+import type { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
 import type { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import type { UIStateStore } from "$lib/store/ui-state.store.svelte";
 import type {
@@ -47,7 +47,7 @@ import type {
 	SubmitPromptOptions,
 	SubmitPromptResult,
 } from "$lib/session/session-context.types";
-import type { ProjectStreamManager } from "$lib/project/project-stream-manager";
+import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 import type { IdeOption, PreferredIde } from "$lib/app/ide-options";
 import type { WindowControlsSide } from "$lib/desktop/types";
@@ -162,6 +162,10 @@ export type AppSessions = {
 	pendingId: string;
 	selected: Session | null;
 	peek: (sessionId: string) => Session | null;
+	shouldLoadSession: (
+		sessionId: string,
+		options?: { includePending?: boolean },
+	) => boolean;
 	sessionContexts: Map<string, SessionContextValue>;
 	select: (sessionId: string) => void;
 	openThread: (sessionId: string, threadId: string) => void;
@@ -318,7 +322,7 @@ export type AppContext = {
 	models: AppModels;
 	credentials: AppCredentials;
 	supportInfo: AppSupportInfo;
-	projectStreams: ProjectStreamManager;
+	chatStreams: ChatStreamManager;
 	ensureSession: (sessionId?: string | null) => SessionContextValue;
 	/**
 	 * Convenience prompt submitter. Uses the mounted session/thread context when

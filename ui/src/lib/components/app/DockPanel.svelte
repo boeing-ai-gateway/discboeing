@@ -7,6 +7,7 @@
 	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import { requestVSCodeOpenFile } from "$lib/editor-control";
 	import {
 		buildUserMessageParts,
@@ -22,6 +23,7 @@
 
 	const app = useAppContext();
 	const session = useSessionContext();
+	const thread = useThreadContext();
 	const sessionView = session.ui;
 	const visibleServices = $derived.by(() =>
 		session.services.list.filter(
@@ -69,10 +71,6 @@
 		}
 	});
 
-	function getSelectedThread() {
-		return session.ensureThread(session.threads.selectedId);
-	}
-
 	function buildDiffSelectionSnippet({
 		path,
 		selectedText,
@@ -86,6 +84,17 @@ ${selectedText}
 \`\`\``;
 	}
 
+	function handleQueueDiffSelectionComment(payload: {
+		path: string;
+		selectedText: string;
+		comment: string;
+	}) {
+		thread.addPendingComment({
+			snippet: buildDiffSelectionSnippet(payload),
+			comment: payload.comment,
+		});
+	}
+
 	async function handleSubmitDiffSelectionComment(payload: {
 		path: string;
 		selectedText: string;
@@ -97,7 +106,7 @@ ${selectedText}
 				comment: payload.comment,
 			},
 		]);
-		await getSelectedThread().submit({
+		await thread.submit({
 			parts: buildUserMessageParts(text),
 		});
 	}
@@ -192,6 +201,7 @@ ${selectedText}
 				onDiffTargetChange={session.files.setDiffTarget}
 				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
+				onQueueSelectionComment={handleQueueDiffSelectionComment}
 				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				sessionId={session.sessionId}
@@ -212,7 +222,7 @@ ${selectedText}
 			<ServicePanel
 				dockMaximized={sessionView.dockMaximized}
 				sessionId={session.sessionId}
-				streamManager={app.projectStreams}
+				streamManager={app.chatStreams}
 				services={visibleServices}
 				activeServiceId={sessionView.activeServiceId}
 				onSelectService={session.services.open}

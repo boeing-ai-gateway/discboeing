@@ -1,19 +1,12 @@
 import { CommitOperation, CommitStatus } from "../api-constants";
 import type {
 	Session,
+	SessionDisplayStatus,
 	SessionThreadStatus,
 	Thread,
 	ThreadActivityStatus,
 } from "../api-types";
 import type { ThreadContextValue } from "$lib/session/session-context.types";
-
-export type SessionDisplayStatus =
-	| NonNullable<Session["sandboxStatus"]>
-	| SessionThreadStatus["status"]
-	| "pending"
-	| "committing"
-	| "completed"
-	| "committed";
 
 export function isThreadSnapshotRunning(
 	thread: Partial<Thread> | null | undefined,
@@ -22,21 +15,6 @@ export function isThreadSnapshotRunning(
 		thread?.activityStatus?.status === "running" ||
 		(thread?.activeCommand ?? "").trim().length > 0
 	);
-}
-
-function normalizeActiveCommandName(
-	name: string | null | undefined,
-): string | null {
-	const trimmed = name?.trim() ?? "";
-	return trimmed.length > 0 ? trimmed : null;
-}
-
-export function getActiveCommandName({
-	thread,
-}: {
-	thread: Pick<Thread, "activeCommand"> | null | undefined;
-}): string | null {
-	return normalizeActiveCommandName(thread?.activeCommand);
 }
 
 export function resolveSessionDisplayStatus(

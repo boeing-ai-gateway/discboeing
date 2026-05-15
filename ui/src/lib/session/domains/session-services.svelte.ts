@@ -9,7 +9,7 @@ import { createEntityStore } from "$lib/store/create-entity-store.svelte";
 
 type CreateSessionServicesDomainArgs = {
 	sessionId: string;
-	canLoadSessionData: () => boolean;
+	hasSession: () => boolean;
 	getActiveServiceId: () => string | null;
 	openService: (serviceId: string) => void;
 };
@@ -19,7 +19,7 @@ export function createSessionServicesDomain(
 ): SessionServicesDomain {
 	const store = createEntityStore<Service, string>({
 		owner: `SessionServices:${args.sessionId}`,
-		enabled: args.canLoadSessionData,
+		enabled: () => args.hasSession(),
 		list: {
 			load: async () => {
 				const { services } = await api.getServices(args.sessionId);
@@ -35,7 +35,6 @@ export function createSessionServicesDomain(
 	$effect(() => {
 		if (
 			typeof window === "undefined" ||
-			!args.canLoadSessionData() ||
 			!resource.list.some(
 				(service) =>
 					service.status === "starting" || service.status === "stopping",
@@ -53,23 +52,17 @@ export function createSessionServicesDomain(
 		};
 	});
 
-	function getList() {
-		return sortServiceItems(resource.list.map(toServiceItem));
-	}
-
-	function getActive() {
-		return (
-			getList().find((service) => service.id === args.getActiveServiceId()) ??
-			null
-		);
-	}
+	const list = $derived(sortServiceItems(resource.list.map(toServiceItem)));
+	const active = $derived(
+		list.find((service) => service.id === args.getActiveServiceId()) ?? null,
+	);
 
 	return {
 		get list() {
-			return getList();
+			return list;
 		},
 		get active() {
-			return getActive();
+			return active;
 		},
 		get status() {
 			return resource.status;
@@ -88,10 +81,7 @@ export function createSessionServicesDomain(
 		},
 		open: args.openService,
 		start: async (serviceId: string) => {
-			if (
-				!args.canLoadSessionData() ||
-				!resource.list.some((service) => service.id === serviceId)
-			) {
+			if (!args.hasSession()) {
 				return;
 			}
 			try {
@@ -101,10 +91,7 @@ export function createSessionServicesDomain(
 			}
 		},
 		stop: async (serviceId: string) => {
-			if (
-				!args.canLoadSessionData() ||
-				!resource.list.some((service) => service.id === serviceId)
-			) {
+			if (!args.hasSession()) {
 				return;
 			}
 			try {

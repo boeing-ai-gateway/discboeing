@@ -34,14 +34,14 @@ type Item = {
 
 type TestItemState = {
 	item: Item | null;
-	refresh: () => Promise<void>;
+	refresh: () => Promise<Item | null>;
 	isStale: boolean;
 };
 
 type TestStore = {
 	all: () => {
 		ensure: () => Promise<Item[]>;
-		refresh: () => Promise<void>;
+		refresh: () => Promise<Item[]>;
 		list: Item[];
 		isStale: boolean;
 	};

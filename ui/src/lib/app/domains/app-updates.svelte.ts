@@ -79,19 +79,14 @@ export function createAppUpdatesDomain(
 	let trackPrereleases = $state(uiStateStore.trackPrereleases);
 	const canTrackPrereleases = GITHUB_RELEASES_API_URL.length > 0;
 
-	function isUpdateIgnored() {
-		return (
-			availableVersion !== null && ignoredUpdateVersion === availableVersion
-		);
-	}
-
-	function showUpdateBadge() {
-		return (
-			updateStatus === "ready" &&
-			availableVersion !== null &&
-			!isUpdateIgnored()
-		);
-	}
+	const isUpdateIgnored = $derived.by(
+		() =>
+			availableVersion !== null && ignoredUpdateVersion === availableVersion,
+	);
+	const showUpdateBadge = $derived.by(
+		() =>
+			updateStatus === "ready" && availableVersion !== null && !isUpdateIgnored,
+	);
 
 	let updateCheckInFlight = false;
 	let pendingUpdate: PendingUpdate | null = null;
@@ -268,10 +263,10 @@ export function createAppUpdatesDomain(
 			return totalBytes;
 		},
 		get isIgnored() {
-			return isUpdateIgnored();
+			return isUpdateIgnored;
 		},
 		get showBadge() {
-			return showUpdateBadge();
+			return showUpdateBadge;
 		},
 		get canTrackPrereleases() {
 			return canTrackPrereleases;

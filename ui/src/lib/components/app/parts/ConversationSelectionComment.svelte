@@ -2,7 +2,7 @@
 	import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
 	import { tick } from "svelte";
 	import { Button } from "$lib/components/ui/button";
-	import type { SelectionComment } from "$lib/session/session-context.types";
+	import type { ConversationComment } from "$lib/session/session-context.types";
 
 	type PendingSelectionComment = {
 		snippet: string;
@@ -13,16 +13,26 @@
 	type Props = {
 		conversationRoot: HTMLElement | null;
 		scrollContainer: HTMLElement | null;
-		onSubmitComment: (comment: SelectionComment) => Promise<void> | void;
+		onQueueComment: (
+			comment: Omit<ConversationComment, "id">,
+		) => Promise<void> | void;
+		onSubmitComment: (
+			comment: Omit<ConversationComment, "id">,
+		) => Promise<void> | void;
 	};
 
-	let { conversationRoot, scrollContainer, onSubmitComment }: Props = $props();
+	let {
+		conversationRoot,
+		scrollContainer,
+		onQueueComment,
+		onSubmitComment,
+	}: Props = $props();
 
 	let pendingSelectionComment = $state<PendingSelectionComment | null>(null);
 	let selectionCommentOpen = $state(false);
 	let selectionCommentDraft = $state("");
 	let selectionCommentTextarea = $state<HTMLTextAreaElement | null>(null);
-	let submitting = $state(false);
+	let pendingAction = $state<"queue" | "submit" | null>(null);
 	let selectionCommentError = $state<string | null>(null);
 
 	function clampSelectionCommentPosition(left: number, top: number) {
@@ -89,28 +99,33 @@
 		selectionCommentOpen = false;
 		selectionCommentDraft = "";
 		selectionCommentError = null;
-		submitting = false;
+		pendingAction = null;
 		pendingSelectionComment = null;
 	}
 
-	async function submitSelectionComment() {
+	async function saveSelectionComment(action: "queue" | "submit") {
 		if (!pendingSelectionComment || !selectionCommentDraft.trim()) {
 			return;
 		}
-		submitting = true;
+		const comment = {
+			snippet: pendingSelectionComment.snippet,
+			comment: selectionCommentDraft,
+		};
+		pendingAction = action;
 		selectionCommentError = null;
 		try {
-			await onSubmitComment({
-				snippet: pendingSelectionComment.snippet,
-				comment: selectionCommentDraft,
-			});
+			if (action === "queue") {
+				await onQueueComment(comment);
+			} else {
+				await onSubmitComment(comment);
+			}
 			window.getSelection()?.removeAllRanges();
 			closeSelectionComment();
 		} catch (error) {
 			selectionCommentError =
-				error instanceof Error ? error.message : "Failed to submit comment";
+				error instanceof Error ? error.message : "Failed to save comment";
 		} finally {
-			submitting = false;
+			pendingAction = null;
 		}
 	}
 
@@ -190,12 +205,21 @@
 				Cancel
 			</Button>
 			<Button
-				disabled={!selectionCommentDraft.trim() || submitting}
-				onclick={() => void submitSelectionComment()}
+				disabled={!selectionCommentDraft.trim() || pendingAction !== null}
+				onclick={() => void saveSelectionComment("queue")}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				{pendingAction === "queue" ? "Queueing…" : "Queue"}
+			</Button>
+			<Button
+				disabled={!selectionCommentDraft.trim() || pendingAction !== null}
+				onclick={() => void saveSelectionComment("submit")}
 				size="sm"
 				type="button"
 			>
-				{submitting ? "Submitting…" : "Submit"}
+				{pendingAction === "submit" ? "Submitting…" : "Submit"}
 			</Button>
 		</div>
 	</div>

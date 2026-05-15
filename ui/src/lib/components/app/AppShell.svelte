@@ -138,12 +138,14 @@
 
 {#snippet mountedSessions(mainClass: string)}
 	{#each mountedSessionIds as sessionId (sessionId)}
-		<SessionWorkspace
-			{sessionId}
-			visible={sessionId === currentSelectedSessionId}
-			{mainClass}
-			reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
-		/>
+		{#if app.sessions.shouldLoadSession(sessionId, { includePending: true })}
+			<SessionWorkspace
+				{sessionId}
+				visible={sessionId === currentSelectedSessionId}
+				{mainClass}
+				reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
+			/>
+		{/if}
 	{/each}
 {/snippet}
 

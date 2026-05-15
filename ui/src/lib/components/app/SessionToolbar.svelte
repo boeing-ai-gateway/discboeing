@@ -39,7 +39,6 @@
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/shell";
 	import type { IdeOption, JetBrainsIdeOption } from "$lib/app/ide-options";
-	import { getActiveCommandName } from "$lib/app/thread-status";
 	import {
 		DESKTOP_SERVICE_ID,
 		VSCODE_SERVICE_ID,
@@ -314,9 +313,9 @@
 	});
 	const operationState = $derived.by(() => {
 		const isPending = session.current?.commitStatus === "pending";
-		const activeCommandName = getActiveCommandName({
-			thread: session.threads.selected,
-		});
+		const activeCommandName = normalizeActiveCommandName(
+			session.threads.selected?.activeCommand,
+		);
 		const showBusy = activeCommandName !== null || isPending;
 		const activeCommand =
 			uiCommands.find((command) => command.name === activeCommandName) ?? null;
@@ -369,6 +368,13 @@
 			return null;
 		}
 		return staticCommandIcons[iconName] ?? loadedCommandIcons[iconName] ?? null;
+	}
+
+	function normalizeActiveCommandName(
+		name: string | null | undefined,
+	): string | null {
+		const trimmed = name?.trim() ?? "";
+		return trimmed.length > 0 ? trimmed : null;
 	}
 
 	function commandBusy(command: AgentCommand) {

@@ -49,7 +49,6 @@ export function createEntityStore<
 		ReturnType<typeof createResource<TItem | null>>
 	>();
 	const itemStates = new SvelteMap<TId, EntityItemState<TItem>>();
-	const tombstones = new SvelteMap<TId, number>();
 
 	function findInList(id: TId, items = listResource.peek()): TItem | null {
 		if (!getIndexedKey) {
@@ -81,18 +80,9 @@ export function createEntityStore<
 		freshAt?: number,
 	): TItem[] {
 		if (!getIndexedKey || freshAt === undefined) {
-			return getIndexedKey
-				? items.filter((item) => !tombstones.has(getIndexedKey(item)))
-				: items;
+			return items;
 		}
 		let merged = [...items];
-		for (const [id, deletedAt] of tombstones) {
-			if (deletedAt > freshAt) {
-				merged = merged.filter((item) => getIndexedKey(item) !== id);
-			} else if (merged.some((item) => getIndexedKey(item) === id)) {
-				tombstones.delete(id);
-			}
-		}
 		for (const [id] of itemResources) {
 			const newerItem = getNewerItemSnapshot(id, freshAt);
 			if (newerItem === undefined) {
@@ -178,16 +168,6 @@ export function createEntityStore<
 		options: { markFresh?: boolean; freshAt?: number } = {},
 	) {
 		if (getIndexedKey) {
-			for (const item of items) {
-				const id = getIndexedKey(item);
-				const deletedAt = tombstones.get(id);
-				if (deletedAt === undefined) {
-					continue;
-				}
-				if (options.freshAt === undefined || options.freshAt >= deletedAt) {
-					tombstones.delete(id);
-				}
-			}
 			listResource.update(
 				(current) =>
 					mergeWithNewerItemResources(
@@ -220,7 +200,6 @@ export function createEntityStore<
 		id: TId,
 		options: { markFresh?: boolean; freshAt?: number } = {},
 	) {
-		tombstones.set(id, options.freshAt ?? now());
 		if (getIndexedKey) {
 			listResource.update(
 				(items) =>

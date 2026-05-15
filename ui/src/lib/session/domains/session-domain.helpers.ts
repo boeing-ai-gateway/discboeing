@@ -10,10 +10,10 @@ import type {
 } from "$lib/api-types";
 import type { DynamicToolPart } from "$lib/components/ai/types";
 import type {
+	ConversationComment,
 	HookRunStatus,
 	HooksStatus,
 	HookOutputState,
-	SelectionComment,
 	ServiceItem,
 } from "$lib/session/session-context.types";
 import type { PlanEntry } from "$lib/app/plan-entry";
@@ -119,7 +119,7 @@ export function quoteCommentSnippet(snippet: string): string {
 }
 
 export function formatConversationComments(
-	comments: SelectionComment[],
+	comments: Array<Omit<ConversationComment, "id">>,
 ): string {
 	if (comments.length === 0) {
 		return "";

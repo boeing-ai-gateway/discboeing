@@ -7,7 +7,7 @@ import {
 	bindChatStreamEventSource,
 	createChatStreamState,
 	type ChatStreamStateOptions,
-} from "$lib/conversation/conversation-stream";
+} from "$lib/thread/conversation-stream";
 
 function makeTextMessage(
 	id: string,
@@ -103,7 +103,6 @@ function createHarness(
 		threadId?: string;
 		completionId?: string;
 		isRunning: boolean;
-		history?: boolean;
 	}>;
 	setCount: number;
 	state: ReturnType<typeof createChatStreamState>;
@@ -116,7 +115,6 @@ function createHarness(
 		threadId?: string;
 		completionId?: string;
 		isRunning: boolean;
-		history?: boolean;
 	}> = [];
 
 	const state = createChatStreamState({
@@ -185,10 +183,6 @@ test("history replay accepts Discobot assistant parts", async () => {
 
 	assert.equal(harness.messages.length, 1);
 	assert.equal(harness.messages[0]?.id, "assistant-custom");
-	assert.deepEqual(harness.completionStatusEvents, [
-		{ isRunning: true, history: true },
-		{ isRunning: false, history: true },
-	]);
 	assert.deepEqual(
 		harness.messages[0]?.parts.map((part) => part.type),
 		["reasoning", "dynamic-tool", "step-start", "text"],

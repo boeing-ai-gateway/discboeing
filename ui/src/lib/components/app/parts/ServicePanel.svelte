@@ -25,7 +25,7 @@
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
 	import type { ServiceItem } from "$lib/session/session-context.types";
-	import type { ProjectStreamManager } from "$lib/project/project-stream-manager";
+	import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 	import { openUrl } from "$lib/shell";
 	import { cn } from "$lib/utils";
 
@@ -39,7 +39,7 @@
 		onToggleDockMaximized: () => void;
 		services: ServiceItem[];
 		sessionId: string;
-		streamManager: ProjectStreamManager;
+		streamManager: ChatStreamManager;
 		shiftWindowControlsForSidebar?: boolean;
 	};
 

@@ -82,23 +82,16 @@ export function getVisibleRecentThreads(args: {
 		);
 }
 
-export function getMountedSessionIds(args: {
+function getMountedSessionIds(args: {
 	activeSessionId: string | null;
-	pendingSessionId: string;
 	recentThreads: AppUI["visibleRecentThreads"];
-	sessions: AppSessions["sessions"];
 	limit?: number;
 }): string[] {
 	const {
 		activeSessionId,
-		pendingSessionId,
 		recentThreads,
-		sessions,
 		limit = RECENT_SESSIONS_LIMIT,
 	} = args;
-	const sessionsById = Object.fromEntries(
-		sessions.map((session) => [session.id, session] as const),
-	);
 	const sessionIds: string[] = [];
 	const seen: Record<string, true> = {};
 
@@ -109,14 +102,6 @@ export function getMountedSessionIds(args: {
 		...recentThreads.map((thread) => thread.sessionId),
 	]) {
 		if (!sessionId || seen[sessionId]) {
-			continue;
-		}
-		const session = sessionsById[sessionId];
-		if (
-			sessionId !== activeSessionId &&
-			sessionId !== pendingSessionId &&
-			(!session || session.sandboxStatus === "stopped")
-		) {
 			continue;
 		}
 		seen[sessionId] = true;
@@ -142,6 +127,21 @@ export function createAppViewState(args: {
 	let supportInfoDialogOpen = $state(false);
 	let desktopSidebarOpen = $state(false);
 	let mobileSidebarOpen = $state(false);
+	const visibleRecentThreads = $derived.by(() =>
+		getVisibleRecentThreads({
+			recentThreads: sessions.recentThreads,
+			sessions: sessions.sessions,
+			limit: preferences.recentThreadsVisibleLimit,
+		}),
+	);
+	const mountedSessionIds = $derived.by(() =>
+		getMountedSessionIds({
+			activeSessionId: sessions.selectedId ?? sessions.pendingId,
+			recentThreads: visibleRecentThreads,
+			limit: RECENT_SESSIONS_LIMIT,
+		}),
+	);
+
 	const openSettingsDialogAt = (tab: SettingsDialogTab) => {
 		credentialsDialogOpen = false;
 		supportInfoDialogOpen = false;
@@ -202,25 +202,10 @@ export function createAppViewState(args: {
 			credentialsDialogOpen = value;
 		},
 		get visibleRecentThreads() {
-			return getVisibleRecentThreads({
-				recentThreads: sessions.recentThreads,
-				sessions: sessions.sessions,
-				limit: preferences.recentThreadsVisibleLimit,
-			});
+			return visibleRecentThreads;
 		},
 		get mountedSessionIds() {
-			const visibleRecentThreads = getVisibleRecentThreads({
-				recentThreads: sessions.recentThreads,
-				sessions: sessions.sessions,
-				limit: preferences.recentThreadsVisibleLimit,
-			});
-			return getMountedSessionIds({
-				activeSessionId: sessions.selectedId ?? sessions.pendingId,
-				pendingSessionId: sessions.pendingId,
-				recentThreads: visibleRecentThreads,
-				sessions: sessions.sessions,
-				limit: RECENT_SESSIONS_LIMIT,
-			});
+			return mountedSessionIds;
 		},
 		settingsDialog,
 		openSettings: (tab?: SettingsDialogTab) => {

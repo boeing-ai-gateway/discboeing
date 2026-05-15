@@ -3,24 +3,24 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-const THREAD_WORKSPACE_COMPONENT = path.resolve(
+const THREAD_WORKSPACE_ACTIVE_COMPONENT = path.resolve(
 	import.meta.dirname,
-	"../app/ThreadWorkspace.svelte",
+	"../app/ThreadWorkspaceActive.svelte",
 );
 
-function readThreadWorkspaceSource() {
-	return readFileSync(THREAD_WORKSPACE_COMPONENT, "utf-8");
+function readThreadWorkspaceActiveSource() {
+	return readFileSync(THREAD_WORKSPACE_ACTIVE_COMPONENT, "utf-8");
 }
 
-test("thread workspace reconnects when the session becomes available", () => {
-	const source = readThreadWorkspaceSource();
+test("thread workspace active reconnects when the session becomes available", () => {
+	const source = readThreadWorkspaceActiveSource();
 
 	assert.match(source, /\$effect\(\(\) => \{/);
-	assert.match(source, /if \(!visible \|\| !session\.current\) \{/);
-	assert.match(source, /void thread\.start\(\);/);
+	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
+	assert.match(source, /void thread\.connect\(\);/);
 	assert.doesNotMatch(
 		source,
-		/untrack\(\(\) => \{\s*void thread\.start\(\);\s*\}\);/,
+		/untrack\(\(\) => \{\s*void thread\.connect\(\);\s*\}\);/,
 	);
 	assert.doesNotMatch(source, /currentThread\.disconnect\(\)/);
 	assert.match(source, /onDestroy\(\(\) => \{/);

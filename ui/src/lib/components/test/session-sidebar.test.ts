@@ -177,26 +177,12 @@ test("session sidebar nests task threads and renders a status icon", () => {
 test("session sidebar thread rows include rename and delete actions", () => {
 	const source = readSessionSidebarSource();
 
+	assert.match(source, /function openRenameThreadDialog\(threadId: string\)/);
+	assert.match(source, /function openDeleteThreadDialog\(threadId: string\)/);
+	assert.match(source, /await selectedSessionContext\?\.threads\.rename\(/);
 	assert.match(
 		source,
-		/function openRenameThreadDialog\(sessionId: string, threadId: string\)/,
-	);
-	assert.match(
-		source,
-		/function openDeleteThreadDialog\(sessionId: string, threadId: string\)/,
-	);
-	assert.match(
-		source,
-		/let renameThreadSessionId = \$state<string \| null>\(null\)/,
-	);
-	assert.match(
-		source,
-		/let deleteThreadSessionId = \$state<string \| null>\(null\)/,
-	);
-	assert.match(source, /await sessionContext\?\.threads\.rename\(/);
-	assert.match(
-		source,
-		/await sessionContext\?\.threads\.remove\(deleteThreadId\)/,
+		/await selectedSessionContext\?\.threads\.remove\(deleteThreadId\)/,
 	);
 	assert.match(source, /Thread actions for/);
 	assert.match(source, /Rename thread/);
@@ -206,13 +192,10 @@ test("session sidebar thread rows include rename and delete actions", () => {
 test("session sidebar hides delete for the primary session thread", () => {
 	const source = readSessionSidebarSource();
 
-	assert.match(
-		source,
-		/function isPrimaryThread\(sessionId: string, threadId: string\)/,
-	);
-	assert.match(source, /return threadId === sessionId/);
-	assert.match(source, /isPrimaryThread\(sessionId, threadId\) \|\|/);
-	assert.match(source, /\{#if !isPrimaryThread\(sessionId, threadObj\.id\)\}/);
+	assert.match(source, /function isPrimaryThread\(threadId: string\)/);
+	assert.match(source, /threadId === sessions\.selectedId/);
+	assert.match(source, /isPrimaryThread\(threadId\) \|\|/);
+	assert.match(source, /\{#if !isPrimaryThread\(threadObj\.id\)\}/);
 });
 
 test("session sidebar supports dropdown reuse and closes after creating a session", () => {

@@ -136,10 +136,8 @@ test("ThreadStore delegates entity cache behavior to createEntityStore", () => {
 		removePattern:
 			/remove: \{[\s\S]*api\.deleteThread\(args\.sessionId, id\)[\s\S]*after: "evict",/,
 		extraPatterns: [
-			/enabled: this\.#enabled,/,
 			/#backgroundFetches = new SvelteSet<string>\(\);/,
-			/await this\.#resource\.all\(\)\.refresh\(\);/,
-			/if \(!this\.#enabled\(\)\) \{[\s\S]*return;/,
+			/await this\.#resource\.all\(\)\.ensure\(\);/,
 			/const thread = await api\.getThread\(this\.#sessionId, threadId\);/,
 			/this\.#resource\.upsert\(thread\);/,
 			/return this\.#resource\.create\(data\);/,

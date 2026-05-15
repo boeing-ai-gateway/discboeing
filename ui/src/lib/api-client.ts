@@ -687,21 +687,6 @@ class ApiClient {
 	}
 
 	/**
-	 * Get the current pending AskUserQuestion for a thread.
-	 * @param sessionId Session ID
-	 * @param threadId Thread ID
-	 * @returns { status: "pending", question } if a question is waiting, { status: "answered", question: null } if none is pending
-	 */
-	async getCurrentThreadChatQuestion(
-		sessionId: string,
-		threadId: string,
-	): Promise<PendingQuestionResponse> {
-		return this.fetch<PendingQuestionResponse>(
-			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/question`,
-		);
-	}
-
-	/**
 	 * Get the pending AskUserQuestion for a specific approval ID.
 	 * @param sessionId Session ID
 	 * @param questionId The tool use / approval ID to query for

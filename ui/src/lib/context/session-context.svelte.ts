@@ -1,16 +1,17 @@
 import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
-import { SessionStatus } from "$lib/api-constants";
+import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
 import { createThreadContext } from "$lib/context/thread-context.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
 import { createSessionHooksDomain } from "$lib/session/domains/session-hooks.svelte";
 import { createSessionServicesDomain } from "$lib/session/domains/session-services.svelte";
-import { createSessionThreadsDomain } from "$lib/session/domains/session-threads";
+import { createSessionThreadsDomain } from "$lib/session/domains/session-threads.svelte";
 import type {
 	SessionContextValue,
+	SessionStores,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
 import {
@@ -33,17 +34,18 @@ export function createSessionContext(
 ): SessionContextValue {
 	let selectedThreadId = $state<string | null>(null);
 
-	function getCurrent() {
+	const current = $derived.by(() => {
 		return app.sessions.peek(sessionId);
-	}
+	});
 
-	function isPendingSession() {
-		return getCurrent() === null;
-	}
-
-	function canLoadSessionData() {
-		return getCurrent()?.sandboxStatus === SessionStatus.READY;
-	}
+	const hasSession = $derived.by(() => current !== null);
+	const isPending = $derived.by(() => !hasSession);
+	const canLoadSandboxData = $derived.by(
+		() => current?.sandboxStatus === SessionStatus.READY,
+	);
+	const canLoadThreadData = $derived.by(() =>
+		canLoadSessionThreads(current?.sandboxStatus),
+	);
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -57,23 +59,25 @@ export function createSessionContext(
 				.map((service) => service.id),
 	});
 
-	const threadStore = new ThreadStore({
-		sessionId,
-		enabled: canLoadSessionData,
-	});
+	const stores: SessionStores = {
+		threads: new ThreadStore({
+			sessionId,
+			enabled: () => canLoadThreadData,
+		}),
+	};
 
 	const filesDomain = createSessionFilesDomain({
 		sessionId,
-		canLoadSessionData,
+		hasSession: () => canLoadSandboxData,
 		getSelectedFile: () => ui.selectedFile,
 		openFile: ui.openFile,
 	});
 
 	const threads = createSessionThreadsDomain({
-		store: threadStore,
+		store: stores.threads,
 		sessionId,
-		canLoadSessionData,
-		getSession: getCurrent,
+		hasSession: () => canLoadThreadData,
+		getSession: () => current,
 		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
 			selectedThreadId = threadId;
@@ -86,12 +90,12 @@ export function createSessionContext(
 
 	const hooks = createSessionHooksDomain({
 		sessionId,
-		canLoadSessionData,
+		hasSession: () => canLoadSandboxData,
 	});
 
 	const services = createSessionServicesDomain({
 		sessionId,
-		canLoadSessionData,
+		hasSession: () => canLoadSandboxData,
 		getActiveServiceId: () => ui.activeServiceId,
 		openService: ui.openService,
 	});
@@ -111,7 +115,7 @@ export function createSessionContext(
 	};
 
 	const submit: SessionContextValue["submit"] = async (text, options = {}) => {
-		const threadId = options.threadId ?? threads.selectedId;
+		const threadId = options.threadId ?? threads.selectedId ?? sessionId;
 		const thread = threadContexts.get(threadId);
 		if (thread) {
 			return thread.submit({ parts: buildUserMessageParts(text) });
@@ -127,8 +131,8 @@ export function createSessionContext(
 	const commands = createSessionCommandsDomain({
 		app,
 		sessionId,
-		canLoadSessionData,
-		getSelectedThreadId: () => threads.selectedId,
+		hasSession: () => canLoadThreadData,
+		getSelectedThreadId: () => threads.selectedId ?? sessionId,
 		submit,
 	});
 
@@ -145,13 +149,14 @@ export function createSessionContext(
 			return sessionId;
 		},
 		get isPending() {
-			return isPendingSession();
+			return isPending;
 		},
 		get current() {
-			return getCurrent();
+			return current;
 		},
 		dispose,
 		ensureThread,
+		stores,
 		ui,
 		threads,
 		hooks,
@@ -174,7 +179,9 @@ export function setSessionContext(
 }
 
 export function useSessionContext(): SessionContextValue {
-	const context = getSessionContextIfPresent();
+	const context = getContext<SessionContextValue | undefined>(
+		SESSION_CONTEXT_KEY,
+	);
 	if (!context) {
 		throw new Error(
 			"useSessionContext must be used within SessionContext provider",

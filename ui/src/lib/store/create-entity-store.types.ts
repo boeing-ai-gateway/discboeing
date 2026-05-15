@@ -43,7 +43,7 @@ export interface EntityListState<TItem> {
 	readonly isStale: boolean;
 	readonly fetchedAt: number | null;
 	ensure(): Promise<TItem[]>;
-	refresh(): Promise<void>;
+	refresh(): Promise<TItem[]>;
 	invalidate(): void;
 }
 
@@ -70,7 +70,7 @@ export interface EntityItemState<TItem> {
 	readonly isStale: boolean;
 	readonly fetchedAt: number | null;
 	ensure(): Promise<TItem | null>;
-	refresh(): Promise<void>;
+	refresh(): Promise<TItem | null>;
 	invalidate(): void;
 }
 

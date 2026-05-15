@@ -5,7 +5,7 @@
 	import ListTreeIcon from "@lucide/svelte/icons/list-tree";
 	import { tick } from "svelte";
 	import { api } from "$lib/api-client";
-	import { isSessionTransitioningStatus } from "$lib/session/session-status";
+	import { isSessionTransitioningStatus } from "$lib/api-constants";
 	import type {
 		BrowserEventChunkData,
 		BrowserEventFile,
@@ -66,10 +66,7 @@
 	import { getSessionContextIfPresent } from "$lib/context/session-context.svelte";
 	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
 	import { getErrorMessage } from "$lib/error-message";
-	import type {
-		SelectionComment,
-		ThreadContextValue,
-	} from "$lib/session/session-context.types";
+	import type { ThreadContextValue } from "$lib/session/session-context.types";
 	import {
 		buildUserMessageParts,
 		formatConversationComments,
@@ -170,7 +167,6 @@
 		() => chatWidthMode ?? app?.preferences.chatWidthMode ?? "full",
 	);
 	const hasMessages = $derived.by(() => conversationMessages.length > 0);
-	const hasSession = $derived.by(() => Boolean(session?.current));
 	const isLoading = $derived.by(() => conversationStatus === "loading");
 	const isStreaming = $derived.by(
 		() =>
@@ -776,7 +772,9 @@
 		};
 	}
 
-	async function submitSelectionComment(comment: SelectionComment) {
+	async function submitSelectionComment(
+		comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
+	) {
 		if (!thread) {
 			return;
 		}
@@ -1680,9 +1678,9 @@
 		</div>
 	{/if}
 	<div
-		class={`flex min-h-0 flex-1 flex-col transition-all duration-300 ease-out ${hasSession ? "" : "justify-end md:justify-center"}`}
+		class={`flex min-h-0 flex-1 flex-col transition-all duration-300 ease-out ${hasMessages ? "" : "justify-end md:justify-center"}`}
 	>
-		{#if hasSession}
+		{#if hasMessages}
 			<div class="relative min-h-0 min-w-0 flex-1">
 				<div
 					bind:this={viewport}
@@ -1824,43 +1822,12 @@
 								{/if}
 							</div>
 						{/each}
-						{#if thread?.pendingQuestionToolPart}
-							<Message
-								data-conversation-message-id={`fallback-pending-${thread.pendingQuestionToolPart.toolCallId}`}
-								from="assistant"
-							>
-								<MessageContent>
-									<OptimizedToolRenderer
-										toolPart={thread.pendingQuestionToolPart}
-										queued={false}
-										sessionId={activeSessionId}
-										threadId={activeThreadId}
-										resolvedTheme={app?.preferences.resolvedTheme ?? "light"}
-										onToolApprovalResponse={thread?.addToolApprovalResponse}
-										defaultOpen={toolDefaultOpen}
-									/>
-								</MessageContent>
-							</Message>
-						{:else if thread?.pendingQuestionLoading}
-							<Message from="assistant">
-								<MessageContent>
-									<div class="text-muted-foreground">
-										<Loader size={18} />
-									</div>
-								</MessageContent>
-							</Message>
-						{:else if thread?.pendingQuestionError}
-							<Alert variant="destructive">
-								<AlertDescription>
-									{thread.pendingQuestionError}
-								</AlertDescription>
-							</Alert>
-						{/if}
 					</div>
 				</div>
 				<ConversationSelectionComment
 					conversationRoot={contentEl}
 					scrollContainer={viewport}
+					onQueueComment={(comment) => thread?.addPendingComment(comment)}
 					onSubmitComment={submitSelectionComment}
 				/>
 				{#if !isNearBottom}
