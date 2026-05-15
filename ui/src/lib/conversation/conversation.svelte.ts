@@ -103,6 +103,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	);
 	let activeSubscription: ProjectStreamSubscription | null = null;
 	let activeStreamKey: string | null = null;
+	let activeStreamReady = Promise.resolve();
 
 	function getStatus() {
 		return streamError ? "error" : "ready";
@@ -189,6 +190,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		activeSubscription?.unsubscribe();
 		activeSubscription = null;
 		activeStreamKey = null;
+		activeStreamReady = Promise.resolve();
 	}
 
 	function streamKey(sessionId: string) {
@@ -197,15 +199,19 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 
 	function ensureStream() {
 		if (typeof window === "undefined") {
-			return;
+			return Promise.resolve();
 		}
 		if (activeStreamKey === streamKey(args.sessionId)) {
-			return;
+			return activeStreamReady;
 		}
 
 		disconnectStream();
 		streamError = null;
 		activeStreamKey = streamKey(args.sessionId);
+		let settleActiveStreamReady: () => void = () => {};
+		activeStreamReady = new Promise<void>((resolve) => {
+			settleActiveStreamReady = resolve;
+		});
 		console.debug("[WS] Creating chat stream subscription", {
 			threadId: args.threadId,
 			sessionId: args.sessionId,
@@ -221,6 +227,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			replay: true,
 			listeners,
 			onOpen: () => {
+				settleActiveStreamReady();
 				console.debug("[WS] Chat stream opened", {
 					threadId: args.threadId,
 					sessionId: args.sessionId,
@@ -237,6 +244,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				});
 			},
 			onError: (error) => {
+				settleActiveStreamReady();
 				const errorMessage = getStreamErrorMessage(error);
 				console.warn("[WS] Chat stream subscription error", {
 					threadId: args.threadId,
@@ -245,14 +253,19 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				});
 				streamError = errorMessage;
 			},
+			onComplete: () => {
+				activeSubscription = null;
+				activeStreamKey = null;
+				activeStreamReady = Promise.resolve();
+			},
 		});
 		activeSubscription = subscription;
+		return activeStreamReady;
 	}
 
 	function connect() {
 		streamError = null;
-		ensureStream();
-		return Promise.resolve();
+		return ensureStream();
 	}
 
 	return {
@@ -318,6 +331,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 					sessionId: args.sessionId,
 					status: getStatus(),
 				});
+				await ensureStream();
 				const response = await args.startChat({
 					sessionId: args.sessionId,
 					threadId: args.threadId,

@@ -17,6 +17,10 @@ const SESSION_CONTEXT = path.resolve(
 	TEST_DIR,
 	"../../context/session-context.svelte.ts",
 );
+const THREAD_STATUS_HELPERS = path.resolve(
+	TEST_DIR,
+	"../../app/thread-status.ts",
+);
 const COMMIT_COMMAND = path.resolve(
 	TEST_DIR,
 	"../../../../../container-assets/discobot/scripts/discobot-commit",
@@ -40,6 +44,10 @@ function readSessionCommandsSource() {
 
 function readSessionContextSource() {
 	return readFileSync(SESSION_CONTEXT, "utf-8");
+}
+
+function readThreadStatusSource() {
+	return readFileSync(THREAD_STATUS_HELPERS, "utf-8");
 }
 
 function readCommandSource(filePath: string) {
@@ -91,12 +99,15 @@ test("session toolbar groups dropdown commands from command metadata", () => {
 });
 
 test("session toolbar normalizes empty activeCommand to no running command", () => {
-	const source = readSessionToolbarSource();
+	const toolbarSource = readSessionToolbarSource();
+	const helperSource = readThreadStatusSource();
 
-	assert.match(source, /function normalizeActiveCommandName\(/);
-	assert.match(source, /session\.threads\.selected\?\.activeCommand/);
-	assert.match(source, /const trimmed = name\?\.trim\(\) \?\? "";/);
-	assert.match(source, /return trimmed\.length > 0 \? trimmed : null;/);
+	assert.match(toolbarSource, /getActiveCommandName\(\{/);
+	assert.match(toolbarSource, /thread: session\.threads\.selected/);
+	assert.match(helperSource, /function normalizeActiveCommandName\(/);
+	assert.match(helperSource, /thread\?\.activeCommand/);
+	assert.match(helperSource, /const trimmed = name\?\.trim\(\) \?\? "";/);
+	assert.match(helperSource, /return trimmed\.length > 0 \? trimmed : null;/);
 });
 
 test("commit and rebase bundled scripts specify the expected lucide icons and Git group", () => {

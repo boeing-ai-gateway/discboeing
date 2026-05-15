@@ -24,6 +24,21 @@ export function isThreadSnapshotRunning(
 	);
 }
 
+function normalizeActiveCommandName(
+	name: string | null | undefined,
+): string | null {
+	const trimmed = name?.trim() ?? "";
+	return trimmed.length > 0 ? trimmed : null;
+}
+
+export function getActiveCommandName({
+	thread,
+}: {
+	thread: Pick<Thread, "activeCommand"> | null | undefined;
+}): string | null {
+	return normalizeActiveCommandName(thread?.activeCommand);
+}
+
 export function resolveSessionDisplayStatus(
 	session: Partial<
 		Pick<

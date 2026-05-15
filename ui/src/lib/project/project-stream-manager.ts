@@ -53,6 +53,7 @@ export type ProjectStreamManager = {
 		listeners?: ProjectStreamEventListenerBinding<ProjectStreamEventName>[];
 		onOpen?: () => void;
 		onError?: (error: unknown) => void;
+		onComplete?: () => void;
 	}) => ProjectStreamSubscription;
 	subscribeServiceOutput: (args: {
 		sessionId: string;
@@ -106,6 +107,7 @@ class StreamSource<
 type StreamConsumer = {
 	onOpen?: () => void;
 	onError?: (error: unknown) => void;
+	onComplete?: () => void;
 };
 
 type StreamEntry = {
@@ -154,6 +156,12 @@ export function createProjectStreamManager(): ProjectStreamManager {
 	const notifyError = (entry: StreamEntry, error: unknown) => {
 		for (const consumer of entry.consumers.values()) {
 			consumer.onError?.(error);
+		}
+	};
+
+	const notifyComplete = (entry: StreamEntry) => {
+		for (const consumer of entry.consumers.values()) {
+			consumer.onComplete?.();
 		}
 	};
 
@@ -266,6 +274,7 @@ export function createProjectStreamManager(): ProjectStreamManager {
 					reason: message.type,
 					stream: message.stream,
 				});
+				notifyComplete(entry);
 				removeEntry(entry, { sendUnsubscribe: false });
 				return;
 			case "error":
@@ -371,6 +380,7 @@ export function createProjectStreamManager(): ProjectStreamManager {
 		getOrCreateEntry: () => StreamEntry,
 		onOpen?: () => void,
 		onError?: (error: unknown) => void,
+		onComplete?: () => void,
 		listenerBindings?: Array<{
 			type: string;
 			listener: (event: MessageEvent<string>) => void;
@@ -382,7 +392,7 @@ export function createProjectStreamManager(): ProjectStreamManager {
 			entry.source.addEventListener(binding.type, binding.listener);
 		}
 		const consumerId = Symbol(key);
-		entry.consumers.set(consumerId, { onOpen, onError });
+		entry.consumers.set(consumerId, { onOpen, onError, onComplete });
 		ensureSocket();
 		if (!wasSubscribed && socket?.readyState === WebSocket.OPEN) {
 			sendSubscribe(entry);
@@ -418,6 +428,7 @@ export function createProjectStreamManager(): ProjectStreamManager {
 			listeners,
 			onOpen,
 			onError,
+			onComplete,
 		}) => {
 			const key = chatEntryKey(sessionId, threadId);
 			return createSubscription(
@@ -476,6 +487,7 @@ export function createProjectStreamManager(): ProjectStreamManager {
 				},
 				onOpen,
 				onError,
+				onComplete,
 				listeners,
 			) as unknown as ProjectStreamSubscription;
 		},

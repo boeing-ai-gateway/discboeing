@@ -121,12 +121,12 @@ test("conversation loader keeps stream errors retryable at the project stream la
 	assert.doesNotMatch(source, /Lost chat stream connection/);
 });
 
-test("conversation connect starts streams without awaiting readiness", () => {
+test("conversation connect waits for stream readiness", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(
 		source,
-		/function connect\(\) \{[\s\S]*streamError = null;[\s\S]*ensureStream\(\);[\s\S]*return Promise\.resolve\(\);/,
+		/function connect\(\) \{[\s\S]*streamError = null;[\s\S]*return ensureStream\(\);/,
 	);
 	assert.doesNotMatch(source, /function refresh\(\)/);
 	assert.doesNotMatch(source, /loadStatus/);
@@ -135,18 +135,17 @@ test("conversation connect starts streams without awaiting readiness", () => {
 	assert.doesNotMatch(source, /beginLoadPromise/);
 });
 
-test("conversation submit leaves stream connection decisions to the caller", () => {
+test("conversation submit refreshes idle stream before starting chat", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 
 	assert.match(
 		source,
-		/console\.debug\("\[WS\] Preparing chat submit"[\s\S]*const response = await args\.startChat\(/,
+		/console\.debug\("\[WS\] Preparing chat submit"[\s\S]*await ensureStream\(\);[\s\S]*const response = await args\.startChat\(/,
 	);
 	assert.doesNotMatch(source, /hasSession: \(\) => boolean/);
 	assert.doesNotMatch(source, /canStream\?: \(\) => boolean/);
 	assert.doesNotMatch(source, /args\.hasSession/);
 	assert.doesNotMatch(source, /args\.canStream/);
-	assert.doesNotMatch(source, /resubscribeIdleStream/);
 	assert.doesNotMatch(source, /\.resubscribe\(/);
 	assert.doesNotMatch(source, /\.getState\(/);
 	assert.doesNotMatch(source, /allowEmptyPendingMessage/);

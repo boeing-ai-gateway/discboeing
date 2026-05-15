@@ -82,6 +82,7 @@ test.beforeEach(() => {
 test("project stream manager routes websocket events and removes completed streams", async () => {
 	const manager = createProjectStreamManager();
 	let opened = 0;
+	let completed = 0;
 	const chunkEvents: string[] = [];
 	const subscription = manager.subscribe({
 		sessionId: "session-1",
@@ -89,6 +90,9 @@ test("project stream manager routes websocket events and removes completed strea
 		replay: true,
 		onOpen: () => {
 			opened += 1;
+		},
+		onComplete: () => {
+			completed += 1;
 		},
 	});
 
@@ -132,6 +136,7 @@ test("project stream manager routes websocket events and removes completed strea
 	await flush();
 
 	assert.equal(opened, 1);
+	assert.equal(completed, 1);
 	assert.deepEqual(chunkEvents, ['{"type":"text","text":"hello"}']);
 	assert.equal(socket.readyState, MockWebSocket.CLOSED);
 	assert.equal(socket.sent.length, 1);
