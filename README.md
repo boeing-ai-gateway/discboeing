@@ -27,6 +27,12 @@ Download the macOS app from [Releases](https://github.com/obot-platform/discobot
 
 ## Build from source
 
+Use the Node.js version from [`.node-version`](.node-version). CI reads the
+same file via `actions/setup-node`.
+
+The root [`package.json`](package.json) pins the pnpm version via
+`packageManager`, and CI uses that too.
+
 ```bash
 pnpm build:app
 ```
