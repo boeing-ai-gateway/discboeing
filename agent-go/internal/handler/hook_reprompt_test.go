@@ -282,6 +282,8 @@ exit 1
 		t.Fatal("timed out waiting for first hook notification")
 	}
 	waitForCompletionDone(t, cm, "thread-1")
+	firstStatus := hookManager.GetStatus()
+	firstRunCount := firstStatus.Hooks["go-check"].RunCount
 
 	time.Sleep(1100 * time.Millisecond)
 	if err := os.WriteFile(mainPath, []byte("package main\n\nvar _ = 1\n"), 0o644); err != nil {
@@ -294,6 +296,15 @@ exit 1
 		t.Fatalf("unexpected hook notification for %q; wanted original thread only", got)
 	case <-time.After(400 * time.Millisecond):
 	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		status := hookManager.GetStatus()
+		if status.Hooks["go-check"].RunCount > firstRunCount {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for second hook evaluation to finish")
 }
 
 func TestScheduleHookEvaluation_QueuesHookRepromptWhenThreadBusy(t *testing.T) {
