@@ -40,9 +40,11 @@ export function createAppSessionsDomain(
 		void reloadSession(sessionId);
 	};
 
-	const list = $derived.by(() => sortSessionsByCreatedAt(store.list));
+	function getList() {
+		return sortSessionsByCreatedAt(store.list);
+	}
 
-	const recentThreads = $derived.by(() => {
+	function getRecentThreads() {
 		return recentThreadStore.entries.flatMap((savedEntry) => {
 			const liveThread = sessionContexts
 				.get(savedEntry.sessionId)
@@ -57,21 +59,12 @@ export function createAppSessionsDomain(
 				} satisfies RecentThreadEntry,
 			];
 		});
-	});
-	const selected = $derived.by(
-		() =>
-			list.find((session) => session.id === currentSelectedSessionId) ?? null,
-	);
+	}
 
-	function shouldLoadSession(
-		sessionId: string,
-		options?: { includePending?: boolean },
-	): boolean {
-		const session = store.peek(sessionId);
+	function getSelected() {
 		return (
-			sessionId === currentSelectedSessionId ||
-			(!!options?.includePending && sessionId === pendingSessionId) ||
-			(!!session && session.sandboxStatus !== "stopped")
+			getList().find((session) => session.id === currentSelectedSessionId) ??
+			null
 		);
 	}
 
@@ -138,6 +131,16 @@ export function createAppSessionsDomain(
 		if (sessionContext) {
 			sessionContext.threads.select(threadId);
 		}
+		const thread = sessionContext?.threads.list.find(
+			(thread) => thread.id === threadId,
+		);
+		const session = store.peek(sessionId);
+		recentThreadStore.recordSelection({
+			sessionId,
+			threadId,
+			name:
+				thread?.name || session?.displayName || session?.name || "New Thread",
+		});
 		selectSession(sessionId);
 	};
 
@@ -146,10 +149,10 @@ export function createAppSessionsDomain(
 			return store.list;
 		},
 		get list() {
-			return list;
+			return getList();
 		},
 		get recentThreads() {
-			return recentThreads;
+			return getRecentThreads();
 		},
 		get selectedId() {
 			return currentSelectedSessionId;
@@ -158,15 +161,14 @@ export function createAppSessionsDomain(
 			return pendingSessionId;
 		},
 		get selected() {
-			return selected;
+			return getSelected();
 		},
 		peek: (sessionId) => store.peek(sessionId),
-		shouldLoadSession,
 		sessionContexts,
 		select: selectSession,
 		openThread,
 		createThread: async (sessionId) => {
-			if (!list.some((session) => session.id === sessionId)) {
+			if (!getList().some((session) => session.id === sessionId)) {
 				return null;
 			}
 
@@ -200,7 +202,10 @@ export function createAppSessionsDomain(
 		},
 		rename: async (sessionId, nextName) => {
 			const trimmedName = nextName.trim();
-			if (!trimmedName || !list.some((session) => session.id === sessionId)) {
+			if (
+				!trimmedName ||
+				!getList().some((session) => session.id === sessionId)
+			) {
 				return false;
 			}
 			await store.update(sessionId, {
@@ -221,7 +226,7 @@ export function createAppSessionsDomain(
 							name: trimmedName,
 						},
 					);
-					sessionContexts.get(sessionId)?.stores.threads.upsert(updatedThread);
+					sessionContexts.get(sessionId)?.threads.upsert(updatedThread);
 				}
 			} catch (error) {
 				console.error(
@@ -233,14 +238,14 @@ export function createAppSessionsDomain(
 			return true;
 		},
 		stop: async (sessionId) => {
-			if (!list.some((session) => session.id === sessionId)) {
+			if (!getList().some((session) => session.id === sessionId)) {
 				return false;
 			}
 			await store.stop(sessionId);
 			return true;
 		},
 		remove: async (sessionId) => {
-			if (!list.some((session) => session.id === sessionId)) {
+			if (!getList().some((session) => session.id === sessionId)) {
 				return false;
 			}
 			await store.remove(sessionId);

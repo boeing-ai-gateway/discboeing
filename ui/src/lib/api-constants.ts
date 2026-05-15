@@ -30,52 +30,6 @@ export const CommitOperation = {
 	COMMIT: "commit",
 } as const;
 
-export const SessionDisplayStatus = {
-	...SessionStatus,
-	IDLE: "idle",
-	QUEUED: "queued",
-	RUNNING: "running",
-	NEEDS_ATTENTION: "needs_attention",
-	UNKNOWN: "unknown",
-	PENDING: "pending",
-	COMMITTING: "committing",
-	COMPLETED: "completed",
-	COMMITTED: "committed",
-} as const;
-
-type SessionStatusValue = (typeof SessionStatus)[keyof typeof SessionStatus];
-
-const SESSION_TRANSITIONING_STATUSES = new Set<SessionStatusValue>([
-	SessionStatus.INITIALIZING,
-	SessionStatus.REINITIALIZING,
-	SessionStatus.CLONING,
-	SessionStatus.PULLING_IMAGE,
-	SessionStatus.CREATING_SANDBOX,
-	SessionStatus.REMOVING,
-]);
-
-const SESSION_THREAD_ACCESSIBLE_STATUSES = new Set<SessionStatusValue>([
-	SessionStatus.READY,
-	SessionStatus.STOPPED,
-	SessionStatus.ERROR,
-]);
-
-export function isSessionTransitioningStatus(
-	status: SessionStatusValue | null | undefined,
-): boolean {
-	return status !== null && status !== undefined
-		? SESSION_TRANSITIONING_STATUSES.has(status)
-		: false;
-}
-
-export function canLoadSessionThreads(
-	status: SessionStatusValue | null | undefined,
-): boolean {
-	return status !== null && status !== undefined
-		? SESSION_THREAD_ACCESSIBLE_STATUSES.has(status)
-		: false;
-}
-
 // Workspace status constants representing the lifecycle of a workspace
 export const WorkspaceStatus = {
 	INITIALIZING: "initializing",

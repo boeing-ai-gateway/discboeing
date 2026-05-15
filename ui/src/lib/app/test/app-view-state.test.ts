@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { getReconciledSelectedSessionId } from "../domains/app-sessions.helpers";
-import { getVisibleRecentThreads } from "../view/create-app-view-state.svelte";
+import {
+	getMountedSessionIds,
+	getVisibleRecentThreads,
+} from "../view/create-app-view-state.svelte";
 import type { Session } from "$lib/api-types";
 import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 
@@ -150,5 +153,62 @@ test("getVisibleRecentThreads keeps same-session rows stable when access times c
 			(thread) => `${thread.sessionId}:${thread.threadId}`,
 		),
 		["session-2:session-2", "session-1:thread-a", "session-1:thread-b"],
+	);
+});
+
+test("getMountedSessionIds filters stopped recent sessions before mounting", () => {
+	assert.deepEqual(
+		getMountedSessionIds({
+			activeSessionId: "session-1",
+			pendingSessionId: "pending-session",
+			recentThreads: [
+				{
+					sessionId: "session-2",
+					threadId: "thread-2",
+					name: "Stopped",
+					lastAccessedAt: "2024-01-05T00:00:00.000Z",
+				},
+				{
+					sessionId: "session-3",
+					threadId: "thread-3",
+					name: "Ready",
+					lastAccessedAt: "2024-01-04T00:00:00.000Z",
+				},
+			],
+			sessions: [
+				...appSessions,
+				{
+					id: "session-3",
+					name: "Three",
+					description: "",
+					createdAt: "2024-01-03T00:00:00.000Z",
+					timestamp: "2024-01-03T00:00:00.000Z",
+					sandboxStatus: "ready",
+					files: [],
+				},
+				{
+					id: "session-2",
+					name: "Two",
+					description: "",
+					createdAt: "2024-01-02T00:00:00.000Z",
+					timestamp: "2024-01-02T00:00:00.000Z",
+					sandboxStatus: "stopped",
+					files: [],
+				},
+			],
+		}),
+		["session-1", "session-3"],
+	);
+});
+
+test("getMountedSessionIds keeps pending sessions mountable", () => {
+	assert.deepEqual(
+		getMountedSessionIds({
+			activeSessionId: "pending-session",
+			pendingSessionId: "pending-session",
+			recentThreads: [],
+			sessions: appSessions,
+		}),
+		["pending-session"],
 	);
 });

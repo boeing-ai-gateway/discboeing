@@ -1,5 +1,5 @@
 import type { AppStartupStatus } from "$lib/app/app-context.types";
-import type { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
+import type { StartupTaskStore } from "$lib/store/startup-tasks.store";
 
 function isTaskActive(task: { state: string }) {
 	return task.state === "pending" || task.state === "in_progress";
@@ -14,20 +14,15 @@ export function createAppStartupStatusDomain(
 ): AppStartupStatus {
 	const { store } = args;
 
-	const visibleTasks = $derived.by(() =>
-		store.list.filter((task) => task.state !== "completed"),
-	);
-	const hasActiveTasks = $derived.by(() => store.list.some(isTaskActive));
-
 	return {
 		get tasks() {
 			return store.list;
 		},
 		get visibleTasks() {
-			return visibleTasks;
+			return store.list.filter((task) => task.state !== "completed");
 		},
 		get hasActiveTasks() {
-			return hasActiveTasks;
+			return store.list.some(isTaskActive);
 		},
 		peek: (taskId) => store.peek(taskId),
 		ensure: (taskId) => store.ensure(taskId),

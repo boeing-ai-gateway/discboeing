@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
+import { createProjectStreamManager } from "$lib/project/project-stream-manager";
 
 class MockWebSocket {
 	static CONNECTING = 0;
@@ -79,8 +79,8 @@ test.beforeEach(() => {
 	});
 });
 
-test("chat stream manager routes websocket events and resubscribes after completion", async () => {
-	const manager = createChatStreamManager();
+test("project stream manager routes websocket events and removes completed streams", async () => {
+	const manager = createProjectStreamManager();
 	let opened = 0;
 	const chunkEvents: string[] = [];
 	const subscription = manager.subscribe({
@@ -133,30 +133,16 @@ test("chat stream manager routes websocket events and resubscribes after complet
 
 	assert.equal(opened, 1);
 	assert.deepEqual(chunkEvents, ['{"type":"text","text":"hello"}']);
-	assert.equal(subscription.getState(), "idle");
-
-	subscription.resubscribe();
-	assert.deepEqual(JSON.parse(socket.sent[1]), {
-		type: "subscribe",
-		stream: "chat",
-		sessionId: "session-1",
-		threadId: "thread-1",
-		replay: true,
-		lastEventId: "completion-1:0",
-	});
+	assert.equal(socket.readyState, MockWebSocket.CLOSED);
+	assert.equal(socket.sent.length, 1);
 
 	subscription.unsubscribe();
-	assert.deepEqual(JSON.parse(socket.sent[2]), {
-		type: "unsubscribe",
-		stream: "chat",
-		sessionId: "session-1",
-		threadId: "thread-1",
-	});
+	assert.equal(socket.sent.length, 1);
 	manager.dispose();
 });
 
-test("chat stream manager binds provided listeners before subscribe starts streaming", () => {
-	const manager = createChatStreamManager();
+test("project stream manager binds provided listeners before subscribe starts streaming", () => {
+	const manager = createProjectStreamManager();
 	const chunkEvents: string[] = [];
 	const subscription = manager.subscribe({
 		sessionId: "session-early",
@@ -190,8 +176,8 @@ test("chat stream manager binds provided listeners before subscribe starts strea
 	manager.dispose();
 });
 
-test("chat stream manager does not reconnect completed chat streams until explicitly resubscribed", async () => {
-	const manager = createChatStreamManager();
+test("project stream manager does not reconnect completed chat streams", async () => {
+	const manager = createProjectStreamManager();
 	const subscription = manager.subscribe({
 		sessionId: "session-complete",
 		threadId: "thread-complete",
@@ -216,26 +202,14 @@ test("chat stream manager does not reconnect completed chat streams until explic
 	firstSocket.emitClose();
 	await new Promise((resolve) => setTimeout(resolve, 1100));
 
-	assert.equal(MockWebSocket.instances.length, 2);
-	const secondSocket = MockWebSocket.instances[1];
-	secondSocket.emitOpen();
-	assert.equal(secondSocket.sent.length, 0);
-
-	subscription.resubscribe();
-	assert.deepEqual(JSON.parse(secondSocket.sent[0]), {
-		type: "subscribe",
-		stream: "chat",
-		sessionId: "session-complete",
-		threadId: "thread-complete",
-		replay: true,
-	});
+	assert.equal(MockWebSocket.instances.length, 1);
 
 	subscription.unsubscribe();
 	manager.dispose();
 });
 
-test("chat stream manager reconnects and resubscribes active streams", async () => {
-	const manager = createChatStreamManager();
+test("project stream manager reconnects active streams", async () => {
+	const manager = createProjectStreamManager();
 	const subscription = manager.subscribe({
 		sessionId: "session-2",
 		threadId: "thread-2",
@@ -270,8 +244,53 @@ test("chat stream manager reconnects and resubscribes active streams", async () 
 	manager.dispose();
 });
 
-test("chat stream manager routes service output over the shared websocket", () => {
-	const manager = createChatStreamManager();
+test("project stream manager retries stream errors after a delay", async () => {
+	const manager = createProjectStreamManager();
+	const errors: string[] = [];
+	const subscription = manager.subscribe({
+		sessionId: "session-retry",
+		threadId: "thread-retry",
+		replay: true,
+		onError: (error) => {
+			errors.push(error instanceof Error ? error.message : String(error));
+		},
+	});
+
+	const socket = MockWebSocket.instances[0];
+	socket.emitOpen();
+	socket.emitMessage({
+		type: "subscribed",
+		stream: "chat",
+		sessionId: "session-retry",
+		threadId: "thread-retry",
+	});
+	socket.emitMessage({
+		type: "error",
+		stream: "chat",
+		sessionId: "session-retry",
+		threadId: "thread-retry",
+		error: "agent unavailable",
+	});
+
+	assert.deepEqual(errors, ["agent unavailable"]);
+	assert.equal(socket.sent.length, 1);
+
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+
+	assert.deepEqual(JSON.parse(socket.sent[1]), {
+		type: "subscribe",
+		stream: "chat",
+		sessionId: "session-retry",
+		threadId: "thread-retry",
+		replay: true,
+	});
+
+	subscription.unsubscribe();
+	manager.dispose();
+});
+
+test("project stream manager routes service output over the shared websocket", () => {
+	const manager = createProjectStreamManager();
 	const messages: string[] = [];
 	const subscription = manager.subscribeServiceOutput({
 		sessionId: "session-3",
@@ -321,8 +340,8 @@ test("chat stream manager routes service output over the shared websocket", () =
 	manager.dispose();
 });
 
-test("chat stream manager routes project events over the shared websocket", () => {
-	const manager = createChatStreamManager();
+test("project stream manager routes project events over the shared websocket", () => {
+	const manager = createProjectStreamManager();
 	const connectedEvents: string[] = [];
 	const sessionEvents: string[] = [];
 	const subscription = manager.subscribeProjectEvents({ afterId: "event-1" });
@@ -372,46 +391,5 @@ test("chat stream manager routes project events over the shared websocket", () =
 		type: "unsubscribe",
 		stream: "project-events",
 	});
-	manager.dispose();
-});
-
-test("chat stream manager reconnects after socket close without reporting a stream error", async () => {
-	const manager = createChatStreamManager();
-	let errors = 0;
-	const subscription = manager.subscribeProjectEvents({
-		afterId: "event-1",
-		onError: () => {
-			errors += 1;
-		},
-	});
-
-	const firstSocket = MockWebSocket.instances[0];
-	firstSocket.emitOpen();
-	firstSocket.emitMessage({
-		type: "subscribed",
-		stream: "project-events",
-	});
-	firstSocket.emitMessage({
-		type: "event",
-		stream: "project-events",
-		event: "session_updated",
-		data: '{"id":"event-2","type":"session_updated"}',
-		id: "event-2",
-	});
-
-	firstSocket.emitClose();
-	await new Promise((resolve) => setTimeout(resolve, 1100));
-
-	assert.equal(errors, 0);
-	assert.equal(MockWebSocket.instances.length, 2);
-	const secondSocket = MockWebSocket.instances[1];
-	secondSocket.emitOpen();
-	assert.deepEqual(JSON.parse(secondSocket.sent[0]), {
-		type: "subscribe",
-		stream: "project-events",
-		afterId: "event-2",
-	});
-
-	subscription.unsubscribe();
 	manager.dispose();
 });

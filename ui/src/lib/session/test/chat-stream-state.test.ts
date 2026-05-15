@@ -7,7 +7,7 @@ import {
 	bindChatStreamEventSource,
 	createChatStreamState,
 	type ChatStreamStateOptions,
-} from "$lib/thread/conversation-stream";
+} from "$lib/conversation/conversation-stream";
 
 function makeTextMessage(
 	id: string,

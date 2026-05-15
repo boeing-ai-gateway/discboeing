@@ -24,7 +24,7 @@ import type { SessionCommandsDomain } from "$lib/session/session-context.types";
 type CreateSessionCommandsDomainArgs = {
 	app: AppContext;
 	sessionId: string;
-	hasSession: () => boolean;
+	canLoadSessionData: () => boolean;
 	getSelectedThreadId: () => string;
 	submit: (text: string, options?: { threadId?: string }) => Promise<unknown>;
 };
@@ -34,7 +34,7 @@ export function createSessionCommandsDomain(
 ): SessionCommandsDomain {
 	const resource = createResource<AgentCommand[]>({
 		owner: "SessionCommands",
-		enabled: () => args.hasSession(),
+		enabled: args.canLoadSessionData,
 		createEmptyValue: () => [],
 		load: async () => {
 			const response = await api.getSessionCommands(args.sessionId);
@@ -64,8 +64,8 @@ export function createSessionCommandsDomain(
 	>({});
 	let credentialDialogError = $state<string | null>(null);
 
-	const uiVisible = $derived.by(() =>
-		[...resource.data]
+	function getUiVisible() {
+		return [...resource.data]
 			.filter((command) => command.discobot?.ui)
 			.sort((left, right) => {
 				const leftOrder = left.discobot?.order ?? 0;
@@ -74,8 +74,8 @@ export function createSessionCommandsDomain(
 					return leftOrder - rightOrder;
 				}
 				return left.name.localeCompare(right.name);
-			}),
-	);
+			});
+	}
 
 	async function sendMessages(threadId: string, text: string) {
 		await args.submit(text, { threadId });
@@ -133,7 +133,7 @@ export function createSessionCommandsDomain(
 	}
 
 	async function refreshCredentialDialogContext() {
-		if (!credentialDialogOpen) {
+		if (!credentialDialogOpen || !args.canLoadSessionData()) {
 			return;
 		}
 		await args.app.credentials.refresh();
@@ -183,6 +183,9 @@ export function createSessionCommandsDomain(
 	}
 
 	async function prepareCommandCredentialDialog(command: AgentCommand) {
+		if (!args.canLoadSessionData()) {
+			return;
+		}
 		if (
 			args.app.credentials.list.length === 0 ||
 			args.app.credentials.credentialTypes.length === 0
@@ -367,6 +370,9 @@ export function createSessionCommandsDomain(
 	}
 
 	async function executeCommand(command: AgentCommand) {
+		if (!args.canLoadSessionData()) {
+			return;
+		}
 		const threadId = args.getSelectedThreadId();
 		const text = `/${command.name}`;
 		isSubmitting = true;
@@ -379,6 +385,9 @@ export function createSessionCommandsDomain(
 
 	async function confirmCredentialDialog() {
 		if (!credentialDialogCommand) {
+			return;
+		}
+		if (!args.canLoadSessionData()) {
 			return;
 		}
 
@@ -413,17 +422,25 @@ export function createSessionCommandsDomain(
 	}
 
 	async function run(command: AgentCommand) {
-		if (!args.hasSession() || isSubmitting || credentialDialogOpen) {
+		const currentCommand = resource
+			.peek()
+			.find((candidate) => candidate.name === command.name);
+		if (
+			!args.canLoadSessionData() ||
+			!currentCommand ||
+			isSubmitting ||
+			credentialDialogOpen
+		) {
 			return;
 		}
 
-		const requests = command.discobot?.credentialRequest ?? [];
+		const requests = currentCommand.discobot?.credentialRequest ?? [];
 		if (requests.length === 0) {
-			await executeCommand(command);
+			await executeCommand(currentCommand);
 			return;
 		}
 
-		await prepareCommandCredentialDialog(command);
+		await prepareCommandCredentialDialog(currentCommand);
 	}
 
 	return {
@@ -431,7 +448,7 @@ export function createSessionCommandsDomain(
 			return resource.data;
 		},
 		get uiVisible() {
-			return uiVisible;
+			return getUiVisible();
 		},
 		get status() {
 			return resource.status;

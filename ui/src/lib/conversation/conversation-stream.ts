@@ -11,16 +11,13 @@ import {
 	parseChatStreamMessageValue,
 	type ChatStreamChunk,
 	type ChatStreamEvent,
-} from "$lib/thread/conversation-stream.events";
+} from "$lib/conversation/conversation-stream.events";
 
 export {
 	bindChatStreamEventSource,
 	createChatStreamEventListeners,
-	type ChatStreamEventListenerBinding,
-	type ChatStreamEventName,
-	type ChatStreamEventSource,
 	type ChatStreamEventSourceOptions,
-} from "$lib/thread/conversation-stream.events";
+} from "$lib/conversation/conversation-stream.events";
 
 export type ChatStreamStateOptions = {
 	getMessages: () => ChatMessage[];

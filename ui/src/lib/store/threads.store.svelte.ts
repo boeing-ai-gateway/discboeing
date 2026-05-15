@@ -21,15 +21,17 @@ type ThreadStoreArgs = {
 
 export class ThreadStore {
 	#sessionId: string;
+	#enabled: () => boolean;
 	#resource;
 	#fetchOneRequests = new RequestCoalescer<string, Thread | null>();
 	#backgroundFetches = new SvelteSet<string>();
 
 	constructor(args: ThreadStoreArgs) {
 		this.#sessionId = args.sessionId;
+		this.#enabled = args.enabled ?? (() => true);
 		const resourceArgs = {
 			owner: `ThreadStore:${args.sessionId}`,
-			enabled: args.enabled,
+			enabled: this.#enabled,
 			list: {
 				load: async () => {
 					const { threads } = await api.getThreads(args.sessionId);
@@ -86,7 +88,11 @@ export class ThreadStore {
 
 	ensure(id: string): Thread | null {
 		const cached = this.#resource.peek(id);
-		if (cached === null && !this.#backgroundFetches.has(id)) {
+		if (
+			cached === null &&
+			this.#enabled() &&
+			!this.#backgroundFetches.has(id)
+		) {
 			this.#backgroundFetches.add(id);
 			void this.fetchOne(id).finally(() => this.#backgroundFetches.delete(id));
 		}
@@ -99,13 +105,22 @@ export class ThreadStore {
 	}
 
 	async fetch(): Promise<void> {
+		if (!this.#enabled()) {
+			return;
+		}
 		await this.#resource.all().refresh();
 	}
 
 	async fetchOne(threadId: string): Promise<void> {
+		if (!this.#enabled()) {
+			return;
+		}
 		await this.#fetchOneRequests.run(threadId, async () => {
 			try {
 				const thread = await api.getThread(this.#sessionId, threadId);
+				if (!this.#enabled()) {
+					return null;
+				}
 				this.#resource.upsert(thread);
 				return thread;
 			} catch (error) {

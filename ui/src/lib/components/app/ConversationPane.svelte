@@ -5,7 +5,7 @@
 	import ListTreeIcon from "@lucide/svelte/icons/list-tree";
 	import { tick } from "svelte";
 	import { api } from "$lib/api-client";
-	import { isSessionTransitioningStatus } from "$lib/api-constants";
+	import { isSessionTransitioningStatus } from "$lib/session/session-status";
 	import type {
 		BrowserEventChunkData,
 		BrowserEventFile,
@@ -66,7 +66,10 @@
 	import { getSessionContextIfPresent } from "$lib/context/session-context.svelte";
 	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
 	import { getErrorMessage } from "$lib/error-message";
-	import type { ThreadContextValue } from "$lib/session/session-context.types";
+	import type {
+		SelectionComment,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import {
 		buildUserMessageParts,
 		formatConversationComments,
@@ -772,9 +775,7 @@
 		};
 	}
 
-	async function submitSelectionComment(
-		comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
-	) {
+	async function submitSelectionComment(comment: SelectionComment) {
 		if (!thread) {
 			return;
 		}
@@ -1827,7 +1828,6 @@
 				<ConversationSelectionComment
 					conversationRoot={contentEl}
 					scrollContainer={viewport}
-					onQueueComment={(comment) => thread?.addPendingComment(comment)}
 					onSubmitComment={submitSelectionComment}
 				/>
 				{#if !isNearBottom}

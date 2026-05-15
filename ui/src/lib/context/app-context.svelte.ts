@@ -7,23 +7,23 @@ import type {
 	AppContextBootstrap,
 	AppStores,
 } from "$lib/app/app-context.types";
-import { createAppCredentialsDomain } from "$lib/app/domains/app-credentials.svelte";
+import { createAppCredentialsDomain } from "$lib/app/domains/app-credentials";
 import { createAppEnvironmentDomain } from "$lib/app/domains/app-environment";
-import { createAppModelsDomain } from "$lib/app/domains/app-models.svelte";
+import { createAppModelsDomain } from "$lib/app/domains/app-models";
 import { createAppPreferencesDomain } from "$lib/app/domains/app-preferences.svelte";
 import { createAppSessionsDomain } from "$lib/app/domains/app-sessions.svelte";
-import { createAppStartupStatusDomain } from "$lib/app/domains/app-startup-status.svelte";
+import { createAppStartupStatusDomain } from "$lib/app/domains/app-startup-status";
 import { createAppSupportInfoDomain } from "$lib/app/domains/app-support-info.svelte";
 import { createAppUpdatesDomain } from "$lib/app/domains/app-updates.svelte";
-import { createAppWorkspacesDomain } from "$lib/app/domains/app-workspaces.svelte";
+import { createAppWorkspacesDomain } from "$lib/app/domains/app-workspaces";
 import { createAppViewState } from "$lib/app/view/create-app-view-state.svelte";
 import type { StartChatResponse, StartupTask } from "$lib/api-types";
-import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
+import { createProjectStreamManager } from "$lib/project/project-stream-manager";
 import { SessionStore } from "$lib/store/sessions.store.svelte";
 import { WorkspaceStore } from "$lib/store/workspaces.store.svelte";
-import { ModelStore } from "$lib/store/models.store.svelte";
-import { CredentialStore } from "$lib/store/credentials.store.svelte";
-import { StartupTaskStore } from "$lib/store/startup-tasks.store.svelte";
+import { ModelStore } from "$lib/store/models.store";
+import { CredentialStore } from "$lib/store/credentials.store";
+import { StartupTaskStore } from "$lib/store/startup-tasks.store";
 import { RecentThreadStore } from "$lib/store/recent-threads.store.svelte";
 import { UIStateStore } from "$lib/store/ui-state.store.svelte";
 import { createUserMessage } from "$lib/session/domains/session-domain.helpers";
@@ -65,7 +65,7 @@ type WorkspaceUpdatedEventData = {
 };
 
 function startProjectEventsSubscription(app: AppContext) {
-	const subscription = app.chatStreams.subscribeProjectEvents({
+	const subscription = app.projectStreams.subscribeProjectEvents({
 		onError: (error) => {
 			console.error("[WS] Project events connection error:", error);
 		},
@@ -232,7 +232,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 	const startup = createAppStartupStatusDomain({ store: stores.startup });
 	const models = createAppModelsDomain({ store: stores.models });
 	const supportInfo = createAppSupportInfoDomain();
-	const chatStreams = createChatStreamManager();
+	const projectStreams = createProjectStreamManager();
 	const credentials = createAppCredentialsDomain({
 		store: stores.credentials,
 		refreshModels: models.refresh,
@@ -353,7 +353,7 @@ function createAppContext(bootstrap: AppContextBootstrap): AppContext {
 		models,
 		credentials,
 		supportInfo,
-		chatStreams,
+		projectStreams,
 		ensureSession: (sessionId) => {
 			const resolvedSessionId =
 				sessionId ?? sessions.selectedId ?? sessions.pendingId;

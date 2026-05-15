@@ -12,7 +12,7 @@ function readSessionWorkspaceSource() {
 	return readFileSync(SESSION_WORKSPACE_COMPONENT, "utf-8");
 }
 
-test("session workspace owns the per-session context for its mount lifetime", () => {
+test("session workspace owns the per-session context and stable dock layout", () => {
 	const source = readSessionWorkspaceSource();
 
 	assert.match(source, /type Props = \{/);
@@ -22,6 +22,14 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	assert.doesNotMatch(source, /showSidebarToggle\?: boolean;/);
 	assert.match(source, /reserveSidebarSpace\?: boolean;/);
 	assert.match(source, /import \{ onDestroy, untrack \} from "svelte";/);
+	assert.match(
+		source,
+		/import DockPanel from "\$lib\/components\/app\/DockPanel\.svelte";/,
+	);
+	assert.match(
+		source,
+		/import \* as Resizable from "\$lib\/components\/ui\/resizable";/,
+	);
 	assert.match(
 		source,
 		/import \{ useAppContext \} from "\$lib\/context\/app-context\.svelte";/,
@@ -47,12 +55,25 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	);
 	assert.match(source, /session\.dispose\(\);/);
 	assert.match(source, /const threadId = \$derived\.by\(/);
+	assert.match(source, /const showDock = \$derived\(/);
+	assert.match(
+		source,
+		/!session\.isPending && !isChatView\(session\.ui\.activeView\)/,
+	);
+	assert.match(
+		source,
+		/const dockMaximized = \$derived\(showDock && session\.ui\.dockMaximized\);/,
+	);
 	assert.match(source, /\{#key threadId\}/);
 	assert.match(source, /<ThreadWorkspace/);
 	assert.match(source, /\{threadId\}/);
 	assert.match(source, /\{reserveSidebarSpace\}/);
 	assert.doesNotMatch(source, /\{showSidebarToggle\}/);
-	assert.match(
+	assert.match(source, /<DockPanel \/>/);
+	assert.match(source, /<Resizable\.PaneGroup/);
+	assert.match(source, /autoSaveId="discobot-ui-thread-layout"/);
+	assert.match(source, /mode="connection-only"/);
+	assert.doesNotMatch(
 		source,
 		/mode=\{session\.isPending \? "conversation-only" : undefined\}/,
 	);

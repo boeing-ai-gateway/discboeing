@@ -40,7 +40,7 @@ type EditorRuntimeState = {
 
 type CreateSessionFilesDomainArgs = {
 	sessionId: string;
-	hasSession: () => boolean;
+	canLoadSessionData: () => boolean;
 	getSelectedFile: () => string;
 	openFile: (file?: string) => void;
 };
@@ -395,7 +395,7 @@ export function createSessionFilesDomain(
 
 	const metadataResource = createResource<FilesMetadata>({
 		owner: "SessionFiles",
-		enabled: () => args.hasSession(),
+		enabled: args.canLoadSessionData,
 		createEmptyValue: () => EMPTY_FILES_METADATA,
 		retry: { mode: "background" },
 		load: async () => {
@@ -450,52 +450,60 @@ export function createSessionFilesDomain(
 
 	const editorRuntime = new SvelteMap<string, EditorRuntimeState>();
 
-	const metadata = $derived.by(() => metadataResource.data);
-	const diff = $derived.by(() => metadata.diff.files);
-	const diffStats = $derived.by(() => metadata.diff.stats);
-	const diffEntriesMap = $derived.by(
-		() => new SvelteMap(diff.map((entry) => [entry.path, entry] as const)),
-	);
-	const searchable = $derived.by(() => metadata.searchable);
-	const rootNodes = $derived.by(() => metadata.rootNodes);
-	const tree = $derived.by(() =>
-		showChangedOnly
-			? buildTreeFromChangedFiles(diff)
-			: buildTreeFromCache(rootNodes, childrenCache, diffEntriesMap),
-	);
-	const list = $derived(
-		uniquePaths([
+	function getMetadata() {
+		return metadataResource.data;
+	}
+
+	function getDiff() {
+		return getMetadata().diff.files;
+	}
+
+	function getDiffStats() {
+		return getMetadata().diff.stats;
+	}
+
+	function getDiffEntriesMap() {
+		return new SvelteMap(
+			getDiff().map((entry) => [entry.path, entry] as const),
+		);
+	}
+
+	function getSearchable() {
+		return getMetadata().searchable;
+	}
+
+	function getRootNodes() {
+		return getMetadata().rootNodes;
+	}
+
+	function getTree() {
+		return showChangedOnly
+			? buildTreeFromChangedFiles(getDiff())
+			: buildTreeFromCache(getRootNodes(), childrenCache, getDiffEntriesMap());
+	}
+
+	function getList() {
+		return uniquePaths([
 			...openPaths,
-			...diff.map((file) => file.path),
-			...searchable.slice(0, 20),
-		]),
-	);
-	const contents = $derived.by(() => {
+			...getDiff().map((file) => file.path),
+			...getSearchable().slice(0, 20),
+		]);
+	}
+
+	function getContents() {
 		const next: Record<string, string> = {};
 		for (const [path, record] of Object.entries(fileRecords)) {
 			next[path] = buffers[path]?.content ?? record.content;
 		}
 		return next;
-	});
-
-	function clearLoadedState() {
-		refreshPromise = null;
-		openPaths = [];
-		fileRecords = {};
-		buffers = {};
-		childrenCache.clear();
-		expandedPaths = ["."];
-		loadingPaths = [];
-		syncSelectedFile([], []);
-		metadataResource.reset();
 	}
 
 	function scheduleEnsureLoaded() {
 		if (
 			loadScheduled ||
-			!args.hasSession() ||
 			refreshPromise !== null ||
-			(metadataResource.fetchedAt !== null && !metadataResource.isStale)
+			!args.canLoadSessionData() ||
+			!metadataResource.isStale
 		) {
 			return;
 		}
@@ -507,19 +515,14 @@ export function createSessionFilesDomain(
 	}
 
 	function ensureLoaded(force = false) {
-		if (!args.hasSession()) {
-			clearLoadedState();
-			return refreshPromise;
+		if (!args.canLoadSessionData()) {
+			return null;
 		}
 		if (refreshPromise) {
 			return refreshPromise;
 		}
-		if (
-			!force &&
-			metadataResource.fetchedAt !== null &&
-			!metadataResource.isStale
-		) {
-			syncSelectedFile(list, searchable);
+		if (!force && !metadataResource.isStale) {
+			syncSelectedFile();
 			return null;
 		}
 		const promise = (async () => {
@@ -527,6 +530,9 @@ export function createSessionFilesDomain(
 				await metadataResource.refresh();
 			} else {
 				await metadataResource.ensure();
+			}
+			if (metadataResource.fetchedAt === null) {
+				return;
 			}
 			const nextMetadata = metadataResource.peek();
 			childrenCache.clear();
@@ -550,7 +556,10 @@ export function createSessionFilesDomain(
 		return promise;
 	}
 
-	function syncSelectedFile(nextList = list, nextSearchable = searchable) {
+	function syncSelectedFile(
+		nextList = getList(),
+		nextSearchable = getSearchable(),
+	) {
 		const selectedFile = args.getSelectedFile();
 		if (!selectedFile || nextList.includes(selectedFile)) {
 			return;
@@ -618,7 +627,11 @@ export function createSessionFilesDomain(
 	) {
 		const force = options.force ?? false;
 		const signal = options.signal;
-		if (!args.hasSession() || showChangedOnly) {
+		if (
+			!args.canLoadSessionData() ||
+			metadataResource.fetchedAt === null ||
+			showChangedOnly
+		) {
 			return;
 		}
 		if (
@@ -629,15 +642,16 @@ export function createSessionFilesDomain(
 		}
 
 		throwIfAborted(signal);
-		const currentDiffEntriesMap = new SvelteMap(
-			diff.map((entry) => [entry.path, entry] as const),
-		);
+		const currentDiffEntriesMap = getDiffEntriesMap();
 		loadingPaths = uniquePaths([...loadingPaths, path]);
 		try {
 			const response = await api.listSessionFiles(args.sessionId, path, {
 				signal,
 			});
 			throwIfAborted(signal);
+			if (!args.canLoadSessionData() || metadataResource.fetchedAt === null) {
+				return;
+			}
 			childrenCache.set(
 				path,
 				entriesToNodes(response.entries, path, currentDiffEntriesMap),
@@ -653,18 +667,25 @@ export function createSessionFilesDomain(
 	}
 
 	async function loadFile(path: string, force = false) {
-		if (!args.hasSession() || !path) {
+		if (
+			!args.canLoadSessionData() ||
+			metadataResource.fetchedAt === null ||
+			!path
+		) {
 			return;
 		}
 		if (!force && fileRecords[path]) {
 			return;
 		}
 
-		const diffEntry = diff.find((file) => file.path === path);
+		const diffEntry = getDiff().find((file) => file.path === path);
 		const fromBase = diffEntry?.status === "deleted";
 		const response = await api.readSessionFile(args.sessionId, path, {
 			fromBase,
 		});
+		if (!args.canLoadSessionData() || metadataResource.fetchedAt === null) {
+			return;
+		}
 		const nextRecord: SessionFileRecord = {
 			path,
 			content: response.content,
@@ -686,16 +707,12 @@ export function createSessionFilesDomain(
 
 	async function refresh() {
 		cancelExpandAll();
-		if (!args.hasSession()) {
-			clearLoadedState();
-			return;
-		}
 		await ensureLoaded(true);
 	}
 
 	async function setDiffTarget(target: string) {
 		const nextTarget = target.trim();
-		if (nextTarget === diffTarget) {
+		if (nextTarget === diffTarget || !args.canLoadSessionData()) {
 			return;
 		}
 		diffTarget = nextTarget;
@@ -730,6 +747,9 @@ export function createSessionFilesDomain(
 		const current = buffers[path];
 		if (!current || !current.isDirty) {
 			return true;
+		}
+		if (!args.canLoadSessionData() || metadataResource.fetchedAt === null) {
+			return false;
 		}
 		if (current.encoding !== "utf8" || current.fromBase) {
 			return false;
@@ -835,6 +855,9 @@ export function createSessionFilesDomain(
 
 	async function forceSave(path: string): Promise<boolean> {
 		const current = buffers[path];
+		if (!args.canLoadSessionData() || metadataResource.fetchedAt === null) {
+			return false;
+		}
 		if (!current || current.encoding !== "utf8" || current.fromBase) {
 			return false;
 		}
@@ -888,26 +911,26 @@ export function createSessionFilesDomain(
 	return {
 		get list() {
 			scheduleEnsureLoaded();
-			return list;
+			return getList();
 		},
 		get searchable() {
 			scheduleEnsureLoaded();
-			return searchable;
+			return getSearchable();
 		},
 		get diff() {
 			scheduleEnsureLoaded();
-			return diff;
+			return getDiff();
 		},
 		get diffStats() {
 			scheduleEnsureLoaded();
-			return diffStats;
+			return getDiffStats();
 		},
 		get diffTarget() {
 			return diffTarget;
 		},
 		get contents() {
 			scheduleEnsureLoaded();
-			return contents;
+			return getContents();
 		},
 		get selected() {
 			return args.getSelectedFile();
@@ -920,7 +943,7 @@ export function createSessionFilesDomain(
 		},
 		get tree() {
 			scheduleEnsureLoaded();
-			return tree;
+			return getTree();
 		},
 		get showChangedOnly() {
 			return showChangedOnly;
@@ -933,7 +956,7 @@ export function createSessionFilesDomain(
 		isPathLoading: (path) => loadingPaths.includes(path),
 		hasDirtyChanges: (path) => hasDirtyBufferAtOrWithinPath(buffers, path),
 		open: async (file?: string) => {
-			if (list.length === 0 && searchable.length === 0) {
+			if (getList().length === 0 && getSearchable().length === 0) {
 				await refresh();
 			}
 			if (file === undefined) {
@@ -979,7 +1002,7 @@ export function createSessionFilesDomain(
 		expandAll: async () => {
 			cancelExpandAll();
 			if (showChangedOnly) {
-				expandedPaths = getAllDirectoryPaths(tree);
+				expandedPaths = getAllDirectoryPaths(getTree());
 				return;
 			}
 
@@ -1010,10 +1033,14 @@ export function createSessionFilesDomain(
 			}
 
 			try {
-				await loadAll(tree, controller.signal);
+				await loadAll(getTree(), controller.signal);
 				throwIfAborted(controller.signal);
 				expandedPaths = getAllDirectoryPaths(
-					buildTreeFromCache(rootNodes, childrenCache, diffEntriesMap),
+					buildTreeFromCache(
+						getRootNodes(),
+						childrenCache,
+						getDiffEntriesMap(),
+					),
 				);
 			} catch (error) {
 				if (!isAbortError(error)) {
@@ -1031,7 +1058,12 @@ export function createSessionFilesDomain(
 		},
 		rename: async (path, nextName) => {
 			const trimmedName = nextName.trim();
-			if (!args.hasSession() || !path || !trimmedName) {
+			if (
+				!args.canLoadSessionData() ||
+				metadataResource.fetchedAt === null ||
+				!path ||
+				!trimmedName
+			) {
 				return false;
 			}
 			if (hasDirtyBufferAtOrWithinPath(buffers, path)) {
@@ -1080,7 +1112,11 @@ export function createSessionFilesDomain(
 			return true;
 		},
 		remove: async (path) => {
-			if (!args.hasSession() || !path) {
+			if (
+				!args.canLoadSessionData() ||
+				metadataResource.fetchedAt === null ||
+				!path
+			) {
 				return false;
 			}
 			if (hasDirtyBufferAtOrWithinPath(buffers, path)) {

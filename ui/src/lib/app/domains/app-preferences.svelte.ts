@@ -28,10 +28,12 @@ export function createAppPreferencesDomain(
 	let resolvedTheme = $state<ResolvedTheme>("dark");
 	let colorScheme = $state<ThemeColorScheme>("default");
 
-	const availableThemes = $derived.by(() => getAvailableThemes(resolvedTheme));
+	function getCurrentAvailableThemes() {
+		return getAvailableThemes(resolvedTheme);
+	}
 
 	const ensureColorSchemeForMode = () => {
-		if (!availableThemes.some((t) => t.id === colorScheme)) {
+		if (!getCurrentAvailableThemes().some((t) => t.id === colorScheme)) {
 			colorScheme = "default";
 		}
 	};
@@ -73,7 +75,7 @@ export function createAppPreferencesDomain(
 			return colorScheme;
 		},
 		get availableThemes() {
-			return availableThemes;
+			return getCurrentAvailableThemes();
 		},
 		get promptHistory() {
 			return uiStateStore.promptHistory;
@@ -114,7 +116,7 @@ export function createAppPreferencesDomain(
 		},
 		setTheme: (mode) => applyThemeState(mode),
 		setColorScheme: (scheme) => {
-			if (!availableThemes.some((t) => t.id === scheme)) return;
+			if (!getCurrentAvailableThemes().some((t) => t.id === scheme)) return;
 			colorScheme = applyColorScheme(scheme);
 		},
 		toggleTheme: () =>

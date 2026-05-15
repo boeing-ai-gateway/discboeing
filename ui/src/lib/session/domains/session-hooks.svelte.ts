@@ -14,7 +14,7 @@ const HOOK_STATUS_POLL_MS = 5_000;
 
 type CreateSessionHooksDomainArgs = {
 	sessionId: string;
-	hasSession: () => boolean;
+	canLoadSessionData: () => boolean;
 };
 
 export function createSessionHooksDomain(
@@ -25,29 +25,24 @@ export function createSessionHooksDomain(
 	let streamedStatus = $state<HooksStatusResponse | null>(null);
 	const resource = createResource<HooksStatusResponse | null>({
 		owner: "SessionHooks",
-		enabled: () => args.hasSession(),
+		enabled: args.canLoadSessionData,
 		createEmptyValue: () => null,
 		load: async () => {
 			const nextStatus = await api.getHooksState(args.sessionId);
-			loadOutputs(nextStatus.outputs);
-			streamedStatus = null;
+			if (args.canLoadSessionData()) {
+				loadOutputs(nextStatus.outputs);
+				streamedStatus = null;
+			}
 			return nextStatus;
 		},
 	});
 
-	const resolvedHooksData = $derived.by(() => streamedStatus ?? resource.data);
+	function getResolvedHooksData() {
+		return streamedStatus ?? resource.data;
+	}
 
-	$effect(() => {
-		if (args.hasSession()) {
-			return;
-		}
-		streamedStatus = null;
-		outputById = {};
-		rerunningHookIds = [];
-	});
-
-	const status = $derived.by(() => {
-		const baseStatus = toHooksStatus(resolvedHooksData);
+	function getStatus() {
+		const baseStatus = toHooksStatus(getResolvedHooksData());
 		if (rerunningHookIds.length === 0) {
 			return baseStatus;
 		}
@@ -67,14 +62,14 @@ export function createSessionHooksDomain(
 				};
 			}),
 		};
-	});
+	}
 
 	$effect(() => {
 		if (
-			!args.hasSession() ||
+			!args.canLoadSessionData() ||
 			resource.isRefreshing ||
-			(status.pendingHookIds.length === 0 &&
-				!status.hooks.some((hook) => hook.lastResult === "running"))
+			(getStatus().pendingHookIds.length === 0 &&
+				!getStatus().hooks.some((hook) => hook.lastResult === "running"))
 		) {
 			return;
 		}
@@ -103,12 +98,15 @@ export function createSessionHooksDomain(
 	}
 
 	async function applyStatusUpdate(nextStatus: HooksStatusResponse) {
-		if (!args.hasSession()) {
+		if (!args.canLoadSessionData()) {
 			return;
 		}
 		streamedStatus = nextStatus;
 		try {
 			const nextState = await api.getHooksState(args.sessionId);
+			if (!args.canLoadSessionData()) {
+				return;
+			}
 			streamedStatus = nextState;
 			loadOutputs(nextState.outputs);
 		} catch (error) {
@@ -119,7 +117,7 @@ export function createSessionHooksDomain(
 
 	return {
 		get status() {
-			return status;
+			return getStatus();
 		},
 		get outputById() {
 			void resource.data;
@@ -141,7 +139,11 @@ export function createSessionHooksDomain(
 			return resource.fetchedAt;
 		},
 		rerun: (hookId: string) => {
-			if (!args.hasSession() || rerunningHookIds.includes(hookId)) {
+			if (
+				!args.canLoadSessionData() ||
+				rerunningHookIds.includes(hookId) ||
+				!getStatus().hooks.some((hook) => hook.hookId === hookId)
+			) {
 				return;
 			}
 			rerunningHookIds = [...rerunningHookIds, hookId];

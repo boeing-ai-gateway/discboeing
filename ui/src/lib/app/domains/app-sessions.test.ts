@@ -25,21 +25,11 @@ test("app sessions prune stale recent-session entries after a successful session
 	);
 });
 
-test("app sessions exposes the shared session-load predicate", () => {
+test("app sessions does not expose a session-load predicate", () => {
 	const source = readSource();
 
-	assert.match(
-		source,
-		/function shouldLoadSession\(\s*sessionId: string,\s*options\?: \{ includePending\?: boolean \},\s*\): boolean \{/,
-	);
-	assert.match(source, /const session = store\.peek\(sessionId\);/);
-	assert.match(source, /sessionId === currentSelectedSessionId/);
-	assert.match(
-		source,
-		/!!options\?\.includePending && sessionId === pendingSessionId/,
-	);
-	assert.match(source, /!!session && session\.status !== "stopped"/);
-	assert.match(source, /shouldLoadSession,/);
+	assert.doesNotMatch(source, /function shouldLoadSession/);
+	assert.doesNotMatch(source, /shouldLoadSession,/);
 });
 
 test("app sessions does not track a separate materialization state", () => {

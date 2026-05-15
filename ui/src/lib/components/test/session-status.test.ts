@@ -3,11 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import {
-	SessionDisplayStatus,
-	SessionStatus,
-	isSessionTransitioningStatus,
-} from "../../api-constants";
+import { SessionStatus } from "../../api-constants";
+import { isSessionTransitioningStatus } from "../../session/session-status";
 
 const SESSION_STATUS_COMPONENT = path.resolve(
 	import.meta.dirname,
@@ -26,8 +23,10 @@ function readSessionSetupStatusSource() {
 	return readFileSync(SESSION_SETUP_STATUS_COMPONENT, "utf-8");
 }
 
-test("session display status constants include committed", () => {
-	assert.equal(SessionDisplayStatus.COMMITTED, "committed");
+test("session display status type includes committed", () => {
+	const committed =
+		"committed" satisfies import("../../app/thread-status").SessionDisplayStatus;
+	assert.equal(committed, "committed");
 });
 
 test("session transitioning status helper only flags non-resting lifecycle states", () => {

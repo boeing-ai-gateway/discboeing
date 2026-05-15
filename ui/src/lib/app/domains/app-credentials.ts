@@ -26,7 +26,7 @@ import type {
 	OAuthExchangeResponse,
 	OAuthRefreshResponse,
 } from "$lib/api-types";
-import type { CredentialStore } from "$lib/store/credentials.store.svelte";
+import type { CredentialStore } from "$lib/store/credentials.store";
 
 type CreateAppCredentialsDomainArgs = {
 	store: CredentialStore;

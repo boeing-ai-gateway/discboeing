@@ -1,19 +1,17 @@
 import { appendAuthToken, getWsBase } from "$lib/api-config";
 import type {
+	ProjectStreamSocketEventName,
 	ProjectStreamSocketMessage,
 	ProjectStreamSocketRequest,
-	ProjectStreamSubscriptionState,
 } from "$lib/api-types";
-import type {
-	ChatStreamEventListenerBinding,
-	ChatStreamEventName,
-	ChatStreamEventSource,
-} from "$lib/thread/conversation-stream";
 
-const CHAT_STREAM_RECONNECT_DELAY_MS = 1000;
+const PROJECT_STREAM_RECONNECT_DELAY_MS = 1000;
+const PROJECT_STREAM_RETRY_DELAY_MS = 1000;
 const SERVICE_OUTPUT_EVENT_NAME = "message";
 
-type ProjectStreamEventSource<EventName extends string = string> = {
+export type ProjectStreamEventName = ProjectStreamSocketEventName;
+
+export type ProjectStreamEventSource<EventName extends string = string> = {
 	addEventListener: (
 		type: EventName,
 		listener: (event: MessageEvent<string>) => void,
@@ -24,14 +22,21 @@ type ProjectStreamEventSource<EventName extends string = string> = {
 	) => void;
 };
 
+export type ProjectStreamEventListenerBinding<
+	EventName extends string = string,
+> = {
+	type: EventName;
+	listener: (event: MessageEvent<string>) => void;
+};
+
 type BaseSubscription<EventSource> = {
 	eventSource: EventSource;
 	unsubscribe: () => void;
-	resubscribe: () => void;
-	getState: () => ProjectStreamSubscriptionState;
 };
 
-export type ChatStreamSubscription = BaseSubscription<ChatStreamEventSource>;
+export type ProjectStreamSubscription = BaseSubscription<
+	ProjectStreamEventSource<ProjectStreamEventName>
+>;
 export type ServiceOutputSubscription = BaseSubscription<
 	ProjectStreamEventSource<typeof SERVICE_OUTPUT_EVENT_NAME>
 >;
@@ -39,16 +44,16 @@ export type ProjectEventsSubscription = BaseSubscription<
 	ProjectStreamEventSource<string>
 >;
 
-export type ChatStreamManager = {
+export type ProjectStreamManager = {
 	subscribe: (args: {
 		sessionId: string;
 		threadId: string;
 		replay?: boolean;
 		lastEventId?: string;
-		listeners?: ChatStreamEventListenerBinding[];
+		listeners?: ProjectStreamEventListenerBinding<ProjectStreamEventName>[];
 		onOpen?: () => void;
 		onError?: (error: unknown) => void;
-	}) => ChatStreamSubscription;
+	}) => ProjectStreamSubscription;
 	subscribeServiceOutput: (args: {
 		sessionId: string;
 		serviceId: string;
@@ -105,8 +110,7 @@ type StreamConsumer = {
 
 type StreamEntry = {
 	key: string;
-	state: ProjectStreamSubscriptionState;
-	wantsSubscription: boolean;
+	retryTimeoutId: number | null;
 	source: StreamSource;
 	consumers: Map<symbol, StreamConsumer>;
 	subscribeMessage: () => ProjectStreamSocketRequest;
@@ -134,7 +138,7 @@ function matchesEntryMessage(
 	return entry.matchesMessage(message);
 }
 
-export function createChatStreamManager(): ChatStreamManager {
+export function createProjectStreamManager(): ProjectStreamManager {
 	let socket: WebSocket | null = null;
 	let reconnectTimeoutId: number | null = null;
 	let disposed = false;
@@ -159,6 +163,13 @@ export function createChatStreamManager(): ChatStreamManager {
 		}
 	};
 
+	const clearEntryRetry = (entry: StreamEntry) => {
+		if (entry.retryTimeoutId !== null) {
+			window.clearTimeout(entry.retryTimeoutId);
+			entry.retryTimeoutId = null;
+		}
+	};
+
 	const closeSocket = () => {
 		const current = socket;
 		socket = null;
@@ -174,15 +185,37 @@ export function createChatStreamManager(): ChatStreamManager {
 	};
 
 	const sendSubscribe = (entry: StreamEntry) => {
-		entry.wantsSubscription = true;
-		entry.state = "subscribing";
+		clearEntryRetry(entry);
 		console.debug("[WS] Subscribing to project stream", {
 			key: entry.key,
 			message: entry.subscribeMessage(),
 		});
-		if (!send(entry.subscribeMessage())) {
-			entry.state = "idle";
+		send(entry.subscribeMessage());
+	};
+
+	const scheduleEntryRetry = (entry: StreamEntry) => {
+		if (
+			disposed ||
+			typeof window === "undefined" ||
+			entry.retryTimeoutId !== null ||
+			!entries.has(entry.key)
+		) {
+			return;
 		}
+		console.warn("[WS] Project stream error; scheduling retry", {
+			key: entry.key,
+			delayMs: PROJECT_STREAM_RETRY_DELAY_MS,
+		});
+		entry.retryTimeoutId = window.setTimeout(() => {
+			entry.retryTimeoutId = null;
+			if (!entries.has(entry.key)) {
+				return;
+			}
+			ensureSocket();
+			if (socket?.readyState === WebSocket.OPEN) {
+				sendSubscribe(entry);
+			}
+		}, PROJECT_STREAM_RETRY_DELAY_MS);
 	};
 
 	const scheduleReconnect = () => {
@@ -195,17 +228,15 @@ export function createChatStreamManager(): ChatStreamManager {
 			return;
 		}
 		console.warn("[WS] Project stream socket closed; scheduling reconnect", {
-			delayMs: CHAT_STREAM_RECONNECT_DELAY_MS,
+			delayMs: PROJECT_STREAM_RECONNECT_DELAY_MS,
 			entries: [...entries.values()].map((entry) => ({
 				key: entry.key,
-				state: entry.state,
-				wantsSubscription: entry.wantsSubscription,
 			})),
 		});
 		reconnectTimeoutId = window.setTimeout(() => {
 			reconnectTimeoutId = null;
 			ensureSocket();
-		}, CHAT_STREAM_RECONNECT_DELAY_MS);
+		}, PROJECT_STREAM_RECONNECT_DELAY_MS);
 	};
 
 	const handleMessage = (message: ProjectStreamSocketMessage) => {
@@ -218,7 +249,7 @@ export function createChatStreamManager(): ChatStreamManager {
 
 		switch (message.type) {
 			case "subscribed":
-				entry.state = "streaming";
+				clearEntryRetry(entry);
 				console.debug("[WS] Project stream subscribed", {
 					key: entry.key,
 					stream: message.stream,
@@ -230,17 +261,14 @@ export function createChatStreamManager(): ChatStreamManager {
 				return;
 			case "complete":
 			case "unsubscribed":
-				entry.state = "idle";
-				entry.wantsSubscription = false;
-				console.debug("[WS] Project stream became idle", {
+				console.debug("[WS] Project stream ended", {
 					key: entry.key,
 					reason: message.type,
 					stream: message.stream,
 				});
+				removeEntry(entry, { sendUnsubscribe: false });
 				return;
 			case "error":
-				entry.state = "idle";
-				entry.wantsSubscription = false;
 				console.warn("[WS] Project stream error", {
 					key: entry.key,
 					stream: message.stream,
@@ -250,6 +278,7 @@ export function createChatStreamManager(): ChatStreamManager {
 					entry,
 					new Error(message.error || "Failed to process project stream"),
 				);
+				scheduleEntryRetry(entry);
 				return;
 		}
 	};
@@ -275,14 +304,9 @@ export function createChatStreamManager(): ChatStreamManager {
 			console.debug("[WS] Project stream socket opened", {
 				entries: [...entries.values()].map((entry) => ({
 					key: entry.key,
-					state: entry.state,
-					wantsSubscription: entry.wantsSubscription,
 				})),
 			});
 			for (const entry of entries.values()) {
-				if (!entry.wantsSubscription) {
-					continue;
-				}
 				sendSubscribe(entry);
 			}
 		};
@@ -308,13 +332,8 @@ export function createChatStreamManager(): ChatStreamManager {
 			console.warn("[WS] Project stream socket error", {
 				entries: [...entries.values()].map((entry) => ({
 					key: entry.key,
-					state: entry.state,
-					wantsSubscription: entry.wantsSubscription,
 				})),
 			});
-			for (const entry of entries.values()) {
-				entry.state = "idle";
-			}
 		};
 
 		nextSocket.onclose = () => {
@@ -323,15 +342,22 @@ export function createChatStreamManager(): ChatStreamManager {
 			}
 			socket = null;
 			for (const entry of entries.values()) {
-				entry.state = "idle";
+				notifyError(entry, new Error("Lost project stream connection"));
 			}
 			scheduleReconnect();
 		};
 	};
 
-	const removeEntry = (entry: StreamEntry) => {
+	const removeEntry = (
+		entry: StreamEntry,
+		options: { sendUnsubscribe?: boolean } = {},
+	) => {
+		clearEntryRetry(entry);
 		entries.delete(entry.key);
-		if (socket?.readyState === WebSocket.OPEN) {
+		if (
+			options.sendUnsubscribe !== false &&
+			socket?.readyState === WebSocket.OPEN
+		) {
 			send(entry.unsubscribeMessage());
 		}
 		if (entries.size === 0) {
@@ -350,6 +376,7 @@ export function createChatStreamManager(): ChatStreamManager {
 			listener: (event: MessageEvent<string>) => void;
 		}>,
 	): BaseSubscription<ProjectStreamEventSource> => {
+		const wasSubscribed = entries.has(key);
 		const entry = getOrCreateEntry();
 		for (const binding of listenerBindings ?? []) {
 			entry.source.addEventListener(binding.type, binding.listener);
@@ -357,7 +384,7 @@ export function createChatStreamManager(): ChatStreamManager {
 		const consumerId = Symbol(key);
 		entry.consumers.set(consumerId, { onOpen, onError });
 		ensureSocket();
-		if (entry.state === "idle" && socket?.readyState === WebSocket.OPEN) {
+		if (!wasSubscribed && socket?.readyState === WebSocket.OPEN) {
 			sendSubscribe(entry);
 		}
 
@@ -379,22 +406,6 @@ export function createChatStreamManager(): ChatStreamManager {
 					removeEntry(currentEntry);
 				}
 			},
-			resubscribe: () => {
-				const currentEntry = entries.get(key);
-				if (!currentEntry) {
-					return;
-				}
-				currentEntry.wantsSubscription = true;
-				console.debug("[WS] Project stream resubscribe requested", {
-					key: currentEntry.key,
-					state: currentEntry.state,
-				});
-				ensureSocket();
-				if (socket?.readyState === WebSocket.OPEN) {
-					sendSubscribe(currentEntry);
-				}
-			},
-			getState: () => entries.get(key)?.state ?? "idle",
 		};
 	};
 
@@ -414,11 +425,10 @@ export function createChatStreamManager(): ChatStreamManager {
 				() => {
 					let entry = entries.get(key);
 					if (!entry) {
-						const source = new StreamSource<ChatStreamEventName>();
+						const source = new StreamSource<ProjectStreamEventName>();
 						entry = {
 							key,
-							state: "idle",
-							wantsSubscription: true,
+							retryTimeoutId: null,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
@@ -441,7 +451,7 @@ export function createChatStreamManager(): ChatStreamManager {
 								}
 								if (message.event && typeof message.data === "string") {
 									source.dispatch(
-										message.event as ChatStreamEventName,
+										message.event as ProjectStreamEventName,
 										message.data,
 									);
 								}
@@ -467,7 +477,7 @@ export function createChatStreamManager(): ChatStreamManager {
 				onOpen,
 				onError,
 				listeners,
-			) as unknown as ChatStreamSubscription;
+			) as unknown as ProjectStreamSubscription;
 		},
 		subscribeServiceOutput: ({ sessionId, serviceId, onOpen, onError }) => {
 			const key = serviceEntryKey(sessionId, serviceId);
@@ -479,8 +489,7 @@ export function createChatStreamManager(): ChatStreamManager {
 						const source = new StreamSource<typeof SERVICE_OUTPUT_EVENT_NAME>();
 						entry = {
 							key,
-							state: "idle",
-							wantsSubscription: true,
+							retryTimeoutId: null,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
@@ -523,8 +532,7 @@ export function createChatStreamManager(): ChatStreamManager {
 						const source = new StreamSource<string>();
 						entry = {
 							key,
-							state: "idle",
-							wantsSubscription: true,
+							retryTimeoutId: null,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
@@ -537,9 +545,6 @@ export function createChatStreamManager(): ChatStreamManager {
 								stream: "project-events",
 							}),
 							handleEvent: (message) => {
-								if (message.id) {
-									afterId = message.id;
-								}
 								if (message.event && typeof message.data === "string") {
 									source.dispatch(message.event, message.data);
 								}
@@ -563,6 +568,9 @@ export function createChatStreamManager(): ChatStreamManager {
 		dispose: () => {
 			disposed = true;
 			clearReconnectTimeout();
+			for (const entry of entries.values()) {
+				clearEntryRetry(entry);
+			}
 			entries.clear();
 			closeSocket();
 		},

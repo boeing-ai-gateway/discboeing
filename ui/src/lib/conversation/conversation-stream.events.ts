@@ -6,6 +6,11 @@ import type {
 	ChatMessageDataTypes,
 	ChatMessageMetadata,
 } from "$lib/api-types";
+import type {
+	ProjectStreamEventListenerBinding,
+	ProjectStreamEventName,
+	ProjectStreamEventSource,
+} from "$lib/project/project-stream-manager";
 
 export type ChatStreamEvent =
 	| {
@@ -28,19 +33,6 @@ export type ChatStreamEvent =
 			event: "ping";
 			data: string;
 	  };
-
-export type ChatStreamEventName = ChatStreamEvent["event"];
-
-export type ChatStreamEventSource = {
-	addEventListener: (
-		type: ChatStreamEventName,
-		listener: (event: MessageEvent<string>) => void,
-	) => void;
-	removeEventListener: (
-		type: ChatStreamEventName,
-		listener: (event: MessageEvent<string>) => void,
-	) => void;
-};
 
 export type ChatStreamEventSourceOptions = {
 	onError?: (error: unknown) => void;
@@ -178,17 +170,12 @@ export async function parseChatStreamChunk(
 	return validation.value as ChatStreamChunk;
 }
 
-export type ChatStreamEventListenerBinding = {
-	type: ChatStreamEventName;
-	listener: (event: MessageEvent<string>) => void;
-};
-
 export function createChatStreamEventListeners(
 	streamState: {
 		handleStreamEvent: (event: ChatStreamEvent) => Promise<unknown>;
 	},
 	options: ChatStreamEventSourceOptions = {},
-): ChatStreamEventListenerBinding[] {
+): ProjectStreamEventListenerBinding<ProjectStreamEventName>[] {
 	const handleError = (error: unknown) => {
 		if (options.onError) {
 			options.onError(error);
@@ -237,7 +224,7 @@ export function createChatStreamEventListeners(
 }
 
 export function bindChatStreamEventSource(
-	eventSource: ChatStreamEventSource,
+	eventSource: ProjectStreamEventSource<ProjectStreamEventName>,
 	streamState: {
 		handleStreamEvent: (event: ChatStreamEvent) => Promise<unknown>;
 	},

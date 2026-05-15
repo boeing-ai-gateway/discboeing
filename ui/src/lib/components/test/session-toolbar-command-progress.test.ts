@@ -161,10 +161,7 @@ test("session commands only track submit-in-flight state locally", () => {
 test("session context no longer wires thread activity into command progress tracking", () => {
 	const source = readSessionContextSource();
 
-	assert.match(
-		source,
-		/getSelectedThreadId: \(\) => threads\.selectedId \?\? sessionId,/,
-	);
+	assert.match(source, /getSelectedThreadId: \(\) => threads\.selectedId,/);
 	assert.match(source, /submit,/);
 	assert.doesNotMatch(source, /getThreadActivity:/);
 });

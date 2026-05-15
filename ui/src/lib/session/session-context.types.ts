@@ -18,13 +18,8 @@ import type {
 	Thread,
 	UpdateQueuedPromptRequest,
 } from "$lib/api-types";
-import type { ThreadStore } from "$lib/store/threads.store.svelte";
 import type { SessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 import type { AsyncStatus } from "$lib/resource/types";
-
-export type SessionStores = {
-	threads: ThreadStore;
-};
 
 export type HookOutputState = {
 	output: string;
@@ -78,8 +73,10 @@ export type SessionHooksService = {
 export type SessionThreadsService = {
 	list: Thread[];
 	status: AsyncStatus;
-	selectedId: string | null;
+	selectedId: string;
 	selected: Thread | null;
+	get: (threadId: string) => Thread | null;
+	upsert: (thread: Thread) => void;
 	refresh: () => Promise<void>;
 	select: (threadId: string | null) => void;
 	create: (name?: string) => Promise<string | null>;
@@ -228,10 +225,7 @@ export type SessionConversationDomain = {
 	status: AsyncStatus;
 	isStreaming: boolean;
 	error: string | null;
-	hasPendingQuestion: boolean;
-	pendingQuestionId: string | null;
 	cancel: () => Promise<void>;
-	refresh: () => Promise<void>;
 };
 
 export type ThreadSubmitResult = {
@@ -246,8 +240,7 @@ export type SubmitPromptOptions = {
 
 export type SubmitPromptResult = StartChatResponse | ThreadSubmitResult | void;
 
-export type ConversationComment = {
-	id: string;
+export type SelectionComment = {
 	snippet: string;
 	comment: string;
 };
@@ -272,11 +265,6 @@ export type ThreadContextValue = {
 	isStreaming: boolean;
 	error: string | null;
 	hasPendingQuestion: boolean;
-	pendingQuestionId: string | null;
-	pendingComments: ConversationComment[];
-	addPendingComment: (comment: Omit<ConversationComment, "id">) => void;
-	removePendingComment: (id: string) => void;
-	clearPendingComments: () => void;
 	clearComposerDraft: (storageKey?: string) => void;
 	submit: (payload: {
 		parts: ChatMessage["parts"];
@@ -284,12 +272,10 @@ export type ThreadContextValue = {
 		providerId?: string;
 		workspaceType?: "local" | "git" | null;
 		workspacePath?: string | null;
-		allowEmptyPendingMessage?: boolean;
 		runAfter?: string;
 	}) => Promise<ThreadSubmitResult | void>;
 	cancel: () => Promise<void>;
-	connect: () => Promise<void>;
-	disconnect: () => void;
+	start: () => Promise<void>;
 	refresh: () => Promise<void>;
 	addToolApprovalResponse: (payload: {
 		id: string;
@@ -302,8 +288,6 @@ export type ThreadContextValue = {
 		payload: UpdateQueuedPromptRequest,
 	) => Promise<void>;
 	dispose: () => void;
-	editorFiles: string[];
-	fileContents: Record<string, string>;
 };
 
 export type SessionContextValue = {
@@ -312,7 +296,6 @@ export type SessionContextValue = {
 	current: Session | null;
 	dispose: () => void;
 	ensureThread: (threadId: string) => ThreadContextValue;
-	stores: SessionStores;
 	ui: SessionViewState;
 	threads: SessionThreadsService;
 	hooks: SessionHooksService;

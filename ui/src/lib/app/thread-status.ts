@@ -1,12 +1,19 @@
 import { CommitOperation, CommitStatus } from "../api-constants";
 import type {
 	Session,
-	SessionDisplayStatus,
 	SessionThreadStatus,
 	Thread,
 	ThreadActivityStatus,
 } from "../api-types";
 import type { ThreadContextValue } from "$lib/session/session-context.types";
+
+export type SessionDisplayStatus =
+	| NonNullable<Session["sandboxStatus"]>
+	| SessionThreadStatus["status"]
+	| "pending"
+	| "committing"
+	| "completed"
+	| "committed";
 
 export function isThreadSnapshotRunning(
 	thread: Partial<Thread> | null | undefined,

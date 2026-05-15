@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
-	import XIcon from "@lucide/svelte/icons/x";
 	import { onDestroy, onMount, tick } from "svelte";
 	import { api } from "$lib/api-client";
 	import { InputGroup, InputGroupAddon } from "$lib/components/ui/input-group";
@@ -49,20 +48,14 @@
 		SandboxProviderInstance,
 		UpdateQueuedPromptRequest,
 	} from "$lib/api-types";
-	import type { ConversationComment } from "$lib/session/session-context.types";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import {
-		normalizeThreadComposerReasoning,
-		normalizeThreadComposerServiceTier,
-		parseComposerModelSelection,
-		useThreadContext,
-	} from "$lib/context/thread-context.svelte";
+	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import {
 		buildUserMessageParts,
 		createUserMessageAttachment,
-		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
+	import { normalizeThreadComposerReasoning } from "$lib/thread/domains/thread-composer.svelte";
 
 	type Props = {
 		onContainerChange?: (element: HTMLDivElement | null) => void;
@@ -163,15 +156,14 @@
 		model: ModelInfo | null,
 		serviceTier: string | undefined,
 	): string | undefined {
-		const normalizedTier = normalizeThreadComposerServiceTier(serviceTier);
-		if (!normalizedTier) {
+		if (!serviceTier) {
 			return undefined;
 		}
 		const serviceTiers = model?.serviceTiers ?? [];
 		return serviceTiers.some(
-			(tier) => tier.toLowerCase() === normalizedTier.toLowerCase(),
+			(tier) => tier.toLowerCase() === serviceTier.toLowerCase(),
 		)
-			? normalizedTier
+			? serviceTier
 			: undefined;
 	}
 
@@ -273,9 +265,10 @@
 	}
 
 	function handleModelSelect(nextSelection: string | null) {
-		const parsedSelection = parseComposerModelSelection(nextSelection);
+		const nextModelId =
+			nextSelection && nextSelection.length > 0 ? nextSelection : null;
 		const nextModel = findModelById(
-			(parsedSelection.modelId ?? preferences.defaultModel) || null,
+			(nextModelId ?? preferences.defaultModel) || null,
 		);
 		const nextReasoning = getNextReasoningForModel(
 			nextModel,
@@ -288,7 +281,7 @@
 			thread.serviceTier,
 		);
 
-		if (parsedSelection.modelId === thread.modelId) {
+		if (nextModelId === thread.modelId) {
 			thread.setNextModelId(undefined);
 			thread.setNextReasoning(
 				isSameReasoningSelection(nextReasoning, thread.reasoning)
@@ -303,7 +296,7 @@
 			return;
 		}
 
-		thread.setNextModelId(parsedSelection.modelId);
+		thread.setNextModelId(nextModelId);
 		thread.setNextReasoning(nextReasoning);
 		thread.setNextServiceTier(nextServiceTier);
 	}
@@ -366,10 +359,7 @@
 	}
 
 	function inputEmpty() {
-		return (
-			sessionView.composerDraft.trim().length === 0 &&
-			thread.pendingComments.length === 0
-		);
+		return sessionView.composerDraft.trim().length === 0;
 	}
 
 	function addFiles(files: File[] | FileList) {
@@ -418,12 +408,6 @@
 			attachmentFiles.map(({ file }) => createUserMessageAttachment(file)),
 		);
 		return buildUserMessageParts(text, attachments);
-	}
-
-	function buildSubmitText(draft: string, comments: ConversationComment[]) {
-		const text = draft.trim();
-		const commentText = formatConversationComments(comments);
-		return [text, commentText].filter(Boolean).join("\n\n");
 	}
 
 	async function focusComposerTextarea() {
@@ -602,9 +586,6 @@
 		if (composerDisabled && !forceEmptyPendingMessage) {
 			return false;
 		}
-		const submitComments = forceEmptyPendingMessage
-			? []
-			: thread.pendingComments;
 		const emptyWithoutAttachments =
 			inputEmpty() && attachmentFiles.length === 0;
 		if (isGenerating() && emptyWithoutAttachments) {
@@ -621,18 +602,10 @@
 		pendingSubmitError = null;
 		const wasPending = session.isPending;
 		const currentDraft = sessionView.composerDraft;
-		const nextMessageText = forceEmptyPendingMessage
-			? ""
-			: buildSubmitText(currentDraft, submitComments);
-		const shouldAllowEmptyPendingMessage =
-			wasPending &&
-			(forceEmptyPendingMessage ||
-				(attachmentFiles.length === 0 && nextMessageText.length === 0));
+		const nextMessageText = forceEmptyPendingMessage ? "" : currentDraft.trim();
 		const nextMessageParts = forceEmptyPendingMessage
 			? []
-			: shouldAllowEmptyPendingMessage
-				? []
-				: await createMessageParts(nextMessageText);
+			: await createMessageParts(nextMessageText);
 		const nextRunAfter =
 			!forceEmptyPendingMessage && scheduledRunAfter
 				? scheduledRunAfter
@@ -654,7 +627,6 @@
 		try {
 			const result = await thread.submit({
 				parts: nextMessageParts,
-				allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
 				...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
 				...pendingSubmitOptions,
 			});
@@ -667,7 +639,6 @@
 			}
 			if (!preserveDraft) {
 				thread.clearNextComposerValues();
-				thread.clearPendingComments();
 				scheduledRunAfter = null;
 				schedulePopoverOpen = false;
 				composerTextareaRef?.closeMentionDropdown();
@@ -785,47 +756,6 @@
 
 		{#if pendingSubmitError}
 			<div class="mb-2 text-sm text-destructive">{pendingSubmitError}</div>
-		{/if}
-		{#if thread.pendingComments.length > 0}
-			<div
-				class="mb-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm shadow-sm dark:border-amber-400/30 dark:bg-amber-950/20"
-			>
-				<div class="mb-2 font-medium text-foreground">
-					{thread.pendingComments.length}
-					{thread.pendingComments.length === 1 ? "comment" : "comments"} ready to
-					submit
-				</div>
-				<div class="space-y-2">
-					{#each thread.pendingComments as comment (comment.id)}
-						<div
-							class="rounded-lg border border-border/70 bg-background/80 p-2 text-xs"
-						>
-							<div class="flex items-start gap-2">
-								<div class="min-w-0 flex-1 space-y-1">
-									<div
-										class="line-clamp-2 border-muted-foreground/30 border-l-2 pl-2 text-muted-foreground italic"
-									>
-										{comment.snippet}
-									</div>
-									<div class="whitespace-pre-wrap text-foreground">
-										{comment.comment}
-									</div>
-								</div>
-								<Button
-									aria-label="Remove comment"
-									class="size-6 shrink-0"
-									onclick={() => thread.removePendingComment(comment.id)}
-									size="icon-xs"
-									type="button"
-									variant="ghost"
-								>
-									<XIcon class="size-3.5" />
-								</Button>
-							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
 		{/if}
 		{#if session.isPending && sandboxProvidersError}
 			<div class="mb-2 text-sm text-destructive">{sandboxProvidersError}</div>

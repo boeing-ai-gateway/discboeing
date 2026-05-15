@@ -2,37 +2,19 @@ import { getContext, hasContext, setContext } from "svelte";
 
 import { api } from "$lib/api-client";
 import { isThreadSnapshotRunning } from "$lib/app/thread-status";
-import {
-	canLoadSessionThreads,
-	isSessionTransitioningStatus,
-	SessionStatus,
-} from "$lib/api-constants";
-import type { Thread, ThreadActivityStatus } from "$lib/api-types";
-import {
-	clearComposerDraft,
-	readComposerDraft,
-	resolveComposerDraftStorageKey,
-	writeComposerDraft,
-} from "$lib/composer-draft-storage";
-import {
-	clearConversationComments,
-	readConversationComments,
-	resolveConversationCommentsStorageKey,
-	serializeConversationComments,
-	writeConversationComments,
-} from "$lib/conversation-comment-storage";
+import type { Thread } from "$lib/api-types";
+import { isSessionTransitioningStatus } from "$lib/session/session-status";
 import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
-import { createConversationDomain } from "$lib/thread/conversation.svelte";
-import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
+import { createConversationDomain } from "$lib/conversation/conversation.svelte";
+import { addToolApprovalResponse } from "$lib/session/domains/session-domain.helpers";
+import { createThreadComposerState } from "$lib/thread/domains/thread-composer.svelte";
+import { createThreadPendingQuestionState } from "$lib/thread/domains/thread-pending-question.svelte";
 import type {
-	ConversationComment,
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
 
 const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
-const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
-const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
 export function getThreadIsStreaming(
 	thread: Thread | null,
@@ -41,109 +23,8 @@ export function getThreadIsStreaming(
 	return isStreaming || isThreadSnapshotRunning(thread);
 }
 
-export function getThreadConversationStatus(
-	status: ThreadContextValue["status"],
-): ThreadContextValue["status"] {
-	return status;
-}
-
-export function normalizeThreadComposerReasoning(
-	reasoning: string | null | undefined,
-): string | undefined {
-	return reasoning && reasoning.length > 0 ? reasoning : undefined;
-}
-
-export function normalizeThreadComposerServiceTier(
-	serviceTier: string | null | undefined,
-): string | undefined {
-	const normalized = serviceTier?.trim().toLowerCase();
-	if (!normalized) {
-		return undefined;
-	}
-	return normalized === "fast" ? "priority" : normalized;
-}
-
-export function parseComposerModelSelection(
-	modelId: string | null | undefined,
-): { modelId: string | null } {
-	return {
-		modelId: modelId && modelId.length > 0 ? modelId : null,
-	};
-}
-
-export function getThreadComposerValues(
-	thread: Thread | null,
-	defaultModel: string | null,
-): {
-	modelId: string | null;
-	reasoning: string | undefined;
-	serviceTier: string | undefined;
-} {
-	return {
-		modelId: thread?.model ?? defaultModel,
-		reasoning: normalizeThreadComposerReasoning(thread?.reasoning),
-		serviceTier: normalizeThreadComposerServiceTier(thread?.serviceTier),
-	};
-}
-
-export function getThreadComposerValuesKey(values: {
-	modelId: string | null;
-	reasoning: string | undefined;
-	serviceTier: string | undefined;
-}): string {
-	return JSON.stringify(values);
-}
-
-export function resolveThreadComposerSubmitValues({
-	modelId,
-	reasoning,
-	serviceTier,
-	nextModelId,
-	nextReasoning,
-	nextServiceTier,
-}: {
-	modelId: string | null;
-	reasoning: string | undefined;
-	serviceTier: string | undefined;
-	nextModelId: string | null | undefined;
-	nextReasoning: string | undefined;
-	nextServiceTier: string | null | undefined;
-}): {
-	modelId: string | null;
-	reasoning: string | undefined;
-	serviceTier: string | undefined;
-} {
-	const resolvedModelId = nextModelId !== undefined ? nextModelId : modelId;
-	return {
-		modelId: resolvedModelId,
-		reasoning: resolvedModelId
-			? normalizeThreadComposerReasoning(nextReasoning ?? reasoning)
-			: undefined,
-		serviceTier: resolvedModelId
-			? normalizeThreadComposerServiceTier(
-					nextServiceTier !== undefined ? nextServiceTier : serviceTier,
-				)
-			: undefined,
-	};
-}
-
-export function clearComposerDraftState({
-	cancelPersist,
-	clearStoredDraft,
-	clearInMemoryDraft,
-}: {
-	cancelPersist: () => void;
-	clearStoredDraft: () => void;
-	clearInMemoryDraft: () => void;
-}): void {
-	cancelPersist();
-	clearStoredDraft();
-	clearInMemoryDraft();
-}
-
 export function applyStreamedThreadUpdate({
 	sessionId,
-	sessionName,
 	sessionDisplayName,
 	previousThreadName,
 	thread,
@@ -152,7 +33,6 @@ export function applyStreamedThreadUpdate({
 	reloadSession,
 }: {
 	sessionId: string;
-	sessionName: string;
 	sessionDisplayName?: string | null;
 	previousThreadName?: string | null;
 	thread: Thread;
@@ -160,7 +40,6 @@ export function applyStreamedThreadUpdate({
 	syncSessionName: (name: string) => void;
 	reloadSession: () => void | Promise<void>;
 }): void {
-	void sessionName;
 	upsertThread(thread);
 
 	if (
@@ -182,285 +61,87 @@ export function createThreadContext(
 	session: SessionContextValue,
 	threadId: string,
 ): ThreadContextValue {
-	const hasSession = $derived.by(() =>
-		canLoadSessionThreads(session.current?.sandboxStatus),
-	);
-	const retryScheduler = createRetryScheduler({
-		owner: "ThreadContext",
-		enabled: () => hasSession,
-		retry: { mode: "background" },
-	});
-	const shouldIgnoreClosedStreamError = () => {
-		switch (session.current?.sandboxStatus) {
-			case SessionStatus.INITIALIZING:
-			case SessionStatus.REINITIALIZING:
-			case SessionStatus.CLONING:
-			case SessionStatus.PULLING_IMAGE:
-			case SessionStatus.CREATING_SANDBOX:
-			case SessionStatus.REMOVING:
-				return true;
-			default:
-				return false;
-		}
-	};
 	const refreshSessionState = async () => {
-		if (!hasSession) {
-			return;
-		}
 		session.services.invalidate();
 		session.hooks.invalidate();
 		await Promise.all([
-			retryScheduler.run("files", () => session.files.refresh()),
-			retryScheduler.run("session", () =>
-				app.sessions.reloadSession(session.sessionId),
-			),
+			session.files.refresh().catch(() => {}),
+			app.sessions.reloadSession(session.sessionId),
 		]);
 	};
-	const applyLocalActivityStatus = (
-		activityStatus: ThreadActivityStatus | null,
-	) => {
-		const currentThread = session.stores.threads.get(threadId);
-		if (!currentThread) {
-			return;
-		}
-		session.stores.threads.upsert({
-			...currentThread,
-			activityStatus: activityStatus ?? undefined,
+	const createConversation = () =>
+		createConversationDomain({
+			sessionId: session.sessionId,
+			threadId,
+			startChat,
+			projectStreams: app.projectStreams,
+			refreshThread: async () => {
+				await session.threads.refreshThread(threadId);
+			},
+			applyThreadUpdate: (thread) => {
+				const previousThread = session.threads.get(thread.id);
+				applyStreamedThreadUpdate({
+					sessionId: session.sessionId,
+					sessionDisplayName: session.current?.displayName ?? null,
+					previousThreadName: previousThread?.name ?? null,
+					thread,
+					upsertThread: (nextThread) => {
+						session.threads.upsert(nextThread);
+					},
+					syncSessionName: (name) => {
+						const currentSession = session.current;
+						if (!currentSession || currentSession.displayName) {
+							return;
+						}
+						app.stores.sessions.upsert({
+							...currentSession,
+							name,
+						});
+					},
+					reloadSession: () => app.sessions.reloadSession(session.sessionId),
+				});
+			},
+			applyHooksStatusUpdate: (status) => {
+				return session.hooks.applyStatusUpdate(status);
+			},
+			refreshSessionState,
+			afterTurn: async () => {
+				await session.threads.refreshThread(threadId);
+				await refreshSessionState();
+			},
 		});
-	};
-
-	const conversation = createConversationDomain({
-		sessionId: session.sessionId,
-		hasSession: () => hasSession,
-		threadId,
-		startChat,
-		chatStreams: app.chatStreams,
-		refreshThread: async () => {
-			await session.threads.refreshThread(threadId);
-			const refreshedThread = session.stores.threads.get(threadId);
-			if (refreshedThread) {
-				conversation.reconcileThreadSnapshot(refreshedThread);
-			}
-		},
-		applyThreadUpdate: (thread) => {
-			const previousThread = session.stores.threads.get(thread.id);
-			applyStreamedThreadUpdate({
-				sessionId: session.sessionId,
-				sessionName:
-					session.current?.displayName ||
-					session.current?.name ||
-					"New Session",
-				sessionDisplayName: session.current?.displayName ?? null,
-				previousThreadName: previousThread?.name ?? null,
-				thread,
-				upsertThread: (nextThread) => {
-					session.stores.threads.upsert(nextThread);
-				},
-				syncSessionName: (name) => {
-					const currentSession = session.current;
-					if (!currentSession || currentSession.displayName) {
-						return;
-					}
-					app.stores.sessions.upsert({
-						...currentSession,
-						name,
-					});
-				},
-				reloadSession: () => app.sessions.reloadSession(session.sessionId),
-			});
-			if (thread.id === threadId) {
-				conversation.reconcileThreadSnapshot(thread);
-			}
-		},
-		applyHooksStatusUpdate: (status) => {
-			return session.hooks.applyStatusUpdate(status);
-		},
-		refreshSessionState,
-		shouldIgnoreClosedStreamError,
-		onActivityStatusChange: applyLocalActivityStatus,
-		afterTurn: async () => {
-			if (!hasSession) {
-				return;
-			}
-			await session.threads.refreshThread(threadId);
-			await refreshSessionState();
-		},
-	});
-
-	$effect(() => {
-		if (hasSession) {
-			return;
-		}
-		retryScheduler.dispose();
-		conversation.disconnect();
-	});
+	let conversation = $state(createConversation());
+	let conversationStarted = $state(false);
 
 	function getThread() {
-		return (
-			session.threads.list.find((thread) => thread.id === threadId) ?? null
-		);
+		return session.threads.get(threadId);
 	}
 
-	const sourceComposerValues = $derived.by(() =>
-		getThreadComposerValues(getThread(), app.preferences.defaultModel || null),
-	);
-	const initialComposerValues = getThreadComposerValues(
-		getThread(),
-		app.preferences.defaultModel || null,
-	);
-	let sourceComposerValuesKey = $state(
-		getThreadComposerValuesKey(initialComposerValues),
-	);
-	let modelId = $state<string | null>(initialComposerValues.modelId);
-	let reasoning = $state<string | undefined>(initialComposerValues.reasoning);
-	let serviceTier = $state<string | undefined>(
-		initialComposerValues.serviceTier,
-	);
-	let nextModelId = $state<string | null | undefined>(undefined);
-	let nextReasoning = $state<string | undefined>(undefined);
-	let nextServiceTier = $state<string | null | undefined>(undefined);
-	let loadedComposerDraftStorageKey = $state<string | null>(null);
-	let lastStoredComposerDraft = $state("");
-	let pendingComments = $state<ConversationComment[]>([]);
-	let loadedPendingCommentsStorageKey = $state<string | null>(null);
-	let lastStoredPendingComments = $state("");
-	let composerDraftPersistTimer: ReturnType<typeof setTimeout> | null = null;
-	let pendingCommentsPersistTimer: ReturnType<typeof setTimeout> | null = null;
-
-	$effect(() => {
-		const nextSourceComposerValues = sourceComposerValues;
-		const nextSourceComposerValuesKey = getThreadComposerValuesKey(
-			nextSourceComposerValues,
-		);
-		if (nextSourceComposerValuesKey === sourceComposerValuesKey) {
-			return;
-		}
-		sourceComposerValuesKey = nextSourceComposerValuesKey;
-		modelId = nextSourceComposerValues.modelId;
-		reasoning = nextSourceComposerValues.reasoning;
-		serviceTier = nextSourceComposerValues.serviceTier;
+	const composer = createThreadComposerState({
+		sessionId: session.sessionId,
+		threadId,
+		isPending: () => session.isPending,
+		getThread,
+		getDefaultModel: () => app.preferences.defaultModel || null,
+		getDraft: () => session.ui.composerDraft,
+		setDraft: session.ui.setComposerDraft,
+	});
+	const pendingQuestion = createThreadPendingQuestionState({
+		getMessages: () => conversation.messages,
 	});
 
-	const composerDraftStorageKey = $derived.by(() =>
-		resolveComposerDraftStorageKey({
-			isPending: session.isPending,
-			threadId,
-			sessionId: session.sessionId,
-		}),
-	);
-	const pendingCommentsStorageKey = $derived.by(() =>
-		resolveConversationCommentsStorageKey({
-			isPending: session.isPending,
-			threadId,
-			sessionId: session.sessionId,
-		}),
-	);
-
-	$effect(() => {
-		const storageKey = composerDraftStorageKey;
-		if (loadedComposerDraftStorageKey !== storageKey) {
-			loadedComposerDraftStorageKey = storageKey;
-			lastStoredComposerDraft = readComposerDraft(storageKey);
-			if (session.ui.composerDraft !== lastStoredComposerDraft) {
-				session.ui.setComposerDraft(lastStoredComposerDraft);
-			}
-			return;
-		}
-
-		const draft = session.ui.composerDraft;
-		if (draft === lastStoredComposerDraft) {
-			return;
-		}
-
-		if (composerDraftPersistTimer !== null) {
-			clearTimeout(composerDraftPersistTimer);
-		}
-
-		composerDraftPersistTimer = setTimeout(() => {
-			writeComposerDraft(storageKey, draft);
-			lastStoredComposerDraft = draft;
-			composerDraftPersistTimer = null;
-		}, COMPOSER_DRAFT_PERSIST_DELAY_MS);
-
-		return () => {
-			if (composerDraftPersistTimer !== null) {
-				clearTimeout(composerDraftPersistTimer);
-				composerDraftPersistTimer = null;
-			}
-		};
-	});
-
-	const clearStoredComposerDraft = (storageKey = composerDraftStorageKey) => {
-		clearComposerDraftState({
-			cancelPersist: () => {
-				if (composerDraftPersistTimer !== null) {
-					clearTimeout(composerDraftPersistTimer);
-					composerDraftPersistTimer = null;
-				}
-			},
-			clearStoredDraft: () => {
-				clearComposerDraft(storageKey);
-				if (storageKey === composerDraftStorageKey) {
-					lastStoredComposerDraft = "";
-				}
-			},
-			clearInMemoryDraft: () => {
-				session.ui.setComposerDraft("");
-			},
-		});
+	const start = () => {
+		conversationStarted = true;
+		return conversation.connect();
 	};
 
-	$effect(() => {
-		const storageKey = pendingCommentsStorageKey;
-		if (loadedPendingCommentsStorageKey !== storageKey) {
-			loadedPendingCommentsStorageKey = storageKey;
-			pendingComments = readConversationComments(storageKey);
-			lastStoredPendingComments =
-				serializeConversationComments(pendingComments);
-			return;
+	const refreshAfterSubmitError = () => {
+		conversation.dispose();
+		conversation = createConversation();
+		if (!conversationStarted) {
+			return Promise.resolve();
 		}
-
-		const serializedComments = serializeConversationComments(pendingComments);
-		if (serializedComments === lastStoredPendingComments) {
-			return;
-		}
-
-		if (pendingCommentsPersistTimer !== null) {
-			clearTimeout(pendingCommentsPersistTimer);
-		}
-
-		pendingCommentsPersistTimer = setTimeout(() => {
-			writeConversationComments(storageKey, pendingComments);
-			lastStoredPendingComments = serializedComments;
-			pendingCommentsPersistTimer = null;
-		}, PENDING_COMMENTS_PERSIST_DELAY_MS);
-
-		return () => {
-			if (pendingCommentsPersistTimer !== null) {
-				clearTimeout(pendingCommentsPersistTimer);
-				pendingCommentsPersistTimer = null;
-			}
-		};
-	});
-
-	const clearStoredPendingComments = (
-		storageKey = pendingCommentsStorageKey,
-	) => {
-		if (pendingCommentsPersistTimer !== null) {
-			clearTimeout(pendingCommentsPersistTimer);
-			pendingCommentsPersistTimer = null;
-		}
-		clearConversationComments(storageKey);
-		if (storageKey === pendingCommentsStorageKey) {
-			lastStoredPendingComments = "[]";
-			pendingComments = [];
-		}
-	};
-
-	const clearNextComposerValues = () => {
-		nextModelId = undefined;
-		nextReasoning = undefined;
-		nextServiceTier = undefined;
+		return conversation.connect();
 	};
 
 	const submit: ThreadContextValue["submit"] = async ({
@@ -469,33 +150,33 @@ export function createThreadContext(
 		providerId,
 		workspaceType,
 		workspacePath,
-		allowEmptyPendingMessage,
 		runAfter,
 	}) => {
-		const submitValues = resolveThreadComposerSubmitValues({
-			modelId,
-			reasoning,
-			serviceTier,
-			nextModelId,
-			nextReasoning,
-			nextServiceTier,
-		});
-		const result = await conversation.submit({
-			parts,
-			modelId: submitValues.modelId,
-			reasoning: submitValues.reasoning,
-			serviceTier: submitValues.serviceTier,
-			workspaceId,
-			providerId,
-			workspaceType,
-			workspacePath,
-			allowEmptyPendingMessage,
-			runAfter,
-		});
+		const submitValues = composer.resolveSubmitValues();
+		pendingQuestion.clearSubmitError();
+		let result: Awaited<ReturnType<ThreadContextValue["submit"]>>;
+		try {
+			result = await conversation.submit({
+				parts,
+				modelId: submitValues.modelId,
+				reasoning: submitValues.reasoning,
+				serviceTier: submitValues.serviceTier,
+				workspaceId,
+				providerId,
+				workspaceType,
+				workspacePath,
+				runAfter,
+			});
+		} catch (error) {
+			pendingQuestion.applySubmitError(error);
+			void refreshAfterSubmitError();
+			throw error;
+		}
 		if (result) {
-			const submittedThread = session.threads.list.find(
-				(thread) => thread.id === result.threadId,
-			);
+			const submittedThread =
+				result.threadId === threadId
+					? getThread()
+					: session.threads.get(result.threadId);
 			app.stores.recentThreads.recordSelection({
 				sessionId: result.sessionId,
 				threadId: result.threadId,
@@ -506,10 +187,7 @@ export function createThreadContext(
 					"New Thread",
 			});
 		}
-		modelId = submitValues.modelId;
-		reasoning = submitValues.reasoning;
-		serviceTier = submitValues.serviceTier;
-		clearNextComposerValues();
+		composer.applySubmitValues(submitValues);
 		return result;
 	};
 
@@ -521,33 +199,33 @@ export function createThreadContext(
 			return getThread();
 		},
 		get modelId() {
-			return modelId;
+			return composer.modelId;
 		},
 		get reasoning() {
-			return reasoning;
+			return composer.reasoning;
 		},
 		get serviceTier() {
-			return serviceTier;
+			return composer.serviceTier;
 		},
 		get nextModelId() {
-			return nextModelId;
+			return composer.nextModelId;
 		},
 		get nextReasoning() {
-			return nextReasoning;
+			return composer.nextReasoning;
 		},
 		get nextServiceTier() {
-			return nextServiceTier;
+			return composer.nextServiceTier;
 		},
 		setNextModelId: (value) => {
-			nextModelId = value;
+			composer.setNextModelId(value);
 		},
 		setNextReasoning: (value) => {
-			nextReasoning = value;
+			composer.setNextReasoning(value);
 		},
 		setNextServiceTier: (value) => {
-			nextServiceTier = value;
+			composer.setNextServiceTier(value);
 		},
-		clearNextComposerValues,
+		clearNextComposerValues: composer.clearNextValues,
 		get messages() {
 			return conversation.messages;
 		},
@@ -558,58 +236,30 @@ export function createThreadContext(
 			return getThread()?.promptQueue ?? [];
 		},
 		get status() {
-			return getThreadConversationStatus(conversation.status);
+			return conversation.status;
 		},
 		get isStreaming() {
 			return (
 				getThreadIsStreaming(getThread(), conversation.isStreaming) ||
-				(!hasSession &&
-					(isSessionTransitioningStatus(session.current?.sandboxStatus) ||
-						conversation.messages.some(
-							(message) => message.provisional === true,
-						)))
+				isSessionTransitioningStatus(session.current?.sandboxStatus) ||
+				conversation.messages.some((message) => message.provisional === true)
 			);
 		},
 		get error() {
 			return conversation.error ?? getThread()?.errorMessage ?? null;
 		},
 		get hasPendingQuestion() {
-			return conversation.hasPendingQuestion;
+			return pendingQuestion.hasPendingQuestion;
 		},
-		get pendingQuestionId() {
-			return conversation.pendingQuestionId;
-		},
-		get pendingComments() {
-			return pendingComments;
-		},
-		addPendingComment: (comment) => {
-			const trimmedSnippet = comment.snippet.trim();
-			const trimmedComment = comment.comment.trim();
-			if (!trimmedSnippet || !trimmedComment) {
-				return;
-			}
-			pendingComments = [
-				...pendingComments,
-				{
-					id: crypto.randomUUID(),
-					snippet: trimmedSnippet,
-					comment: trimmedComment,
-				},
-			];
-		},
-		removePendingComment: (id) => {
-			pendingComments = pendingComments.filter((comment) => comment.id !== id);
-		},
-		clearPendingComments: () => {
-			clearStoredPendingComments();
-		},
-		clearComposerDraft: clearStoredComposerDraft,
+		clearComposerDraft: composer.clearDraft,
 		submit,
-		cancel: conversation.cancel,
-		connect: conversation.connect,
-		disconnect: conversation.disconnect,
-		refresh: conversation.refresh,
-		addToolApprovalResponse: conversation.addToolApprovalResponse,
+		cancel: () => conversation.cancel(),
+		start,
+		refresh: refreshAfterSubmitError,
+		addToolApprovalResponse: (payload) => {
+			addToolApprovalResponse(conversation.messages, payload);
+			pendingQuestion.clearSubmitError();
+		},
 		deleteQueuedPrompt: async (queueId) => {
 			await api.deleteQueuedPrompt(session.sessionId, threadId, queueId);
 			await session.threads.refreshThread(threadId);
@@ -624,22 +274,9 @@ export function createThreadContext(
 			await session.threads.refreshThread(threadId);
 		},
 		dispose: () => {
-			retryScheduler.dispose();
-			if (composerDraftPersistTimer !== null) {
-				clearTimeout(composerDraftPersistTimer);
-				composerDraftPersistTimer = null;
-			}
-			if (pendingCommentsPersistTimer !== null) {
-				clearTimeout(pendingCommentsPersistTimer);
-				pendingCommentsPersistTimer = null;
-			}
+			composer.dispose();
+			pendingQuestion.clearSubmitError();
 			conversation.dispose();
-		},
-		get editorFiles() {
-			return session.files.list;
-		},
-		get fileContents() {
-			return session.files.contents;
 		},
 	};
 }

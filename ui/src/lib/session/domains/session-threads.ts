@@ -11,7 +11,7 @@ import type { ThreadStore } from "$lib/store/threads.store.svelte";
 type CreateSessionThreadsDomainArgs = {
 	store: ThreadStore;
 	sessionId: string;
-	hasSession: () => boolean;
+	canLoadSessionData: () => boolean;
 	getSession: () => Session | null;
 	getSelectedId: () => string | null;
 	setSelectedId: (threadId: string | null) => void;
@@ -27,9 +27,6 @@ export function createSessionThreadsDomain(
 	const { store } = args;
 
 	function currentList() {
-		if (!args.hasSession()) {
-			return buildImplicitThread(args.getSession());
-		}
 		return store.list.length > 0
 			? store.list
 			: buildImplicitThread(args.getSession());
@@ -46,11 +43,7 @@ export function createSessionThreadsDomain(
 	}
 
 	function resolveSelectedThreadId(nextList = currentList()) {
-		if (
-			args.hasSession() &&
-			store.list.length === 0 &&
-			store.status !== "ready"
-		) {
+		if (store.list.length === 0 && store.status !== "ready") {
 			return null;
 		}
 
@@ -81,7 +74,7 @@ export function createSessionThreadsDomain(
 	function scheduleEnsureLoaded() {
 		if (
 			loadScheduled ||
-			!args.hasSession() ||
+			!args.canLoadSessionData() ||
 			store.status === "loading" ||
 			store.status === "ready"
 		) {
@@ -95,10 +88,7 @@ export function createSessionThreadsDomain(
 	}
 
 	async function ensureLoaded() {
-		if (!args.hasSession()) {
-			store.reset();
-			applyRequestedThreadSelection([]);
-			syncSelectedThread([]);
+		if (!args.canLoadSessionData()) {
 			return;
 		}
 		if (store.status === "loading" || store.status === "ready") {
@@ -114,32 +104,37 @@ export function createSessionThreadsDomain(
 		notifyThreadsUpdated(nextList);
 	}
 
-	const list = $derived.by(() => currentList());
-
 	return {
 		get list() {
 			scheduleEnsureLoaded();
-			return list;
+			return currentList();
 		},
 		get status() {
-			return args.hasSession() ? store.status : "idle";
+			return store.status;
 		},
 		get selectedId() {
 			scheduleEnsureLoaded();
-			return resolveSelectedThreadId(list);
+			return resolveSelectedThreadId() ?? args.sessionId;
 		},
 		get selected() {
 			scheduleEnsureLoaded();
-			const selectedId = resolveSelectedThreadId(list);
-			return list.find((thread) => thread.id === selectedId) ?? null;
+			const nextList = currentList();
+			const selectedId = resolveSelectedThreadId(nextList);
+			return nextList.find((thread) => thread.id === selectedId) ?? null;
+		},
+		get: (threadId: string) => {
+			scheduleEnsureLoaded();
+			const nextList = currentList();
+			return (
+				store.get(threadId) ??
+				nextList.find((thread) => thread.id === threadId) ??
+				null
+			);
+		},
+		upsert: (thread: Thread) => {
+			store.upsert(thread);
 		},
 		refresh: async () => {
-			if (!args.hasSession()) {
-				store.reset();
-				applyRequestedThreadSelection([]);
-				syncSelectedThread([]);
-				return;
-			}
 			await store.fetch();
 			const nextList = currentList();
 			applyRequestedThreadSelection(nextList);
@@ -151,13 +146,15 @@ export function createSessionThreadsDomain(
 				args.setSelectedId(null);
 				return;
 			}
-			const selectedThread = list.find((thread) => thread.id === threadId);
+			const selectedThread = currentList().find(
+				(thread) => thread.id === threadId,
+			);
 			if (selectedThread) {
 				args.setSelectedId(threadId);
 			}
 		},
 		create: async (name?: string) => {
-			if (!args.hasSession()) {
+			if (!args.canLoadSessionData()) {
 				return null;
 			}
 
@@ -181,10 +178,13 @@ export function createSessionThreadsDomain(
 		},
 		rename: async (threadId: string, nextName: string): Promise<boolean> => {
 			const trimmedName = nextName.trim();
-			if (!trimmedName || !list.some((thread) => thread.id === threadId)) {
+			if (
+				!trimmedName ||
+				!currentList().some((thread) => thread.id === threadId)
+			) {
 				return false;
 			}
-			if (!args.hasSession()) {
+			if (!args.canLoadSessionData()) {
 				return false;
 			}
 
@@ -204,7 +204,7 @@ export function createSessionThreadsDomain(
 			return true;
 		},
 		remove: async (threadId: string): Promise<boolean> => {
-			if (!args.hasSession()) {
+			if (!args.canLoadSessionData()) {
 				return false;
 			}
 			if (threadId === args.sessionId) {
@@ -222,9 +222,6 @@ export function createSessionThreadsDomain(
 			return true;
 		},
 		refreshThread: async (threadId: string) => {
-			if (!args.hasSession()) {
-				return;
-			}
 			await store.fetchOne(threadId);
 			const updatedThread = currentList().find(
 				(thread) => thread.id === threadId,

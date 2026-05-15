@@ -76,6 +76,7 @@
 	let renameDraft = $state("");
 	let renamingSession = $state(false);
 	let renameThreadDialogOpen = $state(false);
+	let renameThreadSessionId = $state<string | null>(null);
 	let renameThreadId = $state<string | null>(null);
 	let renameThreadDraft = $state("");
 	let renamingThread = $state(false);
@@ -83,6 +84,7 @@
 	let deleteSessionId = $state<string | null>(null);
 	let deletingSession = $state(false);
 	let deleteThreadDialogOpen = $state(false);
+	let deleteThreadSessionId = $state<string | null>(null);
 	let deleteThreadId = $state<string | null>(null);
 	let deletingThread = $state(false);
 	let renameWorkspaceDialogOpen = $state(false);
@@ -174,6 +176,10 @@
 			return [];
 		}
 		return sessionContext.threads.list;
+	}
+
+	function threadSessionContext(sessionId: string | null) {
+		return sessionId ? app.sessions.sessionContexts.get(sessionId) : undefined;
 	}
 
 	function sessionHasNestedThreads(sessionId: string) {
@@ -289,13 +295,15 @@
 		renameDialogOpen = true;
 	}
 
-	function openRenameThreadDialog(threadId: string) {
-		const threadItem = selectedSessionContext?.threads.list.find(
+	function openRenameThreadDialog(sessionId: string, threadId: string) {
+		const sessionContext = threadSessionContext(sessionId);
+		const threadItem = sessionContext?.threads.list.find(
 			(thread) => thread.id === threadId,
 		);
 		if (!threadItem) {
 			return;
 		}
+		renameThreadSessionId = sessionId;
 		renameThreadId = threadId;
 		renameThreadDraft = threadItem.name;
 		renameThreadDialogOpen = true;
@@ -310,6 +318,7 @@
 
 	function closeRenameThreadDialog() {
 		renameThreadDialogOpen = false;
+		renameThreadSessionId = null;
 		renameThreadId = null;
 		renameThreadDraft = "";
 		renamingThread = false;
@@ -328,11 +337,12 @@
 	}
 
 	async function handleRenameThread() {
-		if (!renameThreadId || renamingThread) {
+		if (!renameThreadSessionId || !renameThreadId || renamingThread) {
 			return;
 		}
+		const sessionContext = threadSessionContext(renameThreadSessionId);
 		renamingThread = true;
-		const renamed = await selectedSessionContext?.threads.rename(
+		const renamed = await sessionContext?.threads.rename(
 			renameThreadId,
 			renameThreadDraft,
 		);
@@ -364,15 +374,15 @@
 		deleteDialogOpen = true;
 	}
 
-	function openDeleteThreadDialog(threadId: string) {
+	function openDeleteThreadDialog(sessionId: string, threadId: string) {
+		const sessionContext = threadSessionContext(sessionId);
 		if (
-			isPrimaryThread(threadId) ||
-			!selectedSessionContext?.threads.list.some(
-				(thread) => thread.id === threadId,
-			)
+			isPrimaryThread(sessionId, threadId) ||
+			!sessionContext?.threads.list.some((thread) => thread.id === threadId)
 		) {
 			return;
 		}
+		deleteThreadSessionId = sessionId;
 		deleteThreadId = threadId;
 		deleteThreadDialogOpen = true;
 	}
@@ -385,6 +395,7 @@
 
 	function closeDeleteThreadDialog() {
 		deleteThreadDialogOpen = false;
+		deleteThreadSessionId = null;
 		deleteThreadId = null;
 		deletingThread = false;
 	}
@@ -402,12 +413,12 @@
 	}
 
 	async function handleDeleteThread() {
-		if (!deleteThreadId || deletingThread) {
+		if (!deleteThreadSessionId || !deleteThreadId || deletingThread) {
 			return;
 		}
+		const sessionContext = threadSessionContext(deleteThreadSessionId);
 		deletingThread = true;
-		const deleted =
-			await selectedSessionContext?.threads.remove(deleteThreadId);
+		const deleted = await sessionContext?.threads.remove(deleteThreadId);
 		deletingThread = false;
 		if (deleted) {
 			closeDeleteThreadDialog();
@@ -422,18 +433,18 @@
 	}
 
 	function deleteDialogThreadName() {
-		if (!deleteThreadId) {
+		if (!deleteThreadSessionId || !deleteThreadId) {
 			return "this thread";
 		}
 		return (
-			selectedSessionContext?.threads.list.find(
+			threadSessionContext(deleteThreadSessionId)?.threads.list.find(
 				(thread) => thread.id === deleteThreadId,
 			)?.name ?? "this thread"
 		);
 	}
 
-	function isPrimaryThread(threadId: string) {
-		return threadId === sessions.selectedId;
+	function isPrimaryThread(sessionId: string, threadId: string) {
+		return threadId === sessionId;
 	}
 
 	function isRecentThreadSelected(sessionId: string, threadId: string) {
@@ -597,14 +608,14 @@
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" class="w-32">
 					<DropdownMenuItem
-						onclick={() => openRenameThreadDialog(threadObj.id)}
+						onclick={() => openRenameThreadDialog(sessionId, threadObj.id)}
 					>
 						Rename
 					</DropdownMenuItem>
-					{#if !isPrimaryThread(threadObj.id)}
+					{#if !isPrimaryThread(sessionId, threadObj.id)}
 						<DropdownMenuItem
 							variant="destructive"
-							onclick={() => openDeleteThreadDialog(threadObj.id)}
+							onclick={() => openDeleteThreadDialog(sessionId, threadObj.id)}
 						>
 							Delete
 						</DropdownMenuItem>

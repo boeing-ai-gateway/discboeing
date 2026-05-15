@@ -1,5 +1,5 @@
 import type { AppModels } from "$lib/app/app-context.types";
-import type { ModelStore } from "$lib/store/models.store.svelte";
+import type { ModelStore } from "$lib/store/models.store";
 
 type CreateAppModelsDomainArgs = {
 	store: ModelStore;
