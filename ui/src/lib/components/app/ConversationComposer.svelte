@@ -47,6 +47,9 @@
 	import type {
 		ModelInfo,
 		SandboxProviderInstance,
+		TokenPrices,
+		TokenUsage,
+		TokenUsageInfo,
 		UpdateQueuedPromptRequest,
 	} from "$lib/api-types";
 	import type { ConversationComment } from "$lib/session/session-context.types";
@@ -196,6 +199,174 @@
 		return (left ?? "") === (right ?? "");
 	}
 
+	function usageTotal(usage: TokenUsage | undefined): number {
+		return (usage?.inputTokens?.total ?? 0) + (usage?.outputTokens?.total ?? 0);
+	}
+
+	function formatRounded(value: number): string {
+		return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+	}
+
+	function formatTokenCount(value: number): string {
+		if (value >= 1_000_000) {
+			return `${formatRounded(value / 1_000_000)}M`;
+		}
+		if (value >= 1_000) {
+			return `${formatRounded(value / 1_000)}K`;
+		}
+		return `${value}`;
+	}
+
+	function formatFullTokenCount(value: number): string {
+		return new Intl.NumberFormat().format(value);
+	}
+
+	function formatPercent(value: number): string {
+		return value < 1 ? "<1%" : `${Math.round(value)}%`;
+	}
+
+	function formatTokenPrice(value: number | undefined): string | null {
+		if (!value) {
+			return null;
+		}
+		return `$${value.toFixed(value >= 1 ? 2 : 4)} / 1M`;
+	}
+
+	function estimateUsageCost(
+		usage: TokenUsage | undefined,
+		prices: TokenPrices | undefined,
+	) {
+		const inputPrice = prices?.input ?? 0;
+		const outputPrice = prices?.output ?? 0;
+		if (inputPrice <= 0 && outputPrice <= 0) {
+			return null;
+		}
+		return (
+			((usage?.inputTokens?.total ?? 0) * inputPrice +
+				(usage?.outputTokens?.total ?? 0) * outputPrice) /
+			1_000_000
+		);
+	}
+
+	function formatEstimatedCost(value: number | null): string | null {
+		if (value === null) {
+			return null;
+		}
+		if (value > 0 && value < 0.0001) {
+			return "<$0.0001";
+		}
+		return `$${value.toFixed(value < 0.01 ? 4 : 2)}`;
+	}
+
+	function tokenUsageRows(usage: TokenUsage | undefined) {
+		return [
+			{
+				label: "Input",
+				value: usage?.inputTokens?.total ?? 0,
+			},
+			{
+				label: "No cache",
+				value: usage?.inputTokens?.noCache ?? 0,
+			},
+			{
+				label: "Cache read",
+				value: usage?.inputTokens?.cacheRead ?? 0,
+			},
+			{
+				label: "Cache write",
+				value: usage?.inputTokens?.cacheWrite ?? 0,
+			},
+			{
+				label: "Output",
+				value: usage?.outputTokens?.total ?? 0,
+			},
+			{
+				label: "Text",
+				value: usage?.outputTokens?.text ?? 0,
+			},
+			{
+				label: "Reasoning",
+				value: usage?.outputTokens?.reasoning ?? 0,
+			},
+			{
+				label: "Total",
+				value: usageTotal(usage),
+			},
+		];
+	}
+
+	function visibleTokenUsageRows(
+		lastTurnRows: ReturnType<typeof tokenUsageRows>,
+		totalRows: ReturnType<typeof tokenUsageRows>,
+	) {
+		return lastTurnRows
+			.map((row, index) => ({
+				label: row.label,
+				lastValue: row.value,
+				totalValue: totalRows[index]?.value ?? 0,
+			}))
+			.filter((row) => row.lastValue > 0 || row.totalValue > 0);
+	}
+
+	function buildTokenUsageSummary(usage: TokenUsageInfo | undefined) {
+		const totalTokens = usageTotal(usage?.total);
+		const lastTurnTokens = usageTotal(usage?.lastTurn);
+		const contextTokens = usage?.lastStep?.inputTokens?.total ?? 0;
+		const modelMaxTokens = usage?.modelMaxTokens ?? 0;
+		const contextPercent =
+			contextTokens > 0 && modelMaxTokens > 0
+				? (contextTokens / modelMaxTokens) * 100
+				: 0;
+
+		if (totalTokens <= 0 && lastTurnTokens <= 0 && contextTokens <= 0) {
+			return null;
+		}
+
+		const contextText =
+			contextTokens > 0 && modelMaxTokens > 0
+				? `${formatTokenCount(contextTokens)} / ${formatTokenCount(modelMaxTokens)} (${formatPercent((contextTokens / modelMaxTokens) * 100)})`
+				: null;
+		const inputPriceText = formatTokenPrice(usage?.prices?.input);
+		const outputPriceText = formatTokenPrice(usage?.prices?.output);
+		const lastTurnCost = formatEstimatedCost(
+			estimateUsageCost(usage?.lastTurn, usage?.prices),
+		);
+		const totalCost = formatEstimatedCost(
+			estimateUsageCost(usage?.total, usage?.prices),
+		);
+		const labelParts = [
+			contextText ? `Context: ${contextText}` : null,
+			`Last turn: ${formatFullTokenCount(lastTurnTokens)} tokens`,
+			`Thread total: ${formatFullTokenCount(totalTokens)} tokens`,
+			totalCost ? `Estimated total cost: ${totalCost}` : null,
+		].filter((part): part is string => part !== null);
+
+		return {
+			contextText,
+			primaryText:
+				contextPercent > 0
+					? formatPercent(contextPercent)
+					: formatTokenCount(lastTurnTokens),
+			modelMaxTokensText:
+				modelMaxTokens > 0 ? formatFullTokenCount(modelMaxTokens) : null,
+			maxOutputTokensText:
+				(usage?.maxOutputTokens ?? 0) > 0
+					? formatFullTokenCount(usage?.maxOutputTokens ?? 0)
+					: null,
+			lastTurnText: formatTokenCount(lastTurnTokens),
+			totalText: formatTokenCount(totalTokens),
+			rows: visibleTokenUsageRows(
+				tokenUsageRows(usage?.lastTurn),
+				tokenUsageRows(usage?.total),
+			),
+			inputPriceText,
+			outputPriceText,
+			lastTurnCost,
+			totalCost,
+			ariaLabel: labelParts.join(", "),
+		};
+	}
+
 	const effectiveModelId = $derived.by(
 		() => thread.nextModelId ?? thread.modelId,
 	);
@@ -220,6 +391,9 @@
 	);
 	const serviceTiers = $derived.by(() => selectedModel?.serviceTiers ?? []);
 	const hasAvailableModels = $derived.by(() => models.list.length > 0);
+	const tokenUsageSummary = $derived.by(() =>
+		buildTokenUsageSummary(thread.thread?.tokenUsage),
+	);
 	const sessionSetupDisabled = $derived.by(
 		() =>
 			sessionView.pendingWorkspaceRequiresSourceInput &&
@@ -908,6 +1082,79 @@
 									tiers={serviceTiers}
 									onSelect={handleServiceTierSelect}
 								/>
+							{/if}
+							{#if tokenUsageSummary}
+								<button
+									type="button"
+									class="group relative flex h-6 appearance-none items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground"
+									aria-label={tokenUsageSummary.ariaLabel}
+								>
+									<span>{tokenUsageSummary.primaryText}</span>
+									<span class="text-border">/</span>
+									<span>{tokenUsageSummary.totalText}</span>
+									<div
+										class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-max max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover p-3 text-xs text-popover-foreground shadow-lg group-hover:block group-focus:block"
+									>
+										<div
+											class="grid grid-cols-[auto_auto_auto] gap-x-4 gap-y-1.5"
+										>
+											<div></div>
+											<div class="font-medium text-foreground">Last</div>
+											<div class="font-medium text-foreground">Total</div>
+											{#each tokenUsageSummary.rows as row (row.label)}
+												<div class="text-muted-foreground">{row.label}</div>
+												<div class="text-right tabular-nums">
+													{formatFullTokenCount(row.lastValue)}
+												</div>
+												<div class="text-right tabular-nums">
+													{formatFullTokenCount(row.totalValue)}
+												</div>
+											{/each}
+											{#if tokenUsageSummary.lastTurnCost && tokenUsageSummary.totalCost}
+												<div class="text-muted-foreground">Est. cost</div>
+												<div class="text-right tabular-nums">
+													{tokenUsageSummary.lastTurnCost}
+												</div>
+												<div class="text-right tabular-nums">
+													{tokenUsageSummary.totalCost}
+												</div>
+											{/if}
+										</div>
+										{#if tokenUsageSummary.contextText || tokenUsageSummary.modelMaxTokensText}
+											<div
+												class="mt-2 space-y-1 border-t border-border pt-2 text-muted-foreground"
+											>
+												{#if tokenUsageSummary.contextText}
+													<div>Context {tokenUsageSummary.contextText}</div>
+												{/if}
+												{#if tokenUsageSummary.modelMaxTokensText}
+													<div>
+														Model max {tokenUsageSummary.modelMaxTokensText} tokens
+													</div>
+												{/if}
+												{#if tokenUsageSummary.maxOutputTokensText}
+													<div>
+														Max output {tokenUsageSummary.maxOutputTokensText} tokens
+													</div>
+												{/if}
+												{#if tokenUsageSummary.inputPriceText || tokenUsageSummary.outputPriceText}
+													<div>
+														Prices:
+														{#if tokenUsageSummary.inputPriceText}
+															input {tokenUsageSummary.inputPriceText}
+														{/if}
+														{#if tokenUsageSummary.inputPriceText && tokenUsageSummary.outputPriceText}
+															/
+														{/if}
+														{#if tokenUsageSummary.outputPriceText}
+															output {tokenUsageSummary.outputPriceText}
+														{/if}
+													</div>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								</button>
 							{/if}
 						</div>
 

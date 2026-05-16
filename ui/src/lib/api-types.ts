@@ -21,12 +21,45 @@ export interface Thread {
 	reasoning?: string;
 	serviceTier?: string;
 	state?: ThreadState;
+	tokenUsage?: TokenUsageInfo;
 	pendingQuestion?: boolean;
 	activeCommand?: string; // empty or omitted when no command is running for the current completion
 	pending?: boolean;
 	promptQueue?: QueuedPrompt[];
 	activityStatus?: ThreadActivityStatus;
 	metadata?: Record<string, unknown>;
+}
+
+export interface TokenUsageInfo {
+	total?: TokenUsage;
+	lastStep?: TokenUsage;
+	lastTurn?: TokenUsage;
+	modelMaxTokens?: number;
+	maxOutputTokens?: number;
+	prices?: TokenPrices;
+}
+
+export interface TokenUsage {
+	inputTokens: InputTokenUsage;
+	outputTokens: OutputTokenUsage;
+}
+
+export interface TokenPrices {
+	input?: number;
+	output?: number;
+}
+
+export interface InputTokenUsage {
+	total: number;
+	noCache?: number;
+	cacheRead?: number;
+	cacheWrite?: number;
+}
+
+export interface OutputTokenUsage {
+	total: number;
+	text?: number;
+	reasoning?: number;
 }
 
 export interface ThreadActivityStatus {

@@ -141,12 +141,68 @@ type Thread struct {
 	Reasoning       string          `json:"reasoning,omitempty"`       // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
 	ServiceTier     string          `json:"serviceTier,omitempty"`     // provider latency tier, such as "priority"
 	State           string          `json:"state,omitempty"`           // "interrupted" or "cancelled"
+	TokenUsage      TokenUsageInfo  `json:"tokenUsage,omitzero"`       // aggregate token usage for the thread
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"` // true when the thread is paused for user input
 	ActiveCommand   string          `json:"activeCommand,omitempty"`   // empty when no command is running
 	Pending         bool            `json:"pending,omitempty"`         // true when the thread exists in concept but the sandbox hasn't created it yet
 	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
 	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"` // sparse non-idle activity state from the agent snapshot
 	Metadata        json.RawMessage `json:"metadata,omitempty"`
+}
+
+type TokenUsageInfo struct {
+	Total           Usage       `json:"total,omitzero"`
+	LastStep        Usage       `json:"lastStep,omitzero"`
+	LastTurn        Usage       `json:"lastTurn,omitzero"`
+	ModelMaxTokens  int         `json:"modelMaxTokens,omitempty"`
+	MaxOutputTokens int         `json:"maxOutputTokens,omitempty"`
+	Prices          TokenPrices `json:"prices,omitzero"`
+}
+
+func (u TokenUsageInfo) IsZero() bool {
+	return u.Total.IsZero() &&
+		u.LastStep.IsZero() &&
+		u.LastTurn.IsZero() &&
+		u.ModelMaxTokens == 0 &&
+		u.MaxOutputTokens == 0 &&
+		u.Prices.IsZero()
+}
+
+type Usage struct {
+	InputTokens  InputTokens  `json:"inputTokens"`
+	OutputTokens OutputTokens `json:"outputTokens"`
+}
+
+type TokenPrices struct {
+	Input  float64 `json:"input,omitempty"`
+	Output float64 `json:"output,omitempty"`
+}
+
+func (p TokenPrices) IsZero() bool {
+	return p.Input == 0 && p.Output == 0
+}
+
+func (u Usage) IsZero() bool {
+	return u.InputTokens.Total == 0 &&
+		u.InputTokens.NoCache == 0 &&
+		u.InputTokens.CacheRead == 0 &&
+		u.InputTokens.CacheWrite == 0 &&
+		u.OutputTokens.Total == 0 &&
+		u.OutputTokens.Text == 0 &&
+		u.OutputTokens.Reasoning == 0
+}
+
+type InputTokens struct {
+	Total      int `json:"total"`
+	NoCache    int `json:"noCache,omitempty"`
+	CacheRead  int `json:"cacheRead,omitempty"`
+	CacheWrite int `json:"cacheWrite,omitempty"`
+}
+
+type OutputTokens struct {
+	Total     int `json:"total"`
+	Text      int `json:"text,omitempty"`
+	Reasoning int `json:"reasoning,omitempty"`
 }
 
 type QueuedPrompt struct {

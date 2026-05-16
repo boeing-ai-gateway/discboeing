@@ -341,10 +341,29 @@ type ThreadUpdateInfo struct {
 	Reasoning     string                   `json:"reasoning,omitempty"`
 	ServiceTier   string                   `json:"serviceTier,omitempty"`
 	State         string                   `json:"state,omitempty"`
+	TokenUsage    TokenUsageInfo           `json:"tokenUsage,omitzero"`
 	ActiveCommand string                   `json:"activeCommand,omitempty"`
 	Pending       *bool                    `json:"pending,omitempty"`
 	PromptQueue   []ThreadQueuedPromptInfo `json:"promptQueue,omitempty"`
 	Metadata      json.RawMessage          `json:"metadata,omitempty"`
+}
+
+type TokenUsageInfo struct {
+	Total           Usage       `json:"total,omitzero"`
+	LastStep        Usage       `json:"lastStep,omitzero"`
+	LastTurn        Usage       `json:"lastTurn,omitzero"`
+	ModelMaxTokens  int         `json:"modelMaxTokens,omitempty"`
+	MaxOutputTokens int         `json:"maxOutputTokens,omitempty"`
+	Prices          TokenPrices `json:"prices,omitzero"`
+}
+
+func (u TokenUsageInfo) IsZero() bool {
+	return u.Total.IsZero() &&
+		u.LastStep.IsZero() &&
+		u.LastTurn.IsZero() &&
+		u.ModelMaxTokens == 0 &&
+		u.MaxOutputTokens == 0 &&
+		u.Prices.IsZero()
 }
 
 // ThreadQueuedPromptInfo summarizes one queued prompt for thread chrome.

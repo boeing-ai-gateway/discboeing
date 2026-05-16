@@ -171,9 +171,19 @@ type ThreadInfo struct {
 	Reasoning       string
 	ServiceTier     string
 	State           ThreadState
+	TokenUsage      TokenUsageInfo
 	PendingQuestion bool
 	ActiveCommand   string
 	Metadata        json.RawMessage
+}
+
+type TokenUsageInfo struct {
+	Total           message.Usage
+	LastStep        message.Usage
+	LastTurn        message.Usage
+	ModelMaxTokens  int
+	MaxOutputTokens int
+	Prices          message.TokenPrices
 }
 
 // ThreadState is the user-visible terminal state shown for a thread.

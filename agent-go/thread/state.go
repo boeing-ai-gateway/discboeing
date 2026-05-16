@@ -22,18 +22,38 @@ const (
 // It exists in {threadID}/turn.json only while a turn is running.
 // On clean completion, it is deleted.
 type TurnState struct {
-	ID                string     `json:"id"`
-	ThreadID          string     `json:"threadId"`
-	LeafID            string     `json:"leafId"`
-	Config            TurnConfig `json:"config"`
-	CurrentStep       int        `json:"currentStep"`
-	Phase             TurnPhase  `json:"phase"`
-	LeafMsgID         string     `json:"leafMsgId"`                   // updated as messages are saved
-	AssistantMsgID    string     `json:"assistantMsgId"`              // pre-generated ID for the first assistant message
-	PendingApprovalID string     `json:"pendingApprovalId,omitempty"` // tool call ID of the pending approval request
-	StartedAt         *time.Time `json:"startedAt,omitempty"`
-	UpdatedAt         *time.Time `json:"updatedAt,omitempty"`
-	FinishedAt        *time.Time `json:"finishedAt,omitempty"`
+	ID                string         `json:"id"`
+	ThreadID          string         `json:"threadId"`
+	LeafID            string         `json:"leafId"`
+	Config            TurnConfig     `json:"config"`
+	CurrentStep       int            `json:"currentStep"`
+	Phase             TurnPhase      `json:"phase"`
+	TokenUsage        TokenUsageInfo `json:"tokenUsage,omitzero"`
+	LeafMsgID         string         `json:"leafMsgId"`                   // updated as messages are saved
+	AssistantMsgID    string         `json:"assistantMsgId"`              // pre-generated ID for the first assistant message
+	PendingApprovalID string         `json:"pendingApprovalId,omitempty"` // tool call ID of the pending approval request
+	StartedAt         *time.Time     `json:"startedAt,omitempty"`
+	UpdatedAt         *time.Time     `json:"updatedAt,omitempty"`
+	FinishedAt        *time.Time     `json:"finishedAt,omitempty"`
+}
+
+// TokenUsageInfo is the persisted usage summary for a step, turn, or thread.
+type TokenUsageInfo struct {
+	Total           message.Usage       `json:"total,omitzero"`
+	LastStep        message.Usage       `json:"lastStep,omitzero"`
+	LastTurn        message.Usage       `json:"lastTurn,omitzero"`
+	ModelMaxTokens  int                 `json:"modelMaxTokens,omitempty"`
+	MaxOutputTokens int                 `json:"maxOutputTokens,omitempty"`
+	Prices          message.TokenPrices `json:"prices,omitzero"`
+}
+
+func (u TokenUsageInfo) IsZero() bool {
+	return u.Total.IsZero() &&
+		u.LastStep.IsZero() &&
+		u.LastTurn.IsZero() &&
+		u.ModelMaxTokens == 0 &&
+		u.MaxOutputTokens == 0 &&
+		u.Prices.IsZero()
 }
 
 // PendingQuestionState persists a pending approval to disk.
@@ -121,6 +141,7 @@ type StepResult struct {
 	AssistantMessageID string          `json:"assistantMessageId,omitempty"`
 	AssistantMessage   message.Message `json:"assistantMessage"`
 	ToolCalls          []ToolCallInfo  `json:"toolCalls,omitempty"`
+	Usage              message.Usage   `json:"usage,omitzero"`
 }
 
 // ToolCallInfo identifies a tool call extracted from an assistant message.

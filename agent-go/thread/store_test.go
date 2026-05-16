@@ -913,6 +913,264 @@ func TestLoadStepEventMessages_NotFound(t *testing.T) {
 	}
 }
 
+func TestStepResultPersistsUsage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	usage := message.Usage{
+		InputTokens: message.InputTokens{
+			Total:      100,
+			NoCache:    70,
+			CacheRead:  20,
+			CacheWrite: 10,
+		},
+		OutputTokens: message.OutputTokens{
+			Total:     30,
+			Text:      25,
+			Reasoning: 5,
+		},
+	}
+
+	if err := store.SaveTurnState("thread1", TurnState{ID: "turn1", ThreadID: "thread1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult("thread1", "turn1", 0, StepResult{
+		AssistantMessage: message.Message{Role: "assistant"},
+		Usage:            usage,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.LoadStepResult("thread1", "turn1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded == nil {
+		t.Fatal("expected step result")
+	}
+	if loaded.Usage != usage {
+		t.Fatalf("expected usage %+v, got %+v", usage, loaded.Usage)
+	}
+}
+
+func TestAggregateTurnUsage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	prices := message.TokenPrices{Input: 3, Output: 15}
+	cfg := TurnConfig{ContextWindow: 200000, MaxOutputTokens: 16000, TokenPrices: prices}
+	if err := store.SaveTurnState("thread1", TurnState{ID: "turn1", ThreadID: "thread1", Config: cfg}); err != nil {
+		t.Fatal(err)
+	}
+	first := message.Usage{
+		InputTokens:  message.InputTokens{Total: 100, NoCache: 80, CacheRead: 20},
+		OutputTokens: message.OutputTokens{Total: 40, Text: 30, Reasoning: 10},
+	}
+	second := message.Usage{
+		InputTokens:  message.InputTokens{Total: 60, NoCache: 40, CacheWrite: 20},
+		OutputTokens: message.OutputTokens{Total: 20, Text: 20},
+	}
+	if err := store.SaveStepResult("thread1", "turn1", 0, StepResult{AssistantMessage: message.Message{Role: "assistant"}, Usage: first}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult("thread1", "turn1", 1, StepResult{AssistantMessage: message.Message{Role: "assistant"}, Usage: second}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := aggregateTurnUsage(store, "thread1", "turn1", 1, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Total.InputTokens.Total != 160 || summary.Total.OutputTokens.Total != 60 {
+		t.Fatalf("unexpected total usage: %+v", summary.Total)
+	}
+	if summary.Total.InputTokens.CacheRead != 20 || summary.Total.InputTokens.CacheWrite != 20 {
+		t.Fatalf("unexpected input breakdown: %+v", summary.Total.InputTokens)
+	}
+	if summary.Total.OutputTokens.Reasoning != 10 || summary.Total.OutputTokens.Text != 50 {
+		t.Fatalf("unexpected output breakdown: %+v", summary.Total.OutputTokens)
+	}
+	if summary.LastStep != second {
+		t.Fatalf("expected last step %+v, got %+v", second, summary.LastStep)
+	}
+	if summary.ModelMaxTokens != 200000 || summary.MaxOutputTokens != 16000 {
+		t.Fatalf("unexpected model limits: %+v", summary)
+	}
+	if summary.Prices != prices {
+		t.Fatalf("expected prices %+v, got %+v", prices, summary.Prices)
+	}
+}
+
+func TestAggregateTurnUsageCostEstimate(t *testing.T) {
+	store := NewStore(t.TempDir())
+	prices := message.TokenPrices{Input: 2.5, Output: 10}
+	cfg := TurnConfig{ContextWindow: 200000, MaxOutputTokens: 16000, TokenPrices: prices}
+	if err := store.SaveTurnState("thread1", TurnState{ID: "turn1", ThreadID: "thread1", Config: cfg}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult("thread1", "turn1", 0, StepResult{
+		AssistantMessage: message.Message{Role: "assistant"},
+		Usage: message.Usage{
+			InputTokens:  message.InputTokens{Total: 1_000_000},
+			OutputTokens: message.OutputTokens{Total: 200_000},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveStepResult("thread1", "turn1", 1, StepResult{
+		AssistantMessage: message.Message{Role: "assistant"},
+		Usage: message.Usage{
+			InputTokens:  message.InputTokens{Total: 500_000},
+			OutputTokens: message.OutputTokens{Total: 300_000},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := aggregateTurnUsage(store, "thread1", "turn1", 1, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Prices != prices {
+		t.Fatalf("expected prices %+v, got %+v", prices, summary.Prices)
+	}
+	if summary.Total.InputTokens.Total != 1_500_000 || summary.Total.OutputTokens.Total != 500_000 {
+		t.Fatalf("unexpected aggregate usage: %+v", summary.Total)
+	}
+	if got, want := estimateTokenCostForTest(summary.Total, summary.Prices), 8.75; got != want {
+		t.Fatalf("expected cost %.2f, got %.2f", want, got)
+	}
+}
+
+func TestCompleteTurnUpdatesThreadUsage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread1"
+	prices := message.TokenPrices{Input: 3, Output: 15}
+	cfg := TurnConfig{ContextWindow: 200000, MaxOutputTokens: 16000, TokenPrices: prices}
+	if err := store.SaveConfig(threadID, Config{Model: "provider/model"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveTurnState(threadID, TurnState{
+		ID:       "turn0",
+		ThreadID: threadID,
+		TokenUsage: TokenUsageInfo{
+			Total: message.Usage{
+				InputTokens:  message.InputTokens{Total: 10},
+				OutputTokens: message.OutputTokens{Total: 5},
+			},
+			ModelMaxTokens: 1000,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	turnState := TurnState{
+		ID:          "turn1",
+		ThreadID:    threadID,
+		Config:      cfg,
+		CurrentStep: 0,
+	}
+	if err := store.SaveTurnState(threadID, turnState); err != nil {
+		t.Fatal(err)
+	}
+	lastTurnUsage := message.Usage{
+		InputTokens:  message.InputTokens{Total: 100, NoCache: 100},
+		OutputTokens: message.OutputTokens{Total: 25, Text: 25},
+	}
+	if err := store.SaveStepResult(threadID, "turn1", 0, StepResult{AssistantMessage: message.Message{Role: "assistant"}, Usage: lastTurnUsage}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := completeTurn(store, threadID, &turnState); err != nil {
+		t.Fatal(err)
+	}
+	info, err := store.GetThreadInfo(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.TokenUsage.LastTurn != lastTurnUsage {
+		t.Fatalf("expected last turn %+v, got %+v", lastTurnUsage, info.TokenUsage.LastTurn)
+	}
+	if info.TokenUsage.LastStep != lastTurnUsage {
+		t.Fatalf("expected last step %+v, got %+v", lastTurnUsage, info.TokenUsage.LastStep)
+	}
+	if info.TokenUsage.Total.InputTokens.Total != 110 || info.TokenUsage.Total.OutputTokens.Total != 30 {
+		t.Fatalf("unexpected thread total: %+v", info.TokenUsage.Total)
+	}
+	if info.TokenUsage.ModelMaxTokens != 200000 || info.TokenUsage.MaxOutputTokens != 16000 {
+		t.Fatalf("unexpected model limits: %+v", info.TokenUsage)
+	}
+	if info.TokenUsage.Prices != prices {
+		t.Fatalf("expected prices %+v, got %+v", prices, info.TokenUsage.Prices)
+	}
+}
+
+func TestAggregateThreadUsageCostEstimate(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread1"
+	prices := message.TokenPrices{Input: 1.25, Output: 5}
+	if err := store.SaveTurnState(threadID, TurnState{
+		ID:       "turn0",
+		ThreadID: threadID,
+		TokenUsage: TokenUsageInfo{
+			Total: message.Usage{
+				InputTokens:  message.InputTokens{Total: 2_000_000},
+				OutputTokens: message.OutputTokens{Total: 1_000_000},
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	current := TurnState{
+		ID:          "turn1",
+		ThreadID:    threadID,
+		CurrentStep: 0,
+		Config: TurnConfig{
+			ContextWindow:   200000,
+			MaxOutputTokens: 16000,
+			TokenPrices:     prices,
+		},
+	}
+	if err := store.SaveTurnState(threadID, current); err != nil {
+		t.Fatal(err)
+	}
+	currentUsage := message.Usage{
+		InputTokens:  message.InputTokens{Total: 1_000_000},
+		OutputTokens: message.OutputTokens{Total: 500_000},
+	}
+	if err := store.SaveStepResult(threadID, current.ID, 0, StepResult{
+		AssistantMessage: message.Message{Role: "assistant"},
+		Usage:            currentUsage,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tokenUsage, err := aggregateTurnUsage(store, threadID, current.ID, current.CurrentStep, current.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.TokenUsage = tokenUsage
+
+	summary, err := aggregateThreadUsage(store, threadID, &current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Prices != prices {
+		t.Fatalf("expected prices %+v, got %+v", prices, summary.Prices)
+	}
+	if summary.LastTurn != currentUsage {
+		t.Fatalf("expected last turn %+v, got %+v", currentUsage, summary.LastTurn)
+	}
+	if summary.Total.InputTokens.Total != 3_000_000 || summary.Total.OutputTokens.Total != 1_500_000 {
+		t.Fatalf("unexpected aggregate usage: %+v", summary.Total)
+	}
+	if got, want := estimateTokenCostForTest(summary.LastTurn, summary.Prices), 3.75; got != want {
+		t.Fatalf("expected last turn cost %.2f, got %.2f", want, got)
+	}
+	if got, want := estimateTokenCostForTest(summary.Total, summary.Prices), 11.25; got != want {
+		t.Fatalf("expected total cost %.2f, got %.2f", want, got)
+	}
+}
+
+func estimateTokenCostForTest(usage message.Usage, prices message.TokenPrices) float64 {
+	return (float64(usage.InputTokens.Total)*prices.Input + float64(usage.OutputTokens.Total)*prices.Output) / 1_000_000
+}
+
 func TestStepFileNaming(t *testing.T) {
 	dir := t.TempDir()
 	store := NewStore(dir)

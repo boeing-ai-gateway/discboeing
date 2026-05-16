@@ -740,6 +740,8 @@ type Config struct {
 	// LastTurnState stores the last user-visible terminal turn outcome that
 	// should surface in thread chrome. Empty means no special state.
 	LastTurnState State `json:"lastTurnState,omitempty"`
+	// TokenUsage stores aggregate token usage across completed turns.
+	TokenUsage TokenUsageInfo `json:"tokenUsage,omitzero"`
 	// ActiveLeafID tracks the currently selected branch head for this thread.
 	ActiveLeafID string `json:"activeLeafId,omitempty"`
 	// ActiveCommand is the slash-command name currently driving thread work.
@@ -1126,6 +1128,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ServiceTier                  string                          `json:"serviceTier"`
 		CWD                          string                          `json:"cwd"`
 		LastTurnState                State                           `json:"lastTurnState"`
+		TokenUsage                   TokenUsageInfo                  `json:"tokenUsage"`
 		ActiveLeafID                 string                          `json:"activeLeafId"`
 		ActiveCommand                string                          `json:"activeCommand"`
 		CommunicatedCredentials      []CommunicatedCredentialBinding `json:"communicatedCredentials"`
@@ -1150,6 +1153,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		ServiceTier:                  raw.ServiceTier,
 		CWD:                          raw.CWD,
 		LastTurnState:                raw.LastTurnState,
+		TokenUsage:                   raw.TokenUsage,
 		ActiveLeafID:                 raw.ActiveLeafID,
 		ActiveCommand:                strings.TrimSpace(raw.ActiveCommand),
 		CommunicatedCredentials:      NormalizeCommunicatedCredentialBindings(raw.CommunicatedCredentials),

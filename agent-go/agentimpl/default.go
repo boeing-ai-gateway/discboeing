@@ -298,6 +298,14 @@ func (a *DefaultAgent) promptStream(
 			Tools:            env.tools,
 			MaxSteps:         env.maxSteps,
 		}
+		if modelInfo := modelsdev.Lookup(env.modelRef.ProviderID, env.modelRef.ModelID); modelInfo != nil {
+			cfg.ContextWindow = modelInfo.ContextWindow
+			cfg.MaxOutputTokens = modelInfo.MaxOutputTokens
+			cfg.TokenPrices = message.TokenPrices{
+				Input:  modelInfo.Cost.Input,
+				Output: modelInfo.Cost.Output,
+			}
+		}
 
 		currentCommunicatedCredentials, credentialReminder := a.buildCredentialChangeReminder(
 			env.threadCfg.CommunicatedCredentials,
@@ -1410,6 +1418,14 @@ func (a *DefaultAgent) handleCompactCommand(ctx context.Context, threadID string
 	}
 
 	turnCfg := &thread.TurnConfig{ProviderID: ref.ProviderID, Model: ref.ModelID}
+	if modelInfo := modelsdev.Lookup(ref.ProviderID, ref.ModelID); modelInfo != nil {
+		turnCfg.ContextWindow = modelInfo.ContextWindow
+		turnCfg.MaxOutputTokens = modelInfo.MaxOutputTokens
+		turnCfg.TokenPrices = message.TokenPrices{
+			Input:  modelInfo.Cost.Input,
+			Output: modelInfo.Cost.Output,
+		}
+	}
 	if summaryRef, err := a.registry.ResolveSupportingModel(ref, req.SupportingModels, providers.SupportingModelThreadSummarization); err == nil {
 		turnCfg.SupportingModels = compactSupportingModels(ref, map[providers.SupportingModelType]providers.ModelRef{
 			providers.SupportingModelThreadSummarization: summaryRef,
@@ -2005,15 +2021,23 @@ func (a *DefaultAgent) UpdateThread(_ context.Context, threadID string, req agen
 
 func threadInfoToAgent(info thread.Info) agent.ThreadInfo {
 	return agent.ThreadInfo{
-		ID:              info.ID,
-		Name:            info.Name,
-		CWD:             info.CWD,
-		LastMessage:     info.LastMessage,
-		ErrorMessage:    info.ErrorMessage,
-		Model:           info.Model,
-		Reasoning:       info.Reasoning,
-		ServiceTier:     info.ServiceTier,
-		State:           agent.ThreadState(info.State),
+		ID:           info.ID,
+		Name:         info.Name,
+		CWD:          info.CWD,
+		LastMessage:  info.LastMessage,
+		ErrorMessage: info.ErrorMessage,
+		Model:        info.Model,
+		Reasoning:    info.Reasoning,
+		ServiceTier:  info.ServiceTier,
+		State:        agent.ThreadState(info.State),
+		TokenUsage: agent.TokenUsageInfo{
+			Total:           info.TokenUsage.Total,
+			LastStep:        info.TokenUsage.LastStep,
+			LastTurn:        info.TokenUsage.LastTurn,
+			ModelMaxTokens:  info.TokenUsage.ModelMaxTokens,
+			MaxOutputTokens: info.TokenUsage.MaxOutputTokens,
+			Prices:          info.TokenUsage.Prices,
+		},
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   info.ActiveCommand,
 		Metadata:        info.Metadata,

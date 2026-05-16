@@ -114,11 +114,30 @@ type Thread struct {
 	Reasoning       string          `json:"reasoning,omitempty"`   // "", "auto", "low", "medium", "high", "xhigh", "none", "default"
 	ServiceTier     string          `json:"serviceTier,omitempty"` // provider latency tier, such as "priority"
 	State           string          `json:"state,omitempty"`       // "interrupted" or "cancelled"
+	TokenUsage      TokenUsageInfo  `json:"tokenUsage,omitzero"`
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"`
 	ActiveCommand   string          `json:"activeCommand,omitempty"` // empty when no command is running
 	PromptQueue     []QueuedPrompt  `json:"promptQueue,omitempty"`
 	ActivityStatus  *ThreadActivity `json:"activityStatus,omitempty"`
 	Metadata        json.RawMessage `json:"metadata,omitempty"`
+}
+
+type TokenUsageInfo struct {
+	Total           message.Usage       `json:"total,omitzero"`
+	LastStep        message.Usage       `json:"lastStep,omitzero"`
+	LastTurn        message.Usage       `json:"lastTurn,omitzero"`
+	ModelMaxTokens  int                 `json:"modelMaxTokens,omitempty"`
+	MaxOutputTokens int                 `json:"maxOutputTokens,omitempty"`
+	Prices          message.TokenPrices `json:"prices,omitzero"`
+}
+
+func (u TokenUsageInfo) IsZero() bool {
+	return u.Total.IsZero() &&
+		u.LastStep.IsZero() &&
+		u.LastTurn.IsZero() &&
+		u.ModelMaxTokens == 0 &&
+		u.MaxOutputTokens == 0 &&
+		u.Prices.IsZero()
 }
 
 type QueuedPrompt struct {

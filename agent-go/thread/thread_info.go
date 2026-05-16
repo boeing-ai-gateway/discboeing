@@ -19,6 +19,7 @@ type Info struct {
 	Reasoning       string
 	ServiceTier     string
 	State           State
+	TokenUsage      TokenUsageInfo
 	PendingQuestion bool
 	ActiveCommand   string
 	Metadata        json.RawMessage
@@ -211,6 +212,7 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		Reasoning:       string(cfg.Reasoning),
 		ServiceTier:     serviceTier,
 		State:           cfg.LastTurnState,
+		TokenUsage:      cfg.TokenUsage,
 		PendingQuestion: pendingQuestion,
 		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
 		Metadata:        cfg.Metadata.RawMessage(),

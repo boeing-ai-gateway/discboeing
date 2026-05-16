@@ -23,6 +23,30 @@ type Usage struct {
 	OutputTokens OutputTokens `json:"outputTokens"`
 }
 
+func (u Usage) IsZero() bool {
+	return usageIsZero(u)
+}
+
+func usageIsZero(u Usage) bool {
+	return u.InputTokens.Total == 0 &&
+		u.InputTokens.NoCache == 0 &&
+		u.InputTokens.CacheRead == 0 &&
+		u.InputTokens.CacheWrite == 0 &&
+		u.OutputTokens.Total == 0 &&
+		u.OutputTokens.Text == 0 &&
+		u.OutputTokens.Reasoning == 0
+}
+
+// TokenPrices contains model token prices in USD per million tokens.
+type TokenPrices struct {
+	Input  float64 `json:"input,omitempty"`
+	Output float64 `json:"output,omitempty"`
+}
+
+func (p TokenPrices) IsZero() bool {
+	return p.Input == 0 && p.Output == 0
+}
+
 // InputTokens breaks down input token usage.
 type InputTokens struct {
 	Total      int `json:"total"`

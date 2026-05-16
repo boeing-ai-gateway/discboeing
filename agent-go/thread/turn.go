@@ -8,6 +8,7 @@ import (
 	"iter"
 	"log"
 	"maps"
+	"os"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ type TurnConfig struct {
 	ProviderOptions  json.RawMessage            `json:"providerOptions,omitempty"`
 	ContextWindow    int                        `json:"contextWindow,omitempty"`   // model context window in tokens
 	MaxOutputTokens  int                        `json:"maxOutputTokens,omitempty"` // model max output tokens
+	TokenPrices      message.TokenPrices        `json:"tokenPrices,omitzero"`      // USD per million tokens
 	MaxSteps         int                        `json:"maxSteps,omitempty"`        // max LLM calls; 0 = unlimited
 }
 
@@ -454,6 +456,9 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 	if stepResult != nil {
 		// Resumes land here: the completion already ran earlier, so just reload the
 		// persisted assistant output and continue from there.
+		if !lc.refreshTurnUsage(stepIndex) {
+			return loopStepStop
+		}
 		assistantMsg, err = loadStepAssistantMessage(lc.store, lc.threadID, stepResult)
 		if err != nil {
 			lc.yield(nil, fmt.Errorf("load assistant message for step: %w", err))
@@ -478,6 +483,9 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 		stepResult, err = lc.store.LoadStepResult(lc.threadID, lc.turnID, stepIndex)
 		if err != nil || stepResult == nil {
 			lc.yield(nil, fmt.Errorf("load step result after completion: %w", err))
+			return loopStepStop
+		}
+		if !lc.refreshTurnUsage(stepIndex) {
 			return loopStepStop
 		}
 		assistantMsg, err = saveAssistantStepMessage(lc.store, lc.threadID, lc.turnID, lc.turnState, *cfg, stepIndex, stepResult)
@@ -517,6 +525,20 @@ func (lc *loopContext) runStreamingPhase(cfg *TurnConfig) loopStepResult {
 		return loopStepStop
 	}
 	return loopStepContinue
+}
+
+func (lc *loopContext) refreshTurnUsage(stepIndex int) bool {
+	usage, err := aggregateTurnUsage(lc.store, lc.threadID, lc.turnID, stepIndex, lc.turnState.Config)
+	if err != nil {
+		lc.yield(nil, fmt.Errorf("aggregate turn token usage: %w", err))
+		return false
+	}
+	lc.turnState.TokenUsage = usage
+	if err := lc.store.SaveTurnState(lc.threadID, *lc.turnState); err != nil {
+		lc.yield(nil, fmt.Errorf("save turn token usage: %w", err))
+		return false
+	}
+	return true
 }
 
 func (lc *loopContext) prepareMaxStepsFinalStep() bool {
@@ -1769,7 +1791,10 @@ func runCompletion(
 	toolCalls := extractToolCalls(assistantMsg)
 
 	// Persist step result (assistant message + tool call list).
-	stepResult := StepResult{AssistantMessage: assistantMsg}
+	stepResult := StepResult{
+		AssistantMessage: assistantMsg,
+		Usage:            usage,
+	}
 	for _, tc := range toolCalls {
 		stepResult.ToolCalls = append(stepResult.ToolCalls, ToolCallInfo{
 			ToolCallID: tc.ToolCallID,
@@ -1991,6 +2016,10 @@ func recoverStreamingStep(store *Store, threadID, turnID string, turnState *Turn
 	acc.Close()
 
 	partialMsg := acc.Message()
+	var usage message.Usage
+	if finish := acc.FinishResult(); finish != nil {
+		usage = finish.Usage
+	}
 	if stepIndex == 0 {
 		partialMsg.ID = turnState.AssistantMsgID
 	}
@@ -1998,7 +2027,7 @@ func recoverStreamingStep(store *Store, threadID, turnID string, turnState *Turn
 		partialMsg.Parts = filterContentParts(partialMsg.Parts)
 	}
 
-	if err := store.SaveStepResult(threadID, turnID, stepIndex, StepResult{AssistantMessage: partialMsg}); err != nil {
+	if err := store.SaveStepResult(threadID, turnID, stepIndex, StepResult{AssistantMessage: partialMsg, Usage: usage}); err != nil {
 		log.Printf("turn: recover streaming step %d: save step result: %v", stepIndex, err)
 		return false, false
 	}
@@ -2006,11 +2035,107 @@ func recoverStreamingStep(store *Store, threadID, turnID string, turnState *Turn
 	return streamComplete, true
 }
 
+func aggregateTurnUsage(store *Store, threadID, turnID string, throughStep int, cfg TurnConfig) (TokenUsageInfo, error) {
+	summary := TokenUsageInfo{
+		ModelMaxTokens:  cfg.ContextWindow,
+		MaxOutputTokens: cfg.MaxOutputTokens,
+		Prices:          cfg.TokenPrices,
+	}
+	for step := 0; step <= throughStep; step++ {
+		result, err := store.LoadStepResult(threadID, turnID, step)
+		if err != nil {
+			return TokenUsageInfo{}, err
+		}
+		if result == nil {
+			continue
+		}
+		summary.Total = addUsage(summary.Total, result.Usage)
+		if !result.Usage.IsZero() {
+			summary.LastStep = result.Usage
+		}
+	}
+	return summary, nil
+}
+
+func updateThreadTokenUsage(store *Store, threadID string, turnState *TurnState) error {
+	cfg, err := store.LoadConfig(threadID)
+	if err != nil {
+		return fmt.Errorf("load thread config: %w", err)
+	}
+	usage, err := aggregateThreadUsage(store, threadID, turnState)
+	if err != nil {
+		return err
+	}
+	cfg.TokenUsage = usage
+	return store.SaveConfig(threadID, cfg)
+}
+
+func aggregateThreadUsage(store *Store, threadID string, current *TurnState) (TokenUsageInfo, error) {
+	summary := TokenUsageInfo{}
+	if current != nil {
+		summary.LastTurn = current.TokenUsage.Total
+		summary.LastStep = current.TokenUsage.LastStep
+		summary.ModelMaxTokens = current.TokenUsage.ModelMaxTokens
+		summary.MaxOutputTokens = current.TokenUsage.MaxOutputTokens
+		summary.Prices = current.TokenUsage.Prices
+	}
+
+	turnsDir := store.turnsDir(threadID)
+	entries, err := os.ReadDir(turnsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return summary, nil
+		}
+		return TokenUsageInfo{}, fmt.Errorf("read turns dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		record, err := store.LoadTurnRecord(threadID, entry.Name())
+		if err != nil {
+			return TokenUsageInfo{}, err
+		}
+		if record == nil {
+			continue
+		}
+		if current != nil && record.ID == current.ID {
+			record = current
+		}
+		summary.Total = addUsage(summary.Total, record.TokenUsage.Total)
+	}
+
+	if current != nil {
+		recordPath := store.turnRecordPath(threadID, current.ID)
+		if _, err := os.Stat(recordPath); err != nil && os.IsNotExist(err) {
+			summary.Total = addUsage(summary.Total, current.TokenUsage.Total)
+		}
+	}
+	return summary, nil
+}
+
+func addUsage(a, b message.Usage) message.Usage {
+	a.InputTokens.Total += b.InputTokens.Total
+	a.InputTokens.NoCache += b.InputTokens.NoCache
+	a.InputTokens.CacheRead += b.InputTokens.CacheRead
+	a.InputTokens.CacheWrite += b.InputTokens.CacheWrite
+	a.OutputTokens.Total += b.OutputTokens.Total
+	a.OutputTokens.Text += b.OutputTokens.Text
+	a.OutputTokens.Reasoning += b.OutputTokens.Reasoning
+	return a
+}
+
 func finalizeTurnState(store *Store, threadID string, turnState *TurnState) error {
 	if turnState.FinishedAt == nil {
 		finishedAt := time.Now().UTC()
 		turnState.FinishedAt = &finishedAt
 	}
+	usage, err := aggregateTurnUsage(store, threadID, turnState.ID, turnState.CurrentStep, turnState.Config)
+	if err != nil {
+		return err
+	}
+	turnState.TokenUsage = usage
 	return store.SaveTurnState(threadID, *turnState)
 }
 
@@ -2028,6 +2153,9 @@ func persistTurnResponseMetadata(store *Store, threadID string, turnState *TurnS
 
 func completeTurn(store *Store, threadID string, turnState *TurnState) error {
 	if err := finalizeTurnState(store, threadID, turnState); err != nil {
+		return err
+	}
+	if err := updateThreadTokenUsage(store, threadID, turnState); err != nil {
 		return err
 	}
 	_ = persistTurnResponseMetadata(store, threadID, turnState)
