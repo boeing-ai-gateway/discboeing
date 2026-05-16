@@ -808,8 +808,8 @@ func TestSandboxAgentClient_SendMessages_WithAuthorization(t *testing.T) {
 func TestSandboxAuthTransportMergesProviderWebSocketAuth(t *testing.T) {
 	base := providerWebSocketAuthTransport{}
 	transport := &sandboxAuthTransport{
-		base:   base,
-		secret: "discobot-secret",
+		base:  base,
+		token: "discobot-secret",
 	}
 
 	headers := transport.Headers()
@@ -919,6 +919,7 @@ func TestIsRetryableError(t *testing.T) {
 		{"syscall.EPIPE", syscall.EPIPE, true},
 		{"wrapped EPIPE", fmt.Errorf("write failed: %w", syscall.EPIPE), true},
 		{"broken pipe in string", fmt.Errorf("write: broken pipe"), true},
+		{"server closed idle connection", fmt.Errorf("Get %q: http: server closed idle connection", "http://sandbox/health"), true},
 		{"unrelated error", fmt.Errorf("some other error"), false},
 	}
 

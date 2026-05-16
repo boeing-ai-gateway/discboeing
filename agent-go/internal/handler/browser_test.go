@@ -101,7 +101,7 @@ func TestBrowserCDPRouteSkipsBearerAuthButBrowserInfoDoesNot(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/sessions/{sessionId}/browser/cdp", h.ProxyBrowserCDP)
 	authed := chi.NewRouter()
-	authed.Use(middleware.Auth(testSecretHash("secret-token")))
+	authed.Use(middleware.Auth(testSecretHash("secret-token"), ""))
 	h.RegisterRoutes(authed)
 	r.Mount("/", authed)
 	server := httptest.NewServer(r)

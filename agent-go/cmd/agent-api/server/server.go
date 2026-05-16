@@ -252,8 +252,8 @@ func Run(cfg *config.Config) {
 	// All remaining routes stay behind the normal auth and credentials stack.
 	authed := chi.NewRouter()
 
-	// Auth: validates Bearer token against DISCOBOT_SECRET hash.
-	authed.Use(middleware.Auth(cfg.SecretHash))
+	// Auth: validates Bearer tokens against DISCOBOT_TRUST_KEY or legacy DISCOBOT_SECRET.
+	authed.Use(middleware.Auth(cfg.SecretHash, cfg.TrustKey))
 
 	// Credentials: applies X-Discobot-Credentials env vars and git user config.
 	authed.Use(middleware.Credentials(credMgr, promptQueue.EnableTimers))

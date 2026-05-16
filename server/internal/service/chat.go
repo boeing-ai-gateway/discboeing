@@ -59,6 +59,7 @@ type NewSessionRequest struct {
 	ProjectID   string
 	WorkspaceID string
 	ProviderID  string
+	UserID      string
 	// Messages is the UIMessage array from the client — each element is a raw JSON object.
 	Messages []json.RawMessage
 }
@@ -90,7 +91,7 @@ func (c *ChatService) NewSession(ctx context.Context, req NewSessionRequest) (st
 	}
 
 	// Use SessionService to create the session with client-provided ID
-	sess, err := c.sessionService.CreateSessionWithIDAndProvider(ctx, req.SessionID, req.ProjectID, req.WorkspaceID, req.ProviderID, "")
+	sess, err := c.sessionService.CreateSessionWithIDAndProvider(ctx, req.SessionID, req.ProjectID, req.WorkspaceID, req.ProviderID, "", req.UserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}

@@ -319,6 +319,7 @@ func (s *SandboxService) newAgentClient(ctx context.Context) *SandboxAgentClient
 		GitUserEmail:      gitEmail,
 		AcquireHTTPClient: s.acquireHTTPClient,
 		GetSecret:         s.getSandboxSecret,
+		GetAuthToken:      s.createSandboxAuthToken,
 	})
 }
 
@@ -649,7 +650,7 @@ func (s *SandboxService) ReconcileSandbox(ctx context.Context, sessionID string)
 
 // CreateForSession creates and starts a sandbox for the given session.
 // It retrieves the workspace path and commit from the session in the database
-// and generates a cryptographically secure shared secret.
+// and configures either user-key auth or a legacy shared secret.
 func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string) error {
 	// Get session to retrieve workspace path and commit
 	session, err := s.store.GetSessionByID(ctx, sessionID)
@@ -675,14 +676,20 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// Generate a cryptographically secure shared secret
-	sharedSecret := generateSandboxSecret(32)
+	trustKey, err := s.sandboxTrustKeyForUser(ctx, session.CreatedByUserID)
+	if err != nil {
+		return fmt.Errorf("failed to get sandbox trust key: %w", err)
+	}
+	sharedSecret := ""
+	if trustKey == "" {
+		sharedSecret = generateSandboxSecret(32)
+	}
 
 	// Create sandbox with session configuration
 	// Note: The sandbox image is configured globally on the provider via SANDBOX_IMAGE env var
 	opts := sandbox.CreateOptions{
 		SharedSecret: sharedSecret,
-		Env: sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, "",
+		Env: sandboxCreateEnv(sessionID, sharedSecret, trustKey, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, "",
 			session.ProjectID, s.cfg.MCPOAuthRedirectBase, s.cfg.AgentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
 		Labels: map[string]string{
 			"discobot.session.id":   sessionID,
@@ -738,13 +745,16 @@ func sandboxGitControlSocketEnabled(workspace *model.Workspace, workspacePath st
 	return isLocalWorkspaceSourceType(workspace.SourceType) && !git.IsGitURL(workspace.Path)
 }
 
-func sandboxCreateEnv(sessionID, sharedSecret, workspacePath, workspaceSource, workspaceSourceType, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string, enableGitControlSocket bool) map[string]string {
+func sandboxCreateEnv(sessionID, sharedSecret, trustKey, workspacePath, workspaceSource, workspaceSourceType, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string, enableGitControlSocket bool) map[string]string {
 	env := map[string]string{
 		"SESSION_ID":          sessionID,
 		"DISCOBOT_SESSION_ID": sessionID,
 	}
 	if sharedSecret != "" {
 		env["DISCOBOT_SECRET"] = hashSandboxSecret(sharedSecret)
+	}
+	if trustKey != "" {
+		env["DISCOBOT_TRUST_KEY"] = trustKey
 	}
 	if workspacePath != "" {
 		env["WORKSPACE_ORIGIN_PATH"] = "/.workspace"

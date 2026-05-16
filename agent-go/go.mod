@@ -10,6 +10,7 @@ require (
 replace github.com/obot-platform/discobot/modelsdev => ../modelsdev
 
 require (
+	aidanwoods.dev/go-paseto v1.6.0
 	codeberg.org/readeck/go-readability/v2 v2.1.1
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
@@ -25,6 +26,11 @@ require (
 	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.40.0
 	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	aidanwoods.dev/go-result v0.3.1 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 )
 
 require (

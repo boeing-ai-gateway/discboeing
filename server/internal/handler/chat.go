@@ -145,6 +145,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 			ProjectID:   projectID,
 			WorkspaceID: workspaceID,
 			ProviderID:  req.ProviderID,
+			UserID:      middleware.GetUserID(ctx),
 			Messages:    req.Messages,
 		})
 		if err != nil {

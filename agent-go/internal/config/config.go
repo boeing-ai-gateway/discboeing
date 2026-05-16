@@ -11,7 +11,8 @@ import (
 type Config struct {
 	// Server settings (HTTP API mode)
 	Port       int    // HTTP server port (DISCOBOT_PORT, default: 3002)
-	SecretHash string // Auth secret for API access (DISCOBOT_SECRET)
+	SecretHash string // Legacy auth secret for API access (DISCOBOT_SECRET)
+	TrustKey   string // Public key for signed API access tokens (DISCOBOT_TRUST_KEY)
 
 	// Agent settings
 	AgentCwd        string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
@@ -42,6 +43,7 @@ func Load() *Config {
 	// Server
 	cfg.Port = getEnvInt("DISCOBOT_PORT", 3002)
 	cfg.SecretHash = getEnv("DISCOBOT_SECRET", "")
+	cfg.TrustKey = getEnv("DISCOBOT_TRUST_KEY", "")
 
 	// Agent
 	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", cwd)

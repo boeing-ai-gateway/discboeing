@@ -154,6 +154,9 @@ func (s *AuthService) CreateOrUpdateUser(ctx context.Context, user *User) (*User
 		if err := s.store.UpdateUser(ctx, existing); err != nil {
 			return nil, fmt.Errorf("failed to update user: %w", err)
 		}
+		if err := s.ensureUserSandboxKeys(ctx, existing); err != nil {
+			return nil, err
+		}
 		result := &User{
 			ID:        existing.ID,
 			Email:     existing.Email,
@@ -175,6 +178,9 @@ func (s *AuthService) CreateOrUpdateUser(ctx context.Context, user *User) (*User
 		existing.AvatarURL = strPtr(user.AvatarURL)
 		if err := s.store.UpdateUser(ctx, existing); err != nil {
 			return nil, fmt.Errorf("failed to update user: %w", err)
+		}
+		if err := s.ensureUserSandboxKeys(ctx, existing); err != nil {
+			return nil, err
 		}
 		result := &User{
 			ID:        existing.ID,
@@ -200,6 +206,9 @@ func (s *AuthService) CreateOrUpdateUser(ctx context.Context, user *User) (*User
 	if err := s.store.CreateUser(ctx, newUser); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
+	if err := s.ensureUserSandboxKeys(ctx, newUser); err != nil {
+		return nil, err
+	}
 
 	if err := s.ensureDefaultProjectBootstrap(ctx, newUser.ID); err != nil {
 		return nil, err
@@ -212,6 +221,11 @@ func (s *AuthService) CreateOrUpdateUser(ctx context.Context, user *User) (*User
 		AvatarURL: ptrToString(newUser.AvatarURL),
 		Provider:  newUser.Provider,
 	}, nil
+}
+
+func (s *AuthService) ensureUserSandboxKeys(ctx context.Context, user *model.User) error {
+	_, err := ensureSandboxKeysForUser(ctx, s.store, s.encryptor, user)
+	return err
 }
 
 func (s *AuthService) ensureDefaultProjectBootstrap(ctx context.Context, userID string) error {

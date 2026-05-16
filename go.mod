@@ -28,6 +28,7 @@ require (
 )
 
 require (
+	aidanwoods.dev/go-paseto v1.6.0
 	cloud.google.com/go/kms v1.23.2
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/adrg/xdg v0.5.3
@@ -43,10 +44,9 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.48.0
 	golang.org/x/sys v0.41.0
-	gorm.io/driver/sqlite v1.6.0
 )
 
-require github.com/mattn/go-sqlite3 v1.14.22 // indirect
+require aidanwoods.dev/go-result v0.3.1 // indirect
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect

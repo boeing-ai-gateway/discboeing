@@ -300,6 +300,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		ProjectID:   projectID,
 		WorkspaceID: workspaceID,
 		ProviderID:  req.ProviderID,
+		UserID:      middleware.GetUserID(ctx),
 		Messages:    nil,
 	})
 	if err != nil {

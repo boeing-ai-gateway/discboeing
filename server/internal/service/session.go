@@ -97,6 +97,7 @@ type Session struct {
 	ID              string                 `json:"id"`
 	ProjectID       string                 `json:"projectId"`
 	ProviderID      string                 `json:"providerId,omitempty"`
+	CreatedByUserID *string                `json:"-"`
 	Name            string                 `json:"name"`
 	DisplayName     string                 `json:"displayName,omitempty"`
 	Description     string                 `json:"description"`
@@ -268,16 +269,21 @@ func (s *SessionService) CreateSessionWithProvider(ctx context.Context, projectI
 
 // CreateSessionWithID creates a new session with the provided client ID.
 func (s *SessionService) CreateSessionWithID(ctx context.Context, sessionID, projectID, workspaceID, name string) (*Session, error) {
-	return s.CreateSessionWithIDAndProvider(ctx, sessionID, projectID, workspaceID, "", name)
+	return s.CreateSessionWithIDAndProvider(ctx, sessionID, projectID, workspaceID, "", name, "")
 }
 
 // CreateSessionWithIDAndProvider creates a new session with the provided client ID and sandbox provider instance.
-func (s *SessionService) CreateSessionWithIDAndProvider(ctx context.Context, sessionID, projectID, workspaceID, providerID, name string) (*Session, error) {
+func (s *SessionService) CreateSessionWithIDAndProvider(ctx context.Context, sessionID, projectID, workspaceID, providerID, name, userID string) (*Session, error) {
+	var createdByUserID *string
+	if strings.TrimSpace(userID) != "" {
+		createdByUserID = &userID
+	}
 	sess := &model.Session{
 		ID:                sessionID, // Use client-provided ID
 		ProjectID:         projectID,
 		WorkspaceID:       workspaceID,
 		SandboxProviderID: strings.TrimSpace(providerID),
+		CreatedByUserID:   createdByUserID,
 		Name:              name,
 		Description:       nil,
 		SandboxStatus:     model.SessionStatusInitializing,
@@ -734,6 +740,7 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *S
 		ID:              sess.ID,
 		ProjectID:       sess.ProjectID,
 		ProviderID:      sess.SandboxProviderID,
+		CreatedByUserID: sess.CreatedByUserID,
 		Name:            sess.Name,
 		DisplayName:     displayName,
 		Description:     description,
@@ -1013,12 +1020,20 @@ func (s *SessionService) initializeSync(
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreatingSandbox, nil)
 		}
 
-		sandboxSecret := generateSecret(32)
+		trustKey, err := s.sandboxService.sandboxTrustKeyForUser(ctx, session.CreatedByUserID)
+		if err != nil {
+			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to get sandbox trust key: "+err.Error()))
+			return fmt.Errorf("failed to get sandbox trust key: %w", err)
+		}
+		sandboxSecret := ""
+		if trustKey == "" {
+			sandboxSecret = generateSecret(32)
+		}
 		mcpOAuthRedirectBase := s.sandboxService.cfg.MCPOAuthRedirectBase
 		agentServerURL := s.sandboxService.cfg.AgentServerURL
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
-			Env: sandboxCreateEnv(sessionID, sandboxSecret, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, session.TargetRef,
+			Env: sandboxCreateEnv(sessionID, sandboxSecret, trustKey, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, session.TargetRef,
 				projectID, mcpOAuthRedirectBase, agentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
 			Labels: map[string]string{
 				"discobot.session.id":   sessionID,

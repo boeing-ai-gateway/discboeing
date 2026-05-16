@@ -12,14 +12,16 @@ import (
 
 // User represents an authenticated user.
 type User struct {
-	ID         string    `gorm:"primaryKey;type:text" json:"id"`
-	Email      string    `gorm:"uniqueIndex;not null;type:text" json:"email"`
-	Name       *string   `gorm:"type:text" json:"name,omitempty"`
-	AvatarURL  *string   `gorm:"column:avatar_url;type:text" json:"avatar_url,omitempty"`
-	Provider   string    `gorm:"not null;type:text" json:"provider"`
-	ProviderID string    `gorm:"column:provider_id;not null;type:text" json:"provider_id"`
-	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                         string    `gorm:"primaryKey;type:text" json:"id"`
+	Email                      string    `gorm:"uniqueIndex;not null;type:text" json:"email"`
+	Name                       *string   `gorm:"type:text" json:"name,omitempty"`
+	AvatarURL                  *string   `gorm:"column:avatar_url;type:text" json:"avatar_url,omitempty"`
+	Provider                   string    `gorm:"not null;type:text" json:"provider"`
+	ProviderID                 string    `gorm:"column:provider_id;not null;type:text" json:"provider_id"`
+	SandboxPublicKey           string    `gorm:"column:sandbox_public_key;type:text" json:"-"`
+	EncryptedSandboxPrivateKey string    `gorm:"column:encrypted_sandbox_private_key;type:text" json:"-"`
+	CreatedAt                  time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt                  time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (User) TableName() string { return "users" }
@@ -219,6 +221,7 @@ type Session struct {
 	ProjectID         string         `gorm:"column:project_id;not null;type:text;index" json:"projectId"`
 	WorkspaceID       string         `gorm:"column:workspace_id;not null;type:text;index" json:"workspaceId"`
 	SandboxProviderID string         `gorm:"column:sandbox_provider_id;type:text;default:'';index" json:"providerId,omitempty"`
+	CreatedByUserID   *string        `gorm:"column:created_by_user_id;type:text;index" json:"createdByUserId,omitempty"`
 	Name              string         `gorm:"not null;type:text" json:"name"`
 	DisplayName       *string        `gorm:"column:display_name;type:text" json:"displayName,omitempty"`
 	Description       *string        `gorm:"type:text" json:"description,omitempty"`

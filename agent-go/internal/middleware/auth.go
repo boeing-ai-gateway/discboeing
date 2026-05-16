@@ -3,24 +3,27 @@ package middleware
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"aidanwoods.dev/go-paseto"
 )
 
 // publicPaths are paths that do not require authentication.
 var publicPaths = map[string]bool{
-	"/":       true,
-	"/health": true,
+	"/":               true,
+	"/health":         true,
 }
 
-// Auth returns middleware that validates Bearer tokens against a shared secret hash.
-// If secretHash is empty, the middleware is a no-op (auth disabled).
-func Auth(secretHash string) func(http.Handler) http.Handler {
+// Auth returns middleware that validates Bearer tokens against a trusted public
+// key or legacy shared secret hash. If both are empty, auth is disabled.
+func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if secretHash == "" {
+			if secretHash == "" && trustKey == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -47,7 +50,7 @@ func Auth(secretHash string) func(http.Handler) http.Handler {
 			}
 
 			token := strings.TrimPrefix(auth, "Bearer ")
-			if token != secretHash && !verifySecret(token, secretHash) {
+			if !verifyBearerToken(token, secretHash, trustKey) {
 				writeAuthError(w)
 				return
 			}
@@ -55,6 +58,13 @@ func Auth(secretHash string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func verifyBearerToken(token, secretHash, trustKey string) bool {
+	if trustKey != "" && verifyPASETOToken(token, trustKey) {
+		return true
+	}
+	return secretHash != "" && (token == secretHash || verifySecret(token, secretHash))
 }
 
 func writeAuthError(w http.ResponseWriter) {
@@ -83,4 +93,17 @@ func verifySecret(token, secretHash string) bool {
 	computedHash := hex.EncodeToString(h.Sum(nil))
 
 	return hmac.Equal([]byte(computedHash), []byte(expectedHash))
+}
+
+func verifyPASETOToken(token, trustKey string) bool {
+	publicKeyBytes, err := base64.StdEncoding.DecodeString(trustKey)
+	if err != nil {
+		return false
+	}
+	publicKey, err := paseto.NewV4AsymmetricPublicKeyFromBytes(publicKeyBytes)
+	if err != nil {
+		return false
+	}
+	_, err = paseto.NewParserForValidNow().ParseV4Public(publicKey, token, nil)
+	return err == nil
 }

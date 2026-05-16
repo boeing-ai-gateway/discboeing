@@ -84,6 +84,16 @@ func (s *Store) UpdateUser(ctx context.Context, user *model.User) error {
 	return s.writeDB.WithContext(ctx).Save(user).Error
 }
 
+func (s *Store) UpdateUserSandboxKeysIfMissing(ctx context.Context, userID, publicKey, encryptedPrivateKey string) (bool, error) {
+	result := s.writeDB.WithContext(ctx).Model(&model.User{}).
+		Where("id = ? AND COALESCE(sandbox_public_key, '') = '' AND COALESCE(encrypted_sandbox_private_key, '') = ''", userID).
+		Updates(map[string]any{
+			"sandbox_public_key":            publicKey,
+			"encrypted_sandbox_private_key": encryptedPrivateKey,
+		})
+	return result.RowsAffected > 0, result.Error
+}
+
 // --- User Sessions ---
 
 func (s *Store) CreateUserSession(ctx context.Context, session *model.UserSession) error {

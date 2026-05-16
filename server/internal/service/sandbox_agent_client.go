@@ -61,6 +61,7 @@ type SandboxAgentClient struct {
 
 	acquireHTTPClientFunc func(context.Context, string) (*sandbox.HTTPClientLease, error)
 	getSecretFunc         func(context.Context, string) (string, error)
+	getAuthTokenFunc      func(context.Context, string) (string, error)
 }
 
 // SandboxChatStartError preserves a structured non-2xx response from the
@@ -95,6 +96,8 @@ type SandboxAgentClientConfig struct {
 	AcquireHTTPClient func(context.Context, string) (*sandbox.HTTPClientLease, error)
 	// GetSecret optionally overrides provider secret lookup.
 	GetSecret func(context.Context, string) (string, error)
+	// GetAuthToken optionally returns a bearer token for sandbox API auth.
+	GetAuthToken func(context.Context, string) (string, error)
 }
 
 // NewSandboxAgentClient creates a new sandbox agent client.
@@ -113,6 +116,9 @@ func NewSandboxAgentClient(provider sandbox.Provider, fetcher CredentialFetcher,
 		}
 		if config.GetSecret != nil {
 			c.getSecretFunc = config.GetSecret
+		}
+		if config.GetAuthToken != nil {
+			c.getAuthTokenFunc = config.GetAuthToken
 		}
 	}
 	return c
@@ -162,6 +168,7 @@ func isRetryableError(err error) bool {
 		strings.Contains(errStr, "broken pipe") ||
 		strings.Contains(errStr, "no such host") ||
 		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "server closed idle connection") ||
 		strings.Contains(errStr, "vsock connect") ||
 		strings.Contains(errStr, "EOF")
 }
@@ -245,42 +252,49 @@ func (c *SandboxAgentClient) acquireHTTPClient(ctx context.Context, sessionID st
 }
 
 func (c *SandboxAgentClient) withSandboxAuth(ctx context.Context, lease *sandbox.HTTPClientLease, sessionID string) *sandbox.HTTPClientLease {
-	if c.getSecretFunc != nil {
-		secret, err := c.getSecretFunc(ctx, sessionID)
-		if err != nil || secret == "" {
-			return lease
-		}
-		lease.Client = &http.Client{
-			Transport: &sandboxAuthTransport{
-				base:   lease.Client.Transport,
-				secret: secret,
-			},
-			Timeout: lease.Client.Timeout,
-		}
-		return lease
-	}
-	secret, err := c.provider.GetSecret(ctx, nil, sessionID)
-	if err != nil || secret == "" {
+	token := c.sandboxAuthToken(ctx, sessionID)
+	if token == "" {
 		return lease
 	}
 	lease.Client = &http.Client{
 		Transport: &sandboxAuthTransport{
-			base:   lease.Client.Transport,
-			secret: secret,
+			base:  lease.Client.Transport,
+			token: token,
 		},
 		Timeout: lease.Client.Timeout,
 	}
 	return lease
 }
 
+func (c *SandboxAgentClient) sandboxAuthToken(ctx context.Context, sessionID string) string {
+	if c.getAuthTokenFunc != nil {
+		token, err := c.getAuthTokenFunc(ctx, sessionID)
+		if err == nil && token != "" {
+			return token
+		}
+	}
+	if c.getSecretFunc != nil {
+		secret, err := c.getSecretFunc(ctx, sessionID)
+		if err == nil && secret != "" {
+			return secret
+		}
+		return ""
+	}
+	secret, err := c.provider.GetSecret(ctx, nil, sessionID)
+	if err != nil {
+		return ""
+	}
+	return secret
+}
+
 type sandboxAuthTransport struct {
-	base   http.RoundTripper
-	secret string
+	base  http.RoundTripper
+	token string
 }
 
 func (t *sandboxAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clone := req.Clone(req.Context())
-	clone.Header.Set("Authorization", "Bearer "+t.secret)
+	clone.Header.Set("Authorization", "Bearer "+t.token)
 	return t.baseTransport().RoundTrip(clone)
 }
 
@@ -294,7 +308,7 @@ func (t *sandboxAuthTransport) DialContext(ctx context.Context, network, addr st
 
 func (t *sandboxAuthTransport) Headers() http.Header {
 	headers := cloneHeaders(t.baseHeaders())
-	headers.Set("Authorization", "Bearer "+t.secret)
+	headers.Set("Authorization", "Bearer "+t.token)
 	return headers
 }
 
@@ -442,15 +456,8 @@ type GetCommitsRequest struct {
 // Credentials are automatically fetched unless SkipCredentials is set.
 func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
 	// Add Authorization header with Bearer token
-	var secret string
-	var err error
-	if c.getSecretFunc != nil {
-		secret, err = c.getSecretFunc(ctx, sessionID)
-	} else {
-		secret, err = c.provider.GetSecret(ctx, nil, sessionID)
-	}
-	if err == nil && secret != "" {
-		req.Header.Set("Authorization", "Bearer "+secret)
+	if token := c.sandboxAuthToken(ctx, sessionID); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	// Auto-fetch credentials if fetcher is set and not skipped

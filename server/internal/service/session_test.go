@@ -261,6 +261,78 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	}
 }
 
+func TestInitializeSessionWithUserUsesTrustKey(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	user := &model.User{
+		ID:         "user-trust-key",
+		Email:      "user@example.com",
+		Provider:   "test",
+		ProviderID: "user-trust-key",
+	}
+	if err := testStore.CreateUser(ctx, user); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	project := &model.Project{ID: "project-trust-key", Name: "trust key project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-trust-key",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+
+	dbSession := &model.Session{
+		ID:              "session-trust-key",
+		ProjectID:       project.ID,
+		WorkspaceID:     workspace.ID,
+		CreatedByUserID: &user.ID,
+		Name:            "Trust Key Session",
+		SandboxStatus:   model.SessionStatusInitializing,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	opts, ok := provider.GetCreateOptions(dbSession.ID)
+	if !ok {
+		t.Fatalf("expected sandbox create options for session %s", dbSession.ID)
+	}
+	if opts.SharedSecret != "" {
+		t.Fatalf("SharedSecret = %q, want empty for trust-key auth", opts.SharedSecret)
+	}
+	if opts.Env["DISCOBOT_SECRET"] != "" {
+		t.Fatalf("Env[DISCOBOT_SECRET] = %q, want empty for trust-key auth", opts.Env["DISCOBOT_SECRET"])
+	}
+	if opts.Env["DISCOBOT_TRUST_KEY"] == "" {
+		t.Fatal("Env[DISCOBOT_TRUST_KEY] is empty")
+	}
+	storedUser, err := testStore.GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if storedUser.SandboxPublicKey != opts.Env["DISCOBOT_TRUST_KEY"] {
+		t.Fatalf("SandboxPublicKey = %q, want trust key %q", storedUser.SandboxPublicKey, opts.Env["DISCOBOT_TRUST_KEY"])
+	}
+	if storedUser.EncryptedSandboxPrivateKey == "" {
+		t.Fatal("EncryptedSandboxPrivateKey is empty")
+	}
+}
+
 func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
@@ -702,11 +774,13 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 
 	createdAt := time.Date(2026, time.March, 20, 8, 30, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, time.March, 21, 9, 45, 0, 0, time.UTC)
+	createdByUserID := "user-123"
 
 	modelSession := &model.Session{
 		ID:              "test-id",
 		ProjectID:       "test-project",
 		WorkspaceID:     "test-workspace",
+		CreatedByUserID: &createdByUserID,
 		Name:            "test-name",
 		DisplayName:     strPtr("Test Display"),
 		Description:     strPtr("Test Description"),
@@ -736,6 +810,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		"ProjectID":         "ProjectID",
 		"WorkspaceID":       "WorkspaceID",
 		"SandboxProviderID": "ProviderID",
+		"CreatedByUserID":   "CreatedByUserID",
 		"Name":              "Name",
 		"DisplayName":       "DisplayName",
 		"Description":       "Description",
