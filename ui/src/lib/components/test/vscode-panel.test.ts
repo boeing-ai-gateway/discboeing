@@ -124,7 +124,7 @@ test("dockerfile does not ship stale code-server extension registry", () => {
 
 	assert.match(
 		source,
-		/code-server --install-extension vscodevim\.vim --extensions-dir \/opt\/discobot\/code-server-defaults\/extensions \\\n\s+&& rm -f \/opt\/discobot\/code-server-defaults\/extensions\/extensions\.json \\/,
+		/code-server --install-extension svelte\.svelte-vscode --extensions-dir \/opt\/discobot\/code-server-defaults\/extensions \\\n\s+&& rm -f \/opt\/discobot\/code-server-defaults\/extensions\/extensions\.json \\/,
 	);
 	assert.match(
 		source,
