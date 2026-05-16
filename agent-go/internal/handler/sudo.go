@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net"
 	"net/http"
 	"strings"
 
@@ -10,6 +11,11 @@ import (
 // AuthorizeSudo handles POST /sudo/authorize. It is called by the sandbox sudo
 // wrapper before the wrapper executes the real sudo binary.
 func (h *Handler) AuthorizeSudo(w http.ResponseWriter, r *http.Request) {
+	if !sudoAuthorizeRequestIsLocal(r) {
+		h.JSON(w, http.StatusForbidden, sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo authorization must be requested from loopback", Guidance: sudoauth.Guidance})
+		return
+	}
+
 	if h.sudoAuthorizer == nil {
 		h.JSON(w, http.StatusForbidden, sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo authorization is not configured", Guidance: sudoauth.Guidance})
 		return
@@ -38,4 +44,16 @@ func (h *Handler) AuthorizeSudo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.JSON(w, http.StatusOK, resp)
+}
+
+func sudoAuthorizeRequestIsLocal(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

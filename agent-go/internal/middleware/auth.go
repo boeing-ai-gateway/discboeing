@@ -16,6 +16,7 @@ import (
 var publicPaths = map[string]bool{
 	"/":               true,
 	"/health":         true,
+	"/sudo/authorize": true,
 }
 
 // Auth returns middleware that validates Bearer tokens against a trusted public

@@ -81,6 +81,46 @@ func TestAuthAcceptsAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestAuthSkipsSudoAuthorize(t *testing.T) {
+	called := false
+	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/sudo/authorize", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("expected wrapped handler to be called")
+	}
+}
+
+func TestAuthStillRequiresTokenForOtherRoutes(t *testing.T) {
+	called := false
+	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/exec", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if called {
+		t.Fatal("wrapped handler should not be called")
+	}
+}
+
 func TestAuthAcceptsSignedTrustKeyToken(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

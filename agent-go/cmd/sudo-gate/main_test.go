@@ -3,7 +3,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -88,6 +91,28 @@ func TestValidateGateConfig(t *testing.T) {
 				t.Fatal("expected config to be rejected")
 			}
 		})
+	}
+}
+
+func TestAuthorizeDoesNotSendBearerAuth(t *testing.T) {
+	t.Setenv("DISCOBOT_SECRET", "legacy-secret")
+	t.Setenv("DISCOBOT_SUDO_RUNTIME", "agent")
+	t.Setenv("DISCOBOT_SUDO_TOKEN", "sudo-token")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("Authorization header = %q, want empty", got)
+		}
+		_ = json.NewEncoder(w).Encode(authorizeResponse{Allow: true})
+	}))
+	defer server.Close()
+
+	resp, err := authorize(gateConfig{AgentAPIURL: server.URL, RealSudo: "/usr/lib/discobot/sudo.real"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Allow {
+		t.Fatalf("expected authorize response to allow, got %#v", resp)
 	}
 }
 

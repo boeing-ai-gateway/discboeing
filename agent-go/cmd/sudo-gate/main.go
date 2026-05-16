@@ -176,9 +176,6 @@ func authorize(cfg gateConfig) (authorizeResponse, error) {
 		return authorizeResponse{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if secret := os.Getenv("DISCOBOT_SECRET"); secret != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+secret)
-	}
 
 	client := &http.Client{Timeout: defaultTimeout}
 	httpResp, err := client.Do(httpReq)
