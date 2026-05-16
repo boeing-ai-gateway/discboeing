@@ -492,7 +492,15 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	}
 
 	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
-	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent, CurrentTaskID: "parent-task", SubagentDepth: 1, MaxSubagentDepth: 4}
+	toolCtx := &thread.ToolContext{
+		ThreadID:         "parent-thread",
+		Agent:            subAgent,
+		CurrentTaskID:    "parent-task",
+		SubagentDepth:    1,
+		MaxSubagentDepth: 4,
+		ProviderID:       "openai",
+		ModelID:          "gpt-5.5",
+	}
 
 	raw, _ := json.Marshal(map[string]string{
 		"prompt":        wantPrompt,
@@ -521,8 +529,8 @@ func TestTask_ForwardsPromptAndSubagentType(t *testing.T) {
 	if gotType != wantType {
 		t.Errorf("subagent_type: got %q, want %q", gotType, wantType)
 	}
-	if gotModel != "" {
-		t.Errorf("model: got %q, want empty", gotModel)
+	if gotModel != "openai/gpt-5.5" {
+		t.Errorf("model: got %q, want %q", gotModel, "openai/gpt-5.5")
 	}
 	if gotParentTaskID == "" {
 		t.Errorf("parent_task_id: got %q, want non-empty task id", gotParentTaskID)
@@ -638,6 +646,59 @@ func TestTask_ResumeSkipsNewTaskValidation(t *testing.T) {
 	}
 }
 
+func TestTaskOutputTimeoutDefaultsAndUsesMilliseconds(t *testing.T) {
+	if got := taskOutputWaitTimeout(0); got != taskOutputDefaultTimeout {
+		t.Fatalf("timeout 0 = %s, want %s", got, taskOutputDefaultTimeout)
+	}
+	if got := taskOutputWaitTimeout(60); got != 60*time.Millisecond {
+		t.Fatalf("timeout 60 = %s, want 60ms", got)
+	}
+	if got := taskOutputWaitTimeout(600000); got != 10*time.Minute {
+		t.Fatalf("timeout 600000 = %s, want 10m", got)
+	}
+}
+
+func TestTaskOutputBlockWaitsForTaskCompletion(t *testing.T) {
+	taskID := t.Name()
+	done := make(chan struct{})
+	rec := &taskRecord{
+		taskID:      taskID,
+		status:      "in_progress",
+		subThreadID: taskID,
+		done:        done,
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		rec.mu.Lock()
+		rec.status = "completed"
+		rec.output = "done"
+		rec.mu.Unlock()
+		close(done)
+	}()
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	start := time.Now()
+	result, err := exec.Execute(context.Background(), nil, message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + taskID + `","block":true,"timeout":600000}`,
+	})
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 45*time.Millisecond {
+		t.Fatalf("TaskOutput returned too early after %s", elapsed)
+	}
+	if got := textOutput(result.Result); got != "done" {
+		t.Fatalf("TaskOutput = %q, want %q", got, "done")
+	}
+}
+
 func TestTask_BackgroundFailurePersistsThreadError(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	subAgent := &storeBackedMockSubAgent{
@@ -705,19 +766,24 @@ func TestTask_RejectsCallsPastMaxDepth(t *testing.T) {
 	}
 }
 
-// TestTask_Cancellation verifies that cancelling the Wait context propagates
-// cancellation to the sub-agent goroutine via rec.cancel.
+// TestTask_Cancellation verifies that cancelling the parent Wait context does
+// not cancel the independent sub-agent goroutine.
 func TestTask_Cancellation(t *testing.T) {
 	agentCancelled := make(chan struct{})
+	finishAgent := make(chan struct{})
+	const want = "completed after parent stopped waiting"
 
 	subAgent := &mockSubAgent{
 		promptFn: func(ctx context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			return func(_ func(message.MessageChunk, error) bool) {
-				<-ctx.Done()
-				close(agentCancelled)
+				select {
+				case <-ctx.Done():
+					close(agentCancelled)
+				case <-finishAgent:
+				}
 			}
 		},
-		finalResponseFn: func(_ string) (string, error) { return "", nil },
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
 	}
 
 	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
@@ -730,7 +796,8 @@ func TestTask_Cancellation(t *testing.T) {
 	if result.Async == nil {
 		t.Fatal("expected Async handle")
 	}
-	t.Cleanup(func() { cleanupTask(continuationSubThreadID(t, result.Async.Continuation)) })
+	subThreadID := continuationSubThreadID(t, result.Async.Continuation)
+	t.Cleanup(func() { cleanupTask(subThreadID) })
 
 	// Cancel the Wait context after a brief delay so the goroutine has started.
 	waitCtx, waitCancel := context.WithCancel(context.Background())
@@ -747,29 +814,45 @@ func TestTask_Cancellation(t *testing.T) {
 		t.Errorf("expected ErrorTextOutput (cancelled), got %T", res.Result.Output)
 	}
 
-	// The sub-agent goroutine should have been cancelled too.
+	// The parent wait was cancelled, but the child task should keep running.
 	select {
 	case <-agentCancelled:
-		// good
-	case <-time.After(2 * time.Second):
-		t.Error("sub-agent goroutine was not cancelled after Wait context was done")
+		t.Fatal("sub-agent goroutine was cancelled by parent Wait context")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(finishAgent)
+	result, err = exec.Execute(context.Background(), nil, message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + subThreadID + `","block":true,"timeout":1000}`,
+	})
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	if got := textOutput(result.Result); got != want {
+		t.Fatalf("TaskOutput = %q, want %q", got, want)
 	}
 }
 
 // TestTask_CancellationBeforeGoroutineStarts verifies there is no race between
-// creating the cancel func and a very early cancellation. The context is created
-// before the goroutine starts, so rec.cancel is always set.
+// creating the cancel func and a very early parent wait cancellation.
 func TestTask_CancellationBeforeGoroutineStarts(t *testing.T) {
 	agentCancelled := make(chan struct{})
+	finishAgent := make(chan struct{})
+	const want = "completed despite early parent cancellation"
 
 	subAgent := &mockSubAgent{
 		promptFn: func(ctx context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			return func(_ func(message.MessageChunk, error) bool) {
-				<-ctx.Done()
-				close(agentCancelled)
+				select {
+				case <-ctx.Done():
+					close(agentCancelled)
+				case <-finishAgent:
+				}
 			}
 		},
-		finalResponseFn: func(_ string) (string, error) { return "", nil },
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
 	}
 
 	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
@@ -786,7 +869,8 @@ func TestTask_CancellationBeforeGoroutineStarts(t *testing.T) {
 	if result.Async == nil {
 		t.Fatal("expected Async handle")
 	}
-	t.Cleanup(func() { cleanupTask(continuationSubThreadID(t, result.Async.Continuation)) })
+	subThreadID := continuationSubThreadID(t, result.Async.Continuation)
+	t.Cleanup(func() { cleanupTask(subThreadID) })
 
 	res, err := result.Async.Wait(waitCtx)
 	if err != nil {
@@ -798,9 +882,21 @@ func TestTask_CancellationBeforeGoroutineStarts(t *testing.T) {
 
 	select {
 	case <-agentCancelled:
-		// good
-	case <-time.After(2 * time.Second):
-		t.Error("sub-agent goroutine was not cancelled")
+		t.Fatal("sub-agent goroutine was cancelled by parent Wait context")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(finishAgent)
+	result, err = exec.Execute(context.Background(), nil, message.ToolCallPart{
+		ToolCallID: t.Name() + "-output",
+		ToolName:   "TaskOutput",
+		Input:      `{"task_id":"` + subThreadID + `","block":true,"timeout":1000}`,
+	})
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	if got := textOutput(result.Result); got != want {
+		t.Fatalf("TaskOutput = %q, want %q", got, want)
 	}
 }
 

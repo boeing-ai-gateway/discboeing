@@ -80,6 +80,13 @@ func normalizeSubagentType(subagentType string) string {
 	return subagentType
 }
 
+func parentTaskModel(toolCtx *thread.ToolContext) string {
+	if toolCtx == nil || strings.TrimSpace(toolCtx.ProviderID) == "" || strings.TrimSpace(toolCtx.ModelID) == "" {
+		return ""
+	}
+	return strings.TrimSpace(toolCtx.ProviderID) + "/" + strings.TrimSpace(toolCtx.ModelID)
+}
+
 func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input taskInput
 	if err := unmarshalInput(call, &input); err != nil {
@@ -151,6 +158,7 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		Model:         parentTaskModel(toolCtx),
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
@@ -336,6 +344,7 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		Model:         parentTaskModel(toolCtx),
 		SubagentType:  input.SubagentType,
 		ParentTaskID:  subThreadID,
 		SubagentDepth: rec.depth,
@@ -502,12 +511,9 @@ func taskHandle(call message.ToolCallPart, rec *taskRecord, subThreadID string) 
 			select {
 			case <-rec.done:
 			case <-ctx.Done():
-				// Cancel the sub-agent goroutine when the parent is cancelled.
-				rec.mu.Lock()
-				if rec.cancel != nil {
-					rec.cancel()
-				}
-				rec.mu.Unlock()
+				// The parent turn stopped waiting, but the sub-agent task is an
+				// independent child run. Leave it alive so TaskOutput or a later
+				// continuation can collect the result.
 				return thread.AsyncWaitResult{
 					Result: errorResult(call, "task cancelled"),
 				}, nil
@@ -623,10 +629,19 @@ func (e *Executor) executeTodoWrite(_ context.Context, _ *thread.ToolContext, ca
 
 // --- TaskOutput ---
 
+const taskOutputDefaultTimeout = 30 * time.Second
+
 type taskOutputInput struct {
 	TaskID  string `json:"task_id"`
 	Block   bool   `json:"block"`
 	Timeout int    `json:"timeout"`
+}
+
+func taskOutputWaitTimeout(input int) time.Duration {
+	if input <= 0 {
+		return taskOutputDefaultTimeout
+	}
+	return time.Duration(min(input, 600_000)) * time.Millisecond
 }
 
 func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
@@ -647,10 +662,7 @@ func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExec
 	}
 
 	if input.Block {
-		timeout := 30 * time.Second
-		if input.Timeout > 0 {
-			timeout = time.Duration(min(input.Timeout, 600_000)) * time.Millisecond
-		}
+		timeout := taskOutputWaitTimeout(input.Timeout)
 		select {
 		case <-rec.done:
 		case <-time.After(timeout):

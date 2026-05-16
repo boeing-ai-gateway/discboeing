@@ -19,7 +19,7 @@ inputSchema:
       default: 30000
       minimum: 0
       maximum: 600000
-      description: Max wait time in milliseconds.
+      description: Max wait time in milliseconds. Use 0 to apply the default when block is true.
   required:
     - task_id
     - block
