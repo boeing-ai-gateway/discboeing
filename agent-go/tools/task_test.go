@@ -20,9 +20,11 @@ import (
 
 type mockSubAgent struct {
 	promptFn               func(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
+	resumeFn               func(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error)
 	finalResponseFn        func(threadID string) (string, error)
 	pendingQuestionFn      func(threadID string) (*agent.PendingQuestion, error)
 	submitAnswerFn         func(threadID, approvalID string, req api.AnswerQuestionRequest) error
+	hasInterruptedTurnFn   func(threadID string) (bool, error)
 	validateSubagentTypeFn func(subagentType string) error
 }
 
@@ -32,7 +34,10 @@ func (m *mockSubAgent) Prompt(ctx context.Context, threadID string, req agent.Pr
 	}
 	return func(_ func(message.MessageChunk, error) bool) {}
 }
-func (m *mockSubAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) (agent.ResumeResult, error) {
+func (m *mockSubAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
+	if m.resumeFn != nil {
+		return m.resumeFn(ctx, threadID, req)
+	}
 	return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 }
 
@@ -57,7 +62,12 @@ func (m *mockSubAgent) UpdateThread(_ context.Context, threadID string, req agen
 	return info, nil
 }
 func (m *mockSubAgent) DeleteThread(context.Context, string) error { return nil }
-func (m *mockSubAgent) HasInterruptedTurn(string) (bool, error)    { return false, nil }
+func (m *mockSubAgent) HasInterruptedTurn(threadID string) (bool, error) {
+	if m.hasInterruptedTurnFn != nil {
+		return m.hasInterruptedTurnFn(threadID)
+	}
+	return false, nil
+}
 func (m *mockSubAgent) PendingQuestion(threadID string) (*agent.PendingQuestion, error) {
 	if m.pendingQuestionFn != nil {
 		return m.pendingQuestionFn(threadID)
@@ -250,8 +260,8 @@ func (a *recursiveTaskAgent) Prompt(ctx context.Context, threadID string, req ag
 		}
 	}
 }
-func (a *recursiveTaskAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) (agent.ResumeResult, error) {
-	return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
+func (a *recursiveTaskAgent) Resume(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error) {
+	return agent.ResumeResult{Stream: a.Prompt(ctx, threadID, req)}, nil
 }
 
 func (a *recursiveTaskAgent) Cancel(_ string) bool                              { return false }
@@ -646,6 +656,135 @@ func TestTask_ResumeSkipsNewTaskValidation(t *testing.T) {
 	}
 }
 
+func TestTask_ResumeInterruptedSubtaskUsesResume(t *testing.T) {
+	const want = "resumed interrupted task"
+	var promptCalled bool
+	var gotResumeUserParts int
+	var gotResumeModel, gotResumeType string
+
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			promptCalled = true
+			return func(yield func(message.MessageChunk, error) bool) {
+				yield(nil, agent.ErrInterruptedTurnRequiresResume)
+			}
+		},
+		hasInterruptedTurnFn: func(_ string) (bool, error) { return true, nil },
+		resumeFn: func(_ context.Context, _ string, req agent.PromptRequest) (agent.ResumeResult, error) {
+			gotResumeUserParts = len(req.UserParts)
+			gotResumeModel = req.Model
+			gotResumeType = req.SubagentType
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
+		},
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{
+		ThreadID:   "parent-thread",
+		Agent:      subAgent,
+		ProviderID: "openai",
+		ModelID:    "gpt-5.5",
+	}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"description":"recover task","prompt":"continue existing work","subagent_type":"general-purpose"}`,
+	}
+
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatal("expected Async handle")
+	}
+	t.Cleanup(func() { cleanupTask(continuationSubThreadID(t, result.Async.Continuation)) })
+
+	res := waitHandle(t, result.Async, 5*time.Second)
+	if promptCalled {
+		t.Fatal("Prompt called for interrupted subtask; expected Resume")
+	}
+	if got := textOutput(res); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+	if gotResumeUserParts != 0 {
+		t.Fatalf("resume user parts len = %d, want 0", gotResumeUserParts)
+	}
+	if gotResumeModel != "openai/gpt-5.5" {
+		t.Fatalf("resume model = %q, want openai/gpt-5.5", gotResumeModel)
+	}
+	if gotResumeType != "general-purpose" {
+		t.Fatalf("resume subagent type = %q, want general-purpose", gotResumeType)
+	}
+}
+
+func TestTask_ContinueAfterAnswerUsesResume(t *testing.T) {
+	const want = "answered task done"
+	approvalID := "approval-1"
+	var submitted bool
+	var resumed bool
+
+	subAgent := &mockSubAgent{
+		pendingQuestionFn: func(_ string) (*agent.PendingQuestion, error) {
+			if submitted {
+				return nil, nil
+			}
+			return &agent.PendingQuestion{ApprovalID: approvalID}, nil
+		},
+		submitAnswerFn: func(_, gotApprovalID string, _ api.AnswerQuestionRequest) error {
+			if gotApprovalID != approvalID {
+				t.Fatalf("approvalID = %q, want %q", gotApprovalID, approvalID)
+			}
+			submitted = true
+			return nil
+		},
+		resumeFn: func(_ context.Context, _ string, req agent.PromptRequest) (agent.ResumeResult, error) {
+			resumed = true
+			if len(req.UserParts) != 0 {
+				t.Fatalf("resume user parts len = %d, want 0", len(req.UserParts))
+			}
+			return agent.ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
+		},
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+	}
+
+	rec := &taskRecord{
+		taskID:            t.Name(),
+		status:            "waiting_for_answer",
+		subThreadID:       t.Name(),
+		pendingApprovalID: approvalID,
+		done:              make(chan struct{}),
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[rec.taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(rec.taskID) })
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	result, err := exec.continueTask(context.Background(), &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}, message.ToolCallPart{
+		ToolCallID: t.Name() + "-tc",
+		ToolName:   "Task",
+		Input:      `{"resume":"` + rec.taskID + `"}`,
+	}, marshalTaskContinuation(rec.taskID), &api.AnswerQuestionRequest{})
+	if err != nil {
+		t.Fatalf("continueTask: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatal("expected Async handle")
+	}
+	res := waitHandle(t, result.Async, 5*time.Second)
+	if !submitted {
+		t.Fatal("answer was not submitted")
+	}
+	if !resumed {
+		t.Fatal("Resume was not called")
+	}
+	if got := textOutput(res); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
 func TestTaskOutputTimeoutDefaultsAndUsesMilliseconds(t *testing.T) {
 	if got := taskOutputWaitTimeout(0); got != taskOutputDefaultTimeout {
 		t.Fatalf("timeout 0 = %s, want %s", got, taskOutputDefaultTimeout)
@@ -696,6 +835,40 @@ func TestTaskOutputBlockWaitsForTaskCompletion(t *testing.T) {
 	}
 	if got := textOutput(result.Result); got != "done" {
 		t.Fatalf("TaskOutput = %q, want %q", got, "done")
+	}
+}
+
+func TestTaskStopDoesNotWaitWhileHoldingTaskLock(t *testing.T) {
+	taskID := t.Name()
+	cancelled := make(chan struct{})
+	rec := &taskRecord{
+		taskID:      taskID,
+		status:      "in_progress",
+		subThreadID: taskID,
+		done:        make(chan struct{}),
+		cancel:      func() { close(cancelled) },
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	result, err := exec.Execute(context.Background(), nil, message.ToolCallPart{
+		ToolCallID: t.Name() + "-stop",
+		ToolName:   "TaskStop",
+		Input:      `{"task_id":"` + taskID + `"}`,
+	})
+	if err != nil {
+		t.Fatalf("TaskStop execute: %v", err)
+	}
+	if got := textOutput(result.Result); !strings.Contains(got, "Task "+taskID+" stopped") {
+		t.Fatalf("TaskStop output = %q", got)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("TaskStop did not call cancel")
 	}
 }
 

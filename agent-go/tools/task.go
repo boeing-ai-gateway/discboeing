@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"iter"
 	"strings"
 	"sync"
 	"time"
@@ -439,14 +441,7 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	defer close(rec.done)
 	defer rec.cancel()
 
-	// Drain the Prompt iterator to run the full multi-step turn loop.
-	var runErr error
-	for _, err := range subAgent.Prompt(ctx, subThreadID, req) {
-		if err != nil {
-			runErr = err
-			break
-		}
-	}
+	runErr := drainSubAgentRun(ctx, subAgent, subThreadID, req)
 
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -500,6 +495,44 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	rec.status = "completed"
 	rec.output = output
 	persistTaskThreadError(subAgent, subThreadID, "")
+}
+
+func drainSubAgentRun(ctx context.Context, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) error {
+	if req.UserParts == nil {
+		return drainSubAgentResume(ctx, subAgent, subThreadID, req)
+	}
+	if interrupted, err := subAgent.HasInterruptedTurn(subThreadID); err == nil && interrupted {
+		return drainSubAgentResume(ctx, subAgent, subThreadID, req)
+	}
+	for _, err := range subAgent.Prompt(ctx, subThreadID, req) {
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, agent.ErrInterruptedTurnRequiresResume) || errors.Is(err, agent.ErrPendingQuestionRequiresAnswer) {
+			return drainSubAgentResume(ctx, subAgent, subThreadID, req)
+		}
+		return err
+	}
+	return nil
+}
+
+func drainSubAgentResume(ctx context.Context, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) error {
+	resumeReq := req
+	resumeReq.UserParts = nil
+	result, err := subAgent.Resume(ctx, subThreadID, resumeReq)
+	if err != nil {
+		return err
+	}
+	return drainMessageStream(result.Stream)
+}
+
+func drainMessageStream(seq iter.Seq2[message.MessageChunk, error]) error {
+	for _, err := range seq {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // taskHandle builds the AsyncContinuationHandle that the turn loop waits on.
@@ -707,19 +740,16 @@ func (e *Executor) executeTaskStop(call message.ToolCallPart) (thread.ToolExecut
 	}
 
 	rec.mu.Lock()
-	defer rec.mu.Unlock()
-
 	if rec.status != "completed" && rec.status != "failed" {
 		rec.status = "failed"
 		rec.output += "\n[Task stopped by agent]"
-		if rec.cancel != nil {
-			rec.cancel()
+		cancel := rec.cancel
+		rec.mu.Unlock()
+		if cancel != nil {
+			cancel()
 		}
-		select {
-		case <-rec.done:
-		default:
-			close(rec.done)
-		}
+	} else {
+		rec.mu.Unlock()
 	}
 
 	return textResult(call, fmt.Sprintf("Task %s stopped", input.TaskID)), nil
