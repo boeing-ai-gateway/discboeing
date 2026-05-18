@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -217,13 +218,6 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{"sessions": mapSessionResponses(sessions)})
 }
 
-// CreateSessionRequest represents the request body for creating a session without sending a message.
-type CreateSessionRequest struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	ProviderID  string `json:"providerId,omitempty"`
-}
-
 func (h *Handler) resolveWorkspaceIDForNewSession(
 	ctx context.Context,
 	projectID string,
@@ -269,7 +263,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	projectID := middleware.GetProjectID(ctx)
 
-	var req CreateSessionRequest
+	var req api.CreateSessionRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

@@ -3,33 +3,17 @@ package handler
 import (
 	"net/http"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/providers"
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
-// ModelsResponse contains the list of available models
-type ModelsResponse struct {
-	Models []ModelInfo `json:"models"`
-}
-
-// ModelInfo represents a model in the API response
-type ModelInfo struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Provider         string   `json:"provider"`
-	Description      string   `json:"description,omitempty"`
-	Reasoning        bool     `json:"reasoning,omitempty"` // Whether model supports extended thinking
-	ReasoningLevels  []string `json:"reasoningLevels,omitempty"`
-	DefaultReasoning string   `json:"defaultReasoning,omitempty"`
-	ServiceTiers     []string `json:"serviceTiers,omitempty"`
-}
-
 // toModelInfos converts service models to API response models.
-func toModelInfos(models []service.Model) []ModelInfo {
-	modelInfos := make([]ModelInfo, len(models))
+func toModelInfos(models []service.Model) []api.ModelInfo {
+	modelInfos := make([]api.ModelInfo, len(models))
 	for i, m := range models {
-		modelInfos[i] = ModelInfo{
+		modelInfos[i] = api.ModelInfo{
 			ID:               m.ID,
 			Name:             m.Name,
 			Provider:         m.Provider,
@@ -57,7 +41,7 @@ func (h *Handler) GetProjectModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, ModelsResponse{Models: toModelInfos(models)})
+	h.JSON(w, http.StatusOK, api.ModelsResponse{Models: toModelInfos(models)})
 }
 
 // GetAuthProviders returns available auth providers from models.dev data

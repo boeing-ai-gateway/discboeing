@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"github.com/obot-platform/discobot/server/api"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +13,7 @@ import (
 )
 
 // getDiskUsage returns filesystem usage statistics for a given path
-func getDiskUsage(path string) *DiskUsageInfo {
+func getDiskUsage(path string) *api.DiskUsageInfo {
 	// Convert to UTF16 for Windows API
 	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
@@ -39,7 +41,7 @@ func getDiskUsage(path string) *DiskUsageInfo {
 		usedPercent = float64(usedBytes) / float64(totalBytes) * 100
 	}
 
-	return &DiskUsageInfo{
+	return &api.DiskUsageInfo{
 		TotalBytes:     totalBytes,
 		UsedBytes:      usedBytes,
 		AvailableBytes: freeBytesAvailable,
@@ -50,13 +52,13 @@ func getDiskUsage(path string) *DiskUsageInfo {
 // getDataDiskFiles scans for project data disk images and returns their size info.
 // On Windows, we report both apparent and actual size as the file size.
 // Sparse file detection on Windows requires more complex Win32 API calls.
-func getDataDiskFiles(dataDir string) []DataDiskFileInfo {
+func getDataDiskFiles(dataDir string) []api.DataDiskFileInfo {
 	entries, err := os.ReadDir(dataDir)
 	if err != nil {
 		return nil
 	}
 
-	var disks []DataDiskFileInfo
+	var disks []api.DataDiskFileInfo
 	for _, entry := range entries {
 		name := entry.Name()
 		if !strings.HasPrefix(name, "project-") || !strings.HasSuffix(name, "-data.img") {
@@ -74,7 +76,7 @@ func getDataDiskFiles(dataDir string) []DataDiskFileInfo {
 		// Full sparse file support would require DeviceIoControl with FSCTL_GET_COMPRESSION
 		actualBytes := apparentBytes
 
-		disks = append(disks, DataDiskFileInfo{
+		disks = append(disks, api.DataDiskFileInfo{
 			Path:          path,
 			ApparentBytes: apparentBytes,
 			ActualBytes:   actualBytes,

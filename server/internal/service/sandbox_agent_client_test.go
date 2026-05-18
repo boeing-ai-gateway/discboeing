@@ -748,7 +748,8 @@ func TestSandboxAgentClient_SendMessages_WithCredentials(t *testing.T) {
 	}
 
 	// Drain channel to completion
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	// Verify credentials were sent
@@ -795,7 +796,8 @@ func TestSandboxAgentClient_SendMessages_WithAuthorization(t *testing.T) {
 	}
 
 	// Drain channel to completion
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	// Verify authorization header was set
@@ -864,7 +866,8 @@ func TestSandboxAgentClient_SendMessages_RetriesOnEOF(t *testing.T) {
 	}
 
 	// Drain channel
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	// Should have retried: 2 EOF failures + 1 success for POST + 1 for GET = 4 total
@@ -897,7 +900,8 @@ func TestSandboxAgentClient_SendMessages_RetriesOnBrokenPipe(t *testing.T) {
 		t.Fatalf("SendMessages failed: %v", err)
 	}
 
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	if totalAttempts := attempts.Load(); totalAttempts < 3 {
@@ -1092,7 +1096,8 @@ func TestSandboxAgentClient_SendMessages_WithGitConfig(t *testing.T) {
 	}
 
 	// Drain channel to completion
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	// Verify git config headers were sent
@@ -1143,7 +1148,8 @@ func TestSandboxAgentClient_SendMessages_WithPartialGitConfig(t *testing.T) {
 	}
 
 	// Drain channel to completion
-	for range ch { //nolint:revive // empty block intentionally drains channel
+	for event := range ch {
+		_ = event
 	}
 
 	// Verify only name header was sent

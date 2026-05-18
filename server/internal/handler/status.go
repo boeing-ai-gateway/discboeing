@@ -5,22 +5,14 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/startup"
 	"github.com/obot-platform/discobot/server/internal/version"
 )
 
-// ServerConfigResponse contains public server configuration for the frontend
-type ServerConfigResponse struct {
-	SSHPort       int    `json:"ssh_port"`
-	HTTPPort      int    `json:"http_port"`
-	HTTPSPort     int    `json:"https_port,omitempty"`
-	HTTPSTLSMode  string `json:"https_tls_mode,omitempty"`
-	PublicBaseURL string `json:"public_base_url"`
-}
-
 // GetServerConfig returns public server configuration
 func (h *Handler) GetServerConfig(w http.ResponseWriter, _ *http.Request) {
-	h.JSON(w, http.StatusOK, ServerConfigResponse{
+	h.JSON(w, http.StatusOK, api.ServerConfig{
 		SSHPort:       h.cfg.SSHPort,
 		HTTPPort:      h.cfg.Port,
 		HTTPSPort:     h.cfg.HTTPSPort,
@@ -39,89 +31,57 @@ func (h *Handler) GetSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	// Use system manager to get complete system status
 	if h.systemManager != nil {
 		status := h.systemManager.GetSystemStatus()
-		h.JSON(w, http.StatusOK, status)
+		h.JSON(w, http.StatusOK, mapSystemStatus(status))
 		return
 	}
 
 	// Fallback if system manager is not available
-	h.JSON(w, http.StatusOK, startup.SystemStatusResponse{
+	h.JSON(w, http.StatusOK, api.SystemStatusResponse{
 		OK:       true,
-		Messages: []startup.StatusMessage{},
+		Messages: []api.StatusMessage{},
 	})
 }
 
-// SupportInfoResponse contains diagnostic information for debugging and support
-type SupportInfoResponse struct {
-	Version    string                       `json:"version"`
-	Runtime    RuntimeInfo                  `json:"runtime"`
-	Config     ConfigInfo                   `json:"config"`
-	ServerLog  string                       `json:"server_log"`
-	LogPath    string                       `json:"log_path"`
-	LogExists  bool                         `json:"log_exists"`
-	SystemInfo startup.SystemStatusResponse `json:"system_info"`
-}
-
-// RuntimeInfo contains Go runtime information
-type RuntimeInfo struct {
-	OS           string `json:"os"`
-	Arch         string `json:"arch"`
-	GoVersion    string `json:"go_version"`
-	NumCPU       int    `json:"num_cpu"`
-	NumGoroutine int    `json:"num_goroutine"`
-}
-
-// ConfigInfo contains sanitized configuration information
-type ConfigInfo struct {
-	Port               int      `json:"port"`
-	HTTPSPort          int      `json:"https_port,omitempty"`
-	HTTPSTLSMode       string   `json:"https_tls_mode,omitempty"`
-	DatabaseDriver     string   `json:"database_driver"`
-	AuthEnabled        bool     `json:"auth_enabled"`
-	WorkspaceDir       string   `json:"workspace_dir"`
-	SandboxImage       string   `json:"sandbox_image"`
-	SandboxImageRemote string   `json:"sandbox_image_remote,omitempty"`
-	DesktopMode        bool     `json:"desktop_mode"`
-	DesktopRuntime     string   `json:"desktop_runtime,omitempty"`
-	SSHEnabled         bool     `json:"ssh_enabled"`
-	SSHPort            int      `json:"ssh_port"`
-	DispatcherEnabled  bool     `json:"dispatcher_enabled"`
-	AvailableProviders []string `json:"available_providers"`
-	VZ                 *VZInfo  `json:"vz,omitempty"`
-}
-
-// VZInfo contains VZ-specific configuration and disk usage information
-type VZInfo struct {
-	ImageRef     string             `json:"image_ref"`
-	DataDir      string             `json:"data_dir"`
-	CPUCount     int                `json:"cpu_count"`
-	MemoryMB     int                `json:"memory_mb"`
-	DataDiskGB   int                `json:"data_disk_gb"`
-	DiskUsage    *DiskUsageInfo     `json:"disk_usage,omitempty"`
-	DataDisks    []DataDiskFileInfo `json:"data_disks,omitempty"`
-	KernelPath   string             `json:"kernel_path,omitempty"`
-	InitrdPath   string             `json:"initrd_path,omitempty"`
-	BaseDiskPath string             `json:"base_disk_path,omitempty"`
-}
-
-// DiskUsageInfo contains filesystem usage statistics
-type DiskUsageInfo struct {
-	TotalBytes     uint64  `json:"total_bytes"`
-	UsedBytes      uint64  `json:"used_bytes"`
-	AvailableBytes uint64  `json:"available_bytes"`
-	UsedPercent    float64 `json:"used_percent"`
-}
-
-// DataDiskFileInfo contains size information for a sparse data disk file
-type DataDiskFileInfo struct {
-	Path          string `json:"path"`
-	ApparentBytes uint64 `json:"apparent_bytes"` // Logical file size
-	ActualBytes   uint64 `json:"actual_bytes"`   // Actual disk usage (sparse-aware)
+func mapSystemStatus(status startup.SystemStatusResponse) api.SystemStatusResponse {
+	out := api.SystemStatusResponse{
+		OK:       status.OK,
+		Messages: make([]api.StatusMessage, 0, len(status.Messages)),
+	}
+	for _, message := range status.Messages {
+		out.Messages = append(out.Messages, api.StatusMessage{
+			ID:      message.ID,
+			Level:   api.StatusMessageLevel(message.Level),
+			Title:   message.Title,
+			Message: message.Message,
+		})
+	}
+	if len(status.StartupTasks) > 0 {
+		out.StartupTasks = make([]*api.StartupTask, 0, len(status.StartupTasks))
+		for _, task := range status.StartupTasks {
+			if task == nil {
+				continue
+			}
+			out.StartupTasks = append(out.StartupTasks, &api.StartupTask{
+				ID:               task.ID,
+				Name:             task.Name,
+				State:            string(task.State),
+				Progress:         task.Progress,
+				CurrentOperation: task.CurrentOperation,
+				BytesDownloaded:  task.BytesDownloaded,
+				TotalBytes:       task.TotalBytes,
+				Error:            task.Error,
+				StartedAt:        task.StartedAt,
+				CompletedAt:      task.CompletedAt,
+			})
+		}
+	}
+	return out
 }
 
 // GetSupportInfo returns comprehensive diagnostic information for debugging
 func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 	// Get runtime info
-	runtimeInfo := RuntimeInfo{
+	runtimeInfo := api.RuntimeInfo{
 		OS:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
 		GoVersion:    runtime.Version(),
@@ -135,7 +95,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		availableProviders = h.sandboxService.ListProviderNames()
 	}
 
-	configInfo := ConfigInfo{
+	configInfo := api.ConfigInfo{
 		Port:               h.cfg.Port,
 		HTTPSPort:          h.cfg.HTTPSPort,
 		HTTPSTLSMode:       h.cfg.HTTPSTLSMode,
@@ -154,7 +114,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 
 	// Add VZ info if on macOS
 	if runtime.GOOS == "darwin" {
-		vzInfo := &VZInfo{
+		vzInfo := &api.VZInfo{
 			ImageRef:     h.cfg.VZImageRef,
 			DataDir:      h.cfg.VZDataDir,
 			CPUCount:     h.cfg.VZCPUCount,
@@ -187,15 +147,15 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	// Get system status from system manager
-	var systemStatus startup.SystemStatusResponse
+	systemStatus := api.SystemStatusResponse{}
 	if h.sandboxService != nil {
 		h.sandboxService.RefreshProviderStatuses()
 	}
 	if h.systemManager != nil {
-		systemStatus = h.systemManager.GetSystemStatus()
+		systemStatus = mapSystemStatus(h.systemManager.GetSystemStatus())
 	}
 
-	response := SupportInfoResponse{
+	response := api.SupportInfoResponse{
 		Version:    version.Get(),
 		Runtime:    runtimeInfo,
 		Config:     configInfo,

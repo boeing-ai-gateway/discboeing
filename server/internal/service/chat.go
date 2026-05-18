@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
@@ -765,12 +766,12 @@ func (c *ChatService) GetServiceOutput(ctx context.Context, projectID, sessionID
 
 // lastUserMessageID returns the ID of the last user message in the slice, or "".
 func lastUserMessageID(messages []json.RawMessage) string {
-	for i := len(messages) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(messages) {
 		var m struct {
 			ID   string `json:"id"`
 			Role string `json:"role"`
 		}
-		if json.Unmarshal(messages[i], &m) == nil && m.Role == "user" && m.ID != "" {
+		if json.Unmarshal(v, &m) == nil && m.Role == "user" && m.ID != "" {
 			return m.ID
 		}
 	}

@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/service"
@@ -51,15 +52,15 @@ type validateWorkspaceRequest struct {
 }
 
 type validateWorkspaceResponse struct {
-	Path           string       `json:"path"`
-	SourceType     string       `json:"sourceType"`
-	Valid          bool         `json:"valid"`
-	Classification string       `json:"classification"`
-	Error          string       `json:"error,omitempty"`
-	Suggestions    []Suggestion `json:"suggestions"`
-	AuthProvider   string       `json:"authProvider,omitempty"`
-	AuthRequired   bool         `json:"authRequired,omitempty"`
-	AuthMessage    string       `json:"authMessage,omitempty"`
+	Path           string           `json:"path"`
+	SourceType     string           `json:"sourceType"`
+	Valid          bool             `json:"valid"`
+	Classification string           `json:"classification"`
+	Error          string           `json:"error,omitempty"`
+	Suggestions    []api.Suggestion `json:"suggestions"`
+	AuthProvider   string           `json:"authProvider,omitempty"`
+	AuthRequired   bool             `json:"authRequired,omitempty"`
+	AuthMessage    string           `json:"authMessage,omitempty"`
 }
 
 // ValidateWorkspace validates a workspace path/repo and returns suggestions.
@@ -89,7 +90,7 @@ func (h *Handler) ValidateWorkspace(w http.ResponseWriter, r *http.Request) {
 			SourceType:     req.SourceType,
 			Valid:          false,
 			Classification: service.LocalWorkspaceClassificationInvalid,
-			Suggestions:    []Suggestion{},
+			Suggestions:    []api.Suggestion{},
 		})
 		return
 	}
@@ -215,12 +216,12 @@ func looksLikeGitRepositoryInput(path string) bool {
 	return false
 }
 
-func getRepoSuggestions(ctx context.Context, query string, githubToken string) []Suggestion {
+func getRepoSuggestions(ctx context.Context, query string, githubToken string) []api.Suggestion {
 	normalizedGitHubQuery := normalizeGitHubRepoQuery(query)
 
 	if githubToken != "" && normalizedGitHubQuery != "" {
 		repoSuggestions, repoErr := getGitHubRepoSuggestions(ctx, query, githubToken)
-		orgSuggestions := []Suggestion{}
+		orgSuggestions := []api.Suggestion{}
 		var orgErr error
 
 		if !strings.Contains(normalizedGitHubQuery, "/") {
@@ -228,10 +229,10 @@ func getRepoSuggestions(ctx context.Context, query string, githubToken string) [
 		}
 
 		if repoErr == nil && orgErr == nil && (len(repoSuggestions) > 0 || len(orgSuggestions) > 0) {
-			merged := make([]Suggestion, 0, len(repoSuggestions)+len(orgSuggestions))
+			merged := make([]api.Suggestion, 0, len(repoSuggestions)+len(orgSuggestions))
 			seen := make(map[string]struct{}, len(repoSuggestions)+len(orgSuggestions))
 
-			appendSuggestion := func(suggestion Suggestion) {
+			appendSuggestion := func(suggestion api.Suggestion) {
 				if suggestion.Value == "" {
 					return
 				}
@@ -257,7 +258,7 @@ func getRepoSuggestions(ctx context.Context, query string, githubToken string) [
 		}
 
 		if strings.Contains(normalizedGitHubQuery, "/") {
-			return []Suggestion{}
+			return []api.Suggestion{}
 		}
 	}
 
@@ -265,14 +266,14 @@ func getRepoSuggestions(ctx context.Context, query string, githubToken string) [
 	return staticSuggestions
 }
 
-func getStaticRepoSuggestions(query string) []Suggestion {
+func getStaticRepoSuggestions(query string) []api.Suggestion {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
-		return []Suggestion{}
+		return []api.Suggestion{}
 	}
 
 	seen := map[string]struct{}{}
-	suggestions := make([]Suggestion, 0, 3)
+	suggestions := make([]api.Suggestion, 0, 3)
 	appendSuggestion := func(value string) {
 		if value == "" {
 			return
@@ -281,7 +282,7 @@ func getStaticRepoSuggestions(query string) []Suggestion {
 			return
 		}
 		seen[value] = struct{}{}
-		suggestions = append(suggestions, Suggestion{Value: value, Type: "repo", Valid: true})
+		suggestions = append(suggestions, api.Suggestion{Value: value, Type: "repo", Valid: true})
 	}
 
 	if looksLikeGitRepositoryInput(trimmed) {
@@ -318,7 +319,7 @@ type githubUserSearchResponse struct {
 	} `json:"items"`
 }
 
-func getGitHubRepoSuggestions(ctx context.Context, query string, githubToken string) ([]Suggestion, error) {
+func getGitHubRepoSuggestions(ctx context.Context, query string, githubToken string) ([]api.Suggestion, error) {
 	if githubToken == "" {
 		return nil, nil
 	}
@@ -361,12 +362,12 @@ func getGitHubRepoSuggestions(ctx context.Context, query string, githubToken str
 		return nil, err
 	}
 
-	suggestions := make([]Suggestion, 0, len(payload.Items))
+	suggestions := make([]api.Suggestion, 0, len(payload.Items))
 	for _, item := range payload.Items {
 		if item.FullName == "" {
 			continue
 		}
-		suggestions = append(suggestions, Suggestion{
+		suggestions = append(suggestions, api.Suggestion{
 			Value: item.FullName,
 			Type:  "repo",
 			Valid: true,
@@ -376,7 +377,7 @@ func getGitHubRepoSuggestions(ctx context.Context, query string, githubToken str
 	return suggestions, nil
 }
 
-func getGitHubOrgSuggestions(ctx context.Context, query string, githubToken string) ([]Suggestion, error) {
+func getGitHubOrgSuggestions(ctx context.Context, query string, githubToken string) ([]api.Suggestion, error) {
 	trimmedQuery := strings.TrimSpace(query)
 	if trimmedQuery == "" {
 		return nil, nil
@@ -409,13 +410,13 @@ func getGitHubOrgSuggestions(ctx context.Context, query string, githubToken stri
 		return nil, err
 	}
 
-	suggestions := make([]Suggestion, 0, len(payload.Items))
+	suggestions := make([]api.Suggestion, 0, len(payload.Items))
 	for _, item := range payload.Items {
 		if item.Login == "" {
 			continue
 		}
 
-		suggestions = append(suggestions, Suggestion{
+		suggestions = append(suggestions, api.Suggestion{
 			Value:          item.Login + "/",
 			Type:           "repo",
 			Valid:          false,
@@ -431,7 +432,7 @@ type githubRepositoryListItem struct {
 	FullName string `json:"full_name"`
 }
 
-func getGitHubOwnerRepoSuggestions(ctx context.Context, owner, repoPrefix, githubToken string) ([]Suggestion, error) {
+func getGitHubOwnerRepoSuggestions(ctx context.Context, owner, repoPrefix, githubToken string) ([]api.Suggestion, error) {
 	if owner == "" {
 		return nil, nil
 	}
@@ -489,8 +490,8 @@ func fetchGitHubOwnerRepos(ctx context.Context, owner, githubToken string) ([]gi
 	return merged, nil
 }
 
-func filterGitHubOwnerRepoSuggestions(repos []githubRepositoryListItem, lowerPrefix string) []Suggestion {
-	suggestions := make([]Suggestion, 0, 10)
+func filterGitHubOwnerRepoSuggestions(repos []githubRepositoryListItem, lowerPrefix string) []api.Suggestion {
+	suggestions := make([]api.Suggestion, 0, 10)
 	for _, item := range repos {
 		if item.FullName == "" {
 			continue
@@ -499,7 +500,7 @@ func filterGitHubOwnerRepoSuggestions(repos []githubRepositoryListItem, lowerPre
 			continue
 		}
 
-		suggestions = append(suggestions, Suggestion{
+		suggestions = append(suggestions, api.Suggestion{
 			Value: item.FullName,
 			Type:  "repo",
 			Valid: true,

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
@@ -30,43 +32,6 @@ type requestCommitPullMetadata struct {
 	CommitBody  string `json:"commitBody,omitempty"`
 }
 
-// ChatRequest represents the request body for the chat endpoint.
-// This matches the AI SDK's DefaultChatTransport format.
-// Each element is a single UIMessage encoded as JSON.
-type ChatRequest struct {
-	// Messages is optional for create-only requests. When omitted or [], the
-	// handler creates/validates the session and returns an immediate empty SSE completion.
-	Messages []json.RawMessage `json:"messages"`
-	// Trigger indicates the type of request: "submit-message" or "regenerate-message"
-	Trigger string `json:"trigger,omitempty"`
-	// WorkspaceID is optional for new sessions.
-	// If omitted, the server creates a local workspace under Discobot's data directory.
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	// ProviderID is optional for new sessions and selects a sandbox provider instance.
-	ProviderID string `json:"providerId,omitempty"`
-	// Model is optional for new sessions.
-	Model string `json:"model,omitempty"`
-	// Reasoning controls extended thinking. This is passed through as a string
-	// reasoning level such as "auto", "low", "medium", "high", "xhigh",
-	// "none", "default", or "" for model/provider default behavior.
-	Reasoning string `json:"reasoning,omitempty"`
-	// ServiceTier optionally selects a provider latency tier, such as "fast".
-	ServiceTier string `json:"serviceTier,omitempty"`
-	// RunAfter queues the prompt until the given RFC3339 timestamp, even if the thread is idle.
-	RunAfter string `json:"runAfter,omitempty"`
-}
-
-type ChatResponse struct {
-	WorkspaceID    string `json:"workspaceId"`
-	SessionID      string `json:"sessionId"`
-	ThreadID       string `json:"threadId"`
-	SubmissionID   string `json:"submissionId,omitempty"`
-	MessageID      string `json:"messageId,omitempty"`
-	CompletionID   string `json:"completionId,omitempty"`
-	Status         string `json:"status,omitempty"`
-	QueuedPromptID string `json:"queuedPromptId,omitempty"`
-}
-
 // Chat handles AI chat initiation.
 // POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/chat
 // Request body: { messages, workspaceId?, trigger?, messageId?, model?, reasoning? }
@@ -76,7 +41,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(ctx)
 
 	// Parse request
-	var req ChatRequest
+	var req api.ChatRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -154,7 +119,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := ChatResponse{
+	response := api.ChatResponse{
 		WorkspaceID: sessionWorkspaceID,
 		SessionID:   sessionID,
 		ThreadID:    threadID,
@@ -537,12 +502,12 @@ func (h *Handler) resolveSessionAndThread(w http.ResponseWriter, r *http.Request
 
 // lastUserMessageID returns the ID of the last user message in the slice, or "".
 func lastUserMessageID(messages []json.RawMessage) string {
-	for i := len(messages) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(messages) {
 		var m struct {
 			ID   string `json:"id"`
 			Role string `json:"role"`
 		}
-		if json.Unmarshal(messages[i], &m) == nil && m.Role == "user" && m.ID != "" {
+		if json.Unmarshal(v, &m) == nil && m.Role == "user" && m.ID != "" {
 			return m.ID
 		}
 	}

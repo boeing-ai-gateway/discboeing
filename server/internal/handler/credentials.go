@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/oauth"
@@ -16,29 +17,18 @@ import (
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
-// CreateCredentialRequest is the request body for creating/updating a credential
-type createCredentialEnvVarRequest struct {
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	OriginalKey string `json:"originalKey,omitempty"`
-}
-
-type CreateCredentialRequest struct {
-	Provider     string                          `json:"provider,omitempty"`
-	CredentialID string                          `json:"credentialId,omitempty"`
-	Name         string                          `json:"name"`
-	Description  string                          `json:"description,omitempty"`
-	AuthType     string                          `json:"authType"` // "api_key", "id", or "oauth"
-	APIKey       string                          `json:"apiKey,omitempty"`
-	EnvVars      []createCredentialEnvVarRequest `json:"envVars,omitempty"`
-	AgentVisible *bool                           `json:"agentVisible,omitempty"`
-	Visibility   *service.CredentialVisibility   `json:"visibility,omitempty"`
-	Inactive     *bool                           `json:"inactive,omitempty"`
-}
-
 // GetCredentialTypes returns the credential choices used by the current UI.
 func (h *Handler) GetCredentialTypes(w http.ResponseWriter, _ *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{"credentialTypes": providers.GetCredentialTypes()})
+}
+
+func credentialVisibilityFromAPI(visibility api.CredentialVisibility) service.CredentialVisibility {
+	return service.CredentialVisibility{
+		Tools:    visibility.Tools,
+		Console:  visibility.Console,
+		Services: visibility.Services,
+		Hooks:    visibility.Hooks,
+	}
 }
 
 // ListCredentials returns all credentials for a project (safe info only)
@@ -58,7 +48,7 @@ func (h *Handler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req CreateCredentialRequest
+	var req api.CreateCredentialRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -108,7 +98,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		visibility.Tools = *req.AgentVisible
 	}
 	if req.Visibility != nil {
-		visibility = *req.Visibility
+		visibility = credentialVisibilityFromAPI(*req.Visibility)
 	}
 	if req.Inactive != nil {
 		inactive = *req.Inactive
@@ -414,12 +404,6 @@ func (h *Handler) RefreshCredential(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, response)
 }
 
-// AnthropicExchangeRequest is the request for exchanging code for tokens
-type AnthropicExchangeRequest struct {
-	Code         string `json:"code"`
-	CodeVerifier string `json:"verifier"`
-}
-
 // AnthropicAuthorize generates PKCE and returns OAuth URL
 func (h *Handler) AnthropicAuthorize(w http.ResponseWriter, _ *http.Request) {
 	provider := oauth.NewAnthropicProvider(h.cfg.AnthropicClientID)
@@ -436,7 +420,7 @@ func (h *Handler) AnthropicAuthorize(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req AnthropicExchangeRequest
+	var req api.AnthropicExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -508,37 +492,9 @@ func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, response)
 }
 
-// GitHubCopilotDeviceCodeRequest is the request for initiating device flow
-type GitHubCopilotDeviceCodeRequest struct {
-	DeploymentType string `json:"deploymentType"` // "github.com" or "enterprise"
-	EnterpriseURL  string `json:"enterpriseUrl,omitempty"`
-}
-
-// GitHubCopilotPollRequest is the request for polling device authorization
-type GitHubCopilotPollRequest struct {
-	DeviceCode string `json:"deviceCode"`
-	Domain     string `json:"domain"`
-}
-
-// GitHubCopilotDeviceCodeResponse is the camelCase response for frontend
-type GitHubCopilotDeviceCodeResponse struct {
-	DeviceCode      string `json:"deviceCode"`
-	UserCode        string `json:"userCode"`
-	VerificationURI string `json:"verificationUri"`
-	ExpiresIn       int    `json:"expiresIn"`
-	Interval        int    `json:"interval"`
-	Domain          string `json:"domain"`
-}
-
-// GitHubCopilotPollResponse is the response for poll requests
-type GitHubCopilotPollResponse struct {
-	Status string `json:"status"` // "pending", "success", or "error"
-	Error  string `json:"error,omitempty"`
-}
-
 // GitHubCopilotDeviceCode initiates device flow
 func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req GitHubCopilotDeviceCodeRequest
+	var req api.GitHubCopilotDeviceCodeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		// Allow empty body, default to github.com
 		req.DeploymentType = "github.com"
@@ -567,7 +523,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Convert to camelCase for frontend
-	h.JSON(w, http.StatusOK, GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: deviceResp.VerificationURI,
@@ -581,7 +537,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 func (h *Handler) GitHubCopilotPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req GitHubCopilotPollRequest
+	var req api.GitHubCopilotPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -666,63 +622,6 @@ func (h *Handler) GitHubCopilotPoll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GitHubDeviceCodeRequest is the request for initiating GitHub device flow
-type GitHubDeviceCodeRequest struct {
-	EnterpriseURL string   `json:"enterpriseUrl,omitempty"`
-	Scopes        []string `json:"scopes,omitempty"`
-}
-
-type GitHubAuthorizeRequest struct {
-	EnterpriseURL string                        `json:"enterpriseUrl,omitempty"`
-	RedirectURI   string                        `json:"redirectUri,omitempty"`
-	Scopes        []string                      `json:"scopes,omitempty"`
-	CredentialID  string                        `json:"credentialId,omitempty"`
-	Name          string                        `json:"name,omitempty"`
-	Description   string                        `json:"description,omitempty"`
-	Visibility    *service.CredentialVisibility `json:"visibility,omitempty"`
-	Inactive      *bool                         `json:"inactive,omitempty"`
-}
-
-type GitHubAuthorizeResponse struct {
-	URL               string `json:"url"`
-	Verifier          string `json:"verifier"`
-	State             string `json:"state"`
-	RedirectURI       string `json:"redirectUri"`
-	CallbackListening bool   `json:"callbackListening"`
-}
-
-// GitHubPollRequest is the request for polling GitHub device authorization
-type GitHubPollRequest struct {
-	DeviceCode   string                        `json:"deviceCode"`
-	Domain       string                        `json:"domain"`
-	CredentialID string                        `json:"credentialId,omitempty"`
-	Name         string                        `json:"name,omitempty"`
-	Description  string                        `json:"description,omitempty"`
-	Visibility   *service.CredentialVisibility `json:"visibility,omitempty"`
-	Inactive     *bool                         `json:"inactive,omitempty"`
-}
-
-type GitHubExchangeRequest struct {
-	Code          string                        `json:"code"`
-	RedirectURI   string                        `json:"redirectUri,omitempty"`
-	CodeVerifier  string                        `json:"verifier"`
-	EnterpriseURL string                        `json:"enterpriseUrl,omitempty"`
-	CredentialID  string                        `json:"credentialId,omitempty"`
-	Name          string                        `json:"name,omitempty"`
-	Description   string                        `json:"description,omitempty"`
-	Visibility    *service.CredentialVisibility `json:"visibility,omitempty"`
-	Inactive      *bool                         `json:"inactive,omitempty"`
-}
-
-type GitHubExchangeResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
-}
-
-type GitHubCallbackStatusRequest struct {
-	State string `json:"state"`
-}
-
 func normalizeGitHubDomain(raw string) string {
 	domain := strings.TrimSpace(raw)
 	if domain == "" {
@@ -739,7 +638,7 @@ func normalizeGitHubDomain(raw string) string {
 
 // GitHubDeviceCode initiates device flow for GitHub git operations (repo scope)
 func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req GitHubDeviceCodeRequest
+	var req api.GitHubDeviceCodeRequest
 	// Allow empty body, default to github.com
 	_ = h.DecodeJSON(r, &req)
 
@@ -757,7 +656,7 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: deviceResp.VerificationURI,
@@ -775,7 +674,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req GitHubAuthorizeRequest
+	var req api.GitHubAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
 	domain := normalizeGitHubDomain(req.EnterpriseURL)
@@ -793,7 +692,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	visibility := service.CredentialVisibility{}
 	if req.Visibility != nil {
-		visibility = *req.Visibility
+		visibility = credentialVisibilityFromAPI(*req.Visibility)
 	}
 	inactive := false
 	if req.Inactive != nil {
@@ -819,7 +718,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusOK, GitHubAuthorizeResponse{
+	h.JSON(w, http.StatusOK, api.GitHubAuthorizeResponse{
 		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
@@ -832,7 +731,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req GitHubPollRequest
+	var req api.GitHubPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -891,7 +790,7 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 
 	visibility := service.CredentialVisibility{}
 	if req.Visibility != nil {
-		visibility = *req.Visibility
+		visibility = credentialVisibilityFromAPI(*req.Visibility)
 	}
 	inactive := false
 	if req.Inactive != nil {
@@ -928,7 +827,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req GitHubExchangeRequest
+	var req api.GitHubExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -959,7 +858,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 
 	visibility := service.CredentialVisibility{}
 	if req.Visibility != nil {
-		visibility = *req.Visibility
+		visibility = credentialVisibilityFromAPI(*req.Visibility)
 	}
 	inactive := false
 	if req.Inactive != nil {
@@ -994,7 +893,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) GitHubCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req GitHubCallbackStatusRequest
+	var req api.GitHubCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -1015,45 +914,6 @@ func (h *Handler) GitHubCallbackStatus(w http.ResponseWriter, r *http.Request) {
 		"status": status,
 		"error":  errMsg,
 	})
-}
-
-type CodexDeviceCodeResponse struct {
-	DeviceAuthID    string `json:"deviceAuthId"`
-	UserCode        string `json:"userCode"`
-	VerificationURI string `json:"verificationUri"`
-	Interval        int    `json:"interval"`
-}
-
-type CodexAuthorizeRequest struct {
-	RedirectURI string `json:"redirectUri"`
-}
-
-type CodexAuthorizeResponse struct {
-	URL               string `json:"url"`
-	Verifier          string `json:"verifier"`
-	State             string `json:"state"`
-	RedirectURI       string `json:"redirectUri"`
-	CallbackListening bool   `json:"callbackListening"`
-}
-
-type CodexExchangeRequest struct {
-	Code         string `json:"code"`
-	RedirectURI  string `json:"redirectUri"`
-	CodeVerifier string `json:"verifier"`
-}
-
-type CodexExchangeResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
-}
-
-type CodexPollRequest struct {
-	DeviceAuthID string `json:"deviceAuthId"`
-	UserCode     string `json:"userCode"`
-}
-
-type CodexCallbackStatusRequest struct {
-	State string `json:"state"`
 }
 
 // PostMCPToken stores an MCP OAuth token posted by the agent after completing
@@ -1106,7 +966,7 @@ func (h *Handler) CodexDeviceCode(w http.ResponseWriter, r *http.Request) {
 		interval = 5
 	}
 
-	h.JSON(w, http.StatusOK, CodexDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, api.CodexDeviceCodeResponse{
 		DeviceAuthID:    deviceResp.DeviceAuthID,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: oauth.CodexDevicePageURL,
@@ -1122,7 +982,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CodexAuthorizeRequest
+	var req api.CodexAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
 	redirectURI := strings.TrimSpace(req.RedirectURI)
@@ -1145,7 +1005,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusOK, CodexAuthorizeResponse{
+	h.JSON(w, http.StatusOK, api.CodexAuthorizeResponse{
 		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
@@ -1158,7 +1018,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req CodexPollRequest
+	var req api.CodexPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -1234,7 +1094,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CodexExchangeRequest
+	var req api.CodexExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -1291,7 +1151,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 
 // CodexCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) CodexCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req CodexCallbackStatusRequest
+	var req api.CodexCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

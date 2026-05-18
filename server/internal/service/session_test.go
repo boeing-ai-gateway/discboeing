@@ -872,7 +872,7 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 		// For string fields that come from pointers, verify they're not empty
 		// (since we populated all pointers with non-empty values)
 		if serviceField.Type.Kind() == reflect.String {
-			if modelField.Type.Kind() == reflect.Ptr {
+			if modelField.Type.Kind() == reflect.Pointer {
 				// This field comes from a pointer, should be populated
 				if serviceValue.String() == "" {
 					t.Errorf("Field %s is empty but model.%s was set to a non-nil pointer", serviceFieldName, modelFieldName)

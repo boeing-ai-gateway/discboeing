@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
+	"github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/terminal"
@@ -36,18 +37,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(_ *http.Request) bool {
 		return true // CORS middleware handles origin validation
 	},
-}
-
-// TerminalMessage represents a message sent over the WebSocket
-type TerminalMessage struct {
-	Type string          `json:"type"` // "input", "output", "resize", "error"
-	Data json.RawMessage `json:"data,omitempty"`
-}
-
-// ResizeData contains terminal resize dimensions
-type ResizeData struct {
-	Rows int `json:"rows"`
-	Cols int `json:"cols"`
 }
 
 // TerminalWebSocket handles WebSocket terminal connections.
@@ -201,7 +190,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 				log.Printf("terminal: JSON marshal error: %v", err)
 				return
 			}
-			msg := TerminalMessage{Type: "output", Data: json.RawMessage(data)}
+			msg := api.TerminalMessage{Type: "output", Data: json.RawMessage(data)}
 			if err := conn.WriteJSON(msg); err != nil {
 				// WebSocket write failed (client disconnected); stop sending.
 				return
@@ -220,7 +209,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 	go func() {
 		defer close(inputDone)
 		for {
-			var msg TerminalMessage
+			var msg api.TerminalMessage
 			if err := conn.ReadJSON(&msg); err != nil {
 				if websocket.IsUnexpectedCloseError(err,
 					websocket.CloseNormalClosure,
@@ -244,7 +233,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 				}
 
 			case "resize":
-				var resize ResizeData
+				var resize api.ResizeData
 				if err := json.Unmarshal(msg.Data, &resize); err != nil {
 					log.Printf("terminal: failed to unmarshal resize: %v", err)
 					continue
