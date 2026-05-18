@@ -1,0 +1,11 @@
+package message
+
+import ahtempl "github.com/a-h/templ"
+
+templ Message(from string, messageID string, className string, children ahtempl.Component) {
+	<div class={ messageClass(from, className) } data-conversation-message-id={ messageID }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,12 +1,15 @@
 packages:
   - ui
+  - ui-go
 
 allowBuilds:
+  "@parcel/watcher": true
   "@sentry/cli": true
   electron-winstaller: true
   esbuild: true
 
 onlyBuiltDependencies:
+  - "@parcel/watcher"
   - "@sentry/cli"
   - "@tailwindcss/oxide"
   - electron

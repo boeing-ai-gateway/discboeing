@@ -1,0 +1,16 @@
+package app
+
+import "github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+
+templ SessionToolbarStack(snapshot viewmodel.HeaderSnapshot) {
+	if snapshot.ShowSessionToolbar {
+		<div
+			class="contents"
+			data-session-toolbar-stack
+			data-selected-session-id={ snapshot.SessionToolbar.SessionID }
+			data-mounted-session-count="1"
+		>
+			@SessionToolbar(snapshot.SessionToolbar)
+		</div>
+	}
+}

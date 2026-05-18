@@ -1,0 +1,61 @@
+package app
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+)
+
+templ WorkspaceIcon(sourceType string, className string) {
+	switch sourceType {
+	case "git":
+		@GitBranchIcon(className)
+	case "local":
+		@FolderIcon(className)
+	default:
+		@PackageIcon(className)
+	}
+}
+
+templ PlusIcon(className string) {
+	@lucide.Plus(ahtempl.Attributes{"class": className})
+}
+
+templ RefreshCwIcon(className string) {
+	@lucide.RefreshCw(ahtempl.Attributes{"class": className})
+}
+
+templ RefreshIcon(className string) {
+	@RefreshCwIcon(className)
+}
+
+templ SettingsIcon(className string) {
+	@lucide.Settings(ahtempl.Attributes{"class": className})
+}
+
+templ PanelLeftIcon(className string) {
+	@lucide.PanelLeft(ahtempl.Attributes{"class": className})
+}
+
+templ ChevronDownIcon(className string) {
+	@lucide.ChevronDown(ahtempl.Attributes{"class": className})
+}
+
+templ ChevronRightIcon(className string) {
+	@lucide.ChevronRight(ahtempl.Attributes{"class": className})
+}
+
+templ EllipsisIcon(className string) {
+	@lucide.Ellipsis(ahtempl.Attributes{"class": className})
+}
+
+templ GitBranchIcon(className string) {
+	@lucide.GitBranch(ahtempl.Attributes{"class": className})
+}
+
+templ FolderIcon(className string) {
+	@lucide.Folder(ahtempl.Attributes{"class": className})
+}
+
+templ PackageIcon(className string) {
+	@lucide.Package(ahtempl.Attributes{"class": className})
+}

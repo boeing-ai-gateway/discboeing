@@ -1,0 +1,11 @@
+package codeblock
+
+import ahtempl "github.com/a-h/templ"
+
+templ CodeBlockHeader(className string, children ahtempl.Component) {
+	<div class={ classNames("flex items-center justify-between bg-muted/80 px-3 py-2 text-muted-foreground text-xs", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

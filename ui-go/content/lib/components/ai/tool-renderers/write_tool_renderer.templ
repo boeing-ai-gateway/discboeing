@@ -1,0 +1,95 @@
+package toolrenderers
+
+import (
+	"fmt"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ WriteToolRenderer(view WriteView) {
+	{{
+		input, inputOK := parseWriteInput(view.Input)
+		output, outputOK := parseWriteOutput(view.Output)
+		writeErr := writeError(view, output)
+		preview := writePreview(input.Content)
+		contentView := tool.View{Open: view.Open}
+	}}
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground" data-tool-toggle="true">
+			@lucide.FilePenLine(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">{ writeHeader(input, inputOK, view.State) }</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, true, "")
+	</div>
+	@tool.ToolContent(contentView, "", writeContent(view, input, inputOK, output, outputOK, writeErr, preview))
+}
+
+templ writeContent(view WriteView, input WriteInput, inputOK bool, output WriteOutput, outputOK bool, writeErr string, preview string) {
+	if strings.TrimSpace(view.Input) == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading write details...
+			} else {
+				Write details are unavailable.
+			}
+		</div>
+	} else if !inputOK {
+		<div class="space-y-3 p-4 pt-3">
+			<p class="text-muted-foreground text-sm">
+				if isStreamingState(view.State) {
+					Loading write details...
+				} else {
+					Could not parse write details.
+				}
+			</p>
+			if strings.TrimSpace(view.Output) != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	} else {
+		<div class="space-y-4 p-4 pt-3">
+			<div class="space-y-3 rounded-md border bg-muted/20 p-3">
+				<p class="font-mono text-xs text-muted-foreground">{ shortenPath(input.FilePath) }</p>
+				<div class="flex flex-wrap gap-2 text-xs">
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(len(input.Content)) } chars</span>
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(writeLineCount(input.Content)) } lines</span>
+				</div>
+				if preview != "" {
+					<div class="rounded-md border bg-background/80">
+						<pre class="max-h-56 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs"><code>{ preview }</code></pre>
+					</div>
+				}
+			</div>
+			<div class="flex flex-wrap items-center gap-3 text-xs">
+				if output.Success != nil {
+					<span class={ map[bool]string{true: "text-green-700", false: "text-yellow-700"}[*output.Success] }>
+						if *output.Success {
+							Write completed
+						} else {
+							Write returned warnings
+						}
+					</span>
+				}
+				if output.BytesWritten != nil {
+					<span class="text-muted-foreground">{ fmt.Sprint(*output.BytesWritten) } bytes written</span>
+				}
+			</div>
+			if writeErr != "" {
+				<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ writeErr }</div>
+			}
+			if !outputOK && strings.TrimSpace(view.Output) != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<h5 class="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unparsed output</h5>
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	}
+}

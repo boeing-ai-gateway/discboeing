@@ -1,0 +1,80 @@
+package app
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ConversationHooksPanel(snapshot viewmodel.ConversationHooksPanelSnapshot) {
+	if snapshot.Expanded && len(snapshot.Hooks) > 0 {
+		<div class="mb-2 rounded-lg border border-border bg-background shadow-sm" data-conversation-hooks-panel>
+			<div class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+				Hooks ({ strconv.Itoa(hookPassedCount(snapshot.Hooks)) } passed)
+			</div>
+			<div class="max-h-48 overflow-auto p-1">
+				for _, hook := range snapshot.Hooks {
+					<details class="group" data-hook-id={ hook.ID }>
+						<summary class={ hookRowClass(hook.DisplayState) } role="button" tabindex="0" aria-label={ hookRowAriaLabel(hook) }>
+							if hook.DisplayState == "running" {
+								@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-3 animate-spin " + hookStatusTone(hook.DisplayState)})
+							} else if hook.DisplayState == "pending" {
+								@lucide.Clock(ahtempl.Attributes{"class": "size-3 " + hookStatusTone(hook.DisplayState)})
+							} else if hook.DisplayState == "failure" {
+								@lucide.CircleX(ahtempl.Attributes{"class": "size-3 " + hookStatusTone(hook.DisplayState)})
+							} else {
+								@lucide.CircleCheck(ahtempl.Attributes{"class": "size-3 " + hookStatusTone(hook.DisplayState)})
+							}
+							<div class="min-w-0 flex-1">
+								<div class="truncate text-foreground">{ hook.Name }</div>
+								<div class="truncate text-[11px] text-muted-foreground">
+									{ hook.Type } · { hookStatusLabel(hook.DisplayState) } · runs { strconv.Itoa(hook.RunCount) }
+								</div>
+							</div>
+							if canRerunHook(hook.DisplayState) {
+								<button type="button" class="ms-auto inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" title="Rerun hook" aria-label={ "Rerun " + hook.Name } disabled>
+									@lucide.RotateCcw(ahtempl.Attributes{"class": "size-3"})
+								</button>
+							}
+						</summary>
+						<div class="mx-2 mb-2 rounded-md border border-border bg-muted/30" data-hook-output-dialog-placeholder>
+							<div class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+								if hook.Command != "" {
+									{ "Command: " + hook.Command }
+								} else {
+									{ "Output" }
+								}
+							</div>
+							if hook.TooLarge {
+								<div class="flex items-center gap-3 border-b border-border px-3 py-2 text-sm">
+									<p class="min-w-0 flex-1 text-muted-foreground">{ hookOutputSizeText(hook.DisplayedBytes, hook.SizeBytes) }</p>
+									<button type="button" class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2 text-xs text-muted-foreground" aria-label={ "Download full log for " + hook.Name } disabled>
+										@lucide.Download(ahtempl.Attributes{"class": "size-3"})
+										Download full log
+									</button>
+								</div>
+							}
+							<div class="flex items-center gap-4 border-b border-border px-3 py-2 text-xs text-muted-foreground">
+								<span>Status: { hookStatusLabel(hook.DisplayState) }</span>
+								<span>Runs: { strconv.Itoa(hook.RunCount) }</span>
+								if hook.LastExitCode != nil {
+									<span>Exit code: { strconv.Itoa(*hook.LastExitCode) }</span>
+								}
+								if hook.FailCount > 0 {
+									<span class="text-red-500/80">Failures: { strconv.Itoa(hook.FailCount) }</span>
+								}
+								if hook.LastRunLabel != "" {
+									<span>Last run: { hook.LastRunLabel }</span>
+								}
+							</div>
+							<pre class="max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 text-xs leading-relaxed text-foreground">{ hookOutputText(hook.Output) }</pre>
+						</div>
+					</details>
+				}
+			</div>
+		</div>
+	}
+}

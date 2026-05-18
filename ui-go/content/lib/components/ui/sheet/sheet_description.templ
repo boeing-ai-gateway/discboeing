@@ -1,0 +1,11 @@
+package sheet
+
+import ahtempl "github.com/a-h/templ"
+
+templ SheetDescription(className string, children ahtempl.Component) {
+	<p data-slot="sheet-description" class={ descriptionClass(className) }>
+		if children != nil {
+			@children
+		}
+	</p>
+}

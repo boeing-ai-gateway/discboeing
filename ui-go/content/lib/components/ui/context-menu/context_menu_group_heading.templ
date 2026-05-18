@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuGroupHeading(inset bool, className string, children ahtempl.Component) {
+	<div data-slot="context-menu-group-heading" data-inset={ boolString(inset) } class={ labelClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

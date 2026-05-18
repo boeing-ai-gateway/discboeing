@@ -1,0 +1,67 @@
+package parts
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ VSCodePanel(snapshot viewmodel.DockPanelSnapshot) {
+	{{ service := vscodePanelService(snapshot) }}
+	@DockWindowChrome(
+		DockWindowChromeSnapshot{
+			DockMaximized: snapshot.DockMaximized,
+			ShiftWindowControlsForSidebar: snapshot.ShiftWindowControlsForSidebar,
+			CloseLabel: "Close editor panel",
+			MinimizeLabel: "Minimize editor panel",
+			MaximizeTitle: vscodePanelMaximizeTitle(snapshot),
+			ShellClass: "min-h-[28rem]",
+			ContentClass: "min-h-0 min-w-0 flex-1 overflow-hidden",
+		},
+		vscodePanelTitle(),
+		nil,
+		vscodePanelBody(snapshot, service),
+	)
+}
+
+templ vscodePanelTitle() {
+	<p class="truncate text-sm font-medium">Editor</p>
+}
+
+templ vscodePanelBody(snapshot viewmodel.DockPanelSnapshot, service viewmodel.DockService) {
+	<div class="flex h-full min-h-0 min-w-0 flex-col p-0" data-vscode-panel data-vscode-theme={ snapshot.VSCode.Theme }>
+		if service.ID != "" {
+			<div class="relative min-h-0 flex-1 overflow-hidden border border-sidebar-border bg-background" data-vscode-service={ service.ID }>
+				if vscodePanelLoading(snapshot) {
+					<div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+						<div class="flex items-center gap-2 text-sm text-muted-foreground">
+							@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-4 animate-spin"})
+							<span>Loading editor…</span>
+						</div>
+					</div>
+				}
+				if snapshot.VSCode.Error != "" {
+					<div class="absolute inset-0 z-20 flex items-center justify-center bg-background/90">
+						<div class="space-y-3 text-center text-sm text-muted-foreground">
+							<p>{ snapshot.VSCode.Error }</p>
+							<div class="flex items-center justify-center gap-2">
+								<button type="button" class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm hover:bg-accent hover:text-accent-foreground" data-vscode-refresh>Retry</button>
+							</div>
+						</div>
+					</div>
+				}
+				if vscodePanelURL(snapshot, service) != "" {
+					<iframe src={ ahtempl.SafeURL(vscodePanelURL(snapshot, service)) } class="size-full border-0" title="Editor" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer" data-vscode-iframe={ service.ID }></iframe>
+				}
+			</div>
+		} else {
+			<div class="flex h-full items-center justify-center rounded-md border border-dashed border-sidebar-border bg-sidebar/30 p-6 text-center">
+				<div class="space-y-2 text-sm text-muted-foreground">
+					<p class="font-medium text-sidebar-foreground">Editor is not available for this session.</p>
+					<p>Install <code class="rounded bg-muted px-1 py-0.5 text-xs">code-server</code> in the sandbox image to enable the built-in editor service.</p>
+				</div>
+			</div>
+		}
+	</div>
+}

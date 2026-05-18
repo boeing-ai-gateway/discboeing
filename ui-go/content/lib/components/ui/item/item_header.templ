@@ -1,0 +1,11 @@
+package item
+
+import ahtempl "github.com/a-h/templ"
+
+templ ItemHeader(className string, children ahtempl.Component) {
+	<div data-slot="item-header" class={ joinClass("flex basis-full items-center justify-between gap-2", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

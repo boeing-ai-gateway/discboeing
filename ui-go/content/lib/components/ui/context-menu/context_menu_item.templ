@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuItem(inset bool, itemVariant string, disabled bool, className string, children ahtempl.Component) {
+	<div data-slot="context-menu-item" data-inset={ boolString(inset) } data-variant={ variant(itemVariant) } data-disabled?={ disabled } class={ itemClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,10 @@
+package codeblock
+
+import ahtempl "github.com/a-h/templ"
+import selectui "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/select"
+
+templ CodeBlockLanguageSelector(value string, children ahtempl.Component) {
+	<div data-code-block-language-selector="true" data-value={ value }>
+		@selectui.Select(false, value, children)
+	</div>
+}

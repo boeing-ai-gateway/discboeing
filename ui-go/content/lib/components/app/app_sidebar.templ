@@ -1,0 +1,126 @@
+package app
+
+import "github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+
+templ AppSidebar(snapshot viewmodel.AppSidebarSnapshot) {
+	if snapshot.Collapsed {
+		<aside id="app-sidebar" class={ appSidebarFloatingClass(snapshot.FloatingOpen) } data-sidebar-collapsed="true" data-sidebar-floating-open={ boolString(snapshot.FloatingOpen) }>
+			<div class={ appSidebarHeaderClass(snapshot.FloatingOpen) }>
+				<div class="flex min-w-0 items-center gap-1">
+					<button type="button" aria-label="Expand sessions panel" title="Expand sessions panel" class="inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-on:click={ sidebarToggleCollapsedCommand() }>
+						@PanelLeftIcon("size-3.5")
+					</button>
+					<button type="button" aria-expanded={ boolString(snapshot.FloatingOpen) } class="inline-flex items-center gap-1 rounded-md py-0 pr-0.5 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground" data-on:click={ sidebarToggleFloatingCommand() }>
+						<span>Sessions</span>
+						if snapshot.FloatingOpen {
+							@ChevronDownIcon("size-3 shrink-0 rotate-180")
+						} else {
+							@ChevronDownIcon("size-3 shrink-0")
+						}
+					</button>
+				</div>
+				<div class="flex items-center gap-2">
+					<button type="button" aria-label="New session" title="New session" class="inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-on:click={ sidebarNewSessionCommand() }>
+						@PlusIcon("size-3.5")
+					</button>
+				</div>
+			</div>
+			if snapshot.FloatingOpen {
+				@SidebarBody(snapshot)
+				@SidebarActionOverlays(snapshot)
+			}
+		</aside>
+	} else {
+		<aside id="app-sidebar" class="flex min-h-0 flex-col overflow-hidden text-sidebar-foreground h-full min-w-64 w-full rounded-md border border-sidebar-border bg-sidebar shadow-sm" data-sidebar-collapsed="false">
+			<div class="flex h-10 items-center justify-between px-3 border-b border-sidebar-border">
+				<div class="flex min-w-0 items-center gap-1">
+					<button type="button" aria-label="Collapse sessions panel" title="Collapse sessions panel" class="inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-on:click={ sidebarToggleCollapsedCommand() }>
+						@PanelLeftIcon("size-3.5")
+					</button>
+					<p class="text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70">Sessions</p>
+				</div>
+				<div class="flex items-center gap-2">
+					if snapshot.GroupedByWorkspace {
+						<label class="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+							<span>workspace</span>
+							<button type="button" role="switch" aria-label="Group sessions by workspace" aria-checked="true" title="Ungroup sessions" class="inline-flex h-5 w-9 items-center rounded-full bg-muted p-0.5 transition-colors duration-200 ease-out" data-on:click={ sidebarToggleGroupingCommand() }>
+								<span class="size-4 translate-x-4 rounded-full bg-foreground transition-transform duration-200 ease-out"></span>
+							</button>
+						</label>
+					} else {
+						<label class="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+							<span>workspace</span>
+							<button type="button" role="switch" aria-label="Group sessions by workspace" aria-checked="false" title="Group sessions by workspace" class="inline-flex h-5 w-9 items-center rounded-full bg-muted/70 p-0.5 transition-colors duration-200 ease-out" data-on:click={ sidebarToggleGroupingCommand() }>
+								<span class="size-4 translate-x-0 rounded-full bg-foreground transition-transform duration-200 ease-out"></span>
+							</button>
+						</label>
+					}
+					<button type="button" aria-label="New session" title="New session" class="inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-on:click={ sidebarNewSessionCommand() }>
+						@PlusIcon("size-3.5")
+					</button>
+				</div>
+			</div>
+			@SidebarBody(snapshot)
+			<div class="border-t border-sidebar-border px-3 py-2 text-[0.6875rem] uppercase tracking-[0.16em] text-sidebar-foreground/45">
+				<span data-text="$streamOpen ? 'stream connected' : 'opening stream'">opening stream</span>
+				<span> · { snapshot.StreamEvents } patches · { snapshot.Commands } commands</span>
+			</div>
+			@SidebarActionOverlays(snapshot)
+		</aside>
+	}
+}
+
+templ SidebarBody(snapshot viewmodel.AppSidebarSnapshot) {
+	<div class="flex-1 overflow-y-auto p-2">
+		<div class="space-y-0.5">
+			if len(snapshot.SessionGroups) == 0 {
+				<p class="px-2 text-xs text-sidebar-foreground/50">No sessions</p>
+			} else {
+				if snapshot.ShowRecentThreads {
+					<div class="space-y-0.5">
+						<button type="button" class="flex w-full items-center gap-1 px-2 pb-1 pt-1 text-left text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground" aria-expanded={ boolString(snapshot.RecentOpen) } data-on:click={ sidebarToggleSectionCommand("recent") }>
+							if snapshot.RecentOpen {
+								@ChevronDownIcon("size-3 shrink-0")
+							} else {
+								@ChevronRightIcon("size-3 shrink-0")
+							}
+							Recent
+						</button>
+						if snapshot.RecentOpen {
+							<div class="space-y-0.5">
+								for _, thread := range snapshot.RecentThreads {
+									@RecentThreadItem(thread)
+								}
+							</div>
+						}
+					</div>
+				}
+				if snapshot.ShowAllHeader {
+					<button type="button" class="flex w-full items-center gap-1 px-2 pb-1 pt-2 text-left text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground" aria-expanded={ boolString(snapshot.AllOpen) } data-on:click={ sidebarToggleSectionCommand("all") }>
+						if snapshot.AllOpen {
+							@ChevronDownIcon("size-3 shrink-0")
+						} else {
+							@ChevronRightIcon("size-3 shrink-0")
+						}
+						All sessions
+					</button>
+				}
+				if snapshot.AllOpen {
+					if snapshot.GroupedByWorkspace {
+						<div class="space-y-3 pt-1">
+							for _, group := range snapshot.SessionGroups {
+								@WorkspaceSessionGroup(group, snapshot.OpenMenu)
+							}
+						</div>
+					} else {
+						<div class="space-y-0.5 pt-1">
+							for _, group := range snapshot.SessionGroups {
+								@WorkspaceSessionGroup(group, snapshot.OpenMenu)
+							}
+						</div>
+					}
+				}
+			}
+		</div>
+	</div>
+}

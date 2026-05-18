@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuSubContent(open bool, side string, className string, children ahtempl.Component) {
+	<div data-slot="context-menu-sub-content" data-state={ state(open) } data-side={ side } class={ subContentClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,11 @@
+package hovercard
+
+import ahtempl "github.com/a-h/templ"
+
+templ HoverCardTrigger(className string, children ahtempl.Component) {
+	<span data-slot="hover-card-trigger" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</span>
+}

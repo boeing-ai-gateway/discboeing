@@ -1,0 +1,5 @@
+package textarea
+
+templ Textarea(value string, placeholder string, name string, dataSlotValue string, className string, disabled bool, required bool, readOnly bool, invalid bool) {
+	<textarea data-slot={ dataSlot(dataSlotValue) } class={ textareaClass(className) } placeholder={ placeholder } name={ name } disabled?={ disabled } required?={ required } readonly?={ readOnly } aria-invalid={ invalid }>{ value }</textarea>
+}

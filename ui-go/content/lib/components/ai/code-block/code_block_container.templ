@@ -1,0 +1,11 @@
+package codeblock
+
+import ahtempl "github.com/a-h/templ"
+
+templ CodeBlockContainer(language string, className string, children ahtempl.Component) {
+	<div class={ classNames("group relative w-full overflow-hidden rounded-md border bg-background text-foreground", className) } data-language={ language } style="content-visibility: auto; contain-intrinsic-size: auto 200px;">
+		if children != nil {
+			@children
+		}
+	</div>
+}

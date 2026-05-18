@@ -1,0 +1,11 @@
+package dialog
+
+import ahtempl "github.com/a-h/templ"
+
+templ DialogPortal(children ahtempl.Component) {
+	<div data-slot="dialog-portal">
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,14 @@
+package dropdownmenu
+
+import "fmt"
+import ahtempl "github.com/a-h/templ"
+
+templ DropdownMenuContent(open bool, side string, sideOffset int, className string, children ahtempl.Component) {
+	<div data-slot="dropdown-menu-portal">
+		<div data-slot="dropdown-menu-content" data-state={ state(open) } data-side={ side } data-side-offset={ fmt.Sprint(sideOffset) } class={ contentClass(className) }>
+			if children != nil {
+				@children
+			}
+		</div>
+	</div>
+}

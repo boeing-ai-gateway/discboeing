@@ -1,0 +1,11 @@
+package sheet
+
+import ahtempl "github.com/a-h/templ"
+
+templ SheetFooter(className string, children ahtempl.Component) {
+	<div data-slot="sheet-footer" class={ footerClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

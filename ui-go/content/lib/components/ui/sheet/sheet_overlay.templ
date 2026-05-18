@@ -1,0 +1,5 @@
+package sheet
+
+templ SheetOverlay(open bool, className string) {
+	<div data-slot="sheet-overlay" data-state={ sheetState(open) } class={ overlayClass(className) }></div>
+}

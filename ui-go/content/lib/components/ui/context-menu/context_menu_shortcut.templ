@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuShortcut(className string, children ahtempl.Component) {
+	<span data-slot="context-menu-shortcut" class={ shortcutClass(className) }>
+		if children != nil {
+			@children
+		}
+	</span>
+}

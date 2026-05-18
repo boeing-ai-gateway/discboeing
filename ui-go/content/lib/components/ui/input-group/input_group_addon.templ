@@ -1,0 +1,11 @@
+package inputgroup
+
+import ahtempl "github.com/a-h/templ"
+
+templ InputGroupAddon(align string, className string, children ahtempl.Component) {
+	<div role="group" data-slot="input-group-addon" data-align={ addonAlign(align) } class={ addonClass(align, className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

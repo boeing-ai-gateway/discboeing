@@ -1,0 +1,9 @@
+package message
+
+import "fmt"
+
+templ MessageBranchPage(branch BranchView, className string) {
+	<div class={ classNames("border-none bg-transparent text-muted-foreground shadow-none px-2 text-sm", className) }>
+		{ fmt.Sprintf("%d of %d", branchPage(branch), branchTotal(branch)) }
+	</div>
+}

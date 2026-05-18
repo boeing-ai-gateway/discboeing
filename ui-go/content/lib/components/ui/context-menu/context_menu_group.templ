@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuGroup(className string, children ahtempl.Component) {
+	<div data-slot="context-menu-group" role="group" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,21 @@
+package dropdownmenu
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ DropdownMenuCheckboxItem(checked bool, indeterminate bool, disabled bool, className string, children ahtempl.Component) {
+	<div data-slot="dropdown-menu-checkbox-item" data-disabled?={ disabled } class={ checkboxItemClass(className) }>
+		<span class="pointer-events-none absolute start-2 flex size-3.5 items-center justify-center">
+			if indeterminate {
+				@lucide.Minus(ahtempl.Attributes{"class": "size-4"})
+			} else if checked {
+				@lucide.Check(ahtempl.Attributes{"class": "size-4"})
+			} else {
+				@lucide.Check(ahtempl.Attributes{"class": "size-4 text-transparent"})
+			}
+		</span>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,14 @@
+package resizable
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ ResizableHandle(directionValue string, withHandle bool, className string) {
+	<div data-slot="resizable-handle" data-direction={ direction(directionValue) } role="separator" aria-orientation={ direction(directionValue) } class={ handleClass(className) }>
+		if withHandle {
+			<div class="bg-border z-10 flex h-4 w-3 items-center justify-center rounded-xs border">
+				@lucide.GripVertical(ahtempl.Attributes{"class": "size-2.5"})
+			</div>
+		}
+	</div>
+}

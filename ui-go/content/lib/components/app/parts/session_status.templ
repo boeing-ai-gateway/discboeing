@@ -1,0 +1,27 @@
+package parts
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ SessionStatus(status string, className string, iconClass string, labelClass string, showLabel bool) {
+	<span class={ sessionStatusClass(showLabel, className) } title={ sessionStatusLabel(status) } aria-label={ sessionStatusLabel(status) }>
+		<span class={ sessionStatusIconClass(status, iconClass) }>
+			if sessionStatusSpinning(status) {
+				@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-3.5 animate-spin"})
+			} else if sessionStatusNormalized(status) == "needs_attention" {
+				@lucide.MessageCircleQuestion(ahtempl.Attributes{"class": "size-3.5"})
+			} else if sessionStatusNormalized(status) == "committed" {
+				@lucide.GitCommitHorizontal(ahtempl.Attributes{"class": "size-3.5"})
+			} else if sessionStatusNormalized(status) == "ready" || sessionStatusNormalized(status) == "completed" {
+				@lucide.CircleCheck(ahtempl.Attributes{"class": "size-3.5"})
+			} else if sessionStatusNormalized(status) == "unknown" {
+				@lucide.Circle(ahtempl.Attributes{"class": "size-3.5"})
+			} else {
+				@lucide.Circle(ahtempl.Attributes{"class": "size-2.5 fill-current"})
+			}
+		</span>
+		if showLabel {
+			<span class={ sessionStatusLabelClass(labelClass) }>{ sessionStatusLabel(status) }</span>
+		}
+	</span>
+}

@@ -1,0 +1,11 @@
+package dialog
+
+import ahtempl "github.com/a-h/templ"
+
+templ DialogClose(className string, children ahtempl.Component) {
+	<button type="button" data-slot="dialog-close" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</button>
+}

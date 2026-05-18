@@ -1,0 +1,14 @@
+package message
+
+import (
+	ahtempl "github.com/a-h/templ"
+	"fmt"
+)
+
+templ MessageBranch(branch BranchView, className string, children ahtempl.Component) {
+	<div class={ classNames("grid w-full gap-2 [&>div]:pb-0", className) } data-current-branch={ fmt.Sprint(branch.Current) } data-total-branches={ fmt.Sprint(branchTotal(branch)) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

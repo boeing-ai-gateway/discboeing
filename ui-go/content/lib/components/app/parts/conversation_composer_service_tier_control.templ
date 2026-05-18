@@ -1,0 +1,66 @@
+package parts
+
+import (
+	"strconv"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+)
+
+templ ConversationComposerServiceTierControl(value string, tiers []string) {
+	if len(tiers) > 0 {
+		<div
+			class="relative inline-flex"
+			data-composer-service-tier-control
+			data-composer-service-tier-value={ value }
+			data-composer-service-tier-count={ strconv.Itoa(len(tiers)) }
+		>
+			<button
+				type="button"
+				class={ composerServiceTierButtonClass(value) }
+				title={ "Service tier: " + composerServiceTierLabel(value) }
+				aria-label={ "Service tier: " + composerServiceTierLabel(value) }
+				aria-haspopup="menu"
+				aria-controls="composer-service-tier-menu"
+				aria-expanded="false"
+				disabled
+			>
+				@lucide.Zap(ahtempl.Attributes{"class": "size-3.5 shrink-0"})
+				<span>{ composerServiceTierLabel(value) }</span>
+			</button>
+			<div id="composer-service-tier-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md" role="menu" data-composer-service-tier-menu>
+				<div
+					class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+					role="menuitemradio"
+					aria-checked={ composerServiceTierSelected(value, "") }
+					data-composer-service-tier-option="__default__"
+				>
+					<div class="min-w-0 flex-1">
+						<div class="font-medium">Standard</div>
+						<div class="text-xs text-muted-foreground">Use the provider default service tier</div>
+					</div>
+					if value == "" {
+						@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+					}
+				</div>
+				for _, tier := range tiers {
+					<div
+						class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+						role="menuitemradio"
+						aria-checked={ composerServiceTierSelected(value, tier) }
+						data-composer-service-tier-option={ tier }
+					>
+						<div class="min-w-0 flex-1">
+							<div class="font-medium">{ composerServiceTierLabel(tier) }</div>
+							<div class="text-xs text-muted-foreground">{ composerServiceTierDescription(tier) }</div>
+						</div>
+						if strings.EqualFold(value, tier) {
+							@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+						}
+					</div>
+				}
+			</div>
+		</div>
+	}
+}

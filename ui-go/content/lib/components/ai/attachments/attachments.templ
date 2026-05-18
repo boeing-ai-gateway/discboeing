@@ -1,0 +1,11 @@
+package attachments
+
+import ahtempl "github.com/a-h/templ"
+
+templ Attachments(variant string, className string, children ahtempl.Component) {
+	<div class={ attachmentsClass(variant, className) } data-attachment-variant={ attachmentVariant(variant) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

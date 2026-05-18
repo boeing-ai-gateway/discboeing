@@ -1,0 +1,11 @@
+package buttongroup
+
+import ahtempl "github.com/a-h/templ"
+
+templ ButtonGroup(orientation string, className string, children ahtempl.Component) {
+	<div role="group" data-slot="button-group" data-orientation={ buttonGroupOrientation(orientation) } class={ buttonGroupClass(orientation, className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

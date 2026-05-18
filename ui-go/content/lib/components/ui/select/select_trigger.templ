@@ -1,0 +1,13 @@
+package selectui
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ SelectTrigger(size string, className string, disabled bool, invalid bool, children ahtempl.Component) {
+	<button type="button" data-slot="select-trigger" data-size={ triggerSize(size) } class={ triggerClass(className) } disabled?={ disabled } aria-invalid?={ invalid }>
+		if children != nil {
+			@children
+		}
+		@lucide.ChevronDown(ahtempl.Attributes{"class": "size-4 opacity-50"})
+	</button>
+}

@@ -1,0 +1,13 @@
+package attachments
+
+import ahtempl "github.com/a-h/templ"
+
+templ AttachmentEmpty(className string, children ahtempl.Component) {
+	<div class={ classNames("flex items-center justify-center p-4 text-muted-foreground text-sm", className) }>
+		if children != nil {
+			@children
+		} else {
+			No attachments
+		}
+	</div>
+}

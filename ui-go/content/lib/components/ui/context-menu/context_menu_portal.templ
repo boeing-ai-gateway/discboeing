@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuPortal(children ahtempl.Component) {
+	<div data-slot="context-menu-portal">
+		if children != nil {
+			@children
+		}
+	</div>
+}

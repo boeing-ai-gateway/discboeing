@@ -1,0 +1,11 @@
+package message
+
+import ahtempl "github.com/a-h/templ"
+
+templ MessageToolbar(className string, children ahtempl.Component) {
+	<div class={ classNames("mt-4 flex w-full items-center justify-between gap-4", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

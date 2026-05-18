@@ -1,0 +1,15 @@
+package app
+
+import "strings"
+
+// AppThreadStatus renders a resolved thread display status.
+// Svelte resolves this from AppContext using sessionId/threadId; ui-go callers pass
+// the resolved read-model status until the thread status lookup layer exists.
+templ AppThreadStatus(status string, className string) {
+	{{
+		if strings.TrimSpace(status) == "" {
+			status = "unknown"
+		}
+	}}
+	@AppSessionStatus(status, className, "", "", false)
+}

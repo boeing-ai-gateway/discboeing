@@ -1,0 +1,21 @@
+package dialog
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ DialogContent(open bool, className string, overlayClassName string, showCloseButton bool, children ahtempl.Component) {
+	<div data-slot="dialog-portal">
+		@DialogOverlay(open, overlayClassName)
+		<div data-slot="dialog-content" data-state={ dialogState(open) } class={ contentClass(className) }>
+			if children != nil {
+				@children
+			}
+			if showCloseButton {
+				<button type="button" data-slot="dialog-close" class={ closeClass("") }>
+					@lucide.X(ahtempl.Attributes{})
+					<span class="sr-only">Close</span>
+				</button>
+			}
+		</div>
+	</div>
+}

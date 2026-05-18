@@ -1,0 +1,11 @@
+package item
+
+import ahtempl "github.com/a-h/templ"
+
+templ ItemTitle(className string, children ahtempl.Component) {
+	<div data-slot="item-title" class={ joinClass("flex w-fit items-center gap-2 text-sm leading-snug font-medium", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

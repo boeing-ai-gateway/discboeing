@@ -1,0 +1,15 @@
+package tooltip
+
+import ahtempl "github.com/a-h/templ"
+import "strconv"
+
+templ TooltipContent(open bool, sideValue string, sideOffset int, className string, arrowClassName string, children ahtempl.Component) {
+	<div data-slot="tooltip-portal">
+		<div data-slot="tooltip-content" data-state={ state(open) } data-side={ side(sideValue) } data-side-offset={ strconv.Itoa(sideOffset) } class={ contentClass(className) }>
+			if children != nil {
+				@children
+			}
+			<div data-slot="tooltip-arrow" data-side={ side(sideValue) } class={ arrowClass(arrowClassName) }></div>
+		</div>
+	</div>
+}

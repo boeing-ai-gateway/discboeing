@@ -1,0 +1,111 @@
+package toolrenderers
+
+import (
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ AskUserQuestionToolRenderer(view AskUserQuestionView) {
+	{{
+		input, inputOK := parseAskUserQuestionInput(view.Input)
+		answers := parseAskUserQuestionAnswers(view.Output)
+		outputText := askUserQuestionOutputText(view.Output)
+		contentView := tool.View{Open: view.Open}
+	}}
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<div class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground">
+			@lucide.MessageSquareQuote(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">Agent question</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</div>
+		@tool.ToolHeaderControls(view.Raw, true, false, "")
+	</div>
+	@tool.ToolContent(contentView, "", askUserQuestionContent(view, input, inputOK, answers, outputText))
+}
+
+templ askUserQuestionContent(view AskUserQuestionView, input AskUserQuestionInput, inputOK bool, answers map[string]string, outputText string) {
+	if view.State == "approval-requested" {
+		<div class="space-y-4 p-4 pt-3">
+			if inputOK && len(input.Questions) > 0 {
+				<div class="rounded-lg border bg-card p-4">
+					@AskUserQuestionWizard(input, "")
+				</div>
+			} else {
+				<p class="text-muted-foreground text-sm">Waiting for question details...</p>
+			}
+			if view.ErrorText != "" {
+				<div class="space-y-1.5">
+					<h4 class="font-medium text-destructive text-xs uppercase tracking-wide">Error</h4>
+					<p class="text-destructive text-sm">{ view.ErrorText }</p>
+				</div>
+			}
+		</div>
+	} else if strings.TrimSpace(view.Input) == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading question...
+			} else {
+				No input data
+			}
+		</div>
+	} else if !inputOK {
+		<div class="space-y-3 p-4 pt-3">
+			<p class="text-muted-foreground text-sm">
+				if isStreamingState(view.State) {
+					Loading question...
+				} else {
+					Could not parse question details.
+				}
+			</p>
+			if outputText != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs">{ outputText }</pre>
+				</div>
+			}
+			if view.ErrorText != "" {
+				<p class="text-destructive text-sm">{ view.ErrorText }</p>
+			}
+		</div>
+	} else {
+		<div class="space-y-4 p-4 pt-3">
+			if len(input.Questions) > 0 {
+				@askUserQuestionList(input.Questions, answers)
+			}
+			if outputText != "" && answers == nil {
+				<div class="space-y-1.5">
+					<h4 class="font-medium text-muted-foreground text-xs uppercase tracking-wide">Response</h4>
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3 text-sm">{ outputText }</pre>
+				</div>
+			}
+			if view.ErrorText != "" {
+				<div class="space-y-1.5">
+					<h4 class="font-medium text-destructive text-xs uppercase tracking-wide">Error</h4>
+					<p class="text-destructive text-sm">{ view.ErrorText }</p>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ askUserQuestionList(questions []AskUserQuestionItem, answers map[string]string) {
+	<div class="space-y-2">
+		if answers != nil {
+			for _, question := range questions {
+				<div class="space-y-1">
+					<p class="font-medium text-sm">{ question.Question }</p>
+					<p class="text-muted-foreground text-sm">{ questionAnswer(answers, question.Question) }</p>
+				</div>
+			}
+		} else {
+			<ul class="list-disc space-y-1 pl-5 text-sm">
+				for _, question := range questions {
+					<li>{ question.Question }</li>
+				}
+			</ul>
+		}
+	</div>
+}

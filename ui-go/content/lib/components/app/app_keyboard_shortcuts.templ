@@ -1,0 +1,8 @@
+package app
+
+// AppKeyboardShortcuts reserves the global-shortcut component slot for the Go UI.
+// Full parity needs the ui-go command/state layer for session, thread, and view
+// navigation actions before key handlers can safely dispatch commands.
+templ AppKeyboardShortcuts() {
+	<div class="hidden" data-app-keyboard-shortcuts="pending"></div>
+}

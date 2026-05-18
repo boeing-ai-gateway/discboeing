@@ -1,0 +1,11 @@
+package card
+
+import ahtempl "github.com/a-h/templ"
+
+templ CardAction(className string, children ahtempl.Component) {
+	<div data-slot="card-action" class={ cardActionClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

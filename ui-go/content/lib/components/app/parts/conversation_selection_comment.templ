@@ -1,0 +1,86 @@
+package parts
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ConversationSelectionComment(snapshot viewmodel.ConversationSelectionCommentSnapshot) {
+	<div
+		class={ selectionCommentRootClass(snapshot) }
+		data-conversation-selection-comment
+		data-enabled?={ snapshot.Enabled }
+		data-open?={ snapshot.Open }
+		data-selection-comment-pending={ strconv.FormatBool(snapshot.Pending) }
+		data-selection-comment-submitting={ strconv.FormatBool(snapshot.Submitting) }
+		data-selection-comment-has-error={ strconv.FormatBool(snapshot.Error != "") }
+		data-selection-comment-snippet-length={ strconv.Itoa(len(snapshot.Snippet)) }
+	>
+		if snapshot.Pending && !snapshot.Open {
+			<div
+				class="fixed z-50"
+				style={ selectionCommentButtonStyle(snapshot) }
+				data-selection-comment-button-shell
+			>
+				<button
+					type="button"
+					class="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-300 bg-background px-3 py-1.5 text-sm font-medium shadow-lg transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+					aria-haspopup="dialog"
+					aria-controls="selection-comment-editor"
+					data-selection-comment-open
+				>
+					@lucide.MessageSquarePlus(ahtempl.Attributes{"class": "size-4"})
+					Comment
+				</button>
+			</div>
+		}
+		if snapshot.Pending && snapshot.Open {
+			<div
+				class="fixed z-50 w-80 rounded-xl border border-border bg-card p-3 text-card-foreground shadow-xl"
+				style={ selectionCommentEditorStyle(snapshot) }
+				id="selection-comment-editor"
+				role="dialog"
+				aria-modal="false"
+				aria-labelledby="selection-comment-title"
+				aria-describedby="selection-comment-snippet"
+				data-selection-comment-editor
+			>
+				<div id="selection-comment-title" class="mb-2 text-xs text-muted-foreground">Comment on</div>
+				<div id="selection-comment-snippet" class="mb-3 line-clamp-3 border-l-2 border-amber-400 bg-amber-50/70 py-1 pl-2 text-sm italic dark:bg-amber-950/20" data-selection-comment-snippet>
+					{ snapshot.Snippet }
+				</div>
+				<textarea
+					class="min-h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					placeholder="Add a comment..."
+					aria-label="Selection comment"
+					disabled?={ snapshot.Submitting }
+					data-selection-comment-draft
+				>{ snapshot.Draft }</textarea>
+				if snapshot.Error != "" {
+					<p class="mt-2 text-xs text-destructive" role="alert" data-selection-comment-error>{ snapshot.Error }</p>
+				}
+				<div class="mt-3 flex justify-end gap-2">
+					<button
+						type="button"
+						class="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+						disabled?={ snapshot.Submitting }
+						data-selection-comment-cancel
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+						disabled?={ snapshot.Draft == "" || snapshot.Submitting }
+						data-selection-comment-submit
+					>
+						{ selectionCommentSubmitLabel(snapshot.Submitting) }
+					</button>
+				</div>
+			</div>
+		}
+	</div>
+}

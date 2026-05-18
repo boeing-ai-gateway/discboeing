@@ -1,0 +1,39 @@
+package parts
+
+templ RightWindowControls() {
+	<div class="desktop-no-drag flex h-full items-stretch pr-1" data-right-window-controls>
+		<button
+			type="button"
+			class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-50"
+			aria-label="Minimize"
+			disabled
+			data-window-minimize
+		>
+			<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+				<path d="M0 5H10" stroke="currentColor" stroke-width="1"></path>
+			</svg>
+		</button>
+		<button
+			type="button"
+			class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-50"
+			aria-label="Maximize"
+			disabled
+			data-window-toggle-maximize
+		>
+			<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+				<rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none"></rect>
+			</svg>
+		</button>
+		<button
+			type="button"
+			class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-[#e81123] hover:text-white disabled:pointer-events-none disabled:opacity-50"
+			aria-label="Close"
+			disabled
+			data-window-close
+		>
+			<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+				<path d="M0 0L10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path>
+			</svg>
+		</button>
+	</div>
+}

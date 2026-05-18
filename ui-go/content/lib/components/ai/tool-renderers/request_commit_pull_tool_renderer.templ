@@ -1,0 +1,152 @@
+package toolrenderers
+
+import (
+	"fmt"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ RequestCommitPullToolRenderer(view RequestCommitPullView) {
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground" disabled?={ view.State == "approval-requested" } data-tool-toggle="true">
+			@lucide.GitCommitHorizontal(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">Pull Sandbox Commit</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, view.State != "approval-requested", "")
+	</div>
+	@tool.ToolContent(tool.View{Open: view.Open}, "", requestCommitPullContent(view))
+}
+
+templ requestCommitPullContent(view RequestCommitPullView) {
+	{{
+		rejectionSummary, rejected := requestCommitPullRejectionSummary(view)
+	}}
+	<div class="space-y-4 p-4 pt-3">
+		if view.ApprovalStatus == "loading" {
+			<div class="flex items-center gap-2 text-muted-foreground text-sm">
+				@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-4 animate-spin"})
+				<span>Loading commit pull approval…</span>
+			</div>
+		} else if view.ApprovalStatus == "error" {
+			<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">
+				{ map[bool]string{true: view.ApprovalError, false: "Failed to load commit pull request."}[view.ApprovalError != ""] }
+			</div>
+		} else if view.State == "approval-requested" || view.Question != "" {
+			@requestCommitPullPending(view)
+		} else if rejected {
+			<div class="rounded-md border bg-muted/20 p-3 text-sm">
+				<p class="font-medium text-sm">Commit pull rejected.</p>
+				if rejectionSummary != "" {
+					<p class="mt-1 text-muted-foreground text-sm">{ rejectionSummary }</p>
+				}
+			</div>
+		} else if requestCommitPullWasApproved(view) {
+			<div class="rounded-md border bg-muted/20 p-3 text-sm">Commit pull approved. Discobot is applying the sandbox commit.</div>
+		} else if strings.TrimSpace(view.Summary) != "" {
+			<div class="rounded-md border bg-muted/20 p-3 text-sm">{ view.Summary }</div>
+		} else {
+			<p class="text-muted-foreground text-sm">Waiting for commit pull details…</p>
+		}
+	</div>
+}
+
+templ requestCommitPullPending(view RequestCommitPullView) {
+	<div class="space-y-3 rounded-lg border bg-card p-4">
+		<p class="font-medium text-sm">{ requestCommitPullQuestion(view) }</p>
+
+		<div class="space-y-2 rounded-md border bg-muted/20 p-3 text-sm">
+			<div class="space-y-1">
+				<div class="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+					<span class="font-medium">Commit</span>
+					if requestCommitPullShortHash(view.CommitHash) != "" {
+						<span class="font-mono normal-case tracking-normal">{ requestCommitPullShortHash(view.CommitHash) }</span>
+					}
+				</div>
+				<p class="font-medium break-words">{ requestCommitPullCommitTitle(view) }</p>
+			</div>
+			if strings.TrimSpace(view.CommitBody) != "" {
+				<p class="whitespace-pre-wrap text-muted-foreground text-sm">{ view.CommitBody }</p>
+			}
+			if view.CommitCount > 0 || view.FilesChanged > 0 || view.Additions > 0 || view.Deletions > 0 || view.LineCount > 0 {
+				<div class="flex flex-wrap gap-2 text-xs">
+					if view.CommitCount > 0 {
+						<span class="rounded-full bg-background px-2 py-0.5 text-muted-foreground">{ requestCommitPullCommitCountLabel(view.CommitCount) }</span>
+					}
+					if view.FilesChanged > 0 {
+						<span class="rounded-full bg-background px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(view.FilesChanged) } files</span>
+					}
+					if view.Additions > 0 || view.Deletions > 0 {
+						<span class="rounded-full bg-background px-2 py-0.5 text-muted-foreground">+{ fmt.Sprint(view.Additions) } / -{ fmt.Sprint(view.Deletions) }</span>
+					}
+					if view.LineCount > 0 {
+						<span class="rounded-full bg-background px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(view.LineCount) } changed lines</span>
+					}
+				</div>
+			}
+		</div>
+
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div class="flex items-center gap-2">
+				if view.PreviewStatus == "loading" {
+					<div class="flex items-center gap-2 text-muted-foreground text-sm">
+						@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-4 animate-spin"})
+						<span>Loading replay bundle preview…</span>
+					</div>
+				} else if view.PreviewStatus == "error" {
+					<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">
+						{ map[bool]string{true: view.PreviewError, false: "Failed to load commit preview."}[view.PreviewError != ""] }
+					</div>
+				} else if len(view.DiffFiles) > 0 || strings.TrimSpace(view.RawPatch) != "" {
+					<button type="button" class="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground" title="Show diff" aria-label="Show diff" disabled>
+						@lucide.Eye(ahtempl.Attributes{"class": "size-4"})
+					</button>
+					<button type="button" class="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground" title="Show raw patch" aria-label="Show raw patch" disabled>
+						@lucide.FileCode(ahtempl.Attributes{"class": "size-4"})
+					</button>
+				}
+				if strings.TrimSpace(view.Summary) != "" {
+					<button type="button" class="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground" title="Show notes from the agent" aria-label="Show notes from the agent" disabled>
+						@lucide.FileText(ahtempl.Attributes{"class": "size-4"})
+					</button>
+				}
+			</div>
+
+			<div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+				if view.PreviewStatus == "error" {
+					<button type="button" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-primary-foreground text-sm font-medium" disabled>Retry</button>
+					<button type="button" class="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium" disabled>Reject</button>
+				} else {
+					<button type="button" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-primary-foreground text-sm font-medium" disabled>Approve</button>
+					<button type="button" class="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium" disabled>Reject</button>
+				}
+			</div>
+		</div>
+		if strings.TrimSpace(view.ApprovalError) != "" {
+			<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ view.ApprovalError }</div>
+		}
+		if len(view.DiffFiles) > 0 {
+			<div class="space-y-3 rounded-md border bg-background/60 p-3">
+				<div class="space-y-1">
+					<h3 class="font-medium text-sm">Commit diff</h3>
+					<p class="text-muted-foreground text-xs">Review the prepared sandbox patch before approving it.</p>
+				</div>
+				@RequestCommitPullDiffViewer(view.DiffFiles, "unified")
+			</div>
+		}
+		if strings.TrimSpace(view.RawPatch) != "" {
+			<div class="space-y-3 rounded-md border bg-background/60 p-3">
+				@RequestCommitPullRawPatchDialogContent(view.RawPatch)
+			</div>
+		}
+		if strings.TrimSpace(view.Summary) != "" {
+			<div class="space-y-3 rounded-md border bg-background/60 p-3">
+				@RequestCommitPullNotesDialogContent(view.Summary)
+			</div>
+		}
+	</div>
+}

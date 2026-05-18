@@ -1,0 +1,12 @@
+package message
+
+import ahtempl "github.com/a-h/templ"
+import buttongroup "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/button-group"
+
+templ MessageBranchSelector(branch BranchView, from string, children ahtempl.Component) {
+	if branchTotal(branch) > 1 {
+		<div data-message-from={ from }>
+			@buttongroup.ButtonGroup("horizontal", "[&>*:not(:first-child)]:rounded-l-md [&>*:not(:last-child)]:rounded-r-md", children)
+		</div>
+	}
+}

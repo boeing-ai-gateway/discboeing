@@ -1,0 +1,11 @@
+package contextmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuLabel(inset bool, className string, children ahtempl.Component) {
+	<div data-slot="context-menu-label" data-inset={ boolString(inset) } class={ labelClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

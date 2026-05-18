@@ -1,0 +1,23 @@
+package imageattachment
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+)
+
+templ ImageAttachment(src string, filename string, className string) {
+	{{ label := imageFilename(filename) }}
+	<div class={ classNames("group relative max-w-xs overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50 hover:shadow-md", className) }>
+		<a href={ ahtempl.SafeURL(src) } target="_blank" rel="noreferrer" aria-label={ "Open image: " + label } class="block cursor-pointer">
+			<img alt={ label } class="h-auto max-w-full" src={ src } title={ label }/>
+			<div class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+				@lucide.Maximize2(ahtempl.Attributes{"class": "size-6 opacity-0 transition-opacity group-hover:opacity-100 text-white drop-shadow-lg"})
+			</div>
+		</a>
+		<div class="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+			<a class="inline-flex size-8 items-center justify-center rounded-md bg-white/10 text-white backdrop-blur-sm hover:bg-white/20" href={ ahtempl.SafeURL(src) } download={ label } title="Download" aria-label={ "Download " + label }>
+				@lucide.Download(ahtempl.Attributes{"class": "size-4"})
+			</a>
+		</div>
+	</div>
+}

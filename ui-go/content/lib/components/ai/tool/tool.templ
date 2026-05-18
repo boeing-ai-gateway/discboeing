@@ -1,0 +1,10 @@
+package tool
+
+import ahtempl "github.com/a-h/templ"
+import collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
+
+templ Tool(view View, className string, children ahtempl.Component) {
+	<div data-ai-tool data-ai-stack class={ toolClass(view, className) } data-state={ map[bool]string{true: "open", false: "closed"}[view.Open] } data-queued={ map[bool]string{true: "true", false: "false"}[view.Queued] }>
+		@collapsible.Collapsible(view.Open, "", children)
+	</div>
+}

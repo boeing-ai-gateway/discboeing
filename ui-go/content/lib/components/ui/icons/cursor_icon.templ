@@ -1,0 +1,8 @@
+package icons
+
+templ CursorIcon(className string, title string) {
+	<svg aria-label={ iconTitle(title, "Cursor") } class={ iconClass(className) } role="img" viewBox="0 0 24 24">
+		<title>{ iconTitle(title, "Cursor") }</title>
+		<path fill="currentColor" d={ cursorPath }></path>
+	</svg>
+}

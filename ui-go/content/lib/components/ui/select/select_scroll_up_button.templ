@@ -1,0 +1,10 @@
+package selectui
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ SelectScrollUpButton(className string) {
+	<div data-slot="select-scroll-up-button" class={ scrollButtonClass(className) }>
+		@lucide.ChevronUp(ahtempl.Attributes{"class": "size-4"})
+	</div>
+}

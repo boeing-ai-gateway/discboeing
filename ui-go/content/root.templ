@@ -1,0 +1,63 @@
+package content
+
+import (
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/app"
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/app/parts"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ Root(snapshot viewmodel.ShellSnapshot, sessionID string) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="ui-go-session-id" content={ sessionID }/>
+			<title>Discobot UI</title>
+			<script>
+				try {
+					const storedTheme = localStorage.getItem("theme");
+					const theme = storedTheme === "light" || storedTheme === "dark" || storedTheme === "system"
+						? storedTheme
+						: "system";
+					const resolved = theme === "system"
+						? window.matchMedia("(prefers-color-scheme: dark)").matches
+							? "dark"
+							: "light"
+						: theme;
+					const storedScheme = localStorage.getItem(`theme.colorScheme.${resolved}`);
+					const schemeModes = {
+						default: "system",
+						flexoki: "system",
+						nord: "dark",
+						"tokyo-night": "dark",
+						solarized: "light",
+						dracula: "dark",
+						"catppuccin-mocha": "dark",
+						"catppuccin-macchiato": "dark",
+						"catppuccin-frappe": "dark",
+						alucard: "light",
+						"catppuccin-latte": "light",
+					};
+					const schemeMode = schemeModes[storedScheme];
+					const scheme = schemeMode === resolved || schemeMode === "system"
+						? storedScheme
+						: "default";
+
+					document.documentElement.classList.toggle("dark", resolved === "dark");
+					document.documentElement.setAttribute("data-theme", scheme);
+				} catch (_error) {
+					document.documentElement.classList.add("dark");
+					document.documentElement.setAttribute("data-theme", "default");
+				}
+			</script>
+			<link rel="stylesheet" href="/app.css"/>
+			<script type="module" src="/assets/app.js"></script>
+			<script type="module" src="/vendor/datastar.js"></script>
+		</head>
+		<body data-signals="{streamOpen: false}" data-init="@get('/ui/stream')">
+			@parts.DevErrorOverlay(snapshot.DevErrors)
+			@app.StartupGate(snapshot.Startup, app.AppShell(snapshot))
+		</body>
+	</html>
+}

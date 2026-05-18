@@ -1,0 +1,11 @@
+package nativeselect
+
+import ahtempl "github.com/a-h/templ"
+
+templ NativeSelectOption(value string, selected bool, disabled bool, children ahtempl.Component) {
+	<option data-slot="native-select-option" value={ value } selected?={ selected } disabled?={ disabled }>
+		if children != nil {
+			@children
+		}
+	</option>
+}

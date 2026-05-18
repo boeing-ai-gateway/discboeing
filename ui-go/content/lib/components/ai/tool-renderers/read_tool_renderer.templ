@@ -1,0 +1,155 @@
+package toolrenderers
+
+import (
+	"fmt"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ ReadToolRenderer(view ReadView) {
+	{{
+		input, inputOK := parseReadInput(view.Input)
+		output, outputOK := parseReadOutput(view.Output)
+		content := readContent(output)
+		parsedContent := parseBashNumberedOutput(content)
+		imageItems := readImageItems(output)
+		readError := view.ErrorText
+		if readError == "" {
+			readError = output.Error
+		}
+		contentView := tool.View{Open: view.Open}
+	}}
+	<div class="flex items-start justify-between gap-4 px-4 pt-4">
+		<button type="button" class="min-w-0 flex-1 text-left text-muted-foreground" data-tool-toggle="true">
+			if len(imageItems) > 0 && readImageSrc(imageItems[0]) != "" {
+				<img src={ readImageSrc(imageItems[0]) } alt={ readHeader(input, inputOK, view.State) } class="max-h-40 max-w-full rounded object-contain"/>
+			}
+			<div class={ map[bool]string{true: "mt-2 flex min-w-0 items-center gap-2", false: "flex min-w-0 items-center gap-2"}[len(imageItems) > 0] }>
+				@lucide.FileText(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+				<span class="truncate font-medium text-sm">{ readHeader(input, inputOK, view.State) }</span>
+				@tool.ToolHeaderStatus(view.State, view.Queued, "")
+			</div>
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, true, "")
+	</div>
+	@tool.ToolContent(contentView, "", readContentView(view, input, inputOK, outputOK, content, parsedContent, imageItems, readError))
+}
+
+templ readContentView(view ReadView, input ReadInput, inputOK bool, outputOK bool, content string, parsedContent parsedNumberedOutput, imageItems []ReadContentItem, readError string) {
+	if strings.TrimSpace(view.Input) == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading file details...
+			} else {
+				File details are unavailable.
+			}
+		</div>
+	} else if !inputOK {
+		<div class="space-y-3 p-4 pt-3">
+			<p class="text-muted-foreground text-sm">
+				if isStreamingState(view.State) {
+					Loading file details...
+				} else {
+					Could not parse file details.
+				}
+			</p>
+			if strings.TrimSpace(view.Output) != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	} else {
+		<div class="space-y-4 p-4 pt-3">
+			<div class="space-y-2">
+				<div class="flex flex-wrap items-center gap-2 text-sm">
+					<code class="rounded bg-muted px-2 py-1 font-mono text-foreground">{ readFileName(input) }</code>
+					if input.Offset != nil {
+						<span class="text-muted-foreground text-xs">offset: { fmt.Sprint(*input.Offset) }</span>
+					}
+					if input.Limit != nil {
+						<span class="text-muted-foreground text-xs">limit: { fmt.Sprint(*input.Limit) }</span>
+					}
+					if input.Pages != "" {
+						<span class="text-muted-foreground text-xs">pages: { input.Pages }</span>
+					}
+				</div>
+				<div class="font-mono text-muted-foreground text-xs">{ shortenPath(input.FilePath) }</div>
+			</div>
+			if content != "" {
+				@readTextContent(content, parsedContent)
+			} else if outputOK && readError == "" {
+				<div class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm">Read completed without file content.</div>
+			}
+			if len(imageItems) > 0 {
+				@readImages(imageItems, readFileName(input))
+			}
+			if readError != "" {
+				<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ readError }</div>
+			}
+		</div>
+	}
+}
+
+templ readTextContent(content string, parsed parsedNumberedOutput) {
+	<div class="space-y-2">
+		<div class="flex items-center gap-2">
+			@lucide.Eye(ahtempl.Attributes{"class": "size-4 text-muted-foreground"})
+			<h4 class="font-medium text-muted-foreground text-xs uppercase tracking-wide">Content</h4>
+			<span class="text-muted-foreground text-xs">{ fmt.Sprint(bashLineCount(content, parsed)) } lines</span>
+			if parsed.IsTruncated {
+				<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">Truncated</span>
+			}
+		</div>
+		<div class="rounded-md border bg-muted/30">
+			if parsed.IsTruncated {
+				<div class="border-b px-3 py-2 text-muted-foreground text-xs">
+					Output truncated
+					if parsed.TruncationFilePath != "" {
+						— full output written to { shortenPath(parsed.TruncationFilePath) }
+					}
+				</div>
+			}
+			if len(parsed.Lines) > 0 {
+				<div class="overflow-x-auto p-3 font-mono text-xs text-foreground">
+					<div class="grid min-w-max grid-cols-[auto_1fr] gap-x-3">
+						for _, line := range parsed.Lines {
+							<div class="select-none text-muted-foreground/60 text-right">{ line.LineNumber }</div>
+							<div class="whitespace-pre-wrap break-words">{ lineText(line.Text) }</div>
+						}
+					</div>
+				</div>
+			} else {
+				<pre class="overflow-x-auto p-3 font-mono text-xs text-foreground"><code>{ content }</code></pre>
+			}
+		</div>
+	</div>
+}
+
+templ readImages(imageItems []ReadContentItem, fileName string) {
+	<div class="space-y-2">
+		<div class="flex items-center gap-2">
+			@lucide.Image(ahtempl.Attributes{"class": "size-4 text-muted-foreground"})
+			<h4 class="font-medium text-muted-foreground text-xs uppercase tracking-wide">Image</h4>
+			if len(imageItems) > 1 {
+				<span class="text-muted-foreground text-xs">{ fmt.Sprint(len(imageItems)) } images</span>
+			}
+		</div>
+		<div class="grid gap-3">
+			for _, imageItem := range imageItems {
+				if readImageSrc(imageItem) != "" {
+					<div class="overflow-hidden rounded-md border bg-muted/30 p-2">
+						<img src={ readImageSrc(imageItem) } alt={ map[bool]string{true: readImageLabel(imageItem), false: fileName}[readImageLabel(imageItem) != ""] } class="max-h-96 max-w-full rounded object-contain"/>
+						if readImageLabel(imageItem) != "" {
+							<div class="mt-2 text-muted-foreground text-xs">{ readImageLabel(imageItem) }</div>
+						}
+					</div>
+				}
+			}
+		</div>
+	</div>
+}

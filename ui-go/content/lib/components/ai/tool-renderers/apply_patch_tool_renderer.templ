@@ -1,0 +1,181 @@
+package toolrenderers
+
+import (
+	"fmt"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ ApplyPatchToolRenderer(view ApplyPatchView) {
+	{{
+		parsedPatch := parseApplyPatch(view.Input)
+		parsedOutput := parseApplyPatchOutput(view.Output)
+		rawOutputText := view.Output
+		contentView := tool.View{Open: view.Open}
+	}}
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground" data-tool-toggle="true">
+			@lucide.FilePen(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">{ applyPatchHeadline(view) }</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, true, "")
+	</div>
+	@tool.ToolContent(contentView, "", templApplyPatchContent(view, parsedPatch, parsedOutput, rawOutputText))
+}
+
+templ templApplyPatchContent(view ApplyPatchView, parsedPatch applyPatchParseResult, parsedOutput applyPatchOutputResult, rawOutputText string) {
+	if strings.TrimSpace(view.Input) == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading patch details...
+			} else {
+				Patch details are unavailable.
+			}
+		</div>
+	} else {
+		<div class="space-y-4 p-4 pt-3">
+			<div class="rounded-md border bg-muted/20 p-3">
+				<div class="flex flex-wrap gap-2 text-xs">
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+						{ fmt.Sprint(parsedPatch.Stats.Files) } { plural(parsedPatch.Stats.Files, "file", "files") }
+					</span>
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+						{ fmt.Sprint(parsedPatch.Stats.Additions) } additions
+					</span>
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+						{ fmt.Sprint(parsedPatch.Stats.Removals) } removals
+					</span>
+					if parsedPatch.Incomplete {
+						<span class="rounded-full bg-yellow-500/10 px-2 py-0.5 text-yellow-700 dark:text-yellow-300">Streaming</span>
+					}
+				</div>
+				if parsedPatch.Error != "" && len(parsedPatch.Operations) > 0 {
+					<p class="mt-3 text-sm text-yellow-700 dark:text-yellow-300">Showing the parsed portion of the patch. { parsedPatch.Error }</p>
+				}
+			</div>
+			if len(parsedPatch.Operations) == 0 {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<p class="text-muted-foreground text-sm">
+						if parsedPatch.Error != "" {
+							{ parsedPatch.Error }
+						} else {
+							Could not parse patch details.
+						}
+					</p>
+					<pre class="mt-3 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Input }</code></pre>
+				</div>
+			} else {
+				<div class="space-y-3">
+					for _, operation := range parsedPatch.Operations {
+						@applyPatchOperationView(operation)
+					}
+				</div>
+			}
+			if len(parsedOutput.Entries) > 0 {
+				<div class="space-y-2 rounded-md border bg-muted/20 p-3">
+					<div class="flex items-center justify-between gap-3">
+						<h4 class="font-medium text-muted-foreground text-xs uppercase tracking-wide">Updated files</h4>
+						<span class="text-muted-foreground text-xs">{ fmt.Sprint(len(parsedOutput.Entries)) } entries</span>
+					</div>
+					<div class="grid gap-2 md:grid-cols-2">
+						for _, entry := range parsedOutput.Entries {
+							<div class="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2 text-sm">
+								<span class={ classNames("inline-flex rounded-full border px-2 py-0.5 font-medium text-xs", resultBadgeClass(entry.Marker)) }>{ entry.Marker }</span>
+								<span class="truncate font-mono text-xs text-muted-foreground">{ shortenPath(entry.Path) }</span>
+							</div>
+						}
+					</div>
+				</div>
+			}
+			if view.ErrorText != "" {
+				<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ view.ErrorText }</div>
+			}
+			if strings.TrimSpace(rawOutputText) != "" && len(parsedOutput.Entries) == 0 && view.ErrorText == "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<h5 class="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unparsed output</h5>
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ rawOutputText }</code></pre>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ applyPatchOperationView(operation applyPatchOperation) {
+	<div class="overflow-hidden rounded-md border bg-muted/20">
+		<div class="flex flex-wrap items-start justify-between gap-3 border-b bg-background/70 px-3 py-3">
+			<div class="min-w-0 space-y-1">
+				<div class="flex flex-wrap items-center gap-2">
+					<span class={ classNames("rounded-full border px-2 py-0.5 font-medium text-xs", operationBadgeClass(operation)) }>{ operationLabel(operation) }</span>
+					if operation.MovePath != "" {
+						<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">Rename</span>
+					}
+				</div>
+				<div class="font-mono text-xs text-muted-foreground">
+					if operation.MovePath != "" {
+						<span>{ shortenPath(operation.Path) }</span>
+						<span class="px-1">→</span>
+						<span>{ shortenPath(operation.MovePath) }</span>
+					} else {
+						{ shortenPath(operation.Path) }
+					}
+				</div>
+			</div>
+			<div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
+				if operation.Kind == "add" {
+					<span>{ fmt.Sprint(len(operation.AddLines)) } lines</span>
+				} else if operation.Kind == "delete" {
+					<span>File removal</span>
+				} else {
+					<span>{ fmt.Sprint(len(operation.Chunks)) } { plural(len(operation.Chunks), "hunk", "hunks") }</span>
+					<span>+{ fmt.Sprint(operation.Additions) }</span>
+					<span>-{ fmt.Sprint(operation.Removals) }</span>
+				}
+			</div>
+		</div>
+		<div class="space-y-3 p-3">
+			if operation.Kind == "delete" {
+				<div class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm">This patch deletes the file.</div>
+			} else if operation.Kind == "add" {
+				if len(operation.AddLines) == 0 {
+					<div class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm">This patch creates an empty file.</div>
+				} else {
+					<div class="overflow-hidden rounded-md border bg-background/70">
+						for _, line := range operation.AddLines {
+							<div class="grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b last:border-b-0 bg-emerald-500/10 font-mono text-xs">
+								<div class="px-2 py-1 text-emerald-700 dark:text-emerald-300">+</div>
+								<div class="overflow-x-auto px-2 py-1 text-foreground">{ lineText(line) }</div>
+							</div>
+						}
+					</div>
+				}
+			} else {
+				for index, chunk := range operation.Chunks {
+					<div class="space-y-2">
+						<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+							<span class="font-medium uppercase tracking-wide">Hunk { fmt.Sprint(index + 1) }</span>
+							if chunk.Context != "" {
+								<span class="rounded-full bg-muted px-2 py-0.5 font-mono">{ "@@ " + chunk.Context }</span>
+							}
+							if chunk.IsEndOfFile {
+								<span class="rounded-full bg-muted px-2 py-0.5">EOF</span>
+							}
+						</div>
+						<div class="overflow-hidden rounded-md border bg-background/70">
+							for _, line := range chunk.Lines {
+								<div class={ classNames("grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b font-mono text-xs last:border-b-0", rowClass(line.Marker)) }>
+									<div class={ classNames("px-2 py-1", markerClass(line.Marker)) }>{ line.Marker }</div>
+									<div class="overflow-x-auto px-2 py-1 text-foreground">{ lineText(line.Content) }</div>
+								</div>
+							}
+						</div>
+					</div>
+				}
+			}
+		</div>
+	</div>
+}

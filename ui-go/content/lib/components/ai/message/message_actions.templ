@@ -1,0 +1,11 @@
+package message
+
+import ahtempl "github.com/a-h/templ"
+
+templ MessageActions(className string, children ahtempl.Component) {
+	<div class={ classNames("flex items-center gap-1", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

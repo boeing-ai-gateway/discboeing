@@ -1,0 +1,5 @@
+package separator
+
+templ Separator(orientation string, dataSlot string, className string) {
+	<div data-slot={ separatorDataSlot(dataSlot) } data-orientation={ separatorOrientation(orientation) } role="separator" aria-orientation={ separatorOrientation(orientation) } class={ separatorClass(className) }></div>
+}

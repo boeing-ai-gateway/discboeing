@@ -1,0 +1,48 @@
+package parts
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ProjectInspectionTerminalDialog(snapshot viewmodel.ProjectInspectionTerminalSnapshot) {
+	if snapshot.Open {
+		{{ status := projectInspectionStatus(snapshot) }}
+		<div class="fixed inset-x-0 bottom-0 top-10 z-50 flex h-auto w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none border-0 bg-background p-0 shadow-none sm:max-w-none" data-project-inspection-terminal data-project-id={ snapshot.ProjectID } data-provider-id={ snapshot.ProviderID }>
+			<div class="flex items-center justify-between border-b border-border px-5 py-4">
+				<div class="min-w-0">
+					<div class="flex items-center gap-2 text-sm font-semibold">
+						@lucide.Terminal(ahtempl.Attributes{"class": "size-4"})
+						<span class="truncate">{ projectInspectionTitle(snapshot) }</span>
+					</div>
+					<p class="mt-1 text-xs text-muted-foreground">{ projectInspectionDescription(snapshot) }</p>
+				</div>
+				<div class="flex items-center gap-2 pr-8 text-xs text-muted-foreground">
+					<div class={ "size-2 rounded-full " + projectInspectionStatusClass(status) }></div>
+					<span class="capitalize">{ status }</span>
+				</div>
+			</div>
+			<div class="relative min-h-0 flex-1 overflow-hidden p-4">
+				if status != "connected" {
+					<div class="absolute inset-4 z-10 flex items-center justify-center rounded-md bg-black/35">
+						<div class="flex flex-col items-center gap-3 text-center">
+							<span class="text-xs text-white/70">{ projectInspectionOverlayMessage(status) }</span>
+							if status != "connecting" {
+								<button type="button" class="inline-flex h-7 items-center gap-2 rounded-md border border-input bg-background px-2 text-xs font-medium text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" disabled data-inspection-terminal-reconnect>
+									@lucide.RotateCcw(ahtempl.Attributes{"class": "size-3.5"})
+									Reconnect
+								</button>
+							}
+						</div>
+					</div>
+				}
+				<div class="h-full w-full cursor-text overflow-hidden rounded-md border border-white/10 bg-terminal-bg p-3 outline-none [caret-color:transparent]" data-inspection-terminal-host>
+					if !snapshot.TerminalReady {
+						<p class="font-mono text-xs text-terminal-fg/60">Inspection terminal will initialize here.</p>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}

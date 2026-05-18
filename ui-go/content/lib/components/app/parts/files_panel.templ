@@ -1,0 +1,233 @@
+package parts
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ FilesPanel(snapshot viewmodel.DockPanelSnapshot) {
+	@DockWindowChrome(
+		DockWindowChromeSnapshot{
+			DockMaximized: snapshot.DockMaximized,
+			ShiftWindowControlsForSidebar: snapshot.ShiftWindowControlsForSidebar,
+			CloseLabel: "Close files panel",
+			MinimizeLabel: "Minimize files panel",
+			MaximizeTitle: dockWindowChromeLabel(filesPanelMaximizeTitle(snapshot.DockMaximized), "Maximize files panel"),
+			ContentClass: "min-h-0 flex-1 overflow-hidden p-3",
+		},
+		filesPanelTitle(snapshot.Files),
+		filesPanelActions(snapshot.Files),
+		filesPanelBody(snapshot.Files),
+	)
+}
+
+templ filesPanelTitle(files viewmodel.FilesPanelSnapshot) {
+	<span class="truncate text-xs text-sidebar-foreground/70">{ filesPanelActiveTitle(files) }</span>
+	<div
+		class={ filesPanelDirtyDotClass(filesPanelDirty(files)) }
+		title={ filesPanelDirtyTitle(filesPanelDirty(files)) }
+	></div>
+}
+
+templ filesPanelActions(files viewmodel.FilesPanelSnapshot) {
+	<label class="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+		<span>changed only</span>
+		<button type="button" class={ filesPanelSwitchClass(files.ShowChangedOnly) } disabled data-files-toggle-changed-only>
+			<span class={ filesPanelSwitchThumbClass(files.ShowChangedOnly) }></span>
+		</button>
+	</label>
+	<button type="button" class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50" disabled data-files-refresh>
+		if files.Refreshing {
+			@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5 animate-spin"})
+		} else {
+			@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5"})
+		}
+		Refresh
+	</button>
+}
+
+templ filesPanelBody(files viewmodel.FilesPanelSnapshot) {
+	<div class="grid h-full min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(14rem,24%)] gap-3" data-files-panel>
+		<div class="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar shadow-sm">
+			@filesPanelTabs(files)
+			@filesPanelActiveHeader(files)
+			@filesPanelConflictDialog(files)
+			@filesPanelPreview(files)
+		</div>
+		<div class="h-full min-h-0 overflow-auto rounded-md border border-sidebar-border bg-sidebar shadow-sm">
+			<div class="flex items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2 text-xs text-sidebar-foreground/70">
+				<span>Explorer</span>
+				<div class="flex items-center gap-2">
+					<button type="button" class="hover:text-sidebar-accent-foreground disabled:opacity-50" disabled data-files-expand-all>Expand all</button>
+					<button type="button" class="hover:text-sidebar-accent-foreground disabled:opacity-50" disabled data-files-collapse-all>Collapse</button>
+				</div>
+			</div>
+			<div class="space-y-0.5 p-2 font-mono text-xs">
+				if len(files.Tree) == 0 {
+					<p class="px-2 py-6 text-center text-sm text-sidebar-foreground/50">
+						if files.ShowChangedOnly {
+							No changed files
+						} else {
+							No files
+						}
+					</p>
+				} else {
+					@filesPanelTree(files.Tree, 0, files.ActivePath)
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ filesPanelTabs(files viewmodel.FilesPanelSnapshot) {
+	<div class="flex min-h-10 items-end gap-1 overflow-x-auto border-b border-sidebar-border bg-sidebar px-2 py-2">
+		if len(files.OpenTabs) == 0 {
+			<p class="px-2 text-sm text-sidebar-foreground/50">Open a file from the explorer.</p>
+		} else {
+			for _, tab := range files.OpenTabs {
+				<div role="button" tabindex="0" class={ filesPanelTabClass(tab.Path == files.ActivePath) } data-files-open={ tab.Path }>
+					<span class="max-w-36 truncate">{ filesPanelFileLabel(tab.Path) }</span>
+					if tab.Dirty {
+						<span class="size-2 rounded-full bg-sidebar-primary"></span>
+					}
+					if tab.Status != "" {
+						<span class={ "rounded border px-1 py-0 text-[10px] " + filesPanelStatusBadgeClass(tab.Status) }>{ filesPanelStatusLetter(tab.Status) }</span>
+					}
+					<button type="button" class="rounded p-0.5 text-sidebar-foreground/45 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:pointer-events-none" disabled data-files-close-tab={ tab.Path }>
+						@lucide.X(ahtempl.Attributes{"class": "size-3.5"})
+					</button>
+				</div>
+			}
+		}
+	</div>
+}
+
+templ filesPanelActiveHeader(files viewmodel.FilesPanelSnapshot) {
+	if files.ActivePath != "" && filesPanelActiveBufferLoaded(files) {
+		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-sidebar-border bg-sidebar px-3 py-2 text-sm">
+			<div class="min-w-0">
+				<p class="truncate font-mono text-sidebar-foreground">{ files.ActivePath }</p>
+				<div class="mt-1 flex items-center gap-2 text-xs text-sidebar-foreground/70">
+					{{ status := filesPanelActiveStatus(files) }}
+					if status != "" {
+						<span>{ filesPanelStatusLetter(status) } · { status }</span>
+					}
+					if files.ActiveBuffer.FromBase {
+						<span>Deleted file · read only</span>
+					}
+					if files.ActiveBuffer.Dirty {
+						<span>Unsaved changes</span>
+					}
+				</div>
+			</div>
+			<div class="flex flex-wrap items-center justify-end gap-2">
+				if files.ActiveBuffer.SaveError != "" && !files.ActiveBuffer.HasConflict {
+					<span class="text-xs text-destructive">{ files.ActiveBuffer.SaveError }</span>
+				}
+				<button type="button" class="inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Download file" aria-label="Download file" disabled data-files-download={ files.ActivePath }>
+					@lucide.Download(ahtempl.Attributes{"class": "size-3.5"})
+				</button>
+				if filesPanelIsMarkdown(files.ActivePath) {
+					<div class="inline-flex rounded-md border border-sidebar-border bg-transparent p-0.5" data-files-markdown-view>
+						<button type="button" class="inline-flex size-7 items-center justify-center rounded text-sidebar-foreground/55" title="Preview" disabled><span class="sr-only">Preview</span>@lucide.Eye(ahtempl.Attributes{"class": "size-3.5"})</button>
+						<button type="button" class="inline-flex size-7 items-center justify-center rounded text-sidebar-foreground/55" title="Split" disabled><span class="sr-only">Split</span>@lucide.Columns2(ahtempl.Attributes{"class": "size-3.5"})</button>
+						<button type="button" class="inline-flex size-7 items-center justify-center rounded text-sidebar-foreground/55" title="Editor" disabled><span class="sr-only">Editor</span>@lucide.FileCode(ahtempl.Attributes{"class": "size-3.5"})</button>
+					</div>
+				}
+				if files.ActiveBuffer.Dirty {
+					<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" disabled data-files-discard={ files.ActivePath }>
+						@lucide.X(ahtempl.Attributes{"class": "size-4"})
+						Discard
+					</button>
+					<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" disabled={ !filesPanelCanEdit(files) || files.ActiveBuffer.Saving } data-files-save={ files.ActivePath }>
+						if files.ActiveBuffer.Saving {
+							@lucide.RefreshCw(ahtempl.Attributes{"class": "size-4 animate-spin"})
+						} else {
+							@lucide.Save(ahtempl.Attributes{"class": "size-4"})
+						}
+						Save
+					</button>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ filesPanelConflictDialog(files viewmodel.FilesPanelSnapshot) {
+	if files.ActivePath != "" && files.ActiveBuffer.HasConflict {
+		<div class="border-b border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-900 dark:text-yellow-100" data-files-conflict>
+			<p class="font-medium">File modified externally</p>
+			<p class="mt-1">{ files.ActivePath } changed on disk while you were editing it. Choose whether to keep the disk version or overwrite it with your local changes.</p>
+			<div class="mt-3 flex flex-wrap gap-2">
+				<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-xs disabled:opacity-50" disabled data-files-accept-conflict={ files.ActivePath }>@lucide.Check(ahtempl.Attributes{"class": "size-4"}) Use disk version</button>
+				<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-xs disabled:opacity-50" disabled data-files-force-save={ files.ActivePath }>@lucide.Save(ahtempl.Attributes{"class": "size-4"}) Save my changes</button>
+			</div>
+		</div>
+	}
+}
+
+templ filesPanelPreview(files viewmodel.FilesPanelSnapshot) {
+	<div class="relative min-h-0 flex-1 overflow-hidden bg-background">
+		if files.ActivePath == "" {
+			<div class="relative z-10 flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Select a file to start editing.</div>
+		} else if !filesPanelActiveBufferLoaded(files) {
+			<div class="relative z-10 flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading file contents…</div>
+		} else if files.ActiveBuffer.Encoding == "base64" && filesPanelIsImage(files.ActivePath) {
+			<div class="relative z-10 flex h-full items-center justify-center overflow-auto bg-card/20 p-4">
+				<img src={ filesPanelDataURL(filesPanelImageMimeType(files.ActivePath), files.ActiveBuffer.Content) } alt={ filesPanelFileLabel(files.ActivePath) } class="max-h-[calc(100vh-12rem)] max-w-full rounded-md border border-border bg-background object-contain shadow-sm"/>
+			</div>
+		} else if files.ActiveBuffer.Encoding == "base64" && filesPanelIsPDF(files.ActivePath) {
+			<div class="relative z-10 h-full bg-card/10 p-4">
+				<iframe src={ filesPanelDataURL("application/pdf", files.ActiveBuffer.Content) } title={ "PDF preview: " + files.ActivePath } class="size-full rounded-md border border-border bg-background shadow-sm"></iframe>
+			</div>
+		} else if files.ActiveBuffer.Encoding == "base64" {
+			<div class="relative z-10 flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">Binary file preview is not supported for { files.ActivePath }.</div>
+		} else if filesPanelCanRenderText(files) {
+			<div class="absolute inset-0 overflow-auto p-4" data-files-editor-host={ files.ActivePath }>
+				<pre class="min-h-full whitespace-pre-wrap break-words rounded-md bg-card/10 p-4 font-mono text-xs text-foreground">{ files.ActiveBuffer.Content }</pre>
+			</div>
+		} else {
+			<div class="relative z-10 flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading file contents…</div>
+		}
+	</div>
+}
+
+templ filesPanelTree(nodes []viewmodel.FilesPanelNode, depth int, activePath string) {
+	for _, node := range nodes {
+		<button type="button" class={ filesPanelTreeButtonClass(node, node.Path == activePath) } style={ filesPanelTreePadding(depth) } disabled data-files-tree-path={ node.Path } data-files-tree-type={ node.Type }>
+			if node.Type == "directory" {
+				if node.Loading {
+					@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5 animate-spin text-sidebar-foreground/40"})
+				} else if node.Expanded {
+					@lucide.ChevronDown(ahtempl.Attributes{"class": "size-3.5 text-sidebar-foreground/40"})
+				} else {
+					@lucide.ChevronRight(ahtempl.Attributes{"class": "size-3.5 text-sidebar-foreground/40"})
+				}
+				if node.Expanded {
+					@lucide.FolderOpen(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				} else {
+					@lucide.Folder(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				}
+			} else {
+				<span class="size-3.5 shrink-0"></span>
+				if filesPanelIsImage(node.Path) {
+					@lucide.FileImage(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				} else if node.Status == "added" {
+					@lucide.FilePlus(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				} else if node.Status == "deleted" {
+					@lucide.FileMinus(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				} else {
+					@lucide.FileCode(ahtempl.Attributes{"class": filesPanelTreeIconClass(node)})
+				}
+			}
+			<span class="min-w-0 flex-1 truncate">{ node.Name }</span>
+			if node.Type == "file" && node.Status != "" {
+				<span class={ "text-[10px] font-semibold " + filesPanelStatusBadgeClass(node.Status) }>{ filesPanelStatusLetter(node.Status) }</span>
+			}
+		</button>
+		if node.Type == "directory" && node.Expanded && len(node.Children) > 0 {
+			@filesPanelTree(node.Children, depth + 1, activePath)
+		}
+	}
+}

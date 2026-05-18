@@ -1,0 +1,122 @@
+package app
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/app/parts"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ StartupGate(startup viewmodel.StartupSnapshot, children ahtempl.Component) {
+	<div
+		class={ startupGateShellClass(startup) }
+		data-startup-gate-shell
+		data-startup-phase={ startupGatePhase(startup) }
+		data-startup-ready={ strconv.FormatBool(startupGateShellVisible(startup)) }
+		data-startup-api-state={ startupGateAPIState(startup) }
+		data-startup-retry-count={ strconv.Itoa(startup.RetryCount) }
+		data-startup-active-tasks={ strconv.FormatBool(startup.HasActiveTasks) }
+	>
+		if children != nil {
+			@children
+		}
+	</div>
+	if startupGateShowAuth(startup) {
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-background/95 px-6 py-10 text-foreground backdrop-blur-sm" data-startup-auth-overlay>
+			<div class="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm" role="dialog" aria-modal="true" aria-labelledby="startup-auth-title" aria-describedby="startup-auth-description">
+				<div class="mb-5 flex justify-center">
+					@parts.DiscobotBrand("", "h-8", "")
+				</div>
+				<h1 id="startup-auth-title" class="mb-2 font-semibold text-2xl text-foreground">Sign in required</h1>
+				<p id="startup-auth-description" class="mb-6 text-muted-foreground text-sm leading-6">Sign in to continue to your Discobot workspace.</p>
+				<div class="flex justify-center">
+					<a class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90" href={ ahtempl.SafeURL(startup.LoginHref) }>Sign in</a>
+				</div>
+			</div>
+		</div>
+	} else if startupGateShowOverlay(startup) {
+		@startupGateOverlay(startup)
+	}
+}
+
+templ startupGateOverlay(startup viewmodel.StartupSnapshot) {
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-background/95 px-6 py-10 text-foreground backdrop-blur-sm"
+		data-startup-overlay
+		data-startup-phase={ startupGatePhase(startup) }
+		data-startup-api-state={ startupGateAPIState(startup) }
+	>
+		<div class="w-full max-w-lg space-y-4" role="status" aria-live="polite" aria-labelledby="startup-gate-headline" aria-describedby="startup-gate-detail">
+			<div class="mx-auto flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-border bg-background px-6 py-6 text-center shadow-sm">
+				@parts.DiscobotBrand("", "h-5", "")
+				if startup.Phase == "ready" {
+					<div class="flex size-9 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+						<div class="size-3.5 rounded-full bg-current"></div>
+					</div>
+				} else {
+					@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-7 animate-spin text-muted-foreground"})
+				}
+				<div class="space-y-1.5">
+					<div class="flex flex-wrap items-center justify-center gap-2">
+						<span class="inline-flex items-center rounded-full border border-transparent bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">Startup gate</span>
+						<span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-medium">Live app</span>
+					</div>
+					<h2 id="startup-gate-headline" class="font-semibold text-lg sm:text-xl">{ startupGateHeadline(startup) }</h2>
+					<p id="startup-gate-detail" class="text-muted-foreground text-sm leading-5">{ startupGateDetail(startup) }</p>
+				</div>
+				<div class="w-full space-y-2.5 text-left">
+					<div class="flex items-center justify-between gap-3 text-xs sm:text-sm">
+						<span class={ startupGateAPIClass(startupGateAPIState(startup)) } data-startup-api-state={ startupGateAPIState(startup) }>
+							{ "API: " + startupGateAPILabel(startupGateAPIState(startup)) }
+						</span>
+						<div class="flex items-center gap-2">
+							<span class="text-muted-foreground">{ startupGateStatusLabel(startup) }</span>
+							if startup.RetryCount > 0 {
+								<span class="text-muted-foreground">{ "retry " + strconv.Itoa(startup.RetryCount) }</span>
+							}
+						</div>
+					</div>
+					<div class="h-2 w-full overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ strconv.Itoa(startupGateProgress(startup)) }>
+						<div class="h-full bg-primary transition-all" style={ "width: " + strconv.Itoa(startupGateProgress(startup)) + "%;" }></div>
+					</div>
+					if startup.OverlayDismissible {
+						<div class="flex justify-end">
+							<button type="button" class="text-muted-foreground text-xs transition-colors hover:text-foreground" data-startup-dismiss-overlay disabled>Continue while tasks finish</button>
+						</div>
+					}
+				</div>
+				if startup.ErrorMessage != "" {
+					<div class="w-full rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-left text-sm text-destructive" role="alert">
+						{ startup.ErrorMessage }
+					</div>
+				}
+				if len(startup.VisibleTasks) > 0 {
+					<div class="w-full space-y-2 text-left" data-startup-task-list>
+						for _, task := range startup.VisibleTasks {
+							<div
+								class="rounded-xl border border-border px-3 py-2.5"
+								data-startup-task-id={ task.ID }
+								data-startup-task-state={ task.State }
+								data-startup-task-progress={ strconv.Itoa(startupGateTaskProgress(task)) }
+							>
+								<div class="flex items-start gap-2.5">
+									<div class={ "mt-1 size-2.5 shrink-0 rounded-full " + startupGateTaskDotClass(task) }></div>
+									<div class="min-w-0 space-y-1">
+										<div class="flex items-center justify-between gap-3">
+											<p class="font-medium text-sm">{ task.Name }</p>
+											<span class={ "text-xs capitalize " + startupGateTaskTone(task) }>{ startupGateTaskState(task) }</span>
+										</div>
+										<p class="text-sm text-muted-foreground">{ startupGateTaskDetail(task) }</p>
+									</div>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+}

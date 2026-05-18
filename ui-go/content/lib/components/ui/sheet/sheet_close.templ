@@ -1,0 +1,11 @@
+package sheet
+
+import ahtempl "github.com/a-h/templ"
+
+templ SheetClose(className string, children ahtempl.Component) {
+	<button type="button" data-slot="sheet-close" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</button>
+}

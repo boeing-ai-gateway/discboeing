@@ -1,0 +1,5 @@
+package dialog
+
+templ DialogOverlay(open bool, className string) {
+	<div data-slot="dialog-overlay" data-state={ dialogState(open) } class={ overlayClass(className) }></div>
+}

@@ -1,0 +1,83 @@
+package toolrenderers
+
+import (
+	"fmt"
+	"strings"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ GlobToolRenderer(view GlobView) {
+	{{
+		input, inputOK := parseGlobInput(view.Input)
+		output, outputOK := parseGlobOutput(view.Output)
+		contentView := tool.View{Open: view.Open}
+	}}
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground" data-tool-toggle="true">
+			@lucide.FolderSearch(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">{ globHeader(input, inputOK, view.State) }</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, true, "")
+	</div>
+	@tool.ToolContent(contentView, "", globContent(view, input, inputOK, output, outputOK))
+}
+
+templ globContent(view GlobView, input GlobInput, inputOK bool, output GlobOutput, outputOK bool) {
+	if strings.TrimSpace(view.Input) == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading file search...
+			} else {
+				File search details are unavailable.
+			}
+		</div>
+	} else if !inputOK {
+		<div class="space-y-3 p-4 pt-3">
+			<p class="text-muted-foreground text-sm">
+				if isStreamingState(view.State) {
+					Loading file search...
+				} else {
+					Could not parse file search details.
+				}
+			</p>
+			if strings.TrimSpace(view.Output) != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	} else {
+		<div class="space-y-4 p-4 pt-3">
+			<div class="rounded-md border bg-muted/30 p-3 text-xs">
+				<p><span class="text-muted-foreground">pattern:</span> <code>{ input.Pattern }</code></p>
+				if input.Path != "" {
+					<p class="mt-1"><span class="text-muted-foreground">path:</span> <code>{ shortenPath(input.Path) }</code></p>
+				}
+			</div>
+			if len(output.Files) > 0 {
+				<div class="space-y-2">
+					<p class="text-muted-foreground text-xs">{ fmt.Sprint(len(output.Files)) } files matched</p>
+					<div class="rounded-md border bg-muted/20 p-2">
+						for _, file := range output.Files {
+							<div class="border-b px-2 py-1 font-mono text-xs last:border-b-0">{ shortenPath(file) }</div>
+						}
+					</div>
+				</div>
+			} else if output.Content != "" {
+				<div class="rounded-md border bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ output.Content }</code></pre>
+				</div>
+			} else if outputOK {
+				<div class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm">No files matched.</div>
+			}
+			if view.ErrorText != "" {
+				<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ view.ErrorText }</div>
+			}
+		</div>
+	}
+}

@@ -1,0 +1,109 @@
+package parts
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ConversationPromptQueuePanel(entries []viewmodel.QueuedPrompt) {
+	if len(entries) > 0 {
+		<div
+			class="mb-2 rounded-lg border border-border bg-background shadow-sm"
+			role="region"
+			aria-labelledby="conversation-prompt-queue-heading"
+			data-conversation-prompt-queue-panel
+			data-queued-prompt-count={ strconv.Itoa(len(entries)) }
+		>
+			<div id="conversation-prompt-queue-heading" class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+				{ "Queued prompts (" + strconv.Itoa(len(entries)) + ")" }
+			</div>
+			<div class="flex flex-col gap-1 p-1" role="list" aria-label="Queued prompts">
+				for index, entry := range entries {
+					<div
+						class="flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
+						role="listitem"
+						data-queued-prompt-id={ entry.ID }
+						data-queued-prompt-index={ strconv.Itoa(index) }
+						data-queued-prompt-saving={ strconv.FormatBool(entry.Saving) }
+						data-queued-prompt-editing={ strconv.FormatBool(entry.Editing) }
+						data-queued-prompt-attachment-count={ strconv.Itoa(entry.AttachmentCount) }
+						data-queued-prompt-model={ entry.Model }
+						data-queued-prompt-run-after={ entry.RunAfter }
+					>
+						<div class="min-w-0 flex-1">
+							if entry.Editing {
+								<div class="space-y-2">
+									<textarea
+										class="min-h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm"
+										aria-label="Edit queued prompt"
+										data-queued-prompt-edit-text
+										disabled?={ entry.Saving }
+									>{ queuedPromptText(entry) }</textarea>
+									<div class="flex justify-end gap-1">
+										<button type="button" class="h-8 rounded-md px-3 text-sm text-muted-foreground" data-queued-prompt-action="cancel-edit" data-on:click={ queuedPromptCommand(entry.ID, "cancel-edit") } disabled?={ entry.Saving }>Cancel</button>
+										<button type="button" class="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" data-queued-prompt-action="save-edit" data-on:click={ queuedPromptCommand(entry.ID, "save-edit") } disabled?={ entry.Saving }>
+											@lucide.Check(ahtempl.Attributes{"class": "size-3.5"})
+											Save
+										</button>
+									</div>
+								</div>
+							} else {
+								<div class="truncate text-sm text-foreground">{ queuedPromptText(entry) }</div>
+							}
+							<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+								if entry.AttachmentCount > 0 {
+									<span>{ queuedPromptAttachmentLabel(entry.AttachmentCount) }</span>
+								}
+								if entry.Model != "" {
+									<span>{ entry.Model }</span>
+								}
+								if queuedPromptRunAfterLabel(entry) != "" {
+									<span class="font-medium text-foreground/80">{ queuedPromptRunAfterLabel(entry) }</span>
+								}
+							</div>
+						</div>
+						<div class="flex shrink-0 items-start gap-1">
+							<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Move queued prompt up" aria-label="Move queued prompt up" data-queued-prompt-action="move-up" data-on:click={ queuedPromptCommand(entry.ID, "move-up") } disabled?={ entry.Saving || index == 0 }>
+								@lucide.ChevronUp(ahtempl.Attributes{"class": "size-3.5"})
+							</button>
+							<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Move queued prompt down" aria-label="Move queued prompt down" data-queued-prompt-action="move-down" data-on:click={ queuedPromptCommand(entry.ID, "move-down") } disabled?={ entry.Saving || index == len(entries)-1 }>
+								@lucide.ChevronDown(ahtempl.Attributes{"class": "size-3.5"})
+							</button>
+							<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title={ queuedPromptEditTitle(entry) } aria-label={ queuedPromptEditTitle(entry) } data-queued-prompt-action="edit" data-on:click={ queuedPromptCommand(entry.ID, "edit") } disabled?={ entry.Saving }>
+								if entry.Editing {
+									@lucide.X(ahtempl.Attributes{"class": "size-3.5"})
+								} else {
+									@lucide.Pencil(ahtempl.Attributes{"class": "size-3.5"})
+								}
+							</button>
+							if entry.RunAfter != "" {
+								<div class="relative">
+									<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Schedule queued prompt" aria-label="Schedule queued prompt" aria-haspopup="dialog" aria-expanded={ strconv.FormatBool(entry.ScheduleOpen) } data-queued-prompt-action="schedule" data-on:click={ queuedPromptCommand(entry.ID, "schedule") } disabled?={ entry.Saving }>
+										@lucide.Clock(ahtempl.Attributes{"class": "size-3.5"})
+									</button>
+									<div class={ queuedPromptSchedulePopoverClass(entry) } data-queued-prompt-schedule-popover>
+										@ConversationPromptSchedulePicker(entry)
+									</div>
+								</div>
+								<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Run queued prompt now" aria-label="Run queued prompt now" data-queued-prompt-action="run-now" data-on:click={ queuedPromptCommand(entry.ID, "run-now") } disabled?={ entry.Saving }>
+									@lucide.Play(ahtempl.Attributes{"class": "size-3.5"})
+								</button>
+							} else {
+								<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Pause queued prompt" aria-label="Pause queued prompt" data-queued-prompt-action="pause" data-on:click={ queuedPromptCommand(entry.ID, "pause") } disabled?={ entry.Saving }>
+									@lucide.Pause(ahtempl.Attributes{"class": "size-3.5"})
+								</button>
+							}
+							<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" title="Delete queued prompt" aria-label="Delete queued prompt" data-queued-prompt-action="delete" data-on:click={ queuedPromptCommand(entry.ID, "delete") } disabled?={ entry.Saving }>
+								@lucide.Trash2(ahtempl.Attributes{"class": "size-3.5 text-destructive"})
+							</button>
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	}
+}

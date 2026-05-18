@@ -1,0 +1,11 @@
+package selectui
+
+import ahtempl "github.com/a-h/templ"
+
+templ SelectGroup(className string, children ahtempl.Component) {
+	<div data-slot="select-group" role="group" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

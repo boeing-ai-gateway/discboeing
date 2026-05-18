@@ -1,0 +1,203 @@
+package parts
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ServicePanel(snapshot viewmodel.DockPanelSnapshot) {
+	{{ service := servicePanelActive(snapshot) }}
+	@DockWindowChrome(
+		DockWindowChromeSnapshot{
+			DockMaximized: snapshot.DockMaximized,
+			ShiftWindowControlsForSidebar: snapshot.ShiftWindowControlsForSidebar,
+			CloseLabel: "Close service panel",
+			MinimizeLabel: "Minimize service panel",
+			MaximizeTitle: servicePanelMaximizeTitle(snapshot),
+			ContentClass: "flex min-h-0 flex-1 flex-col overflow-hidden",
+		},
+		templServicePanelTitle(service),
+		nil,
+		templServicePanelBody(snapshot, service),
+	)
+}
+
+templ templServicePanelTitle(service viewmodel.DockService) {
+	<div class="flex min-w-0 items-center gap-2 text-xs">
+		<p class="truncate text-sm font-medium">Services</p>
+		if service.ID != "" {
+			<span class="truncate text-sidebar-foreground/70">{ servicePanelLabel(service) }</span>
+		}
+	</div>
+}
+
+templ templServicePanelBody(snapshot viewmodel.DockPanelSnapshot, service viewmodel.DockService) {
+	if len(snapshot.VisibleServices) > 0 {
+		<div class="flex min-h-10 items-end gap-1 overflow-x-auto border-b border-sidebar-border bg-sidebar px-2 py-2">
+			for _, item := range snapshot.VisibleServices {
+				{{ active := item.ID == service.ID }}
+				<button type="button" class={ servicePanelTabClass(active) } data-service-select={ item.ID }>
+					<div class="flex min-w-0 items-center gap-2">
+						<span class="max-w-40 truncate">{ servicePanelLabel(item) }</span>
+						if !item.Passive {
+							<div class={ servicePanelDotClass(item) }></div>
+						}
+					</div>
+				</button>
+			}
+		</div>
+	} else {
+		<div class="flex min-h-10 items-center border-b border-sidebar-border bg-sidebar px-3 py-2 text-sm text-sidebar-foreground/60">No services available.</div>
+	}
+	if service.ID != "" {
+		@templServicePanelToolbar(snapshot, service)
+	}
+	if servicePanelShowPreview(snapshot, service) {
+		@templServicePanelAddressBar(snapshot, service)
+	}
+	<div class="relative min-h-0 flex-1">
+		if service.ID == "" {
+			<div class="flex h-full items-center justify-center text-sm text-muted-foreground">Select a service to view its preview or logs.</div>
+		} else if servicePanelShowPreview(snapshot, service) {
+			@templServicePanelPreview(snapshot, service)
+		} else {
+			@templServicePanelLogs(snapshot)
+		}
+	</div>
+}
+
+templ templServicePanelToolbar(snapshot viewmodel.DockPanelSnapshot, service viewmodel.DockService) {
+	<div class="flex flex-wrap items-center justify-between gap-1 border-b bg-muted/20 px-2 py-0.5">
+		<div class="flex min-w-0 flex-wrap items-center gap-1">
+			if servicePanelShowTabs(service) {
+				<div class="inline-flex rounded-md border border-border bg-background/80 text-[11px] shadow-xs" data-service-view-mode={ snapshot.Services.ViewMode }>
+					<button type="button" class={ servicePanelViewButtonClass(snapshot.Services.ViewMode == "" || snapshot.Services.ViewMode == "preview") } aria-label="Preview service" title="Preview" data-service-view="preview">
+						@lucide.Globe(ahtempl.Attributes{"class": "size-2.5"})
+						Preview
+					</button>
+					<button type="button" class={ servicePanelViewButtonClass(snapshot.Services.ViewMode == "logs") } aria-label="Show service logs" title="Logs" data-service-view="logs">
+						@lucide.Terminal(ahtempl.Attributes{"class": "size-2.5"})
+						Logs
+					</button>
+				</div>
+			}
+			if !service.Passive {
+				<div class={ servicePanelStatusTextClass(service) }>
+					if servicePanelBusy(service) {
+						@lucide.RefreshCw(ahtempl.Attributes{"class": "size-2.5 animate-spin"})
+					} else if service.ExitCode != nil && *service.ExitCode != 0 && servicePanelStatus(service) == "stopped" {
+						@lucide.CircleX(ahtempl.Attributes{"class": "size-2.5"})
+					} else {
+						@lucide.Circle(ahtempl.Attributes{"class": "size-2.5"})
+					}
+					<span>{ servicePanelStatusLabel(service) }</span>
+				</div>
+			}
+		</div>
+		if servicePanelRunnable(service) {
+			<div class="flex items-center gap-1">
+				if servicePanelCanRestart(service) {
+					<button type="button" class="inline-flex h-7 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent hover:text-accent-foreground" title={ "Restart " + servicePanelLabel(service) } aria-label={ "Restart " + servicePanelLabel(service) } data-service-restart={ service.ID }>
+						@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5"})
+						Restart
+					</button>
+				}
+				<button type="button" class="inline-flex h-7 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent hover:text-accent-foreground disabled:opacity-50" title={ servicePanelActionLabel(service) + " " + servicePanelLabel(service) } aria-label={ servicePanelActionLabel(service) + " " + servicePanelLabel(service) } data-service-action={ service.ID } disabled?={ servicePanelBusy(service) }>
+					if servicePanelBusy(service) {
+						@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5 animate-spin"})
+					} else if servicePanelCanStop(service) {
+						@lucide.Square(ahtempl.Attributes{"class": "size-3.5 fill-current"})
+					} else {
+						@lucide.Play(ahtempl.Attributes{"class": "size-3.5 fill-current"})
+					}
+					{ servicePanelActionLabel(service) }
+				</button>
+			</div>
+		}
+	</div>
+}
+
+templ templServicePanelAddressBar(snapshot viewmodel.DockPanelSnapshot, service viewmodel.DockService) {
+	<div class="flex items-center gap-1 border-b bg-muted/50 px-2 py-1.5">
+		<span class="max-w-[18rem] shrink-0 truncate font-mono text-xs text-muted-foreground">{ servicePanelBaseURL(snapshot, service) }</span>
+		<input class="h-7 min-w-[4rem] flex-1 rounded-md border border-input bg-background px-2 py-1 font-mono text-xs shadow-xs" placeholder="/" value={ servicePanelPath(service) } data-service-path={ service.ID } />
+		<button type="button" class={ servicePanelViewportButtonClass(snapshot.Services.Viewport == "mobile") } aria-label="Mobile (390px)" title="Mobile (390px)" data-service-viewport="mobile">
+			@lucide.Smartphone(ahtempl.Attributes{"class": "size-3.5"})
+		</button>
+		<button type="button" class={ servicePanelViewportButtonClass(snapshot.Services.Viewport == "tablet") } aria-label="Tablet (768px)" title="Tablet (768px)" data-service-viewport="tablet">
+			@lucide.Tablet(ahtempl.Attributes{"class": "size-3.5"})
+		</button>
+		<button type="button" class={ servicePanelViewportButtonClass(snapshot.Services.Viewport == "" || snapshot.Services.Viewport == "desktop") } aria-label="Desktop" title="Desktop" data-service-viewport="desktop">
+			@lucide.Monitor(ahtempl.Attributes{"class": "size-3.5"})
+		</button>
+		<button type="button" class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" title="Refresh" aria-label="Refresh preview" data-service-refresh={ service.ID }>
+			@lucide.RefreshCw(ahtempl.Attributes{"class": "size-3.5"})
+		</button>
+		if servicePanelURL(snapshot, service) != "" {
+			<a class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" href={ templ.SafeURL(servicePanelURL(snapshot, service)) } target="_blank" rel="noreferrer" title="Open in browser" aria-label="Open preview externally" data-service-open-external={ service.ID }>
+				@lucide.ExternalLink(ahtempl.Attributes{"class": "size-3.5"})
+			</a>
+		}
+	</div>
+}
+
+templ templServicePanelPreview(snapshot viewmodel.DockPanelSnapshot, service viewmodel.DockService) {
+	<div class={ servicePanelPreviewShellClass(snapshot) } data-service-preview={ service.ID }>
+		if !service.Passive && !servicePanelRunning(service) {
+			<div class="absolute inset-0 z-10 flex items-center justify-center bg-background">
+				<div class="flex flex-col items-center gap-3 text-center text-muted-foreground">
+					if servicePanelBusy(service) {
+						@lucide.RefreshCw(ahtempl.Attributes{"class": "size-6 animate-spin"})
+						<span class="text-sm">{ servicePanelStatusLabel(service) }...</span>
+					} else {
+						@lucide.Play(ahtempl.Attributes{"class": "size-8 text-foreground"})
+						<div class="space-y-1">
+							<p class="text-sm font-medium text-foreground">Service is not running</p>
+							<p class="text-xs text-muted-foreground">Start it to load the preview.</p>
+						</div>
+						<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50" data-service-action={ service.ID } disabled?={ !servicePanelCanStart(service) }>
+							@lucide.Play(ahtempl.Attributes{"class": "size-4 fill-current"})
+							Start service
+						</button>
+					}
+				</div>
+			</div>
+		}
+		if snapshot.Services.Error != "" && (service.Passive || servicePanelRunning(service)) {
+			<div class="absolute inset-0 z-10 flex items-center justify-center bg-background">
+				<div class="flex flex-col items-center gap-2 text-destructive">
+					@lucide.CircleAlert(ahtempl.Attributes{"class": "size-6"})
+					<span class="text-sm">{ snapshot.Services.Error }</span>
+					<button type="button" class="h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground hover:bg-accent hover:text-accent-foreground" data-service-refresh={ service.ID }>Retry</button>
+				</div>
+			</div>
+		}
+		if (service.Passive || servicePanelRunning(service)) && servicePanelURL(snapshot, service) != "" {
+			<div class="h-full shrink-0" style={ servicePanelFrameStyle(snapshot) }>
+				<iframe src={ templ.SafeURL(servicePanelURL(snapshot, service)) } class="size-full border-0" title={ "Service: " + service.ID } sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals" data-service-iframe={ service.ID }></iframe>
+			</div>
+		}
+	</div>
+}
+
+templ templServicePanelLogs(snapshot viewmodel.DockPanelSnapshot) {
+	<div class="relative h-full" data-service-logs>
+		<div class="h-full overflow-auto bg-background p-3 font-mono text-sm text-foreground">
+			if len(snapshot.Services.LogEvents) == 0 && !snapshot.Services.LogsConnected {
+				<div class="italic text-muted-foreground">No output yet</div>
+			}
+			for index, event := range snapshot.Services.LogEvents {
+				<div class={ servicePanelLogClass(event) } data-service-log-index={ strconv.Itoa(index) }>{ event.DisplayText }</div>
+			}
+		</div>
+		if snapshot.Services.HasUnreadLogs {
+			<button class="absolute bottom-4 left-[50%] inline-flex size-10 translate-x-[-50%] items-center justify-center rounded-full border border-input bg-background hover:bg-accent hover:text-accent-foreground" type="button" data-service-scroll-bottom>
+				@lucide.ArrowDown(ahtempl.Attributes{"class": "size-4"})
+			</button>
+		}
+	</div>
+}

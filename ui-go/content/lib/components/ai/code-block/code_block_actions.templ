@@ -1,0 +1,11 @@
+package codeblock
+
+import ahtempl "github.com/a-h/templ"
+
+templ CodeBlockActions(className string, children ahtempl.Component) {
+	<div class={ classNames("flex items-center gap-2", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

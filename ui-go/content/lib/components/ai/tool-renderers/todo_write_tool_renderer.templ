@@ -1,0 +1,159 @@
+package toolrenderers
+
+import (
+	"fmt"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+)
+
+templ TodoWriteToolRenderer(view TodoWriteView) {
+	{{
+		input, inputOK := parseTodoWriteInput(view.Input)
+		output, outputOK := parseTodoWriteOutput(view.Output)
+		todoError := view.ErrorText
+		if todoError == "" {
+			todoError = output.Error
+		}
+	}}
+	<div class="flex items-center justify-between gap-4 px-4 pt-4">
+		<button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground" data-tool-toggle="true">
+			@lucide.ListTodo(ahtempl.Attributes{"class": "size-4 shrink-0 text-muted-foreground"})
+			<span class="truncate font-medium text-sm">{ todoWriteHeader(input.Todos, inputOK, view.State) }</span>
+			@tool.ToolHeaderStatus(view.State, view.Queued, "")
+		</button>
+		@tool.ToolHeaderControls(view.Raw, true, true, "")
+	</div>
+	@tool.ToolContent(tool.View{Open: view.Open}, "", todoWriteContent(view, input, inputOK, output, outputOK, todoError))
+}
+
+templ todoWriteContent(view TodoWriteView, input TodoWriteInput, inputOK bool, output TodoWriteOutput, outputOK bool, todoError string) {
+	if view.Input == "" {
+		<div class="p-4 pt-3 text-muted-foreground text-sm">
+			if isStreamingState(view.State) {
+				Loading todos...
+			} else {
+				Todo details are unavailable.
+			}
+		</div>
+	} else if !inputOK {
+		<div class="space-y-3 p-4 pt-3">
+			<p class="text-muted-foreground text-sm">
+				if isStreamingState(view.State) {
+					Loading todos...
+				} else {
+					Could not parse todo details.
+				}
+			</p>
+			if view.Output != "" {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	} else {
+		{{ counts := todoWriteCounts(input.Todos) }}
+		<div class="space-y-4 p-4 pt-3">
+			<div class="space-y-2 rounded-md border bg-muted/20 p-3">
+				<div class="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+					<span>{ fmt.Sprint(todoWriteProgressPercent(input.Todos)) }% complete</span>
+					<span>{ fmt.Sprint(counts.Completed) }/{ fmt.Sprint(len(input.Todos)) } done</span>
+				</div>
+				<div class="h-2 overflow-hidden rounded-full bg-muted">
+					<div class="h-full rounded-full bg-foreground/70 transition-[width]" style={ "width: " + fmt.Sprint(todoWriteProgressPercent(input.Todos)) + "%" }></div>
+				</div>
+				<div class="flex flex-wrap gap-2 text-xs">
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(counts.Completed) } completed</span>
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(counts.InProgress) } in progress</span>
+					<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{ fmt.Sprint(counts.Pending) } pending</span>
+				</div>
+			</div>
+			if current, ok := todoWriteCurrent(input.Todos); ok {
+				<div class="rounded-md border bg-background p-3">
+					<div class="mb-1 text-muted-foreground text-xs uppercase tracking-wide">
+						if current.Status == "in_progress" {
+							Currently working on
+						} else {
+							Up next
+						}
+					</div>
+					<div class="text-sm">{ todoLabel(current) }</div>
+					if current.ActiveForm != "" && current.ActiveForm != current.Content {
+						<div class="mt-1 text-muted-foreground text-xs">{ current.Content }</div>
+					}
+				</div>
+			}
+			@todoCompletedList(input.Todos, view.PreviousTodos)
+			@todoRemainingList(input.Todos)
+			if outputOK && (output.Success || output.Content != "") {
+				<p class="text-green-700 text-xs">Todo list updated.</p>
+			}
+			if todoError != "" {
+				<div class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive text-sm">{ todoError }</div>
+			}
+			if view.Output != "" && !outputOK {
+				<div class="rounded-md border border-dashed bg-muted/20 p-3">
+					<h5 class="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unparsed output</h5>
+					<pre class="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs"><code>{ view.Output }</code></pre>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ todoCompletedList(todos []TodoEntry, previousTodos []TodoEntry) {
+	{{ completed, newlyCompleted := todoCompletedToShow(todos, previousTodos) }}
+	if len(completed) > 0 {
+		<div class="rounded-md border bg-background p-3">
+			<div class="mb-2 text-muted-foreground text-xs uppercase tracking-wide">
+				if newlyCompleted {
+					Completed since last update
+				} else {
+					Recently completed
+				}
+			</div>
+			<ul class="space-y-1 text-sm">
+				for _, todo := range completed {
+					<li class="flex items-start gap-2"><span class="mt-0.5 text-muted-foreground">✓</span><span>{ todoContentLabel(todo) }</span></li>
+				}
+			</ul>
+		</div>
+	}
+}
+
+templ todoRemainingList(todos []TodoEntry) {
+	{{ remaining := 0 }}
+	for _, todo := range todos {
+		if todo.Status != "completed" {
+			{{ remaining++ }}
+		}
+	}
+	if remaining > 0 {
+		<div class="rounded-md border bg-muted/20 p-3">
+			<div class="mb-2 text-muted-foreground text-xs uppercase tracking-wide">Remaining work</div>
+			<ul class="space-y-1">
+				for _, todo := range todos {
+					if todo.Status != "completed" {
+						<li class="flex items-start gap-2 text-xs">
+							<span class="mt-0.5 text-muted-foreground">
+								if todo.Status == "in_progress" {
+									•
+								} else {
+									○
+								}
+							</span>
+							<div>
+								<div>{ todoContentLabel(todo) }</div>
+								if todo.ActiveForm != "" && todo.ActiveForm != todo.Content {
+									<div class="text-muted-foreground">{ todo.ActiveForm }</div>
+								}
+							</div>
+						</li>
+					}
+				}
+			</ul>
+		</div>
+	}
+}

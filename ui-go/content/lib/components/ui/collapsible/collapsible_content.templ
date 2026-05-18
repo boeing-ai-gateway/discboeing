@@ -1,0 +1,13 @@
+package collapsible
+
+import ahtempl "github.com/a-h/templ"
+
+templ CollapsibleContent(open bool, className string, children ahtempl.Component) {
+	if open {
+		<div data-slot="collapsible-content" data-state="open" class={ joinClass(className) }>
+			if children != nil {
+				@children
+			}
+		</div>
+	}
+}

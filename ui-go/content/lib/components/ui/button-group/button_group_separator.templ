@@ -1,0 +1,5 @@
+package buttongroup
+
+templ ButtonGroupSeparator(orientation string, className string) {
+	<div data-slot="button-group-separator" data-orientation={ buttonGroupOrientation(orientation) } role="separator" aria-orientation={ buttonGroupOrientation(orientation) } class={ buttonGroupSeparatorClass(className) }></div>
+}

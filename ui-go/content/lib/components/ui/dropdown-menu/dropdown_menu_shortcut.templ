@@ -1,0 +1,11 @@
+package dropdownmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ DropdownMenuShortcut(className string, children ahtempl.Component) {
+	<span data-slot="dropdown-menu-shortcut" class={ shortcutClass(className) }>
+		if children != nil {
+			@children
+		}
+	</span>
+}

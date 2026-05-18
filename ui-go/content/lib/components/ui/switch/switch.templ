@@ -1,0 +1,7 @@
+package switchcomponent
+
+templ Switch(checked bool, disabled bool, className string) {
+	<button type="button" role="switch" data-slot="switch" data-state={ switchState(checked) } aria-checked={ switchState(checked) == "checked" } class={ switchClass(className) } disabled?={ disabled }>
+		<span data-slot="switch-thumb" data-state={ switchState(checked) } class={ thumbClass() }></span>
+	</button>
+}

@@ -1,0 +1,16 @@
+package checkbox
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ Checkbox(checked bool, indeterminate bool, disabled bool, className string) {
+	<button type="button" role="checkbox" data-slot="checkbox" data-state={ checkboxState(checked, indeterminate) } aria-checked={ checkboxAriaChecked(checked, indeterminate) } class={ checkboxClass(className) } disabled?={ disabled }>
+		<div data-slot="checkbox-indicator" class="text-current transition-none">
+			if checked {
+				@lucide.Check(ahtempl.Attributes{"class": "size-3.5"})
+			} else if indeterminate {
+				@lucide.Minus(ahtempl.Attributes{"class": "size-3.5"})
+			}
+		</div>
+	</button>
+}

@@ -1,0 +1,11 @@
+package popover
+
+import ahtempl "github.com/a-h/templ"
+
+templ PopoverClose(className string, children ahtempl.Component) {
+	<button type="button" data-slot="popover-close" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</button>
+}

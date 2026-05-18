@@ -1,0 +1,12 @@
+package attachments
+
+templ AttachmentInfo(attachment AttachmentView, showMediaType bool, className string) {
+	if attachmentVariant(attachment.Variant) != "grid" {
+		<div class={ classNames("min-w-0 flex-1", className) }>
+			<span class="block truncate">{ attachmentLabel(attachment.Data) }</span>
+			if showMediaType && attachment.Data.MediaType != "" {
+				<span class="block truncate text-muted-foreground text-xs">{ attachment.Data.MediaType }</span>
+			}
+		</div>
+	}
+}

@@ -1,0 +1,11 @@
+package popover
+
+import ahtempl "github.com/a-h/templ"
+
+templ Popover(open bool, children ahtempl.Component) {
+	<div data-slot="popover" data-state={ state(open) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

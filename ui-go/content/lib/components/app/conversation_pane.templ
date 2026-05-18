@@ -1,0 +1,90 @@
+package app
+
+import (
+	"context"
+	"io"
+
+	ahtempl "github.com/a-h/templ"
+	aimessage "github.com/obot-platform/discobot/ui-go/content/lib/components/ai/message"
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/app/parts"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ConversationPane(snapshot viewmodel.SessionWorkspaceSnapshot) {
+	<div id="conversation-pane" class="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background pt-1" data-conversation-pane>
+		if snapshot.Conversation.SessionError != "" || snapshot.Conversation.ThreadError != "" {
+			<div class="flex flex-col gap-2 p-3">
+				if snapshot.Conversation.SessionError != "" {
+					@conversationPaneErrorBanner("session", snapshot.Conversation.SessionError)
+				}
+				if snapshot.Conversation.ThreadError != "" {
+					@conversationPaneErrorBanner("thread", snapshot.Conversation.ThreadError)
+				}
+			</div>
+		}
+		<div class={ conversationPaneBodyClass(len(conversationMessages(snapshot)) > 0) }>
+			if !snapshot.IsPending {
+				<div class="relative min-h-0 min-w-0 flex-1">
+					<div class="scrollbar-gutter-stable h-full min-w-0 overflow-auto p-4" data-conversation-scroll-container>
+						<div class={ conversationContentClass(snapshot.Conversation.ChatWidthMode) } data-conversation-root>
+					if snapshot.State != "" {
+						<div class="flex items-center gap-2 text-xs text-muted-foreground">
+							<span class="rounded-full border border-border bg-card px-2.5 py-1 font-medium uppercase tracking-[0.16em] text-muted-foreground">
+								{ snapshot.State }
+							</span>
+						</div>
+					}
+					if len(conversationMessages(snapshot)) == 0 {
+						<div class="rounded-xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
+							Start a conversation with Discobot.
+						</div>
+					} else {
+						for _, message := range conversationMessages(snapshot) {
+							@conversationPaneMessage(message)
+						}
+					}
+						</div>
+					</div>
+					<button type="button" class="pointer-events-auto absolute bottom-4 left-1/2 hidden size-10 -translate-x-1/2 items-center justify-center rounded-full border border-input bg-background text-muted-foreground shadow-sm" aria-label="Scroll to bottom" data-scroll-to-bottom-placeholder disabled>
+						↓
+					</button>
+					@parts.ConversationSelectionComment(snapshot.Conversation.SelectionComment)
+				</div>
+			}
+			if showConversationComposer(snapshot) {
+				@ConversationComposer(snapshot.Composer)
+			}
+		</div>
+	</div>
+}
+
+templ conversationPaneMessage(row viewmodel.ConversationMessage) {
+	@aimessage.Message(conversationMessageFrom(row.Role), row.ID, "", ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		branch := conversationMessageBranch(row)
+		if err := aimessage.MessageContent("", ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+			if branch.Total > 1 {
+				return aimessage.MessageBranch(branch, "", ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+					return aimessage.MessageResponse(conversationMessageContent(row), "", nil).Render(ctx, w)
+				})).Render(ctx, w)
+			}
+			return aimessage.MessageResponse(conversationMessageContent(row), "", nil).Render(ctx, w)
+		})).Render(ctx, w); err != nil {
+			return err
+		}
+		return aimessage.MessageBranchSelector(branch, conversationMessageFrom(row.Role), ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+			if err := aimessage.MessageBranchPrevious(branch, nil).Render(ctx, w); err != nil {
+				return err
+			}
+			if err := aimessage.MessageBranchPage(branch, "").Render(ctx, w); err != nil {
+				return err
+			}
+			return aimessage.MessageBranchNext(branch, nil).Render(ctx, w)
+		})).Render(ctx, w)
+	}))
+}
+
+templ conversationPaneErrorBanner(kind string, text string) {
+	<div class="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" data-error-banner-kind={ kind }>
+		{ text }
+	</div>
+}

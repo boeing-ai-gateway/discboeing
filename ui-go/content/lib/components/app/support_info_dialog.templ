@@ -1,0 +1,59 @@
+package app
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) {
+	if snapshot.Open {
+		<div class="fixed inset-0 z-[60] flex items-start justify-center bg-black/50 px-4 py-10" data-support-info-dialog data-support-info-status={ snapshot.Status } data-support-info-has-json={ strconv.FormatBool(snapshot.JSON != "") }>
+			<div
+				class="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-background p-6 shadow-xl"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="support-info-title"
+				aria-describedby="support-info-description"
+			>
+				<div>
+					<h2 id="support-info-title" class="flex items-center gap-2 text-lg font-semibold">
+						@lucide.Info(ahtempl.Attributes{"class": "size-4"})
+						<span>Support Information</span>
+					</h2>
+					<p id="support-info-description" class="mt-1 text-sm text-muted-foreground">Diagnostic data snapshot for support and debugging.</p>
+				</div>
+				<div class="mt-4 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted/30 p-3" data-support-info-content>
+					if snapshot.Status == "loading" {
+						<div class="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+							@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-4 animate-spin"})
+							<span>Loading support information...</span>
+						</div>
+					} else if snapshot.Status == "error" {
+						<div class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+							{ supportInfoError(snapshot) }
+						</div>
+					} else if snapshot.JSON != "" {
+						<pre class="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-5" aria-label="Support information JSON"><code>{ snapshot.JSON }</code></pre>
+					} else {
+						<div class="flex min-h-40 items-center justify-center text-sm text-muted-foreground">No support information available.</div>
+					}
+				</div>
+				<div class="mt-3 flex justify-end gap-2">
+					<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium opacity-60" data-support-info-copy disabled?={ !supportInfoCanUse(snapshot) }>
+						@lucide.Copy(ahtempl.Attributes{"class": "size-3.5"})
+						<span>Copy JSON</span>
+					</button>
+					<button type="button" class="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium opacity-60" data-support-info-download disabled?={ !supportInfoCanUse(snapshot) }>
+						@lucide.Download(ahtempl.Attributes{"class": "size-3.5"})
+						<span>Download JSON</span>
+					</button>
+					<button type="button" class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90" data-support-info-close data-on:click={ supportInfoCloseCommand() }>Close</button>
+				</div>
+			</div>
+		</div>
+	}
+}

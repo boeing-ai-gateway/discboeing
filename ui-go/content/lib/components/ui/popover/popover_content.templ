@@ -1,0 +1,14 @@
+package popover
+
+import "fmt"
+import ahtempl "github.com/a-h/templ"
+
+templ PopoverContent(open bool, side string, align string, sideOffset int, className string, children ahtempl.Component) {
+	<div data-slot="popover-portal">
+		<div data-slot="popover-content" data-state={ state(open) } data-side={ side } data-align={ align } data-side-offset={ fmt.Sprint(sideOffset) } class={ contentClass(className) }>
+			if children != nil {
+				@children
+			}
+		</div>
+	</div>
+}

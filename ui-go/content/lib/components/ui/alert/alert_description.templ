@@ -1,0 +1,11 @@
+package alert
+
+import ahtempl "github.com/a-h/templ"
+
+templ AlertDescription(className string, children ahtempl.Component) {
+	<div data-slot="alert-description" class={ alertDescriptionClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

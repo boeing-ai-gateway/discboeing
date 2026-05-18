@@ -1,0 +1,11 @@
+package codeblock
+
+import ahtempl "github.com/a-h/templ"
+
+templ CodeBlockFilename(className string, children ahtempl.Component) {
+	<span class={ classNames("font-mono", className) }>
+		if children != nil {
+			@children
+		}
+	</span>
+}

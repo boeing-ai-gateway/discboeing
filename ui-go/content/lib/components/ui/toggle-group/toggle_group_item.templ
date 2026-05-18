@@ -1,0 +1,12 @@
+package togglegroup
+
+import ahtempl "github.com/a-h/templ"
+import "strconv"
+
+templ ToggleGroupItem(value string, pressed bool, variant string, size string, spacing int, className string, disabled bool, children ahtempl.Component) {
+	<button type="button" data-slot="toggle-group-item" data-value={ value } data-state={ state(pressed) } data-variant={ variant } data-size={ size } data-spacing={ strconv.Itoa(spacing) } aria-pressed={ pressed } class={ toggleClass(variant, size, className) } disabled?={ disabled }>
+		if children != nil {
+			@children
+		}
+	</button>
+}

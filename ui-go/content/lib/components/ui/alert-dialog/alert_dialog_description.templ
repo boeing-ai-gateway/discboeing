@@ -1,0 +1,11 @@
+package alertdialog
+
+import ahtempl "github.com/a-h/templ"
+
+templ AlertDialogDescription(className string, children ahtempl.Component) {
+	<div data-slot="alert-dialog-description" class={ joinClass("text-muted-foreground text-sm", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

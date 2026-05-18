@@ -1,0 +1,11 @@
+package card
+
+import ahtempl "github.com/a-h/templ"
+
+templ CardHeader(className string, children ahtempl.Component) {
+	<div data-slot="card-header" class={ cardHeaderClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

@@ -1,0 +1,7 @@
+package progress
+
+templ Progress(value float64, max float64, className string) {
+	<div data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax={ progressFloat(progressMax(max)) } aria-valuenow={ progressFloat(progressValue(value, max)) } class={ progressClass(className) }>
+		<div data-slot="progress-indicator" class="bg-primary h-full w-full flex-1 transition-all" style={ progressTransform(value, max) }></div>
+	</div>
+}

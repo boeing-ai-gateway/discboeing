@@ -1,0 +1,13 @@
+package attachments
+
+import (
+	ahtempl "github.com/a-h/templ"
+	hovercard "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/hover-card"
+	"strconv"
+)
+
+templ AttachmentHoverCard(openDelay int, closeDelay int, children ahtempl.Component) {
+	<div data-hover-card="attachment" data-open-delay={ strconv.Itoa(openDelay) } data-close-delay={ strconv.Itoa(closeDelay) }>
+		@hovercard.HoverCard(false, children)
+	</div>
+}

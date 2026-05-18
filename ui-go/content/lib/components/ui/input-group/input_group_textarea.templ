@@ -1,0 +1,5 @@
+package inputgroup
+
+templ InputGroupTextarea(value string, placeholder string, name string, className string, disabled bool, required bool, invalid bool) {
+	<textarea data-slot="input-group-control" class={ textareaClass(className) } placeholder={ placeholder } name={ name } disabled?={ disabled } required?={ required } aria-invalid?={ invalid }>{ value }</textarea>
+}

@@ -1,0 +1,11 @@
+package dropdownmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ DropdownMenuRadioGroup(value string, className string, children ahtempl.Component) {
+	<div data-slot="dropdown-menu-radio-group" data-value={ value } role="radiogroup" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

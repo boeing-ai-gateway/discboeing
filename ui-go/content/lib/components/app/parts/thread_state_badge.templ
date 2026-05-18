@@ -1,0 +1,7 @@
+package parts
+
+templ ThreadStateBadge(state string, className string) {
+	if threadStateBadgeLabel(state) != "" {
+		<span class={ threadStateBadgeClass(state, className) }>{ threadStateBadgeLabel(state) }</span>
+	}
+}

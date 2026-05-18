@@ -1,0 +1,11 @@
+package popover
+
+import ahtempl "github.com/a-h/templ"
+
+templ PopoverPortal(children ahtempl.Component) {
+	<div data-slot="popover-portal">
+		if children != nil {
+			@children
+		}
+	</div>
+}

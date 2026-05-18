@@ -1,0 +1,14 @@
+package parts
+
+import "strconv"
+
+templ DiscobotLogo(className string, title string, size int) {
+	<img
+		src="/branding-assets/discobot-logo-purple.svg"
+		alt={ discobotTitle(title, defaultDiscobotLogoTitle) }
+		title={ discobotTitle(title, defaultDiscobotLogoTitle) }
+		width={ strconv.Itoa(discobotLogoSize(size)) }
+		height={ strconv.Itoa(discobotLogoSize(size)) }
+		class={ logoImageClass(className) }
+	/>
+}

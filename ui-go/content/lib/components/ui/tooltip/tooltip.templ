@@ -1,0 +1,11 @@
+package tooltip
+
+import ahtempl "github.com/a-h/templ"
+
+templ Tooltip(open bool, children ahtempl.Component) {
+	<div data-slot="tooltip" data-state={ state(open) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

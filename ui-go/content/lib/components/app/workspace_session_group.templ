@@ -1,0 +1,25 @@
+package app
+
+import "github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+
+templ WorkspaceSessionGroup(group viewmodel.SidebarSessionGroup, openMenu viewmodel.SidebarMenuSnapshot) {
+	<div class="space-y-1.5">
+		<div class="group relative flex items-center gap-1.5 px-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60">
+			@WorkspaceIcon(group.SourceType, "size-3 shrink-0")
+			<span class="min-w-0 flex-1 truncate">{ group.Label }</span>
+			if group.WorkspaceID != "" {
+				<button type="button" class="h-6 w-6 rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label={ "Workspace actions for " + group.Label } data-workspace-id={ group.WorkspaceID } data-action="workspace-menu" data-on:click={ sidebarWorkspaceMenuCommand(group.WorkspaceID) }>
+					@EllipsisIcon("mx-auto size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100")
+				</button>
+				if openMenu.Kind == "workspace" && openMenu.WorkspaceID == group.WorkspaceID {
+					@SidebarActionMenu(openMenu)
+				}
+			}
+		</div>
+		<div class="space-y-0.5">
+			for _, session := range group.Sessions {
+				@SessionItem(session, openMenu)
+			}
+		</div>
+	</div>
+}

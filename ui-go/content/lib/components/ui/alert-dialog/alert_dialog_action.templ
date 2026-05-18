@@ -1,0 +1,11 @@
+package alertdialog
+
+import ahtempl "github.com/a-h/templ"
+
+templ AlertDialogAction(className string, children ahtempl.Component) {
+	<button type="button" data-slot="alert-dialog-action" class={ buttonClass("default", className) } data-alert-dialog-action>
+		if children != nil {
+			@children
+		}
+	</button>
+}

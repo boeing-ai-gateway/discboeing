@@ -1,0 +1,11 @@
+package item
+
+import ahtempl "github.com/a-h/templ"
+
+templ ItemGroup(className string, children ahtempl.Component) {
+	<div role="list" data-slot="item-group" class={ joinClass("group/item-group flex flex-col", className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

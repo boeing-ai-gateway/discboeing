@@ -1,0 +1,47 @@
+package app
+
+import (
+	"strconv"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ SessionWorkspace(snapshot viewmodel.SessionWorkspaceSnapshot) {
+	<div
+		class={ sessionWorkspaceShellClass(snapshot.Visible) }
+		data-session-workspace-shell
+		data-session-id={ sessionWorkspaceSessionID(snapshot) }
+		data-session-visible={ strconv.FormatBool(snapshot.Visible) }
+		data-session-pending={ strconv.FormatBool(snapshot.IsPending) }
+		data-session-reserve-sidebar={ strconv.FormatBool(snapshot.ReserveSidebar) }
+		data-session-workspace-mode={ sessionWorkspaceMode(snapshot) }
+	>
+		<main id="session-workspace" class={ sessionWorkspaceMainClass(snapshot) } data-session-workspace-main>
+			if sessionWorkspaceShowDock(snapshot) && snapshot.Dock.DockMaximized {
+				<div class="hidden" data-thread-workspace-connection="pending" data-thread-workspace-mode="connection-only"></div>
+				<div class="min-h-0 flex-1 overflow-hidden" data-session-dock-region="maximized">
+					@DockPanel(snapshot.Dock)
+				</div>
+			} else if sessionWorkspaceShowDock(snapshot) {
+				<div
+					class="flex min-h-0 min-w-0 flex-1"
+					data-resizable-pane-group
+					data-resizable-direction="horizontal"
+					data-resizable-auto-save-id="discobot-ui-thread-layout"
+				>
+					<div class="min-h-0 min-w-0 basis-[35%] overflow-hidden" data-resizable-pane="thread" data-resizable-default-size="35" data-resizable-min-size="25">
+						<div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+							@ThreadWorkspace(snapshot)
+						</div>
+					</div>
+					<div class="w-px bg-transparent" data-resizable-handle></div>
+					<div class="min-h-0 min-w-0 flex-1 basis-[65%] overflow-auto" data-resizable-pane="dock" data-resizable-default-size="65" data-resizable-min-size="25" data-session-dock-region="split">
+						@DockPanel(snapshot.Dock)
+					</div>
+				</div>
+			} else {
+				@ThreadWorkspace(snapshot)
+			}
+		</main>
+	</div>
+}

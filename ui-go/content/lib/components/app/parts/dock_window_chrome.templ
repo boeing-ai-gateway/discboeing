@@ -1,0 +1,48 @@
+package parts
+
+import ahtempl "github.com/a-h/templ"
+
+templ DockWindowChrome(snapshot DockWindowChromeSnapshot, title ahtempl.Component, actions ahtempl.Component, children ahtempl.Component) {
+	<div class={ dockWindowChromeShellClass(snapshot.ShellClass) } data-dock-window-chrome>
+		<div class={ dockWindowChromeHeaderClass(snapshot.HeaderClass) } data-dock-header data-dock-header-double-click-toggle>
+			<div class="flex min-w-0 items-center gap-2">
+				<div class={ dockWindowChromeControlsClass(snapshot.ShiftWindowControlsForSidebar) }>
+					<button
+						type="button"
+						class="size-3 rounded-full bg-red-500 transition-opacity hover:opacity-80"
+						aria-label={ dockWindowChromeLabel(snapshot.CloseLabel, "Close panel") }
+						title={ dockWindowChromeLabel(snapshot.CloseLabel, "Close panel") }
+						data-dock-close
+					></button>
+					<button
+						type="button"
+						class="size-3 rounded-full bg-yellow-500 transition-opacity hover:opacity-80"
+						aria-label={ dockWindowChromeLabel(snapshot.MinimizeLabel, "Minimize panel") }
+						title={ dockWindowChromeLabel(snapshot.MinimizeLabel, "Minimize panel") }
+						data-dock-minimize
+					></button>
+					<button
+						type="button"
+						class={ dockWindowChromeMaximizeClass(snapshot) }
+						aria-label={ dockWindowChromeLabel(snapshot.MaximizeTitle, "Toggle panel size") }
+						title={ dockWindowChromeLabel(snapshot.MaximizeTitle, "Toggle panel size") }
+						data-dock-maximize
+					></button>
+				</div>
+				if title != nil {
+					@title
+				}
+			</div>
+			if actions != nil {
+				<div class="flex items-center gap-2" data-dock-header-double-click-ignore>
+					@actions
+				</div>
+			}
+		</div>
+		<div class={ dockWindowChromeContentClass(snapshot.ContentClass) }>
+			if children != nil {
+				@children
+			}
+		</div>
+	</div>
+}

@@ -1,0 +1,68 @@
+package parts
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/message"
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ MessageResponseWithCommand(snapshot viewmodel.MessageResponseWithCommandSnapshot) {
+	if messageCommandPresent(snapshot.OriginalCommand) {
+		<div class="group space-y-2" data-message-command={ snapshot.MessageID }>
+			<button
+				type="button"
+				aria-label={ messageGeneratedToggleLabel(snapshot.OriginalCommand.Kind, snapshot.GeneratedTextExpanded) }
+				class="flex w-full items-center gap-2 rounded-sm text-left text-muted-foreground transition hover:text-foreground disabled:pointer-events-none disabled:opacity-80"
+				disabled
+				data-message-generated-toggle={ snapshot.MessageID }
+			>
+				@lucide.ChevronRight(ahtempl.Attributes{"class": "size-3.5 shrink-0"})
+				<p class="text-[11px] uppercase tracking-[0.14em]">
+					{ messageCommandKindLabel(snapshot.OriginalCommand.Kind) }: { snapshot.OriginalCommand.Command }
+				</p>
+				@lucide.ChevronDown(ahtempl.Attributes{"class": messageCommandChevronClass(snapshot.GeneratedTextExpanded)})
+			</button>
+			if snapshot.OriginalCommand.Args != "" {
+				@message.MessageResponse(snapshot.OriginalCommand.Args, "", nil)
+			}
+			if snapshot.OriginalCommand.Kind == "script" && snapshot.OriginalCommand.SuppressedLLM {
+				<div class="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+					The script completed without output, so no model response was started.
+				</div>
+			}
+			if messageShouldShowGenerated(snapshot) && snapshot.GeneratedTextExpanded {
+				@messageGeneratedTextBlock(snapshot, messageGeneratedSectionLabel(snapshot.OriginalCommand.Kind))
+			}
+		</div>
+	} else if snapshot.OriginalText != "" {
+		@message.MessageResponse(snapshot.OriginalText, "", nil)
+	} else {
+		for _, part := range snapshot.TextParts {
+			@message.MessageResponse(part.Text, "", nil)
+		}
+	}
+	if snapshot.OriginalText != "" && !messageCommandPresent(snapshot.OriginalCommand) && len(snapshot.TextParts) > 0 {
+		<div class="mt-2 flex flex-col items-start gap-1">
+			<button type="button" class="h-auto rounded-md px-0 text-[11px] font-normal text-muted-foreground hover:text-foreground disabled:pointer-events-none" disabled data-message-generated-toggle={ snapshot.MessageID }>
+				{ messageGeneratedToggleLabel("", snapshot.GeneratedTextExpanded) }
+			</button>
+			if snapshot.GeneratedTextExpanded {
+				@messageGeneratedTextBlock(snapshot, "Generated text")
+			}
+		</div>
+	}
+}
+
+templ messageGeneratedTextBlock(snapshot viewmodel.MessageResponseWithCommandSnapshot, label string) {
+	<div class="w-full space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+		<p class="text-xs uppercase tracking-[0.14em] text-muted-foreground">{ label }</p>
+		if (snapshot.OriginalCommand.Kind == "skill" || snapshot.OriginalCommand.Kind == "script") && snapshot.OriginalCommand.Text != "" {
+			@message.MessageResponse(snapshot.OriginalCommand.Text, "", nil)
+		} else {
+			for _, part := range snapshot.TextParts {
+				@message.MessageResponse(part.Text, "", nil)
+			}
+		}
+	</div>
+}

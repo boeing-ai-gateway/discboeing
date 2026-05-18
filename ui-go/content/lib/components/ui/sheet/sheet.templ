@@ -1,0 +1,11 @@
+package sheet
+
+import ahtempl "github.com/a-h/templ"
+
+templ Sheet(open bool, children ahtempl.Component) {
+	<div data-slot="sheet" data-state={ sheetState(open) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

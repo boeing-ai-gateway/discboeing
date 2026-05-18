@@ -1,0 +1,11 @@
+package label
+
+import ahtempl "github.com/a-h/templ"
+
+templ Label(forID string, className string, children ahtempl.Component) {
+	<label data-slot="label" for={ forID } class={ labelClass(className) }>
+		if children != nil {
+			@children
+		}
+	</label>
+}

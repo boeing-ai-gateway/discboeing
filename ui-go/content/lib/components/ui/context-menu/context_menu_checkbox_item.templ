@@ -1,0 +1,17 @@
+package contextmenu
+
+import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+import ahtempl "github.com/a-h/templ"
+
+templ ContextMenuCheckboxItem(checked bool, indeterminate bool, disabled bool, className string, children ahtempl.Component) {
+	<div data-slot="context-menu-checkbox-item" data-state={ boolString(checked || indeterminate) } data-disabled?={ disabled } class={ checkboxItemClass(className) }>
+		<span class="pointer-events-none absolute start-2 flex size-3.5 items-center justify-center">
+			if checked {
+				@lucide.Check(ahtempl.Attributes{"class": "size-4"})
+			}
+		</span>
+		if children != nil {
+			@children
+		}
+	</div>
+}

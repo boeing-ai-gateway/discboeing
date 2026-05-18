@@ -1,0 +1,16 @@
+package message
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+)
+
+templ MessageBranchNext(branch BranchView, children ahtempl.Component) {
+	<button aria-label="Next branch" disabled?={ branchTotal(branch) <= 1 } type="button" class={ branchButtonClass("") } data-branch-action="next" data-on:click={ branchCommand(branch.MessageID, "next") }>
+		if children != nil {
+			@children
+		} else {
+			@lucide.ChevronRight(ahtempl.Attributes{"class": "size-3.5"})
+		}
+	</button>
+}

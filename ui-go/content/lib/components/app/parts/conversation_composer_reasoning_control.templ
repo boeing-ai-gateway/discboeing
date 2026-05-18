@@ -1,0 +1,66 @@
+package parts
+
+import (
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+)
+
+templ ConversationComposerReasoningControl(value string, defaultValue string, levels []string) {
+	if len(levels) > 0 || value != "" || defaultValue != "" {
+		<div
+			class="relative inline-flex"
+			data-composer-reasoning-control
+			data-composer-reasoning-value={ value }
+			data-composer-reasoning-default-value={ defaultValue }
+			data-composer-reasoning-count={ composerReasoningLevelCount(levels, defaultValue) }
+		>
+			<button
+				type="button"
+				class="desktop-no-drag inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+				title={ "Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }
+				aria-label={ "Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }
+				aria-haspopup="menu"
+				aria-controls="composer-reasoning-menu"
+				aria-expanded="false"
+				disabled
+			>
+				@lucide.Brain(ahtempl.Attributes{"class": "size-3.5 shrink-0"})
+				<span>{ composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }</span>
+			</button>
+			<div id="composer-reasoning-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md" role="menu" data-composer-reasoning-menu>
+				<div
+					class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+					role="menuitemradio"
+					aria-checked={ composerReasoningSelected(value, "default") }
+					data-composer-reasoning-option="default"
+				>
+					<div class="min-w-0 flex-1">
+						<div class="font-medium">{ composerDefaultReasoningLabel(defaultValue) }</div>
+						<div class="text-xs text-muted-foreground">{ composerDefaultReasoningDescription(defaultValue) }</div>
+					</div>
+					if value == "" || value == "default" {
+						@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+					}
+				</div>
+				for _, level := range levels {
+					if level != defaultValue {
+						<div
+							class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+							role="menuitemradio"
+							aria-checked={ composerReasoningSelected(value, level) }
+							data-composer-reasoning-option={ level }
+						>
+							<div class="min-w-0 flex-1">
+								<div class="font-medium">{ composerReasoningLabel(level) }</div>
+								<div class="text-xs text-muted-foreground">{ composerReasoningDescription(level) }</div>
+							</div>
+							if value == level {
+								@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+							}
+						</div>
+					}
+				}
+			</div>
+		</div>
+	}
+}

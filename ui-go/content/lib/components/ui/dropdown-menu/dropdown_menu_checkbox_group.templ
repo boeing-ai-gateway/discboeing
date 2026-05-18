@@ -1,0 +1,11 @@
+package dropdownmenu
+
+import ahtempl "github.com/a-h/templ"
+
+templ DropdownMenuCheckboxGroup(value string, className string, children ahtempl.Component) {
+	<div data-slot="dropdown-menu-checkbox-group" data-value={ value } role="group" class={ joinClass(className) }>
+		if children != nil {
+			@children
+		}
+	</div>
+}

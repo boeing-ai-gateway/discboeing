@@ -1,0 +1,96 @@
+package app
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
+
+templ ConversationWorkspaceSelector(snapshot viewmodel.ConversationWorkspaceSelectorSnapshot) {
+	<div class={ workspaceSelectorClass(snapshot.FullWidth) } data-conversation-workspace-selector>
+		if snapshot.RequiresInput {
+			<button type="button" class="-m-1 inline-flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Return to workspace dropdown" title="Return to workspace dropdown" disabled>
+				@WorkspaceIcon(workspaceIconSource(snapshot), "size-4")
+			</button>
+			<div class={ "relative " + workspaceInputWidthClass(snapshot.FullWidth) }>
+				<div class="flex items-center gap-1.5">
+					<input
+						id="session-setup-source-inline"
+						class={ "h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs shadow-xs outline-none placeholder:text-muted-foreground " + workspaceInputWidthClass(snapshot.FullWidth) }
+						value={ snapshot.SourceInput }
+						placeholder={ workspaceSourcePlaceholder(snapshot.SourceType) }
+						aria-autocomplete="list"
+						aria-expanded={ strconv.FormatBool(len(snapshot.Suggestions) > 0) }
+						disabled
+					/>
+					if snapshot.SourceType == "local" {
+						<button type="button" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" aria-label="Choose local directory" title="Choose local directory" disabled>
+							@lucide.FolderOpen(ahtempl.Attributes{"class": "size-4"})
+						</button>
+					}
+				</div>
+				if len(snapshot.Suggestions) > 0 {
+					<div class={ "absolute right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg " + workspaceInputWidthClass(snapshot.FullWidth) } role="listbox">
+						for index, suggestion := range snapshot.Suggestions {
+							<button type="button" class={ workspaceSuggestionClass(workspaceSuggestionSelected(snapshot, index), suggestion.Valid) } role="option" aria-selected={ strconv.FormatBool(workspaceSuggestionSelected(snapshot, index)) } disabled>
+								<span class="truncate font-mono">{ suggestion.Value }</span>
+								if suggestion.Valid {
+									@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+								}
+							</button>
+						}
+					</div>
+				}
+			</div>
+		} else {
+			@WorkspaceIcon(workspaceIconSource(snapshot), "size-4 text-muted-foreground")
+			<select
+				id="session-setup-workspace-inline"
+				class={ "h-8 min-w-0 rounded-md border border-input bg-background px-3 text-xs shadow-xs " + workspaceInputWidthClass(snapshot.FullWidth) }
+				disabled?={ snapshot.Loading }
+			>
+				if len(snapshot.Workspaces) > 0 {
+					<optgroup label="Existing workspaces">
+						for _, workspace := range snapshot.Workspaces {
+							<option value={ workspaceOptionValue(workspace) } selected?={ snapshot.SelectedOption == workspaceOptionValue(workspace) }>
+								{ workspace.Label }
+							</option>
+						}
+					</optgroup>
+				}
+				<optgroup label="Create new">
+					<option value="new-workspace" selected?={ snapshot.SelectedOption == "new-workspace" }>Create New Workspace</option>
+					<option value="local-directory" selected?={ snapshot.SelectedOption == "local-directory" }>Local Directory</option>
+					<option value="git-repo" selected?={ snapshot.SelectedOption == "git-repo" }>GitHub Repo</option>
+				</optgroup>
+			</select>
+		}
+	</div>
+	if snapshot.ShowBranchSelector {
+		<details class="desktop-no-drag relative">
+			<summary class="inline-flex size-8 list-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" title={ snapshot.Branch }>
+				@lucide.GitBranch(ahtempl.Attributes{"class": "size-4"})
+			</summary>
+			<div class="absolute bottom-full right-0 z-50 mb-1 w-56 rounded-md border border-border bg-popover p-1 shadow-md">
+				<button type="button" class="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-accent" disabled>
+					<span>No branch</span>
+					if snapshot.Branch == "" {
+						@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+					}
+				</button>
+				<div class="my-1 h-px bg-border"></div>
+				for _, branch := range snapshot.Branches {
+					<button type="button" class="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-accent" disabled>
+						<span class="truncate">{ branch }</span>
+						if snapshot.Branch == branch {
+							@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
+						}
+					</button>
+				}
+			</div>
+		</details>
+	}
+}
