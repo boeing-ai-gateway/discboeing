@@ -17,12 +17,12 @@ func setupBenchDir(b *testing.B) string {
 	// Create 100 Go files with realistic content
 	for i := range 100 {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("package pkg%d\n\n", i))
+		fmt.Fprintf(&sb, "package pkg%d\n\n", i)
 		sb.WriteString("import (\n\t\"fmt\"\n\t\"strings\"\n)\n\n")
 		for j := range 50 {
-			sb.WriteString(fmt.Sprintf("func Function%d_%d(input string) string {\n", i, j))
-			sb.WriteString(fmt.Sprintf("\tresult := strings.Replace(input, \"old%d\", \"new%d\", -1)\n", j, j))
-			sb.WriteString(fmt.Sprintf("\tfmt.Println(\"processing item %d\")\n", j))
+			fmt.Fprintf(&sb, "func Function%d_%d(input string) string {\n", i, j)
+			fmt.Fprintf(&sb, "\tresult := strings.Replace(input, \"old%d\", \"new%d\", -1)\n", j, j)
+			fmt.Fprintf(&sb, "\tfmt.Println(\"processing item %d\")\n", j)
 			sb.WriteString("\treturn result\n}\n\n")
 		}
 		path := filepath.Join(dir, fmt.Sprintf("file_%03d.go", i))

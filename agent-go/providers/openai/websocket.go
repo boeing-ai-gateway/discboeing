@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -224,9 +225,9 @@ func openAIResponseID(msg message.Message) string {
 // real OpenAI response ID. This avoids sending client-generated UI message IDs
 // as previous_response_id.
 func lastAssistantID(msgs []message.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "assistant" {
-			return openAIResponseID(msgs[i])
+	for _, v := range slices.Backward(msgs) {
+		if v.Role == "assistant" {
+			return openAIResponseID(v)
 		}
 	}
 	return ""
@@ -241,11 +242,11 @@ func messagesAfterAssistantID(msgs []message.Message, assistantRespID string) []
 		return msgs
 	}
 
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role != "assistant" {
+	for i, v := range slices.Backward(msgs) {
+		if v.Role != "assistant" {
 			continue
 		}
-		if openAIResponseID(msgs[i]) != assistantRespID {
+		if openAIResponseID(v) != assistantRespID {
 			continue
 		}
 		if i+1 >= len(msgs) {

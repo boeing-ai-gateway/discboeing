@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -568,8 +569,8 @@ type patchReplacement struct {
 
 func applyPatchReplacements(lines []string, replacements []patchReplacement) []string {
 	out := append([]string(nil), lines...)
-	for i := len(replacements) - 1; i >= 0; i-- {
-		r := replacements[i]
+	for _, v := range slices.Backward(replacements) {
+		r := v
 		if r.start < 0 {
 			continue
 		}

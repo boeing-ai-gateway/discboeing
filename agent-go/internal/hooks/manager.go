@@ -837,10 +837,10 @@ func lastLines(output string, maxLines int) string {
 // formatHookFailureMessage builds the markdown message for LLM re-prompt.
 func formatHookFailureMessage(meta HookFailureMessageMetadata) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("### Hook failed: %s\n\n", meta.HookName))
-	b.WriteString(fmt.Sprintf("- Exit code: `%d`\n", meta.ExitCode))
+	fmt.Fprintf(&b, "### Hook failed: %s\n\n", meta.HookName)
+	fmt.Fprintf(&b, "- Exit code: `%d`\n", meta.ExitCode)
 	if meta.Pattern != "" {
-		b.WriteString(fmt.Sprintf("- Pattern: `%s`\n", meta.Pattern))
+		fmt.Fprintf(&b, "- Pattern: `%s`\n", meta.Pattern)
 	}
 
 	if len(meta.Files) > 0 {
@@ -848,15 +848,15 @@ func formatHookFailureMessage(meta HookFailureMessageMetadata) string {
 		if meta.ExtraFileCount > 0 {
 			filesStr += fmt.Sprintf(", and %d more", meta.ExtraFileCount)
 		}
-		b.WriteString(fmt.Sprintf("- Files: %s\n", filesStr))
+		fmt.Fprintf(&b, "- Files: %s\n", filesStr)
 	}
 	b.WriteString("\n")
 
 	if meta.OutputTruncated && meta.OutputPath != "" {
 		b.WriteString("#### Output\n\n")
-		b.WriteString(fmt.Sprintf("Output was too long to inline. Full output was written to `%s`.\n\n", meta.OutputPath))
+		fmt.Fprintf(&b, "Output was too long to inline. Full output was written to `%s`.\n\n", meta.OutputPath)
 		if meta.OutputTail != "" {
-			b.WriteString(fmt.Sprintf("Last %d lines:\n\n", TruncatedOutputTailLines))
+			fmt.Fprintf(&b, "Last %d lines:\n\n", TruncatedOutputTailLines)
 			b.WriteString("```text\n")
 			b.WriteString(meta.OutputTail)
 			b.WriteString("\n```\n\n")

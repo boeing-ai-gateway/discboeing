@@ -47,15 +47,15 @@ func buildPDFWithPageCount(pageCount int) []byte {
 	b.WriteString("%PDF-1.4\n")
 	b.WriteString("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
 	b.WriteString("2 0 obj\n<< /Type /Pages /Count ")
-	b.WriteString(fmt.Sprintf("%d", pageCount))
+	fmt.Fprintf(&b, "%d", pageCount)
 	b.WriteString(" /Kids [")
 	for i := range pageCount {
-		b.WriteString(fmt.Sprintf("%d 0 R ", i+3))
+		fmt.Fprintf(&b, "%d 0 R ", i+3)
 	}
 	b.WriteString("] >>\nendobj\n")
 	for i := range pageCount {
 		objNum := i + 3
-		b.WriteString(fmt.Sprintf("%d 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n", objNum))
+		fmt.Fprintf(&b, "%d 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n", objNum)
 	}
 	b.WriteString("%%EOF\n")
 	return []byte(b.String())

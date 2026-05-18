@@ -28,9 +28,9 @@ func marshalDiscriminatedUnion(propertyName, propertyValue string, value any) js
 type AgentCapabilities struct {
 	Meta                map[string]any      `json:"_meta,omitempty"`
 	LoadSession         bool                `json:"loadSession,omitempty"`
-	MCPCapabilities     MCPCapabilities     `json:"mcpCapabilities,omitempty"`
-	PromptCapabilities  PromptCapabilities  `json:"promptCapabilities,omitempty"`
-	SessionCapabilities SessionCapabilities `json:"sessionCapabilities,omitempty"`
+	MCPCapabilities     MCPCapabilities     `json:"mcpCapabilities,omitzero"`
+	PromptCapabilities  PromptCapabilities  `json:"promptCapabilities,omitzero"`
+	SessionCapabilities SessionCapabilities `json:"sessionCapabilities,omitzero"`
 }
 
 type Annotations struct {
@@ -99,7 +99,7 @@ type CancelNotification struct {
 
 type ClientCapabilities struct {
 	Meta     map[string]any         `json:"_meta,omitempty"`
-	FS       FileSystemCapabilities `json:"fs,omitempty"`
+	FS       FileSystemCapabilities `json:"fs,omitzero"`
 	Terminal bool                   `json:"terminal,omitempty"`
 }
 
@@ -358,7 +358,7 @@ const InitializeRequestMethod = "initialize"
 
 type InitializeRequest struct {
 	Meta               map[string]any     `json:"_meta,omitempty"`
-	ClientCapabilities ClientCapabilities `json:"clientCapabilities,omitempty"`
+	ClientCapabilities ClientCapabilities `json:"clientCapabilities,omitzero"`
 	ClientInfo         *Implementation    `json:"clientInfo,omitempty"`
 	ProtocolVersion    ProtocolVersion    `json:"protocolVersion"`
 }
@@ -367,7 +367,7 @@ const InitializeResponseMethod = "initialize"
 
 type InitializeResponse struct {
 	Meta              map[string]any    `json:"_meta,omitempty"`
-	AgentCapabilities AgentCapabilities `json:"agentCapabilities,omitempty"`
+	AgentCapabilities AgentCapabilities `json:"agentCapabilities,omitzero"`
 	AgentInfo         *Implementation   `json:"agentInfo,omitempty"`
 	AuthMethods       []AuthMethod      `json:"authMethods,omitempty"`
 	ProtocolVersion   ProtocolVersion   `json:"protocolVersion"`

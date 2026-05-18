@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -866,6 +867,7 @@ func resolveSubAgentConfig(sessionCfg *sessionconfig.SessionConfig, subAgentType
 	return nil, fmt.Errorf("sub-agent type %q not found in session config", subAgentType)
 }
 
+// ValidateSubagentType checks that subAgentType exists in the session config.
 func (a *DefaultAgent) ValidateSubagentType(subAgentType string) error {
 	sessionCfg, err := sessionconfig.Load(a.cwd)
 	if err != nil {
@@ -1550,10 +1552,10 @@ func (a *DefaultAgent) FinalResponse(threadID string) (string, error) {
 	}
 
 	// Return the last assistant message's text content.
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Role == "assistant" {
+	for _, v := range slices.Backward(history) {
+		if v.Role == "assistant" {
 			var sb strings.Builder
-			for _, p := range history[i].Parts {
+			for _, p := range v.Parts {
 				if tp, ok := p.(message.TextPart); ok {
 					sb.WriteString(tp.Text)
 				}
@@ -1739,9 +1741,9 @@ func (a *DefaultAgent) resolveResumeMessageID(threadID string, state *thread.Tur
 	if err != nil {
 		return ""
 	}
-	for index := len(uiMessages) - 1; index >= 0; index-- {
-		if uiMessages[index].Role == "assistant" && uiMessages[index].ID != "" {
-			return uiMessages[index].ID
+	for _, v := range slices.Backward(uiMessages) {
+		if v.Role == "assistant" && v.ID != "" {
+			return v.ID
 		}
 	}
 	return ""

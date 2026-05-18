@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 	"strings"
 	"time"
 
@@ -354,12 +355,12 @@ func (a *Agent) FinalResponse(threadID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != "assistant" {
+	for _, v := range slices.Backward(messages) {
+		if v.Role != "assistant" {
 			continue
 		}
 		var text strings.Builder
-		for _, part := range messages[i].Parts {
+		for _, part := range v.Parts {
 			if part, ok := part.(message.UITextPart); ok {
 				text.WriteString(part.Text)
 			}

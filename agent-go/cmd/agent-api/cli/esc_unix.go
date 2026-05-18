@@ -39,12 +39,16 @@ func watchEscDuringTurn(ctx context.Context, cancel context.CancelFunc) {
 	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &state); err != nil {
 		return
 	}
-	defer unix.IoctlSetTermios(fd, unix.TCSETS, oldState) //nolint:errcheck
+	defer func() {
+		_ = unix.IoctlSetTermios(fd, unix.TCSETS, oldState)
+	}()
 
 	if err := unix.SetNonblock(fd, true); err != nil {
 		return
 	}
-	defer unix.SetNonblock(fd, false) //nolint:errcheck
+	defer func() {
+		_ = unix.SetNonblock(fd, false)
+	}()
 
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()

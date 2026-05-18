@@ -452,7 +452,7 @@ func mcpResultToOutput(result *gosdkmcp.CallToolResult) message.ToolResultOutput
 		case *gosdkmcp.TextContent:
 			sb.WriteString(v.Text)
 		case *gosdkmcp.ImageContent:
-			sb.WriteString(fmt.Sprintf("[image: %s, %d bytes]", v.MIMEType, len(v.Data)))
+			fmt.Fprintf(&sb, "[image: %s, %d bytes]", v.MIMEType, len(v.Data))
 		default:
 			data, _ := json.Marshal(c)
 			sb.Write(data)

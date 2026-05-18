@@ -621,12 +621,10 @@ func renderTodoWriteSummary(todos []todoItem) string {
 		return b.String()
 	}
 
-	b.WriteString(fmt.Sprintf(
-		"Current status is %d completed, %d in progress, and %d pending.\n\n",
+	fmt.Fprintf(&b, "Current status is %d completed, %d in progress, and %d pending.\n\n",
 		completed,
 		inProgress,
-		pending,
-	))
+		pending)
 	b.WriteString("### Current tasks\n")
 	for _, todo := range todos {
 		content := strings.TrimSpace(todo.Content)

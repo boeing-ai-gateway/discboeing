@@ -58,11 +58,11 @@ fi
 `)
 
 	// Status tracking setup
-	b.WriteString(fmt.Sprintf(`# Status tracking setup
+	fmt.Fprintf(&b, `# Status tracking setup
 HOOKS_DATA_DIR="${HOME}/.discobot/threads/%s/hooks"
 mkdir -p "$HOOKS_DATA_DIR/output"
 
-`, sessionID))
+`, sessionID)
 
 	// update_hook_status function
 	b.WriteString(`# Update hook status in status.json
@@ -142,7 +142,7 @@ run_hook() {
 
 	// Run each hook
 	for _, hook := range hooks {
-		b.WriteString(fmt.Sprintf("run_hook %q %q %q\n", hook.Path, hook.ID, hook.Name))
+		fmt.Fprintf(&b, "run_hook %q %q %q\n", hook.Path, hook.ID, hook.Name)
 	}
 
 	return b.String()

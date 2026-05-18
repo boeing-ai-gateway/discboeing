@@ -421,11 +421,26 @@ func (g *generator) writeStruct(buf *bytes.Buffer, name string, def schema) {
 		field := fieldName(prop)
 		tag := prop
 		if !required[prop] || nullable {
-			tag += ",omitempty"
+			omitOption := "omitempty"
+			if !nullable && g.omitZeroField(propSchema) {
+				omitOption = "omitzero"
+			}
+			tag += "," + omitOption
 		}
 		fmt.Fprintf(buf, "\t%s %s `json:%q`\n", field, typ, tag)
 	}
 	buf.WriteString("}\n\n")
+}
+
+func (g *generator) omitZeroField(s schema) bool {
+	if s.Ref != "" {
+		def := g.mustDef(refSchemaName(s.Ref))
+		return len(def.Properties) > 0 && len(def.OneOf) == 0 && len(def.AnyOf) == 0 && len(def.Enum) == 0
+	}
+	if len(s.AllOf) == 1 {
+		return g.omitZeroField(s.AllOf[0])
+	}
+	return false
 }
 
 func (g *generator) goType(s schema, topLevel bool) (string, bool) {

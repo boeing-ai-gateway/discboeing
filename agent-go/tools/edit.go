@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -161,8 +162,8 @@ func applyLenientEditMatches(content string, matches []editLine, newString strin
 	}
 
 	updated := content
-	for i := len(matches) - 1; i >= 0; i-- {
-		match := matches[i]
+	for _, v := range slices.Backward(matches) {
+		match := v
 		updated = updated[:match.start] + newString + updated[match.end:]
 	}
 	return updated

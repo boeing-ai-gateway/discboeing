@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -452,8 +453,8 @@ func writeSSEEvent(w http.ResponseWriter, id, event string, data []byte) {
 func resolveLeafAndUserMessage(msgs []message.UIMessage) (leafID string, userMessage message.UIMessage, err error) {
 	// Find the last assistant message.
 	lastAssistantIdx := -1
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "assistant" {
+	for i, v := range slices.Backward(msgs) {
+		if v.Role == "assistant" {
 			lastAssistantIdx = i
 			break
 		}

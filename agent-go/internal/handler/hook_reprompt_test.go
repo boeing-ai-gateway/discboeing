@@ -464,13 +464,13 @@ exit 1
 
 	firstTurnCh := make(chan struct{}, 1)
 	repromptCh := make(chan agent.PromptRequest, 1)
-	var promptCalls int32
+	var promptCalls atomic.Int32
 	ma := &streamTestAgent{
 		promptFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 			if threadID != "thread-1" {
 				t.Fatalf("threadID = %q, want %q", threadID, "thread-1")
 			}
-			if atomic.AddInt32(&promptCalls, 1) == 1 {
+			if promptCalls.Add(1) == 1 {
 				firstTurnCh <- struct{}{}
 				return func(yield func(message.MessageChunk, error) bool) {
 					// A paused turn returns without a response-finish chunk while

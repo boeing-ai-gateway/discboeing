@@ -88,7 +88,9 @@ func readLineReadlineTTYWithOptions(
 	if err != nil {
 		return "", err
 	}
-	defer restore(oldState) //nolint:errcheck
+	defer func() {
+		_ = restore(oldState)
+	}()
 
 	var sawCtrlC bool
 	reader := &inputTrackingReader{r: stdin, sawC: &sawCtrlC}

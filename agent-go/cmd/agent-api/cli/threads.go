@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -195,8 +196,8 @@ func handleResumeCommand(ctx context.Context, session clisession.Session, curren
 }
 
 func lastUserPreview(messages []message.UIMessage) string {
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
+	for _, v := range slices.Backward(messages) {
+		msg := v
 		if msg.Role == "user" && !isInjectedMessageID(msg.ID) {
 			if text := extractMessageText(msg.Parts); text != "" && !isInjectedText(text) {
 				return abbreviate(text, 80)

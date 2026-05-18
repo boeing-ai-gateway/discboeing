@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,8 +126,8 @@ func countTokens(messages []message.Message, lastUsage *message.Usage) int {
 // message in the slice. These are typically tool results added since the most
 // recent LLM response, and represent new input tokens not yet reflected in lastUsage.
 func messagesAfterLastAssistant(messages []message.Message) []message.Message {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "assistant" {
+	for i, v := range slices.Backward(messages) {
+		if v.Role == "assistant" {
 			return messages[i+1:]
 		}
 	}
@@ -643,23 +644,23 @@ func resolveSupportingProvider(
 func formatTranscript(messages []message.Message) string {
 	var sb strings.Builder
 	for _, msg := range messages {
-		sb.WriteString(fmt.Sprintf("[%s]: ", msg.Role))
+		fmt.Fprintf(&sb, "[%s]: ", msg.Role)
 		for _, part := range msg.Parts {
 			switch p := part.(type) {
 			case message.TextPart:
 				sb.WriteString(p.Text)
 			case message.ToolCallPart:
-				sb.WriteString(fmt.Sprintf("<tool_call name=%q id=%q>", p.ToolName, p.ToolCallID))
+				fmt.Fprintf(&sb, "<tool_call name=%q id=%q>", p.ToolName, p.ToolCallID)
 			case message.ToolResultPart:
 				output := toolResultOutputToString(p.Output)
 				if len(output) > 500 {
 					output = output[:500] + "... [truncated]"
 				}
-				sb.WriteString(fmt.Sprintf("<tool_result name=%q>%s</tool_result>", p.ToolName, output))
+				fmt.Fprintf(&sb, "<tool_result name=%q>%s</tool_result>", p.ToolName, output)
 			case message.ReasoningPart:
 				// Skip reasoning in transcript.
 			default:
-				sb.WriteString(fmt.Sprintf("<%T>", p))
+				fmt.Fprintf(&sb, "<%T>", p)
 			}
 		}
 		sb.WriteString("\n\n")
