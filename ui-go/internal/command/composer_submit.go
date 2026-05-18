@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+	"github.com/obot-platform/discobot/ui-go/internal/live"
 )
 
 // ComposerSubmit handles the composer runtime slice for the current browser
@@ -34,7 +36,7 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if view.Workspace.IsPending {
-			projectID, workspaceID, err := h.defaultProjectWorkspace(r)
+			projectID, workspaceID, err := h.pendingComposerWorkspace(r, view.Workspace.Composer.WorkspaceSelector)
 			if err != nil {
 				updateErr = err
 				return
@@ -55,6 +57,22 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 		if len(attachments) > 0 {
 			content = contentWithAttachments(content, attachments)
 		}
+		runAfter := strings.TrimSpace(r.FormValue("run_after"))
+		if runAfter != "" {
+			view.Workspace.Composer.PromptQueue = append(view.Workspace.Composer.PromptQueue, viewmodel.QueuedPrompt{
+				ID:              fmt.Sprintf("queued-%d", commandID),
+				Text:            content,
+				Model:           view.Workspace.Composer.ModelLabel,
+				RunAfter:        runAfter,
+				RunAfterLabel:   scheduledPromptRunAfterLabel(runAfter),
+				AttachmentCount: len(attachments),
+			})
+			view.Workspace.Composer.Draft = ""
+			view.Workspace.Composer.Attachments = nil
+			view.Workspace.Composer.ScheduledRunAfter = ""
+			view.Workspace.Composer.ScheduleOpen = false
+			return
+		}
 		view.Workspace.Conversation.Messages = append(view.Workspace.Conversation.Messages,
 			viewmodel.ConversationMessage{
 				ID:      fmt.Sprintf("user-%d", commandID),
@@ -73,6 +91,8 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 		)
 		view.Workspace.Composer.Draft = ""
 		view.Workspace.Composer.Attachments = nil
+		view.Workspace.Composer.ScheduledRunAfter = ""
+		view.Workspace.Composer.ScheduleOpen = false
 	})
 	if updateErr != nil {
 		h.logger.Warn("failed to submit composer command", "error", updateErr)
@@ -81,6 +101,45 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func scheduledPromptRunAfterLabel(value string) string {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return value
+	}
+	if parsed.After(time.Now().AddDate(25, 0, 0)) {
+		return "Paused"
+	}
+	return "Runs " + parsed.Format("Jan 2, 3:04 PM")
+}
+
+func (h *Handler) pendingComposerWorkspace(r *http.Request, selector viewmodel.ConversationWorkspaceSelectorSnapshot) (string, string, error) {
+	projectID := live.DefaultProjectID
+	if workspaceID, ok := strings.CutPrefix(selector.SelectedOption, "existing:"); ok {
+		return projectID, workspaceID, nil
+	}
+	if selector.RequiresInput {
+		if selector.ValidationSourceType != selector.SourceType || !selector.ValidationValid {
+			return "", "", fmt.Errorf("validate workspace before submitting")
+		}
+		path := strings.TrimSpace(selector.ValidationPath)
+		if path == "" {
+			path = strings.TrimSpace(selector.SourceInput)
+		}
+		workspace, err := h.client.Workspaces.Create(r.Context(), projectID, api.CreateWorkspaceRequest{
+			Path:       path,
+			SourceType: selector.SourceType,
+		})
+		if err != nil {
+			return "", "", err
+		}
+		return projectID, workspace.ID, nil
+	}
+	if selector.SelectedOption == "new-workspace" {
+		return projectID, "", nil
+	}
+	return h.defaultProjectWorkspace(r)
 }
 
 func contentWithAttachments(prompt string, attachments []viewmodel.ComposerAttachment) string {

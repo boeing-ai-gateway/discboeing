@@ -13,26 +13,31 @@ templ ConversationComposerReasoningControl(value string, defaultValue string, le
 			data-composer-reasoning-value={ value }
 			data-composer-reasoning-default-value={ defaultValue }
 			data-composer-reasoning-count={ composerReasoningLevelCount(levels, defaultValue) }
+			data-on:pointerdown__outside="discobot.composerControls.closeReasoning()"
+			data-on:keydown__escape__window="discobot.composerControls.closeAll()"
 		>
 			<button
 				type="button"
-				class="desktop-no-drag inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+				class="desktop-no-drag inline-flex h-6 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium whitespace-nowrap transition-all outline-none hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
 				title={ "Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }
 				aria-label={ "Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }
 				aria-haspopup="menu"
 				aria-controls="composer-reasoning-menu"
 				aria-expanded="false"
-				disabled
+				data-composer-reasoning-trigger
+				data-on:click__prevent="discobot.composerControls.toggleReasoning(el)"
 			>
 				@lucide.Brain(ahtempl.Attributes{"class": "size-3.5 shrink-0"})
 				<span>{ composerReasoningLabel(composerResolvedReasoning(value, defaultValue)) }</span>
 			</button>
-			<div id="composer-reasoning-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md" role="menu" data-composer-reasoning-menu>
-				<div
-					class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+			<div id="composer-reasoning-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none" role="menu" data-composer-reasoning-menu>
+				<button
+					type="button"
+					class="relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
 					role="menuitemradio"
 					aria-checked={ composerReasoningSelected(value, "default") }
 					data-composer-reasoning-option="default"
+					data-on:click={ composerReasoningOptionCommand("default") }
 				>
 					<div class="min-w-0 flex-1">
 						<div class="font-medium">{ composerDefaultReasoningLabel(defaultValue) }</div>
@@ -41,14 +46,16 @@ templ ConversationComposerReasoningControl(value string, defaultValue string, le
 					if value == "" || value == "default" {
 						@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
 					}
-				</div>
+				</button>
 				for _, level := range levels {
 					if level != defaultValue {
-						<div
-							class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+						<button
+							type="button"
+							class="relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
 							role="menuitemradio"
 							aria-checked={ composerReasoningSelected(value, level) }
 							data-composer-reasoning-option={ level }
+							data-on:click={ composerReasoningOptionCommand(level) }
 						>
 							<div class="min-w-0 flex-1">
 								<div class="font-medium">{ composerReasoningLabel(level) }</div>
@@ -57,7 +64,7 @@ templ ConversationComposerReasoningControl(value string, defaultValue string, le
 							if value == level {
 								@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
 							}
-						</div>
+						</button>
 					}
 				}
 			</div>

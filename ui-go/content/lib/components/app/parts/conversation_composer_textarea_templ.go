@@ -93,14 +93,14 @@ func ConversationComposerTextarea(draft string, disabled bool, attachmentCount i
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-composer-paste-files=\"true\" data-composer-file-mentions=\"true\" data-composer-slash-commands=\"true\" data-composer-prompt-history=\"true\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-composer-paste-files=\"true\" data-composer-file-mentions=\"true\" data-on:keydown=\"discobot.composerAttachments.backspace(el, evt)\" data-on:paste=\"discobot.composerAttachments.paste(el, evt)\" data-composer-slash-commands=\"true\" data-composer-prompt-history=\"true\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(draft)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_textarea.templ`, Line: 28, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_textarea.templ`, Line: 30, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {

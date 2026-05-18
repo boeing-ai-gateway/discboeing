@@ -22,12 +22,16 @@ type UpdateSessionRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
+type sessionsResponse struct {
+	Sessions []Session `json:"sessions"`
+}
+
 func (s *SessionsService) List(ctx context.Context, projectID string) ([]Session, error) {
-	var out []Session
+	var out sessionsResponse
 	if err := s.client.do(ctx, http.MethodGet, projectPath(projectID, "/sessions/"), nil, nil, &out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return out.Sessions, nil
 }
 
 func (s *SessionsService) Create(ctx context.Context, projectID string, req CreateSessionRequest) (*Session, error) {

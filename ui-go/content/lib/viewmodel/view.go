@@ -131,10 +131,14 @@ type ThemeOption struct {
 
 // ModelOption is a model option in settings.
 type ModelOption struct {
-	ID          string
-	Name        string
-	Provider    string
-	Description string
+	ID               string
+	Name             string
+	Provider         string
+	Description      string
+	Reasoning        bool
+	ReasoningLevels  []string
+	DefaultReasoning string
+	ServiceTiers     []string
 }
 
 // UpdateSnapshot describes app update status in settings.
@@ -626,15 +630,20 @@ type ConversationComposerSnapshot struct {
 	IsStreaming       bool
 	SubmitStatus      string
 	ModelID           string
+	ModelSelectionSet bool
 	ModelLabel        string
 	Models            []ModelOption
 	ReasoningValue    string
+	ReasoningSet      bool
 	DefaultReasoning  string
 	ReasoningLabel    string
 	ReasoningLevels   []string
 	ServiceTierValue  string
+	ServiceTierSet    bool
 	ServiceTierLabel  string
 	ServiceTiers      []string
+	ScheduledRunAfter string
+	ScheduleOpen      bool
 	Attachments       []ComposerAttachment
 	QueueExpanded     bool
 	PlanEntries       []PlanEntry
@@ -718,6 +727,12 @@ type ConversationWorkspaceSelectorSnapshot struct {
 	SourceType              string
 	SourceInput             string
 	SelectedOption          string
+	Validating              bool
+	ValidationPath          string
+	ValidationSourceType    string
+	ValidationValid         bool
+	ValidationError         string
+	SetupMessage            string
 	Workspaces              []WorkspaceOption
 	Suggestions             []WorkspaceSuggestion
 	HasSuggestionSelection  bool

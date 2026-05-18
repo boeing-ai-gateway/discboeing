@@ -9,29 +9,31 @@ import (
 
 templ ConversationComposerSessionSetupStatus(isPending bool, snapshot viewmodel.ComposerSessionSetupStatusSnapshot) {
 	if showComposerSessionSetupStatus(isPending, snapshot) {
-		<div class="mb-2 px-1">
-			if snapshot.PendingStarted && snapshot.SessionStatus == "" {
-				<div class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-					@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-3.5 animate-spin"})
-					<span>Creating session</span>
-				</div>
-			} else if showComposerSessionStatus(snapshot) {
-				@AppSessionStatus(snapshot.SessionStatus, "text-sm", "", "font-medium", true)
-				if snapshot.ErrorMessage != "" {
-					<p class="mt-1 line-clamp-3 text-xs text-destructive" title={ snapshot.ErrorMessage }>{ snapshot.ErrorMessage }</p>
+		if isPending {
+			<div class="relative mb-2 flex min-h-10 flex-col justify-end px-1">
+				if setupInlineMessage(snapshot) != "" {
+					<p class={ "absolute left-1 right-1 top-0 " + setupInlineMessageClass(snapshot) } title={ setupInlineMessage(snapshot) }>{ setupInlineMessage(snapshot) }</p>
 				}
-			} else {
-				<p class="text-sm font-medium text-muted-foreground">Start a new session</p>
-			}
-		</div>
-		if isPending && snapshot.WorkspacesLoading {
-			<p class="mb-2 px-1 text-xs text-muted-foreground">Loading workspaces...</p>
-		}
-		if isPending && snapshot.SetupMessage != "" {
-			<p class="mb-2 truncate px-1 text-xs text-destructive" title={ snapshot.SetupMessage }>{ snapshot.SetupMessage }</p>
-		}
-		if isPending && snapshot.ValidationMessage != "" {
-			<p class={ setupValidationClass(snapshot) } title={ snapshot.ValidationMessage }>{ snapshot.ValidationMessage }</p>
+				if snapshot.PendingStarted && snapshot.SessionStatus == "" {
+					<div class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+						@lucide.LoaderCircle(ahtempl.Attributes{"class": "size-3.5 animate-spin"})
+						<span>Creating session</span>
+					</div>
+				} else if showComposerSessionStatus(snapshot) {
+					@AppSessionStatus(snapshot.SessionStatus, "text-sm", "", "font-medium", true)
+				} else {
+					<p class="text-sm font-medium text-muted-foreground">Start a new session</p>
+				}
+			</div>
+		} else {
+			<div class="mb-2 px-1">
+				if showComposerSessionStatus(snapshot) {
+					@AppSessionStatus(snapshot.SessionStatus, "text-sm", "", "font-medium", true)
+					if snapshot.ErrorMessage != "" {
+						<p class="mt-1 line-clamp-3 text-xs text-destructive" title={ snapshot.ErrorMessage }>{ snapshot.ErrorMessage }</p>
+					}
+				}
+			</div>
 		}
 		if isPending && snapshot.AuthMessage != "" {
 			<p class="mb-2 px-1 text-xs text-muted-foreground">{ snapshot.AuthMessage }</p>

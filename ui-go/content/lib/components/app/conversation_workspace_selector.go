@@ -1,6 +1,10 @@
 package app
 
-import "github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+import (
+	"strings"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
+)
 
 func workspaceSelectorClass(fullWidth bool) string {
 	if fullWidth {
@@ -32,16 +36,22 @@ func workspaceIconSource(snapshot viewmodel.ConversationWorkspaceSelectorSnapsho
 		if snapshot.SourceType == "local" {
 			return "local"
 		}
+		if isGithubRepoInput(snapshot.SourceInput) {
+			return "github"
+		}
 		return "git"
 	}
 	switch snapshot.SelectedOption {
 	case "local-directory":
 		return "local"
 	case "git-repo":
-		return "git"
+		return "github"
 	default:
 		for _, workspace := range snapshot.Workspaces {
 			if workspaceOptionValue(workspace) == snapshot.SelectedOption {
+				if workspace.GitHub {
+					return "github"
+				}
 				return workspace.SourceType
 			}
 		}
@@ -62,4 +72,27 @@ func workspaceSuggestionClass(selected bool, valid bool) string {
 
 func workspaceSuggestionSelected(snapshot viewmodel.ConversationWorkspaceSelectorSnapshot, index int) bool {
 	return snapshot.HasSuggestionSelection && snapshot.SelectedSuggestionIndex == index
+}
+
+func workspaceInputInvalid(snapshot viewmodel.ConversationWorkspaceSelectorSnapshot) bool {
+	return workspaceValidationError(snapshot) != ""
+}
+
+func workspaceValidationError(snapshot viewmodel.ConversationWorkspaceSelectorSnapshot) string {
+	if snapshot.Validating {
+		return ""
+	}
+	return strings.TrimSpace(snapshot.ValidationError)
+}
+
+func isGithubRepoInput(value string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "github.com/") || strings.Contains(trimmed, "github.com") {
+		return true
+	}
+	parts := strings.Split(trimmed, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
 }

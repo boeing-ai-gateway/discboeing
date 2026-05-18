@@ -15,7 +15,7 @@ templ ConversationComposerAttachments(files []viewmodel.ComposerAttachment) {
 			for _, file := range files {
 				<div class="inline-flex max-w-[220px] items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs" role="listitem" data-composer-attachment-id={ file.ID }>
 					<span class="truncate" title={ file.Filename }>{ file.Filename }</span>
-					<button type="button" class="inline-flex size-4 items-center justify-center rounded-sm text-muted-foreground opacity-60 hover:opacity-100" aria-label={ "Remove " + file.Filename } data-composer-attachment-remove={ file.ID }>
+					<button type="button" class="inline-flex size-4 items-center justify-center rounded-sm text-muted-foreground opacity-60 hover:opacity-100" aria-label={ "Remove " + file.Filename } data-composer-attachment-remove={ file.ID } data-on:click__prevent="discobot.composerAttachments.remove(el)">
 						@lucide.X(ahtempl.Attributes{"class": "size-3"})
 					</button>
 				</div>

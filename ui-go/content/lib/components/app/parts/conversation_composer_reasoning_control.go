@@ -1,6 +1,7 @@
 package parts
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -59,6 +60,10 @@ func composerReasoningLevelCount(levels []string, defaultValue string) string {
 		}
 	}
 	return strconv.Itoa(count)
+}
+
+func composerReasoningOptionCommand(level string) string {
+	return "@post('/ui/commands/composer-reasoning?reasoning=" + url.QueryEscape(level) + "')"
 }
 
 func upperFirst(value string) string {

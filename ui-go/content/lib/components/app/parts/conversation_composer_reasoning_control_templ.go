@@ -74,14 +74,14 @@ func ConversationComposerReasoningControl(value string, defaultValue string, lev
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><button type=\"button\" class=\"desktop-no-drag inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground\" title=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-on:pointerdown__outside=\"discobot.composerControls.closeReasoning()\" data-on:keydown__escape__window=\"discobot.composerControls.closeAll()\"><button type=\"button\" class=\"desktop-no-drag inline-flex h-6 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium whitespace-nowrap transition-all outline-none hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50\" title=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue("Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 20, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 22, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -94,13 +94,13 @@ func ConversationComposerReasoningControl(value string, defaultValue string, lev
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue("Reasoning: " + composerReasoningLabel(composerResolvedReasoning(value, defaultValue)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 21, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 23, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" aria-haspopup=\"menu\" aria-controls=\"composer-reasoning-menu\" aria-expanded=\"false\" disabled>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" aria-haspopup=\"menu\" aria-controls=\"composer-reasoning-menu\" aria-expanded=\"false\" data-composer-reasoning-trigger data-on:click__prevent=\"discobot.composerControls.toggleReasoning(el)\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -115,52 +115,65 @@ func ConversationComposerReasoningControl(value string, defaultValue string, lev
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(composerReasoningLabel(composerResolvedReasoning(value, defaultValue)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 28, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 31, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></button><div id=\"composer-reasoning-menu\" class=\"absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md\" role=\"menu\" data-composer-reasoning-menu><div class=\"flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm\" role=\"menuitemradio\" aria-checked=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></button><div id=\"composer-reasoning-menu\" class=\"absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none\" role=\"menu\" data-composer-reasoning-menu><button type=\"button\" class=\"relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground\" role=\"menuitemradio\" aria-checked=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(composerReasoningSelected(value, "default"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 34, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 38, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" data-composer-reasoning-option=\"default\"><div class=\"min-w-0 flex-1\"><div class=\"font-medium\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" data-composer-reasoning-option=\"default\" data-on:click=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var9 string
-			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(composerDefaultReasoningLabel(defaultValue))
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(composerReasoningOptionCommand("default"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 38, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 40, Col: 62}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><div class=\"text-xs text-muted-foreground\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><div class=\"min-w-0 flex-1\"><div class=\"font-medium\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(composerDefaultReasoningDescription(defaultValue))
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(composerDefaultReasoningLabel(defaultValue))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 39, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 43, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><div class=\"text-xs text-muted-foreground\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var11 string
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(composerDefaultReasoningDescription(defaultValue))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 44, Col: 100}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -170,65 +183,78 @@ func ConversationComposerReasoningControl(value string, defaultValue string, lev
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</button> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, level := range levels {
 				if level != defaultValue {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm\" role=\"menuitemradio\" aria-checked=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var11 string
-					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(composerReasoningSelected(value, level))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 50, Col: 61}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" data-composer-reasoning-option=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<button type=\"button\" class=\"relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground\" role=\"menuitemradio\" aria-checked=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var12 string
-					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(level)
+					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(composerReasoningSelected(value, level))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 51, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 56, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"><div class=\"min-w-0 flex-1\"><div class=\"font-medium\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" data-composer-reasoning-option=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var13 string
-					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(composerReasoningLabel(level))
+					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(level)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 54, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 57, Col: 45}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div><div class=\"text-xs text-muted-foreground\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" data-on:click=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var14 string
-					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(composerReasoningDescription(level))
+					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(composerReasoningOptionCommand(level))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 55, Col: 88}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 58, Col: 60}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\"><div class=\"min-w-0 flex-1\"><div class=\"font-medium\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var15 string
+					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(composerReasoningLabel(level))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 61, Col: 64}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><div class=\"text-xs text-muted-foreground\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var16 string
+					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(composerReasoningDescription(level))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/conversation_composer_reasoning_control.templ`, Line: 62, Col: 88}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -238,13 +264,13 @@ func ConversationComposerReasoningControl(value string, defaultValue string, lev
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

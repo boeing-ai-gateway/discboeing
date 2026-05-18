@@ -154,6 +154,7 @@ func buildShellFromBackendSelection(backend live.Snapshot, selectedSessionID str
 	}
 
 	selected := selectedSession(sessions, selectedSessionID)
+	thread := selectedThread(backend.ThreadsBySession[selected.ID], selectedThreadID)
 	workspace := workspaceByID[selected.WorkspaceID]
 	title := sessionTitle(selected)
 	if title == "" {
@@ -170,10 +171,13 @@ func buildShellFromBackendSelection(backend live.Snapshot, selectedSessionID str
 			ReserveSidebar: false,
 			Visible:        true,
 			Composer: viewmodel.ConversationComposerSnapshot{
-				Placeholder:  "Ask Discobot to continue the Go UI migration…",
-				SubmitStatus: "ready",
-				ModelLabel:   "Model",
-				Models:       modelOptions(backend.Models),
+				Placeholder:      "Ask Discobot to continue the Go UI migration…",
+				SubmitStatus:     "ready",
+				ModelID:          thread.Model,
+				ModelLabel:       "Model",
+				Models:           modelOptions(backend.Models),
+				ReasoningValue:   thread.Reasoning,
+				ServiceTierValue: thread.ServiceTier,
 			},
 			Conversation: viewmodel.ConversationPaneSnapshot{Status: "ready", ShowComposer: true},
 		},
@@ -196,6 +200,71 @@ func applyViewState(shell *viewmodel.ShellSnapshot, view state.ViewState) {
 	shell.Workspace.Composer.Draft = view.Workspace.Composer.Draft
 	shell.Workspace.Composer.Attachments = view.Workspace.Composer.Attachments
 	shell.Workspace.Composer.Error = view.Workspace.Composer.Error
+	shell.Workspace.Composer.ScheduledRunAfter = view.Workspace.Composer.ScheduledRunAfter
+	shell.Workspace.Composer.ScheduleOpen = view.Workspace.Composer.ScheduleOpen
+	shell.Workspace.Composer.PromptQueue = view.Workspace.Composer.PromptQueue
+	if view.Workspace.Composer.ModelSelectionSet {
+		shell.Workspace.Composer.ModelID = view.Workspace.Composer.ModelID
+		shell.Workspace.Composer.ModelSelectionSet = true
+	}
+	if view.Workspace.Composer.ReasoningSet {
+		shell.Workspace.Composer.ReasoningValue = view.Workspace.Composer.ReasoningValue
+		shell.Workspace.Composer.ReasoningSet = true
+	}
+	if view.Workspace.Composer.ServiceTierSet {
+		shell.Workspace.Composer.ServiceTierValue = view.Workspace.Composer.ServiceTierValue
+		shell.Workspace.Composer.ServiceTierSet = true
+	}
+	applyComposerSelectedModel(&shell.Workspace.Composer)
+	if shell.Workspace.IsPending {
+		shell.Workspace.Composer.WorkspaceSelector = mergeWorkspaceSelector(
+			shell.Workspace.Composer.WorkspaceSelector,
+			view.Workspace.Composer.WorkspaceSelector,
+		)
+		applyWorkspaceSelectorSetupStatus(&shell.Workspace.Composer)
+	}
+}
+
+func mergeWorkspaceSelector(next viewmodel.ConversationWorkspaceSelectorSnapshot, saved viewmodel.ConversationWorkspaceSelectorSnapshot) viewmodel.ConversationWorkspaceSelectorSnapshot {
+	if saved.SelectedOption == "" {
+		return next
+	}
+	next.FullWidth = saved.FullWidth
+	next.RequiresInput = saved.RequiresInput
+	next.SourceType = saved.SourceType
+	next.SourceInput = saved.SourceInput
+	next.SelectedOption = saved.SelectedOption
+	next.Validating = saved.Validating
+	next.ValidationPath = saved.ValidationPath
+	next.ValidationSourceType = saved.ValidationSourceType
+	next.ValidationValid = saved.ValidationValid
+	next.ValidationError = saved.ValidationError
+	next.SetupMessage = saved.SetupMessage
+	next.Suggestions = saved.Suggestions
+	next.HasSuggestionSelection = saved.HasSuggestionSelection
+	next.SelectedSuggestionIndex = saved.SelectedSuggestionIndex
+	next.Branch = saved.Branch
+	next.Branches = saved.Branches
+	next.ShowBranchSelector = saved.ShowBranchSelector
+	return next
+}
+
+func applyWorkspaceSelectorSetupStatus(composer *viewmodel.ConversationComposerSnapshot) {
+	selector := composer.WorkspaceSelector
+	composer.SetupStatus.SetupMessage = selector.SetupMessage
+	composer.SetupStatus.ValidationMessage = ""
+	composer.SetupStatus.ValidationIsValid = true
+	if !selector.RequiresInput || strings.TrimSpace(selector.SourceInput) == "" {
+		return
+	}
+	if selector.Validating {
+		composer.SetupStatus.ValidationMessage = "Validating workspace..."
+		return
+	}
+	if strings.TrimSpace(selector.ValidationError) != "" {
+		composer.SetupStatus.ValidationMessage = selector.ValidationError
+		composer.SetupStatus.ValidationIsValid = false
+	}
 }
 
 func currentSelection(view viewmodel.ShellSnapshot) (string, string) {
@@ -491,7 +560,7 @@ func pendingWorkspaceSelector(workspaces []api.Workspace) viewmodel.Conversation
 			ID:         workspace.ID,
 			Label:      workspaceLabel(workspace),
 			SourceType: workspace.SourceType,
-			GitHub:     workspace.SourceType == "git",
+			GitHub:     isGitHubWorkspace(workspace),
 		}
 		selector.Workspaces = append(selector.Workspaces, option)
 		if selector.SelectedOption == "new-workspace" {
@@ -499,6 +568,18 @@ func pendingWorkspaceSelector(workspaces []api.Workspace) viewmodel.Conversation
 		}
 	}
 	return selector
+}
+
+func isGitHubWorkspace(workspace api.Workspace) bool {
+	if workspace.SourceType != "git" {
+		return false
+	}
+	displayName := ""
+	if workspace.DisplayName != nil {
+		displayName = *workspace.DisplayName
+	}
+	value := strings.ToLower(workspace.Path + " " + displayName)
+	return strings.Contains(value, "github.com") || strings.Contains(value, "github")
 }
 
 func pendingWorkspaceOptionValue(workspace viewmodel.WorkspaceOption) string {
@@ -509,13 +590,41 @@ func modelOptions(models []api.ModelInfo) []viewmodel.ModelOption {
 	options := make([]viewmodel.ModelOption, 0, len(models))
 	for _, model := range models {
 		options = append(options, viewmodel.ModelOption{
-			ID:          model.ID,
-			Name:        model.Name,
-			Provider:    model.Provider,
-			Description: model.Description,
+			ID:               model.ID,
+			Name:             model.Name,
+			Provider:         model.Provider,
+			Description:      model.Description,
+			Reasoning:        model.Reasoning,
+			ReasoningLevels:  append([]string(nil), model.ReasoningLevels...),
+			DefaultReasoning: model.DefaultReasoning,
+			ServiceTiers:     append([]string(nil), model.ServiceTiers...),
 		})
 	}
 	return options
+}
+
+func applyComposerSelectedModel(composer *viewmodel.ConversationComposerSnapshot) {
+	for _, model := range composer.Models {
+		if model.ID != composer.ModelID {
+			continue
+		}
+		if model.Reasoning {
+			composer.DefaultReasoning = model.DefaultReasoning
+			composer.ReasoningLevels = append([]string(nil), model.ReasoningLevels...)
+		} else {
+			composer.DefaultReasoning = ""
+			composer.ReasoningLevels = nil
+			composer.ReasoningValue = ""
+		}
+		composer.ServiceTiers = append([]string(nil), model.ServiceTiers...)
+		if len(model.ServiceTiers) == 0 {
+			composer.ServiceTierValue = ""
+		}
+		return
+	}
+	composer.DefaultReasoning = ""
+	composer.ReasoningLevels = nil
+	composer.ServiceTiers = nil
 }
 
 func selectedSession(sessions []api.Session, selectedSessionID string) api.Session {
@@ -528,6 +637,18 @@ func selectedSession(sessions []api.Session, selectedSessionID string) api.Sessi
 		return sessions[0]
 	}
 	return api.Session{}
+}
+
+func selectedThread(threads []api.Thread, selectedThreadID string) api.Thread {
+	for _, thread := range threads {
+		if thread.ID == selectedThreadID {
+			return thread
+		}
+	}
+	if len(threads) > 0 {
+		return threads[0]
+	}
+	return api.Thread{}
 }
 
 func sidebarSession(session api.Session, threads []api.Thread, selectedSessionID string, selectedThreadID string) viewmodel.SidebarSessionItem {

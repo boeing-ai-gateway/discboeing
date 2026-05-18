@@ -46,7 +46,7 @@ func ConversationComposerAttachmentButton(disabled bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " data-composer-attachment-input><div class=\"relative inline-flex\" data-composer-attachment-button data-composer-attachment-disabled=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " data-composer-attachment-input data-on:change=\"discobot.composerAttachments.upload(el)\"><div class=\"relative inline-flex\" data-composer-attachment-button data-composer-attachment-disabled=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -59,7 +59,7 @@ func ConversationComposerAttachmentButton(disabled bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><button type=\"button\" class=\"desktop-no-drag focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-8 p-0 shadow-none has-[>svg]:p-0\" aria-label=\"Attachment actions\" aria-haspopup=\"menu\" aria-controls=\"composer-attachment-menu\" aria-expanded=\"false\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-on:pointerdown__outside=\"discobot.composerControls.closeAttachment()\" data-on:keydown__escape__window=\"discobot.composerControls.closeAll()\"><button type=\"button\" class=\"desktop-no-drag focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-8 p-0 shadow-none has-[>svg]:p-0\" aria-label=\"Attachment actions\" aria-haspopup=\"menu\" aria-controls=\"composer-attachment-menu\" aria-expanded=\"false\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -69,7 +69,7 @@ func ConversationComposerAttachmentButton(disabled bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " data-composer-attachment-trigger>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " data-composer-attachment-trigger data-on:click__prevent=\"discobot.composerControls.toggleAttachment(el)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -77,7 +77,7 @@ func ConversationComposerAttachmentButton(disabled bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</button><div id=\"composer-attachment-menu\" class=\"absolute bottom-full left-0 z-50 mb-2 hidden w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md\" role=\"menu\" data-composer-attachment-menu><button type=\"button\" class=\"w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground\" role=\"menuitem\" data-composer-attachment-add-files")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</button><div id=\"composer-attachment-menu\" class=\"absolute bottom-full left-0 z-50 mb-2 hidden w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md\" role=\"menu\" data-composer-attachment-menu><button type=\"button\" class=\"w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground\" role=\"menuitem\" data-composer-attachment-add-files data-on:click__prevent=\"discobot.composerAttachments.addFiles(el)\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

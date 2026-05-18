@@ -59,7 +59,7 @@ func RequestCommitPullDiffViewer(files []RequestCommitPullDiffEntry, diffStyle s
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-diff-style=\"unified\">Unified</button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-diff-style=\"unified\" data-on:click__prevent=\"discobot.pierreDiffViewer.setStyle(el)\">Unified</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -81,7 +81,7 @@ func RequestCommitPullDiffViewer(files []RequestCommitPullDiffEntry, diffStyle s
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-diff-style=\"split\">Split</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-diff-style=\"split\" data-on:click__prevent=\"discobot.pierreDiffViewer.setStyle(el)\">Split</button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

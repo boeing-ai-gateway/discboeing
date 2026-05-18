@@ -30,10 +30,10 @@ pnpm ui-go:build    # Build assets, generate templ files, and build ./ui-go/buil
 pnpm ui-go:check    # Build assets, generate, test, and lint the Go UI
 ```
 
-During development, Air watches `.templ`, Go, JavaScript, and Tailwind source CSS
-files, rebuilds the static assets, runs `pnpm generate`, rebuilds the Go server,
-and restarts it. Generated `*_templ.go` and `static/app.css` files are ignored by
-Air to avoid rebuild loops.
+During development, Air watches `.templ`, Go, JavaScript, Tailwind source CSS,
+and the shared `server/api` client package. It rebuilds the static assets, runs
+`pnpm generate`, rebuilds the Go server, and restarts it. Generated `*_templ.go`
+and `static/app.css` files are ignored by Air to avoid rebuild loops.
 
 ## Styling
 
@@ -46,3 +46,19 @@ The Tailwind source scans both `ui-go` templ/Go files and `../ui/src` so classes
 copied from the Svelte UI are available during the migration. `pnpm assets:build`
 copies the Fontsource font files into the generated `static/files` directory
 and compiles the served CSS to `static/app.css`.
+
+## Datastar UI guidelines
+
+Keep transient browser-only state local. Editable text, popover visibility,
+focus/cursor state, and debounce timers should live in Datastar local signals or
+component-scoped TypeScript instead of being echoed through server patches on
+every keystroke.
+
+Keep committed and validated state server-authoritative. Workspace selection,
+validation results, suggestions, model/reasoning/service-tier choices,
+attachments, and security-sensitive/shared state should be stored by the server
+and patched back into the UI.
+
+Prefer component-scoped TypeScript modules for imperative behavior and wire them
+from templates with `data-on:*` bindings. The top-level JS entrypoint should stay
+focused on bootstrapping and enhancement orchestration.

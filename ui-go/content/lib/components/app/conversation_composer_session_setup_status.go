@@ -14,9 +14,20 @@ func showComposerSessionStatus(snapshot viewmodel.ComposerSessionSetupStatusSnap
 	return strings.TrimSpace(snapshot.SessionStatus) != "" && snapshot.SessionStatus != "ready"
 }
 
-func setupValidationClass(snapshot viewmodel.ComposerSessionSetupStatusSnapshot) string {
-	if snapshot.ValidationIsValid {
-		return "mb-2 truncate px-1 text-xs text-muted-foreground"
+func setupInlineMessage(snapshot viewmodel.ComposerSessionSetupStatusSnapshot) string {
+	if snapshot.WorkspacesLoading {
+		return "Loading workspaces..."
 	}
-	return "mb-2 truncate px-1 text-xs text-destructive"
+	if message := strings.TrimSpace(snapshot.SetupMessage); message != "" {
+		return message
+	}
+	return strings.TrimSpace(snapshot.ValidationMessage)
+}
+
+func setupInlineMessageClass(snapshot viewmodel.ComposerSessionSetupStatusSnapshot) string {
+	base := "truncate text-xs leading-4 "
+	if snapshot.WorkspacesLoading || (strings.TrimSpace(snapshot.SetupMessage) == "" && snapshot.ValidationIsValid) {
+		return base + "text-muted-foreground"
+	}
+	return base + "text-destructive"
 }

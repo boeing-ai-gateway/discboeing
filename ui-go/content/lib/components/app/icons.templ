@@ -7,8 +7,10 @@ import (
 
 templ WorkspaceIcon(sourceType string, className string) {
 	switch sourceType {
+	case "github":
+		@GitHubIcon(className)
 	case "git":
-		@GitBranchIcon(className)
+		@GitCommitIcon(className)
 	case "local":
 		@FolderIcon(className)
 	default:
@@ -50,6 +52,14 @@ templ EllipsisIcon(className string) {
 
 templ GitBranchIcon(className string) {
 	@lucide.GitBranch(ahtempl.Attributes{"class": className})
+}
+
+templ GitCommitIcon(className string) {
+	@lucide.GitCommitHorizontal(ahtempl.Attributes{"class": className})
+}
+
+templ GitHubIcon(className string) {
+	@lucide.Github(ahtempl.Attributes{"class": className})
 }
 
 templ FolderIcon(className string) {

@@ -1,6 +1,6 @@
-root = "."
+root = ".."
 testdata_dir = "testdata"
-tmp_dir = "build"
+tmp_dir = "ui-go/build"
 
 [build]
   args_bin = []
@@ -12,12 +12,12 @@ tmp_dir = "build"
   exclude_regex = ["_test.go", "_templ.go"]
   exclude_unchanged = false
   follow_symlink = false
-  full_bin = "./build/ui-go"
-  include_dir = ["cmd", "content", "scripts", "styles"]
+  full_bin = "UI_GO_STATIC_DIR=./static ./build/ui-go"
+  include_dir = ["ui-go/cmd", "ui-go/content", "ui-go/scripts", "ui-go/styles", "server/api"]
   include_ext = ["go", "templ", "temple", "tpl", "tmpl", "html", "css", "js", "json", "svg"]
   include_file = [".env"]
   kill_delay = "10m"
-  log = "build-errors.log"
+  log = "ui-go/build-errors.log"
   poll = false
   poll_interval = 0
   post_cmd = []

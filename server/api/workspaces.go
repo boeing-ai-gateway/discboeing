@@ -15,22 +15,51 @@ type CreateWorkspaceRequest struct {
 	SourceType string `json:"sourceType"`
 }
 
+type ValidateWorkspaceRequest struct {
+	Path       string `json:"path"`
+	SourceType string `json:"sourceType"`
+}
+
+type ValidateWorkspaceResponse struct {
+	Path           string       `json:"path"`
+	SourceType     string       `json:"sourceType"`
+	Valid          bool         `json:"valid"`
+	Classification string       `json:"classification"`
+	Error          string       `json:"error,omitempty"`
+	Suggestions    []Suggestion `json:"suggestions"`
+	AuthProvider   string       `json:"authProvider,omitempty"`
+	AuthRequired   bool         `json:"authRequired,omitempty"`
+	AuthMessage    string       `json:"authMessage,omitempty"`
+}
+
 type UpdateWorkspaceRequest struct {
 	Path        string  `json:"path,omitempty"`
 	DisplayName *string `json:"displayName"`
 }
 
+type workspacesResponse struct {
+	Workspaces []Workspace `json:"workspaces"`
+}
+
 func (s *WorkspacesService) List(ctx context.Context, projectID string) ([]Workspace, error) {
-	var out []Workspace
+	var out workspacesResponse
 	if err := s.client.do(ctx, http.MethodGet, projectPath(projectID, "/workspaces/"), nil, nil, &out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return out.Workspaces, nil
 }
 
 func (s *WorkspacesService) Create(ctx context.Context, projectID string, req CreateWorkspaceRequest) (*Workspace, error) {
 	var out Workspace
 	if err := s.client.do(ctx, http.MethodPost, projectPath(projectID, "/workspaces/"), nil, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *WorkspacesService) Validate(ctx context.Context, projectID string, req ValidateWorkspaceRequest) (*ValidateWorkspaceResponse, error) {
+	var out ValidateWorkspaceResponse
+	if err := s.client.do(ctx, http.MethodPost, projectPath(projectID, "/workspaces/validate"), nil, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

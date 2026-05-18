@@ -14,8 +14,8 @@ templ RequestCommitPullDiffViewer(files []RequestCommitPullDiffEntry, diffStyle 
 	<div class="space-y-4" data-pierre-diff-viewer>
 		<div class="flex items-center justify-end gap-2">
 			<div class="inline-flex rounded-md border border-border bg-background p-0.5">
-				<button type="button" class={ requestCommitPullDiffStyleButtonClass(diffStyle == "" || diffStyle == "unified", "left") } data-diff-style="unified">Unified</button>
-				<button type="button" class={ requestCommitPullDiffStyleButtonClass(diffStyle == "split", "right") } data-diff-style="split">Split</button>
+				<button type="button" class={ requestCommitPullDiffStyleButtonClass(diffStyle == "" || diffStyle == "unified", "left") } data-diff-style="unified" data-on:click__prevent="discobot.pierreDiffViewer.setStyle(el)">Unified</button>
+				<button type="button" class={ requestCommitPullDiffStyleButtonClass(diffStyle == "split", "right") } data-diff-style="split" data-on:click__prevent="discobot.pierreDiffViewer.setStyle(el)">Split</button>
 			</div>
 		</div>
 

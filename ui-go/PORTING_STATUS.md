@@ -72,6 +72,11 @@ Current server command routes:
   session-scoped view, save, and let `/ui/stream` patch the UI.
 - [x] `POST /ui/commands/composer-stop` — clears temporary generating state in
   the session-scoped composer view until real agent cancellation is wired.
+- [x] `POST /ui/commands/composer-workspace` — handles the pending-session
+  workspace selector option changes, source input validation, suggestion
+  selection, and reset-to-dropdown flow.
+- [x] `POST /ui/commands/composer-schedule` — handles the composer run-after
+  popover toggle, preset times, pause, run-now, and custom datetime selection.
 - [x] `POST /ui/commands/sidebar-refresh` — rebuild the left sidebar from the
   client read side while preserving the current selection.
 - [x] `POST /ui/commands/sidebar/new-session` — create a session through the
@@ -173,8 +178,10 @@ routes or browser-local islands:
   - `data-schedule-action="pause"`
   - `data-schedule-action="run-now"`
   - `data-schedule-action="save-custom"`
-  - Preset scheduling, pause, and run-now are command-backed. Custom datetime
-    input is rendered but not yet posted to the server.
+  - Composer run-after scheduling now matches the Svelte popover layout and is
+    command-backed for presets, pause, run-now, and custom datetime values.
+    Queue row preset scheduling, pause, and run-now are command-backed; queue
+    row custom datetime input remains future plumbing.
 - [~] Settings
   - Header settings button now posts to `/ui/commands/settings/action?action=open`.
   - The settings dialog shell is server-owned: Done closes it, tabs switch
@@ -1284,15 +1291,18 @@ routes or browser-local islands:
 ### [~] `ui/src/lib/components/app/ConversationWorkspaceSelector.svelte`
 
 - Target: `ui-go/content/lib/components/app/conversation_workspace_selector.templ`
-- Status: Partial ported / pending-session workspace commands needed
+- Status: Runtime parity for selector flow / local directory picker and branch selector still pending
 - Owner/task: Discobot sequential port
-- Shared files touched: `ui-go/content/lib/components/app/{conversation_workspace_selector.templ,conversation_workspace_selector.go,conversation_composer.templ}`, `ui-go/content/lib/viewmodel/view.go`
-- Validation: `pnpm --dir /home/discobot/workspace/ui-go generate`; `pnpm --dir /home/discobot/workspace/ui-go check`
+- Shared files touched: `server/api/workspaces.go`, `ui-go/assets/js/app.ts`, `ui-go/content/lib/components/app/{conversation_workspace_selector.templ,conversation_workspace_selector.go,icons.templ,conversation_composer.templ}`, `ui-go/content/lib/viewmodel/view.go`, `ui-go/internal/{command,readmodel,server}`
+- Validation: `cd ui-go && pnpm js:build && pnpm generate && go test ./...`; `cd server && go test ./api`
 - Notes:
   - Added a read-model workspace selector for pending sessions with source input, return-to-dropdown icon button, local-directory button placeholder, autocomplete suggestions, existing/new workspace select, and branch selector shell.
   - Added suggestion listbox/option metadata, selected-suggestion read-model fields, and input autocomplete expanded state for future keyboard/pointer wiring.
   - Wired the selector into the pending composer controls.
-  - Record for later backend/client pass: implement local directory picker, GitHub validation, suggestion selection, workspace selection/create commands, branch selection, auth flow, desktop-shell integration, and pending setup state persistence.
+  - Added `/ui/commands/composer-workspace` and browser-local event hooks so the existing workspace select, local/GitHub input transition, reset icon, validation debounce, and suggestion clicks follow the Svelte selector flow.
+  - Added workspace validation to the Go API client and submit-time workspace resolution: existing workspaces are respected, local/GitHub inputs create workspaces after validation, and "Create New Workspace" submits without forcing the first existing workspace.
+  - Updated the NativeSelect wrapper/classes and workspace icons to match the Svelte styling more closely, including GitHub vs generic git icon selection.
+  - Record for later backend/client pass: implement native desktop directory picker, branch selection when re-enabled, auth credential launch flow, richer keyboard suggestion navigation, and setup-status message rendering for validation/auth details.
 
 ### [~] `ui/src/lib/components/app/CredentialsManager.svelte`
 
@@ -1488,7 +1498,9 @@ routes or browser-local islands:
   - Added composer model read-model fields and a pure model control shell with selected-model display, default model item, provider grouping, descriptions, and checkmark state.
   - Replaced the composer’s generic model button with the new model control and removed an unused helper surfaced by lint.
   - Added selected model/count metadata, trigger menu ARIA, stable menu ID, menu/menuitemradio roles, selected-state ARIA, and per-option model/provider data hooks.
-  - Record for later backend/client pass: implement model deduping parity, dropdown open/focus behavior, model selection command, default/null model handling, live model list loading, and selected model/reasoning interactions.
+  - Added Svelte-parity model deduping/sorting, enabled the trigger/menu with the ui-go JS island, and wired option clicks to `/ui/commands/composer-model`.
+  - Model selection is now session-scoped, supports the default/null option, preserves backend thread model defaults until the user chooses an override, and updates reasoning/service-tier availability from selected model metadata.
+  - Record for later backend/client pass: submit selected model/reasoning/service-tier through the real chat API and match Svelte's exact "clear next model when selecting the thread model" behavior once thread composer state is split from the rendered snapshot.
 
 ### [~] `ui/src/lib/components/app/parts/ConversationComposerQueueControl.svelte`
 
@@ -1502,31 +1514,35 @@ routes or browser-local islands:
   - Wired the existing queue-expanded read-model field into the composer control and added expanded-state ARIA plus completed/total count metadata for later toggle behavior.
   - Record for later backend/client pass: wire expanded-state toggling, prompt queue read model, queue panel placement, completed-status derivation, and prompt update/delete commands.
 
-### [~] `ui/src/lib/components/app/parts/ConversationComposerReasoningControl.svelte`
+### [x] `ui/src/lib/components/app/parts/ConversationComposerReasoningControl.svelte`
 
 - Target: `ui-go/content/lib/components/app/parts/conversation_composer_reasoning_control.templ`
-- Status: Partial ported / reasoning selection command needed
+- Status: Ported
 - Owner/task: Go UI rewrite
-- Shared files touched: `ui-go/content/lib/viewmodel/view.go`, `ui-go/content/lib/components/app/conversation_composer.templ`
+- Shared files touched: `ui-go/content/lib/viewmodel/view.go`, `ui-go/content/lib/components/app/conversation_composer.templ`, `ui-go/assets/js/app.ts`, `ui-go/internal/command/composer_reasoning_service_tier.go`, `ui-go/internal/readmodel/client_shell.go`, `ui-go/internal/server/server.go`
 - Validation: `pnpm --dir /home/discobot/workspace/ui-go generate`; `pnpm --dir /home/discobot/workspace/ui-go check`
 - Notes:
   - Added reasoning read-model fields and a pure reasoning control shell with selected/default label resolution, default item, level items, descriptions, and checkmark state.
   - Replaced the composer’s plain reasoning label button with the new control.
-  - Added selected/default/count metadata, trigger menu ARIA, stable menu ID, menu/menuitemradio roles, selected-state ARIA, and per-level data hooks for later command wiring.
-  - Record for later backend/client pass: wire dropdown open/focus behavior, reasoning selection command, model default reasoning sync, available level filtering, and exact `default` versus unset semantics.
+  - Added selected/default/count metadata, trigger menu ARIA, stable menu ID, menu/menuitemradio roles, selected-state ARIA, and per-level data hooks.
+  - Enabled the dropdown with open/close/Escape/outside-click behavior, selected-option focus on open, and option commands via `/ui/commands/composer-reasoning`.
+  - Reasoning choices are session-scoped, preserve backend thread defaults until explicit user selection, and reset to model defaults when the model selection changes.
+  - Record for later backend/client pass: submit selected model/reasoning/service-tier through the real chat API once composer submit leaves placeholder mode.
 
-### [~] `ui/src/lib/components/app/parts/ConversationComposerServiceTierControl.svelte`
+### [x] `ui/src/lib/components/app/parts/ConversationComposerServiceTierControl.svelte`
 
 - Target: `ui-go/content/lib/components/app/parts/conversation_composer_service_tier_control.templ`
-- Status: Partial ported / service-tier selection command needed
+- Status: Ported
 - Owner/task: Go UI rewrite
-- Shared files touched: `ui-go/content/lib/viewmodel/view.go`, `ui-go/content/lib/components/app/conversation_composer.templ`
+- Shared files touched: `ui-go/content/lib/viewmodel/view.go`, `ui-go/content/lib/components/app/conversation_composer.templ`, `ui-go/assets/js/app.ts`, `ui-go/internal/command/composer_reasoning_service_tier.go`, `ui-go/internal/readmodel/client_shell.go`, `ui-go/internal/server/server.go`
 - Validation: `pnpm --dir /home/discobot/workspace/ui-go generate`; `pnpm --dir /home/discobot/workspace/ui-go check`
 - Notes:
   - Added service-tier read-model fields and a pure service-tier control shell with Standard/default item, tier items, fast/priority label formatting, descriptions, secondary selected styling, and checkmark state.
   - Replaced the composer’s plain service-tier label button with the new control.
-  - Added selected value/count metadata, trigger menu ARIA, stable menu ID, menu/menuitemradio roles, selected-state ARIA, and per-tier data hooks for later command wiring.
-  - Record for later backend/client pass: wire dropdown open/focus behavior, service-tier selection command, provider tier availability, normalized comparisons, and unset/default semantics.
+  - Added selected value/count metadata, trigger menu ARIA, stable menu ID, menu/menuitemradio roles, selected-state ARIA, and per-tier data hooks.
+  - Enabled the dropdown with open/close/Escape/outside-click behavior, selected-option focus on open, and option commands via `/ui/commands/composer-service-tier`.
+  - Service-tier choices are session-scoped, preserve backend thread defaults until explicit user selection, and reset to provider defaults when the model selection changes.
+  - Record for later backend/client pass: submit selected model/reasoning/service-tier through the real chat API once composer submit leaves placeholder mode.
 
 ### [~] `ui/src/lib/components/app/parts/ConversationComposerSubmitButton.svelte`
 

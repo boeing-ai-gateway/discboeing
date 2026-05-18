@@ -4,4 +4,9 @@
 # type: file
 # pattern: "**/*.go"
 #---
-pnpm build:server
+set -euo pipefail
+
+lock_file="${TMPDIR:-/tmp}/discobot-backend-build.lock"
+mkdir -p "$(dirname "$lock_file")"
+
+flock "$lock_file" pnpm build:server

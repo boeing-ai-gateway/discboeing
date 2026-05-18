@@ -15,6 +15,8 @@ templ ConversationComposerServiceTierControl(value string, tiers []string) {
 			data-composer-service-tier-control
 			data-composer-service-tier-value={ value }
 			data-composer-service-tier-count={ strconv.Itoa(len(tiers)) }
+			data-on:pointerdown__outside="discobot.composerControls.closeServiceTier()"
+			data-on:keydown__escape__window="discobot.composerControls.closeAll()"
 		>
 			<button
 				type="button"
@@ -24,17 +26,20 @@ templ ConversationComposerServiceTierControl(value string, tiers []string) {
 				aria-haspopup="menu"
 				aria-controls="composer-service-tier-menu"
 				aria-expanded="false"
-				disabled
+				data-composer-service-tier-trigger
+				data-on:click__prevent="discobot.composerControls.toggleServiceTier(el)"
 			>
 				@lucide.Zap(ahtempl.Attributes{"class": "size-3.5 shrink-0"})
 				<span>{ composerServiceTierLabel(value) }</span>
 			</button>
-			<div id="composer-service-tier-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md" role="menu" data-composer-service-tier-menu>
-				<div
-					class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+			<div id="composer-service-tier-menu" class="absolute bottom-full left-0 z-50 mb-2 hidden w-64 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none" role="menu" data-composer-service-tier-menu>
+				<button
+					type="button"
+					class="relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
 					role="menuitemradio"
 					aria-checked={ composerServiceTierSelected(value, "") }
 					data-composer-service-tier-option="__default__"
+					data-on:click={ composerServiceTierOptionCommand("") }
 				>
 					<div class="min-w-0 flex-1">
 						<div class="font-medium">Standard</div>
@@ -43,13 +48,15 @@ templ ConversationComposerServiceTierControl(value string, tiers []string) {
 					if value == "" {
 						@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
 					}
-				</div>
+				</button>
 				for _, tier := range tiers {
-					<div
-						class="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+					<button
+						type="button"
+						class="relative flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
 						role="menuitemradio"
 						aria-checked={ composerServiceTierSelected(value, tier) }
 						data-composer-service-tier-option={ tier }
+						data-on:click={ composerServiceTierOptionCommand(tier) }
 					>
 						<div class="min-w-0 flex-1">
 							<div class="font-medium">{ composerServiceTierLabel(tier) }</div>
@@ -58,7 +65,7 @@ templ ConversationComposerServiceTierControl(value string, tiers []string) {
 						if strings.EqualFold(value, tier) {
 							@lucide.Check(ahtempl.Attributes{"class": "size-3.5 text-primary"})
 						}
-					</div>
+					</button>
 				}
 			</div>
 		</div>
