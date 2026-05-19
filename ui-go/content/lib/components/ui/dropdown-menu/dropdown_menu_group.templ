@@ -1,9 +1,10 @@
 package dropdownmenu
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ DropdownMenuGroup(className string, children ahtempl.Component) {
-	<div data-slot="dropdown-menu-group" role="group" class={ joinClass(className) }>
+	<div data-slot="dropdown-menu-group" role="group" class={ classnames.CN(className) }>
 		if children != nil {
 			@children
 		}

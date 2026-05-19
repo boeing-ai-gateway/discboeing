@@ -1,9 +1,10 @@
 package codeblock
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 templ CodeBlockLanguageSelectorValue(className string, children ahtempl.Component) {
-	<span class={ classNames("line-clamp-1 flex items-center gap-2", className) } data-slot="select-value">
+	<span class={ classnames.CN("line-clamp-1 flex items-center gap-2", className) } data-slot="select-value">
 		if children != nil {
 			@children
 		}

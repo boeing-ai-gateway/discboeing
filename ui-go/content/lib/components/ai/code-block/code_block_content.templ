@@ -1,8 +1,9 @@
 package codeblock
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 templ CodeBlockContent(code string, showLineNumbers bool, className string) {
 	<div class="relative overflow-auto">
-		<pre class={ classNames("m-0 whitespace-normal p-4 text-sm", className) }><code class={ codeElementClass(showLineNumbers) }>
+		<pre class={ classnames.CN("m-0 whitespace-normal p-4 text-sm", className) }><code class={ codeElementClass(showLineNumbers) }>
 			for _, line := range codeLines(code) {
 				<span class={ codeLineClass(showLineNumbers) }>{ line }</span>
 			}

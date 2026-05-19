@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
 import "github.com/obot-platform/discobot/ui-go/content/lib/components/ai/streamdown"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func MessageResponse(text string, className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -32,7 +33,7 @@ func MessageResponse(text string, className string, children ahtempl.Component) 
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("size-full break-words", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("size-full break-words", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

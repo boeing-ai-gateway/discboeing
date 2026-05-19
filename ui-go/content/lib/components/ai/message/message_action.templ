@@ -1,12 +1,13 @@
 package message
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 templ MessageAction(label string, tooltip string, className string, children ahtempl.Component) {
 	if tooltip != "" {
 		<div data-slot="tooltip-provider">
 			<div data-slot="tooltip" data-state="closed">
-				<button type="button" data-slot="tooltip-trigger" class={ classNames("inline-flex size-8 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className) } title={ tooltip }>
+				<button type="button" data-slot="tooltip-trigger" class={ classnames.CN("inline-flex size-8 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className) } title={ tooltip }>
 					if children != nil {
 						@children
 					}
@@ -27,7 +28,7 @@ templ MessageAction(label string, tooltip string, className string, children aht
 			</div>
 		</div>
 	} else {
-		<button type="button" class={ classNames("inline-flex size-8 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className) }>
+		<button type="button" class={ classnames.CN("inline-flex size-8 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className) }>
 			if children != nil {
 				@children
 			}

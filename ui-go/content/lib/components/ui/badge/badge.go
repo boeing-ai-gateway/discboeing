@@ -1,6 +1,6 @@
 package badge
 
-import "strings"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func badgeClass(variant string, className string) string {
 	base := "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] [&>svg]:pointer-events-none [&>svg]:size-3"
@@ -14,8 +14,5 @@ func badgeClass(variant string, className string) string {
 	default:
 		base += " bg-primary text-primary-foreground [a&]:hover:bg-primary/90 border-transparent"
 	}
-	if strings.TrimSpace(className) != "" {
-		base += " " + className
-	}
-	return base
+	return classnames.CN(base, className)
 }

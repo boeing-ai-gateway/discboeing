@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 	collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
 )
 
@@ -35,7 +36,7 @@ func ToolHeaderControls(raw bool, canToggleRaw bool, canCollapse bool, className
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("flex items-center gap-2", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("flex items-center gap-2", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -65,7 +66,7 @@ func ToolHeaderControls(raw bool, canToggleRaw bool, canCollapse bool, className
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(rawTitle(raw))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header_controls.templ`, Line: 12, Col: 296}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header_controls.templ`, Line: 13, Col: 296}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {

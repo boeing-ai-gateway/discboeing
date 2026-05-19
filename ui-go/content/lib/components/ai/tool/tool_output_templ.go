@@ -8,6 +8,8 @@ package tool
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+
 func ToolOutput(output string, errorText string, className string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -30,7 +32,7 @@ func ToolOutput(output string, errorText string, className string) templ.Compone
 		}
 		ctx = templ.ClearChildren(ctx)
 		if output != "" || errorText != "" {
-			var templ_7745c5c3_Var2 = []any{classNames("space-y-2 p-4", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("space-y-2 p-4", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -67,7 +69,7 @@ func ToolOutput(output string, errorText string, className string) templ.Compone
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var4 = []any{classNames("overflow-x-auto rounded-md text-xs [&_table]:w-full", map[bool]string{true: "bg-destructive/10 text-destructive", false: "bg-muted/50 text-foreground"}[errorText != ""])}
+			var templ_7745c5c3_Var4 = []any{classnames.CN("overflow-x-auto rounded-md text-xs [&_table]:w-full", map[bool]string{true: "bg-destructive/10 text-destructive", false: "bg-muted/50 text-foreground"}[errorText != ""])}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var4...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -97,7 +99,7 @@ func ToolOutput(output string, errorText string, className string) templ.Compone
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(errorText)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_output.templ`, Line: 15, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_output.templ`, Line: 16, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -116,7 +118,7 @@ func ToolOutput(output string, errorText string, className string) templ.Compone
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(output)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_output.templ`, Line: 18, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_output.templ`, Line: 19, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {

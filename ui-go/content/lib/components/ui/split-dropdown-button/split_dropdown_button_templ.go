@@ -8,6 +8,7 @@ package splitdropdownbutton
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 import ahtempl "github.com/a-h/templ"
 import "context"
@@ -96,7 +97,7 @@ func SplitDropdownButtonContent(label string, menuAriaLabel string, variant stri
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = dropdownmenu.DropdownMenuTrigger(joinClass(), ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		templ_7745c5c3_Err = dropdownmenu.DropdownMenuTrigger(classnames.CN(), ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
 			return SplitDropdownButtonTrigger(menuAriaLabel, variant, size, disabled).Render(ctx, w)
 		})).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
@@ -160,7 +161,7 @@ func SplitDropdownButtonTrigger(menuAriaLabel string, variant string, size strin
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(menuAriaLabel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/split-dropdown-button/split_dropdown_button.templ`, Line: 30, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/split-dropdown-button/split_dropdown_button.templ`, Line: 31, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {

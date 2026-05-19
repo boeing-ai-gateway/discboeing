@@ -1,21 +1,15 @@
 package codeblock
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+)
 
 type View struct {
 	Code            string
 	Language        string
 	ShowLineNumbers bool
-}
-
-func classNames(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
 }
 
 func codeLines(code string) []string {
@@ -38,7 +32,7 @@ func codeElementClass(showLineNumbers bool) string {
 
 //nolint:unused // Referenced from generated templ code; golangci-lint filters generated files.
 func copyButtonClass(className string) string {
-	return classNames("inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className)
+	return classnames.CN("inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50", className)
 }
 
 func copyButtonLabel(label string) string {

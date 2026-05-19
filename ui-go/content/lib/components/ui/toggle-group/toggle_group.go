@@ -1,16 +1,6 @@
 package togglegroup
 
-import "strings"
-
-func joinClass(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
-}
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func state(pressed bool) string {
 	if pressed {
@@ -20,7 +10,7 @@ func state(pressed bool) string {
 }
 
 func groupClass(className string) string {
-	return joinClass("group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs", className)
+	return classnames.CN("group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs", className)
 }
 
 func toggleClass(variant string, size string, className string) string {
@@ -38,5 +28,5 @@ func toggleClass(variant string, size string, className string) string {
 	default:
 		base += " h-9 min-w-9 px-2"
 	}
-	return joinClass(base, "w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l", className)
+	return classnames.CN(base, "w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l", className)
 }

@@ -1,6 +1,10 @@
 package tool
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+)
 
 type View struct {
 	Open       bool
@@ -20,22 +24,12 @@ type HeaderView struct {
 	Queued       bool
 }
 
-func classNames(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
-}
-
 func toolClass(view View, className string) string {
 	base := "group group/tool not-prose mb-4 w-full rounded-md"
 	if view.ShowBorder {
 		base += " border"
 	}
-	return classNames(base, className)
+	return classnames.CN(base, className)
 }
 
 func derivedName(header HeaderView) string {

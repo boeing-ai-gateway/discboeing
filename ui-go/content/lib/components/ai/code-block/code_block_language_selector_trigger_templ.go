@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
 import selectui "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/select"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func CodeBlockLanguageSelectorTrigger(className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -36,7 +37,7 @@ func CodeBlockLanguageSelectorTrigger(className string, children ahtempl.Compone
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = selectui.SelectTrigger("sm", classNames("h-7 rounded-md border-none bg-transparent px-2 text-xs shadow-none", className), false, false, children).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = selectui.SelectTrigger("sm", classnames.CN("h-7 rounded-md border-none bg-transparent px-2 text-xs shadow-none", className), false, false, children).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

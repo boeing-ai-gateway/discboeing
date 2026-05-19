@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func ToolContent(view View, className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -32,7 +33,7 @@ func ToolContent(view View, className string, children ahtempl.Component) templ.
 		}
 		ctx = templ.ClearChildren(ctx)
 		if view.Open {
-			var templ_7745c5c3_Var2 = []any{classNames("data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

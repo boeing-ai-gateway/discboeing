@@ -1,9 +1,10 @@
 package codeblock
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 templ CodeBlockFilename(className string, children ahtempl.Component) {
-	<span class={ classNames("font-mono", className) }>
+	<span class={ classnames.CN("font-mono", className) }>
 		if children != nil {
 			@children
 		}

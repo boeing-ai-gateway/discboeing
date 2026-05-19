@@ -8,6 +8,8 @@ package codeblock
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+
 func CodeBlockContent(code string, showLineNumbers bool, className string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -33,7 +35,7 @@ func CodeBlockContent(code string, showLineNumbers bool, className string) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 = []any{classNames("m-0 whitespace-normal p-4 text-sm", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("m-0 whitespace-normal p-4 text-sm", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -103,7 +105,7 @@ func CodeBlockContent(code string, showLineNumbers bool, className string) templ
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(line)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/code-block/code_block_content.templ`, Line: 7, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/code-block/code_block_content.templ`, Line: 8, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {

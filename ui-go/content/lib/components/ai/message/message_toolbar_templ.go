@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func MessageToolbar(className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -31,7 +32,7 @@ func MessageToolbar(className string, children ahtempl.Component) templ.Componen
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("mt-4 flex w-full items-center justify-between gap-4", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("mt-4 flex w-full items-center justify-between gap-4", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

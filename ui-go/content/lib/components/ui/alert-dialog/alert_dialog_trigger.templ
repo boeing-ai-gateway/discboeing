@@ -1,9 +1,10 @@
 package alertdialog
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ AlertDialogTrigger(className string, children ahtempl.Component) {
-	<button type="button" data-slot="alert-dialog-trigger" class={ joinClass("", className) } data-alert-dialog-trigger>
+	<button type="button" data-slot="alert-dialog-trigger" class={ classnames.CN("", className) } data-alert-dialog-trigger>
 		if children != nil {
 			@children
 		}

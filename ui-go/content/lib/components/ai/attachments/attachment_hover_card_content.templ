@@ -2,7 +2,8 @@ package attachments
 
 import ahtempl "github.com/a-h/templ"
 import hovercard "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/hover-card"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 templ AttachmentHoverCardContent(className string, children ahtempl.Component) {
-	@hovercard.HoverCardContent(false, "bottom", "start", 4, classNames("w-auto p-2", className), children)
+	@hovercard.HoverCardContent(false, "bottom", "start", 4, classnames.CN("w-auto p-2", className), children)
 }

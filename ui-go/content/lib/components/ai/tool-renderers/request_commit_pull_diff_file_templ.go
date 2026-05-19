@@ -13,6 +13,7 @@ import (
 
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string) templ.Component {
@@ -43,7 +44,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(file.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 15, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 16, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -61,7 +62,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(file.OldPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 17, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 18, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -79,7 +80,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(file.CommitSubject)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 21, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 22, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -92,7 +93,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(file.CommitHash)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 21, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 22, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -102,7 +103,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var6 = []any{classNames("rounded-full border px-2 py-0.5", requestCommitPullStatusClasses(file.Status))}
+		var templ_7745c5c3_Var6 = []any{classnames.CN("rounded-full border px-2 py-0.5", requestCommitPullStatusClasses(file.Status))}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var6...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -127,7 +128,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(requestCommitPullStatusLabel(file.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 26, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 27, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -140,7 +141,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(file.Additions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 29, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 30, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -153,7 +154,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(file.Deletions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 29, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 30, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -176,7 +177,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(requestCommitPullDiffPayloadJSON(file, diffStyle))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 40, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 41, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -212,7 +213,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(line)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 51, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 52, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -225,7 +226,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs("\n")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 52, Col: 13}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 53, Col: 13}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -252,7 +253,7 @@ func RequestCommitPullDiffFile(file RequestCommitPullDiffEntry, diffStyle string
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(file.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 62, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/request_commit_pull_diff_file.templ`, Line: 63, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {

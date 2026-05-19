@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func MessageBranchContent(branch BranchView, contentBranch int, className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -32,7 +33,7 @@ func MessageBranchContent(branch BranchView, contentBranch int, className string
 		}
 		ctx = templ.ClearChildren(ctx)
 		if contentBranch == branch.Current {
-			var templ_7745c5c3_Var2 = []any{classNames("grid gap-2 overflow-hidden [&>div]:pb-0", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("grid gap-2 overflow-hidden [&>div]:pb-0", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

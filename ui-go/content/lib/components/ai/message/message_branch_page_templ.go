@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import "fmt"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func MessageBranchPage(branch BranchView, className string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -31,7 +32,7 @@ func MessageBranchPage(branch BranchView, className string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("border-none bg-transparent text-muted-foreground shadow-none px-2 text-sm", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("border-none bg-transparent text-muted-foreground shadow-none px-2 text-sm", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -56,7 +57,7 @@ func MessageBranchPage(branch BranchView, className string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d of %d", branchPage(branch), branchTotal(branch)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch_page.templ`, Line: 7, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch_page.templ`, Line: 8, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {

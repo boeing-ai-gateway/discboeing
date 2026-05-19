@@ -4,10 +4,11 @@ import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 	collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ ToolHeaderControls(raw bool, canToggleRaw bool, canCollapse bool, className string) {
-	<div class={ classNames("flex items-center gap-2", className) }>
+	<div class={ classnames.CN("flex items-center gap-2", className) }>
 		if canToggleRaw {
 			<button type="button" class="inline-flex size-7 items-center justify-center rounded-md pointer-events-none opacity-0 transition-opacity hover:bg-accent hover:text-accent-foreground group-data-[state=open]/tool:pointer-events-auto group-data-[state=open]/tool:opacity-100" title={ rawTitle(raw) } data-tool-raw-toggle="true">
 				@lucide.Code(ahtempl.Attributes{"class": "size-4"})

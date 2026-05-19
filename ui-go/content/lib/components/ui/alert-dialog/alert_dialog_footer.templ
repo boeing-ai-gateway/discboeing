@@ -1,9 +1,10 @@
 package alertdialog
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ AlertDialogFooter(className string, children ahtempl.Component) {
-	<div data-slot="alert-dialog-footer" class={ joinClass("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className) }>
+	<div data-slot="alert-dialog-footer" class={ classnames.CN("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className) }>
 		if children != nil {
 			@children
 		}

@@ -8,6 +8,7 @@ package collapsible
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 func CollapsibleTrigger(open bool, disabled bool, className string, children ahtempl.Component) templ.Component {
@@ -31,7 +32,7 @@ func CollapsibleTrigger(open bool, disabled bool, className string, children aht
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{joinClass(className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN(className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -43,7 +44,7 @@ func CollapsibleTrigger(open bool, disabled bool, className string, children aht
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(collapsibleState(open))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/collapsible/collapsible_trigger.templ`, Line: 6, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/collapsible/collapsible_trigger.templ`, Line: 7, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -56,7 +57,7 @@ func CollapsibleTrigger(open bool, disabled bool, className string, children aht
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(open)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/collapsible/collapsible_trigger.templ`, Line: 6, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/collapsible/collapsible_trigger.templ`, Line: 7, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {

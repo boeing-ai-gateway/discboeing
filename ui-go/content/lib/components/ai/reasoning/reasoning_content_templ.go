@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
 import "github.com/obot-platform/discobot/ui-go/content/lib/components/ai/streamdown"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func ReasoningContent(view View, text string, className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -33,7 +34,7 @@ func ReasoningContent(view View, text string, className string, children ahtempl
 		}
 		ctx = templ.ClearChildren(ctx)
 		if view.IsOpen {
-			var templ_7745c5c3_Var2 = []any{classNames("mt-4 px-4 text-sm text-muted-foreground outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("mt-4 px-4 text-sm text-muted-foreground outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -58,7 +59,7 @@ func ReasoningContent(view View, text string, className string, children ahtempl
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(openState(view.IsOpen))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/reasoning/reasoning_content.templ`, Line: 8, Col: 299}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/reasoning/reasoning_content.templ`, Line: 9, Col: 302}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {

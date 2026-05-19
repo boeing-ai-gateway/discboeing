@@ -1377,7 +1377,7 @@ func SettingsDialog(snapshot viewmodel.SettingsDialogSnapshot) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = uidialog.DialogContentAttrs(snapshot.Open, "top-10 max-h-[90vh] w-[calc(100vw-2rem)] max-w-none translate-y-0 overflow-y-auto shadow-xl sm:!max-w-4xl", "", false, ahtempl.Attributes{
+			templ_7745c5c3_Err = uidialog.DialogContentAttrs(snapshot.Open, "sm:max-w-2xl max-h-[90vh] overflow-y-auto", "", false, ahtempl.Attributes{
 				"data-settings-dialog":     "",
 				"data-settings-active-tab": settingsActiveTab(snapshot),
 				"data-dialog-dismiss-url":  settingsCloseURL(),

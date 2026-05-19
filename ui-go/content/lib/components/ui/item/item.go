@@ -1,16 +1,6 @@
 package item
 
-import "strings"
-
-func joinClass(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
-}
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func itemVariant(variant string) string {
 	switch variant {
@@ -43,7 +33,7 @@ func itemClass(variant string, size string, className string) string {
 	} else {
 		base += " gap-4 p-4"
 	}
-	return joinClass(base, className)
+	return classnames.CN(base, className)
 }
 
 func mediaVariant(variant string) string {
@@ -65,5 +55,5 @@ func mediaClass(variant string, className string) string {
 	default:
 		base += " bg-transparent"
 	}
-	return joinClass(base, className)
+	return classnames.CN(base, className)
 }

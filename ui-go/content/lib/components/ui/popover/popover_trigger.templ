@@ -1,5 +1,6 @@
 package popover
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ PopoverTrigger(className string, children ahtempl.Component) {
@@ -9,7 +10,7 @@ templ PopoverTrigger(className string, children ahtempl.Component) {
 }
 
 templ PopoverTriggerAttrs(className string, disabled bool, attrs ahtempl.Attributes) {
-	<button { attrs... } type="button" data-slot="popover-trigger" class={ joinClass(className) } disabled?={ disabled }>
+	<button { attrs... } type="button" data-slot="popover-trigger" class={ classnames.CN(className) } disabled?={ disabled }>
 		{ children... }
 	</button>
 }

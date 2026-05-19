@@ -8,6 +8,7 @@ package dropdownmenu
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 func DropdownMenuRadioGroup(value string, className string, children ahtempl.Component) templ.Component {
@@ -31,7 +32,7 @@ func DropdownMenuRadioGroup(value string, className string, children ahtempl.Com
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{joinClass(className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN(className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -43,7 +44,7 @@ func DropdownMenuRadioGroup(value string, className string, children ahtempl.Com
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/dropdown-menu/dropdown_menu_radio_group.templ`, Line: 6, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ui/dropdown-menu/dropdown_menu_radio_group.templ`, Line: 7, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {

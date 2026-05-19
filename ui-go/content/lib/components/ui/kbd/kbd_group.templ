@@ -1,9 +1,10 @@
 package kbd
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ KbdGroup(className string, children ahtempl.Component) {
-	<kbd data-slot="kbd-group" class={ joinClass("inline-flex items-center gap-1", className) }>
+	<kbd data-slot="kbd-group" class={ classnames.CN("inline-flex items-center gap-1", className) }>
 		if children != nil {
 			@children
 		}

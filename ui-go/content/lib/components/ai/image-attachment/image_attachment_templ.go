@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 func ImageAttachment(src string, filename string, className string) templ.Component {
@@ -35,7 +36,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		}
 		ctx = templ.ClearChildren(ctx)
 		label := imageFilename(filename)
-		var templ_7745c5c3_Var2 = []any{classNames("group relative max-w-xs overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50 hover:shadow-md", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("group relative max-w-xs overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50 hover:shadow-md", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -60,7 +61,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var4 templ.SafeURL
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(ahtempl.SafeURL(src))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 11, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 12, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -73,7 +74,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue("Open image: " + label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 11, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 12, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -86,7 +87,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 12, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 13, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -99,7 +100,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(src)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 12, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 13, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -112,7 +113,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 12, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 13, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -133,7 +134,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var9 templ.SafeURL
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(ahtempl.SafeURL(src))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 18, Col: 157}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 19, Col: 157}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -146,7 +147,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 18, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 19, Col: 176}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -159,7 +160,7 @@ func ImageAttachment(src string, filename string, className string) templ.Compon
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue("Download " + label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 18, Col: 228}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/image-attachment/image_attachment.templ`, Line: 19, Col: 228}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {

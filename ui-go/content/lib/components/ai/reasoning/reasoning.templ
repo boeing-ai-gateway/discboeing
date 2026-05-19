@@ -2,9 +2,10 @@ package reasoning
 
 import ahtempl "github.com/a-h/templ"
 import collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 templ Reasoning(view View, className string, children ahtempl.Component) {
-	<div data-ai-reasoning data-ai-stack class={ classNames("group group/reasoning not-prose mb-4 w-full rounded-md", className) } data-state={ openState(view.IsOpen) }>
+	<div data-ai-reasoning data-ai-stack class={ classnames.CN("group group/reasoning not-prose mb-4 w-full rounded-md", className) } data-state={ openState(view.IsOpen) }>
 		@collapsible.Collapsible(view.IsOpen, "", children)
 	</div>
 }

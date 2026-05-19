@@ -1,16 +1,6 @@
 package toggle
 
-import "strings"
-
-func joinClass(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
-}
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func state(pressed bool) string {
 	if pressed {
@@ -34,5 +24,5 @@ func toggleClass(variant string, size string, className string) string {
 	default:
 		base += " h-9 min-w-9 px-2"
 	}
-	return joinClass(base, className)
+	return classnames.CN(base, className)
 }

@@ -8,6 +8,7 @@ import (
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
 	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ ApplyPatchToolRenderer(view ApplyPatchView) {
@@ -85,7 +86,7 @@ templ templApplyPatchContent(view ApplyPatchView, parsedPatch applyPatchParseRes
 					<div class="grid gap-2 md:grid-cols-2">
 						for _, entry := range parsedOutput.Entries {
 							<div class="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2 text-sm">
-								<span class={ classNames("inline-flex rounded-full border px-2 py-0.5 font-medium text-xs", resultBadgeClass(entry.Marker)) }>{ entry.Marker }</span>
+								<span class={ classnames.CN("inline-flex rounded-full border px-2 py-0.5 font-medium text-xs", resultBadgeClass(entry.Marker)) }>{ entry.Marker }</span>
 								<span class="truncate font-mono text-xs text-muted-foreground">{ shortenPath(entry.Path) }</span>
 							</div>
 						}
@@ -110,7 +111,7 @@ templ applyPatchOperationView(operation applyPatchOperation) {
 		<div class="flex flex-wrap items-start justify-between gap-3 border-b bg-background/70 px-3 py-3">
 			<div class="min-w-0 space-y-1">
 				<div class="flex flex-wrap items-center gap-2">
-					<span class={ classNames("rounded-full border px-2 py-0.5 font-medium text-xs", operationBadgeClass(operation)) }>{ operationLabel(operation) }</span>
+					<span class={ classnames.CN("rounded-full border px-2 py-0.5 font-medium text-xs", operationBadgeClass(operation)) }>{ operationLabel(operation) }</span>
 					if operation.MovePath != "" {
 						<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">Rename</span>
 					}
@@ -167,8 +168,8 @@ templ applyPatchOperationView(operation applyPatchOperation) {
 						</div>
 						<div class="overflow-hidden rounded-md border bg-background/70">
 							for _, line := range chunk.Lines {
-								<div class={ classNames("grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b font-mono text-xs last:border-b-0", rowClass(line.Marker)) }>
-									<div class={ classNames("px-2 py-1", markerClass(line.Marker)) }>{ line.Marker }</div>
+								<div class={ classnames.CN("grid grid-cols-[1.5rem_minmax(0,1fr)] border-border/50 border-b font-mono text-xs last:border-b-0", rowClass(line.Marker)) }>
+									<div class={ classnames.CN("px-2 py-1", markerClass(line.Marker)) }>{ line.Marker }</div>
 									<div class="overflow-x-auto px-2 py-1 text-foreground">{ lineText(line.Content) }</div>
 								</div>
 							}

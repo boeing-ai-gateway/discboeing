@@ -8,6 +8,7 @@ import (
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
 	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ BashToolRenderer(view BashView) {
@@ -20,8 +21,8 @@ templ BashToolRenderer(view BashView) {
 		contentView := tool.View{Open: view.Open}
 	}}
 	<div class="flex items-center justify-between gap-4 px-4 pt-4">
-		<button type="button" class={ classNames("flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground", map[bool]string{true: "text-amber-700 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0]) } data-tool-toggle="true">
-			@lucide.Terminal(ahtempl.Attributes{"class": classNames("size-4 shrink-0 text-muted-foreground", map[bool]string{true: "text-amber-600 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])})
+		<button type="button" class={ classnames.CN("flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground", map[bool]string{true: "text-amber-700 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0]) } data-tool-toggle="true">
+			@lucide.Terminal(ahtempl.Attributes{"class": classnames.CN("size-4 shrink-0 text-muted-foreground", map[bool]string{true: "text-amber-600 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])})
 			<span class="truncate font-medium text-sm">{ bashHeader(input, inputOK, view.State) }</span>
 			if len(input.CredentialUses) > 0 {
 				<span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700 text-xs dark:text-amber-300">
@@ -105,7 +106,7 @@ templ bashContent(view BashView, input BashInput, inputOK bool, output BashOutpu
 						}
 					</h4>
 					if output.ExitCode != nil {
-						<span class={ classNames("rounded px-2 py-0.5 font-mono text-xs", bashExitClass(output)) }>{ bashExitLabel(output) }</span>
+						<span class={ classnames.CN("rounded px-2 py-0.5 font-mono text-xs", bashExitClass(output)) }>{ bashExitLabel(output) }</span>
 					}
 					if parsedStdout.IsTruncated {
 						<span class="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">Truncated</span>

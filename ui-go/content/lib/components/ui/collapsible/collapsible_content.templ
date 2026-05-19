@@ -1,10 +1,11 @@
 package collapsible
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ CollapsibleContent(open bool, className string, children ahtempl.Component) {
 	if open {
-		<div data-slot="collapsible-content" data-state="open" class={ joinClass(className) }>
+		<div data-slot="collapsible-content" data-state="open" class={ classnames.CN(className) }>
 			if children != nil {
 				@children
 			}

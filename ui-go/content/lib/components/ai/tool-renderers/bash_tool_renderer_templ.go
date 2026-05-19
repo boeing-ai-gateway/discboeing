@@ -15,6 +15,7 @@ import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
 )
 
@@ -49,7 +50,7 @@ func BashToolRenderer(view BashView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 = []any{classNames("flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground", map[bool]string{true: "text-amber-700 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground", map[bool]string{true: "text-amber-700 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -71,7 +72,7 @@ func BashToolRenderer(view BashView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = lucide.Terminal(ahtempl.Attributes{"class": classNames("size-4 shrink-0 text-muted-foreground", map[bool]string{true: "text-amber-600 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = lucide.Terminal(ahtempl.Attributes{"class": classnames.CN("size-4 shrink-0 text-muted-foreground", map[bool]string{true: "text-amber-600 dark:text-amber-300", false: ""}[len(input.CredentialUses) > 0])}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -82,7 +83,7 @@ func BashToolRenderer(view BashView) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(bashHeader(input, inputOK, view.State))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 25, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 26, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -199,7 +200,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(view.Output)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 59, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 60, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -243,7 +244,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(*input.Timeout))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 74, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 75, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -266,7 +267,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(input.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 78, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 79, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -284,7 +285,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(input.Command)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 83, Col: 232}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 84, Col: 232}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -305,7 +306,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(input.Command)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 88, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 89, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -351,7 +352,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				return templ_7745c5c3_Err
 			}
 			if output.ExitCode != nil {
-				var templ_7745c5c3_Var11 = []any{classNames("rounded px-2 py-0.5 font-mono text-xs", bashExitClass(output))}
+				var templ_7745c5c3_Var11 = []any{classnames.CN("rounded px-2 py-0.5 font-mono text-xs", bashExitClass(output))}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var11...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -376,7 +377,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(bashExitLabel(output))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 108, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 109, Col: 123}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -416,7 +417,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(output.Stderr)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 122, Col: 106}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 123, Col: 106}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -435,7 +436,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(view.ErrorText)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 126, Col: 121}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 127, Col: 121}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -454,7 +455,7 @@ func bashContent(view BashView, input BashInput, inputOK bool, output BashOutput
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(view.Output)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 131, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 132, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 				if templ_7745c5c3_Err != nil {
@@ -515,7 +516,7 @@ func bashCredentialUses(uses []BashCredentialUse) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(binding.CredentialID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 149, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 150, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -528,7 +529,7 @@ func bashCredentialUses(uses []BashCredentialUse) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(binding.EnvVar)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 150, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 151, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -541,7 +542,7 @@ func bashCredentialUses(uses []BashCredentialUse) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(binding.UseID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 152, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 153, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -554,7 +555,7 @@ func bashCredentialUses(uses []BashCredentialUse) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(binding.CredentialID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 153, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 154, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -601,7 +602,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(bashLineCount(stdout, parsed)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 165, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 166, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -614,7 +615,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(stdout)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 166, Col: 239}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 167, Col: 239}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -645,7 +646,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(shortenPath(parsed.TruncationFilePath))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 176, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 177, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -670,7 +671,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(line.LineNumber)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 184, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 185, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -683,7 +684,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(lineText(line.Text))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 185, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 186, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -706,7 +707,7 @@ func bashStdoutBlock(stdout string, parsed parsedNumberedOutput) templ.Component
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(stdout)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 190, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/bash_tool_renderer.templ`, Line: 191, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {

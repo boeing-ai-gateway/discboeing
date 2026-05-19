@@ -3,10 +3,11 @@ package message
 import (
 	ahtempl "github.com/a-h/templ"
 	"fmt"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ MessageBranch(branch BranchView, className string, children ahtempl.Component) {
-	<div class={ classNames("grid w-full gap-2 [&>div]:pb-0", className) } data-current-branch={ fmt.Sprint(branch.Current) } data-total-branches={ fmt.Sprint(branchTotal(branch)) }>
+	<div class={ classnames.CN("grid w-full gap-2 [&>div]:pb-0", className) } data-current-branch={ fmt.Sprint(branch.Current) } data-total-branches={ fmt.Sprint(branchTotal(branch)) }>
 		if children != nil {
 			@children
 		}

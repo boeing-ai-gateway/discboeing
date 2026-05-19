@@ -1,5 +1,6 @@
 package splitdropdownbutton
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 import ahtempl "github.com/a-h/templ"
 import "context"
@@ -19,7 +20,7 @@ templ SplitDropdownButtonContent(label string, menuAriaLabel string, variant str
 			_, err := io.WriteString(w, templ.EscapeString(label))
 			return err
 		}))
-		@dropdownmenu.DropdownMenuTrigger(joinClass(), ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		@dropdownmenu.DropdownMenuTrigger(classnames.CN(), ahtempl.ComponentFunc(func(ctx context.Context, w io.Writer) error {
 			return SplitDropdownButtonTrigger(menuAriaLabel, variant, size, disabled).Render(ctx, w)
 		}))
 	</div>

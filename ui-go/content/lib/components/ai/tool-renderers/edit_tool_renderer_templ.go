@@ -15,6 +15,7 @@ import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
 )
 
@@ -63,7 +64,7 @@ func EditToolRenderer(view EditView) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(editHeader(input, inputOK, view.State))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 28, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 29, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -166,7 +167,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(view.Output)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 56, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 57, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -189,7 +190,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(shortenPath(input.FilePath))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 64, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 65, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -217,7 +218,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(editLineCount(input.OldString)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 73, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 74, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -230,7 +231,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(editLineCount(input.NewString)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 74, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 75, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -248,7 +249,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(changedRows))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 76, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 77, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -261,7 +262,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(plural(changedRows, "row", "rows"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 76, Col: 149}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 77, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -348,7 +349,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(*output.Replacements))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 112, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 113, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -371,7 +372,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(editError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 116, Col: 115}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 117, Col: 115}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -390,7 +391,7 @@ func editContent(view EditView, input EditInput, inputOK bool, output EditOutput
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(view.Output)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 121, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 122, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -431,7 +432,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var16 = []any{classNames("grid grid-cols-[3rem_3rem_1.5rem_minmax(0,1fr)] border-t first:border-t-0", editRowClass(row.Kind))}
+		var templ_7745c5c3_Var16 = []any{classnames.CN("grid grid-cols-[3rem_3rem_1.5rem_minmax(0,1fr)] border-t first:border-t-0", editRowClass(row.Kind))}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var16...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -456,7 +457,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(editLineNumber(row.OldLineNumber))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 130, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 131, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -469,7 +470,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(editLineNumber(row.NewLineNumber))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 131, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 132, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -479,7 +480,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var20 = []any{classNames("border-r px-1 py-1 text-center font-semibold", editMarkerClass(row.Kind))}
+		var templ_7745c5c3_Var20 = []any{classnames.CN("border-r px-1 py-1 text-center font-semibold", editMarkerClass(row.Kind))}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var20...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -504,7 +505,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(editMarker(row.Kind))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 132, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 133, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -546,7 +547,7 @@ func editDiffRowView(row editDiffRow) templ.Component {
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(segment.Text)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 138, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/edit_tool_renderer.templ`, Line: 139, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {

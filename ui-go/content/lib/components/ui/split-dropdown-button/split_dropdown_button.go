@@ -1,16 +1,6 @@
 package splitdropdownbutton
 
-import "strings"
-
-func joinClass(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
-}
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func useSharedOutlineBorder(variant string) bool {
 	return variant == "" || variant == "outline"
@@ -18,9 +8,9 @@ func useSharedOutlineBorder(variant string) bool {
 
 func groupClass(variant string, className string) string {
 	if useSharedOutlineBorder(variant) {
-		return joinClass("inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs", className)
+		return classnames.CN("inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs", className)
 	}
-	return joinClass("inline-flex items-center", className)
+	return classnames.CN("inline-flex items-center", className)
 }
 
 func primaryButtonClass(variant string) string {

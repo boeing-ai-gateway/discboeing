@@ -6,6 +6,7 @@ import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 	message "github.com/obot-platform/discobot/ui-go/content/lib/components/ai/message"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID string) {
@@ -28,7 +29,7 @@ templ AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID stri
 		if len(pendingQuestion.Questions) > 1 {
 			<div class="flex flex-wrap gap-1">
 				for index, question := range pendingQuestion.Questions {
-					<button type="button" class={ classNames("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors", map[bool]string{true: "border-primary/30 bg-primary/10 text-primary", false: "border-transparent bg-muted/50 text-muted-foreground"}[index == 0]) } disabled={ index != 0 }>
+					<button type="button" class={ classnames.CN("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors", map[bool]string{true: "border-primary/30 bg-primary/10 text-primary", false: "border-transparent bg-muted/50 text-muted-foreground"}[index == 0]) } disabled={ index != 0 }>
 						if index == 0 {
 							@lucide.Check(ahtempl.Attributes{"class": "size-3.5 shrink-0 text-primary"})
 						} else {

@@ -1,9 +1,10 @@
 package item
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ ItemActions(className string, children ahtempl.Component) {
-	<div data-slot="item-actions" class={ joinClass("flex items-center gap-2", className) }>
+	<div data-slot="item-actions" class={ classnames.CN("flex items-center gap-2", className) }>
 		if children != nil {
 			@children
 		}

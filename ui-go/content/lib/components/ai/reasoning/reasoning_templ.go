@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import ahtempl "github.com/a-h/templ"
 import collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 
 func Reasoning(view View, className string, children ahtempl.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -32,7 +33,7 @@ func Reasoning(view View, className string, children ahtempl.Component) templ.Co
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("group group/reasoning not-prose mb-4 w-full rounded-md", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("group group/reasoning not-prose mb-4 w-full rounded-md", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -57,7 +58,7 @@ func Reasoning(view View, className string, children ahtempl.Component) templ.Co
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(openState(view.IsOpen))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/reasoning/reasoning.templ`, Line: 7, Col: 163}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/reasoning/reasoning.templ`, Line: 8, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {

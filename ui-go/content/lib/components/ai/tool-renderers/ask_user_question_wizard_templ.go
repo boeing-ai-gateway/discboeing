@@ -13,6 +13,7 @@ import (
 
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 	message "github.com/obot-platform/discobot/ui-go/content/lib/components/ai/message"
 )
 
@@ -45,7 +46,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(toolUseID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 13, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 14, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -83,7 +84,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				return templ_7745c5c3_Err
 			}
 			for index, question := range pendingQuestion.Questions {
-				var templ_7745c5c3_Var3 = []any{classNames("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors", map[bool]string{true: "border-primary/30 bg-primary/10 text-primary", false: "border-transparent bg-muted/50 text-muted-foreground"}[index == 0])}
+				var templ_7745c5c3_Var3 = []any{classnames.CN("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors", map[bool]string{true: "border-primary/30 bg-primary/10 text-primary", false: "border-transparent bg-muted/50 text-muted-foreground"}[index == 0])}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var3...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -108,7 +109,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(index != 0)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 31, Col: 312}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 32, Col: 315}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
@@ -131,7 +132,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(index + 1))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 35, Col: 193}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 36, Col: 193}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -145,7 +146,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(questionStepLabel(question, index))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 37, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 38, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -170,7 +171,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(question.Question)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 45, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 46, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -188,7 +189,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(questionInputType(question))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 49, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 50, Col: 114}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 				if templ_7745c5c3_Err != nil {
@@ -201,7 +202,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 49, Col: 137}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 50, Col: 137}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
@@ -214,7 +215,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 51, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 52, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -232,7 +233,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(option.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 53, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 54, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -255,7 +256,7 @@ func AskUserQuestionWizard(pendingQuestion AskUserQuestionInput, toolUseID strin
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(questionInputType(question))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 59, Col: 113}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool-renderers/ask_user_question_wizard.templ`, Line: 60, Col: 113}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {

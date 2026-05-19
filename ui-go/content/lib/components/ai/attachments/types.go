@@ -1,6 +1,10 @@
 package attachments
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+)
 
 type AttachmentData struct {
 	ID        string
@@ -24,16 +28,6 @@ func attachmentVariant(variant string) string {
 	default:
 		return "grid"
 	}
-}
-
-func classNames(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
 }
 
 func mediaCategory(data AttachmentData) string {
@@ -81,11 +75,11 @@ func canOpenAttachmentFullscreen(data AttachmentData) bool {
 func attachmentClass(variant string, className string) string {
 	switch attachmentVariant(variant) {
 	case "inline":
-		return classNames("group relative flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md border border-border px-1.5 font-medium text-sm transition-all hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50", className)
+		return classnames.CN("group relative flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md border border-border px-1.5 font-medium text-sm transition-all hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50", className)
 	case "list":
-		return classNames("group relative flex w-full items-center gap-3 rounded-lg border p-3 hover:bg-accent/50", className)
+		return classnames.CN("group relative flex w-full items-center gap-3 rounded-lg border p-3 hover:bg-accent/50", className)
 	default:
-		return classNames("group relative size-24 overflow-hidden rounded-lg", className)
+		return classnames.CN("group relative size-24 overflow-hidden rounded-lg", className)
 	}
 }
 
@@ -99,17 +93,17 @@ func attachmentsClass(variant string, className string) string {
 	if attachmentVariant(variant) == "grid" {
 		base += " ml-auto w-fit"
 	}
-	return classNames(base, className)
+	return classnames.CN(base, className)
 }
 
 func previewClass(variant string, className string) string {
 	switch attachmentVariant(variant) {
 	case "inline":
-		return classNames("flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-background", className)
+		return classnames.CN("flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-background", className)
 	case "list":
-		return classNames("flex size-12 shrink-0 items-center justify-center overflow-hidden rounded bg-muted", className)
+		return classnames.CN("flex size-12 shrink-0 items-center justify-center overflow-hidden rounded bg-muted", className)
 	default:
-		return classNames("flex size-full shrink-0 items-center justify-center overflow-hidden bg-muted", className)
+		return classnames.CN("flex size-full shrink-0 items-center justify-center overflow-hidden bg-muted", className)
 	}
 }
 
@@ -137,7 +131,7 @@ func removeButtonClass(variant string, className string) string {
 	default:
 		base += " absolute top-2 right-2 size-6 rounded-full bg-background/80 p-0 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:bg-background [&>svg]:size-3"
 	}
-	return classNames(base, className)
+	return classnames.CN(base, className)
 }
 
 func removeLabel(label string) string {

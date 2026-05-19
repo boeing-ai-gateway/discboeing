@@ -1,9 +1,10 @@
 package dropdownmenu
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 templ DropdownMenuTrigger(className string, children ahtempl.Component) {
-	<button type="button" data-slot="dropdown-menu-trigger" class={ joinClass(className) }>
+	<button type="button" data-slot="dropdown-menu-trigger" class={ classnames.CN(className) }>
 		if children != nil {
 			@children
 		}

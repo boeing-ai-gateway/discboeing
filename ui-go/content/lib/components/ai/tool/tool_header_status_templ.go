@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 func ToolHeaderStatus(state string, queued bool, className string) templ.Component {
@@ -36,7 +37,7 @@ func ToolHeaderStatus(state string, queued bool, className string) templ.Compone
 		ctx = templ.ClearChildren(ctx)
 		effective := effectiveState(state, queued)
 		if effective != "output-available" {
-			var templ_7745c5c3_Var2 = []any{classNames("inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 text-secondary-foreground text-xs", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 text-secondary-foreground text-xs", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -60,7 +61,7 @@ func ToolHeaderStatus(state string, queued bool, className string) templ.Compone
 			}
 			switch effective {
 			case "input-streaming", "input-available":
-				templ_7745c5c3_Err = lucide.LoaderCircle(ahtempl.Attributes{"class": classNames("size-4 shrink-0", map[bool]string{true: "animate-spin", false: ""}[isToolRunningState(effective)])}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = lucide.LoaderCircle(ahtempl.Attributes{"class": classnames.CN("size-4 shrink-0", map[bool]string{true: "animate-spin", false: ""}[isToolRunningState(effective)])}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -105,7 +106,7 @@ func ToolHeaderStatus(state string, queued bool, className string) templ.Compone
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(toolStatusLabel(effective))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header_status.templ`, Line: 22, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header_status.templ`, Line: 23, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {

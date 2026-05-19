@@ -3,11 +3,12 @@ package imageattachment
 import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ ImageAttachment(src string, filename string, className string) {
 	{{ label := imageFilename(filename) }}
-	<div class={ classNames("group relative max-w-xs overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50 hover:shadow-md", className) }>
+	<div class={ classnames.CN("group relative max-w-xs overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50 hover:shadow-md", className) }>
 		<a href={ ahtempl.SafeURL(src) } target="_blank" rel="noreferrer" aria-label={ "Open image: " + label } class="block cursor-pointer">
 			<img alt={ label } class="h-auto max-w-full" src={ src } title={ label }/>
 			<div class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">

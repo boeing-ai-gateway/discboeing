@@ -8,6 +8,7 @@ package popover
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 func PopoverTrigger(className string, children ahtempl.Component) templ.Component {
@@ -78,7 +79,7 @@ func PopoverTriggerAttrs(className string, disabled bool, attrs ahtempl.Attribut
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var4 = []any{joinClass(className)}
+		var templ_7745c5c3_Var4 = []any{classnames.CN(className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var4...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

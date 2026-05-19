@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 	ahtempl "github.com/a-h/templ"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 func MessageBranch(branch BranchView, className string, children ahtempl.Component) templ.Component {
@@ -34,7 +35,7 @@ func MessageBranch(branch BranchView, className string, children ahtempl.Compone
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{classNames("grid w-full gap-2 [&>div]:pb-0", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("grid w-full gap-2 [&>div]:pb-0", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -59,7 +60,7 @@ func MessageBranch(branch BranchView, className string, children ahtempl.Compone
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(branch.Current))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch.templ`, Line: 9, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch.templ`, Line: 10, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -72,7 +73,7 @@ func MessageBranch(branch BranchView, className string, children ahtempl.Compone
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(branchTotal(branch)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch.templ`, Line: 9, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/message/message_branch.templ`, Line: 10, Col: 179}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {

@@ -5,6 +5,7 @@ import (
 
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ RequestCommitPullDiffViewer(files []RequestCommitPullDiffEntry, diffStyle string) {
@@ -49,7 +50,7 @@ templ RequestCommitPullDiffViewer(files []RequestCommitPullDiffEntry, diffStyle 
 									<div class="flex min-w-0 items-center gap-2">
 										<span class="group-open:hidden">@lucide.ChevronRight(ahtempl.Attributes{"class": "size-4 shrink-0"})</span>
 										<span class="hidden group-open:inline">@lucide.ChevronDown(ahtempl.Attributes{"class": "size-4 shrink-0"})</span>
-										<span class={ classNames("inline-grid grid-cols-1 place-items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold", requestCommitPullStatusBadgeClass(file.Status)) }>
+										<span class={ classnames.CN("inline-grid grid-cols-1 place-items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold", requestCommitPullStatusBadgeClass(file.Status)) }>
 											<span class="col-start-1 row-start-1">{ requestCommitPullViewerStatusLabel(file.Status) }</span>
 											<span class="invisible col-start-1 row-start-1" aria-hidden="true">Modified</span>
 										</span>

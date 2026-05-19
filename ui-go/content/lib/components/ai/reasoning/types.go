@@ -1,25 +1,12 @@
 package reasoning
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type View struct {
 	IsStreaming bool
 	IsOpen      bool
 	PreviewText string
 	Duration    *int
-}
-
-func classNames(parts ...string) string {
-	classes := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			classes = append(classes, trimmed)
-		}
-	}
-	return strings.Join(classes, " ")
 }
 
 func thinkingMessage(view View) string {

@@ -1,8 +1,9 @@
 package tool
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 templ ToolOutput(output string, errorText string, className string) {
 	if output != "" || errorText != "" {
-		<div class={ classNames("space-y-2 p-4", className) }>
+		<div class={ classnames.CN("space-y-2 p-4", className) }>
 			<h4 class="font-medium text-muted-foreground text-xs uppercase tracking-wide">
 				if errorText != "" {
 					Error
@@ -10,7 +11,7 @@ templ ToolOutput(output string, errorText string, className string) {
 					Result
 				}
 			</h4>
-			<div class={ classNames("overflow-x-auto rounded-md text-xs [&_table]:w-full", map[bool]string{true: "bg-destructive/10 text-destructive", false: "bg-muted/50 text-foreground"}[errorText != ""]) }>
+			<div class={ classnames.CN("overflow-x-auto rounded-md text-xs [&_table]:w-full", map[bool]string{true: "bg-destructive/10 text-destructive", false: "bg-muted/50 text-foreground"}[errorText != ""]) }>
 				if errorText != "" {
 					<div class="p-3">{ errorText }</div>
 				}

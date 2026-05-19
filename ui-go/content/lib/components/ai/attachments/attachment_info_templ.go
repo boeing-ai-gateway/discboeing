@@ -8,6 +8,8 @@ package attachments
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
+
 func AttachmentInfo(attachment AttachmentView, showMediaType bool, className string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -30,7 +32,7 @@ func AttachmentInfo(attachment AttachmentView, showMediaType bool, className str
 		}
 		ctx = templ.ClearChildren(ctx)
 		if attachmentVariant(attachment.Variant) != "grid" {
-			var templ_7745c5c3_Var2 = []any{classNames("min-w-0 flex-1", className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("min-w-0 flex-1", className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -55,7 +57,7 @@ func AttachmentInfo(attachment AttachmentView, showMediaType bool, className str
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(attachmentLabel(attachment.Data))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/attachments/attachment_info.templ`, Line: 6, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/attachments/attachment_info.templ`, Line: 7, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -73,7 +75,7 @@ func AttachmentInfo(attachment AttachmentView, showMediaType bool, className str
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(attachment.Data.MediaType)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/attachments/attachment_info.templ`, Line: 8, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/attachments/attachment_info.templ`, Line: 9, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {

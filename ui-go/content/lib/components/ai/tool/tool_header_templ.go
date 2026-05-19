@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 	collapsible "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/collapsible"
 )
 
@@ -41,12 +42,12 @@ func ToolHeader(header HeaderView, className string) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if header.CanCollapse {
-			templ_7745c5c3_Err = collapsible.CollapsibleTrigger(false, false, classNames("flex w-full min-w-0 items-center gap-2 text-left", map[bool]string{true: "p-3", false: "px-3 py-1.5"}[header.ShowIcon], className), toolHeaderLabel(header, verb, rest)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = collapsible.CollapsibleTrigger(false, false, classnames.CN("flex w-full min-w-0 items-center gap-2 text-left", map[bool]string{true: "p-3", false: "px-3 py-1.5"}[header.ShowIcon], className), toolHeaderLabel(header, verb, rest)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			var templ_7745c5c3_Var2 = []any{classNames("flex w-full min-w-0 items-center gap-2 text-left", map[bool]string{true: "p-3", false: "px-3 py-1.5"}[header.ShowIcon], className)}
+			var templ_7745c5c3_Var2 = []any{classnames.CN("flex w-full min-w-0 items-center gap-2 text-left", map[bool]string{true: "p-3", false: "px-3 py-1.5"}[header.ShowIcon], className)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -128,7 +129,7 @@ func toolHeaderLabel(header HeaderView, verb string, rest string) templ.Componen
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(verb)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header.templ`, Line: 29, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header.templ`, Line: 30, Col: 105}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -146,7 +147,7 @@ func toolHeaderLabel(header HeaderView, verb string, rest string) templ.Componen
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(rest)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header.templ`, Line: 31, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/ai/tool/tool_header.templ`, Line: 32, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {

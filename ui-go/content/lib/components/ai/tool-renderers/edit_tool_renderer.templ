@@ -8,6 +8,7 @@ import (
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
 	"github.com/obot-platform/discobot/ui-go/content/lib/components/ai/tool"
+	"github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 )
 
 templ EditToolRenderer(view EditView) {
@@ -126,10 +127,10 @@ templ editContent(view EditView, input EditInput, inputOK bool, output EditOutpu
 }
 
 templ editDiffRowView(row editDiffRow) {
-	<div class={ classNames("grid grid-cols-[3rem_3rem_1.5rem_minmax(0,1fr)] border-t first:border-t-0", editRowClass(row.Kind)) }>
+	<div class={ classnames.CN("grid grid-cols-[3rem_3rem_1.5rem_minmax(0,1fr)] border-t first:border-t-0", editRowClass(row.Kind)) }>
 		<div class="border-r px-2 py-1 text-right text-muted-foreground">{ editLineNumber(row.OldLineNumber) }</div>
 		<div class="border-r px-2 py-1 text-right text-muted-foreground">{ editLineNumber(row.NewLineNumber) }</div>
-		<div class={ classNames("border-r px-1 py-1 text-center font-semibold", editMarkerClass(row.Kind)) }>{ editMarker(row.Kind) }</div>
+		<div class={ classnames.CN("border-r px-1 py-1 text-center font-semibold", editMarkerClass(row.Kind)) }>{ editMarker(row.Kind) }</div>
 		<div class="min-h-6 px-3 py-1 whitespace-pre">
 			if len(row.Segments) == 0 || (len(row.Segments) == 1 && row.Segments[0].Text == "") {
 				<span aria-hidden="true" class="opacity-0">·</span>

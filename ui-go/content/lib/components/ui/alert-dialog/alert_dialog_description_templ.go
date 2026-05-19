@@ -8,6 +8,7 @@ package alertdialog
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/obot-platform/discobot/ui-go/content/lib/classnames"
 import ahtempl "github.com/a-h/templ"
 
 func AlertDialogDescription(className string, children ahtempl.Component) templ.Component {
@@ -31,7 +32,7 @@ func AlertDialogDescription(className string, children ahtempl.Component) templ.
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{joinClass("text-muted-foreground text-sm", className)}
+		var templ_7745c5c3_Var2 = []any{classnames.CN("text-muted-foreground text-sm", className)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
