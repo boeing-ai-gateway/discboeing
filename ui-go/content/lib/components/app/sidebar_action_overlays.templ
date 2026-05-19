@@ -28,7 +28,7 @@ templ SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) {
 		<button type="button" class="fixed inset-0 z-40 cursor-default bg-transparent" aria-label="Close sidebar menu" data-on:click={ sidebarCloseMenuCommand() }></button>
 	}
 	if snapshot.RenameDialog.Open {
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="sidebar-rename-title">
+		<dialog open class="fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-4 text-foreground" aria-modal="true" aria-labelledby="sidebar-rename-title">
 			<form class="w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg" data-on:submit__prevent={ sidebarRenameCommand() }>
 				<input type="hidden" name="kind" value={ snapshot.RenameDialog.Kind }/>
 				<input type="hidden" name="session_id" value={ snapshot.RenameDialog.SessionID }/>
@@ -43,10 +43,10 @@ templ SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) {
 					<button type="submit" class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
 				</div>
 			</form>
-		</div>
+		</dialog>
 	}
 	if snapshot.DeleteDialog.Open {
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="sidebar-delete-title">
+		<dialog open class="fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-4 text-foreground" role="alertdialog" aria-modal="true" aria-labelledby="sidebar-delete-title">
 			<div class="w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg">
 				<div class="space-y-1">
 					<h2 id="sidebar-delete-title" class="text-base font-semibold">Delete { snapshot.DeleteDialog.Kind }?</h2>
@@ -57,6 +57,6 @@ templ SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) {
 					<button type="button" class="h-8 rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground hover:bg-destructive/90" data-on:click={ sidebarDeleteCommand() }>Delete</button>
 				</div>
 			</div>
-		</div>
+		</dialog>
 	}
 }

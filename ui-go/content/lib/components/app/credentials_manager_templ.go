@@ -154,7 +154,7 @@ func CredentialsManager(snapshot viewmodel.CredentialsManagerSnapshot) templ.Com
 				return templ_7745c5c3_Err
 			}
 			if snapshot.EditorOpen {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"max-h-[85vh] overflow-hidden rounded-lg border border-border bg-background p-4 shadow-lg sm:max-w-3xl\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"credential-editor-title\" data-credentials-editor=\"placeholder\"><div class=\"flex items-start justify-between gap-3\"><div><div id=\"credential-editor-title\" class=\"text-sm font-medium\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<dialog open class=\"relative m-0 max-h-[85vh] w-full max-w-none overflow-hidden rounded-lg border border-border bg-background p-4 text-foreground shadow-lg sm:max-w-3xl\" aria-modal=\"true\" aria-labelledby=\"credential-editor-title\" data-credentials-editor=\"placeholder\"><div class=\"flex items-start justify-between gap-3\"><div><div id=\"credential-editor-title\" class=\"text-sm font-medium\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -267,7 +267,7 @@ func CredentialsManager(snapshot viewmodel.CredentialsManagerSnapshot) templ.Com
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</dialog>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

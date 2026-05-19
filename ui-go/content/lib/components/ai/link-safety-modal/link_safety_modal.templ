@@ -8,9 +8,9 @@ import (
 templ LinkSafetyModal(url string, isOpen bool) {
 	if isOpen {
 		{{ label := safeURLLabel(url) }}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Open external link">
+		<dialog open class="fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-0 text-foreground" aria-modal="true" aria-label="Open external link">
 			<div class="relative mx-4 flex w-full max-w-md flex-col gap-4 rounded-xl border bg-background p-6 shadow-lg">
-				<button class="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground" aria-label="Close external link dialog" title="Close" type="button" data-on:click="$el.closest('[role=dialog]')?.remove()">
+				<button class="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground" aria-label="Close external link dialog" title="Close" type="button" data-on:click="$el.closest('dialog')?.remove()">
 					@lucide.X(ahtempl.Attributes{"class": "h-4 w-4"})
 				</button>
 				<div class="flex flex-col gap-2">
@@ -32,6 +32,6 @@ templ LinkSafetyModal(url string, isOpen bool) {
 					</a>
 				</div>
 			</div>
-		</div>
+		</dialog>
 	}
 }

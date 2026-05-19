@@ -36,7 +36,7 @@ func RecentThreadSwitcherDialog(snapshot viewmodel.RecentThreadSwitcherSnapshot)
 		}
 		ctx = templ.ClearChildren(ctx)
 		if snapshot.Open {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/20 px-4 pt-24 backdrop-blur-[2px]\" data-recent-thread-switcher><div class=\"pointer-events-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-border/80 bg-background/95 shadow-2xl\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"recent-thread-switcher-title\"><div class=\"flex items-center justify-between border-b border-border/70 px-4 py-3\"><p id=\"recent-thread-switcher-title\" class=\"text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground\">Threads</p><p class=\"text-xs text-muted-foreground\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<dialog open class=\"pointer-events-none absolute inset-0 z-40 m-0 flex h-auto max-h-none w-auto max-w-none items-start justify-center border-0 bg-background/20 px-4 pt-24 text-foreground backdrop-blur-[2px]\" data-recent-thread-switcher aria-modal=\"true\" aria-labelledby=\"recent-thread-switcher-title\"><div class=\"pointer-events-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-border/80 bg-background/95 shadow-2xl\"><div class=\"flex items-center justify-between border-b border-border/70 px-4 py-3\"><p id=\"recent-thread-switcher-title\" class=\"text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground\">Threads</p><p class=\"text-xs text-muted-foreground\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -192,7 +192,7 @@ func RecentThreadSwitcherDialog(snapshot viewmodel.RecentThreadSwitcherSnapshot)
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -38,14 +38,14 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 		}
 		ctx = templ.ClearChildren(ctx)
 		if snapshot.Open {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4\" data-credential-oauth-wizard data-oauth-wizard-open=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-4 text-foreground\" data-credential-oauth-wizard data-oauth-wizard-open=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.Open))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 16, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 17, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 			if templ_7745c5c3_Err != nil {
@@ -58,7 +58,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(oauthWizardKind(snapshot))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 17, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 18, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -71,7 +71,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(oauthWizardProviderName(snapshot))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 18, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 19, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -84,7 +84,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.StartingOAuth))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 19, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 20, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -97,7 +97,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.PollingOAuth))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 20, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 21, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -110,7 +110,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.HasScopeOptions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 21, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 22, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
@@ -123,13 +123,13 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ErrorMessage != ""))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 22, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/parts/credential_oauth_wizard_dialog.templ`, Line: 23, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><div class=\"max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg border border-border bg-background p-6 shadow-lg\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"credential-oauth-wizard-title\"><div class=\"mb-4 flex items-start justify-between gap-3\"><h2 id=\"credential-oauth-wizard-title\" class=\"text-lg font-semibold\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" aria-modal=\"true\" aria-labelledby=\"credential-oauth-wizard-title\"><div class=\"max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg border border-border bg-background p-6 shadow-lg\"><div class=\"mb-4 flex items-start justify-between gap-3\"><h2 id=\"credential-oauth-wizard-title\" class=\"text-lg font-semibold\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -790,7 +790,7 @@ func CredentialOAuthWizardDialog(snapshot viewmodel.CredentialOAuthWizardSnapsho
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</button></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</button></div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

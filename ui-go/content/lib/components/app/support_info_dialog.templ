@@ -6,19 +6,19 @@ import (
 	ahtempl "github.com/a-h/templ"
 	lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
 
+	uidialog "github.com/obot-platform/discobot/ui-go/content/lib/components/ui/dialog"
 	"github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
 )
 
 templ SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) {
-	if snapshot.Open {
-		<div class="fixed inset-0 z-[60] flex items-start justify-center bg-black/50 px-4 py-10" data-support-info-dialog data-support-info-status={ snapshot.Status } data-support-info-has-json={ strconv.FormatBool(snapshot.JSON != "") }>
-			<div
-				class="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-background p-6 shadow-xl"
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby="support-info-title"
-				aria-describedby="support-info-description"
-			>
+	@uidialog.Dialog(snapshot.Open) {
+		@uidialog.DialogContentAttrs(snapshot.Open, "top-10 z-[60] flex max-h-[88vh] max-w-3xl translate-y-0 flex-col overflow-hidden shadow-xl sm:max-w-3xl", "z-[60]", false, ahtempl.Attributes{
+			"data-support-info-dialog": "",
+			"data-support-info-status": snapshot.Status,
+			"data-support-info-has-json": strconv.FormatBool(snapshot.JSON != ""),
+			"aria-labelledby": "support-info-title",
+			"aria-describedby": "support-info-description",
+		}) {
 				<div>
 					<h2 id="support-info-title" class="flex items-center gap-2 text-lg font-semibold">
 						@lucide.Info(ahtempl.Attributes{"class": "size-4"})
@@ -53,7 +53,6 @@ templ SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) {
 					</button>
 					<button type="button" class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90" data-support-info-close data-on:click={ supportInfoCloseCommand() }>Close</button>
 				</div>
-			</div>
-		</div>
+		}
 	}
 }

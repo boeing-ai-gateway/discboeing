@@ -137,7 +137,7 @@ func StartupGate(startup viewmodel.StartupSnapshot, children ahtempl.Component) 
 			return templ_7745c5c3_Err
 		}
 		if startupGateShowAuth(startup) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-background/95 px-6 py-10 text-foreground backdrop-blur-sm\" data-startup-auth-overlay><div class=\"w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"startup-auth-title\" aria-describedby=\"startup-auth-description\"><div class=\"mb-5 flex justify-center\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-background/95 px-6 py-10 text-foreground backdrop-blur-sm\" data-startup-auth-overlay aria-modal=\"true\" aria-labelledby=\"startup-auth-title\" aria-describedby=\"startup-auth-description\"><div class=\"w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm\"><div class=\"mb-5 flex justify-center\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -158,7 +158,7 @@ func StartupGate(startup viewmodel.StartupSnapshot, children ahtempl.Component) 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">Sign in</a></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">Sign in</a></div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

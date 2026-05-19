@@ -36,7 +36,7 @@ func LinkSafetyModal(url string, isOpen bool) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		if isOpen {
 			label := safeURLLabel(url)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Open external link\"><div class=\"relative mx-4 flex w-full max-w-md flex-col gap-4 rounded-xl border bg-background p-6 shadow-lg\"><button class=\"absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground\" aria-label=\"Close external link dialog\" title=\"Close\" type=\"button\" data-on:click=\"$el.closest('[role=dialog]')?.remove()\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-0 text-foreground\" aria-modal=\"true\" aria-label=\"Open external link\"><div class=\"relative mx-4 flex w-full max-w-md flex-col gap-4 rounded-xl border bg-background p-6 shadow-lg\"><button class=\"absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground\" aria-label=\"Close external link dialog\" title=\"Close\" type=\"button\" data-on:click=\"$el.closest('dialog')?.remove()\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -133,7 +133,7 @@ func LinkSafetyModal(url string, isOpen bool) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<span>Open link</span></a></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<span>Open link</span></a></div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

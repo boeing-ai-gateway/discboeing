@@ -1296,6 +1296,9 @@
   .max-h-\[min\(70vh\,32rem\)\] {
     max-height: min(70vh, 32rem);
   }
+  .max-h-none {
+    max-height: none;
+  }
   .min-h-0 {
     min-height: calc(var(--spacing) * 0);
   }
@@ -1451,6 +1454,9 @@
   }
   .w-\[320px\] {
     width: 320px;
+  }
+  .w-\[calc\(100vw-2rem\)\] {
+    width: calc(100vw - 2rem);
   }
   .w-\[min\(40rem\,calc\(100vw-2rem\)\)\] {
     width: min(40rem, calc(100vw - 2rem));
@@ -6467,6 +6473,11 @@
   .sm\:inline {
     @media (width >= 40rem) {
       display: inline;
+    }
+  }
+  .sm\:\!max-w-4xl {
+    @media (width >= 40rem) {
+      max-width: var(--container-4xl) !important;
     }
   }
   .sm\:max-w-2xl {

@@ -107,14 +107,14 @@ templ SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) {
 			</details>
 		</div>
 		if snapshot.ShowLearnMoreDialog {
-			<div class="desktop-no-drag absolute right-3 top-12 z-50 max-w-md rounded-lg border border-border bg-background p-4 shadow-lg" role="dialog" aria-modal="true" aria-labelledby="session-toolbar-services-title">
+			<dialog open class="desktop-no-drag absolute right-3 top-12 z-50 m-0 max-h-none max-w-md rounded-lg border border-border bg-background p-4 text-foreground shadow-lg" aria-modal="true" aria-labelledby="session-toolbar-services-title">
 				<div id="session-toolbar-services-title" class="text-sm font-medium">Learn about services and hooks?</div>
 				<p class="mt-1 text-sm text-muted-foreground">This project does not have Discobot services configured yet. Ask the agent to explain how services and hooks could help run, preview, and automate this application.</p>
 				<div class="mt-3 flex justify-end gap-2">
 					<button type="button" class="h-8 rounded-md px-3 text-sm text-muted-foreground hover:bg-accent" disabled>Cancel</button>
 					<button type="button" class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground opacity-60" disabled>Yes, ask agent</button>
 				</div>
-			</div>
+			</dialog>
 		}
 		@parts.SessionCommandCredentialsDialog(snapshot.CommandCredentials)
 	</div>

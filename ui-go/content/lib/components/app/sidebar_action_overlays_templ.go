@@ -233,7 +233,7 @@ func SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) templ.Componen
 			}
 		}
 		if snapshot.RenameDialog.Open {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"sidebar-rename-title\"><form class=\"w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg\" data-on:submit__prevent=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-4 text-foreground\" aria-modal=\"true\" aria-labelledby=\"sidebar-rename-title\"><form class=\"w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg\" data-on:submit__prevent=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -337,13 +337,13 @@ func SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) templ.Componen
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">Cancel</button> <button type=\"submit\" class=\"h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90\">Save</button></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">Cancel</button> <button type=\"submit\" class=\"h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90\">Save</button></div></form></dialog> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if snapshot.DeleteDialog.Open {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4\" role=\"alertdialog\" aria-modal=\"true\" aria-labelledby=\"sidebar-delete-title\"><div class=\"w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg\"><div class=\"space-y-1\"><h2 id=\"sidebar-delete-title\" class=\"text-base font-semibold\">Delete ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-black/50 p-4 text-foreground\" role=\"alertdialog\" aria-modal=\"true\" aria-labelledby=\"sidebar-delete-title\"><div class=\"w-full max-w-md rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg\"><div class=\"space-y-1\"><h2 id=\"sidebar-delete-title\" class=\"text-base font-semibold\">Delete ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -395,7 +395,7 @@ func SidebarActionOverlays(snapshot viewmodel.AppSidebarSnapshot) templ.Componen
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\">Delete</button></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\">Delete</button></div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

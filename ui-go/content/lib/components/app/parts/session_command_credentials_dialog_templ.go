@@ -32,7 +32,7 @@ func SessionCommandCredentialsDialog(snapshot viewmodel.SessionCommandCredential
 		}
 		ctx = templ.ClearChildren(ctx)
 		if sessionCommandCredentialsOpen(snapshot) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm\" role=\"dialog\" aria-modal=\"true\" data-session-command-credentials-dialog><div class=\"flex max-h-[min(44rem,90vh)] w-full max-w-2xl flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg\"><div class=\"space-y-1.5\"><h2 class=\"text-lg font-semibold leading-none tracking-tight\">Approve credential access for ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<dialog open class=\"fixed inset-0 z-50 m-0 flex h-auto max-h-none w-auto max-w-none items-center justify-center border-0 bg-background/80 p-4 text-foreground backdrop-blur-sm\" aria-modal=\"true\" data-session-command-credentials-dialog><div class=\"flex max-h-[min(44rem,90vh)] w-full max-w-2xl flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg\"><div class=\"space-y-1.5\"><h2 class=\"text-lg font-semibold leading-none tracking-tight\">Approve credential access for ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -78,7 +78,7 @@ func SessionCommandCredentialsDialog(snapshot viewmodel.SessionCommandCredential
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"flex justify-end gap-2\"><button type=\"button\" class=\"inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground\" data-command-credentials-deny>Deny</button> <button type=\"button\" class=\"inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90\" data-command-credentials-approve>Approve</button></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"flex justify-end gap-2\"><button type=\"button\" class=\"inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground\" data-command-credentials-deny>Deny</button> <button type=\"button\" class=\"inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90\" data-command-credentials-approve>Approve</button></div></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
