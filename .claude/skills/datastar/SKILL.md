@@ -98,6 +98,9 @@ Common modifiers:
 - `data-on`: `__once`, `__passive`, `__capture`, `__delay.*`,
   `__debounce.*`, `__throttle.*`, `__viewtransition`, `__window`,
   `__document`, `__outside`, `__prevent`, `__stop`, `__case.*`.
+  Datastar does not provide Alpine/Svelte-style key filters such as
+  `__escape`, `__enter`, or `__tab`; use `data-on:keydown` and check
+  `evt.key` in the expression or a component-scoped JS handler.
 - `data-init`: `__delay.*`, `__viewtransition`.
 - `data-on-intersect`: `__once`, `__exit`, `__half`, `__full`,
   `__threshold.*`, plus delay/debounce/throttle/view-transition modifiers.
