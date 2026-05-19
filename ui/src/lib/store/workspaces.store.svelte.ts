@@ -1,6 +1,6 @@
 import { SvelteSet } from "svelte/reactivity";
 
-import { api } from "$lib/api-client";
+import { ApiError, api } from "$lib/api-client";
 import type {
 	CreateWorkspaceRequest,
 	Workspace,
@@ -89,6 +89,11 @@ export class WorkspaceStore {
 				this.#resource.upsert(workspace);
 				return workspace;
 			} catch (error) {
+				if (error instanceof ApiError && error.status === 404) {
+					this.#resource.evict(id);
+					return null;
+				}
+
 				console.error("[WorkspaceStore] Failed to fetch workspace:", id, error);
 				return null;
 			}
