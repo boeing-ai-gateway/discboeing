@@ -5,16 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -120,6 +125,76 @@ func TestReadDevToolsURL(t *testing.T) {
 	}
 	if wsURL != "ws://127.0.0.1:41235/devtools/browser/browser-id" {
 		t.Fatalf("unexpected websocket URL %q", wsURL)
+	}
+}
+
+func TestWaitForDevToolsURLRequiresWebSocketProbe(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) < 3 {
+			http.Error(w, "warming up", http.StatusServiceUnavailable)
+			return
+		}
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Errorf("accept websocket: %v", err)
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+
+		_, payload, err := conn.Read(r.Context())
+		if err != nil {
+			t.Errorf("read probe request: %v", err)
+			return
+		}
+		var req struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(payload, &req); err != nil {
+			t.Errorf("unmarshal probe request: %v", err)
+			return
+		}
+		resp, err := json.Marshal(map[string]any{
+			"id": req.ID,
+			"result": map[string]any{
+				"targetInfos": []map[string]any{},
+			},
+		})
+		if err != nil {
+			t.Errorf("marshal probe response: %v", err)
+			return
+		}
+		if err := conn.Write(r.Context(), websocket.MessageText, resp); err != nil {
+			t.Errorf("write probe response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "DevToolsActivePort")
+	if err := os.WriteFile(path, fmt.Appendf(nil, "%s\n/devtools/browser/browser-id\n", port), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wsURL, err := waitForDevToolsURLWithTimeout(path, 2*time.Second, 10*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "ws://127.0.0.1:" + port + "/devtools/browser/browser-id"
+	if wsURL != want {
+		t.Fatalf("expected %q, got %q", want, wsURL)
+	}
+	if attempts.Load() < 3 {
+		t.Fatalf("expected websocket probe retries, got %d attempt(s)", attempts.Load())
 	}
 }
 

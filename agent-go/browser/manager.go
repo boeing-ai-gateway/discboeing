@@ -29,6 +29,7 @@ import (
 )
 
 const devToolsStartupTimeout = 10 * time.Second
+const devToolsProbeTimeout = time.Second
 const cdpReadLimit = 16 << 20
 
 // ErrChromiumNotFound indicates that no supported Chromium executable is on PATH.
@@ -495,20 +496,53 @@ func IsChromiumNotFound(err error) bool {
 var chromiumExecutableCandidates = []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 
 func waitForDevToolsURL(path string) (string, error) {
-	deadline := time.Now().Add(devToolsStartupTimeout)
+	return waitForDevToolsURLWithTimeout(path, devToolsStartupTimeout, 100*time.Millisecond)
+}
+
+func waitForDevToolsURLWithTimeout(path string, timeout, interval time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
 	for {
-		wsURL, err := readDevToolsURL(path)
-		if err == nil {
-			return wsURL, nil
+		wsURL, readErr := readDevToolsURL(path)
+		if readErr == nil {
+			err := probeDevToolsWebSocket(wsURL)
+			if err == nil {
+				return wsURL, nil
+			}
+			lastErr = err
+		} else {
+			lastErr = readErr
 		}
-		if !errors.Is(err, os.ErrNotExist) && !strings.Contains(err.Error(), "incomplete") {
-			return "", err
+		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !strings.Contains(readErr.Error(), "incomplete") {
+			return "", readErr
 		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("wait for chromium DevToolsActivePort: %w", err)
+			return "", fmt.Errorf("wait for chromium DevTools websocket: %w", lastErr)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(interval)
 	}
+}
+
+func probeDevToolsWebSocket(wsURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), devToolsProbeTimeout)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPClient: &httpClientNoProxy,
+	})
+	if err != nil {
+		return fmt.Errorf("dial DevTools websocket: %w", err)
+	}
+	ConfigureCDPConn(conn)
+	defer conn.Close(websocket.StatusNormalClosure, "probe done")
+
+	client := &cdpClient{conn: conn}
+	var targets struct {
+		TargetInfos []cdpTargetInfo `json:"targetInfos"`
+	}
+	if err := client.call(ctx, "Target.getTargets", nil, "", &targets); err != nil {
+		return fmt.Errorf("probe DevTools websocket: %w", err)
+	}
+	return nil
 }
 
 func readDevToolsURL(path string) (string, error) {
