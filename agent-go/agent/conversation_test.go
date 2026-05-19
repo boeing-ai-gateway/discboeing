@@ -569,6 +569,62 @@ func TestConversationManager_ActiveCompletionID(t *testing.T) {
 	waitForDone(t, cm, "thread1")
 }
 
+func TestConversationManager_ActiveCompletionIDIncludesExternalProvider(t *testing.T) {
+	unregister := RegisterExternalCompletionIDProvider(func(threadID string) string {
+		if threadID == "thread1" {
+			return "task-thread1"
+		}
+		return ""
+	})
+	t.Cleanup(unregister)
+
+	cm := NewConversationManager(&mockAgent{promptFn: blockingPromptFn()})
+	if id := cm.ActiveCompletionID("thread1"); id != "task-thread1" {
+		t.Fatalf("expected external completion ID, got %q", id)
+	}
+	if id := cm.ActiveCompletionID("thread2"); id != "" {
+		t.Fatalf("expected no external completion ID, got %q", id)
+	}
+
+	_, err := cm.Chat("thread1", PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{Text: "hi"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "completion_in_progress:task-thread1") {
+		t.Fatalf("expected external completion conflict, got %v", err)
+	}
+}
+
+func TestConversationManager_ExternalCompletionSuppressesInterruptedState(t *testing.T) {
+	unregister := RegisterExternalCompletionIDProvider(func(threadID string) string {
+		if threadID == "thread1" {
+			return "task-thread1"
+		}
+		return ""
+	})
+	t.Cleanup(unregister)
+
+	cm := NewConversationManager(&mockAgent{
+		interruptedThreads: []string{"thread1", "thread2"},
+		threads:            []string{"thread1", "thread2"},
+	})
+
+	info, err := cm.GetThreadInfo("thread1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State == ThreadStateInterrupted {
+		t.Fatal("external completion thread was marked interrupted")
+	}
+
+	info, err = cm.GetThreadInfo("thread2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State != ThreadStateInterrupted {
+		t.Fatalf("expected interrupted state for thread2, got %q", info.State)
+	}
+}
+
 func TestConversationManager_ChatAfterDone(t *testing.T) {
 	callCount := 0
 	agent := &mockAgent{

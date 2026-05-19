@@ -20,11 +20,10 @@ import (
 // Each task runs as an async operation with its own mini turn loop.
 
 type taskInput struct {
-	AllowedTools    []string `json:"allowed_tools"`
-	Description     string   `json:"description"`
-	Prompt          string   `json:"prompt"`
-	Resume          string   `json:"resume"`
-	RunInBackground bool     `json:"run_in_background"`
+	Description     string `json:"description"`
+	Prompt          string `json:"prompt"`
+	Resume          string `json:"resume"`
+	RunInBackground bool   `json:"run_in_background"`
 
 	// Agent-specific fields (from the Agent/Task tool schema).
 	SubagentType string `json:"subagent_type"`
@@ -67,8 +66,36 @@ type taskStore struct {
 
 var globalTasks = &taskStore{tasks: make(map[string]*taskRecord)}
 
+func init() {
+	agent.RegisterExternalCompletionIDProvider(taskCompletionID)
+}
+
+func taskCompletionID(threadID string) string {
+	if IsTaskRunning(threadID) {
+		return threadID
+	}
+	return ""
+}
+
+var subThreadIDSuffix = agent.GenerateID
+
 func newSubThreadID(parentThreadID string) string {
-	return fmt.Sprintf("%s.sub.%d", parentThreadID, time.Now().UnixNano())
+	return fmt.Sprintf("%s.sub.%s", parentThreadID, subThreadIDSuffix())
+}
+
+func reserveSubThreadID(parentThreadID string) (string, error) {
+	for range 100 {
+		subThreadID := newSubThreadID(parentThreadID)
+		globalTasks.mu.Lock()
+		_, active := globalTasks.tasks[subThreadID]
+		globalTasks.mu.Unlock()
+		if active {
+			continue
+		}
+		return subThreadID, nil
+	}
+
+	return "", fmt.Errorf("could not allocate a unique sub-thread ID")
 }
 
 func subagentDepthFromThreadID(threadID string) int {
@@ -130,12 +157,26 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 		return errResult(call, fmt.Sprintf("Task tool is not available: max sub-agent depth %d reached", toolCtx.MaxSubagentDepth)), nil
 	}
 
-	subThreadID := newSubThreadID(currentThreadID)
-
+	subThreadID, err := reserveSubThreadID(currentThreadID)
+	if err != nil {
+		return errResult(call, fmt.Sprintf("create sub-thread: %v", err)), nil
+	}
+	created := time.Now()
+	metadata := thread.ConfigMetadata{
+		Type:            "task",
+		TaskID:          subThreadID,
+		ParentThreadID:  currentThreadID,
+		ParentTaskID:    toolCtx.CurrentTaskID,
+		SubagentType:    input.SubagentType,
+		Description:     input.Description,
+		Prompt:          prompt,
+		RunInBackground: input.RunInBackground,
+		StartedAt:       created.UTC(),
+	}
 	rec := &taskRecord{
 		taskID:         subThreadID,
 		status:         "in_progress",
-		created:        time.Now(),
+		created:        created,
 		parentThreadID: currentThreadID,
 		parentTaskID:   toolCtx.CurrentTaskID,
 		depth:          childDepth,
@@ -143,20 +184,18 @@ func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext,
 	}
 
 	globalTasks.mu.Lock()
+	if _, exists := globalTasks.tasks[subThreadID]; exists {
+		globalTasks.mu.Unlock()
+		return errResult(call, fmt.Sprintf("create sub-thread: duplicate sub-thread ID %s", subThreadID)), nil
+	}
 	globalTasks.tasks[subThreadID] = rec
 	globalTasks.mu.Unlock()
-
-	bootstrapTaskThread(toolCtx, subThreadID, thread.ConfigMetadata{
-		Type:            "task",
-		TaskID:          rec.taskID,
-		ParentThreadID:  currentThreadID,
-		ParentTaskID:    toolCtx.CurrentTaskID,
-		SubagentType:    input.SubagentType,
-		Description:     input.Description,
-		Prompt:          prompt,
-		RunInBackground: input.RunInBackground,
-		StartedAt:       rec.created.UTC(),
-	})
+	if _, err := bootstrapTaskThread(toolCtx, subThreadID, metadata); err != nil {
+		globalTasks.mu.Lock()
+		delete(globalTasks.tasks, subThreadID)
+		globalTasks.mu.Unlock()
+		return errResult(call, fmt.Sprintf("create sub-thread: %v", err)), nil
+	}
 
 	startSubAgentRun(rec, subAgent, subThreadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
@@ -200,6 +239,20 @@ func taskStatus(taskID string) string {
 		return "completed"
 	}
 	return rec.status
+}
+
+// IsTaskRunning reports whether taskID is currently owned by an in-memory
+// sub-agent task runner.
+func IsTaskRunning(taskID string) bool {
+	globalTasks.mu.Lock()
+	rec := globalTasks.tasks[taskID]
+	globalTasks.mu.Unlock()
+	if rec == nil {
+		return false
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return rec.status == "in_progress"
 }
 
 func marshalTaskContinuation(subThreadID string) json.RawMessage {
@@ -355,9 +408,9 @@ func (e *Executor) continueTask(_ context.Context, toolCtx *thread.ToolContext, 
 	return thread.ToolExecuteResult{Async: taskHandle(call, rec, subThreadID)}, nil
 }
 
-func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata thread.ConfigMetadata) {
+func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata thread.ConfigMetadata) (agent.ThreadInfo, error) {
 	if toolCtx == nil || toolCtx.Agent == nil {
-		return
+		return agent.ThreadInfo{}, fmt.Errorf("no sub-agent configured")
 	}
 	info, err := toolCtx.Agent.CreateThread(context.Background(), agent.CreateThreadRequest{
 		ID:          threadID,
@@ -366,11 +419,12 @@ func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata 
 		Metadata:    metadata.RawMessage(),
 	})
 	if err != nil {
-		return
+		return agent.ThreadInfo{}, err
 	}
 	if toolCtx.EmitChunk != nil {
 		toolCtx.EmitChunk(threadUpdateChunkFromInfo(info), nil)
 	}
+	return info, nil
 }
 
 func persistTaskThreadError(subAgent agent.Agent, threadID, message string) {

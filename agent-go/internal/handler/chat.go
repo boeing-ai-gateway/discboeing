@@ -193,7 +193,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	threadID := chi.URLParam(r, "id")
 
 	snapshot := h.conversations.PollChunks(threadID, 0)
-	if snapshot == nil {
+	if snapshot == nil && h.conversations.ActiveCompletionID(threadID) == "" {
 		interrupted, err := h.conversations.HasInterruptedTurn(threadID)
 		if err != nil {
 			h.Error(w, http.StatusInternalServerError, err.Error())

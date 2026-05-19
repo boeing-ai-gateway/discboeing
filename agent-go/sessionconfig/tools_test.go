@@ -188,12 +188,12 @@ func TestBuiltinTools_TaskSchema(t *testing.T) {
 	schema := findToolSchema(t, "Task")
 	props := schema["properties"].(map[string]any)
 
-	for _, field := range []string{"description", "prompt", "subagent_type", "resume", "run_in_background", "allowed_tools"} {
+	for _, field := range []string{"description", "prompt", "subagent_type", "resume", "run_in_background"} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("Task schema missing '%s' property", field)
 		}
 	}
-	for _, field := range []string{"model", "max_turns"} {
+	for _, field := range []string{"allowed_tools", "model", "max_turns"} {
 		if _, ok := props[field]; ok {
 			t.Errorf("Task schema should not expose '%s' property", field)
 		}

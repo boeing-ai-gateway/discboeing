@@ -17,6 +17,57 @@ type CompletionListener interface {
 	OnTurnComplete(threadID string, err error)
 }
 
+type externalCompletionIDProvider struct {
+	id       int
+	provider func(threadID string) string
+}
+
+var (
+	externalCompletionIDMu        sync.Mutex
+	externalCompletionIDProviders []externalCompletionIDProvider
+	nextExternalCompletionID      int
+)
+
+// RegisterExternalCompletionIDProvider registers a package-level provider that
+// reports externally managed in-memory runs for a thread. It returns a cleanup
+// function that unregisters the provider.
+func RegisterExternalCompletionIDProvider(provider func(threadID string) string) func() {
+	if provider == nil {
+		return func() {}
+	}
+	externalCompletionIDMu.Lock()
+	nextExternalCompletionID++
+	id := nextExternalCompletionID
+	externalCompletionIDProviders = append(externalCompletionIDProviders, externalCompletionIDProvider{
+		id:       id,
+		provider: provider,
+	})
+	externalCompletionIDMu.Unlock()
+
+	return func() {
+		externalCompletionIDMu.Lock()
+		defer externalCompletionIDMu.Unlock()
+		for i, registered := range externalCompletionIDProviders {
+			if registered.id == id {
+				externalCompletionIDProviders = append(externalCompletionIDProviders[:i], externalCompletionIDProviders[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+func externalCompletionID(threadID string) string {
+	externalCompletionIDMu.Lock()
+	providers := append([]externalCompletionIDProvider(nil), externalCompletionIDProviders...)
+	externalCompletionIDMu.Unlock()
+	for _, registered := range providers {
+		if id := strings.TrimSpace(registered.provider(threadID)); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
 // ConversationManager wraps an Agent with goroutine management, chunk caching,
 // and SSE polling. It bridges the synchronous streaming Agent interface to
 // the async HTTP handler world.
@@ -135,14 +186,9 @@ func (cm *ConversationManager) startCompletion(
 	prepare func(context.Context) (string, iter.Seq2[message.MessageChunk, error], error),
 ) (string, error) {
 	cm.mu.Lock()
-	if existing, ok := cm.active[threadID]; ok {
-		existing.mu.Lock()
-		done := existing.done
-		existing.mu.Unlock()
-		if !done {
-			cm.mu.Unlock()
-			return "", fmt.Errorf("completion_in_progress:%s", existing.id)
-		}
+	if existingID := cm.activeCompletionIDLocked(threadID); existingID != "" {
+		cm.mu.Unlock()
+		return "", fmt.Errorf("completion_in_progress:%s", existingID)
 	}
 
 	completionID := generateID()
@@ -444,15 +490,19 @@ func (cm *ConversationManager) EmitChunkIfActive(threadID string, chunk message.
 // or empty string if none is active.
 func (cm *ConversationManager) ActiveCompletionID(threadID string) string {
 	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.activeCompletionIDLocked(threadID)
+}
+
+func (cm *ConversationManager) activeCompletionIDLocked(threadID string) string {
 	comp, ok := cm.active[threadID]
-	cm.mu.Unlock()
 	if !ok {
-		return ""
+		return externalCompletionID(threadID)
 	}
 	comp.mu.Lock()
 	defer comp.mu.Unlock()
 	if comp.done {
-		return ""
+		return externalCompletionID(threadID)
 	}
 	return comp.id
 }
@@ -512,6 +562,9 @@ func (cm *ConversationManager) ResumeInterruptedTurns() error {
 		return err
 	}
 	for _, threadID := range threads {
+		if cm.ActiveCompletionID(threadID) != "" {
+			continue
+		}
 		interrupted, err := cm.agent.HasInterruptedTurn(threadID)
 		if err != nil {
 			return err

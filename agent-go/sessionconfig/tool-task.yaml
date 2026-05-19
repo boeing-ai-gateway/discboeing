@@ -11,11 +11,6 @@ inputSchema:
   type: object
   additionalProperties: false
   properties:
-    allowed_tools:
-      type: array
-      items:
-        type: string
-      description: Tools to grant the agent.
     description:
       type: string
       description: Short 3-5 word summary.

@@ -25,6 +25,7 @@ type mockSubAgent struct {
 	pendingQuestionFn      func(threadID string) (*agent.PendingQuestion, error)
 	submitAnswerFn         func(threadID, approvalID string, req api.AnswerQuestionRequest) error
 	hasInterruptedTurnFn   func(threadID string) (bool, error)
+	createThreadFn         func(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error)
 	validateSubagentTypeFn func(subagentType string) error
 }
 
@@ -48,7 +49,10 @@ func (m *mockSubAgent) ListThreadInfos() ([]agent.ThreadInfo, error)      { retu
 func (m *mockSubAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: threadID}, nil
 }
-func (m *mockSubAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+func (m *mockSubAgent) CreateThread(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	if m.createThreadFn != nil {
+		return m.createThreadFn(ctx, req)
+	}
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
 }
 func (m *mockSubAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
@@ -425,6 +429,30 @@ func cleanupTask(subThreadID string) {
 
 // --- Tests ---
 
+func TestIsTaskRunning(t *testing.T) {
+	taskID := "task-running-" + t.Name()
+	if IsTaskRunning(taskID) {
+		t.Fatal("missing task reported running")
+	}
+
+	rec := &taskRecord{taskID: taskID, status: "in_progress"}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	if !IsTaskRunning(taskID) {
+		t.Fatal("in-progress task was not reported running")
+	}
+
+	rec.mu.Lock()
+	rec.status = "completed"
+	rec.mu.Unlock()
+	if IsTaskRunning(taskID) {
+		t.Fatal("completed task reported running")
+	}
+}
+
 // TestTask_BasicSubAgent verifies that Execute("Task") launches the sub-agent and
 // returns its FinalResponse output once the goroutine completes.
 func TestTask_BasicSubAgent(t *testing.T) {
@@ -456,6 +484,60 @@ func TestTask_BasicSubAgent(t *testing.T) {
 	if got := textOutput(res); got != want {
 		t.Errorf("output: got %q, want %q", got, want)
 	}
+}
+
+func TestTask_ReservesUniqueSubThreadID(t *testing.T) {
+	const parentThreadID = "parent-thread"
+	const activeSubThreadID = parentThreadID + ".sub.collision"
+	const uniqueSubThreadID = parentThreadID + ".sub.unique"
+
+	oldSuffix := subThreadIDSuffix
+	suffixes := []string{"collision", "unique"}
+	subThreadIDSuffix = func() string {
+		if len(suffixes) == 0 {
+			t.Fatal("unexpected extra sub-thread ID allocation")
+		}
+		suffix := suffixes[0]
+		suffixes = suffixes[1:]
+		return suffix
+	}
+	t.Cleanup(func() { subThreadIDSuffix = oldSuffix })
+	globalTasks.mu.Lock()
+	globalTasks.tasks[activeSubThreadID] = &taskRecord{taskID: activeSubThreadID, status: "in_progress"}
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(activeSubThreadID) })
+
+	var createdThreadID string
+	subAgent := &mockSubAgent{
+		createThreadFn: func(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+			createdThreadID = req.ID
+			return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
+		},
+		promptFn: func(_ context.Context, _ string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		finalResponseFn: func(_ string) (string, error) { return "ok", nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), parentThreadID)
+	toolCtx := &thread.ToolContext{ThreadID: parentThreadID, Agent: subAgent}
+
+	result, err := exec.Execute(context.Background(), toolCtx, makeTaskCall(t, "do something"))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatal("expected Async handle, got nil")
+	}
+	t.Cleanup(func() { cleanupTask(continuationSubThreadID(t, result.Async.Continuation)) })
+
+	if createdThreadID != uniqueSubThreadID {
+		t.Fatalf("created thread ID: got %q, want %q", createdThreadID, uniqueSubThreadID)
+	}
+	if got := continuationSubThreadID(t, result.Async.Continuation); got != uniqueSubThreadID {
+		t.Fatalf("continuation thread ID: got %q, want %q", got, uniqueSubThreadID)
+	}
+	waitHandle(t, result.Async, 5*time.Second)
 }
 
 // TestTask_NoSubAgent verifies that Execute("Task") returns an error result when no
