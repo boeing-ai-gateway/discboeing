@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -327,8 +328,7 @@ func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string, ic
 	}
 
 	updated := append([]byte(nil), data...)
-	for i := len(replacements) - 1; i >= 0; i-- {
-		replacement := replacements[i]
+	for _, replacement := range slices.Backward(replacements) {
 		updated = append(updated[:replacement.start], append(replacement.value, updated[replacement.end:]...)...)
 	}
 	return updated, true, nil
