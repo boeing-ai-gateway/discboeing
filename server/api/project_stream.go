@@ -390,13 +390,13 @@ func sendProjectStreamEvent(ctx context.Context, ch chan<- ProjectStreamEvent, e
 func projectStreamEvents(msg projectStreamSocketMessage) []ProjectStreamEvent {
 	switch m := msg.(type) {
 	case projectStreamSubscribedMessage:
-		return []ProjectStreamEvent{ProjectStreamSubscribedEvent{Stream: m.Stream, SessionID: m.SessionID, ThreadID: m.ThreadID, ServiceID: m.ServiceID, Replay: m.Replay}}
+		return []ProjectStreamEvent{ProjectStreamSubscribedEvent(m)}
 	case projectStreamUnsubscribedMessage:
-		return []ProjectStreamEvent{ProjectStreamUnsubscribedEvent{Stream: m.Stream, SessionID: m.SessionID, ThreadID: m.ThreadID, ServiceID: m.ServiceID}}
+		return []ProjectStreamEvent{ProjectStreamUnsubscribedEvent(m)}
 	case projectStreamCompleteMessage:
-		return []ProjectStreamEvent{ProjectStreamCompleteEvent{Stream: m.Stream, SessionID: m.SessionID, ThreadID: m.ThreadID, ServiceID: m.ServiceID}}
+		return []ProjectStreamEvent{ProjectStreamCompleteEvent(m)}
 	case projectStreamErrorMessage:
-		return []ProjectStreamEvent{ProjectStreamErrorEvent{Stream: m.Stream, SessionID: m.SessionID, ThreadID: m.ThreadID, ServiceID: m.ServiceID, Error: m.Error}}
+		return []ProjectStreamEvent{ProjectStreamErrorEvent(m)}
 	case projectEventsStreamMessage:
 		event, err := parseProjectEventMessage(m.Event, m.Data)
 		if err != nil {
@@ -406,7 +406,7 @@ func projectStreamEvents(msg projectStreamSocketMessage) []ProjectStreamEvent {
 	case chatStreamMessage:
 		return []ProjectStreamEvent{ChatStreamEvent{SessionID: m.SessionID, ThreadID: m.ThreadID, Event: m.Event, Data: json.RawMessage(m.Data), ID: m.ID}}
 	case serviceStreamMessage:
-		return []ProjectStreamEvent{ServiceOutputEvent{SessionID: m.SessionID, ServiceID: m.ServiceID, Data: m.Data, ID: m.ID}}
+		return []ProjectStreamEvent{ServiceOutputEvent(m)}
 	}
 	return nil
 }
