@@ -16,6 +16,7 @@ templ SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) {
 			"data-support-info-dialog": "",
 			"data-support-info-status": snapshot.Status,
 			"data-support-info-has-json": strconv.FormatBool(snapshot.JSON != ""),
+			"data-dialog-dismiss-url": supportInfoCloseURL(),
 			"aria-labelledby": "support-info-title",
 			"aria-describedby": "support-info-description",
 		}) {

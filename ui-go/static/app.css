@@ -6098,6 +6098,11 @@
       color: var(--primary-foreground);
     }
   }
+  .data-\[state\=closed\]\:hidden {
+    &[data-state="closed"] {
+      display: none;
+    }
+  }
   .data-\[state\=closed\]\:duration-300 {
     &[data-state="closed"] {
       --tw-duration: 300ms;

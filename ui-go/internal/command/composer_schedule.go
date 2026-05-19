@@ -34,6 +34,8 @@ func (h *Handler) ComposerSchedule(w http.ResponseWriter, r *http.Request) {
 		switch action {
 		case "toggle":
 			composer.ScheduleOpen = !composer.ScheduleOpen
+		case "close":
+			composer.ScheduleOpen = false
 		case "later":
 			minutes, err := strconv.Atoi(r.URL.Query().Get("offset_minutes"))
 			if err != nil || minutes <= 0 {

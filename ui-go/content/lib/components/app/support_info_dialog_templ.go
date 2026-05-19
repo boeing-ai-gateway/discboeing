@@ -96,7 +96,7 @@ func SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(supportInfoError(snapshot))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 37, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 38, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -114,7 +114,7 @@ func SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(snapshot.JSON)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 40, Col: 172}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 41, Col: 172}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -173,7 +173,7 @@ func SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(supportInfoCloseCommand())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 54, Col: 195}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/support_info_dialog.templ`, Line: 55, Col: 195}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 				if templ_7745c5c3_Err != nil {
@@ -189,6 +189,7 @@ func SupportInfoDialog(snapshot viewmodel.SupportInfoSnapshot) templ.Component {
 				"data-support-info-dialog":   "",
 				"data-support-info-status":   snapshot.Status,
 				"data-support-info-has-json": strconv.FormatBool(snapshot.JSON != ""),
+				"data-dialog-dismiss-url":    supportInfoCloseURL(),
 				"aria-labelledby":            "support-info-title",
 				"aria-describedby":           "support-info-description",
 			}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)

@@ -10,7 +10,11 @@ import (
 )
 
 func settingsCloseCommand() string {
-	return "@post('/ui/commands/settings/action?action=close')"
+	return "@post('" + settingsCloseURL() + "')"
+}
+
+func settingsCloseURL() string {
+	return "/ui/commands/settings/action?action=close"
 }
 
 func settingsTabCommand(tab string) string {

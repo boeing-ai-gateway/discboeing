@@ -3,9 +3,13 @@ package popover
 import ahtempl "github.com/a-h/templ"
 
 templ Popover(open bool, children ahtempl.Component) {
-	<div data-slot="popover" data-state={ state(open) }>
-		if children != nil {
-			@children
-		}
+	@PopoverAttrs(open, nil) {
+		{ children... }
+	}
+}
+
+templ PopoverAttrs(open bool, attrs ahtempl.Attributes) {
+	<div { attrs... } data-slot="popover" data-state={ state(open) }>
+		{ children... }
 	</div>
 }

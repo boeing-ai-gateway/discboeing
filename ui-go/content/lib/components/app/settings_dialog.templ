@@ -16,6 +16,7 @@ templ SettingsDialog(snapshot viewmodel.SettingsDialogSnapshot) {
 		@uidialog.DialogContentAttrs(snapshot.Open, "top-10 max-h-[90vh] w-[calc(100vw-2rem)] max-w-none translate-y-0 overflow-y-auto shadow-xl sm:!max-w-4xl", "", false, ahtempl.Attributes{
 			"data-settings-dialog": "",
 			"data-settings-active-tab": settingsActiveTab(snapshot),
+			"data-dialog-dismiss-url": settingsCloseURL(),
 			"aria-labelledby": "settings-dialog-title",
 			"aria-describedby": "settings-dialog-description",
 		}) {

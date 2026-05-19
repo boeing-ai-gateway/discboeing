@@ -3,7 +3,11 @@ package app
 import "github.com/obot-platform/discobot/ui-go/content/lib/viewmodel"
 
 func supportInfoCloseCommand() string {
-	return "@post('/ui/commands/settings/action?action=support-close')"
+	return "@post('" + supportInfoCloseURL() + "')"
+}
+
+func supportInfoCloseURL() string {
+	return "/ui/commands/settings/action?action=support-close"
 }
 
 func supportInfoCanUse(snapshot viewmodel.SupportInfoSnapshot) bool {
