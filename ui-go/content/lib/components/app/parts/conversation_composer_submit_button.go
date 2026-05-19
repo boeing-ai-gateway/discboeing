@@ -34,10 +34,3 @@ func composerSubmitAction(status string, inputEmpty bool, isPending bool) string
 	}
 	return "submit"
 }
-
-func composerSubmitClickCommand(status string) string {
-	if composerSubmitIsGenerating(status) {
-		return "@post('/ui/commands/composer-stop')"
-	}
-	return "true"
-}

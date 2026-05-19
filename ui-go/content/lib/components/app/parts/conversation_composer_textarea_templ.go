@@ -93,7 +93,7 @@ func ConversationComposerTextarea(draft string, disabled bool, attachmentCount i
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-composer-paste-files=\"true\" data-composer-file-mentions=\"true\" data-on:keydown=\"discobot.composerAttachments.backspace(el, evt)\" data-on:paste=\"discobot.composerAttachments.paste(el, evt)\" data-composer-slash-commands=\"true\" data-composer-prompt-history=\"true\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-composer-paste-files=\"true\" data-composer-file-mentions=\"true\" data-on:keydown=\"discobot.composerAttachments.keydown(el, event)\" data-on:paste=\"discobot.composerAttachments.paste(el, event)\" data-composer-slash-commands=\"true\" data-composer-prompt-history=\"true\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

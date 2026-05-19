@@ -2,6 +2,9 @@ package live
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +40,14 @@ type Snapshot struct {
 	Models            []api.ModelInfo
 	Sessions          []api.Session
 	ThreadsBySession  map[string][]api.Thread
+	MessagesByThread  map[string][]Message
+}
+
+// Message is the live store's simplified in-memory conversation message.
+type Message struct {
+	ID      string
+	Role    string
+	Content string
 }
 
 // Store owns scoped process-local backend caches fetched through the Discobot
@@ -66,7 +77,7 @@ func NormalizeScope(scope Scope) Scope {
 // the returned cancel function is called.
 func (s *Store) Subscribe(scope Scope) (<-chan Event, func()) {
 	cache := s.project(NormalizeScope(scope))
-	return cache.subscribe()
+	return cache.subscribe(NormalizeScope(scope))
 }
 
 // Snapshot returns a copy of the current live backend state for scope.
@@ -113,8 +124,10 @@ type projectCache struct {
 	loading        bool
 	projectLoaded  bool
 	sessionsLoaded bool
+	watchScope     Scope
 	loadedSessions map[string]struct{}
 	loadedThreads  map[string]map[string]struct{}
+	activeMessages map[string]string
 	snapshot       Snapshot
 	subscribers    map[chan Event]struct{}
 	idleTimer      *time.Timer
@@ -122,28 +135,28 @@ type projectCache struct {
 }
 
 func newProjectCache(projectID string, client *api.Client, onIdle func(string, *projectCache)) *projectCache {
-	ctx, cancel := context.WithCancel(context.Background())
-	_ = ctx
 	return &projectCache{
 		projectID:      projectID,
 		client:         client,
 		onIdle:         onIdle,
 		loadedSessions: map[string]struct{}{},
 		loadedThreads:  map[string]map[string]struct{}{},
+		activeMessages: map[string]string{},
 		snapshot: Snapshot{
 			SelectedProjectID: projectID,
 			ThreadsBySession:  map[string][]api.Thread{},
+			MessagesByThread:  map[string][]Message{},
 		},
 		subscribers: map[chan Event]struct{}{},
-		watchCancel: cancel,
 	}
 }
 
-func (c *projectCache) subscribe() (<-chan Event, func()) {
+func (c *projectCache) subscribe(scope Scope) (<-chan Event, func()) {
 	ch := make(chan Event, 1)
 	c.mu.Lock()
 	c.cancelIdleLocked()
 	c.subscribers[ch] = struct{}{}
+	c.ensureWatchLocked(NormalizeScope(scope))
 	c.mu.Unlock()
 	cancel := func() {
 		c.mu.Lock()
@@ -171,6 +184,10 @@ func (c *projectCache) ensureLoaded(ctx context.Context, scope Scope) error {
 }
 
 func (c *projectCache) refresh(ctx context.Context, scope Scope, force bool) error {
+	c.mu.Lock()
+	c.ensureWatchLocked(NormalizeScope(scope))
+	c.mu.Unlock()
+
 	c.setLoading(true)
 
 	c.mu.Lock()
@@ -271,6 +288,12 @@ func (c *projectCache) snapshotFor(scope Scope) Snapshot {
 			snapshot.ThreadsBySession = map[string][]api.Thread{scope.SessionID: append([]api.Thread(nil), threads...)}
 		}
 	}
+	if scope.SessionID != "" && scope.ThreadID != "" {
+		key := threadKey(scope.SessionID, scope.ThreadID)
+		if messages, ok := c.snapshot.MessagesByThread[key]; ok {
+			snapshot.MessagesByThread = map[string][]Message{key: append([]Message(nil), messages...)}
+		}
+	}
 	return snapshot
 }
 
@@ -369,6 +392,229 @@ func (c *projectCache) startIdleLocked() {
 	})
 }
 
+func (c *projectCache) ensureWatchLocked(scope Scope) {
+	if c.watchCancel != nil && c.watchScope == scope {
+		return
+	}
+	if c.watchCancel != nil {
+		c.watchCancel()
+		c.watchCancel = nil
+	}
+	c.watchScope = scope
+	ctx, cancel := context.WithCancel(context.Background())
+	c.watchCancel = cancel
+	go c.watch(ctx, scope)
+}
+
+func (c *projectCache) watch(ctx context.Context, scope Scope) {
+	for {
+		if err := c.watchOnce(ctx, scope); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			c.setError(err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func (c *projectCache) watchOnce(ctx context.Context, scope Scope) error {
+	opts := api.ProjectStreamOptions{ProjectEvents: &api.ProjectEventsSubscriptionOptions{}}
+	if scope.SessionID != "" && scope.ThreadID != "" {
+		opts.Chat = &api.ChatStreamSubscriptionOptions{
+			SessionID: scope.SessionID,
+			ThreadID:  scope.ThreadID,
+			Replay:    true,
+		}
+	}
+
+	for event := range c.client.Events.WatchProjectStream(ctx, scope.ProjectID, opts) {
+		switch event := event.(type) {
+		case api.ProjectStreamErrorEvent:
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("project stream: %s", event.Error)
+		case api.ProjectConnectedEvent:
+			_ = c.refresh(ctx, scope, true)
+		case api.SessionUpdatedEvent:
+			c.handleSessionUpdated(ctx, event.Data)
+		case api.ThreadUpdatedEvent:
+			c.handleThreadUpdated(ctx, event.Data)
+		case api.WorkspaceUpdatedEvent:
+			_ = c.refresh(ctx, scope, true)
+		case api.ChatStreamEvent:
+			c.handleChatEvent(event.SessionID, event.ThreadID, event.Event, event.Data)
+		}
+	}
+	return ctx.Err()
+}
+
+func (c *projectCache) handleSessionUpdated(ctx context.Context, data api.SessionUpdatedData) {
+	if data.SessionID == "" {
+		return
+	}
+	if data.SandboxStatus == "removed" {
+		c.removeSession(data.SessionID)
+		return
+	}
+	if session, err := c.client.Sessions.Get(ctx, c.projectID, data.SessionID); err == nil {
+		c.upsertSession(*session)
+	}
+}
+
+func (c *projectCache) handleThreadUpdated(ctx context.Context, data api.ThreadUpdatedData) {
+	if data.SessionID == "" {
+		return
+	}
+	if session, err := c.client.Sessions.Get(ctx, c.projectID, data.SessionID); err == nil {
+		c.upsertSession(*session)
+	}
+	if data.ThreadID != "" {
+		if thread, err := c.client.Sessions.GetThread(ctx, c.projectID, data.SessionID, data.ThreadID); err == nil {
+			c.upsertThread(data.SessionID, *thread)
+		}
+		return
+	}
+	if threads, err := c.client.Sessions.ListThreads(ctx, c.projectID, data.SessionID); err == nil {
+		c.setThreads(data.SessionID, threads)
+	}
+}
+
+func (c *projectCache) upsertSession(session api.Session) {
+	c.mu.Lock()
+	c.snapshot.Sessions = upsertSession(c.snapshot.Sessions, session)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
+func (c *projectCache) removeSession(sessionID string) {
+	c.mu.Lock()
+	next := c.snapshot.Sessions[:0]
+	for _, session := range c.snapshot.Sessions {
+		if session.ID != sessionID {
+			next = append(next, session)
+		}
+	}
+	c.snapshot.Sessions = next
+	delete(c.snapshot.ThreadsBySession, sessionID)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
+func (c *projectCache) setThreads(sessionID string, threads []api.Thread) {
+	c.mu.Lock()
+	c.snapshot.ThreadsBySession[sessionID] = append([]api.Thread(nil), threads...)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
+func (c *projectCache) upsertThread(sessionID string, thread api.Thread) {
+	c.mu.Lock()
+	c.snapshot.ThreadsBySession[sessionID] = upsertThread(c.snapshot.ThreadsBySession[sessionID], thread)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
+func (c *projectCache) handleChatEvent(sessionID string, threadID string, eventName api.ChatStreamEventName, data json.RawMessage) {
+	key := threadKey(sessionID, threadID)
+	switch eventName {
+	case api.ChatStreamEventHistoryStart:
+		c.setMessages(key, nil)
+	case api.ChatStreamEventHistoryMessage:
+		if msg, ok := parseMessage(data); ok {
+			c.upsertMessage(key, msg)
+		}
+	case api.ChatStreamEventChunk:
+		c.handleChunk(key, data)
+	}
+}
+
+func (c *projectCache) handleChunk(key string, data json.RawMessage) {
+	var raw struct {
+		Type      string `json:"type"`
+		MessageID string `json:"messageId"`
+		Delta     string `json:"delta"`
+		Data      struct {
+			Message               any    `json:"message"`
+			InsertBeforeMessageID string `json:"insertBeforeMessageId"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return
+	}
+	switch raw.Type {
+	case "start":
+		if raw.MessageID == "" {
+			return
+		}
+		c.mu.Lock()
+		c.activeMessages[key] = raw.MessageID
+		c.snapshot.MessagesByThread[key] = upsertMessage(c.snapshot.MessagesByThread[key], Message{ID: raw.MessageID, Role: "assistant"})
+		event := c.nextEventLocked()
+		subscribers := c.subscriberListLocked()
+		c.mu.Unlock()
+		c.publish(event, subscribers)
+	case "text-delta":
+		c.mu.Lock()
+		messageID := c.activeMessages[key]
+		if messageID == "" {
+			c.mu.Unlock()
+			return
+		}
+		c.snapshot.MessagesByThread[key] = appendMessageContent(c.snapshot.MessagesByThread[key], messageID, raw.Delta)
+		event := c.nextEventLocked()
+		subscribers := c.subscriberListLocked()
+		c.mu.Unlock()
+		c.publish(event, subscribers)
+	case "finish", "abort":
+		c.mu.Lock()
+		delete(c.activeMessages, key)
+		c.mu.Unlock()
+	case "data-user-message":
+		if raw.Data.Message == nil {
+			return
+		}
+		messageData, err := json.Marshal(raw.Data.Message)
+		if err != nil {
+			return
+		}
+		if msg, ok := parseMessage(messageData); ok {
+			c.upsertMessage(key, msg)
+		}
+	}
+}
+
+func (c *projectCache) setMessages(key string, messages []Message) {
+	c.mu.Lock()
+	c.snapshot.MessagesByThread[key] = append([]Message(nil), messages...)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
+func (c *projectCache) upsertMessage(key string, msg Message) {
+	c.mu.Lock()
+	c.snapshot.MessagesByThread[key] = upsertMessage(c.snapshot.MessagesByThread[key], msg)
+	event := c.nextEventLocked()
+	subscribers := c.subscriberListLocked()
+	c.mu.Unlock()
+	c.publish(event, subscribers)
+}
+
 func cloneSnapshot(snapshot Snapshot) Snapshot {
 	clone := snapshot
 	clone.Projects = append([]api.Project(nil), snapshot.Projects...)
@@ -379,7 +625,21 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 	for sessionID, threads := range snapshot.ThreadsBySession {
 		clone.ThreadsBySession[sessionID] = append([]api.Thread(nil), threads...)
 	}
+	clone.MessagesByThread = map[string][]Message{}
+	for key, messages := range snapshot.MessagesByThread {
+		clone.MessagesByThread[key] = append([]Message(nil), messages...)
+	}
 	return clone
+}
+
+func upsertSession(sessions []api.Session, session api.Session) []api.Session {
+	for i := range sessions {
+		if sessions[i].ID == session.ID {
+			sessions[i] = session
+			return sessions
+		}
+	}
+	return append(sessions, session)
 }
 
 func upsertThread(threads []api.Thread, thread api.Thread) []api.Thread {
@@ -390,4 +650,53 @@ func upsertThread(threads []api.Thread, thread api.Thread) []api.Thread {
 		}
 	}
 	return append(threads, thread)
+}
+
+func threadKey(sessionID string, threadID string) string {
+	return sessionID + ":" + threadID
+}
+
+func upsertMessage(messages []Message, msg Message) []Message {
+	for i := range messages {
+		if messages[i].ID == msg.ID {
+			if msg.Content != "" || messages[i].Content == "" {
+				messages[i] = msg
+			}
+			return messages
+		}
+	}
+	return append(messages, msg)
+}
+
+func parseMessage(data json.RawMessage) (Message, bool) {
+	var raw struct {
+		ID    string `json:"id"`
+		Role  string `json:"role"`
+		Parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"parts"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil || raw.ID == "" {
+		return Message{}, false
+	}
+	var content strings.Builder
+	content.WriteString(raw.Content)
+	for _, part := range raw.Parts {
+		if part.Type == "text" || part.Type == "reasoning" {
+			content.WriteString(part.Text)
+		}
+	}
+	return Message{ID: raw.ID, Role: raw.Role, Content: content.String()}, true
+}
+
+func appendMessageContent(messages []Message, messageID string, delta string) []Message {
+	for i := range messages {
+		if messages[i].ID == messageID {
+			messages[i].Content += delta
+			return messages
+		}
+	}
+	return append(messages, Message{ID: messageID, Role: "assistant", Content: delta})
 }

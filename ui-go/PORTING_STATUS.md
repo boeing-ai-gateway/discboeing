@@ -68,8 +68,9 @@ Initial hook scan from templ source:
 
 Current server command routes:
 
-- [x] `POST /ui/commands/composer-submit` — parse prompt, update the
-  session-scoped view, save, and let `/ui/stream` patch the UI.
+- [x] `POST /ui/commands/composer-submit` — resolve/create the pending
+  workspace/session as needed, submit the prompt through the backend chat API,
+  save the session-scoped view, and let `/ui/stream` patch the UI.
 - [x] `POST /ui/commands/composer-stop` — clears temporary generating state in
   the session-scoped composer view until real agent cancellation is wired.
 - [x] `POST /ui/commands/composer-workspace` — handles the pending-session

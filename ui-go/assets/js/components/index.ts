@@ -32,6 +32,7 @@ export function registerComponents() {
 		theme,
 		workspaceSelector,
 	};
+	composerAttachments.install();
 	dialog.install();
 	popover.install();
 	theme.registerLegacyGlobals();

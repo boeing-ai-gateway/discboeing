@@ -3,6 +3,8 @@ import { composerControls } from "./composer-controls";
 export type ComposerAttachmentsAPI = {
 	addFiles(button: HTMLButtonElement): void;
 	backspace(textarea: HTMLTextAreaElement, event: KeyboardEvent): void;
+	install(): void;
+	keydown(textarea: HTMLTextAreaElement, event: KeyboardEvent): void;
 	paste(textarea: HTMLTextAreaElement, event: ClipboardEvent): void;
 	remove(button: HTMLButtonElement): void;
 	upload(input: HTMLInputElement): void;
@@ -47,6 +49,47 @@ function composerAttachmentInput(root: ParentNode = document) {
 	return root.querySelector<HTMLInputElement>("input[data-composer-attachment-input]");
 }
 
+function composerHasSubmitContent(textarea: HTMLTextAreaElement) {
+	const attachmentCount = Number.parseInt(textarea.dataset.composerAttachmentCount ?? "0", 10);
+	return textarea.value.trim().length > 0 || attachmentCount > 0;
+}
+
+function submitOnEnter(textarea: HTMLTextAreaElement, event: KeyboardEvent) {
+	if (
+		event.defaultPrevented ||
+		event.key !== "Enter" ||
+		event.shiftKey ||
+		event.altKey ||
+		event.ctrlKey ||
+		event.metaKey ||
+		event.isComposing ||
+		textarea.dataset.composerSubmitOnEnter !== "true" ||
+		!composerHasSubmitContent(textarea)
+	) {
+		return;
+	}
+	event.preventDefault();
+	textarea.closest<HTMLFormElement>("form")?.requestSubmit();
+}
+
+async function postComposerSubmit(form: HTMLFormElement) {
+	const data = new URLSearchParams();
+	const formData = new FormData(form);
+	data.set("prompt", String(formData.get("prompt") ?? ""));
+	data.set("run_after", String(formData.get("run_after") ?? ""));
+	await fetch("/ui/commands/composer-submit", {
+		method: "POST",
+		headers: { "content-type": "application/x-www-form-urlencoded" },
+		body: data,
+	});
+}
+
+function isComposerForm(form: HTMLFormElement | null): form is HTMLFormElement {
+	return !!form?.closest("[data-conversation-composer]");
+}
+
+let installed = false;
+
 export const composerAttachments: ComposerAttachmentsAPI = {
 	addFiles(button) {
 		composerControls.closeAttachment();
@@ -70,6 +113,44 @@ export const composerAttachments: ComposerAttachmentsAPI = {
 		}
 		event.preventDefault();
 		void removeComposerAttachmentByID(form, id);
+	},
+
+	keydown(textarea, event) {
+		submitOnEnter(textarea, event);
+		if (!event.defaultPrevented) {
+			composerAttachments.backspace(textarea, event);
+		}
+	},
+
+	install() {
+		if (installed) {
+			return;
+		}
+		installed = true;
+		document.addEventListener(
+			"keydown",
+			(event) => {
+				const textarea = event.target instanceof HTMLTextAreaElement ? event.target : null;
+				if (!textarea?.matches("[data-composer-textarea]")) {
+					return;
+				}
+				submitOnEnter(textarea, event);
+			},
+			true,
+		);
+		document.addEventListener(
+			"submit",
+			(event) => {
+				const form = event.target instanceof HTMLFormElement ? event.target : null;
+				if (!isComposerForm(form)) {
+					return;
+				}
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				void postComposerSubmit(form);
+			},
+			true,
+		);
 	},
 
 	paste(textarea, event) {

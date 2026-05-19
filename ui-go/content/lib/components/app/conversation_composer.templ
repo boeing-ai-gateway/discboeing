@@ -31,7 +31,7 @@ templ ConversationComposer(snapshot viewmodel.ConversationComposerSnapshot) {
 				@parts.ConversationSlashCommandDropdown(snapshot.SlashCommands)
 				@parts.ConversationFileMentionDropdown(snapshot.FileMentions)
 				@ConversationPromptHistoryDropdown(snapshot.PromptHistory)
-				<form data-on:submit__prevent="@post('/ui/commands/composer-submit')">
+				<form data-on:submit__prevent="@post('/ui/commands/composer-submit', {contentType: 'form'})">
 					<input type="hidden" name="run_after" value={ snapshot.ScheduledRunAfter }/>
 					<div data-slot="input-group" role="group" class="group/input-group border-input dark:bg-input/30 relative flex w-full items-center rounded-t-md rounded-b-none border bg-background shadow-xs transition-[color,box-shadow] outline-none h-auto flex-col md:rounded-md">
 						@parts.ConversationComposerAttachments(snapshot.Attachments)

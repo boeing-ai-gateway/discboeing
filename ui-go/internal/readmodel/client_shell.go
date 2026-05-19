@@ -50,6 +50,20 @@ func BuildShellFromBackend(view state.ViewState, backend live.Snapshot) viewmode
 	return shell
 }
 
+// BuildShellSelectionFromBackend builds the shell for an explicit session/thread
+// selection while preserving the browser-session UI state.
+func BuildShellSelectionFromBackend(view state.ViewState, backend live.Snapshot, selectedSessionID string, selectedThreadID string) viewmodel.ShellSnapshot {
+	if selectedSessionID == "" && selectedThreadID == "" {
+		return BuildShellFromBackend(view, backend)
+	}
+	if !backend.Ready {
+		return BuildShellFromBackend(view, backend)
+	}
+	shell := buildShellFromBackendSelection(backend, selectedSessionID, selectedThreadID, view.Sidebar.GroupedByWorkspace)
+	applyViewState(&shell, view)
+	return shell
+}
+
 // BuildPendingShellFromBackend builds pending new-session UI from live backend data.
 func BuildPendingShellFromBackend(backend live.Snapshot, grouped bool) viewmodel.ShellSnapshot {
 	sessions := append([]api.Session(nil), backend.Sessions...)
@@ -166,7 +180,7 @@ func buildShellFromBackendSelection(backend live.Snapshot, selectedSessionID str
 		Workspace: viewmodel.SessionWorkspaceSnapshot{
 			Title:          title,
 			State:          workspaceStatus(workspace, selected),
-			ThreadState:    selected.ThreadStatus,
+			ThreadState:    threadState(selected),
 			Message:        fmt.Sprintf("Selected %s in %s.", title, workspaceLabel(workspace)),
 			ReserveSidebar: false,
 			Visible:        true,
@@ -179,7 +193,11 @@ func buildShellFromBackendSelection(backend live.Snapshot, selectedSessionID str
 				ReasoningValue:   thread.Reasoning,
 				ServiceTierValue: thread.ServiceTier,
 			},
-			Conversation: viewmodel.ConversationPaneSnapshot{Status: "ready", ShowComposer: true},
+			Conversation: viewmodel.ConversationPaneSnapshot{
+				Status:       "ready",
+				Messages:     liveMessages(backend, selected.ID, thread.ID),
+				ShowComposer: true,
+			},
 		},
 	}
 }
@@ -195,7 +213,9 @@ func applyViewState(shell *viewmodel.ShellSnapshot, view state.ViewState) {
 	shell.Sidebar.RenameDialog = view.Sidebar.RenameDialog
 	shell.Sidebar.DeleteDialog = view.Sidebar.DeleteDialog
 	shell.Header.Settings = view.Header.Settings
-	shell.Workspace.Conversation.Messages = view.Workspace.Conversation.Messages
+	if len(shell.Workspace.Conversation.Messages) == 0 {
+		shell.Workspace.Conversation.Messages = view.Workspace.Conversation.Messages
+	}
 	shell.Workspace.Conversation.SelectionComment = view.Workspace.Conversation.SelectionComment
 	shell.Workspace.Composer.Draft = view.Workspace.Composer.Draft
 	shell.Workspace.Composer.Attachments = view.Workspace.Composer.Attachments
@@ -403,7 +423,7 @@ func BuildShellFromClient(ctx context.Context, client *api.Client, selectedSessi
 		Workspace: viewmodel.SessionWorkspaceSnapshot{
 			Title:          title,
 			State:          workspaceStatus(workspace, selected),
-			ThreadState:    selected.ThreadStatus,
+			ThreadState:    threadState(selected),
 			Message:        fmt.Sprintf("Selected %s in %s.", title, workspaceLabel(workspace)),
 			ReserveSidebar: false,
 			Composer: viewmodel.ConversationComposerSnapshot{
@@ -757,6 +777,19 @@ func sessionStatus(session api.Session) string {
 	return "ready"
 }
 
+func liveMessages(backend live.Snapshot, sessionID string, threadID string) []viewmodel.ConversationMessage {
+	messages := backend.MessagesByThread[sessionID+":"+threadID]
+	result := make([]viewmodel.ConversationMessage, 0, len(messages))
+	for _, message := range messages {
+		result = append(result, viewmodel.ConversationMessage{
+			ID:      message.ID,
+			Role:    message.Role,
+			Content: message.Content,
+		})
+	}
+	return result
+}
+
 func threadStatus(thread api.Thread) string {
 	if thread.ActivityStatus != nil && thread.ActivityStatus.Status != "" {
 		return thread.ActivityStatus.Status
@@ -771,8 +804,8 @@ func threadStatus(thread api.Thread) string {
 }
 
 func threadState(session api.Session) string {
-	if session.ThreadStatus != "" {
-		return session.ThreadStatus
+	if session.ThreadStatus != nil && session.ThreadStatus.Status != "" {
+		return session.ThreadStatus.Status
 	}
 	return "ready"
 }

@@ -36,10 +36,8 @@ func (h *Handler) rebuildSidebarView(ctx context.Context, view *viewmodel.ShellS
 		if err := h.live.Refresh(ctx, scope); err != nil {
 			return err
 		}
-		next := readmodel.BuildShellFromBackend(*view, h.live.Snapshot(scope))
-		if selectedSessionID != "" || selectedThreadID != "" {
-			markSidebarSelection(&next, selectedSessionID, selectedThreadID)
-		}
+		next := readmodel.BuildShellSelectionFromBackend(*view, h.live.Snapshot(scope), selectedSessionID, selectedThreadID)
+		markSidebarSelection(&next, selectedSessionID, selectedThreadID)
 		*view = next
 		return nil
 	}
@@ -81,6 +79,9 @@ func (h *Handler) rebuildSidebarView(ctx context.Context, view *viewmodel.ShellS
 }
 
 func markSidebarSelection(view *viewmodel.ShellSnapshot, sessionID string, threadID string) {
+	if threadID == "" {
+		threadID = sessionID
+	}
 	for groupIndex := range view.Sidebar.SessionGroups {
 		for sessionIndex := range view.Sidebar.SessionGroups[groupIndex].Sessions {
 			session := &view.Sidebar.SessionGroups[groupIndex].Sessions[sessionIndex]
@@ -93,7 +94,7 @@ func markSidebarSelection(view *viewmodel.ShellSnapshot, sessionID string, threa
 
 func markThreadSelection(threads []viewmodel.SidebarThreadItem, sessionID string, threadID string) {
 	for i := range threads {
-		threads[i].Selected = threads[i].SessionID == sessionID && (threadID == "" || threads[i].ID == threadID)
+		threads[i].Selected = threads[i].SessionID == sessionID && threads[i].ID == threadID
 		markThreadSelection(threads[i].Children, sessionID, threadID)
 	}
 }

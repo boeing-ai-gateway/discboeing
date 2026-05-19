@@ -21,7 +21,9 @@ templ ConversationComposerSubmitButton(status string, inputEmpty bool, isPending
 		data-composer-submit-generating={ strconv.FormatBool(composerSubmitIsGenerating(status)) }
 		data-composer-submit-disabled={ strconv.FormatBool(disabled) }
 		data-composer-submit-plus-on-hover={ strconv.FormatBool(isPending && inputEmpty && !composerSubmitIsGenerating(status)) }
-		data-on:click={ composerSubmitClickCommand(status) }
+		if composerSubmitIsGenerating(status) {
+			data-on:click="@post('/ui/commands/composer-stop')"
+		}
 	>
 		if composerSubmitShowPlus(status, inputEmpty, isPending) {
 			@lucide.Plus(ahtempl.Attributes{"class": "hidden size-4 group-hover:block"})

@@ -1,6 +1,9 @@
 package command
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,9 +15,9 @@ import (
 	"github.com/obot-platform/discobot/ui-go/internal/live"
 )
 
-// ComposerSubmit handles the composer runtime slice for the current browser
-// session. It parses the form, leaves a seam for the Discobot client operation,
-// and updates the session-scoped frontend view model.
+// ComposerSubmit resolves any pending workspace/session state, forwards the
+// prompt and staged attachments to the backend chat API, and updates the
+// session-scoped frontend view model.
 func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		h.logger.Warn("failed to parse composer command form", "error", err)
@@ -28,37 +31,52 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prompt := strings.TrimSpace(r.FormValue("prompt"))
+	current := session.View()
+	attachments := append([]viewmodel.ComposerAttachment(nil), current.Workspace.Composer.Attachments...)
+	if prompt == "" && len(attachments) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	projectID, sessionID, threadID, workspaceID, err := h.composerSubmitTarget(r, current)
+	if err != nil {
+		h.logger.Warn("failed to resolve composer submit target", "error", err)
+		http.Error(w, "failed to prepare session", http.StatusBadRequest)
+		return
+	}
+
+	runAfter := strings.TrimSpace(r.FormValue("run_after"))
+	chatReq := api.ChatRequest{
+		Messages:    []json.RawMessage{composerUserMessage(prompt, attachments)},
+		WorkspaceID: workspaceID,
+		Model:       current.Workspace.Composer.ModelID,
+		Reasoning:   current.Workspace.Composer.ReasoningValue,
+		ServiceTier: current.Workspace.Composer.ServiceTierValue,
+		RunAfter:    runAfter,
+	}
+	if _, err := h.client.Sessions.StartChat(r.Context(), projectID, sessionID, threadID, chatReq); err != nil {
+		h.logger.Warn("failed to submit composer prompt", "error", err)
+		session.Save(func(view *viewmodel.ShellSnapshot) {
+			view.Workspace.Composer.Error = err.Error()
+		})
+		http.Error(w, "failed to submit prompt", http.StatusBadGateway)
+		return
+	}
+
 	var updateErr error
 	session.Save(func(view *viewmodel.ShellSnapshot) {
 		commandID := nextLabel(&view.Sidebar.Commands)
-		attachments := append([]viewmodel.ComposerAttachment(nil), view.Workspace.Composer.Attachments...)
-		if prompt == "" && len(attachments) == 0 {
+		if err := h.rebuildSidebarView(r.Context(), view, sessionID, threadID); err != nil {
+			updateErr = err
 			return
 		}
-		if view.Workspace.IsPending {
-			projectID, workspaceID, err := h.pendingComposerWorkspace(r, view.Workspace.Composer.WorkspaceSelector)
-			if err != nil {
-				updateErr = err
-				return
-			}
-			created, err := h.client.Sessions.Create(r.Context(), projectID, api.CreateSessionRequest{WorkspaceID: workspaceID})
-			if err != nil {
-				updateErr = err
-				return
-			}
-			if err := h.rebuildSidebarView(r.Context(), view, created.ID, ""); err != nil {
-				updateErr = err
-				return
-			}
-		}
-		view.Workspace.State = "Composer command handled"
+		view.Workspace.State = "Prompt submitted"
 		view.Workspace.Message = ""
-		content := prompt
-		if len(attachments) > 0 {
-			content = contentWithAttachments(content, attachments)
-		}
-		runAfter := strings.TrimSpace(r.FormValue("run_after"))
 		if runAfter != "" {
+			content := prompt
+			if len(attachments) > 0 {
+				content = contentWithAttachments(content, attachments)
+			}
 			view.Workspace.Composer.PromptQueue = append(view.Workspace.Composer.PromptQueue, viewmodel.QueuedPrompt{
 				ID:              fmt.Sprintf("queued-%d", commandID),
 				Text:            content,
@@ -73,24 +91,9 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 			view.Workspace.Composer.ScheduleOpen = false
 			return
 		}
-		view.Workspace.Conversation.Messages = append(view.Workspace.Conversation.Messages,
-			viewmodel.ConversationMessage{
-				ID:      fmt.Sprintf("user-%d", commandID),
-				Role:    "user",
-				Content: content,
-			},
-			viewmodel.ConversationMessage{
-				ID:   fmt.Sprintf("assistant-%d", commandID),
-				Role: "assistant",
-				Branches: []string{
-					"ui-go recorded this prompt in the session-scoped view model. The Discobot API call will replace this placeholder response in a later integration slice.",
-					"Branch 2 placeholder: this proves the server-owned branch selector can switch assistant alternatives without client-side state.",
-					"Branch 3 placeholder: the real Discobot thread branch data will replace these generated alternatives in a later integration slice.",
-				},
-			},
-		)
 		view.Workspace.Composer.Draft = ""
 		view.Workspace.Composer.Attachments = nil
+		view.Workspace.Composer.Error = ""
 		view.Workspace.Composer.ScheduledRunAfter = ""
 		view.Workspace.Composer.ScheduleOpen = false
 	})
@@ -101,6 +104,69 @@ func (h *Handler) ComposerSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) composerSubmitTarget(r *http.Request, view viewmodel.ShellSnapshot) (string, string, string, string, error) {
+	projectID := live.DefaultProjectID
+	sessionID, threadID := currentSidebarSelection(view)
+	workspaceID := ""
+	if view.Workspace.IsPending {
+		var err error
+		projectID, workspaceID, err = h.pendingComposerWorkspace(r, view.Workspace.Composer.WorkspaceSelector)
+		if err != nil {
+			return "", "", "", "", err
+		}
+		sessionID = randomComposerID()
+		threadID = sessionID
+	} else if sessionID == "" {
+		return "", "", "", "", fmt.Errorf("missing selected session")
+	}
+	if threadID == "" {
+		threadID = sessionID
+	}
+	return projectID, sessionID, threadID, workspaceID, nil
+}
+
+func composerUserMessage(prompt string, attachments []viewmodel.ComposerAttachment) json.RawMessage {
+	type messagePart struct {
+		Type      string `json:"type"`
+		Text      string `json:"text,omitempty"`
+		Filename  string `json:"filename,omitempty"`
+		MediaType string `json:"mediaType,omitempty"`
+		URL       string `json:"url,omitempty"`
+	}
+	message := struct {
+		ID    string        `json:"id"`
+		Role  string        `json:"role"`
+		Parts []messagePart `json:"parts"`
+	}{
+		ID:   randomComposerID(),
+		Role: "user",
+	}
+	if strings.TrimSpace(prompt) != "" {
+		message.Parts = append(message.Parts, messagePart{Type: "text", Text: prompt})
+	}
+	for _, attachment := range attachments {
+		message.Parts = append(message.Parts, messagePart{
+			Type:      "file",
+			Filename:  attachment.Filename,
+			MediaType: attachment.MediaType,
+			URL:       attachment.URL,
+		})
+	}
+	data, err := json.Marshal(message)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+func randomComposerID() string {
+	var data [8]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(data[:])
 }
 
 func scheduledPromptRunAfterLabel(value string) string {

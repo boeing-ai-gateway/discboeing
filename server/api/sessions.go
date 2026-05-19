@@ -113,3 +113,12 @@ func (s *SessionsService) DeleteThread(ctx context.Context, projectID string, se
 	path := sessionPath(projectID, sessionID, "/threads/"+url.PathEscape(threadID))
 	return s.client.do(ctx, http.MethodDelete, path, nil, nil, nil)
 }
+
+func (s *SessionsService) StartChat(ctx context.Context, projectID string, sessionID string, threadID string, req ChatRequest) (*ChatResponse, error) {
+	var out ChatResponse
+	path := sessionPath(projectID, sessionID, "/threads/"+url.PathEscape(threadID)+"/chat")
+	if err := s.client.do(ctx, http.MethodPost, path, nil, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

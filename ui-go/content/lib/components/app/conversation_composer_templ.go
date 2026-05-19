@@ -132,7 +132,7 @@ func ConversationComposer(snapshot viewmodel.ConversationComposerSnapshot) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<form data-on:submit__prevent=\"@post('/ui/commands/composer-submit')\"><input type=\"hidden\" name=\"run_after\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<form data-on:submit__prevent=\"@post('/ui/commands/composer-submit', {contentType: 'form'})\"><input type=\"hidden\" name=\"run_after\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

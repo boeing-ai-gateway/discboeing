@@ -23,8 +23,8 @@ templ ConversationComposerTextarea(draft string, disabled bool, attachmentCount 
 		data-composer-backspace-removes-last-attachment={ strconv.FormatBool(attachmentCount > 0) }
 		data-composer-paste-files="true"
 		data-composer-file-mentions="true"
-		data-on:keydown="discobot.composerAttachments.backspace(el, evt)"
-		data-on:paste="discobot.composerAttachments.paste(el, evt)"
+		data-on:keydown="discobot.composerAttachments.keydown(el, event)"
+		data-on:paste="discobot.composerAttachments.paste(el, event)"
 		data-composer-slash-commands="true"
 		data-composer-prompt-history="true"
 	>{ draft }</textarea>

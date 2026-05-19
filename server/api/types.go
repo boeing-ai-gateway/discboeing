@@ -58,24 +58,36 @@ type Workspace struct {
 
 // Session is the API representation of a session.
 type Session struct {
-	ID                string    `json:"id"`
-	ProjectID         string    `json:"projectId"`
-	WorkspaceID       string    `json:"workspaceId"`
-	SandboxProviderID string    `json:"providerId,omitempty"`
-	Name              string    `json:"name"`
-	DisplayName       *string   `json:"displayName,omitempty"`
-	Description       *string   `json:"description,omitempty"`
-	SandboxStatus     string    `json:"sandboxStatus"`
-	ThreadStatus      string    `json:"threadStatus,omitempty"`
-	CommitStatus      string    `json:"commitStatus"`
-	CommitOperation   *string   `json:"commitOperation,omitempty"`
-	CommitError       *string   `json:"commitError,omitempty"`
-	TargetRef         *string   `json:"targetRef,omitempty"`
-	AppliedCommit     *string   `json:"appliedCommit,omitempty"`
-	ErrorMessage      *string   `json:"errorMessage,omitempty"`
-	WorkspacePath     *string   `json:"workspacePath,omitempty"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	ID                string               `json:"id"`
+	ProjectID         string               `json:"projectId"`
+	WorkspaceID       string               `json:"workspaceId"`
+	SandboxProviderID string               `json:"providerId,omitempty"`
+	Name              string               `json:"name"`
+	DisplayName       *string              `json:"displayName,omitempty"`
+	Description       *string              `json:"description,omitempty"`
+	SandboxStatus     string               `json:"sandboxStatus"`
+	ThreadStatus      *SessionThreadStatus `json:"threadStatus,omitempty"`
+	CommitStatus      string               `json:"commitStatus"`
+	CommitOperation   *string              `json:"commitOperation,omitempty"`
+	CommitError       *string              `json:"commitError,omitempty"`
+	TargetRef         *string              `json:"targetRef,omitempty"`
+	AppliedCommit     *string              `json:"appliedCommit,omitempty"`
+	ErrorMessage      *string              `json:"errorMessage,omitempty"`
+	WorkspacePath     *string              `json:"workspacePath,omitempty"`
+	CreatedAt         time.Time            `json:"createdAt"`
+	UpdatedAt         time.Time            `json:"updatedAt"`
+}
+
+// SessionThreadStatus is the session-level thread activity summary.
+type SessionThreadStatus struct {
+	Status              string `json:"status"`
+	Reason              string `json:"reason,omitempty"`
+	NeedsAttentionCount int    `json:"needsAttentionCount,omitempty"`
+	RunningCount        int    `json:"runningCount,omitempty"`
+	QueuedCount         int    `json:"queuedCount,omitempty"`
+	UnknownCount        int    `json:"unknownCount,omitempty"`
+	ThreadID            string `json:"threadId,omitempty"`
+	UpdatedAt           string `json:"updatedAt,omitempty"`
 }
 
 // ModelInfo represents an AI model returned by GET /api/projects/{projectId}/models.

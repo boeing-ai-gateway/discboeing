@@ -127,6 +127,20 @@ func (c *Client) resolve(path string, query url.Values) string {
 	return u.String()
 }
 
+// WebSocketURL resolves a server websocket path against the client's base URL.
+func (c *Client) WebSocketURL(path string) string {
+	u := *c.baseURL
+	switch u.Scheme {
+	case "https":
+		u.Scheme = "wss"
+	default:
+		u.Scheme = "ws"
+	}
+	u.Path = strings.TrimRight(c.baseURL.Path, "/") + "/" + strings.TrimLeft(path, "/")
+	u.RawQuery = ""
+	return u.String()
+}
+
 func decodeError(resp *http.Response) error {
 	var apiErr ErrorResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
