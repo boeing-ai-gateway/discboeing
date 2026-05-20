@@ -20,7 +20,7 @@ function readThreadWorkspaceActiveSource() {
 	return readFileSync(THREAD_WORKSPACE_ACTIVE_COMPONENT, "utf-8");
 }
 
-test("thread workspace always renders the active conversation view", () => {
+test("thread workspace keeps pending sessions on the active conversation view and avoids the loading screen once messages exist", () => {
 	const source = readThreadWorkspaceSource();
 
 	assert.doesNotMatch(source, /let sessionsMenuOpen = \$state\(false\)/);
@@ -36,40 +36,56 @@ test("thread workspace always renders the active conversation view", () => {
 		/const thread = session\.ensureThread\(untrack\(\(\) => threadId\)\);/,
 	);
 	assert.match(source, /setThreadContext\(thread\);/);
+	assert.match(source, /<ThreadWorkspaceActive/);
+	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
 		source,
-		/<ThreadWorkspaceActive \{visible\} \{reserveSidebarSpace\} \{mode\} \/>/,
+		/session\.isPending \|\|\s*session\.threads\.selectedId !== null \|\|\s*isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)/,
 	);
-	assert.doesNotMatch(source, /const hasSelectedThread = \$derived\.by/);
-	assert.doesNotMatch(source, /const hasConversationMessages = \$derived\.by/);
-	assert.doesNotMatch(source, /const showActiveConversation = \$derived\.by/);
-	assert.doesNotMatch(source, /const isLoadingThread = \$derived\.by/);
+	assert.match(
+		source,
+		/const hasConversationMessages = \$derived\.by\(\(\) => thread\.messages\.length > 0\);/,
+	);
+	assert.match(source, /const showActiveConversation = \$derived\.by/);
+	assert.match(
+		source,
+		/\(\) => hasSelectedThread \|\| hasConversationMessages/,
+	);
+	assert.match(source, /const canLoadThreadData = \$derived\.by/);
+	assert.match(source, /const isLoadingThread = \$derived\.by/);
+	assert.match(
+		source,
+		/import \{[\s\S]*canLoadSessionThreads,[\s\S]*isSessionTransitioningStatus,[\s\S]*\} from "\$lib\/api-constants"/,
+	);
+	assert.match(
+		source,
+		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)/,
+	);
+	assert.match(source, /session\.threads\.status === "loading"/);
 	assert.doesNotMatch(
 		source,
-		/import \{ isSessionTransitioningStatus \} from "\$lib\/api-constants"/,
+		/!showActiveConversation && !session\.isPending && !sandboxReady/,
 	);
-	assert.doesNotMatch(source, /canLoadSessionThreads/);
-	assert.doesNotMatch(source, /session\.threads\.status === "idle"/);
-	assert.doesNotMatch(source, /session\.threads\.status === "loading"/);
-	assert.doesNotMatch(
+	assert.match(source, /const showThreadSelectionPrompt = \$derived\.by/);
+	assert.match(
 		source,
-		/const showThreadSelectionPrompt = \$derived\.by/,
+		/\(\) => !isLoadingThread && !showActiveConversation && canLoadThreadData/,
 	);
-	assert.doesNotMatch(source, /Select a thread to continue\./);
-	assert.doesNotMatch(source, /<ConversationComposerSessionSetupStatus/);
-	assert.doesNotMatch(
+	assert.match(source, /<ConversationComposerSessionSetupStatus/);
+	assert.match(
 		source,
 		/import Loader2Icon from "@lucide\/svelte\/icons\/loader-2"/,
 	);
-	assert.doesNotMatch(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
-	assert.doesNotMatch(
+	assert.match(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
+	assert.match(
 		source,
 		/title=\{isLoadingThread \? "Loading thread" : "No thread selected"\}/,
 	);
-	assert.doesNotMatch(
+	assert.match(
 		source,
 		/Loading the selected thread while the session starts\./,
 	);
+	assert.match(source, /Select a thread to continue\./);
 });
 
 test("thread context stops sandbox refreshes when a session is not ready", () => {
