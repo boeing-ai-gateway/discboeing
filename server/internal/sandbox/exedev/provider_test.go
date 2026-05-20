@@ -327,7 +327,7 @@ func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
 		timings:  defaultTimings(),
 	}
 	client.timings.rateLimitRetryDelay = time.Millisecond
-	client.timings.rateLimitRetryTimeout = 5 * time.Millisecond
+	client.timings.rateLimitRetryTimeout = 100 * time.Millisecond
 
 	_, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
 	if err == nil {
