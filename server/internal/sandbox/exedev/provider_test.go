@@ -53,20 +53,13 @@ func (c *timeoutThenSuccessClient) Exec(ctx context.Context, command string) ([]
 }
 
 func TestCreateRetriesVisibilityPollAfterRequestTimeout(t *testing.T) {
-	oldInterval := createVisibilityPollInterval
-	oldRequestTimeout := createVisibilityPollRequestTimeout
-	createVisibilityPollInterval = time.Millisecond
-	createVisibilityPollRequestTimeout = time.Millisecond
-	t.Cleanup(func() {
-		createVisibilityPollInterval = oldInterval
-		createVisibilityPollRequestTimeout = oldRequestTimeout
-	})
-
 	client := &timeoutThenSuccessClient{}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
 	}
+	provider.timings.createVisibilityPollInterval = time.Millisecond
+	provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
 	state, err := provider.PrepareState(context.Background(), "session-1", sandbox.CreateOptions{SharedSecret: "secret"})
 	if err != nil {
 		t.Fatal(err)
@@ -114,11 +107,9 @@ func TestCreateChecksForVisibleVMAfterCommandTimeout(t *testing.T) {
 	}
 }
 
-func TestCreateUsesLSAsAuthoritativeAfterGenericCreateError(t *testing.T) {
+func TestCreateDoesNotInspectAfterGenericCreateError(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
 		{err: commandError{statusCode: http.StatusInternalServerError, body: `{"error":"temporary failure"}`}},
-		{output: `{"name":"discobot-session-1","status":"creating","image":"ubuntu:22.04"}`},
-		{output: `{"api_key":"vm-api-key"}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -129,21 +120,15 @@ func TestCreateUsesLSAsAuthoritativeAfterGenericCreateError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sb, newState, err := provider.Create(context.Background(), state, "session-1", sandbox.CreateOptions{SharedSecret: "secret"})
-	if err != nil {
-		t.Fatal(err)
+	_, _, err = provider.Create(context.Background(), state, "session-1", sandbox.CreateOptions{SharedSecret: "secret"})
+	if err == nil {
+		t.Fatal("expected create error")
 	}
-	if sb.Status != sandbox.StatusCreated {
-		t.Fatalf("sandbox status = %q, want %q", sb.Status, sandbox.StatusCreated)
+	if !strings.Contains(err.Error(), "temporary failure") {
+		t.Fatalf("error = %q, want original failure", err.Error())
 	}
-	if got := parseState(newState).VMAPIKey; got != "vm-api-key" {
-		t.Fatalf("VM API key = %q", got)
-	}
-	if len(client.commands) != 3 {
-		t.Fatalf("commands = %v", client.commands)
-	}
-	if got, want := client.commands[1], "ls --json --l discobot-session-1"; got != want {
-		t.Fatalf("second command = %q, want %q", got, want)
+	if len(client.commands) != 1 {
+		t.Fatalf("commands = %v, want no inspect after generic failure", client.commands)
 	}
 }
 
@@ -176,6 +161,37 @@ func TestCreateReturnsErrorWhenCommandTimeoutDoesNotCreateVisibleVM(t *testing.T
 	}
 	if got, want := client.commands[1], "ls --json --l discobot-session-1"; got != want {
 		t.Fatalf("second command = %q, want %q", got, want)
+	}
+}
+
+func TestCreateDoesNotInspectAfterAuthQuotaOrInvalidImageErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "auth", err: commandError{statusCode: http.StatusUnauthorized, body: `{"error":"unauthorized"}`}},
+		{name: "quota", err: commandError{statusCode: http.StatusPaymentRequired, body: `{"error":"quota exceeded"}`}},
+		{name: "invalid image", err: commandError{statusCode: http.StatusBadRequest, body: `{"error":"invalid image"}`}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &sequenceCommandClient{responses: []commandResponse{{err: tc.err}}}
+			provider, err := NewProviderWithClient(testConfig(), client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err := provider.PrepareState(context.Background(), "session-1", sandbox.CreateOptions{SharedSecret: "secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, _, err = provider.Create(context.Background(), state, "session-1", sandbox.CreateOptions{SharedSecret: "secret"})
+			if err == nil {
+				t.Fatal("expected create error")
+			}
+			if len(client.commands) != 1 {
+				t.Fatalf("commands = %v, want no inspect", client.commands)
+			}
+		})
 	}
 }
 
@@ -231,10 +247,6 @@ func TestSanitizeCommandForLogRedactsSecretEnvValues(t *testing.T) {
 }
 
 func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
-	oldDelay := rateLimitRetryDelay
-	rateLimitRetryDelay = 10 * time.Millisecond
-	t.Cleanup(func() { rateLimitRetryDelay = oldDelay })
-
 	var mu sync.Mutex
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +278,9 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 		endpoint: server.URL,
 		token:    "token",
 		client:   server.Client(),
+		timings:  defaultTimings(),
 	}
+	client.timings.rateLimitRetryDelay = 10 * time.Millisecond
 
 	start := time.Now()
 	out, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
@@ -276,8 +290,8 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 	if !strings.Contains(string(out), `"status":"running"`) {
 		t.Fatalf("output = %q", string(out))
 	}
-	if elapsed := time.Since(start); elapsed < rateLimitRetryDelay {
-		t.Fatalf("elapsed = %s, want at least %s", elapsed, rateLimitRetryDelay)
+	if elapsed := time.Since(start); elapsed < client.timings.rateLimitRetryDelay {
+		t.Fatalf("elapsed = %s, want at least %s", elapsed, client.timings.rateLimitRetryDelay)
 	}
 
 	mu.Lock()
@@ -288,15 +302,6 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 }
 
 func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
-	oldDelay := rateLimitRetryDelay
-	oldTimeout := rateLimitRetryTimeout
-	rateLimitRetryDelay = time.Millisecond
-	rateLimitRetryTimeout = 5 * time.Millisecond
-	t.Cleanup(func() {
-		rateLimitRetryDelay = oldDelay
-		rateLimitRetryTimeout = oldTimeout
-	})
-
 	var attempts int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts++
@@ -308,7 +313,10 @@ func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
 		endpoint: server.URL,
 		token:    "token",
 		client:   server.Client(),
+		timings:  defaultTimings(),
 	}
+	client.timings.rateLimitRetryDelay = time.Millisecond
+	client.timings.rateLimitRetryTimeout = 5 * time.Millisecond
 
 	_, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
 	if err == nil {
@@ -323,29 +331,17 @@ func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
 }
 
 func TestWaitForVMVisibleStopsAtDefaultMaxWait(t *testing.T) {
-	oldInterval := createVisibilityPollInterval
-	oldRequestTimeout := createVisibilityPollRequestTimeout
-	oldMaxWait := createVisibilityMaxWait
-	createVisibilityPollInterval = time.Millisecond
-	createVisibilityPollRequestTimeout = time.Millisecond
-	createVisibilityMaxWait = 5 * time.Millisecond
-	t.Cleanup(func() {
-		createVisibilityPollInterval = oldInterval
-		createVisibilityPollRequestTimeout = oldRequestTimeout
-		createVisibilityMaxWait = oldMaxWait
-	})
-
-	client := &sequenceCommandClient{responses: []commandResponse{
-		{output: `{}`},
-		{output: `{}`},
-		{output: `{}`},
-		{output: `{}`},
-		{output: `{}`},
-	}}
+	client := &sequenceCommandClient{}
+	for range 20 {
+		client.responses = append(client.responses, commandResponse{output: `{}`})
+	}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
 	}
+	provider.timings.createVisibilityPollInterval = time.Millisecond
+	provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
+	provider.timings.createVisibilityMaxWait = 5 * time.Millisecond
 
 	_, err = provider.waitForVMVisible(context.Background(), "discobot-session-1")
 	if err == nil {
@@ -401,15 +397,12 @@ func TestListCoalescesConcurrentCalls(t *testing.T) {
 }
 
 func TestListUsesShortLivedCache(t *testing.T) {
-	oldTTL := listCacheTTL
-	listCacheTTL = time.Hour
-	t.Cleanup(func() { listCacheTTL = oldTTL })
-
 	client := &countingListClient{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running","image":"ubuntu:22.04"}]}`}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
 	}
+	provider.timings.listCacheTTL = time.Hour
 
 	first, err := provider.List(context.Background())
 	if err != nil {
@@ -492,6 +485,25 @@ func (c *countingListClient) calls() int {
 	return c.callCount
 }
 
+func TestListPrefersSessionIDTag(t *testing.T) {
+	client := &countingListClient{output: `{"vms":[{"vm_name":"discobot-truncated-or-old","status":"running","tags":["discobot","discobot-session-real-session-id"]}]}`}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sandboxes, err := provider.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sandboxes) != 1 {
+		t.Fatalf("sandboxes = %#v", sandboxes)
+	}
+	if got := sandboxes[0].SessionID; got != "real-session-id" {
+		t.Fatalf("session ID = %q, want tag value", got)
+	}
+}
+
 func TestCreateBuildsNewCommand(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
 		"new": `{"name":"discobot-session-1","status":"running","image":"ubuntu:22.04","created_at":"2026-05-07T04:09:04Z"}`,
@@ -541,7 +553,7 @@ func TestCreateBuildsNewCommand(t *testing.T) {
 		"--disk=51200MB",
 		"--env DISCOBOT_PROJECT_ID=project-1",
 		"--env WORKSPACE_TARGET_REF=main",
-		"--tag=discobot,discobot-session-discobot-session-1",
+		"--tag=discobot,discobot-session-session-1",
 	} {
 		if !strings.Contains(command, want) {
 			t.Fatalf("command %q does not contain %q", command, want)
@@ -843,9 +855,427 @@ func TestStopPersistsStoppedStatusForGet(t *testing.T) {
 	}
 }
 
+func TestWatchDedupesUnchangedStatuses(t *testing.T) {
+	client := &sequenceCommandClient{responses: []commandResponse{
+		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
+		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
+		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"stopped"}]}`},
+	}}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.timings.listCacheTTL = 0
+	provider.timings.watchPollInterval = time.Millisecond
+	ctx := t.Context()
+
+	events, err := provider.Watch(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := <-events
+	if first.Status != sandbox.StatusRunning {
+		t.Fatalf("first event = %#v", first)
+	}
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case event := <-events:
+			if event.Status == sandbox.StatusRunning {
+				t.Fatalf("received duplicate running event: %#v", event)
+			}
+			if event.Status != sandbox.StatusStopped {
+				t.Fatalf("event = %#v", event)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timed out waiting for stopped event")
+		}
+	}
+}
+
+func TestStopWaitsForStoppedStatusWhenTimeoutProvided(t *testing.T) {
+	client := &sequenceCommandClient{responses: []commandResponse{
+		{output: `{"name":"discobot-session-1","status":"running"}`},
+		{output: `{}`},
+		{output: `{"name":"discobot-session-1","status":"stopped"}`},
+	}}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.timings.createVisibilityPollInterval = time.Millisecond
+	provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
+	state, err := provider.PrepareState(context.Background(), "session-1", sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state, err = provider.Stop(context.Background(), state, "session-1", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseState(state).Status; got != sandbox.StatusStopped {
+		t.Fatalf("status = %q, want stopped", got)
+	}
+	if len(client.commands) != 3 {
+		t.Fatalf("commands = %v", client.commands)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestProviderDefinitionStatusAndNoops(t *testing.T) {
+	def := Definition()
+	if def.Name != "exe.dev" || len(def.ConfigFields) != 6 {
+		t.Fatalf("definition = %#v", def)
+	}
+
+	provider, err := NewProviderWithClient(Config{SandboxImage: "custom:image"}, &fakeCommandClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !provider.ImageExists(context.Background()) {
+		t.Fatal("ImageExists = false")
+	}
+	if got := provider.Image(); got != "custom:image" {
+		t.Fatalf("Image = %q", got)
+	}
+	if provider.IsLocal() {
+		t.Fatal("IsLocal = true")
+	}
+	if got := provider.Definition().Name; got != "exe.dev" {
+		t.Fatalf("provider definition name = %q", got)
+	}
+	if status := provider.Status(); status.Available || status.State != "not_available" || status.Message == "" {
+		t.Fatalf("status without token = %#v", status)
+	}
+	provider.cfg.Token = "token"
+	if status := provider.Status(); !status.Available || status.State != "ready" || status.Message != "" {
+		t.Fatalf("status with token = %#v", status)
+	}
+	if err := provider.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := provider.RemoveProject(context.Background(), "project-1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStartHandlesRunningCreatedAndStoppedVMs(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		responses    []commandResponse
+		wantStatus   sandbox.Status
+		wantCommands []string
+	}{
+		{
+			name:       "already running",
+			responses:  []commandResponse{{output: `{"name":"discobot-session-1","status":"running"}`}},
+			wantStatus: sandbox.StatusRunning,
+			wantCommands: []string{
+				"ls --json --l discobot-session-1",
+			},
+		},
+		{
+			name: "created waits until running",
+			responses: []commandResponse{
+				{output: `{"name":"discobot-session-1","status":"creating"}`},
+				{output: `{"name":"discobot-session-1","status":"running"}`},
+			},
+			wantStatus: sandbox.StatusRunning,
+			wantCommands: []string{
+				"ls --json --l discobot-session-1",
+				"ls --json --l discobot-session-1",
+			},
+		},
+		{
+			name: "stopped restarts",
+			responses: []commandResponse{
+				{output: `{"name":"discobot-session-1","status":"stopped"}`},
+				{output: `{}`},
+				{output: `{"name":"discobot-session-1","status":"running"}`},
+			},
+			wantStatus: sandbox.StatusRunning,
+			wantCommands: []string{
+				"ls --json --l discobot-session-1",
+				"restart --json discobot-session-1",
+				"ls --json --l discobot-session-1",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &sequenceCommandClient{responses: append([]commandResponse(nil), tc.responses...)}
+			provider, err := NewProviderWithClient(testConfig(), client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider.timings.createVisibilityPollInterval = time.Millisecond
+			provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
+			state, err := marshalState(providerState{VMName: "discobot-session-1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			state, err = provider.Start(context.Background(), state, "session-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parseState(state).Status; got != tc.wantStatus {
+				t.Fatalf("status = %q, want %q", got, tc.wantStatus)
+			}
+			if strings.Join(client.commands, "\n") != strings.Join(tc.wantCommands, "\n") {
+				t.Fatalf("commands = %#v, want %#v", client.commands, tc.wantCommands)
+			}
+		})
+	}
+}
+
+func TestStartErrorPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		responses []commandResponse
+		wantErr   string
+	}{
+		{name: "inspect error", responses: []commandResponse{{err: errors.New("inspect failed")}}, wantErr: "inspect failed"},
+		{name: "not found", responses: []commandResponse{{output: `{}`}}, wantErr: sandbox.ErrNotFound.Error()},
+		{name: "created fails", responses: []commandResponse{{output: `{"name":"discobot-session-1","status":"creating"}`}, {output: `{"name":"discobot-session-1","status":"failed"}`}}, wantErr: "failed to start"},
+		{name: "restart error", responses: []commandResponse{{output: `{"name":"discobot-session-1","status":"stopped"}`}, {err: errors.New("restart failed")}}, wantErr: "restart exe.dev VM"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &sequenceCommandClient{responses: append([]commandResponse(nil), tc.responses...)}
+			provider, err := NewProviderWithClient(testConfig(), client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider.timings.createVisibilityPollInterval = time.Millisecond
+			provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
+			state, err := marshalState(providerState{VMName: "discobot-session-1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = provider.Start(context.Background(), state, "session-1")
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetSecretAndStateEdgeCases(t *testing.T) {
+	provider, err := NewProviderWithClient(testConfig(), &fakeCommandClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.GetSecret(context.Background(), nil, "session-1"); !errors.Is(err, sandbox.ErrNotFound) {
+		t.Fatalf("missing secret error = %v", err)
+	}
+	state, err := marshalState(providerState{SharedSecret: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, err := provider.GetSecret(context.Background(), state, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret != "secret" {
+		t.Fatalf("secret = %q", secret)
+	}
+	if got := parseState([]byte(`not-json`)); got != (providerState{}) {
+		t.Fatalf("invalid state parsed as %#v", got)
+	}
+	if state, err := marshalState(providerState{Status: sandbox.StatusRunning}); err != nil || state != nil {
+		t.Fatalf("empty-ish state = %q, %v", string(state), err)
+	}
+}
+
+func TestRetryAfterDelayParsesSecondsHTTPDatesAndFallbacks(t *testing.T) {
+	fallback := 123 * time.Millisecond
+	if got := retryAfterDelay("2", fallback); got != 2*time.Second {
+		t.Fatalf("seconds delay = %s", got)
+	}
+	future := time.Now().Add(2 * time.Second).UTC().Format(http.TimeFormat)
+	if got := retryAfterDelay(future, fallback); got <= 0 || got > 3*time.Second {
+		t.Fatalf("future http-date delay = %s", got)
+	}
+	past := time.Now().Add(-time.Second).UTC().Format(http.TimeFormat)
+	if got := retryAfterDelay(past, fallback); got != 0 {
+		t.Fatalf("past http-date delay = %s", got)
+	}
+	for _, value := range []string{"", "-1", "bogus"} {
+		if got := retryAfterDelay(value, fallback); got != fallback {
+			t.Fatalf("delay for %q = %s, want %s", value, got, fallback)
+		}
+	}
+}
+
+func TestRemoveTreatsNotFoundAsSuccessAndPreservesOtherErrors(t *testing.T) {
+	provider, err := NewProviderWithClient(testConfig(), &sequenceCommandClient{responses: []commandResponse{{err: errors.New("vm does not exist")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := marshalState(providerState{VMName: "discobot-session-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newState, err := provider.Remove(context.Background(), state, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newState != nil {
+		t.Fatalf("new state = %q, want nil", string(newState))
+	}
+
+	client := &sequenceCommandClient{responses: []commandResponse{{err: errors.New("permission denied")}}}
+	provider, err = NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newState, err = provider.Remove(context.Background(), state, "session-1")
+	if err == nil || !strings.Contains(err.Error(), "remove exe.dev VM") {
+		t.Fatalf("error = %v", err)
+	}
+	if string(newState) != string(state) {
+		t.Fatalf("state changed to %q", string(newState))
+	}
+}
+
+func TestAcquireHTTPClientRejectsMissingKeyStoppedAndGetErrors(t *testing.T) {
+	provider, err := NewProviderWithClient(testConfig(), &fakeCommandClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1"); err == nil || !strings.Contains(err.Error(), "API key is missing") {
+		t.Fatalf("missing key error = %v", err)
+	}
+	state, err := marshalState(providerState{VMName: "discobot-session-1", VMAPIKey: "key", Status: sandbox.StatusStopped, CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.AcquireHTTPClient(context.Background(), state, "session-1"); err == nil || !strings.Contains(err.Error(), "not running") {
+		t.Fatalf("stopped error = %v", err)
+	}
+
+	client := &sequenceCommandClient{responses: []commandResponse{{err: errors.New("inspect failed")}}}
+	provider, err = NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = marshalState(providerState{VMName: "discobot-session-1", VMAPIKey: "key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.AcquireHTTPClient(context.Background(), state, "session-1"); err == nil || !strings.Contains(err.Error(), "inspect failed") {
+		t.Fatalf("get error = %v", err)
+	}
+}
+
+func TestWebSocketURLReturnsRawURLOnParseError(t *testing.T) {
+	transport := &vmHTTPTransport{host: "vm.exe.xyz", token: "key", scheme: "https"}
+	if got, want := transport.WebSocketURL("http://[::1"), "http://[::1"; got != want {
+		t.Fatalf("websocket URL = %q, want %q", got, want)
+	}
+}
+
+func TestParseAPIKeyAndVMHelpersCoverFlexibleShapes(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  string
+	}{
+		{`{"data":{"apiKey":"nested-key"}}`, "nested-key"},
+		{`[{"token":"array-key"}]`, "array-key"},
+		{`" string-key "`, "string-key"},
+		{`plain-key`, "plain-key"},
+	} {
+		if got := parseAPIKey([]byte(tc.input)); got != tc.want {
+			t.Fatalf("parseAPIKey(%s) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+	vms := parseVMs([]byte(`[
+		{"id":123,"phase":"up","tag":"discobot discobot-session-a"},
+		{"vm":"b","phase":"crashed","tags":["discobot","discobot-session-b",5]},
+		{"hostname":"c","phase":"pending","created":"2026-05-09 22:14:33"}
+	]`))
+	if len(vms) != 3 {
+		t.Fatalf("vms = %#v", vms)
+	}
+	if vms[0].Name != "123" || vms[0].Status != sandbox.StatusRunning || sessionIDFromTags(vms[0].Tags) != "a" {
+		t.Fatalf("vms[0] = %#v", vms[0])
+	}
+	if vms[1].Status != sandbox.StatusFailed || sessionIDFromTags(vms[1].Tags) != "b" {
+		t.Fatalf("vms[1] = %#v", vms[1])
+	}
+	if vms[2].Status != sandbox.StatusCreated || vms[2].CreatedAt.IsZero() {
+		t.Fatalf("vms[2] = %#v", vms[2])
+	}
+	if vmName("!!!", "###") != "discobot-session" {
+		t.Fatalf("fallback vmName = %q", vmName("!!!", "###"))
+	}
+}
+
+func TestListErrorIsNotCachedAndWaitingCallerCanCancel(t *testing.T) {
+	client := &sequenceCommandClient{responses: []commandResponse{
+		{err: errors.New("list failed")},
+		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
+	}}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.List(context.Background()); err == nil || !strings.Contains(err.Error(), "list exe.dev VMs") {
+		t.Fatalf("list error = %v", err)
+	}
+	sandboxes, err := provider.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sandboxes) != 1 {
+		t.Fatalf("sandboxes = %#v", sandboxes)
+	}
+
+	blocking := newBlockingListClient(`{"vms":[]}`)
+	provider, err = NewProviderWithClient(testConfig(), blocking)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = provider.List(context.Background()) }()
+	select {
+	case <-blocking.started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for owner list")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := provider.List(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiting caller error = %v, want canceled", err)
+	}
+	close(blocking.release)
+}
+
+func TestWatchClosesOnCancellationAfterInitialListError(t *testing.T) {
+	provider, err := NewProviderWithClient(testConfig(), &sequenceCommandClient{responses: []commandResponse{{err: errors.New("temporary list error")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.timings.watchPollInterval = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	events, err := provider.Watch(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	select {
+	case _, ok := <-events:
+		if ok {
+			t.Fatal("expected watch channel to close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for watch close")
+	}
+}
 
 func testConfig() Config {
 	return Config{
