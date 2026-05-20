@@ -32,7 +32,10 @@ const stopCommandNamePlaceholder = "${name}"
 var (
 	createVisibilityPollInterval       = 2 * time.Second
 	createVisibilityPollRequestTimeout = 15 * time.Second
+	createVisibilityMaxWait            = 2 * time.Minute
+	vmRunningMaxWait                   = 10 * time.Minute
 	rateLimitRetryDelay                = 5 * time.Second
+	rateLimitRetryTimeout              = 2 * time.Minute
 	listCacheTTL                       = 2 * time.Second
 )
 
@@ -625,6 +628,9 @@ func (p *Provider) inspectVMWithTimeout(ctx context.Context, name string) (vmInf
 }
 
 func (p *Provider) waitForVMVisible(ctx context.Context, name string) (vmInfo, error) {
+	ctx, cancel := contextWithDefaultTimeout(ctx, createVisibilityMaxWait)
+	defer cancel()
+
 	var lastErr error
 	var lastStatus sandbox.Status
 	var lastImage string
@@ -652,6 +658,9 @@ func (p *Provider) waitForVMVisible(ctx context.Context, name string) (vmInfo, e
 }
 
 func (p *Provider) waitForVMRunning(ctx context.Context, name string) (vmInfo, error) {
+	ctx, cancel := contextWithDefaultTimeout(ctx, vmRunningMaxWait)
+	defer cancel()
+
 	var lastErr error
 	var lastStatus sandbox.Status
 	var lastImage string
@@ -695,6 +704,16 @@ func logVMWaitStatus(waitingFor, name string, vm vmInfo, lastStatus *sandbox.Sta
 	log.Printf("exe.dev VM %q status while waiting for %s: status=%q image=%q", name, waitingFor, vm.Status, vm.Image)
 }
 
+func contextWithDefaultTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return context.WithCancel(ctx)
+	}
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
 func isVMNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -730,6 +749,9 @@ type httpCommandClient struct {
 }
 
 func (c *httpCommandClient) Exec(ctx context.Context, command string) ([]byte, error) {
+	ctx, cancel := contextWithDefaultTimeout(ctx, rateLimitRetryTimeout)
+	defer cancel()
+
 	sanitizedCommand := sanitizeCommandForLog(command)
 	for {
 		log.Printf("Running exe.dev command: %s", sanitizedCommand)

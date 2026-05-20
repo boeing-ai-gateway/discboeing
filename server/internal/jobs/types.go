@@ -85,7 +85,7 @@ type SessionDeletePayload struct {
 
 func (p SessionDeletePayload) JobType() JobType              { return JobTypeSessionDelete }
 func (p SessionDeletePayload) ResourceKey() (string, string) { return ResourceTypeSession, p.SessionID }
-func (p SessionDeletePayload) Priority() int                 { return 5 }
+func (p SessionDeletePayload) Priority() int                 { return 20 }
 func (p SessionDeletePayload) AllowDuplicates() bool         { return true }
 
 // SessionSandboxDeletePayload is the payload for session_sandbox_delete jobs.

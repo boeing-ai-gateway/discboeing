@@ -61,6 +61,27 @@ func TestQueueEnqueue_SessionInitDoesNotRetry(t *testing.T) {
 	}
 }
 
+func TestQueueEnqueue_SessionDeleteUsesHighPriority(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupJobsTestStore(t)
+	queue := NewQueue(testStore, &config.Config{JobMaxAttempts: 3})
+
+	if err := queue.Enqueue(ctx, SessionDeletePayload{
+		ProjectID: "project-1",
+		SessionID: "session-1",
+	}); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	job, err := testStore.GetJobByResourceID(ctx, ResourceTypeSession, "session-1")
+	if err != nil {
+		t.Fatalf("failed to load queued job: %v", err)
+	}
+	if job.Priority != 20 {
+		t.Fatalf("priority = %d, want 20", job.Priority)
+	}
+}
+
 func setupJobsTestStore(t *testing.T) *store.Store {
 	t.Helper()
 

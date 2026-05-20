@@ -424,7 +424,7 @@ func (d *Service) staleJobCleanupLoop() {
 				continue
 			}
 
-			count, err := d.store.CleanupStaleJobs(d.ctx, d.cfg.DispatcherStaleJobTimeout)
+			count, err := d.store.CleanupStaleJobs(d.ctx, d.effectiveStaleJobTimeout())
 			if err != nil {
 				log.Printf("Stale job cleanup error: %v", err)
 			} else if count > 0 {
@@ -432,6 +432,13 @@ func (d *Service) staleJobCleanupLoop() {
 			}
 		}
 	}
+}
+
+func (d *Service) effectiveStaleJobTimeout() time.Duration {
+	if d.cfg.DispatcherStaleJobTimeout > d.cfg.DispatcherJobTimeout {
+		return d.cfg.DispatcherStaleJobTimeout
+	}
+	return d.cfg.DispatcherJobTimeout + time.Minute
 }
 
 // publishJobCompletionEvent publishes a job completion event to the event broker.

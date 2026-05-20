@@ -887,6 +887,10 @@ func (s *SessionService) Initialize(
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
+	if sessionModel.SandboxStatus == model.SessionStatusRemoving || sessionModel.SandboxStatus == model.SessionStatusRemoved {
+		log.Printf("Skipping initialization for session %s because status is %s", sessionID, sessionModel.SandboxStatus)
+		return nil
+	}
 
 	// Get workspace info
 	workspace, err := s.store.GetWorkspaceByID(ctx, sessionModel.WorkspaceID)
@@ -913,6 +917,10 @@ func (s *SessionService) initializeSync(
 	sessionID := session.ID
 	if s.sandboxService == nil {
 		return fmt.Errorf("sandbox service is not configured")
+	}
+	if s.sessionIsRemoving(ctx, sessionID) {
+		log.Printf("Skipping initialization for session %s because deletion has started", sessionID)
+		return nil
 	}
 
 	// Step 1: Ensure workspace is available (always needed, even on reconcile)
@@ -954,6 +962,10 @@ func (s *SessionService) initializeSync(
 		log.Printf("Failed to update session workspace info for %s: %v", sessionID, err)
 		s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("failed to save workspace info: "+err.Error()))
 		return fmt.Errorf("failed to save workspace info: %w", err)
+	}
+	if s.sessionIsRemoving(ctx, sessionID) {
+		log.Printf("Stopping initialization for session %s because deletion started after workspace setup", sessionID)
+		return nil
 	}
 
 	// Step 3: Create or get existing sandbox (idempotent)
@@ -1046,6 +1058,11 @@ func (s *SessionService) initializeSync(
 	}
 
 	if needsCreation {
+		if s.sessionIsRemoving(ctx, sessionID) {
+			log.Printf("Stopping initialization for session %s because deletion started before sandbox creation", sessionID)
+			return nil
+		}
+
 		// Check if image needs to be pulled and notify if so
 		if !s.sandboxService.SandboxImageExists(ctx) {
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusPullingImage, nil)
@@ -1087,6 +1104,10 @@ func (s *SessionService) initializeSync(
 			log.Printf("Sandbox creation failed for session %s: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreateFailed, ptrString("sandbox creation failed: "+err.Error()))
 			return fmt.Errorf("sandbox creation failed: %w", err)
+		}
+		if s.sessionIsRemoving(ctx, sessionID) {
+			log.Printf("Stopping initialization for session %s because deletion started after sandbox creation", sessionID)
+			return nil
 		}
 
 		// Start the sandbox
@@ -1142,6 +1163,15 @@ func (s *SessionService) updateStatusWithEvent(ctx context.Context, projectID, s
 	if err != nil {
 		log.Printf("Failed to update session %s status to %s: %v", sessionID, status, err)
 	}
+}
+
+func (s *SessionService) sessionIsRemoving(ctx context.Context, sessionID string) bool {
+	current, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to load session %s while checking delete status: %v", sessionID, err)
+		return false
+	}
+	return current.SandboxStatus == model.SessionStatusRemoving || current.SandboxStatus == model.SessionStatusRemoved
 }
 
 // generateSecret generates a cryptographically secure random hex string.

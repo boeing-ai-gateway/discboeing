@@ -166,3 +166,21 @@ func TestDrainAndStopWaitsForRunningJobsWithoutStartingNewOnes(t *testing.T) {
 		t.Fatalf("expected second job to remain pending during drain, got %s", storedSecondJob.Status)
 	}
 }
+
+func TestEffectiveStaleJobTimeoutDoesNotPrecedeJobTimeout(t *testing.T) {
+	env := newDispatcherTestEnv(t)
+	defer env.close()
+	env.cfg.DispatcherJobTimeout = 20 * time.Minute
+	env.cfg.DispatcherStaleJobTimeout = 10 * time.Minute
+
+	disp := NewService(env.store, env.cfg, nil)
+
+	if got, want := disp.effectiveStaleJobTimeout(), 21*time.Minute; got != want {
+		t.Fatalf("effective stale timeout = %s, want %s", got, want)
+	}
+
+	env.cfg.DispatcherStaleJobTimeout = 30 * time.Minute
+	if got, want := disp.effectiveStaleJobTimeout(), 30*time.Minute; got != want {
+		t.Fatalf("effective stale timeout = %s, want %s", got, want)
+	}
+}

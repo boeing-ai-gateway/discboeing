@@ -2,6 +2,7 @@ package exedev
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -283,6 +284,78 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 	defer mu.Unlock()
 	if attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
+	oldDelay := rateLimitRetryDelay
+	oldTimeout := rateLimitRetryTimeout
+	rateLimitRetryDelay = time.Millisecond
+	rateLimitRetryTimeout = 5 * time.Millisecond
+	t.Cleanup(func() {
+		rateLimitRetryDelay = oldDelay
+		rateLimitRetryTimeout = oldTimeout
+	})
+
+	var attempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := &httpCommandClient{
+		endpoint: server.URL,
+		token:    "token",
+		client:   server.Client(),
+	}
+
+	_, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
+	if err == nil {
+		t.Fatal("expected rate-limit retry timeout")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want deadline exceeded", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("attempts = %d, want at least 2", attempts)
+	}
+}
+
+func TestWaitForVMVisibleStopsAtDefaultMaxWait(t *testing.T) {
+	oldInterval := createVisibilityPollInterval
+	oldRequestTimeout := createVisibilityPollRequestTimeout
+	oldMaxWait := createVisibilityMaxWait
+	createVisibilityPollInterval = time.Millisecond
+	createVisibilityPollRequestTimeout = time.Millisecond
+	createVisibilityMaxWait = 5 * time.Millisecond
+	t.Cleanup(func() {
+		createVisibilityPollInterval = oldInterval
+		createVisibilityPollRequestTimeout = oldRequestTimeout
+		createVisibilityMaxWait = oldMaxWait
+	})
+
+	client := &sequenceCommandClient{responses: []commandResponse{
+		{output: `{}`},
+		{output: `{}`},
+		{output: `{}`},
+		{output: `{}`},
+		{output: `{}`},
+	}}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = provider.waitForVMVisible(context.Background(), "discobot-session-1")
+	if err == nil {
+		t.Fatal("expected visibility wait timeout")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want deadline exceeded", err)
+	}
+	if len(client.commands) < 2 {
+		t.Fatalf("commands = %v, want repeated polling", client.commands)
 	}
 }
 

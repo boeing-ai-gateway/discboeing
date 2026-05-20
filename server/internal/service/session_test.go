@@ -256,6 +256,52 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	}
 }
 
+func TestInitializeSkipsSessionAlreadyRemoving(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	project := &model.Project{ID: "project-removing", Name: "removing project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:        "workspace-removing",
+		ProjectID: project.ID,
+		Path:      "/tmp/workspace",
+		Status:    model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	dbSession := &model.Session{
+		ID:            "session-removing",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Removing Session",
+		SandboxStatus: model.SessionStatusRemoving,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+	if _, ok := provider.GetCreateOptions(dbSession.ID); ok {
+		t.Fatalf("expected no sandbox create options for removing session")
+	}
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.SandboxStatus != model.SessionStatusRemoving {
+		t.Fatalf("sandbox status = %q, want %q", stored.SandboxStatus, model.SessionStatusRemoving)
+	}
+}
+
 func TestInitializeSessionWithUserUsesTrustKey(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
