@@ -18,7 +18,8 @@ if [[ -z "$version" ]]; then
 	exit 0
 fi
 
-install_dir="${HOME}/.local/bin"
+gopath="$(go env GOPATH)"
+install_dir="${gopath}/bin"
 mkdir -p "$install_dir"
 
 echo "Installing Templ $version to $install_dir"
