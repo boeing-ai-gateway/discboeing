@@ -22,10 +22,17 @@ type externalCompletionIDProvider struct {
 	provider func(threadID string) string
 }
 
+type externalCompletionCancelProvider struct {
+	id       int
+	provider func(threadID string) (string, bool)
+}
+
 var (
-	externalCompletionIDMu        sync.Mutex
-	externalCompletionIDProviders []externalCompletionIDProvider
-	nextExternalCompletionID      int
+	externalCompletionIDMu            sync.Mutex
+	externalCompletionIDProviders     []externalCompletionIDProvider
+	externalCompletionCancelProviders []externalCompletionCancelProvider
+	nextExternalCompletionProviderID  int
+	nextExternalCompletionCancelID    int
 )
 
 // RegisterExternalCompletionIDProvider registers a package-level provider that
@@ -36,8 +43,8 @@ func RegisterExternalCompletionIDProvider(provider func(threadID string) string)
 		return func() {}
 	}
 	externalCompletionIDMu.Lock()
-	nextExternalCompletionID++
-	id := nextExternalCompletionID
+	nextExternalCompletionProviderID++
+	id := nextExternalCompletionProviderID
 	externalCompletionIDProviders = append(externalCompletionIDProviders, externalCompletionIDProvider{
 		id:       id,
 		provider: provider,
@@ -56,6 +63,34 @@ func RegisterExternalCompletionIDProvider(provider func(threadID string) string)
 	}
 }
 
+// RegisterExternalCompletionCancelProvider registers a package-level provider
+// that cancels externally managed in-memory runs for a thread. It returns a
+// cleanup function that unregisters the provider.
+func RegisterExternalCompletionCancelProvider(provider func(threadID string) (string, bool)) func() {
+	if provider == nil {
+		return func() {}
+	}
+	externalCompletionIDMu.Lock()
+	nextExternalCompletionCancelID++
+	id := nextExternalCompletionCancelID
+	externalCompletionCancelProviders = append(externalCompletionCancelProviders, externalCompletionCancelProvider{
+		id:       id,
+		provider: provider,
+	})
+	externalCompletionIDMu.Unlock()
+
+	return func() {
+		externalCompletionIDMu.Lock()
+		defer externalCompletionIDMu.Unlock()
+		for i, registered := range externalCompletionCancelProviders {
+			if registered.id == id {
+				externalCompletionCancelProviders = append(externalCompletionCancelProviders[:i], externalCompletionCancelProviders[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
 func externalCompletionID(threadID string) string {
 	externalCompletionIDMu.Lock()
 	providers := append([]externalCompletionIDProvider(nil), externalCompletionIDProviders...)
@@ -66,6 +101,18 @@ func externalCompletionID(threadID string) string {
 		}
 	}
 	return ""
+}
+
+func cancelExternalCompletion(threadID string) (string, bool) {
+	externalCompletionIDMu.Lock()
+	providers := append([]externalCompletionCancelProvider(nil), externalCompletionCancelProviders...)
+	externalCompletionIDMu.Unlock()
+	for _, registered := range providers {
+		if id, ok := registered.provider(threadID); ok {
+			return strings.TrimSpace(id), true
+		}
+	}
+	return "", false
 }
 
 // ConversationManager wraps an Agent with goroutine management, chunk caching,
@@ -450,6 +497,9 @@ func (cm *ConversationManager) Cancel(threadID string) (string, bool) {
 	comp, ok := cm.active[threadID]
 	cm.mu.Unlock()
 	if !ok {
+		if id, ok := cancelExternalCompletion(threadID); ok {
+			return id, true
+		}
 		return "", cm.agent.Cancel(threadID)
 	}
 
@@ -458,6 +508,9 @@ func (cm *ConversationManager) Cancel(threadID string) (string, bool) {
 	comp.mu.Unlock()
 
 	if done {
+		if id, ok := cancelExternalCompletion(threadID); ok {
+			return id, true
+		}
 		return comp.id, cm.agent.Cancel(threadID)
 	}
 

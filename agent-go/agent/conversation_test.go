@@ -594,6 +594,40 @@ func TestConversationManager_ActiveCompletionIDIncludesExternalProvider(t *testi
 	}
 }
 
+func TestConversationManager_CancelExternalCompletion(t *testing.T) {
+	cancelled := false
+	unregister := RegisterExternalCompletionCancelProvider(func(threadID string) (string, bool) {
+		if threadID != "thread1" {
+			return "", false
+		}
+		cancelled = true
+		return "task-thread1", true
+	})
+	t.Cleanup(unregister)
+
+	agentCancelCalled := false
+	cm := NewConversationManager(&mockAgent{
+		cancelFn: func(_ string) bool {
+			agentCancelCalled = true
+			return false
+		},
+	})
+
+	cancelledID, ok := cm.Cancel("thread1")
+	if !ok {
+		t.Fatal("expected external completion cancellation to succeed")
+	}
+	if cancelledID != "task-thread1" {
+		t.Fatalf("expected external completion ID, got %q", cancelledID)
+	}
+	if !cancelled {
+		t.Fatal("expected external completion provider to be called")
+	}
+	if agentCancelCalled {
+		t.Fatal("underlying agent cancel should not be called after external cancellation succeeds")
+	}
+}
+
 func TestConversationManager_ExternalCompletionSuppressesInterruptedState(t *testing.T) {
 	unregister := RegisterExternalCompletionIDProvider(func(threadID string) string {
 		if threadID == "thread1" {

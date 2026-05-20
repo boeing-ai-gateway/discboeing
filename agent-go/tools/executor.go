@@ -273,7 +273,7 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 	case "TodoWrite":
 		return e.executeTodoWrite(ctx, toolCtx, call)
 	case "TaskOutput":
-		return e.executeTaskOutput(call)
+		return e.executeTaskOutput(toolCtx, call)
 	case "TaskStop":
 		return e.executeTaskStop(call)
 	case "Skill":

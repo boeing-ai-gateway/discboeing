@@ -68,6 +68,7 @@ var globalTasks = &taskStore{tasks: make(map[string]*taskRecord)}
 
 func init() {
 	agent.RegisterExternalCompletionIDProvider(taskCompletionID)
+	agent.RegisterExternalCompletionCancelProvider(cancelTaskCompletion)
 }
 
 func taskCompletionID(threadID string) string {
@@ -75,6 +76,23 @@ func taskCompletionID(threadID string) string {
 		return threadID
 	}
 	return ""
+}
+
+func cancelTaskCompletion(threadID string) (string, bool) {
+	globalTasks.mu.Lock()
+	rec := globalTasks.tasks[threadID]
+	globalTasks.mu.Unlock()
+	if rec == nil {
+		return "", false
+	}
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.status != "in_progress" || rec.cancel == nil {
+		return "", false
+	}
+	rec.cancel()
+	return threadID, true
 }
 
 var subThreadIDSuffix = agent.GenerateID
@@ -737,7 +755,7 @@ func taskOutputWaitTimeout(input int) time.Duration {
 	return time.Duration(min(input, 600_000)) * time.Millisecond
 }
 
-func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExecuteResult, error) {
+func (e *Executor) executeTaskOutput(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input taskOutputInput
 	if err := unmarshalInput(call, &input); err != nil {
 		return errResult(call, err.Error()), nil
@@ -751,7 +769,7 @@ func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExec
 	globalTasks.mu.Unlock()
 
 	if !ok {
-		return errResult(call, fmt.Sprintf("task %s not found", input.TaskID)), nil
+		return taskOutputFromPersistedThread(toolCtx, call, input.TaskID)
 	}
 
 	if input.Block {
@@ -770,6 +788,60 @@ func (e *Executor) executeTaskOutput(call message.ToolCallPart) (thread.ToolExec
 		return textResult(call, "(no output yet)"), nil
 	}
 	return textResult(call, output), nil
+}
+
+func taskOutputFromPersistedThread(toolCtx *thread.ToolContext, call message.ToolCallPart, taskID string) (thread.ToolExecuteResult, error) {
+	if toolCtx == nil || toolCtx.Agent == nil {
+		return errResult(call, fmt.Sprintf("task %s not found", taskID)), nil
+	}
+
+	subAgent := toolCtx.Agent
+	if output, err := subAgent.FinalResponse(taskID); err == nil && strings.TrimSpace(output) != "" {
+		return textResult(call, output), nil
+	}
+
+	info, err := subAgent.GetThreadInfo(taskID)
+	if err != nil || !isTaskThreadInfo(info, taskID) {
+		return errResult(call, fmt.Sprintf("task %s not found", taskID)), nil
+	}
+
+	status := persistedTaskStatus(info)
+	return textResult(call, fmt.Sprintf(
+		"Task %s was found on disk as thread %s, but it is not active in memory after restart. Persisted status: %s.\n\nUse Task with resume %q to continue it, or inspect the persisted thread transcript for details.",
+		taskID,
+		info.ID,
+		status,
+		taskID,
+	)), nil
+}
+
+func isTaskThreadInfo(info agent.ThreadInfo, taskID string) bool {
+	if strings.TrimSpace(info.ID) != taskID {
+		return false
+	}
+	if strings.Contains(taskID, ".sub.") {
+		return true
+	}
+	var metadata thread.ConfigMetadata
+	if len(info.Metadata) > 0 && json.Unmarshal(info.Metadata, &metadata) == nil {
+		return metadata.Type == "task" || metadata.TaskID == taskID
+	}
+	return false
+}
+
+func persistedTaskStatus(info agent.ThreadInfo) string {
+	switch {
+	case info.PendingQuestion:
+		return "waiting_for_answer"
+	case info.State == agent.ThreadStateInterrupted:
+		return "interrupted"
+	case info.State == agent.ThreadStateCancelled:
+		return "cancelled"
+	case strings.TrimSpace(info.ErrorMessage) != "":
+		return "failed"
+	default:
+		return "in_progress"
+	}
 }
 
 // --- TaskStop ---

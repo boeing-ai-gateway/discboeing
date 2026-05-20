@@ -25,6 +25,7 @@ type mockSubAgent struct {
 	pendingQuestionFn      func(threadID string) (*agent.PendingQuestion, error)
 	submitAnswerFn         func(threadID, approvalID string, req api.AnswerQuestionRequest) error
 	hasInterruptedTurnFn   func(threadID string) (bool, error)
+	getThreadInfoFn        func(threadID string) (agent.ThreadInfo, error)
 	createThreadFn         func(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error)
 	validateSubagentTypeFn func(subagentType string) error
 }
@@ -47,6 +48,9 @@ func (m *mockSubAgent) Messages(_, _ string) ([]message.UIMessage, error) { retu
 func (m *mockSubAgent) ListThreads() ([]string, error)                    { return nil, nil }
 func (m *mockSubAgent) ListThreadInfos() ([]agent.ThreadInfo, error)      { return nil, nil }
 func (m *mockSubAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	if m.getThreadInfoFn != nil {
+		return m.getThreadInfoFn(threadID)
+	}
 	return agent.ThreadInfo{ID: threadID}, nil
 }
 func (m *mockSubAgent) CreateThread(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
@@ -96,6 +100,40 @@ func (m *mockSubAgent) FinalResponse(threadID string) (string, error) {
 		return m.finalResponseFn(threadID)
 	}
 	return "", nil
+}
+
+func TestCancelTaskCompletionCancelsRunningTask(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rec := &taskRecord{
+		taskID:      "task1",
+		status:      "in_progress",
+		subThreadID: "task1",
+		cancel:      cancel,
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks["task1"] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() {
+		globalTasks.mu.Lock()
+		delete(globalTasks.tasks, "task1")
+		globalTasks.mu.Unlock()
+	})
+
+	cancelledID, ok := cancelTaskCompletion("task1")
+	if !ok {
+		t.Fatal("expected task cancellation to succeed")
+	}
+	if cancelledID != "task1" {
+		t.Fatalf("expected task ID, got %q", cancelledID)
+	}
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("expected task context to be cancelled")
+	}
 }
 
 type storeBackedMockSubAgent struct {
@@ -325,6 +363,19 @@ func makeTaskCall(t *testing.T, prompt string) message.ToolCallPart {
 	}
 }
 
+func makeTaskOutputCall(t *testing.T, taskID string, block bool) message.ToolCallPart {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"task_id": taskID, "block": block})
+	if err != nil {
+		t.Fatalf("marshal TaskOutput input: %v", err)
+	}
+	return message.ToolCallPart{
+		ToolCallID: t.Name() + "-task-output",
+		ToolName:   "TaskOutput",
+		Input:      string(raw),
+	}
+}
+
 func waitHandle(t *testing.T, handle *thread.AsyncContinuationHandle, timeout time.Duration) message.ToolResultPart {
 	t.Helper()
 	res := waitAsyncResult(t, handle, timeout)
@@ -483,6 +534,71 @@ func TestTask_BasicSubAgent(t *testing.T) {
 	res := waitHandle(t, result.Async, 5*time.Second)
 	if got := textOutput(res); got != want {
 		t.Errorf("output: got %q, want %q", got, want)
+	}
+}
+
+func TestTaskOutputReadsCompletedTaskFromPersistedThread(t *testing.T) {
+	const taskID = "parent-thread.sub.persisted-complete"
+	const want = "persisted final response"
+
+	subAgent := &mockSubAgent{
+		finalResponseFn: func(threadID string) (string, error) {
+			if threadID != taskID {
+				t.Fatalf("FinalResponse threadID = %q, want %q", threadID, taskID)
+			}
+			return want, nil
+		},
+	}
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+
+	result, err := exec.Execute(
+		context.Background(),
+		&thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent},
+		makeTaskOutputCall(t, taskID, true),
+	)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := textOutput(result.Result); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestTaskOutputReportsPersistedInterruptedTask(t *testing.T) {
+	const taskID = "parent-thread.sub.persisted-interrupted"
+	metadata := thread.ConfigMetadata{Type: "task", TaskID: taskID}.RawMessage()
+	subAgent := &mockSubAgent{
+		finalResponseFn: func(string) (string, error) { return "", nil },
+		getThreadInfoFn: func(threadID string) (agent.ThreadInfo, error) {
+			if threadID != taskID {
+				t.Fatalf("GetThreadInfo threadID = %q, want %q", threadID, taskID)
+			}
+			return agent.ThreadInfo{
+				ID:       taskID,
+				State:    agent.ThreadStateInterrupted,
+				Metadata: metadata,
+			}, nil
+		},
+	}
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+
+	result, err := exec.Execute(
+		context.Background(),
+		&thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent},
+		makeTaskOutputCall(t, taskID, false),
+	)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	got := textOutput(result.Result)
+	for _, want := range []string{
+		"found on disk",
+		"Persisted status: interrupted",
+		`resume "` + taskID + `"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output %q missing %q", got, want)
+		}
 	}
 }
 
