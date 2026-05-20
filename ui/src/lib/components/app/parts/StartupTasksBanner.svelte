@@ -115,7 +115,7 @@
 			{/if}
 		</div>
 
-		<div class="mt-2 grid gap-2 md:grid-cols-2">
+		<div class="mt-2 flex flex-col gap-2">
 			{#each startup.visibleTasks as task (task.id)}
 				<div class="rounded-md border border-border bg-background/80 px-3 py-2">
 					<div class="flex items-start justify-between gap-3">
