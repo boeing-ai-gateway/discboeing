@@ -833,6 +833,7 @@
 				...pendingSubmitOptions,
 			});
 			if (wasPending && result) {
+				app.sessions.openThread(result.sessionId, result.threadId);
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
 				}
