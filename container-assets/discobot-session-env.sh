@@ -52,27 +52,6 @@ trim_trailing_whitespace() {
 	printf '%s' "$value"
 }
 
-normalize_env_value() {
-	value=$1
-	case "$value" in
-		\"*\")
-			value=${value#\"}
-			value=${value%\"}
-			;;
-		\"*)
-			return 1
-			;;
-		\'*\')
-			value=${value#\'}
-			value=${value%\'}
-			;;
-		\'*)
-			return 1
-			;;
-	esac
-	printf '%s' "$value"
-}
-
 load_env_file() {
 	env_file=$1
 	if [ ! -f "$env_file" ]; then
@@ -129,10 +108,24 @@ load_env_file() {
 				;;
 		esac
 
-		if ! value=$(normalize_env_value "$value"); then
-			warn_invalid_env_line "$env_file" "$line_number"
-			continue
-		fi
+		case "$value" in
+			\"*\")
+				value=${value#\"}
+				value=${value%\"}
+				;;
+			\"*)
+				warn_invalid_env_line "$env_file" "$line_number"
+				continue
+				;;
+			\'*\')
+				value=${value#\'}
+				value=${value%\'}
+				;;
+			\'*)
+				warn_invalid_env_line "$env_file" "$line_number"
+				continue
+				;;
+		esac
 
 		export "$key=$value"
 	done < "$env_file"
