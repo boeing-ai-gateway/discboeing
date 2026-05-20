@@ -358,9 +358,7 @@
 			"defaultReasonLevel": "high",
 			"family": "gpt-codex-spark",
 			"inputModalities": [
-				"text",
-				"image",
-				"pdf"
+				"text"
 			],
 			"maxOutputTokens": 32000,
 			"name": "GPT-5.3 Codex Spark",
