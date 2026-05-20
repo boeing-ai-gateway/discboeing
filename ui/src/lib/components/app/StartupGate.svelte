@@ -426,13 +426,11 @@
 	});
 </script>
 
-<div
-	class={ready && startupPhase !== "auth"
-		? "transition-opacity duration-200 opacity-100"
-		: "pointer-events-none select-none transition-opacity duration-200 opacity-0"}
->
-	{@render children?.()}
-</div>
+{#if ready && startupPhase !== "auth"}
+	<div class="transition-opacity duration-200 opacity-100">
+		{@render children?.()}
+	</div>
+{/if}
 
 {#if startupPhase === "auth"}
 	<div
