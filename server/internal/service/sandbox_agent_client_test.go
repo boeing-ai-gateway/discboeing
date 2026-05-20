@@ -924,6 +924,7 @@ func TestIsRetryableError(t *testing.T) {
 		{"wrapped EPIPE", fmt.Errorf("write failed: %w", syscall.EPIPE), true},
 		{"broken pipe in string", fmt.Errorf("write: broken pipe"), true},
 		{"server closed idle connection", fmt.Errorf("Get %q: http: server closed idle connection", "http://sandbox/health"), true},
+		{"windows connectex refused", fmt.Errorf(`Post "http://sandbox/configure": dial tcp 127.0.0.1:32769: connectex: No connection could be made because the target machine actively refused it.`), true},
 		{"unrelated error", fmt.Errorf("some other error"), false},
 	}
 

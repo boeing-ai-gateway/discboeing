@@ -169,17 +169,20 @@ func isRetryableError(err error) bool {
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
-	// Check for common network error patterns in the error string
-	errStr := err.Error()
+	// Check for common network error patterns in the error string.
+	errStr := strings.ToLower(err.Error())
 	return strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "connection reset") ||
-		strings.Contains(errStr, "Connection reset by peer") ||
+		strings.Contains(errStr, "connection reset by peer") ||
 		strings.Contains(errStr, "broken pipe") ||
 		strings.Contains(errStr, "no such host") ||
 		strings.Contains(errStr, "i/o timeout") ||
 		strings.Contains(errStr, "server closed idle connection") ||
 		strings.Contains(errStr, "vsock connect") ||
-		strings.Contains(errStr, "EOF")
+		strings.Contains(errStr, "connectex:") ||
+		strings.Contains(errStr, "actively refused") ||
+		strings.Contains(errStr, "no connection could be made") ||
+		strings.Contains(errStr, "eof")
 }
 
 // isRetryableStatus checks if an HTTP status code should trigger a retry.
