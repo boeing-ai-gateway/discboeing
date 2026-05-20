@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -810,8 +811,10 @@ func TestSandboxAgentClient_SendMessages_WithAuthorization(t *testing.T) {
 func TestSandboxAuthTransportMergesProviderWebSocketAuth(t *testing.T) {
 	base := providerWebSocketAuthTransport{}
 	transport := &sandboxAuthTransport{
-		base:  base,
-		token: "discobot-secret",
+		base: base,
+		token: func(context.Context) string {
+			return "discobot-secret"
+		},
 	}
 
 	headers := transport.Headers()
@@ -823,6 +826,43 @@ func TestSandboxAuthTransportMergesProviderWebSocketAuth(t *testing.T) {
 	}
 	if got, want := transport.WebSocketURL("ws://sandbox/exec/abc/attach"), "wss://vm.exe.xyz/exec/abc/attach"; got != want {
 		t.Fatalf("WebSocketURL = %q, want %q", got, want)
+	}
+}
+
+func TestSandboxAuthTransportRefreshesAuthToken(t *testing.T) {
+	var tokenCalls atomic.Int32
+	var receivedAuth []string
+	transport := &sandboxAuthTransport{
+		base: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			receivedAuth = append(receivedAuth, req.Header.Get("Authorization"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("{}")),
+				Header:     make(http.Header),
+				Request:    req,
+			}, nil
+		}),
+		token: func(context.Context) string {
+			return fmt.Sprintf("token-%d", tokenCalls.Add(1))
+		},
+	}
+
+	for range 2 {
+		req := httptest.NewRequest(http.MethodGet, "http://sandbox/health", nil)
+		resp, err := transport.RoundTrip(req)
+		if err != nil {
+			t.Fatalf("RoundTrip() error = %v", err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	headers := transport.Headers()
+
+	if got, want := receivedAuth, []string{"Bearer token-1", "Bearer token-2"}; !slices.Equal(got, want) {
+		t.Fatalf("Authorization headers = %v, want %v", got, want)
+	}
+	if got := headers.Get("Authorization"); got != "Bearer token-3" {
+		t.Fatalf("Headers Authorization = %q", got)
 	}
 }
 

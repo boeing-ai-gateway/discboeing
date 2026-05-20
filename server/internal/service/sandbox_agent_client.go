@@ -264,14 +264,15 @@ func (c *SandboxAgentClient) acquireHTTPClient(ctx context.Context, sessionID st
 }
 
 func (c *SandboxAgentClient) withSandboxAuth(ctx context.Context, lease *sandbox.HTTPClientLease, sessionID string) *sandbox.HTTPClientLease {
-	token := c.sandboxAuthToken(ctx, sessionID)
-	if token == "" {
-		return lease
-	}
 	lease.Client = &http.Client{
 		Transport: &sandboxAuthTransport{
-			base:  lease.Client.Transport,
-			token: token,
+			base: lease.Client.Transport,
+			token: func(tokenCtx context.Context) string {
+				if tokenCtx == nil {
+					tokenCtx = ctx
+				}
+				return c.sandboxAuthToken(tokenCtx, sessionID)
+			},
 		},
 		Timeout: lease.Client.Timeout,
 	}
@@ -301,12 +302,14 @@ func (c *SandboxAgentClient) sandboxAuthToken(ctx context.Context, sessionID str
 
 type sandboxAuthTransport struct {
 	base  http.RoundTripper
-	token string
+	token func(context.Context) string
 }
 
 func (t *sandboxAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clone := req.Clone(req.Context())
-	clone.Header.Set("Authorization", "Bearer "+t.token)
+	if token := t.authToken(req.Context()); token != "" {
+		clone.Header.Set("Authorization", "Bearer "+token)
+	}
 	return t.baseTransport().RoundTrip(clone)
 }
 
@@ -320,7 +323,9 @@ func (t *sandboxAuthTransport) DialContext(ctx context.Context, network, addr st
 
 func (t *sandboxAuthTransport) Headers() http.Header {
 	headers := cloneHeaders(t.baseHeaders())
-	headers.Set("Authorization", "Bearer "+t.token)
+	if token := t.authToken(context.Background()); token != "" {
+		headers.Set("Authorization", "Bearer "+token)
+	}
 	return headers
 }
 
@@ -343,6 +348,13 @@ func (t *sandboxAuthTransport) baseHeaders() http.Header {
 		return transport.Headers()
 	}
 	return nil
+}
+
+func (t *sandboxAuthTransport) authToken(ctx context.Context) string {
+	if t.token == nil {
+		return ""
+	}
+	return t.token(ctx)
 }
 
 func cloneHeaders(headers http.Header) http.Header {
