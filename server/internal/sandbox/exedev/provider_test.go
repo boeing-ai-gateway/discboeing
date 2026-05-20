@@ -286,6 +286,139 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 	}
 }
 
+func TestListCoalescesConcurrentCalls(t *testing.T) {
+	client := newBlockingListClient(`{"vms":[{"vm_name":"discobot-session-1","status":"running","image":"ubuntu:22.04"}]}`)
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const callers = 5
+	errCh := make(chan error, callers)
+	for range callers {
+		go func() {
+			sandboxes, err := provider.List(context.Background())
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if len(sandboxes) != 1 || sandboxes[0].SessionID != "session-1" {
+				errCh <- fmt.Errorf("sandboxes = %#v", sandboxes)
+				return
+			}
+			errCh <- nil
+		}()
+	}
+
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first list call")
+	}
+	close(client.release)
+
+	for range callers {
+		if err := <-errCh; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls := client.calls(); calls != 1 {
+		t.Fatalf("list calls = %d, want 1", calls)
+	}
+}
+
+func TestListUsesShortLivedCache(t *testing.T) {
+	oldTTL := listCacheTTL
+	listCacheTTL = time.Hour
+	t.Cleanup(func() { listCacheTTL = oldTTL })
+
+	client := &countingListClient{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running","image":"ubuntu:22.04"}]}`}
+	provider, err := NewProviderWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := provider.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("first list length = %d", len(first))
+	}
+	first[0].SessionID = "mutated"
+
+	second, err := provider.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != 1 || second[0].SessionID != "session-1" {
+		t.Fatalf("second list = %#v", second)
+	}
+	if calls := client.calls(); calls != 1 {
+		t.Fatalf("list calls = %d, want 1", calls)
+	}
+}
+
+type blockingListClient struct {
+	output  string
+	started chan struct{}
+	release chan struct{}
+
+	mu        sync.Mutex
+	callCount int
+}
+
+func newBlockingListClient(output string) *blockingListClient {
+	return &blockingListClient{
+		output:  output,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (c *blockingListClient) Exec(_ context.Context, command string) ([]byte, error) {
+	if command != "ls --json --l" {
+		return nil, fmt.Errorf("unexpected command %q", command)
+	}
+	c.mu.Lock()
+	c.callCount++
+	if c.callCount == 1 {
+		close(c.started)
+	}
+	c.mu.Unlock()
+	<-c.release
+	return []byte(c.output), nil
+}
+
+func (c *blockingListClient) calls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.callCount
+}
+
+type countingListClient struct {
+	output string
+
+	mu        sync.Mutex
+	callCount int
+}
+
+func (c *countingListClient) Exec(_ context.Context, command string) ([]byte, error) {
+	if command != "ls --json --l" {
+		return nil, fmt.Errorf("unexpected command %q", command)
+	}
+	c.mu.Lock()
+	c.callCount++
+	c.mu.Unlock()
+	return []byte(c.output), nil
+}
+
+func (c *countingListClient) calls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.callCount
+}
+
 func TestCreateBuildsNewCommand(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
 		"new": `{"name":"discobot-session-1","status":"running","image":"ubuntu:22.04","created_at":"2026-05-07T04:09:04Z"}`,

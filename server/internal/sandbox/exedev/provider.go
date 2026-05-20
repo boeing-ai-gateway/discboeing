@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
@@ -32,6 +33,7 @@ var (
 	createVisibilityPollInterval       = 2 * time.Second
 	createVisibilityPollRequestTimeout = 15 * time.Second
 	rateLimitRetryDelay                = 5 * time.Second
+	listCacheTTL                       = 2 * time.Second
 )
 
 var nonDNSName = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -55,6 +57,21 @@ type Provider struct {
 
 	client    commandClient
 	httpCache *sandbox.HTTPClientCache
+
+	listMu       sync.Mutex
+	listCache    listCacheEntry
+	listInFlight *listCall
+}
+
+type listCacheEntry struct {
+	sandboxes []*sandbox.Sandbox
+	expires   time.Time
+}
+
+type listCall struct {
+	done      chan struct{}
+	sandboxes []*sandbox.Sandbox
+	err       error
 }
 
 type providerState struct {
@@ -245,6 +262,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 		Env: env,
 	}
 
+	p.invalidateListCache()
 	return cloneSandbox(sb), newState, nil
 }
 
@@ -268,6 +286,7 @@ func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([
 			return state, err
 		}
 		ps.Status = sandbox.StatusRunning
+		p.invalidateListCache()
 		return marshalState(ps)
 	}
 	log.Printf("Restarting exe.dev VM %q for session %s", vm.Name, sessionID)
@@ -278,6 +297,7 @@ func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([
 		return state, err
 	}
 	ps.Status = sandbox.StatusRunning
+	p.invalidateListCache()
 	return marshalState(ps)
 }
 
@@ -303,6 +323,7 @@ func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, _ t
 		}
 	}
 	ps.Status = sandbox.StatusStopped
+	p.invalidateListCache()
 	return marshalState(ps)
 }
 
@@ -320,6 +341,7 @@ func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, _
 		return state, fmt.Errorf("remove exe.dev VM: %w", err)
 	}
 
+	p.invalidateListCache()
 	return nil, nil
 }
 
@@ -401,9 +423,24 @@ func (p *Provider) GetSecret(_ context.Context, state []byte, _ string) (string,
 }
 
 func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
+	if sandboxes, ok := p.cachedList(); ok {
+		return sandboxes, nil
+	}
+	call, owner := p.startList()
+	if !owner {
+		select {
+		case <-call.done:
+			return cloneSandboxes(call.sandboxes), call.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	defer p.finishList(call)
+
 	out, err := p.client.Exec(ctx, "ls --json --l")
 	if err != nil {
-		return nil, fmt.Errorf("list exe.dev VMs: %w", err)
+		call.err = fmt.Errorf("list exe.dev VMs: %w", err)
+		return nil, call.err
 	}
 	vms := parseVMs(out)
 
@@ -437,7 +474,60 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].SessionID < result[j].SessionID })
-	return result, nil
+	call.sandboxes = cloneSandboxes(result)
+	p.storeListCache(call.sandboxes)
+	return cloneSandboxes(result), nil
+}
+
+func (p *Provider) cachedList() ([]*sandbox.Sandbox, bool) {
+	p.listMu.Lock()
+	defer p.listMu.Unlock()
+	if time.Now().After(p.listCache.expires) {
+		return nil, false
+	}
+	return cloneSandboxes(p.listCache.sandboxes), true
+}
+
+func (p *Provider) startList() (*listCall, bool) {
+	p.listMu.Lock()
+	defer p.listMu.Unlock()
+	if time.Now().Before(p.listCache.expires) {
+		call := &listCall{
+			done:      make(chan struct{}),
+			sandboxes: cloneSandboxes(p.listCache.sandboxes),
+		}
+		close(call.done)
+		return call, false
+	}
+	if p.listInFlight != nil {
+		return p.listInFlight, false
+	}
+	p.listInFlight = &listCall{done: make(chan struct{})}
+	return p.listInFlight, true
+}
+
+func (p *Provider) finishList(call *listCall) {
+	p.listMu.Lock()
+	if p.listInFlight == call {
+		p.listInFlight = nil
+	}
+	p.listMu.Unlock()
+	close(call.done)
+}
+
+func (p *Provider) storeListCache(sandboxes []*sandbox.Sandbox) {
+	p.listMu.Lock()
+	defer p.listMu.Unlock()
+	p.listCache = listCacheEntry{
+		sandboxes: cloneSandboxes(sandboxes),
+		expires:   time.Now().Add(listCacheTTL),
+	}
+}
+
+func (p *Provider) invalidateListCache() {
+	p.listMu.Lock()
+	defer p.listMu.Unlock()
+	p.listCache = listCacheEntry{}
 }
 
 func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
@@ -1039,6 +1129,17 @@ func cloneSandbox(sb *sandbox.Sandbox) *sandbox.Sandbox {
 	clone.Env = maps.Clone(sb.Env)
 	clone.Ports = append([]sandbox.AssignedPort(nil), sb.Ports...)
 	return &clone
+}
+
+func cloneSandboxes(sandboxes []*sandbox.Sandbox) []*sandbox.Sandbox {
+	if sandboxes == nil {
+		return nil
+	}
+	clones := make([]*sandbox.Sandbox, len(sandboxes))
+	for i, sb := range sandboxes {
+		clones[i] = cloneSandbox(sb)
+	}
+	return clones
 }
 
 func firstNonEmpty(values ...string) string {
