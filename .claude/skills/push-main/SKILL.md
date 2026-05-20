@@ -146,5 +146,10 @@ The skill is complete only when:
 - all relevant GitHub Actions runs for that exact commit have completed, and
 - every relevant run concluded successfully.
 
-End with a concise summary including the pushed commit SHA, the remote used, and
-the successful CI run IDs.
+End with a concise summary that includes:
+
+- the pushed commit SHA,
+- the remote used,
+- the successful CI run IDs,
+- what changed during the push-main run, and
+- why each change was made, including any CI failure fixes.
