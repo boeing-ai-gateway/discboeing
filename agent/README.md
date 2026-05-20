@@ -29,14 +29,14 @@ The agent is typically invoked as the container's CMD:
 
 ```bash
 # Container starts with required environment variables
-docker run -e SESSION_ID=abc123 -e WORKSPACE_ORIGIN_PATH=https://github.com/user/repo discobot
+docker run -e DISCOBOT_SESSION_ID=abc123 discobot
 ```
 
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SESSION_ID` | Yes | - | Unique session identifier for AgentFS database |
+| `DISCOBOT_SESSION_ID` | Yes | - | Unique session identifier for filesystem isolation |
 | `WORKSPACE_ORIGIN_PATH` | No | - | Git URL or local path to clone |
 | `WORKSPACE_COMMIT` | No | - | Specific commit SHA to checkout |
 | `AGENT_BINARY` | No | `/opt/discobot/bin/discobot-agent-api` | Path to the agent API binary |
@@ -53,7 +53,7 @@ docker run -e SESSION_ID=abc123 -e WORKSPACE_ORIGIN_PATH=https://github.com/user
 │   ├── .profile                 # User profile
 │   └── workspace/               # Cloned repository
 └── .agentfs/
-    └── {SESSION_ID}.db          # AgentFS SQLite database
+    └── {sessionID}.db          # AgentFS SQLite database
 ```
 
 ### System Paths

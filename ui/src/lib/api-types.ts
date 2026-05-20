@@ -259,6 +259,8 @@ export interface Session {
 	timestamp: string;
 	/** Lifecycle status of the sandbox backing the session. */
 	sandboxStatus: SessionSandboxStatus;
+	/** Human-readable sandbox lifecycle progress message. */
+	sandboxStatusMessage?: string;
 	/** Orthogonal commit operation status. */
 	commitStatus?: CommitStatus;
 	commitOperation?: CommitOperation;

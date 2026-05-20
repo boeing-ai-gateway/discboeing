@@ -16,6 +16,9 @@
 	const sessionErrorMessage = $derived.by(
 		() => session.current?.errorMessage?.trim() ?? "",
 	);
+	const sessionStatusMessage = $derived.by(
+		() => session.current?.sandboxStatusMessage?.trim() ?? "",
+	);
 	const showSessionStatus = $derived.by(
 		() => sessionStatus !== null && sessionStatus !== "ready",
 	);
@@ -45,6 +48,13 @@
 					title={sessionErrorMessage}
 				>
 					{sessionErrorMessage}
+				</p>
+			{:else if sessionStatusMessage}
+				<p
+					class="mt-1 line-clamp-3 text-xs text-muted-foreground"
+					title={sessionStatusMessage}
+				>
+					{sessionStatusMessage}
 				</p>
 			{/if}
 		{:else}

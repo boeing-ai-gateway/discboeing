@@ -423,7 +423,10 @@ func (s *SandboxService) StartSessionSandbox(ctx context.Context, sessionID stri
 	if err != nil {
 		return err
 	}
-	return s.saveProviderStateIfChanged(ctx, sessionID, state, newState)
+	if err := s.saveProviderStateIfChanged(ctx, sessionID, state, newState); err != nil {
+		return err
+	}
+	return s.configureStartedSandbox(ctx, sessionID)
 }
 
 // PrepareSessionSandboxState prepares and persists provider state before
@@ -689,8 +692,7 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 	// Note: The sandbox image is configured globally on the provider via SANDBOX_IMAGE env var
 	opts := sandbox.CreateOptions{
 		SharedSecret: sharedSecret,
-		Env: sandboxCreateEnv(sessionID, sharedSecret, trustKey, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, "",
-			session.ProjectID, s.cfg.MCPOAuthRedirectBase, s.cfg.AgentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
+		Env:          sandboxCreateEnv(sessionID, sharedSecret, trustKey),
 		Labels: map[string]string{
 			"discobot.session.id":   sessionID,
 			"discobot.workspace.id": session.WorkspaceID,
@@ -735,7 +737,88 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 		return fmt.Errorf("failed to save sandbox provider state: %w", err)
 	}
 
+	if err := s.configureSandboxAgent(ctx, sessionID, session, workspace, workspaceCommit, ""); err != nil {
+		_ = s.removeSandbox(ctx, sessionID)
+		return fmt.Errorf("failed to configure sandbox agent: %w", err)
+	}
+
 	return nil
+}
+
+func (s *SandboxService) configureSandboxAgent(ctx context.Context, sessionID string, session *model.Session, workspace *model.Workspace, workspaceCommit, workspaceTargetRef string) error {
+	client := s.newAgentClient(ctx)
+	needsConfigure, err := client.NeedsConfigure(ctx, sessionID)
+	if err != nil {
+		log.Printf("Sandbox agent health check before configure failed for session %s: %v", sessionID, err)
+		needsConfigure = true
+	}
+	if !needsConfigure {
+		return nil
+	}
+	creds, err := s.configureCredentials(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	gitUserName, gitUserEmail := s.getGitConfig(ctx)
+	msg := "configuring agent runtime"
+	if err := s.store.UpdateSessionSandboxProgress(ctx, sessionID, model.SessionStatusInitializing, &msg, nil); err != nil {
+		log.Printf("Warning: failed to update session progress for %s: %v", sessionID, err)
+	}
+	if s.eventBroker != nil {
+		if err := s.eventBroker.PublishSessionUpdated(ctx, session.ProjectID, sessionID, model.SessionStatusInitializing, "", msg); err != nil {
+			log.Printf("Warning: failed to publish session update event: %v", err)
+		}
+	}
+	return client.Configure(ctx, sessionID, sandboxConfigureRequest{
+		WorkspaceOrigin:        "/.workspace",
+		WorkspaceSource:        workspace.Path,
+		WorkspaceSourceType:    workspace.SourceType,
+		WorkspaceCommit:        workspaceCommit,
+		WorkspaceTargetRef:     workspaceTargetRef,
+		SessionID:              sessionID,
+		MCPOAuthRedirectBase:   s.cfg.MCPOAuthRedirectBase,
+		DiscobotServerURL:      s.cfg.AgentServerURL,
+		DiscobotProjectID:      session.ProjectID,
+		EnableGitControlSocket: sandboxGitControlSocketEnabled(workspace, valueOrEmpty(session.WorkspacePath)),
+		Credentials:            creds,
+		GitUserName:            gitUserName,
+		GitUserEmail:           gitUserEmail,
+	}, func(event sandboxConfigureEvent) {
+		if event.Message == "" {
+			return
+		}
+		if err := s.store.UpdateSessionSandboxProgress(ctx, sessionID, model.SessionStatusInitializing, &event.Message, nil); err != nil {
+			log.Printf("Warning: failed to update session progress for %s: %v", sessionID, err)
+		}
+		if s.eventBroker != nil {
+			if err := s.eventBroker.PublishSessionUpdated(ctx, session.ProjectID, sessionID, model.SessionStatusInitializing, "", event.Message); err != nil {
+				log.Printf("Warning: failed to publish session update event: %v", err)
+			}
+		}
+	})
+}
+
+func (s *SandboxService) configureStartedSandbox(ctx context.Context, sessionID string) error {
+	session, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+	workspace, err := s.store.GetWorkspaceByID(ctx, session.WorkspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+	return s.configureSandboxAgent(ctx, sessionID, session, workspace, "", valueOrEmpty(session.TargetRef))
+}
+
+func (s *SandboxService) configureCredentials(ctx context.Context, sessionID string) ([]CredentialEnvVar, error) {
+	if s.credentialFetcher == nil {
+		return nil, nil
+	}
+	creds, err := s.credentialFetcher(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch credentials for sandbox configuration: %w", err)
+	}
+	return creds, nil
 }
 
 func sandboxGitControlSocketEnabled(workspace *model.Workspace, workspacePath string) bool {
@@ -745,10 +828,10 @@ func sandboxGitControlSocketEnabled(workspace *model.Workspace, workspacePath st
 	return isLocalWorkspaceSourceType(workspace.SourceType) && !git.IsGitURL(workspace.Path)
 }
 
-func sandboxCreateEnv(sessionID, sharedSecret, trustKey, workspacePath, workspaceSource, workspaceSourceType, workspaceCommit, workspaceTargetRef, projectID, mcpOAuthRedirectBase, agentServerURL string, enableGitControlSocket bool) map[string]string {
+func sandboxCreateEnv(sessionID, sharedSecret, trustKey string) map[string]string {
 	env := map[string]string{
-		"SESSION_ID":          sessionID,
-		"DISCOBOT_SESSION_ID": sessionID,
+		"DISCOBOT_SESSION_ID":      sessionID,
+		"DISCOBOT_WAIT_FOR_CONFIG": "true",
 	}
 	if sharedSecret != "" {
 		env["DISCOBOT_SECRET"] = hashSandboxSecret(sharedSecret)
@@ -756,35 +839,14 @@ func sandboxCreateEnv(sessionID, sharedSecret, trustKey, workspacePath, workspac
 	if trustKey != "" {
 		env["DISCOBOT_TRUST_KEY"] = trustKey
 	}
-	if workspacePath != "" {
-		env["WORKSPACE_ORIGIN_PATH"] = "/.workspace"
-	}
-	if workspaceSource != "" {
-		env["WORKSPACE_SOURCE"] = workspaceSource
-	}
-	if workspaceSourceType != "" {
-		env["WORKSPACE_SOURCE_TYPE"] = workspaceSourceType
-		env["DISCOBOT_WORKSPACE_SOURCE_TYPE"] = workspaceSourceType
-	}
-	if enableGitControlSocket {
-		env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"] = "true"
-	}
-	if workspaceCommit != "" {
-		env["WORKSPACE_COMMIT"] = workspaceCommit
-	}
-	if workspaceTargetRef != "" {
-		env["WORKSPACE_TARGET_REF"] = workspaceTargetRef
-	}
-	if projectID != "" {
-		env["DISCOBOT_PROJECT_ID"] = projectID
-	}
-	if mcpOAuthRedirectBase != "" {
-		env["DISCOBOT_MCP_OAUTH_REDIRECT_BASE"] = mcpOAuthRedirectBase
-	}
-	if agentServerURL != "" {
-		env["DISCOBOT_SERVER_URL"] = agentServerURL
-	}
 	return env
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func hashSandboxSecret(secret string) string {

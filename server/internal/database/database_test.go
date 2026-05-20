@@ -123,3 +123,16 @@ func TestUpdateSessionStatusMirrorsLegacyStatusColumn(t *testing.T) {
 		t.Fatalf("sandbox_status = %q, want %q", sandboxStatus, "stopped")
 	}
 }
+
+func TestMigrateAddsSessionSandboxStatusMessage(t *testing.T) {
+	db := newTestDB(t)
+	createLegacySessionsTable(t, db)
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("Migrate() failed: %v", err)
+	}
+
+	if !db.Migrator().HasColumn("sessions", "sandbox_status_message") {
+		t.Fatal("sessions.sandbox_status_message column was not added")
+	}
+}

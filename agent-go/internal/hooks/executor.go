@@ -56,7 +56,7 @@ func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	command, args := buildHookCommand(hook.Path)
+	command, args := buildHookCommandForRunAs(hook)
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Dir = opts.Cwd
 
@@ -135,7 +135,7 @@ func executeHookProcess(hook Hook, opts ExecuteOptions) HookResult {
 		timeout = DefaultTimeout
 	}
 
-	command, args := buildHookCommand(hook.Path)
+	command, args := buildHookCommandForRunAs(hook)
 	env := hookEnv(hook, opts)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -230,6 +230,14 @@ func hookEnv(hook Hook, opts ExecuteOptions) map[string]string {
 		env["DISCOBOT_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
 	}
 	return env
+}
+
+func buildHookCommandForRunAs(hook Hook) (string, []string) {
+	command, args := buildHookCommand(hook.Path)
+	if hook.RunAs != "root" || runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		return command, args
+	}
+	return "sudo", append([]string{command}, args...)
 }
 
 // GetHookOutputPath returns the path to a hook's output log file.

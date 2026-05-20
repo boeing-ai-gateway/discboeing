@@ -15,6 +15,7 @@ func applySudoCredentialHeader(t *testing.T, mgr *Manager) {
 		"sessionCredentialId": "session-sudo-1",
 		"credentialId":        "cred-sudo-1",
 		"uses":                []AuthorizedUse{{ID: "use-sudo-1", Description: "install apt packages needed for the build"}},
+		"category":            sudoauth.TokenCategory,
 		"envVar":              SudoTokenEnvVar,
 		"value":               "sudo-token",
 		"provider":            "discobot",
@@ -65,6 +66,31 @@ func TestSudoAuthorizer_RejectsConsoleWithoutRegisteredToken(t *testing.T) {
 	}
 }
 
+func TestSudoAuthorizer_AllowsRegisteredBootstrapToken(t *testing.T) {
+	authorizer := NewSudoAuthorizer(nil, nil)
+	authorizer.RegisterBootstrapToken("bootstrap-token")
+	resp, err := authorizer.AuthorizeSudo(context.Background(), sudoauth.AuthorizeRequest{Runtime: "bootstrap", Token: "bootstrap-token"})
+	if err != nil {
+		t.Fatalf("AuthorizeSudo() error = %v", err)
+	}
+	if !resp.Allow {
+		t.Fatalf("expected bootstrap sudo to be allowed, got %#v", resp)
+	}
+}
+
+func TestSudoAuthorizer_RejectsRevokedBootstrapToken(t *testing.T) {
+	authorizer := NewSudoAuthorizer(nil, nil)
+	authorizer.RegisterBootstrapToken("bootstrap-token")
+	authorizer.RevokeBootstrapToken("bootstrap-token")
+	resp, err := authorizer.AuthorizeSudo(context.Background(), sudoauth.AuthorizeRequest{Runtime: "bootstrap", Token: "bootstrap-token"})
+	if err != nil {
+		t.Fatalf("AuthorizeSudo() error = %v", err)
+	}
+	if resp.Allow || !strings.Contains(resp.Reason, "not valid") {
+		t.Fatalf("expected bootstrap token rejection, got %#v", resp)
+	}
+}
+
 func TestSudoAuthorizer_RejectsAgentWithoutToken(t *testing.T) {
 	authorizer := NewSudoAuthorizer(nil, nil)
 	resp, err := authorizer.AuthorizeSudo(context.Background(), sudoauth.AuthorizeRequest{Runtime: "agent"})
@@ -103,11 +129,7 @@ func TestSudoAuthorizer_AllowsApprovedAgentSudo(t *testing.T) {
 	if !resp.Allow {
 		t.Fatalf("expected approved sudo, got %#v", resp)
 	}
-	if len(resolver.requests) != 1 {
-		t.Fatalf("expected validation request, got %d", len(resolver.requests))
-	}
-	payload := messageText(t, resolver.requests[0].Messages[1])
-	if !strings.Contains(payload, `"command":"sudo apt-get update`) {
-		t.Fatalf("expected sudo command in validation payload, got %s", payload)
+	if len(resolver.requests) != 0 {
+		t.Fatalf("expected sudo authorization to skip model validation, got %d requests", len(resolver.requests))
 	}
 }

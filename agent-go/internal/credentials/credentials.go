@@ -17,6 +17,7 @@ type EnvVar struct {
 	CredentialID        string          `json:"credentialId,omitempty"`
 	SessionCredentialID string          `json:"sessionCredentialId,omitempty"`
 	Uses                []AuthorizedUse `json:"uses,omitempty"`
+	Category            string          `json:"category,omitempty"`
 	EnvVar              string          `json:"envVar"`
 	Value               string          `json:"value"`
 	Provider            string          `json:"provider"`
@@ -116,6 +117,16 @@ func (m *Manager) Apply(credentialsHeader, gitUserName, gitUserEmail string) {
 	m.applyGitUser(gitUserName, gitUserEmail)
 }
 
+// ApplyEnvVars stores the provided credentials in memory and configures git
+// user information if provided. This is equivalent to Apply without requiring
+// callers that already have decoded credentials to round-trip through JSON.
+func (m *Manager) ApplyEnvVars(creds []EnvVar, gitUserName, gitUserEmail string) {
+	if creds != nil {
+		m.update(creds)
+	}
+	m.applyGitUser(gitUserName, gitUserEmail)
+}
+
 // ForProvider returns all credentials for the given provider ID.
 func (m *Manager) ForProvider(providerID string) []EnvVar {
 	m.mu.RLock()
@@ -151,6 +162,7 @@ func parseHeader(headerValue string) []EnvVar {
 		CredentialID        string          `json:"credentialId,omitempty"`
 		SessionCredentialID string          `json:"sessionCredentialId,omitempty"`
 		Uses                []AuthorizedUse `json:"uses,omitempty"`
+		Category            string          `json:"category,omitempty"`
 		EnvVar              string          `json:"envVar"`
 		Value               string          `json:"value"`
 		Provider            string          `json:"provider"`
@@ -187,6 +199,7 @@ func parseHeader(headerValue string) []EnvVar {
 			CredentialID:        entry.CredentialID,
 			SessionCredentialID: entry.SessionCredentialID,
 			Uses:                entry.Uses,
+			Category:            entry.Category,
 			EnvVar:              entry.EnvVar,
 			Value:               entry.Value,
 			Provider:            entry.Provider,

@@ -525,7 +525,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 
 	fmt.Printf("discobot-agent: found %d session hook(s)\n", len(paths))
 
-	sessionID := os.Getenv("SESSION_ID")
+	sessionID := os.Getenv("DISCOBOT_SESSION_ID")
 	dataDir := hooksDataDir(u.homeDir, sessionID)
 
 	// Ensure hooks data dir and output dir exist, owned by the discobot user
@@ -601,7 +601,14 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 
 // buildHookEnv creates the environment for session hooks.
 func buildHookEnv(u *userInfo, sessionID, workspacePath string) []string {
-	env := os.Environ()
+	legacySessionEnv := "SESSION" + "_ID"
+	env := make([]string, 0, len(os.Environ())+5)
+	for _, entry := range os.Environ() {
+		if name, _, ok := strings.Cut(entry, "="); ok && name == legacySessionEnv {
+			continue
+		}
+		env = append(env, entry)
+	}
 	env = append(env,
 		"DISCOBOT_HOOK_TYPE=session",
 		"DISCOBOT_SESSION_ID="+sessionID,

@@ -217,26 +217,27 @@ const (
 
 // Session represents a chat thread within a workspace.
 type Session struct {
-	ID                string         `gorm:"primaryKey;type:text" json:"id"`
-	ProjectID         string         `gorm:"column:project_id;not null;type:text;index" json:"projectId"`
-	WorkspaceID       string         `gorm:"column:workspace_id;not null;type:text;index" json:"workspaceId"`
-	SandboxProviderID string         `gorm:"column:sandbox_provider_id;type:text;default:'';index" json:"providerId,omitempty"`
-	CreatedByUserID   *string        `gorm:"column:created_by_user_id;type:text;index" json:"createdByUserId,omitempty"`
-	Name              string         `gorm:"not null;type:text" json:"name"`
-	DisplayName       *string        `gorm:"column:display_name;type:text" json:"displayName,omitempty"`
-	Description       *string        `gorm:"type:text" json:"description,omitempty"`
-	SandboxStatus     string         `gorm:"column:sandbox_status;not null;type:text;default:initializing" json:"sandboxStatus"`
-	ThreadStatus      string         `gorm:"column:thread_status;not null;type:text;default:idle" json:"threadStatus,omitempty"`
-	CommitStatus      string         `gorm:"column:commit_status;type:text;default:''" json:"commitStatus"`
-	CommitOperation   *string        `gorm:"column:commit_operation;type:text" json:"commitOperation,omitempty"`
-	CommitError       *string        `gorm:"column:commit_error;type:text" json:"commitError,omitempty"`
-	TargetRef         *string        `gorm:"column:target_ref;type:text" json:"targetRef,omitempty"`
-	AppliedCommit     *string        `gorm:"column:applied_commit;type:text" json:"appliedCommit,omitempty"`
-	ErrorMessage      *string        `gorm:"column:error_message;type:text" json:"errorMessage,omitempty"`
-	WorkspacePath     *string        `gorm:"column:workspace_path;type:text" json:"workspacePath,omitempty"`
-	CreatedAt         time.Time      `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt         time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
-	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                   string         `gorm:"primaryKey;type:text" json:"id"`
+	ProjectID            string         `gorm:"column:project_id;not null;type:text;index" json:"projectId"`
+	WorkspaceID          string         `gorm:"column:workspace_id;not null;type:text;index" json:"workspaceId"`
+	SandboxProviderID    string         `gorm:"column:sandbox_provider_id;type:text;default:'';index" json:"providerId,omitempty"`
+	CreatedByUserID      *string        `gorm:"column:created_by_user_id;type:text;index" json:"createdByUserId,omitempty"`
+	Name                 string         `gorm:"not null;type:text" json:"name"`
+	DisplayName          *string        `gorm:"column:display_name;type:text" json:"displayName,omitempty"`
+	Description          *string        `gorm:"type:text" json:"description,omitempty"`
+	SandboxStatus        string         `gorm:"column:sandbox_status;not null;type:text;default:initializing" json:"sandboxStatus"`
+	SandboxStatusMessage *string        `gorm:"column:sandbox_status_message;type:text" json:"sandboxStatusMessage,omitempty"`
+	ThreadStatus         string         `gorm:"column:thread_status;not null;type:text;default:idle" json:"threadStatus,omitempty"`
+	CommitStatus         string         `gorm:"column:commit_status;type:text;default:''" json:"commitStatus"`
+	CommitOperation      *string        `gorm:"column:commit_operation;type:text" json:"commitOperation,omitempty"`
+	CommitError          *string        `gorm:"column:commit_error;type:text" json:"commitError,omitempty"`
+	TargetRef            *string        `gorm:"column:target_ref;type:text" json:"targetRef,omitempty"`
+	AppliedCommit        *string        `gorm:"column:applied_commit;type:text" json:"appliedCommit,omitempty"`
+	ErrorMessage         *string        `gorm:"column:error_message;type:text" json:"errorMessage,omitempty"`
+	WorkspacePath        *string        `gorm:"column:workspace_path;type:text" json:"workspacePath,omitempty"`
+	CreatedAt            time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt            time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
+	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Project           *Project           `gorm:"foreignKey:ProjectID" json:"-"`
 	Workspace         *Workspace         `gorm:"foreignKey:WorkspaceID" json:"-"`

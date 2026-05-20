@@ -71,7 +71,6 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("MODEL", "openai/gpt-5.4")
 	t.Setenv("DATA_DIR", "/tmp/discobot-data")
 	t.Setenv("THREADS_DIR", "/tmp/discobot-threads")
-	t.Setenv("SESSION_ID", "session-123")
 	t.Setenv("MCP_OAUTH_REDIRECT_BASE", "http://127.0.0.1:9999")
 
 	t.Setenv("DISCOBOT_PORT", "")
@@ -81,6 +80,7 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	t.Setenv("DISCOBOT_THREADS_DIR", "")
 	t.Setenv("DISCOBOT_SESSION_ID", "")
 	t.Setenv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "")
+	t.Setenv("WORKSPACE_PATH", "")
 
 	cfg := Load()
 	cwd, err := os.Getwd()
@@ -108,5 +108,16 @@ func TestLoadIgnoresLegacyUnprefixedConfigEnvVars(t *testing.T) {
 	}
 	if cfg.MCPOAuthRedirectBase != "" {
 		t.Fatalf("expected empty MCP OAuth redirect base when DISCOBOT_MCP_OAUTH_REDIRECT_BASE is unset, got %q", cfg.MCPOAuthRedirectBase)
+	}
+}
+
+func TestLoadUsesWorkspacePathAsAgentCwdFallback(t *testing.T) {
+	t.Setenv("DISCOBOT_AGENT_CWD", "")
+	t.Setenv("WORKSPACE_PATH", "/home/discobot/workspace")
+
+	cfg := Load()
+
+	if cfg.AgentCwd != "/home/discobot/workspace" {
+		t.Fatalf("expected agent cwd to fall back to WORKSPACE_PATH, got %q", cfg.AgentCwd)
 	}
 }

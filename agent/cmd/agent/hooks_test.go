@@ -189,6 +189,30 @@ echo hello`,
 	}
 }
 
+func TestBuildHookEnvUsesDiscobotSessionID(t *testing.T) {
+	legacySessionEnv := "SESSION" + "_ID"
+	t.Setenv(legacySessionEnv, "legacy-session")
+
+	env := buildHookEnv(&userInfo{
+		username: "discobot",
+		homeDir:  "/home/discobot",
+	}, "discobot-session", "/home/discobot/workspace")
+
+	values := map[string]string{}
+	for _, entry := range env {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok {
+			values[name] = value
+		}
+	}
+	if values[legacySessionEnv] != "" {
+		t.Fatalf("%s = %q, want unset", legacySessionEnv, values[legacySessionEnv])
+	}
+	if values["DISCOBOT_SESSION_ID"] != "discobot-session" {
+		t.Fatalf("DISCOBOT_SESSION_ID = %q, want discobot-session", values["DISCOBOT_SESSION_ID"])
+	}
+}
+
 func TestNormalizeHookID(t *testing.T) {
 	tests := []struct {
 		filename string

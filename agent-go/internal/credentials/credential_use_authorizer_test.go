@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -107,6 +108,46 @@ func TestCredentialUseAuthorizer_AllowsValidatedCommand(t *testing.T) {
 	}
 	if !strings.Contains(payload, `"command":"gh pr create --fill"`) {
 		t.Fatalf("validation payload missing command: %s", payload)
+	}
+}
+
+func TestCredentialUseAuthorizer_SkipsModelForSudoToken(t *testing.T) {
+	mgr := NewManager()
+	headerValue, err := json.Marshal([]map[string]any{
+		{
+			"sessionCredentialId": "session-sudo-1",
+			"credentialId":        "cred-sudo-1",
+			"uses":                []AuthorizedUse{{ID: "use-sudo-1", Description: "install apt packages"}},
+			"category":            sudoauth.TokenCategory,
+			"envVar":              sudoauth.TokenEnvVar,
+			"value":               "sudo-token",
+			"provider":            "discobot",
+			"authType":            "approval",
+			"agentVisible":        true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr.Apply(string(headerValue), "", "")
+
+	resolver := &credentialValidationMockResolver{
+		models: map[string]AuthorizationModelRef{
+			"mock\x00chat": {ProviderID: "mock", ModelID: "validator-model"},
+		},
+	}
+
+	authorizer := NewCredentialUseAuthorizer(resolver, mgr, "validator prompt")
+	err = authorizer.Authorize(context.Background(), "mock", "tool-call-1", "sudo apt-get update", "run sudo", []CredentialUseBinding{{
+		CredentialID: "session-sudo-1",
+		UseID:        "use-sudo-1",
+		EnvVar:       sudoauth.TokenEnvVar,
+	}})
+	if err != nil {
+		t.Fatalf("Authorize() error = %v", err)
+	}
+	if len(resolver.requests) != 0 {
+		t.Fatalf("expected sudo token to skip model validation, got %d requests", len(resolver.requests))
 	}
 }
 

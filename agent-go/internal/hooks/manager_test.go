@@ -188,6 +188,107 @@ exit 1
 	}
 }
 
+func TestRerunHook_RunsSessionHook(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "install-deps.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Install Deps
+# type: session
+#---
+echo "$DISCOBOT_SESSION_ID:$SESSION_HOOK_RERUN_ENV" > session-hook-ran
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	mgr.SetStartupHookEnv(func(Hook) map[string]string {
+		return map[string]string{"SESSION_HOOK_RERUN_ENV": "ok"}
+	})
+
+	runResult, err := mgr.RerunHook("install-deps")
+	if err != nil {
+		t.Fatalf("RerunHook() failed: %v", err)
+	}
+	if runResult == nil {
+		t.Fatal("expected rerun result")
+	}
+	if !runResult.Result.Success {
+		t.Fatalf("expected session hook rerun to pass, output: %s", runResult.Result.Output)
+	}
+	marker, err := os.ReadFile(filepath.Join(workspaceRoot, "session-hook-ran"))
+	if err != nil {
+		t.Fatalf("ReadFile(marker) failed: %v", err)
+	}
+	if strings.TrimSpace(string(marker)) != "session-123:ok" {
+		t.Fatalf("marker = %q, want session-123:ok", string(marker))
+	}
+
+	status := LoadStatus(mgr.hooksDataDir)
+	got := status.Hooks["install-deps"]
+	if got.LastResult != "success" {
+		t.Fatalf("last result = %q, want success", got.LastResult)
+	}
+	if got.Type != string(HookTypeSession) {
+		t.Fatalf("hook type = %q, want %q", got.Type, HookTypeSession)
+	}
+}
+
+func TestRunSessionHooks_CapturesBackgroundHookEnv(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "background.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Background
+# type: session
+#---
+echo "$CAPTURED_BACKGROUND_ENV:$DISCOBOT_SESSION_ID" > background-env
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	mgr.SetStartupHookEnv(func(Hook) map[string]string {
+		return map[string]string{"CAPTURED_BACKGROUND_ENV": "available"}
+	})
+
+	wait := mgr.RunSessionHooks(nil)
+	mgr.SetStartupHookEnv(nil)
+	wait()
+
+	data, err := os.ReadFile(filepath.Join(workspaceRoot, "background-env"))
+	if err != nil {
+		t.Fatalf("ReadFile(background-env) failed: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != "available:session-123" {
+		t.Fatalf("background env = %q, want available:session-123", string(data))
+	}
+}
+
 func TestEmitCurrentStatusChunk_EmitsHooksStatusDataChunk(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	mgr := NewManager(t.TempDir(), "session-123")

@@ -539,6 +539,33 @@ func (s *Store) UpdateSessionStatus(ctx context.Context, id, status string, erro
 	if s.writeDB.Migrator().HasColumn("sessions", "status") {
 		updates["status"] = status
 	}
+	if s.writeDB.Migrator().HasColumn("sessions", "sandbox_status_message") {
+		updates["sandbox_status_message"] = nil
+	}
+	if errorMessage != nil {
+		updates["error_message"] = *errorMessage
+	} else {
+		updates["error_message"] = nil
+	}
+	return s.writeDB.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// UpdateSessionSandboxProgress updates the sandbox status, progress message,
+// and error message for a session.
+func (s *Store) UpdateSessionSandboxProgress(ctx context.Context, id, status string, statusMessage, errorMessage *string) error {
+	updates := map[string]any{
+		"sandbox_status": status,
+	}
+	if s.writeDB.Migrator().HasColumn("sessions", "status") {
+		updates["status"] = status
+	}
+	if s.writeDB.Migrator().HasColumn("sessions", "sandbox_status_message") {
+		if statusMessage != nil {
+			updates["sandbox_status_message"] = *statusMessage
+		} else {
+			updates["sandbox_status_message"] = nil
+		}
+	}
 	if errorMessage != nil {
 		updates["error_message"] = *errorMessage
 	} else {

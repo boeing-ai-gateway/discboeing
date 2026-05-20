@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -127,6 +128,14 @@ func NewSandboxAgentClient(provider sandbox.Provider, fetcher CredentialFetcher,
 // threadsURL returns the agent-go thread collection route.
 func (c *SandboxAgentClient) threadsURL() string {
 	return "http://sandbox/threads"
+}
+
+func (c *SandboxAgentClient) configureURL() string {
+	return "http://sandbox/configure"
+}
+
+func (c *SandboxAgentClient) healthURL() string {
+	return "http://sandbox/health"
 }
 
 // threadURL returns a URL under the agent-go thread-scoped route.
@@ -485,6 +494,148 @@ func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Req
 	}
 
 	return nil
+}
+
+type sandboxConfigureRequest struct {
+	Model                  string             `json:"model,omitempty"`
+	WorkspaceOrigin        string             `json:"workspaceOrigin,omitempty"`
+	WorkspaceSource        string             `json:"workspaceSource,omitempty"`
+	WorkspaceSourceType    string             `json:"workspaceSourceType,omitempty"`
+	WorkspaceCommit        string             `json:"workspaceCommit,omitempty"`
+	WorkspaceTargetRef     string             `json:"workspaceTargetRef,omitempty"`
+	SessionID              string             `json:"sessionId,omitempty"`
+	MCPOAuthRedirectBase   string             `json:"mcpOAuthRedirectBase,omitempty"`
+	DiscobotServerURL      string             `json:"discobotServerUrl,omitempty"`
+	DiscobotProjectID      string             `json:"discobotProjectId,omitempty"`
+	EnableGitControlSocket bool               `json:"enableGitControlSocket,omitempty"`
+	Credentials            []CredentialEnvVar `json:"credentials,omitempty"`
+	GitUserName            string             `json:"gitUserName,omitempty"`
+	GitUserEmail           string             `json:"gitUserEmail,omitempty"`
+}
+
+type sandboxConfigureEvent struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (c *SandboxAgentClient) NeedsConfigure(ctx context.Context, sessionID string) (bool, error) {
+	lease, err := c.acquireHTTPClient(ctx, sessionID)
+	if err != nil {
+		return true, err
+	}
+	defer lease.Release()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL(), nil)
+	if err != nil {
+		return false, err
+	}
+	if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+		return false, err
+	}
+	resp, err := lease.Client.Do(req)
+	if err != nil {
+		return true, err
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Code       string `json:"code"`
+		Configured *bool  `json:"configured"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+	if body.Code == "AGENT_NOT_CONFIGURED" {
+		return true, nil
+	}
+	if body.Configured != nil {
+		return !*body.Configured, nil
+	}
+	return false, nil
+}
+
+// Configure posts dynamic runtime configuration to an agent-go instance that is
+// waiting in bootstrap mode and consumes its SSE progress stream until it
+// reaches a terminal ready/error state.
+func (c *SandboxAgentClient) Configure(ctx context.Context, sessionID string, cfg sandboxConfigureRequest, progress func(sandboxConfigureEvent)) error {
+	bodyBytes, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal configure request: %w", err)
+	}
+
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.configureURL(), bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, 0, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "text/event-stream")
+		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := lease.Client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+		if isRetryableStatus(resp.StatusCode) {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return nil, resp.StatusCode, fmt.Errorf("configure returned status %d", resp.StatusCode)
+		}
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("configure returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var last sandboxConfigureEvent
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" {
+			continue
+		}
+		var event sandboxConfigureEvent
+		if err := json.Unmarshal([]byte(payload), &event); err != nil {
+			return fmt.Errorf("failed to decode configure event: %w", err)
+		}
+		last = event
+		if progress != nil {
+			progress(event)
+		}
+		switch event.Status {
+		case "ready":
+			return nil
+		case "error":
+			if event.Error == "" {
+				event.Error = "agent configuration failed"
+			}
+			return fmt.Errorf("%s", event.Error)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed reading configure stream: %w", err)
+	}
+	if last.Status == "ready" {
+		return nil
+	}
+	return fmt.Errorf("configure stream ended before ready")
 }
 
 // StartChat sends messages to the sandbox and returns the initial completion metadata.

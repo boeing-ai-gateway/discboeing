@@ -70,3 +70,12 @@ test("session setup status shows creation while pending chat is starting", () =>
 	assert.match(source, /<span>Creating session<\/span>/);
 	assert.doesNotMatch(source, /Restoring session/);
 });
+
+test("session setup status renders sandbox progress below status", () => {
+	const source = readSessionSetupStatusSource();
+
+	assert.match(source, /session\.current\?\.sandboxStatusMessage\?\.trim\(\)/);
+	assert.match(source, /\{:else if sessionStatusMessage\}/);
+	assert.match(source, /title=\{sessionStatusMessage\}/);
+	assert.match(source, /\{sessionStatusMessage\}/);
+});

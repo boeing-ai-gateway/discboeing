@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/obot-platform/discobot/agent-go/internal/hooks"
+	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 )
 
 // HooksStatus handles GET /hooks/status — returns hook evaluation status.
@@ -137,25 +141,67 @@ func (h *Handler) RerunHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.hookManager.RerunHook(hookID)
-	if err != nil {
-		h.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if result == nil {
-		h.Error(w, http.StatusNotFound, "Hook not found")
-		return
-	}
-
-	if result.Eval.ShouldReprompt {
-		threadID := chi.URLParam(r, "id")
-		if err := h.hookManager.StartFailureReprompt(threadID, result.Eval); err != nil {
-			log.Printf("hooks: failed to start re-prompt for manual rerun: %v", err)
+	h.withManualSessionHookSudo(func() {
+		result, err := h.hookManager.RerunHook(hookID)
+		if err != nil {
+			h.Error(w, http.StatusInternalServerError, err.Error())
+			return
 		}
-	}
+		if result == nil {
+			h.Error(w, http.StatusNotFound, "Hook not found")
+			return
+		}
 
-	h.JSON(w, http.StatusOK, api.HookRerunResponse{
-		Success:  result.Result.Success,
-		ExitCode: result.Result.ExitCode,
+		if result.Eval.ShouldReprompt {
+			threadID := chi.URLParam(r, "id")
+			if err := h.hookManager.StartFailureReprompt(threadID, result.Eval); err != nil {
+				log.Printf("hooks: failed to start re-prompt for manual rerun: %v", err)
+			}
+		}
+
+		h.JSON(w, http.StatusOK, api.HookRerunResponse{
+			Success:  result.Result.Success,
+			ExitCode: result.Result.ExitCode,
+		})
 	})
+}
+
+func (h *Handler) withManualSessionHookSudo(fn func()) {
+	if h.sudoAuthorizer == nil {
+		fn()
+		return
+	}
+	token, err := randomSudoBootstrapToken()
+	if err != nil {
+		log.Printf("hooks: failed to create manual session hook sudo token: %v", err)
+		fn()
+		return
+	}
+	h.sudoAuthorizer.RegisterBootstrapToken(token)
+	defer h.sudoAuthorizer.RevokeBootstrapToken(token)
+	h.hookManager.SetStartupHookEnv(func(hook hooks.Hook) map[string]string {
+		return manualSessionHookSudoEnv(hook, token)
+	})
+	defer h.hookManager.SetStartupHookEnv(nil)
+	fn()
+}
+
+func manualSessionHookSudoEnv(hook hooks.Hook, token string) map[string]string {
+	if hook.RunAs != "root" {
+		return nil
+	}
+	return map[string]string{
+		sudoauth.TokenEnvVar:             token,
+		"DISCOBOT_SUDO_RUNTIME":          "bootstrap",
+		"DISCOBOT_SUDO_COMMAND":          hook.Path,
+		"DISCOBOT_SUDO_BOOTSTRAP_REASON": "manual session hook rerun " + hook.Name,
+	}
+}
+
+func randomSudoBootstrapToken() (string, error) {
+	var token [32]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(token[:]), nil
 }

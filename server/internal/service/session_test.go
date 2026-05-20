@@ -224,29 +224,24 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	if opts.WorkspaceTargetRef != defaultSessionTargetRef {
 		t.Fatalf("WorkspaceTargetRef = %q, want %q", opts.WorkspaceTargetRef, defaultSessionTargetRef)
 	}
-	if opts.Env["SESSION_ID"] != dbSession.ID {
-		t.Fatalf("Env[SESSION_ID] = %q, want %q", opts.Env["SESSION_ID"], dbSession.ID)
+	legacySessionEnv := "SESSION" + "_ID"
+	if _, ok := opts.Env[legacySessionEnv]; ok {
+		t.Fatalf("Env[%s] = %q, want unset", legacySessionEnv, opts.Env[legacySessionEnv])
 	}
 	if opts.Env["DISCOBOT_SESSION_ID"] != dbSession.ID {
 		t.Fatalf("Env[DISCOBOT_SESSION_ID] = %q, want %q", opts.Env["DISCOBOT_SESSION_ID"], dbSession.ID)
 	}
-	if opts.Env["DISCOBOT_PROJECT_ID"] != project.ID {
-		t.Fatalf("Env[DISCOBOT_PROJECT_ID] = %q, want %q", opts.Env["DISCOBOT_PROJECT_ID"], project.ID)
-	}
-	if opts.Env["WORKSPACE_SOURCE"] != workspace.Path {
-		t.Fatalf("Env[WORKSPACE_SOURCE] = %q, want %q", opts.Env["WORKSPACE_SOURCE"], workspace.Path)
-	}
-	if opts.Env["WORKSPACE_SOURCE_TYPE"] != model.WorkspaceSourceTypeGit {
-		t.Fatalf("Env[WORKSPACE_SOURCE_TYPE] = %q, want %q", opts.Env["WORKSPACE_SOURCE_TYPE"], model.WorkspaceSourceTypeGit)
-	}
-	if opts.Env["DISCOBOT_WORKSPACE_SOURCE_TYPE"] != model.WorkspaceSourceTypeGit {
-		t.Fatalf("Env[DISCOBOT_WORKSPACE_SOURCE_TYPE] = %q, want %q", opts.Env["DISCOBOT_WORKSPACE_SOURCE_TYPE"], model.WorkspaceSourceTypeGit)
-	}
-	if opts.Env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"] != "" {
-		t.Fatalf("Env[DISCOBOT_ENABLE_GIT_CONTROL_SOCKET] = %q, want empty for sandbox-cloned git URL workspace", opts.Env["DISCOBOT_ENABLE_GIT_CONTROL_SOCKET"])
-	}
-	if opts.Env["WORKSPACE_TARGET_REF"] != defaultSessionTargetRef {
-		t.Fatalf("Env[WORKSPACE_TARGET_REF] = %q, want %q", opts.Env["WORKSPACE_TARGET_REF"], defaultSessionTargetRef)
+	for _, key := range []string{
+		"DISCOBOT_PROJECT_ID",
+		"WORKSPACE_SOURCE",
+		"WORKSPACE_SOURCE_TYPE",
+		"DISCOBOT_WORKSPACE_SOURCE_TYPE",
+		"DISCOBOT_ENABLE_GIT_CONTROL_SOCKET",
+		"WORKSPACE_TARGET_REF",
+	} {
+		if opts.Env[key] != "" {
+			t.Fatalf("Env[%s] = %q, want empty because dynamic config is sent to /configure", key, opts.Env[key])
+		}
 	}
 	if opts.Env["DISCOBOT_SECRET"] == "" {
 		t.Fatal("Env[DISCOBOT_SECRET] is empty")
@@ -777,24 +772,25 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 	createdByUserID := "user-123"
 
 	modelSession := &model.Session{
-		ID:              "test-id",
-		ProjectID:       "test-project",
-		WorkspaceID:     "test-workspace",
-		CreatedByUserID: &createdByUserID,
-		Name:            "test-name",
-		DisplayName:     strPtr("Test Display"),
-		Description:     strPtr("Test Description"),
-		SandboxStatus:   "ready",
-		ThreadStatus:    model.SessionActivityStatusNeedsAttention,
-		CommitStatus:    model.CommitStatusCompleted,
-		CommitOperation: strPtr(model.CommitOperationCommit),
-		CommitError:     strPtr("commit error"),
-		TargetRef:       strPtr("HEAD"),
-		AppliedCommit:   strPtr("applied456"),
-		ErrorMessage:    strPtr("error message"),
-		WorkspacePath:   strPtr("/path/to/workspace"),
-		CreatedAt:       createdAt,
-		UpdatedAt:       updatedAt,
+		ID:                   "test-id",
+		ProjectID:            "test-project",
+		WorkspaceID:          "test-workspace",
+		CreatedByUserID:      &createdByUserID,
+		Name:                 "test-name",
+		DisplayName:          strPtr("Test Display"),
+		Description:          strPtr("Test Description"),
+		SandboxStatus:        "ready",
+		SandboxStatusMessage: strPtr("sandbox progress"),
+		ThreadStatus:         model.SessionActivityStatusNeedsAttention,
+		CommitStatus:         model.CommitStatusCompleted,
+		CommitOperation:      strPtr(model.CommitOperationCommit),
+		CommitError:          strPtr("commit error"),
+		TargetRef:            strPtr("HEAD"),
+		AppliedCommit:        strPtr("applied456"),
+		ErrorMessage:         strPtr("error message"),
+		WorkspacePath:        strPtr("/path/to/workspace"),
+		CreatedAt:            createdAt,
+		UpdatedAt:            updatedAt,
 	}
 
 	// Create a mock SessionService (nil is fine since mapSession doesn't use it)
@@ -806,24 +802,25 @@ func TestMapSessionFieldCoverage(t *testing.T) {
 	// Define field mappings: model field -> service field
 	// This map documents the expected mapping between model and service layer
 	fieldMappings := map[string]string{
-		"ID":                "ID",
-		"ProjectID":         "ProjectID",
-		"WorkspaceID":       "WorkspaceID",
-		"SandboxProviderID": "ProviderID",
-		"CreatedByUserID":   "CreatedByUserID",
-		"Name":              "Name",
-		"DisplayName":       "DisplayName",
-		"Description":       "Description",
-		"SandboxStatus":     "SandboxStatus",
-		"ThreadStatus":      "ThreadStatus",
-		"CommitStatus":      "CommitStatus",
-		"CommitOperation":   "CommitOperation",
-		"CommitError":       "CommitError",
-		"TargetRef":         "TargetRef",
-		"AppliedCommit":     "AppliedCommit",
-		"ErrorMessage":      "ErrorMessage",
-		"WorkspacePath":     "WorkspacePath",
-		"CreatedAt":         "CreatedAt",
+		"ID":                   "ID",
+		"ProjectID":            "ProjectID",
+		"WorkspaceID":          "WorkspaceID",
+		"SandboxProviderID":    "ProviderID",
+		"CreatedByUserID":      "CreatedByUserID",
+		"Name":                 "Name",
+		"DisplayName":          "DisplayName",
+		"Description":          "Description",
+		"SandboxStatus":        "SandboxStatus",
+		"SandboxStatusMessage": "SandboxStatusMessage",
+		"ThreadStatus":         "ThreadStatus",
+		"CommitStatus":         "CommitStatus",
+		"CommitOperation":      "CommitOperation",
+		"CommitError":          "CommitError",
+		"TargetRef":            "TargetRef",
+		"AppliedCommit":        "AppliedCommit",
+		"ErrorMessage":         "ErrorMessage",
+		"WorkspacePath":        "WorkspacePath",
+		"CreatedAt":            "CreatedAt",
 		// Excluded fields (not part of API response):
 		// - UpdatedAt: mapped to Timestamp
 		// - Project, Workspace, Messages, SessionCommitLogs: relationships, not serialized

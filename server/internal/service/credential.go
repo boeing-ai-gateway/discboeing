@@ -1122,6 +1122,7 @@ type CredentialEnvVar struct {
 	CredentialID        string                 `json:"credentialId,omitempty"`
 	SessionCredentialID string                 `json:"sessionCredentialId,omitempty"`
 	Uses                []SessionCredentialUse `json:"uses,omitempty"`
+	Category            string                 `json:"category,omitempty"`
 	EnvVar              string                 `json:"envVar"`
 	Value               string                 `json:"value"`
 	Provider            string                 `json:"provider"`
@@ -1134,6 +1135,11 @@ type CredentialEnvVar struct {
 	CreatedAt           time.Time              `json:"-"`
 	UpdatedAt           time.Time              `json:"-"`
 }
+
+const (
+	credentialCategorySudo = "sudo"
+	sudoTokenEnvVar        = "DISCOBOT_SUDO_TOKEN"
+)
 
 // GetAllDecrypted returns all configured credentials for a project as environment variable mappings.
 func (s *CredentialService) GetAllDecrypted(ctx context.Context, projectID string) ([]CredentialEnvVar, error) {
@@ -1295,6 +1301,7 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 							CredentialID:        c.ID,
 							SessionCredentialID: sessionCredentialID,
 							Uses:                uses,
+							Category:            credentialCategoryForEnvVar(envVar),
 							EnvVar:              envVar,
 							Value:               secretEnvVar.Value,
 							Provider:            c.Provider,
@@ -1315,6 +1322,7 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 						CredentialID:        c.ID,
 						SessionCredentialID: sessionCredentialID,
 						Uses:                uses,
+						Category:            credentialCategoryForEnvVar(secretEnvVar.Key),
 						EnvVar:              secretEnvVar.Key,
 						Value:               secretEnvVar.Value,
 						Provider:            c.Provider,
@@ -1348,6 +1356,7 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 						CredentialID:        c.ID,
 						SessionCredentialID: sessionCredentialID,
 						Uses:                uses,
+						Category:            credentialCategoryForEnvVar(boundEnvVar),
 						EnvVar:              boundEnvVar,
 						Value:               tokens.AccessToken,
 						Provider:            c.Provider,
@@ -1384,6 +1393,13 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 	}
 
 	return result, nil
+}
+
+func credentialCategoryForEnvVar(envVar string) string {
+	if envVar == sudoTokenEnvVar {
+		return credentialCategorySudo
+	}
+	return ""
 }
 
 // MCPTokenData represents an OAuth token for an MCP server.

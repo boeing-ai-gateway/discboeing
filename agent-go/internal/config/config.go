@@ -18,6 +18,10 @@ type Config struct {
 	AgentCwd        string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
 	Model           string // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
 	WorkspaceSource string // Workspace source path or git URL (WORKSPACE_SOURCE)
+	WorkspaceOrigin string // Original workspace mount path (WORKSPACE_ORIGIN_PATH)
+	WorkspaceType   string // Workspace source type (WORKSPACE_SOURCE_TYPE)
+	WorkspaceCommit string // Workspace commit to check out (WORKSPACE_COMMIT)
+	WorkspaceRef    string // Workspace target ref (WORKSPACE_TARGET_REF)
 
 	// Storage
 	DataDir    string // Root data directory (DISCOBOT_DATA_DIR, default: ~/.discobot)
@@ -31,6 +35,16 @@ type Config struct {
 	MCPOAuthRedirectBase string // Base URL for OAuth callbacks (DISCOBOT_MCP_OAUTH_REDIRECT_BASE)
 	DiscobotServerURL    string // Discobot server URL for posting tokens (DISCOBOT_SERVER_URL)
 	DiscobotProjectID    string // Project ID for the token POST path (DISCOBOT_PROJECT_ID)
+
+	// Bootstrap/configure settings
+	EnableGitControlSocket bool // Enable the git control socket bridge
+}
+
+// DynamicConfigRequired reports whether server mode should start in the
+// lightweight bootstrap state and wait for POST /configure before serving the
+// agent API.
+func (c *Config) DynamicConfigRequired() bool {
+	return getEnvBool("DISCOBOT_WAIT_FOR_CONFIG", false)
 }
 
 // Load reads configuration from environment variables.
@@ -46,9 +60,13 @@ func Load() *Config {
 	cfg.TrustKey = getEnv("DISCOBOT_TRUST_KEY", "")
 
 	// Agent
-	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", cwd)
+	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", getEnv("WORKSPACE_PATH", cwd))
 	cfg.Model = getEnv("DISCOBOT_MODEL", "")
 	cfg.WorkspaceSource = getEnv("WORKSPACE_SOURCE", "")
+	cfg.WorkspaceOrigin = getEnv("WORKSPACE_ORIGIN_PATH", "")
+	cfg.WorkspaceType = getEnv("WORKSPACE_SOURCE_TYPE", getEnv("DISCOBOT_WORKSPACE_SOURCE_TYPE", ""))
+	cfg.WorkspaceCommit = getEnv("WORKSPACE_COMMIT", "")
+	cfg.WorkspaceRef = getEnv("WORKSPACE_TARGET_REF", "")
 
 	// Storage — default to ~/.discobot
 	home, _ := os.UserHomeDir()
@@ -66,6 +84,7 @@ func Load() *Config {
 	cfg.MCPOAuthRedirectBase = getEnv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "")
 	cfg.DiscobotServerURL = getEnv("DISCOBOT_SERVER_URL", "")
 	cfg.DiscobotProjectID = getEnv("DISCOBOT_PROJECT_ID", "")
+	cfg.EnableGitControlSocket = getEnvBool("DISCOBOT_ENABLE_GIT_CONTROL_SOCKET", false)
 
 	return cfg
 }

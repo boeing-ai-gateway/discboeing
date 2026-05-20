@@ -98,14 +98,10 @@ func runSetup() error {
 
 	// Determine configuration from environment
 	runAsUser := envOrDefault("AGENT_USER", defaultUser)
-	sessionID := os.Getenv("SESSION_ID")
-	workspacePath := os.Getenv("WORKSPACE_ORIGIN_PATH")
-	workspaceSource := os.Getenv("WORKSPACE_SOURCE")
-	workspaceCommit := os.Getenv("WORKSPACE_COMMIT")
-	workspaceTargetRef := os.Getenv("WORKSPACE_TARGET_REF")
+	sessionID := os.Getenv("DISCOBOT_SESSION_ID")
 
 	if sessionID == "" {
-		return fmt.Errorf("SESSION_ID environment variable is required")
+		return fmt.Errorf("DISCOBOT_SESSION_ID environment variable is required")
 	}
 
 	userInfo, err := lookupUser(runAsUser)
@@ -115,7 +111,7 @@ func runSetup() error {
 
 	// Step 0: Setup git safe.directory
 	stepStart := time.Now()
-	if err := setupGitSafeDirectories(workspacePath); err != nil {
+	if err := setupGitSafeDirectories(""); err != nil {
 		return fmt.Errorf("git safe.directory setup failed: %w", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] git safe.directory setup completed\n", time.Since(stepStart).Seconds())
@@ -130,13 +126,6 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 2: Clone workspace
-	stepStart = time.Now()
-	if err := setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspaceCommit, userInfo); err != nil {
-		return fmt.Errorf("workspace setup failed: %w", err)
-	}
-	fmt.Printf("discobot-agent: [%.3fs] workspace setup completed\n", time.Since(stepStart).Seconds())
-
 	// Step 3: Setup and mount OverlayFS for copy-on-write session isolation
 	stepStart = time.Now()
 	fmt.Printf("discobot-agent: using OverlayFS\n")
@@ -147,6 +136,9 @@ func runSetup() error {
 	if err := mountOverlayFS(sessionID); err != nil {
 		return fmt.Errorf("overlayfs mount failed: %w", err)
 	}
+	if err := ensureWorkspaceDirectory(userInfo); err != nil {
+		return fmt.Errorf("workspace directory setup failed: %w", err)
+	}
 	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
 
 	// Step 5: Mount cache directories
@@ -155,12 +147,6 @@ func runSetup() error {
 		fmt.Printf("discobot-agent: Cache mount failed: %v\n", err)
 	}
 	fmt.Printf("discobot-agent: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
-
-	// Step 5.5: Run session hooks
-	// In oneshot mode we must wait for background hooks before the process exits.
-	stepStart = time.Now()
-	waitHooks := runSessionHooks(filepath.Join(mountHome, "workspace"), userInfo)
-	fmt.Printf("discobot-agent: [%.3fs] session hooks dispatched\n", time.Since(stepStart).Seconds())
 
 	// Step 6: Setup proxy configuration
 	stepStart = time.Now()
@@ -205,19 +191,10 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-agent: [%.3fs] environment files written\n", time.Since(stepStart).Seconds())
 
-	// Notify systemd that setup is complete so dependent services can start
-	// while background session hooks continue running.
+	// Notify systemd that setup is complete so dependent services can start.
 	fmt.Printf("discobot-agent: [%.3fs] setup completed successfully\n", time.Since(startupStart).Seconds())
 	if err := sdNotifyReady(); err != nil {
 		fmt.Printf("discobot-agent: warning: sd_notify failed: %v\n", err)
-	}
-
-	// Wait for any background session hooks to finish before exiting,
-	// otherwise the process exit will kill in-flight hooks.
-	stepStart = time.Now()
-	waitHooks()
-	if d := time.Since(stepStart); d > 50*time.Millisecond {
-		fmt.Printf("discobot-agent: [%.3fs] waited for background session hooks\n", d.Seconds())
 	}
 
 	return nil
@@ -949,6 +926,21 @@ func chownRecursive(path string, uid, gid int) error {
 	})
 }
 
+// ensureWorkspaceDirectory creates the empty workspace mount point that
+// workspace-dependent services use as their process working directory. The
+// actual clone/setup still happens later in agent-go after dynamic config
+// arrives.
+func ensureWorkspaceDirectory(u *userInfo) error {
+	dir := filepath.Join(mountHome, "workspace")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create %s: %w", dir, err)
+	}
+	if err := os.Chown(dir, u.uid, u.gid); err != nil {
+		return fmt.Errorf("failed to chown %s: %w", dir, err)
+	}
+	return nil
+}
+
 // setupOverlayFS creates the directory structure for overlayfs
 func setupOverlayFS(sessionID string, u *userInfo) error {
 	sessionDir := filepath.Join(overlayFSDir, sessionID)
@@ -1553,11 +1545,14 @@ func buildChildEnv(u *userInfo, proxyEnabled bool) []string {
 	}
 	env := make([]string, 0, len(parentEnv)+extraEnv)
 
-	// Copy parent env, excluding user-specific vars we'll override
+	legacySessionEnv := "SESSION" + "_ID"
+	// Copy parent env, excluding user-specific vars we'll override and legacy
+	// session aliases that should not leak into agent-api.
 	skipVars := map[string]bool{
-		"HOME":    true,
-		"USER":    true,
-		"LOGNAME": true,
+		"HOME":           true,
+		"USER":           true,
+		"LOGNAME":        true,
+		legacySessionEnv: true,
 	}
 
 	for _, e := range parentEnv {

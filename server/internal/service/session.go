@@ -94,26 +94,27 @@ func normalizeSessionStatus(status string) string {
 
 // Session represents a chat session (for API responses)
 type Session struct {
-	ID              string                 `json:"id"`
-	ProjectID       string                 `json:"projectId"`
-	ProviderID      string                 `json:"providerId,omitempty"`
-	CreatedByUserID *string                `json:"-"`
-	Name            string                 `json:"name"`
-	DisplayName     string                 `json:"displayName,omitempty"`
-	Description     string                 `json:"description"`
-	CreatedAt       string                 `json:"createdAt"`
-	Timestamp       string                 `json:"timestamp"`
-	SandboxStatus   string                 `json:"sandboxStatus"`
-	CommitStatus    string                 `json:"commitStatus,omitempty"`
-	CommitOperation string                 `json:"commitOperation,omitempty"`
-	CommitError     string                 `json:"commitError,omitempty"`
-	TargetRef       string                 `json:"targetRef,omitempty"`
-	AppliedCommit   string                 `json:"appliedCommit,omitempty"`
-	ErrorMessage    string                 `json:"errorMessage,omitempty"`
-	ThreadStatus    *SessionActivityStatus `json:"threadStatus,omitempty"`
-	Files           []FileNode             `json:"files"`
-	WorkspaceID     string                 `json:"workspaceId,omitempty"`
-	WorkspacePath   string                 `json:"workspacePath,omitempty"`
+	ID                   string                 `json:"id"`
+	ProjectID            string                 `json:"projectId"`
+	ProviderID           string                 `json:"providerId,omitempty"`
+	CreatedByUserID      *string                `json:"-"`
+	Name                 string                 `json:"name"`
+	DisplayName          string                 `json:"displayName,omitempty"`
+	Description          string                 `json:"description"`
+	CreatedAt            string                 `json:"createdAt"`
+	Timestamp            string                 `json:"timestamp"`
+	SandboxStatus        string                 `json:"sandboxStatus"`
+	SandboxStatusMessage string                 `json:"sandboxStatusMessage,omitempty"`
+	CommitStatus         string                 `json:"commitStatus,omitempty"`
+	CommitOperation      string                 `json:"commitOperation,omitempty"`
+	CommitError          string                 `json:"commitError,omitempty"`
+	TargetRef            string                 `json:"targetRef,omitempty"`
+	AppliedCommit        string                 `json:"appliedCommit,omitempty"`
+	ErrorMessage         string                 `json:"errorMessage,omitempty"`
+	ThreadStatus         *SessionActivityStatus `json:"threadStatus,omitempty"`
+	Files                []FileNode             `json:"files"`
+	WorkspaceID          string                 `json:"workspaceId,omitempty"`
+	WorkspacePath        string                 `json:"workspacePath,omitempty"`
 }
 
 // FileNode represents a file in a session
@@ -314,6 +315,33 @@ func (s *SessionService) UpdateStatus(ctx context.Context, projectID, sessionID,
 	// Always publish SSE event for status changes
 	if s.eventBroker != nil {
 		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, status, ""); err != nil {
+			log.Printf("Failed to publish session update event: %v", err)
+		}
+	}
+
+	return s.mapSession(sess), nil
+}
+
+// UpdateSandboxProgress updates sandbox lifecycle status with an optional
+// human-readable progress message and optional error message.
+func (s *SessionService) UpdateSandboxProgress(ctx context.Context, projectID, sessionID, status string, statusMsg, errorMsg *string) (*Session, error) {
+	status = normalizeSessionStatus(status)
+
+	if err := s.store.UpdateSessionSandboxProgress(ctx, sessionID, status, statusMsg, errorMsg); err != nil {
+		return nil, fmt.Errorf("failed to update session sandbox progress: %w", err)
+	}
+
+	sess, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	if s.eventBroker != nil {
+		message := ""
+		if statusMsg != nil {
+			message = *statusMsg
+		}
+		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, status, "", message); err != nil {
 			log.Printf("Failed to publish session update event: %v", err)
 		}
 	}
@@ -701,6 +729,11 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *S
 		errorMessage = *sess.ErrorMessage
 	}
 
+	sandboxStatusMessage := ""
+	if sess.SandboxStatusMessage != nil {
+		sandboxStatusMessage = *sess.SandboxStatusMessage
+	}
+
 	commitError := ""
 	if sess.CommitError != nil {
 		commitError = *sess.CommitError
@@ -737,25 +770,26 @@ func (s *SessionService) mapSessionWithActivity(sess *model.Session, activity *S
 	}
 
 	session := &Session{
-		ID:              sess.ID,
-		ProjectID:       sess.ProjectID,
-		ProviderID:      sess.SandboxProviderID,
-		CreatedByUserID: sess.CreatedByUserID,
-		Name:            sess.Name,
-		DisplayName:     displayName,
-		Description:     description,
-		CreatedAt:       createdAt,
-		Timestamp:       timestamp,
-		SandboxStatus:   normalizeSessionStatus(sess.SandboxStatus),
-		CommitStatus:    sess.CommitStatus,
-		CommitOperation: commitOperation,
-		CommitError:     commitError,
-		TargetRef:       targetRef,
-		AppliedCommit:   appliedCommit,
-		ErrorMessage:    errorMessage,
-		Files:           []FileNode{},
-		WorkspaceID:     sess.WorkspaceID,
-		WorkspacePath:   workspacePath,
+		ID:                   sess.ID,
+		ProjectID:            sess.ProjectID,
+		ProviderID:           sess.SandboxProviderID,
+		CreatedByUserID:      sess.CreatedByUserID,
+		Name:                 sess.Name,
+		DisplayName:          displayName,
+		Description:          description,
+		CreatedAt:            createdAt,
+		Timestamp:            timestamp,
+		SandboxStatus:        normalizeSessionStatus(sess.SandboxStatus),
+		SandboxStatusMessage: sandboxStatusMessage,
+		CommitStatus:         sess.CommitStatus,
+		CommitOperation:      commitOperation,
+		CommitError:          commitError,
+		TargetRef:            targetRef,
+		AppliedCommit:        appliedCommit,
+		ErrorMessage:         errorMessage,
+		Files:                []FileNode{},
+		WorkspaceID:          sess.WorkspaceID,
+		WorkspacePath:        workspacePath,
 	}
 	session.ThreadStatus = activity
 	return session
@@ -1029,12 +1063,9 @@ func (s *SessionService) initializeSync(
 		if trustKey == "" {
 			sandboxSecret = generateSecret(32)
 		}
-		mcpOAuthRedirectBase := s.sandboxService.cfg.MCPOAuthRedirectBase
-		agentServerURL := s.sandboxService.cfg.AgentServerURL
 		opts := sandbox.CreateOptions{
 			SharedSecret: sandboxSecret,
-			Env: sandboxCreateEnv(sessionID, sandboxSecret, trustKey, workspacePath, workspace.Path, workspace.SourceType, workspaceCommit, session.TargetRef,
-				projectID, mcpOAuthRedirectBase, agentServerURL, sandboxGitControlSocketEnabled(workspace, workspacePath)),
+			Env:          sandboxCreateEnv(sessionID, sandboxSecret, trustKey),
 			Labels: map[string]string{
 				"discobot.session.id":   sessionID,
 				"discobot.workspace.id": workspace.ID,
@@ -1068,6 +1099,17 @@ func (s *SessionService) initializeSync(
 	}
 
 	if needsHealthCheck && s.sandboxService != nil {
+		modelSession := &model.Session{
+			ID:            session.ID,
+			ProjectID:     session.ProjectID,
+			WorkspaceID:   session.WorkspaceID,
+			WorkspacePath: &workspacePath,
+		}
+		if err := s.sandboxService.configureSandboxAgent(ctx, sessionID, modelSession, workspace, workspaceCommit, session.TargetRef); err != nil {
+			log.Printf("Sandbox configure failed for session %s: %v", sessionID, err)
+			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox configure failed: "+err.Error()))
+			return fmt.Errorf("sandbox configure failed: %w", err)
+		}
 		if err := s.sandboxService.waitForSandboxHealth(ctx, sessionID); err != nil {
 			log.Printf("Sandbox health check failed for session %s after start: %v", sessionID, err)
 			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusError, ptrString("sandbox health check failed: "+err.Error()))

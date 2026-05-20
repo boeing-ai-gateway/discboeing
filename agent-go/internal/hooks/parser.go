@@ -31,6 +31,7 @@ type Hook struct {
 	Description string   `json:"description,omitempty"`
 	Path        string   `json:"path"`
 	RunAs       string   `json:"runAs"` // "root" or "user"
+	Blocking    bool     `json:"blocking"`
 	Pattern     string   `json:"pattern,omitempty"`
 	NotifyLLM   bool     `json:"notifyLlm"`
 }
@@ -41,6 +42,7 @@ type hookConfig struct {
 	Type        string
 	Description string
 	RunAs       string
+	Blocking    bool
 	Pattern     string
 	NotifyLLM   *bool // nil = default (true)
 }
@@ -170,6 +172,8 @@ func parseHookFrontMatter(content string) *hookConfig {
 			cfg.Description = value
 		case "run_as":
 			cfg.RunAs = value
+		case "blocking":
+			cfg.Blocking = strings.EqualFold(value, "true")
 		case "pattern":
 			cfg.Pattern = value
 		case "notify_llm":
@@ -262,6 +266,7 @@ func DiscoverHooks(hooksDir string) ([]Hook, error) {
 			Description: cfg.Description,
 			Path:        filePath,
 			RunAs:       runAs,
+			Blocking:    cfg.Blocking,
 			Pattern:     cfg.Pattern,
 			NotifyLLM:   notifyLLM,
 		})

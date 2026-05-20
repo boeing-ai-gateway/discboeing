@@ -87,7 +87,7 @@ The `discobot-agent` binary serves as the container's PID 1 process, providing:
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 4: AgentFS Init                                       │
 │  ───────────────────                                        │
-│  • Check if /.data/.agentfs/{SESSION_ID}.db exists          │
+│  • Check if /.data/.agentfs/{sessionID}.db exists          │
 │  • If not, run: agentfs init --base /.data/discobot {id}     │
 │  • Creates SQLite database with base layer reference        │
 │  • Runs as discobot user                                     │
@@ -325,9 +325,9 @@ Responsible for:
 │  │   ├── .profile               (user profile)              │
 │  │   └── workspace/             (cloned repository)         │
 │  ├── .agentfs/                  (AgentFS databases)         │
-│  │   └── {SESSION_ID}.db        (SQLite with changes)       │
+│  │   └── {sessionID}.db        (SQLite with changes)       │
 │  ├── .overlayfs/                (OverlayFS layers)          │
-│  │   └── {SESSION_ID}/          (upper + work dirs)         │
+│  │   └── {sessionID}/          (upper + work dirs)         │
 │  ├── proxy/                     (session-scoped)            │
 │  │   └── config.yaml            (proxy configuration)       │
 │  └── cache/                     (project-scoped volume)     │

@@ -58,24 +58,25 @@ type Workspace struct {
 
 // Session is the API representation of a session.
 type Session struct {
-	ID                string               `json:"id"`
-	ProjectID         string               `json:"projectId"`
-	WorkspaceID       string               `json:"workspaceId"`
-	SandboxProviderID string               `json:"providerId,omitempty"`
-	Name              string               `json:"name"`
-	DisplayName       *string              `json:"displayName,omitempty"`
-	Description       *string              `json:"description,omitempty"`
-	SandboxStatus     string               `json:"sandboxStatus"`
-	ThreadStatus      *SessionThreadStatus `json:"threadStatus,omitempty"`
-	CommitStatus      string               `json:"commitStatus"`
-	CommitOperation   *string              `json:"commitOperation,omitempty"`
-	CommitError       *string              `json:"commitError,omitempty"`
-	TargetRef         *string              `json:"targetRef,omitempty"`
-	AppliedCommit     *string              `json:"appliedCommit,omitempty"`
-	ErrorMessage      *string              `json:"errorMessage,omitempty"`
-	WorkspacePath     *string              `json:"workspacePath,omitempty"`
-	CreatedAt         time.Time            `json:"createdAt"`
-	UpdatedAt         time.Time            `json:"updatedAt"`
+	ID                   string               `json:"id"`
+	ProjectID            string               `json:"projectId"`
+	WorkspaceID          string               `json:"workspaceId"`
+	SandboxProviderID    string               `json:"providerId,omitempty"`
+	Name                 string               `json:"name"`
+	DisplayName          *string              `json:"displayName,omitempty"`
+	Description          *string              `json:"description,omitempty"`
+	SandboxStatus        string               `json:"sandboxStatus"`
+	SandboxStatusMessage *string              `json:"sandboxStatusMessage,omitempty"`
+	ThreadStatus         *SessionThreadStatus `json:"threadStatus,omitempty"`
+	CommitStatus         string               `json:"commitStatus"`
+	CommitOperation      *string              `json:"commitOperation,omitempty"`
+	CommitError          *string              `json:"commitError,omitempty"`
+	TargetRef            *string              `json:"targetRef,omitempty"`
+	AppliedCommit        *string              `json:"appliedCommit,omitempty"`
+	ErrorMessage         *string              `json:"errorMessage,omitempty"`
+	WorkspacePath        *string              `json:"workspacePath,omitempty"`
+	CreatedAt            time.Time            `json:"createdAt"`
+	UpdatedAt            time.Time            `json:"updatedAt"`
 }
 
 // SessionThreadStatus is the session-level thread activity summary.

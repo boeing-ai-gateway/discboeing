@@ -49,9 +49,10 @@ func FromModel(e *model.ProjectEvent) *Event {
 
 // SessionUpdatedData is the payload for session_updated events
 type SessionUpdatedData struct {
-	SessionID     string `json:"sessionId"`
-	SandboxStatus string `json:"sandboxStatus"`
-	CommitStatus  string `json:"commitStatus,omitempty"`
+	SessionID            string `json:"sessionId"`
+	SandboxStatus        string `json:"sandboxStatus"`
+	SandboxStatusMessage string `json:"sandboxStatusMessage,omitempty"`
+	CommitStatus         string `json:"commitStatus,omitempty"`
 }
 
 // ThreadUpdatedData is the payload for thread_updated events
@@ -156,11 +157,14 @@ func (b *Broker) Publish(ctx context.Context, projectID string, event *Event) er
 
 // PublishSessionUpdated is a convenience method to publish session update events.
 // Both sandbox status and commit status are sent as separate fields to the client.
-func (b *Broker) PublishSessionUpdated(ctx context.Context, projectID, sessionID, sandboxStatus, commitStatus string) error {
+func (b *Broker) PublishSessionUpdated(ctx context.Context, projectID, sessionID, sandboxStatus, commitStatus string, sandboxStatusMessage ...string) error {
 	data := SessionUpdatedData{
 		SessionID:     sessionID,
 		SandboxStatus: sandboxStatus,
 		CommitStatus:  commitStatus,
+	}
+	if len(sandboxStatusMessage) > 0 {
+		data.SandboxStatusMessage = sandboxStatusMessage[0]
 	}
 
 	dataBytes, err := json.Marshal(data)

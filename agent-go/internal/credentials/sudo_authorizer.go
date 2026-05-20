@@ -2,7 +2,6 @@ package credentials
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -12,13 +11,17 @@ import (
 const SudoTokenEnvVar = sudoauth.TokenEnvVar
 
 // SudoAuthorizer validates sudo wrapper requests. Console requests are allowed
-// only when they came from an interactive TTY. Agent requests must present the
-// sudo token and approved use metadata injected by the Bash credential flow.
+// only when they came from an interactive TTY. Agent requests must present a
+// sudo-category token and approved use metadata injected by the Bash credential
+// flow. Unlike normal credential use, sudo approval is already explicit, so this
+// path validates the token locally and does not ask a model to re-judge it.
 type SudoAuthorizer struct {
 	credentialUseAuthorizer *CredentialUseAuthorizer
 	credMgr                 *Manager
 	consoleTokensMu         sync.RWMutex
 	consoleTokens           map[string]struct{}
+	bootstrapTokensMu       sync.RWMutex
+	bootstrapTokens         map[string]struct{}
 }
 
 func NewSudoAuthorizer(credentialUseAuthorizer *CredentialUseAuthorizer, credMgr *Manager) *SudoAuthorizer {
@@ -26,6 +29,7 @@ func NewSudoAuthorizer(credentialUseAuthorizer *CredentialUseAuthorizer, credMgr
 		credentialUseAuthorizer: credentialUseAuthorizer,
 		credMgr:                 credMgr,
 		consoleTokens:           make(map[string]struct{}),
+		bootstrapTokens:         make(map[string]struct{}),
 	}
 }
 
@@ -59,8 +63,43 @@ func (a *SudoAuthorizer) validConsoleToken(token string) bool {
 	return ok
 }
 
+func (a *SudoAuthorizer) RegisterBootstrapToken(token string) {
+	token = strings.TrimSpace(token)
+	if a == nil || token == "" {
+		return
+	}
+	a.bootstrapTokensMu.Lock()
+	defer a.bootstrapTokensMu.Unlock()
+	a.bootstrapTokens[token] = struct{}{}
+}
+
+func (a *SudoAuthorizer) RevokeBootstrapToken(token string) {
+	token = strings.TrimSpace(token)
+	if a == nil || token == "" {
+		return
+	}
+	a.bootstrapTokensMu.Lock()
+	defer a.bootstrapTokensMu.Unlock()
+	delete(a.bootstrapTokens, token)
+}
+
+func (a *SudoAuthorizer) validBootstrapToken(token string) bool {
+	if a == nil || strings.TrimSpace(token) == "" {
+		return false
+	}
+	a.bootstrapTokensMu.RLock()
+	defer a.bootstrapTokensMu.RUnlock()
+	_, ok := a.bootstrapTokens[token]
+	return ok
+}
+
 func (a *SudoAuthorizer) AuthorizeSudo(ctx context.Context, req sudoauth.AuthorizeRequest) (sudoauth.AuthorizeResponse, error) {
 	switch req.Runtime {
+	case "bootstrap":
+		if !a.validBootstrapToken(req.Token) {
+			return sudoauth.AuthorizeResponse{Allow: false, Reason: "bootstrap sudo token is not valid"}, nil
+		}
+		return sudoauth.AuthorizeResponse{Allow: true, Reason: "bootstrap sudo is allowed"}, nil
 	case "console":
 		if !req.TTY {
 			return sudoauth.AuthorizeResponse{Allow: false, Reason: "console sudo requires an interactive terminal"}, nil
@@ -76,8 +115,8 @@ func (a *SudoAuthorizer) AuthorizeSudo(ctx context.Context, req sudoauth.Authori
 	}
 }
 
-func (a *SudoAuthorizer) authorizeAgentSudo(ctx context.Context, req sudoauth.AuthorizeRequest) (sudoauth.AuthorizeResponse, error) {
-	if a == nil || a.credentialUseAuthorizer == nil || a.credMgr == nil {
+func (a *SudoAuthorizer) authorizeAgentSudo(_ context.Context, req sudoauth.AuthorizeRequest) (sudoauth.AuthorizeResponse, error) {
+	if a == nil || a.credMgr == nil {
 		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo authorization is not configured"}, nil
 	}
 	if req.Token == "" || req.CredentialID == "" || req.UseID == "" {
@@ -87,28 +126,20 @@ func (a *SudoAuthorizer) authorizeAgentSudo(ctx context.Context, req sudoauth.Au
 	if cred == nil {
 		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo token is not valid for this session"}, nil
 	}
-	if !cred.AgentVisible || cred.EnvVar != SudoTokenEnvVar {
-		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo token is not agent-visible for sudo"}, nil
+	if !cred.AgentVisible || cred.EnvVar != SudoTokenEnvVar || cred.Category != sudoauth.TokenCategory {
+		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo token is not authorized for sudo"}, nil
 	}
-
-	command := sudoAuthorizationCommand(req)
-	if err := a.credentialUseAuthorizer.Authorize(ctx, "", req.ToolCallID, command, "Authorize sudo privilege escalation", []CredentialUseBinding{{
-		CredentialID: req.CredentialID,
-		UseID:        req.UseID,
-		EnvVar:       SudoTokenEnvVar,
-	}}); err != nil {
-		return sudoauth.AuthorizeResponse{Allow: false, Reason: err.Error()}, nil
+	if !credentialHasApprovedUse(cred, req.UseID) {
+		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo use is not authorized for this token"}, nil
 	}
-	return sudoauth.AuthorizeResponse{Allow: true, Reason: "sudo use matches the approved credential use"}, nil
+	return sudoauth.AuthorizeResponse{Allow: true, Reason: "sudo token and approved use are valid"}, nil
 }
 
-func sudoAuthorizationCommand(req sudoauth.AuthorizeRequest) string {
-	parts := make([]string, 0, len(req.Args)+2)
-	parts = append(parts, "sudo")
-	parts = append(parts, req.Args...)
-	cmd := strings.Join(parts, " ")
-	if strings.TrimSpace(req.Command) == "" {
-		return fmt.Sprintf("%s\ncwd: %s", cmd, req.Cwd)
+func credentialHasApprovedUse(cred *EnvVar, useID string) bool {
+	for _, use := range cred.Uses {
+		if use.ID == useID {
+			return true
+		}
 	}
-	return fmt.Sprintf("%s\ncwd: %s\noriginal Bash command: %s", cmd, req.Cwd, req.Command)
+	return false
 }

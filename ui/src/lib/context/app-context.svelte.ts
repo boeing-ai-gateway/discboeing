@@ -51,6 +51,7 @@ type ProjectEvent<TData> = {
 type SessionUpdatedEventData = {
 	sessionId: string;
 	sandboxStatus?: string;
+	sandboxStatusMessage?: string;
 };
 
 type ThreadUpdatedEventData = {

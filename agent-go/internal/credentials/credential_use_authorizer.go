@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -92,6 +93,9 @@ func (a *CredentialUseAuthorizer) Authorize(ctx context.Context, currentProvider
 		}
 		if approvedUse == nil {
 			return fmt.Errorf("credential use %s is not authorized for credential id %s", use.UseID, use.CredentialID)
+		}
+		if cred.Category == sudoauth.TokenCategory && cred.EnvVar == sudoauth.TokenEnvVar {
+			continue
 		}
 
 		groupKey := use.CredentialID + "\x00" + use.EnvVar

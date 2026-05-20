@@ -134,7 +134,7 @@ func detectFilesystemType(sessionID string) filesystemType {
 
 Detection logic:
 - If `DISCOBOT_FILESYSTEM` env var is set, use that filesystem
-- If `/.data/.agentfs/{SESSION_ID}.db` exists, use AgentFS (backwards compatibility)
+- If `/.data/.agentfs/{sessionID}.db` exists, use AgentFS (backwards compatibility)
 - Otherwise, use OverlayFS (new default)
 
 #### OverlayFS (Default for New Sessions)
@@ -171,7 +171,7 @@ func mountOverlayFS(sessionID string) error {
 
 OverlayFS advantages:
 - Kernel-native (no FUSE overhead)
-- Changes stored directly in filesystem (`/.data/.overlayfs/{SESSION_ID}/upper/`)
+- Changes stored directly in filesystem (`/.data/.overlayfs/{sessionID}/upper/`)
 - Lower memory and CPU overhead
 
 #### AgentFS (For Existing Sessions)
@@ -294,7 +294,7 @@ SIGTERM received
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| SESSION_ID | Yes | Unique identifier for filesystem isolation |
+| DISCOBOT_SESSION_ID | Yes | Unique identifier for filesystem isolation |
 | WORKSPACE_ORIGIN_PATH | No | Git URL to clone |
 | WORKSPACE_COMMIT | No | Specific commit to checkout |
 | AGENT_BINARY | No | Override agent API binary path |
@@ -309,8 +309,8 @@ The init process creates the following directories with `discobot` ownership:
 |-----------|---------|
 | `/.data/discobot` | Base home directory (copied from /home/discobot template) |
 | `/.data/discobot/workspace` | Cloned repository or empty workspace |
-| `/.data/.overlayfs/{SESSION_ID}/upper` | OverlayFS writable layer (new sessions) |
-| `/.data/.overlayfs/{SESSION_ID}/work` | OverlayFS scratch space (new sessions) |
+| `/.data/.overlayfs/{sessionID}/upper` | OverlayFS writable layer (new sessions) |
+| `/.data/.overlayfs/{sessionID}/work` | OverlayFS scratch space (new sessions) |
 | `/.data/.agentfs` | AgentFS SQLite databases (existing sessions) |
 
 Note: Session and message persistence files are stored in `/home/discobot/.config/discobot/` which is managed by the overlay filesystem and created by agent-api on demand.
@@ -356,7 +356,7 @@ The core functions can be unit tested:
 docker run --rm \
     --cap-add SYS_ADMIN \
     --device /dev/fuse:/dev/fuse:rwm \
-    -e SESSION_ID=test123 \
+    -e DISCOBOT_SESSION_ID=test123 \
     -e WORKSPACE_ORIGIN_PATH=https://github.com/octocat/Hello-World \
     -v /tmp/data:/.data \
     discobot
@@ -372,7 +372,7 @@ docker exec -u discobot <container> ls /.data/discobot/workspace/  # Should NOT 
 docker run --rm -d --name test-agent \
     --cap-add SYS_ADMIN \
     --device /dev/fuse:/dev/fuse:rwm \
-    -e SESSION_ID=test123 \
+    -e DISCOBOT_SESSION_ID=test123 \
     discobot
 docker stop test-agent  # Should exit cleanly
 ```
@@ -384,7 +384,7 @@ docker stop test-agent  # Should exit cleanly
 go build -o discobot-agent ./agent/cmd/agent
 
 # Test user lookup
-AGENT_USER=$USER SESSION_ID=test ./discobot-agent --help
+AGENT_USER=$USER DISCOBOT_SESSION_ID=test ./discobot-agent --help
 
 # Test as PID 1 (requires root)
 sudo unshare -p -f --mount-proc ./discobot-agent

@@ -95,7 +95,10 @@ func isSandboxUnavailableError(err error) bool {
 	return strings.Contains(errStr, "sandbox not found") ||
 		strings.Contains(errStr, "sandbox is not running") ||
 		strings.Contains(errStr, "container not found") ||
-		strings.Contains(errStr, "No such container")
+		strings.Contains(errStr, "No such container") ||
+		strings.Contains(errStr, "AGENT_NOT_CONFIGURED") ||
+		strings.Contains(errStr, "waiting for configuration") ||
+		strings.Contains(errStr, "retryable status 503")
 }
 
 // StartChat sends messages to the sandbox and returns completion metadata.

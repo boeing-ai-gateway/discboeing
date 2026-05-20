@@ -74,6 +74,11 @@ type HookRunResult struct {
 	Eval   FileHookEvalResult
 }
 
+type startupHookRun struct {
+	hook Hook
+	env  map[string]string
+}
+
 // Manager orchestrates hook discovery, execution, and status tracking.
 type Manager struct {
 	workspaceRoot string
@@ -82,11 +87,13 @@ type Manager struct {
 	processes     *processes.Manager
 
 	mu             sync.Mutex
+	sessionHooks   []Hook
 	fileHooks      []Hook
 	preCommitHooks []Hook
 	initialized    bool
 	chunkEmitter   func(message.MessageChunk)
 	envSnapshot    func() map[string]string
+	startupHookEnv func(Hook) map[string]string
 	conversations  Conversation
 	promptQueue    *promptqueue.Manager
 
@@ -127,6 +134,27 @@ func (m *Manager) SetEnvSnapshot(fn func() map[string]string) {
 	m.mu.Lock()
 	m.envSnapshot = fn
 	m.mu.Unlock()
+}
+
+// SetStartupHookEnv sets extra environment that is only injected into session
+// hook executions that use visibleStartupHookEnv. Runtime file/pre-commit hooks
+// intentionally do not inherit this bootstrap authority.
+func (m *Manager) SetStartupHookEnv(fn func(Hook) map[string]string) {
+	m.mu.Lock()
+	m.startupHookEnv = fn
+	m.mu.Unlock()
+}
+
+func (m *Manager) visibleStartupHookEnv(hook Hook) map[string]string {
+	env := m.visibleEnvSnapshot()
+	m.mu.Lock()
+	fn := m.startupHookEnv
+	m.mu.Unlock()
+	if fn == nil {
+		return env
+	}
+	maps.Copy(env, fn(hook))
+	return env
 }
 
 func (m *Manager) visibleEnvSnapshot() map[string]string {
@@ -218,10 +246,13 @@ func (m *Manager) loadHooks() error {
 	}
 
 	m.fileHooks = nil
+	m.sessionHooks = nil
 	m.preCommitHooks = nil
 
 	for _, hook := range allHooks {
 		switch hook.Type {
+		case HookTypeSession:
+			m.sessionHooks = append(m.sessionHooks, hook)
 		case HookTypeFile:
 			m.fileHooks = append(m.fileHooks, hook)
 		case HookTypePreCommit:
@@ -236,6 +267,82 @@ func (m *Manager) loadHooks() error {
 	}
 
 	return nil
+}
+
+// RunSessionHooks runs startup hooks discovered from .discobot/hooks and
+// returns a wait function for any background hooks. Blocking hooks gate
+// configure-time startup; non-blocking hooks continue in the background after
+// the runtime becomes ready.
+func (m *Manager) RunSessionHooks(progress func(string)) func() {
+	if m == nil {
+		return func() {}
+	}
+
+	m.mu.Lock()
+	m.reloadHooks()
+	sessionHooks := make([]Hook, len(m.sessionHooks))
+	copy(sessionHooks, m.sessionHooks)
+	m.mu.Unlock()
+
+	if len(sessionHooks) == 0 {
+		return func() {}
+	}
+
+	var blockingHooks, backgroundHooks []startupHookRun
+	for _, hook := range sessionHooks {
+		run := startupHookRun{
+			hook: hook,
+			env:  m.visibleStartupHookEnv(hook),
+		}
+		if hook.Blocking {
+			blockingHooks = append(blockingHooks, run)
+		} else {
+			backgroundHooks = append(backgroundHooks, run)
+		}
+	}
+
+	if len(blockingHooks) > 0 {
+		m.runStartupHookGroup(blockingHooks, "blocking", progress)
+	}
+	if len(backgroundHooks) > 0 {
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			m.runStartupHookGroup(backgroundHooks, "background", nil)
+		})
+		return wg.Wait
+	}
+	return func() {}
+}
+
+func (m *Manager) runStartupHookGroup(sessionHooks []startupHookRun, group string, progress func(string)) {
+	if progress != nil {
+		progress(fmt.Sprintf("running %d %s session hook(s)", len(sessionHooks), group))
+	}
+	for _, run := range sessionHooks {
+		if progress != nil {
+			progress(fmt.Sprintf("running session hook %q", run.hook.Name))
+		}
+		m.runStartupHook(run)
+	}
+}
+
+func (m *Manager) runStartupHook(run startupHookRun) {
+	hook := run.hook
+	outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
+	_ = SetHookRunning(m.hooksDataDir, hook)
+	m.emitCurrentStatusChunk()
+
+	result := ExecuteHook(hook, ExecuteOptions{
+		Cwd:        m.workspaceRoot,
+		Env:        run.env,
+		SessionID:  m.sessionID,
+		OutputPath: outputPath,
+		Processes:  m.processes,
+	})
+
+	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+	_ = UpdateLastEvaluatedAt(m.hooksDataDir)
+	m.emitCurrentStatusChunk()
 }
 
 // reloadHooks re-discovers hooks from disk. Must be called with m.mu held.
@@ -366,21 +473,41 @@ func readHookOutputTail(outputPath string, fileSize, maxBytes int64) ([]byte, er
 	return io.ReadAll(file)
 }
 
-// RerunHook manually reruns a file hook against current dirty files.
+// RerunHook manually reruns a file hook against current dirty files or a
+// session hook against the current workspace.
 func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 	m.mu.Lock()
 	m.reloadHooks()
-	var hook *Hook
+	var fileHook *Hook
 	for i := range m.fileHooks {
 		if m.fileHooks[i].ID == hookID {
-			hook = &m.fileHooks[i]
+			fileHook = &m.fileHooks[i]
 			break
+		}
+	}
+	var sessionHook *Hook
+	if fileHook == nil {
+		for i := range m.sessionHooks {
+			if m.sessionHooks[i].ID == hookID {
+				sessionHook = &m.sessionHooks[i]
+				break
+			}
 		}
 	}
 	m.mu.Unlock()
 
-	if hook == nil || hook.Pattern == "" {
-		return nil, nil
+	if fileHook != nil {
+		return m.rerunFileHook(*fileHook), nil
+	}
+	if sessionHook != nil {
+		return m.rerunSessionHook(*sessionHook), nil
+	}
+	return nil, nil
+}
+
+func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
+	if hook.Pattern == "" {
+		return nil
 	}
 
 	allDirty := DirtyFiles(m.workspaceRoot)
@@ -390,10 +517,10 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 	}
 
 	outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
-	_ = SetHookRunning(m.hooksDataDir, *hook)
+	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
-	result := ExecuteHook(*hook, ExecuteOptions{
+	result := ExecuteHook(hook, ExecuteOptions{
 		Cwd:          m.workspaceRoot,
 		Env:          m.visibleEnvSnapshot(),
 		ChangedFiles: matching,
@@ -416,7 +543,27 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 	_ = UpdateLastEvaluatedAt(m.hooksDataDir)
 	m.emitCurrentStatusChunk()
 
-	return &HookRunResult{Result: result, Eval: eval}, nil
+	return &HookRunResult{Result: result, Eval: eval}
+}
+
+func (m *Manager) rerunSessionHook(hook Hook) *HookRunResult {
+	outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
+	_ = SetHookRunning(m.hooksDataDir, hook)
+	m.emitCurrentStatusChunk()
+
+	result := ExecuteHook(hook, ExecuteOptions{
+		Cwd:        m.workspaceRoot,
+		Env:        m.visibleStartupHookEnv(hook),
+		SessionID:  m.sessionID,
+		OutputPath: outputPath,
+		Processes:  m.processes,
+	})
+
+	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+	_ = UpdateLastEvaluatedAt(m.hooksDataDir)
+	m.emitCurrentStatusChunk()
+
+	return &HookRunResult{Result: result}
 }
 
 // EvaluateFileHooks evaluates file hooks after a completion.

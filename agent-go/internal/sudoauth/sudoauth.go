@@ -3,8 +3,9 @@ package sudoauth
 import "context"
 
 const (
-	TokenEnvVar = "DISCOBOT_SUDO_TOKEN"
-	Guidance    = "Please use AskUserQuestion or RequestUserCredential to ask for permission to run `sudo`."
+	TokenCategory = "sudo"
+	TokenEnvVar   = "DISCOBOT_SUDO_TOKEN"
+	Guidance      = "Please use AskUserQuestion or RequestUserCredential to ask for permission to run `sudo`."
 )
 
 type AuthorizeRequest struct {
@@ -31,5 +32,7 @@ type AuthorizeResponse struct {
 type Authorizer interface {
 	RegisterConsoleToken(token string)
 	RevokeConsoleToken(token string)
+	RegisterBootstrapToken(token string)
+	RevokeBootstrapToken(token string)
 	AuthorizeSudo(ctx context.Context, req AuthorizeRequest) (AuthorizeResponse, error)
 }
