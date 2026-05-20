@@ -10,6 +10,8 @@ import (
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
+const restoreRetryDelay = 15 * time.Second
+
 // Conversation starts and observes thread turns for queued prompts.
 type Conversation interface {
 	ActiveCompletionID(threadID string) string
@@ -212,8 +214,16 @@ func (m *Manager) StartNext(threadID string) {
 		ServiceTier: queuedPrompt.ServiceTier,
 	}
 	if _, err := m.startPromptRequest(threadID, req); err != nil {
+		if errors.Is(err, agent.ErrPendingQuestionRequiresAnswer) {
+			log.Printf("queue: paused queued prompt for %s: pending question requires answer", threadID)
+			m.restore(threadID, *queuedPrompt, false)
+			return
+		}
 		log.Printf("queue: failed to start queued prompt for %s: %v", threadID, err)
-		m.restore(threadID, *queuedPrompt)
+		if queuedPrompt.RunAfter.IsZero() {
+			queuedPrompt.RunAfter = time.Now().UTC().Add(restoreRetryDelay)
+		}
+		m.restore(threadID, *queuedPrompt, true)
 		return
 	}
 
@@ -269,7 +279,7 @@ func (m *Manager) startPromptRequest(threadID string, req agent.PromptRequest) (
 	return completionID, err
 }
 
-func (m *Manager) restore(threadID string, prompt Prompt) {
+func (m *Manager) restore(threadID string, prompt Prompt, reschedule bool) {
 	m.mu.Lock()
 	queue, err := m.store.Prepend(threadID, prompt)
 	if err != nil {
@@ -278,7 +288,9 @@ func (m *Manager) restore(threadID string, prompt Prompt) {
 		m.mu.Unlock()
 		return
 	}
-	m.rescheduleLocked(threadID)
+	if reschedule {
+		m.rescheduleLocked(threadID)
+	}
 	m.mu.Unlock()
 	m.notifyChange(threadID, queue)
 }

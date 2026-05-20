@@ -1,9 +1,12 @@
 package promptqueue
 
 import (
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -129,4 +132,120 @@ func TestStoreQueueOperations(t *testing.T) {
 	if popped == nil || popped.ID != "queue-0" {
 		t.Fatalf("expected queue-0 to pop after clearing runAfter, got %#v", popped)
 	}
+}
+
+func TestManagerStartNextDoesNotReschedulePendingQuestion(t *testing.T) {
+	store := NewStore(t.TempDir())
+	_, _, err := store.Append("thread1", Prompt{
+		ID: "queue-1",
+		Message: message.UIMessage{
+			ID:    "user-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "first"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conversations := &queueTestConversation{
+		pendingQuestion: &agent.PendingQuestion{ApprovalID: "approval-1"},
+	}
+	manager := NewManager(store, conversations, nil)
+	manager.timersReady = true
+
+	manager.StartNext("thread1")
+	time.Sleep(25 * time.Millisecond)
+
+	if got := conversations.pendingQuestionCalls.Load(); got != 1 {
+		t.Fatalf("expected one pending question check, got %d", got)
+	}
+	if got := conversations.chatCalls.Load(); got != 0 {
+		t.Fatalf("expected no chat attempts, got %d", got)
+	}
+	queue, err := store.List("thread1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queue) != 1 || queue[0].ID != "queue-1" {
+		t.Fatalf("expected prompt restored without retry loop, got %#v", queue)
+	}
+}
+
+func TestManagerStartNextBacksOffUnknownRestoreError(t *testing.T) {
+	store := NewStore(t.TempDir())
+	_, _, err := store.Append("thread1", Prompt{
+		ID: "queue-1",
+		Message: message.UIMessage{
+			ID:    "user-1",
+			Role:  "user",
+			Parts: []message.UIPart{message.UITextPart{Text: "first"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conversations := &queueTestConversation{
+		chatErr: errors.New("temporary start failure"),
+	}
+	manager := NewManager(store, conversations, nil)
+	manager.timersReady = true
+
+	before := time.Now().UTC()
+	manager.StartNext("thread1")
+	time.Sleep(25 * time.Millisecond)
+
+	if got := conversations.chatCalls.Load(); got != 1 {
+		t.Fatalf("expected one chat attempt before retry delay, got %d", got)
+	}
+	queue, err := store.List("thread1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queue) != 1 || queue[0].ID != "queue-1" {
+		t.Fatalf("expected prompt restored with retry delay, got %#v", queue)
+	}
+	if queue[0].RunAfter.Before(before.Add(restoreRetryDelay)) {
+		t.Fatalf("expected runAfter at least %s, got %s", before.Add(restoreRetryDelay), queue[0].RunAfter)
+	}
+	if queue[0].RunAfter.After(before.Add(restoreRetryDelay + time.Second)) {
+		t.Fatalf("expected runAfter near retry delay, got %s", queue[0].RunAfter)
+	}
+}
+
+type queueTestConversation struct {
+	pendingQuestion      *agent.PendingQuestion
+	chatErr              error
+	pendingQuestionCalls atomic.Int32
+	chatCalls            atomic.Int32
+}
+
+func (c *queueTestConversation) ActiveCompletionID(_ string) string {
+	return ""
+}
+
+func (c *queueTestConversation) Chat(_ string, _ agent.PromptRequest) (string, error) {
+	c.chatCalls.Add(1)
+	if c.chatErr != nil {
+		return "", c.chatErr
+	}
+	return "completion-1", nil
+}
+
+func (c *queueTestConversation) Resume(_ string, _ agent.PromptRequest) (string, error) {
+	return "completion-1", nil
+}
+
+func (c *queueTestConversation) HasInterruptedTurn(_ string) (bool, error) {
+	return false, nil
+}
+
+func (c *queueTestConversation) PendingQuestion(_ string) (*agent.PendingQuestion, error) {
+	c.pendingQuestionCalls.Add(1)
+	return c.pendingQuestion, nil
+}
+
+func (c *queueTestConversation) ListThreads() ([]string, error) {
+	return nil, nil
 }
