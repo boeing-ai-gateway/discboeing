@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,12 +117,13 @@ func handleResumeCommand(ctx context.Context, session clisession.Session, curren
 			otherUnknown++
 		}
 
-		s := threadSummary{id: item.ID, pending: item.PendingQuestion}
+		preview := strings.TrimSpace(item.Name)
+		if preview == "" {
+			preview = strings.TrimSpace(item.LastMessage)
+		}
+		s := threadSummary{id: item.ID, pending: item.PendingQuestion, preview: abbreviate(preview, 80)}
 		if fi, err := os.Stat(filepath.Join(threadsDir, item.ID)); err == nil {
 			s.modTime = fi.ModTime()
-		}
-		if msgs, err := session.Messages(ctx, item.ID); err == nil {
-			s.preview = lastUserPreview(msgs)
 		}
 		summaries = append(summaries, s)
 	}
@@ -195,36 +195,10 @@ func handleResumeCommand(ctx context.Context, session clisession.Session, curren
 	}
 }
 
-func lastUserPreview(messages []message.UIMessage) string {
-	for _, v := range slices.Backward(messages) {
-		msg := v
-		if msg.Role == "user" && !isInjectedMessageID(msg.ID) {
-			if text := extractMessageText(msg.Parts); text != "" && !isInjectedText(text) {
-				return abbreviate(text, 80)
-			}
-		}
-	}
-	return ""
-}
-
 func isInjectedMessageID(id string) bool {
 	return strings.HasPrefix(id, "system-") ||
 		strings.HasPrefix(id, "instructions-") ||
 		strings.HasPrefix(id, "skills-")
-}
-
-func isInjectedText(text string) bool {
-	return strings.HasPrefix(text, "<system-reminder>") ||
-		strings.HasPrefix(text, "<skills-reminder>")
-}
-
-func extractMessageText(parts []message.UIPart) string {
-	for _, p := range parts {
-		if tp, ok := p.(message.UITextPart); ok && tp.Text != "" {
-			return tp.Text
-		}
-	}
-	return ""
 }
 
 func extractAllText(parts []message.UIPart) string {
