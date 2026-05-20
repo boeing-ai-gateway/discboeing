@@ -237,6 +237,19 @@ test("conversation loader falls back to stream finish when completion status nev
 	);
 });
 
+test("conversation loader preserves local running state across stale snapshots", () => {
+	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
+
+	assert.match(
+		source,
+		/const reconcileThreadSnapshot = \(thread: Thread\) => \{\s*if \(!isThreadSnapshotRunning\(thread\)\) \{\s*return;\s*\}\s*handleCompletionStart\(\);\s*\};/,
+	);
+	assert.doesNotMatch(
+		source,
+		/const reconcileThreadSnapshot = \(thread: Thread\) => \{[\s\S]*completionRunning = false;[\s\S]*\};\s*const streamState/,
+	);
+});
+
 test("conversation loader clears the running flag when the thread disconnects", () => {
 	const source = readFileSync(CONVERSATION_DOMAIN_SOURCE, "utf-8");
 

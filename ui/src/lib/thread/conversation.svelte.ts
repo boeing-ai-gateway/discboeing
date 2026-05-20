@@ -211,12 +211,10 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	};
 
 	const reconcileThreadSnapshot = (thread: Thread) => {
-		if (!completionRunning || isThreadSnapshotRunning(thread)) {
+		if (!isThreadSnapshotRunning(thread)) {
 			return;
 		}
-		completionRunning = false;
-		args.onActivityStatusChange?.(null);
-		void dismissRetryToast(args.threadId);
+		handleCompletionStart();
 	};
 
 	const streamState = createChatStreamState({
