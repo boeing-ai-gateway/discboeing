@@ -376,6 +376,7 @@ COPY --from=agent-builder --chmod=755 /discobot-agent /opt/discobot/bin/discobot
 COPY --from=browser-harness-builder /opt/browser-harness /opt/browser-harness
 COPY --from=browser-harness-builder /usr/local/bin/browser-harness /usr/local/bin/browser-harness
 COPY --from=browser-harness-builder /opt/browser-harness-skills/ /opt/discobot/skills/
+COPY container-assets/discobot/skills/ /opt/discobot/skills/
 
 # Docker wrapper: injects --output type=docker for build commands so remote
 # buildx builders always load images into the local daemon.

@@ -59,6 +59,7 @@ This ensures:
 - New image-provided files are added without overwriting existing files
 - Obsolete bundled home-level Discobot scripts, commands, and built-in skills are removed so system-level config under `/opt/discobot` and other image paths takes over cleanly
 - Built-in Discobot slash-command scripts are embedded in `discobot-agent-api` and written to `/opt/discobot/scripts` by the agent API server-mode startup path
+- Built-in Discobot skills from `container-assets/discobot/skills` are copied to `/opt/discobot/skills` in the runtime image
 - File permissions and ownership are preserved
 
 ### Workspace Cloning
