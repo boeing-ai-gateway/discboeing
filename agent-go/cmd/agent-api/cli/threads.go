@@ -49,32 +49,7 @@ func startupCommandHints(ctx context.Context, session clisession.Session, thread
 	if threadExists(ctx, session, threadID) {
 		showHistory = true
 	}
-
-	threads, err := session.ListThreads(ctx)
-	if err != nil || len(threads) == 0 {
-		return false, showHistory
-	}
-
-	targetCWD := normalizeCWD(session.WorkspaceRoot())
-	matchingCWD := 0
-	currentMatchesCWD := false
-	for _, item := range threads {
-		threadCWD := normalizeCWD(item.CWD)
-		if threadCWD == "" || threadCWD != targetCWD {
-			continue
-		}
-		matchingCWD++
-		if item.ID == threadID {
-			currentMatchesCWD = true
-		}
-	}
-
-	if currentMatchesCWD {
-		showResume = matchingCWD > 1
-	} else {
-		showResume = matchingCWD > 0
-	}
-	return showResume, showHistory
+	return true, showHistory
 }
 
 func selectInitialThreadID(cfg *config.Config, forceNew bool, resumeID string) string {
