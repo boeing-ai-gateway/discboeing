@@ -3,6 +3,7 @@ package clisession
 import (
 	"context"
 	"iter"
+	"os"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/agent"
@@ -54,17 +55,28 @@ func (s *Local) ListThreads(_ context.Context) ([]api.Thread, error) {
 	return threads, nil
 }
 
-func (s *Local) GetThread(ctx context.Context, threadID string) (api.Thread, error) {
-	threads, err := s.ListThreads(ctx)
+func (s *Local) GetThread(_ context.Context, threadID string) (api.Thread, error) {
+	info, err := s.agent.GetThreadInfo(threadID)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return api.Thread{}, ErrNotFound
+		}
 		return api.Thread{}, err
 	}
-	for _, thread := range threads {
-		if thread.ID == threadID {
-			return thread, nil
-		}
-	}
-	return api.Thread{}, ErrNotFound
+	return api.Thread{
+		ID:              info.ID,
+		Name:            strings.TrimSpace(info.Name),
+		CWD:             strings.TrimSpace(info.CWD),
+		LastMessage:     strings.TrimSpace(info.LastMessage),
+		ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
+		Model:           info.Model,
+		Reasoning:       info.Reasoning,
+		ServiceTier:     info.ServiceTier,
+		State:           string(info.State),
+		PendingQuestion: info.PendingQuestion,
+		ActiveCommand:   strings.TrimSpace(info.ActiveCommand),
+		Metadata:        info.Metadata,
+	}, nil
 }
 
 func (s *Local) UpdateThread(_ context.Context, threadID string, req api.UpdateThreadRequest) (api.Thread, error) {
