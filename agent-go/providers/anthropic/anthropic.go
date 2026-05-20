@@ -217,7 +217,7 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 
 func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 	return map[string]providers.ModelRef{
-		providers.ModelTaskChat:                {ProviderID: providerID, ModelID: "claude-sonnet-4-6"},
+		providers.ModelTaskChat:                {ProviderID: providerID, ModelID: "claude-sonnet-4-7"},
 		providers.ModelTaskThreadSummarization: {ProviderID: providerID, ModelID: "claude-haiku-4-5-20251001"},
 	}
 }

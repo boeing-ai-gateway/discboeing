@@ -90,6 +90,31 @@
 				"xhigh",
 				"none"
 			]
+		},
+		"claude-sonnet-4-7": {
+			"contextWindow": 1000000,
+			"defaultReasonLevel": "auto",
+			"family": "claude-sonnet",
+			"inputModalities": [
+				"text",
+				"image",
+				"pdf"
+			],
+			"maxOutputTokens": 64000,
+			"name": "Claude Sonnet 4.7",
+			"outputModalities": [
+				"text"
+			],
+			"reasoning": true,
+			"reasoningLevels": [
+				"auto",
+				"low",
+				"medium",
+				"high",
+				"xhigh",
+				"none"
+			],
+			"tool_call": true
 		}
 	},
 	"codex": {
