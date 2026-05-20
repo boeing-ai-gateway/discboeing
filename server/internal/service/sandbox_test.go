@@ -331,7 +331,22 @@ func (p *imageIDAwareReconcileProvider) List(_ context.Context) ([]*sandbox.Sand
 }
 
 func (p *imageIDAwareReconcileProvider) AcquireHTTPClient(_ context.Context, _ []byte, _ string) (*sandbox.HTTPClientLease, error) {
-	return &sandbox.HTTPClientLease{Client: &http.Client{}}, nil
+	return &sandbox.HTTPClientLease{Client: &http.Client{
+		Transport: healthRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			rec := newResponseRecorder()
+			switch req.URL.Path {
+			case "/health":
+				rec.Header().Set("Content-Type", "application/json")
+				_, _ = rec.Write([]byte(`{"configured":true}`))
+			case "/configure":
+				rec.Header().Set("Content-Type", "text/event-stream")
+				_, _ = rec.Write([]byte("data: {\"status\":\"ready\"}\n\n"))
+			default:
+				rec.WriteHeader(http.StatusOK)
+			}
+			return rec.Result(), nil
+		}),
+	}}, nil
 }
 
 func (p *imageIDAwareReconcileProvider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error) {
