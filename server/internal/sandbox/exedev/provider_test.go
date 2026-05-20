@@ -215,6 +215,17 @@ func (c *sequenceCommandClient) Exec(_ context.Context, command string) ([]byte,
 	return []byte(resp.output), resp.err
 }
 
+type staticCommandClient struct {
+	commands []string
+	output   string
+	err      error
+}
+
+func (c *staticCommandClient) Exec(_ context.Context, command string) ([]byte, error) {
+	c.commands = append(c.commands, command)
+	return []byte(c.output), c.err
+}
+
 func TestSanitizeCommandForLogRedactsSecretEnvValues(t *testing.T) {
 	command := joinArgs([]string{
 		"new",
@@ -331,10 +342,7 @@ func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
 }
 
 func TestWaitForVMVisibleStopsAtDefaultMaxWait(t *testing.T) {
-	client := &sequenceCommandClient{}
-	for range 20 {
-		client.responses = append(client.responses, commandResponse{output: `{}`})
-	}
+	client := &staticCommandClient{output: `{}`}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
