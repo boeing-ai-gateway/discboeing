@@ -40,3 +40,33 @@ func TestDefaultWSLElevationHelperPathFindsNearbySrcTauriBinariesInDev(t *testin
 		t.Fatalf("defaultWSLElevationHelperPath() = %q, want %q", got, helperPath)
 	}
 }
+
+func TestDefaultWSLElevationHelperPathFindsBundledHelperNextToServerBinary(t *testing.T) {
+	root := t.TempDir()
+	helperPath := filepath.Join(root, "discobot-wsl-helper.exe")
+	if err := os.WriteFile(helperPath, []byte("helper"), 0755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	originalExecutablePath := osExecutablePath
+	originalGetwdPath := osGetwdPath
+	t.Cleanup(func() {
+		osExecutablePath = originalExecutablePath
+		osGetwdPath = originalGetwdPath
+	})
+
+	osExecutablePath = func() (string, error) {
+		return filepath.Join(root, "discobot-server.exe"), nil
+	}
+	osGetwdPath = func() (string, error) {
+		return filepath.Join(root, "other"), nil
+	}
+
+	got, err := defaultWSLElevationHelperPath()
+	if err != nil {
+		t.Fatalf("defaultWSLElevationHelperPath() error = %v", err)
+	}
+	if got != helperPath {
+		t.Fatalf("defaultWSLElevationHelperPath() = %q, want %q", got, helperPath)
+	}
+}

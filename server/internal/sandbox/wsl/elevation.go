@@ -131,7 +131,10 @@ func (m *Manager) runWSLElevationHelper(ctx context.Context, args ...string) (st
 }
 
 func defaultWSLElevationHelperPath() (string, error) {
-	helperName := wslElevationHelperBinaryName()
+	helperNames := []string{
+		wslElevationHelperBinaryName(),
+		wslElevationHelperBaseName + ".exe",
+	}
 	var (
 		candidates []string
 		seen       = make(map[string]struct{})
@@ -152,8 +155,10 @@ func defaultWSLElevationHelperPath() (string, error) {
 	addCandidatesFromBase := func(baseDir string) {
 		dir := strings.TrimSpace(baseDir)
 		for depth := 0; dir != "" && depth < 5; depth++ {
-			addCandidate(filepath.Join(dir, helperName))
-			addCandidate(filepath.Join(dir, "src-tauri", "binaries", helperName))
+			for _, helperName := range helperNames {
+				addCandidate(filepath.Join(dir, helperName))
+				addCandidate(filepath.Join(dir, "src-tauri", "binaries", helperName))
+			}
 
 			parent := filepath.Dir(dir)
 			if parent == dir {
@@ -180,7 +185,10 @@ func defaultWSLElevationHelperPath() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("could not find %s; expected it next to the Discobot server binary or in a nearby src-tauri/binaries directory", helperName)
+	return "", fmt.Errorf(
+		"could not find a WSL elevation helper (%s); expected it next to the Discobot server binary or in a nearby src-tauri/binaries directory",
+		strings.Join(helperNames, " or "),
+	)
 }
 
 func wslElevationHelperBinaryName() string {
