@@ -132,6 +132,7 @@ export function createResource<TData>(
 	let fetchedAt = $state<number | null>(null);
 	let staleAt = $state<number | null>(null);
 	let invalidatedAt = $state<number | null>(null);
+	let failedAt = $state<number | null>(null);
 	let loadingPromise = $state<Promise<TData> | null>(null);
 	let queuedPromise = $state<Promise<TData> | null>(null);
 	let queuedForce = false;
@@ -164,6 +165,7 @@ export function createResource<TData>(
 		}
 		if (options.clearError ?? true) {
 			error = null;
+			failedAt = null;
 		}
 		if (options.markFresh) {
 			const freshAt = options.freshAt ?? now();
@@ -207,8 +209,10 @@ export function createResource<TData>(
 	function scheduleEnsure(force = false) {
 		if (
 			ensureScheduled ||
+			retryTimer !== null ||
 			!args.enabled() ||
 			loadingPromise !== null ||
+			(!force && hasUnresolvedAutomaticFailure()) ||
 			(!force && !isStale())
 		) {
 			return;
@@ -234,6 +238,7 @@ export function createResource<TData>(
 		fetchedAt = null;
 		staleAt = null;
 		invalidatedAt = null;
+		failedAt = null;
 		loadingPromise = null;
 	}
 
@@ -258,6 +263,17 @@ export function createResource<TData>(
 			return;
 		}
 		invalidatedAt = now();
+	}
+
+	function hasUnresolvedAutomaticFailure() {
+		if (
+			args.retry?.mode === "background" ||
+			error === null ||
+			failedAt === null
+		) {
+			return false;
+		}
+		return invalidatedAt === null || invalidatedAt <= failedAt;
 	}
 
 	async function ensure(force = false): Promise<TData> {
@@ -304,6 +320,7 @@ export function createResource<TData>(
 				if (!hasData) {
 					status = "error";
 				}
+				failedAt = now();
 				console.warn(`[${args.owner}] Failed to load resource`, nextError);
 				scheduleRetry(force);
 				throw nextError;

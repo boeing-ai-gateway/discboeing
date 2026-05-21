@@ -83,7 +83,8 @@ export function createSessionThreadsDomain(
 			loadScheduled ||
 			!args.hasSession() ||
 			store.status === "loading" ||
-			store.status === "ready"
+			store.status === "ready" ||
+			store.status === "error"
 		) {
 			return;
 		}
@@ -107,7 +108,7 @@ export function createSessionThreadsDomain(
 			syncSelectedThread(nextList);
 			return;
 		}
-		await store.fetch();
+		await store.ensureList();
 		const nextList = currentList();
 		applyRequestedThreadSelection(nextList);
 		syncSelectedThread(nextList);

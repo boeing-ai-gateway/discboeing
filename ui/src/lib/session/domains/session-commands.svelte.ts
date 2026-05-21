@@ -40,6 +40,7 @@ export function createSessionCommandsDomain(
 			const response = await api.getSessionCommands(args.sessionId);
 			return response.commands;
 		},
+		retry: { mode: "background" },
 	});
 	let isSubmitting = $state(false);
 	let credentialDialogOpen = $state(false);

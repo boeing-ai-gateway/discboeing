@@ -35,6 +35,7 @@ export class ThreadStore {
 					const { threads } = await api.getThreads(args.sessionId);
 					return threads;
 				},
+				cache: { retry: { mode: "background" } },
 			},
 			indexed: {
 				getKey: (thread: Thread) => thread.id,
@@ -100,6 +101,10 @@ export class ThreadStore {
 
 	async fetch(): Promise<void> {
 		await this.#resource.all().refresh();
+	}
+
+	async ensureList(): Promise<void> {
+		await this.#resource.all().ensure();
 	}
 
 	async fetchOne(threadId: string): Promise<void> {
