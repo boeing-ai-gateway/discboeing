@@ -256,6 +256,30 @@ func TestBridgeNotReadyErrorForDynamicTCPPort(t *testing.T) {
 	}
 }
 
+func TestProviderSupportsProjectInspection(t *testing.T) {
+	t.Parallel()
+
+	var _ sandbox.ProjectInspectionManager = (*Provider)(nil)
+
+	provider := &Provider{}
+	info, err := provider.GetProjectInspectionInfo(context.Background(), "project-1")
+	if err != nil {
+		t.Fatalf("GetProjectInspectionInfo() error = %v", err)
+	}
+	if info.Provider != "wsl" {
+		t.Fatalf("GetProjectInspectionInfo().Provider = %q, want %q", info.Provider, "wsl")
+	}
+	if !info.Available {
+		t.Fatal("GetProjectInspectionInfo().Available = false, want true")
+	}
+	if info.ContainerName != "discobot-host-inspect" {
+		t.Fatalf("GetProjectInspectionInfo().ContainerName = %q, want %q", info.ContainerName, "discobot-host-inspect")
+	}
+	if info.Scope != "managed_wsl" {
+		t.Fatalf("GetProjectInspectionInfo().Scope = %q, want %q", info.Scope, "managed_wsl")
+	}
+}
+
 func TestProviderDockerProviderForRuntimeLoadsLocalImageOnce(t *testing.T) {
 	t.Parallel()
 

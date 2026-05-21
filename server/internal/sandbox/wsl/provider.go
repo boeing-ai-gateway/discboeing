@@ -345,6 +345,32 @@ func (p *Provider) Image() string {
 	return p.cfg.SandboxImage
 }
 
+// GetProjectInspectionInfo reports inspection-container availability inside the
+// managed WSL runtime.
+func (p *Provider) GetProjectInspectionInfo(_ context.Context, _ string) (*sandbox.ProjectInspectionInfo, error) {
+	return &sandbox.ProjectInspectionInfo{
+		Provider:      "wsl",
+		Available:     true,
+		ContainerName: "discobot-host-inspect",
+		Scope:         "managed_wsl",
+	}, nil
+}
+
+// AttachProjectInspection attaches to the inspection container shell inside the
+// managed WSL runtime.
+func (p *Provider) AttachProjectInspection(ctx context.Context, projectID string, opts sandbox.AttachOptions) (sandbox.PTY, error) {
+	runtimeInfo, err := p.ensureRuntimeInfo(ctx, progressReporter{})
+	if err != nil {
+		return nil, err
+	}
+
+	dockerProvider, err := p.requireDockerProvider(ctx, runtimeInfo)
+	if err != nil {
+		return nil, err
+	}
+	return dockerProvider.AttachProjectInspection(ctx, projectID, opts)
+}
+
 // Create creates a new sandbox through the inner Docker provider once the WSL
 // bridge is available.
 func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, opts sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
