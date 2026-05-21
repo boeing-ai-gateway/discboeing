@@ -58,7 +58,7 @@
 	{:else}
 		<ThreadWorkspaceHeader
 			reserveSidebarSpace={reserveSidebarSpace ?? false}
-			title={isLoadingThread ? "Loading thread" : "No thread selected"}
+			title=""
 		/>
 		{#if showThreadSelectionPrompt}
 			<div class="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">

@@ -77,10 +77,7 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		/import Loader2Icon from "@lucide\/svelte\/icons\/loader-2"/,
 	);
 	assert.match(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
-	assert.match(
-		source,
-		/title=\{isLoadingThread \? "Loading thread" : "No thread selected"\}/,
-	);
+	assert.match(source, /title=""/);
 	assert.match(
 		source,
 		/Loading the selected thread while the session starts\./,
@@ -116,10 +113,7 @@ test("active thread workspace keeps the stream live while inactive conversation 
 	);
 	assert.match(source, /const headerTitle = \$derived\.by/);
 	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
-	assert.match(
-		source,
-		/isSessionTransitioningStatus\(session\.current\?\.sandboxStatus\)[\s\S]*\? "Loading thread"[\s\S]*: "No thread selected"/,
-	);
+	assert.match(source, /return "";\s*\}\);/);
 	assert.match(source, /title=\{headerTitle\}/);
 	assert.doesNotMatch(
 		source,

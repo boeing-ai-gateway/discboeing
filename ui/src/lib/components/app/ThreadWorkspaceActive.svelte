@@ -4,7 +4,6 @@
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
-	import { isSessionTransitioningStatus } from "$lib/api-constants";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
@@ -45,9 +44,7 @@
 		if (session.isPending) {
 			return "";
 		}
-		return isSessionTransitioningStatus(session.current?.sandboxStatus)
-			? "Loading thread"
-			: "No thread selected";
+		return "";
 	});
 </script>
 
