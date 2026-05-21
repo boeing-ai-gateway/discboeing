@@ -36,6 +36,14 @@ type ImageArtifact struct {
 	DownloadedAtUTC time.Time
 }
 
+type imageDescriptor interface {
+	Image() (v1.Image, error)
+}
+
+var getImageDescriptor = func(ctx context.Context, ref name.Reference, platform v1.Platform) (imageDescriptor, error) {
+	return remote.Get(ref, remote.WithContext(ctx), remote.WithPlatform(platform))
+}
+
 // ImageDownloader downloads and caches the WSL rootfs artifact from the shared OCI image.
 type ImageDownloader struct {
 	cfg ImageDownloadConfig
@@ -101,13 +109,11 @@ func (d *ImageDownloader) checkCache() (*ImageArtifact, bool, error) {
 	}
 
 	artifact := &ImageArtifact{
-		Digest:        digest,
-		RootfsArchive: rootfsPath,
-		ManifestPath:  manifestPath,
-		ImageRef:      d.cfg.ImageRef,
-		DownloadedAtUTC: func() time.Time {
-			return manifestInfo.ModTime().UTC()
-		}(),
+		Digest:          digest,
+		RootfsArchive:   rootfsPath,
+		ManifestPath:    manifestPath,
+		ImageRef:        d.cfg.ImageRef,
+		DownloadedAtUTC: manifestInfo.ModTime().UTC(),
 	}
 	return artifact, true, nil
 }
@@ -125,7 +131,7 @@ func (d *ImageDownloader) download(ctx context.Context, report func(ImageDownloa
 	if report != nil {
 		report(ImageDownloadProgress{CurrentOperation: "Fetching WSL runtime image metadata"})
 	}
-	desc, err := remote.Get(ref, remote.WithContext(ctx), remote.WithPlatform(platform))
+	desc, err := getImageDescriptor(ctx, ref, platform)
 	if err != nil {
 		return nil, fmt.Errorf("fetch WSL image descriptor: %w", err)
 	}
