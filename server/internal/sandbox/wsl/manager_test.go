@@ -288,8 +288,14 @@ func TestStartTCPBridgeUsesSystemdRun(t *testing.T) {
 		if !strings.Contains(command, "systemd-run --unit=discobot-docker-bridge") {
 			t.Fatalf("startTCPBridge() command = %q, want systemd-run", command)
 		}
-		if !strings.Contains(command, "exec socat TCP-LISTEN:23755,bind=0.0.0.0,reuseaddr,fork UNIX-CONNECT:/var/run/docker.sock") {
+		if !strings.Contains(command, "exec socat -b131072 TCP-LISTEN:23755,bind=0.0.0.0,reuseaddr,fork,shut-down UNIX-CONNECT:/var/run/docker.sock,shut-down") {
 			t.Fatalf("startTCPBridge() command = %q, want socat command", command)
+		}
+		if !strings.Contains(command, "/proc/net/tcp") {
+			t.Fatalf("startTCPBridge() command = %q, want /proc TCP listener check", command)
+		}
+		if strings.Contains(command, "ss -ltnH") || strings.Contains(command, "netstat -ltn") {
+			t.Fatalf("startTCPBridge() command = %q, want no dependency on ss/netstat", command)
 		}
 		return nil, nil
 	}

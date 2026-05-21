@@ -78,6 +78,10 @@ func main() {
 
 	// Log version
 	log.Printf("Discobot Server version %s", version.Get())
+	log.Printf("Sandbox image: %s", cfg.SandboxImage)
+	if cfg.SandboxImageRemote != "" {
+		log.Printf("Remote sandbox image: %s", cfg.SandboxImageRemote)
+	}
 	if cfg.DockerWSLDistro != "" {
 		log.Printf("Host Docker access will proxy through WSL distro %q", cfg.DockerWSLDistro)
 	}
@@ -1944,14 +1948,14 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %d", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := startup.ListenAndServe(srv); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}()
 	if httpsSrv != nil {
 		go func() {
 			log.Printf("HTTPS server starting on port %d (%s TLS)", cfg.HTTPSPort, httpsSetup.Mode)
-			if err := httpsSrv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			if err := startup.ListenAndServeTLS(httpsSrv, "", ""); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("HTTPS server failed: %v", err)
 			}
 		}()
@@ -2123,7 +2127,7 @@ func isLocalSandboxProvider(cfg *config.Config, providerName string) bool {
 			return true
 		}
 		return isLocalDockerHost(cfg.DockerHost)
-	case "local":
+	case "local", "wsl":
 		return true
 	default:
 		return false

@@ -1674,19 +1674,23 @@ func (m *Manager) startTCPBridge(ctx context.Context, port int) error {
 	}
 
 	bridgeCommand := fmt.Sprintf(
-		"exec socat TCP-LISTEN:%d,bind=0.0.0.0,reuseaddr,fork UNIX-CONNECT:%s >>%s 2>&1",
+		"exec socat -b131072 TCP-LISTEN:%d,bind=0.0.0.0,reuseaddr,fork,shut-down UNIX-CONNECT:%s,shut-down >>%s 2>&1",
 		port,
 		dockerSockPath,
 		bridgeLogPath,
 	)
+	listenerCheck := fmt.Sprintf(
+		"grep -qiE '^[[:space:]]*[0-9]+: [0-9A-Fa-f]{8,32}:%04X [0-9A-Fa-f]{8,32}:[0-9A-Fa-f]{4} 0A ' /proc/net/tcp /proc/net/tcp6 2>/dev/null",
+		port,
+	)
 	command := fmt.Sprintf(
 		"command -v socat >/dev/null 2>&1 || { echo 'socat is required for WSL TCP bridge startup' >&2; exit 127; }; "+
-			"( ss -ltnH '( sport = :%d )' 2>/dev/null || netstat -ltn 2>/dev/null ) | grep -q ':%d ' || "+
+			"if ! %s; then "+
 			"systemctl stop %s.service >/dev/null 2>&1 || true; "+
 			"systemctl reset-failed %s.service >/dev/null 2>&1 || true; "+
-			"systemd-run --unit=%s --property=Restart=always --property=RestartSec=1 --service-type=simple /bin/sh -lc %s",
-		port,
-		port,
+			"systemd-run --unit=%s --property=Restart=always --property=RestartSec=1 --service-type=simple /bin/sh -lc %s; "+
+			"fi",
+		listenerCheck,
 		bridgeUnitName,
 		bridgeUnitName,
 		bridgeUnitName,

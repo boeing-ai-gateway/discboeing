@@ -3,6 +3,7 @@ package startup
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -75,5 +76,12 @@ func TestWaitForTCPBindTimesOutWhenPortStaysBusy(t *testing.T) {
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+}
+
+func TestIsAddressInUseRecognizesWindowsBindMessage(t *testing.T) {
+	err := fmt.Errorf("listen tcp :3001: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.")
+	if !IsAddressInUse(err) {
+		t.Fatalf("IsAddressInUse(%v) = false, want true", err)
 	}
 }

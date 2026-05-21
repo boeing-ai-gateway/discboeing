@@ -90,7 +90,7 @@ func TestSandboxImageForProviderUsesLocalImageForLocalProviders(t *testing.T) {
 		SandboxImageRemote: remoteImage,
 	}
 
-	for _, providerName := range []string{"docker", "local"} {
+	for _, providerName := range []string{"docker", "local", "wsl"} {
 		if got := sandboxImageForProvider(cfg, providerName); got != localImage {
 			t.Fatalf("provider %q image = %q, want %q", providerName, got, localImage)
 		}
@@ -105,7 +105,7 @@ func TestSandboxImageForProviderUsesRemoteImageForRemoteProviders(t *testing.T) 
 		SandboxImageRemote: remoteImage,
 	}
 
-	for _, providerName := range []string{"vz", "wsl", "exedev", "some-remote-provider"} {
+	for _, providerName := range []string{"vz", "exedev", "some-remote-provider"} {
 		if got := sandboxImageForProvider(cfg, providerName); got != remoteImage {
 			t.Fatalf("provider %q image = %q, want %q", providerName, got, remoteImage)
 		}
