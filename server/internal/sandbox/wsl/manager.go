@@ -5,7 +5,6 @@ package wsl
 import (
 	"archive/tar"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -16,15 +15,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf16"
 
-	"github.com/Microsoft/go-winio"
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sys/windows"
 
@@ -66,7 +61,6 @@ type RuntimeInfo struct {
 	DistroVersion     int    `json:"distro_version,omitempty"`
 	BridgeType        string `json:"bridge_type"`
 	BridgePort        int    `json:"bridge_port,omitempty"`
-	BridgePipeName    string `json:"bridge_pipe_name,omitempty"`
 	BridgeDockerHost  string `json:"bridge_docker_host,omitempty"`
 	InstallDir        string `json:"install_dir,omitempty"`
 	StateDir          string `json:"state_dir,omitempty"`
@@ -90,7 +84,6 @@ type StatusDetails struct {
 	ImageRef          string `json:"image_ref,omitempty"`
 	BridgeType        string `json:"bridge_type,omitempty"`
 	BridgePort        int    `json:"bridge_port,omitempty"`
-	BridgePipeName    string `json:"bridge_pipe_name,omitempty"`
 	BridgeDockerHost  string `json:"bridge_docker_host,omitempty"`
 }
 
@@ -110,11 +103,8 @@ type Manager struct {
 	state      *StateStore
 	downloader *ImageDownloader
 
-	lifecycleMu       sync.Mutex
-	mu                sync.RWMutex
-	pipeListener      net.Listener
-	pipeListenerName  string
-	pipeListenerClose chan struct{}
+	lifecycleMu sync.Mutex
+	mu          sync.RWMutex
 }
 
 type managedDistro struct {
@@ -170,9 +160,18 @@ func (m *Manager) varDiskLabel() string {
 	if base == "" {
 		base = "discobot"
 	}
+	return sanitizeLowerDashName(base+"-var", "discobot-var")
+}
+
+func sanitizeLowerDashName(value string, fallback string) string {
+	name := strings.ToLower(strings.TrimSpace(value))
+	if name == "" {
+		name = fallback
+	}
+
 	var builder strings.Builder
 	lastDash := false
-	for _, r := range strings.ToLower(base + "-var") {
+	for _, r := range name {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			builder.WriteRune(r)
 			lastDash = false
@@ -183,11 +182,12 @@ func (m *Manager) varDiskLabel() string {
 			lastDash = true
 		}
 	}
-	name := strings.Trim(builder.String(), "-")
-	if name == "" {
-		return "discobot-var"
+
+	sanitized := strings.Trim(builder.String(), "-")
+	if sanitized == "" {
+		return fallback
 	}
-	return name
+	return sanitized
 }
 
 // EnsureInstalled verifies that WSL tooling is available and reserves the managed distro identity.
@@ -243,414 +243,6 @@ func (m *Manager) ensureInstalledLocked(ctx context.Context, progress progressRe
 
 	progress.Update(100, "Managed WSL distro and WSL /var disk are installed")
 	return nil
-}
-
-func (m *Manager) hideWindowsTerminalWSLProfiles() error {
-	distroName := strings.TrimSpace(m.cfg.WSLDistroName)
-	if distroName == "" {
-		return nil
-	}
-
-	for _, settingsPath := range windowsTerminalSettingsPaths() {
-		data, err := os.ReadFile(settingsPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return fmt.Errorf("read Windows Terminal settings %q: %w", settingsPath, err)
-		}
-
-		updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(data, distroName, m.cfg.DesktopIconPath)
-		if err != nil {
-			return fmt.Errorf("update Windows Terminal settings %q: %w", settingsPath, err)
-		}
-		if !changed {
-			continue
-		}
-		if err := os.WriteFile(settingsPath, updated, 0644); err != nil {
-			return fmt.Errorf("write Windows Terminal settings %q: %w", settingsPath, err)
-		}
-	}
-
-	return nil
-}
-
-func windowsTerminalSettingsPaths() []string {
-	localAppData := strings.TrimSpace(os.Getenv("LOCALAPPDATA"))
-	if localAppData == "" {
-		homeDir, err := os.UserHomeDir()
-		if err == nil && strings.TrimSpace(homeDir) != "" {
-			localAppData = filepath.Join(homeDir, "AppData", "Local")
-		}
-	}
-	if localAppData == "" {
-		return nil
-	}
-
-	return []string{
-		filepath.Join(localAppData, "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe", "LocalState", "settings.json"),
-		filepath.Join(localAppData, "Packages", "Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe", "LocalState", "settings.json"),
-		filepath.Join(localAppData, "Microsoft", "Windows Terminal", "settings.json"),
-	}
-}
-
-func hideWindowsTerminalWSLProfilesInSettings(data []byte, distroName string, iconPath string) ([]byte, bool, error) {
-	if strings.TrimSpace(distroName) == "" {
-		return data, false, nil
-	}
-
-	spans, err := jsonObjectSpans(data)
-	if err != nil {
-		return nil, false, err
-	}
-
-	type replacement struct {
-		start int
-		end   int
-		value []byte
-	}
-
-	var replacements []replacement
-	for _, span := range spans {
-		objectData := data[span.start:span.end]
-		updatedObject, changed := hideWindowsTerminalWSLProfileObject(objectData, distroName, iconPath)
-		if !changed {
-			continue
-		}
-		replacements = append(replacements, replacement{
-			start: span.start,
-			end:   span.end,
-			value: updatedObject,
-		})
-	}
-	if len(replacements) == 0 {
-		return data, false, nil
-	}
-
-	updated := append([]byte(nil), data...)
-	for _, replacement := range slices.Backward(replacements) {
-		updated = append(updated[:replacement.start], append(replacement.value, updated[replacement.end:]...)...)
-	}
-	return updated, true, nil
-}
-
-func hideWindowsTerminalWSLProfileObject(objectData []byte, distroName string, iconPath string) ([]byte, bool) {
-	properties, err := topLevelJSONStringProperties(objectData)
-	if err != nil {
-		return objectData, false
-	}
-	if !strings.EqualFold(properties["name"], distroName) {
-		return objectData, false
-	}
-	if properties["source"] != "Microsoft.WSL" && properties["source"] != "Windows.Terminal.Wsl" {
-		return objectData, false
-	}
-
-	objectText := string(objectData)
-	changed := false
-	hiddenPattern := regexp.MustCompile(`(?m)("hidden"\s*:\s*)(true|false)`)
-	if hiddenPattern.MatchString(objectText) {
-		updated := hiddenPattern.ReplaceAllString(objectText, `${1}true`)
-		if updated != objectText {
-			objectText = updated
-			changed = true
-		}
-	} else {
-		updated := insertJSONProperty(objectText, "hidden", "true")
-		if updated != objectText {
-			objectText = updated
-			changed = true
-		}
-	}
-
-	if strings.TrimSpace(iconPath) != "" {
-		updated := upsertJSONStringProperty(objectText, "icon", iconPath)
-		if updated != objectText {
-			objectText = updated
-			changed = true
-		}
-	}
-
-	return []byte(objectText), changed
-}
-
-func upsertJSONStringProperty(objectText string, propertyName string, value string) string {
-	propertyPattern := regexp.MustCompile(`(?m)("` + regexp.QuoteMeta(propertyName) + `"\s*:\s*)("(?:\\.|[^"\\])*")`)
-	if loc := propertyPattern.FindStringSubmatchIndex(objectText); loc != nil {
-		return objectText[:loc[4]] + strconv.Quote(value) + objectText[loc[5]:]
-	}
-	return insertJSONProperty(objectText, propertyName, strconv.Quote(value))
-}
-
-func insertJSONProperty(objectText string, propertyName string, rawValue string) string {
-	propertyIndent := "\t"
-	if matches := regexp.MustCompile(`(?m)^([ \t]+)"[^"]+"\s*:`).FindStringSubmatch(objectText); len(matches) == 2 {
-		propertyIndent = matches[1]
-	}
-
-	property := strconv.Quote(propertyName) + ": " + rawValue + ","
-	rest := objectText[1:]
-	if strings.HasPrefix(rest, "\r\n") {
-		rest = rest[2:]
-		return "{" + "\r\n" + propertyIndent + property + "\r\n" + rest
-	}
-	if strings.HasPrefix(rest, "\n") {
-		rest = rest[1:]
-		return "{" + "\n" + propertyIndent + property + "\n" + rest
-	}
-
-	return "{" + property + " " + strings.TrimLeft(rest, " \t")
-}
-
-func topLevelJSONStringProperties(objectData []byte) (map[string]string, error) {
-	properties := make(map[string]string)
-	if len(objectData) < 2 || objectData[0] != '{' {
-		return properties, fmt.Errorf("object does not start with '{'")
-	}
-
-	depth := 0
-	inString := false
-	escaped := false
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < len(objectData); i++ {
-		ch := objectData[i]
-
-		if inString {
-			if escaped {
-				escaped = false
-				continue
-			}
-			if ch == '\\' {
-				escaped = true
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-		if inLineComment {
-			if ch == '\n' || ch == '\r' {
-				inLineComment = false
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && i+1 < len(objectData) && objectData[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-		if ch == '/' && i+1 < len(objectData) {
-			switch objectData[i+1] {
-			case '/':
-				inLineComment = true
-				i++
-				continue
-			case '*':
-				inBlockComment = true
-				i++
-				continue
-			}
-		}
-
-		switch ch {
-		case '"':
-			if depth == 1 {
-				key, next, ok := consumeJSONStringProperty(objectData, i)
-				if ok {
-					properties[key] = next.value
-					i = next.index
-					continue
-				}
-			}
-			inString = true
-		case '{', '[':
-			depth++
-		case '}', ']':
-			depth--
-		}
-	}
-
-	return properties, nil
-}
-
-type consumedJSONStringProperty struct {
-	index int
-	value string
-}
-
-func consumeJSONStringProperty(data []byte, start int) (string, consumedJSONStringProperty, bool) {
-	key, keyEnd, ok := consumeJSONStringToken(data, start)
-	if !ok {
-		return "", consumedJSONStringProperty{}, false
-	}
-	index := skipJSONWhitespaceAndComments(data, keyEnd)
-	if index >= len(data) || data[index] != ':' {
-		return "", consumedJSONStringProperty{}, false
-	}
-	index = skipJSONWhitespaceAndComments(data, index+1)
-	if index >= len(data) || data[index] != '"' {
-		return "", consumedJSONStringProperty{}, false
-	}
-	value, valueEnd, ok := consumeJSONStringToken(data, index)
-	if !ok {
-		return "", consumedJSONStringProperty{}, false
-	}
-	return key, consumedJSONStringProperty{index: valueEnd - 1, value: value}, true
-}
-
-func consumeJSONStringToken(data []byte, start int) (string, int, bool) {
-	if start >= len(data) || data[start] != '"' {
-		return "", 0, false
-	}
-
-	var builder strings.Builder
-	escaped := false
-	for i := start + 1; i < len(data); i++ {
-		ch := data[i]
-		if escaped {
-			builder.WriteByte(ch)
-			escaped = false
-			continue
-		}
-		if ch == '\\' {
-			escaped = true
-			continue
-		}
-		if ch == '"' {
-			return builder.String(), i + 1, true
-		}
-		builder.WriteByte(ch)
-	}
-
-	return "", 0, false
-}
-
-func skipJSONWhitespaceAndComments(data []byte, start int) int {
-	inLineComment := false
-	inBlockComment := false
-
-	for i := start; i < len(data); i++ {
-		if inLineComment {
-			if data[i] == '\n' || data[i] == '\r' {
-				inLineComment = false
-			}
-			continue
-		}
-		if inBlockComment {
-			if data[i] == '*' && i+1 < len(data) && data[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-		if data[i] == '/' && i+1 < len(data) {
-			switch data[i+1] {
-			case '/':
-				inLineComment = true
-				i++
-				continue
-			case '*':
-				inBlockComment = true
-				i++
-				continue
-			}
-		}
-		switch data[i] {
-		case ' ', '\t', '\n', '\r':
-			continue
-		default:
-			return i
-		}
-	}
-
-	return len(data)
-}
-
-type objectSpan struct {
-	start int
-	end   int
-}
-
-func jsonObjectSpans(data []byte) ([]objectSpan, error) {
-	var spans []objectSpan
-	var stack []int
-
-	inString := false
-	escaped := false
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < len(data); i++ {
-		ch := data[i]
-
-		if inString {
-			if escaped {
-				escaped = false
-				continue
-			}
-			if ch == '\\' {
-				escaped = true
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-		if inLineComment {
-			if ch == '\n' || ch == '\r' {
-				inLineComment = false
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && i+1 < len(data) && data[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-		if ch == '/' && i+1 < len(data) {
-			switch data[i+1] {
-			case '/':
-				inLineComment = true
-				i++
-				continue
-			case '*':
-				inBlockComment = true
-				i++
-				continue
-			}
-		}
-		if ch == '"' {
-			inString = true
-			continue
-		}
-		if ch == '{' {
-			stack = append(stack, i)
-			continue
-		}
-		if ch != '}' {
-			continue
-		}
-		if len(stack) == 0 {
-			return nil, fmt.Errorf("unbalanced Windows Terminal settings object braces")
-		}
-		start := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		spans = append(spans, objectSpan{start: start, end: i + 1})
-	}
-
-	if inString || inBlockComment || len(stack) != 0 {
-		return nil, fmt.Errorf("unterminated Windows Terminal settings content")
-	}
-
-	return spans, nil
 }
 
 // EnsureRunning ensures the managed distro exists, starts it if needed, and waits
@@ -722,7 +314,6 @@ func (m *Manager) ensureRunningWithProgress(ctx context.Context, progress progre
 		DistroVersion:     distro.Version,
 		BridgeType:        bridgeInfo.Type,
 		BridgePort:        bridgeInfo.Port,
-		BridgePipeName:    bridgeInfo.PipeName,
 		BridgeDockerHost:  bridgeInfo.DockerHost,
 		InstallDir:        m.cfg.WSLInstallDir,
 		StateDir:          m.cfg.WSLStateDir,
@@ -822,14 +413,12 @@ func (m *Manager) Stop(ctx context.Context) error {
 		return nil
 	}
 	if strings.EqualFold(distro.State, "Stopped") {
-		m.stopNamedPipeBridgeLocked()
 		return nil
 	}
 
 	if _, err := m.runCommand(ctx, "wsl.exe", "--terminate", m.cfg.WSLDistroName); err != nil {
 		return fmt.Errorf("terminate managed WSL distro %q: %w", m.cfg.WSLDistroName, err)
 	}
-	m.stopNamedPipeBridgeLocked()
 	return nil
 }
 
@@ -867,7 +456,6 @@ func (m *Manager) upgradeIfNeededLocked(ctx context.Context) error {
 		if err := m.stopMainDistro(ctx); err != nil {
 			return err
 		}
-		m.stopNamedPipeBridgeLocked()
 		if err := m.unregisterMainDistro(ctx); err != nil {
 			return err
 		}
@@ -907,7 +495,6 @@ func (m *Manager) Uninstall(ctx context.Context) error {
 	if _, found, err := m.probeDistro(ctx); err != nil {
 		return err
 	} else if found {
-		m.stopNamedPipeBridgeLocked()
 		if err := m.unregisterMainDistro(ctx); err != nil {
 			return err
 		}
@@ -949,7 +536,7 @@ func (m *Manager) Status() sandbox.ProviderStatus {
 		VarDiskLabel:      m.varDiskLabel(),
 		RootfsArchivePath: strings.TrimSpace(m.cfg.WSLRootfsPath),
 		ImageRef:          m.cfg.WSLImageRef,
-		BridgeType:        m.cfg.WSLBridgeType,
+		BridgeType:        BridgeTypeTCP,
 		BridgePort:        m.cfg.WSLBridgePort,
 	}
 
@@ -966,7 +553,6 @@ func (m *Manager) Status() sandbox.ProviderStatus {
 	}
 	details.BridgeType = bridgeInfo.Type
 	details.BridgePort = bridgeInfo.Port
-	details.BridgePipeName = bridgeInfo.PipeName
 	details.BridgeDockerHost = bridgeInfo.DockerHost
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultProbeTimeout)
@@ -1005,8 +591,6 @@ func (m *Manager) Status() sandbox.ProviderStatus {
 	} else if !strings.EqualFold(distro.State, "Running") {
 		message = fmt.Sprintf("managed WSL distro is currently %s", distro.State)
 		state = "starting"
-	} else if strings.EqualFold(bridgeInfo.Type, BridgeTypeNamedPipe) {
-		message = "managed WSL distro is running; named-pipe Docker bridge will be started on demand"
 	} else if strings.EqualFold(bridgeInfo.Type, BridgeTypeTCP) {
 		message = "managed WSL distro is running; TCP Docker bridge will be started on demand"
 	}
@@ -1016,7 +600,7 @@ func (m *Manager) Status() sandbox.ProviderStatus {
 
 func (m *Manager) resolveBridgeInfo() (BridgeInfo, error) {
 	port := m.cfg.WSLBridgePort
-	if port == 0 && strings.EqualFold(m.cfg.WSLBridgeType, BridgeTypeTCP) {
+	if port == 0 {
 		state, err := m.state.Load()
 		if err != nil {
 			return BridgeInfo{}, err
@@ -1025,26 +609,11 @@ func (m *Manager) resolveBridgeInfo() (BridgeInfo, error) {
 			port = state.BridgePort
 		}
 	}
-	return ResolveBridgeInfo(m.cfg.WSLBridgeType, m.cfg.WSLDistroName, port)
+	return ResolveBridgeInfo(port)
 }
 
 func (m *Manager) ensureBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) (BridgeInfo, bool, error) {
 	switch bridgeInfo.Type {
-	case BridgeTypeNamedPipe:
-		ready, err := m.probeBridgeReady(ctx, bridgeInfo)
-		if err == nil && ready {
-			return bridgeInfo, true, nil
-		}
-		if err := m.startNamedPipeBridge(ctx, bridgeInfo.PipeName); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		if err := m.waitForNamedPipeBridgeReady(ctx, bridgeInfo); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		if err := m.saveBridgeRuntimeState(bridgeInfo); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		return bridgeInfo, true, nil
 	case BridgeTypeTCP:
 		if bridgeInfo.Port == 0 {
 			port, err := allocateLoopbackPort()
@@ -1592,25 +1161,6 @@ func (m *Manager) waitForTCPBridgeReady(ctx context.Context, bridgeInfo BridgeIn
 	})
 }
 
-func (m *Manager) waitForNamedPipeBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) error {
-	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for WSL named-pipe Docker bridge readiness", func(ctx context.Context) error {
-		ready, err := m.probeBridgeReady(ctx, bridgeInfo)
-		if err != nil {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for WSL named-pipe Docker bridge readiness"); stopErr != nil {
-				return stopErr
-			}
-			return err
-		}
-		if !ready {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for WSL named-pipe Docker bridge readiness"); stopErr != nil {
-				return stopErr
-			}
-			return fmt.Errorf("docker bridge is not responding on %s", bridgeInfo.DockerHost)
-		}
-		return nil
-	})
-}
-
 func (m *Manager) waitForCommandSuccess(ctx context.Context, description string, fn func(context.Context) error) error {
 	return m.waitForCommandSuccessWithFallbackTimeout(ctx, description, defaultReadyTimeout, fn)
 }
@@ -1702,44 +1252,8 @@ func (m *Manager) startTCPBridge(ctx context.Context, port int) error {
 	return nil
 }
 
-func (m *Manager) startNamedPipeBridge(_ context.Context, pipeName string) error {
-	if strings.TrimSpace(pipeName) == "" {
-		return fmt.Errorf("named-pipe bridge pipe name is empty")
-	}
-
-	pipePath := bridgePipePath(pipeName)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.pipeListener != nil && m.pipeListenerName == pipeName {
-		return nil
-	}
-	if m.pipeListener != nil {
-		m.stopNamedPipeBridgeLocked()
-	}
-
-	listener, err := winio.ListenPipe(pipePath, nil)
-	if err != nil {
-		return fmt.Errorf("listen on WSL named pipe %q: %w", pipePath, err)
-	}
-
-	closeCh := make(chan struct{})
-	m.pipeListener = listener
-	m.pipeListenerName = pipeName
-	m.pipeListenerClose = closeCh
-
-	go m.serveNamedPipeBridge(listener, closeCh)
-	return nil
-}
-
 func (m *Manager) probeBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) (bool, error) {
 	switch bridgeInfo.Type {
-	case BridgeTypeNamedPipe:
-		if bridgeInfo.PipeName == "" {
-			return false, nil
-		}
-		return m.probeNamedPipeBridgeReady(ctx, bridgeInfo.PipeName)
 	case BridgeTypeTCP:
 		if bridgeInfo.DockerHost == "" || bridgeInfo.Port <= 0 {
 			return false, nil
@@ -2170,10 +1684,6 @@ func (m *Manager) recoverVarDiskAttachment(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("detach WSL /var disk %q during attachment recovery: %w", m.varDiskPath(), err)
 	}
 
-	m.mu.Lock()
-	m.stopNamedPipeBridgeLocked()
-	m.mu.Unlock()
-
 	if _, err := m.runCommand(ctx, "wsl.exe", "--shutdown"); err != nil {
 		return false, fmt.Errorf("shutdown WSL to recover /var disk attachment %q: %w", m.varDiskPath(), err)
 	}
@@ -2187,10 +1697,6 @@ func (m *Manager) recoverBrokenMainDistro(ctx context.Context, progress progress
 	if err := m.stopMainDistro(ctx); err != nil {
 		log.Printf("Failed to terminate broken managed WSL distro %q before recovery: %v", m.mainDistro().name, err)
 	}
-
-	m.mu.Lock()
-	m.stopNamedPipeBridgeLocked()
-	m.mu.Unlock()
 
 	if err := m.unregisterMainDistro(ctx); err != nil {
 		return err
@@ -2268,161 +1774,6 @@ func removeInstallDir(installDir string) error {
 		return fmt.Errorf("remove WSL install dir %q: %w", installDir, err)
 	}
 	return nil
-}
-
-func (m *Manager) stopNamedPipeBridgeLocked() {
-	if m.pipeListener != nil {
-		_ = m.pipeListener.Close()
-		m.pipeListener = nil
-	}
-	if m.pipeListenerClose != nil {
-		close(m.pipeListenerClose)
-		m.pipeListenerClose = nil
-	}
-	m.pipeListenerName = ""
-}
-
-func (m *Manager) serveNamedPipeBridge(listener net.Listener, closeCh <-chan struct{}) {
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			select {
-			case <-closeCh:
-				return
-			default:
-			}
-			return
-		}
-
-		go m.handleNamedPipeBridgeConn(conn)
-	}
-}
-
-func (m *Manager) handleNamedPipeBridgeConn(conn net.Conn) {
-	defer conn.Close()
-
-	cmd := exec.Command("wsl.exe", "-d", m.cfg.WSLDistroName, "--exec", "socat", "STDIO", "UNIX-CONNECT:"+dockerSockPath)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		return
-	}
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		return
-	}
-
-	copyDone := make(chan struct{}, 2)
-	go func() {
-		_, _ = io.Copy(stdin, conn)
-		_ = stdin.Close()
-		copyDone <- struct{}{}
-	}()
-	go func() {
-		_, _ = io.Copy(conn, stdout)
-		_ = stdout.Close()
-		copyDone <- struct{}{}
-	}()
-
-	<-copyDone
-	_ = conn.Close()
-	<-copyDone
-	_ = cmd.Wait()
-}
-
-func (m *Manager) probeNamedPipeBridgeReady(ctx context.Context, pipeName string) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://discobot/_ping", nil)
-	if err != nil {
-		return false, err
-	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return winio.DialPipeContext(ctx, bridgePipePath(pipeName))
-			},
-		},
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, nil
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK, nil
-}
-
-func (m *Manager) runCommand(ctx context.Context, name string, args ...string) (string, error) {
-	output, err := runCommandOutput(ctx, name, args...)
-	trimmed := strings.TrimSpace(decodeCommandOutput(output))
-	if err != nil {
-		if trimmed == "" {
-			return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
-		}
-		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, trimmed)
-	}
-	return trimmed, nil
-}
-
-func decodeCommandOutput(output []byte) string {
-	if len(output) >= 2 {
-		switch {
-		case output[0] == 0xff && output[1] == 0xfe:
-			return decodeUTF16(output[2:], binary.LittleEndian)
-		case output[0] == 0xfe && output[1] == 0xff:
-			return decodeUTF16(output[2:], binary.BigEndian)
-		case looksLikeUTF16(output, binary.LittleEndian):
-			return decodeUTF16(output, binary.LittleEndian)
-		case looksLikeUTF16(output, binary.BigEndian):
-			return decodeUTF16(output, binary.BigEndian)
-		}
-	}
-
-	return string(output)
-}
-
-func looksLikeUTF16(output []byte, order binary.ByteOrder) bool {
-	if len(output) < 4 || len(output)%2 != 0 {
-		return false
-	}
-
-	zeroCount := 0
-	pairs := len(output) / 2
-	for i := 0; i+1 < len(output); i += 2 {
-		var candidate byte
-		if order == binary.LittleEndian {
-			candidate = output[i+1]
-		} else {
-			candidate = output[i]
-		}
-		if candidate == 0 {
-			zeroCount++
-		}
-	}
-
-	return zeroCount >= pairs/2
-}
-
-func decodeUTF16(output []byte, order binary.ByteOrder) string {
-	if len(output)%2 != 0 {
-		output = output[:len(output)-1]
-	}
-	if len(output) == 0 {
-		return ""
-	}
-
-	words := make([]uint16, 0, len(output)/2)
-	for i := 0; i+1 < len(output); i += 2 {
-		words = append(words, order.Uint16(output[i:i+2]))
-	}
-
-	return string(utf16.Decode(words))
 }
 
 func allocateLoopbackPort() (int, error) {

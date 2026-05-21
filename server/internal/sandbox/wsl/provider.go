@@ -808,7 +808,6 @@ func (p *Provider) probeBridge(ctx context.Context, runtimeInfo *RuntimeInfo) (b
 	return p.manager.probeBridgeReady(ctx, BridgeInfo{
 		Type:       runtimeInfo.BridgeType,
 		Port:       runtimeInfo.BridgePort,
-		PipeName:   runtimeInfo.BridgePipeName,
 		DockerHost: runtimeInfo.BridgeDockerHost,
 	})
 }
@@ -828,7 +827,6 @@ func (p *Provider) probeRuntimeBridge(ctx context.Context, runtimeInfo *RuntimeI
 	return p.manager.probeBridgeReady(ctx, BridgeInfo{
 		Type:       runtimeInfo.BridgeType,
 		Port:       runtimeInfo.BridgePort,
-		PipeName:   runtimeInfo.BridgePipeName,
 		DockerHost: runtimeInfo.BridgeDockerHost,
 	})
 }

@@ -237,7 +237,6 @@ func TestStatusReportsInstallingDistroAsStarting(t *testing.T) {
 	manager := NewManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLStateDir:   t.TempDir(),
-		WSLBridgeType: BridgeTypeTCP,
 		WSLBridgePort: 23755,
 	})
 

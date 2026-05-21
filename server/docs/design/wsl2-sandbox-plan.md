@@ -74,11 +74,11 @@ resume work without reconstructing the design from scratch.
 - [x] Best-effort hide the managed WSL distro from Windows Terminal by marking matching generated WSL profiles as hidden during WSL bootstrap
 - [x] Keep the managed WSL runtime alive while sandbox watches are active and recreate Docker event watches after bridge loss
 - [x] Retry cleanup of temporary WSL rootfs tar files and sweep stale temp tar files from the WSL state directory during bootstrap
+- [x] Remove named-pipe bridge support because it required a slow `wsl.exe` launch per Docker connection
 
 ### In Progress
 
 - [ ] Harden the bridge transport from prototype loopback TCP to the final supported bridge strategy
-- [x] Add named-pipe bridge support
 
 ### Not Started
 
@@ -315,7 +315,6 @@ WSLVarDiskPath     string
 WSLVarDiskSizeGB   int
 WSLRootfsPath      string
 WSLImageRef        string
-WSLBridgeType      string // named_pipe|tcp
 WSLBridgePort      int    // 0=random
 WSLIdleTimeout     time.Duration
 ```
@@ -326,7 +325,7 @@ Suggested defaults:
 - `WSLVarDiskPath=%LOCALAPPDATA%/discobot/wsl/var.vhdx`
 - `WSLVarDiskSizeGB=100`
 - `WSLImageRef=DefaultWSLImage()`
-- `WSLBridgeType=tcp` initially while named-pipe transport is still pending
+- TCP Docker bridge transport with a random loopback port by default
 - install/state under `%LOCALAPPDATA%`
 
 For local Windows development, `DISCOBOT_DOCKER_WSL_DISTRO=<name>` can also
@@ -414,30 +413,17 @@ writable data disk before they start.
 
 ## Docker Bridge Design
 
-## Recommended transport
+## Supported transport
 
-Preferred:
+Discobot uses a long-running TCP bridge inside the managed WSL distro. The
+previous Windows named-pipe bridge was removed because every Docker client
+connection required a fresh `wsl.exe -d ... socat ...` process, and `wsl.exe`
+startup is too slow for per-connection proxying.
 
-- Windows named pipe exposed by Discobot
-
-Example endpoint:
-
-- `\\.\pipe\discobot-docker`
-
-### Why named pipe
-
-- Windows-native local IPC
-- no network listener required
-- better ACL story than TCP
-- no TLS required for same-machine transport
-
-## Acceptable fallback for v1
-
-If named pipe integration is too much for the first version:
-
-- use loopback-only TCP on `127.0.0.1`
-- choose a random port
-- require a bearer token
+- use TCP on `127.0.0.1` from the Windows client side
+- choose a random port when `WSLBridgePort=0`
+- keep one in-guest `socat TCP-LISTEN:...,fork UNIX-CONNECT:/var/run/docker.sock`
+  service running under systemd instead of launching `wsl.exe` per connection
 - never expose raw Docker unauthenticated
 
 ## Security requirements
@@ -703,19 +689,20 @@ Implemented the first real managed-runtime teardown and upgrade controls:
 - updated `server/internal/sandbox/wsl/manager.go` so `UpgradeIfNeeded()` reinstalls the runtime distro when the persisted `ImageRef` differs from the configured WSL image source
 - kept upgrade detection conservative by keying off persisted runtime state, avoiding destructive reinstall when the existing distro has no recorded image metadata yet
 
-Current limitation: upgrade handling is still coarse-grained reinstall logic, with no in-guest migration path, no named-pipe bridge lifecycle, and no Windows integration coverage yet.
+Current limitation: upgrade handling is still coarse-grained reinstall logic, with no in-guest migration path and no Windows integration coverage yet.
 
-### 2026-04-03 — Phase 2 named-pipe bridge support landed
+### 2026-04-03 — Phase 2 TCP-only bridge support
 
-Implemented the first working Windows named-pipe bridge path:
+Kept the WSL Docker bridge on TCP only:
 
-- updated `server/internal/sandbox/wsl/manager.go` so `EnsureRunning()` now starts and waits for a named-pipe Docker bridge when `WSL_BRIDGE_TYPE=named_pipe`
-- added an in-process Windows named-pipe listener backed by `go-winio`
-- wired each named-pipe client connection to a `wsl.exe ... socat STDIO UNIX-CONNECT:/var/run/docker.sock` bridge inside the managed distro
-- updated readiness probing so named-pipe bridges are validated with a Docker `/_ping` request over the pipe before the provider reports `BridgeReady=true`
-- added bridge helper coverage for named-pipe path/host derivation in `server/internal/sandbox/wsl/bridge_test.go`
+- removed the experimental Windows named-pipe bridge because it spawned `wsl.exe`
+  for every Docker client connection
+- kept the in-guest `socat TCP-LISTEN:...,fork UNIX-CONNECT:/var/run/docker.sock`
+  bridge managed by systemd
+- kept readiness probing on Docker `/_ping` over the resolved TCP bridge before
+  the provider reports `BridgeReady=true`
 
-Current limitation: the named-pipe bridge is process-local and connection-proxy based, so bridge hardening, shutdown polish, and Windows integration coverage are still pending.
+Current limitation: bridge hardening and Windows integration coverage are still pending.
 
 ### 2026-04-03 — Shared runtime-idle shutdown abstraction landed
 
@@ -767,7 +754,7 @@ Current limitation: runtime state is now available, but nothing writes live brid
 Implemented the first reusable Phase 2 pieces:
 
 - added `server/internal/sandbox/wsl/path.go` with Windows-to-WSL bind path translation
-- added `server/internal/sandbox/wsl/bridge.go` with named-pipe and TCP bridge host resolution
+- added `server/internal/sandbox/wsl/bridge.go` with TCP bridge host resolution
 - added unit tests for both helper areas so they run outside Windows-specific builds
 - updated `server/internal/sandbox/wsl/manager.go` to surface resolved bridge metadata in runtime status
 - updated `server/internal/sandbox/wsl/provider.go` to translate `CreateOptions.WorkspacePath` and to build a future inner `docker.Provider` from bridge settings

@@ -105,7 +105,6 @@ type Config struct {
 	WSLVarDiskSizeGB int           // Size of the persistent /var VHDX in GB when created
 	WSLRootfsPath    string        // Path to a local WSL rootfs archive (optional, preferred over WSLImageRef)
 	WSLImageRef      string        // Docker registry image ref for WSL rootfs downloads
-	WSLBridgeType    string        // Docker bridge transport type (named_pipe|tcp)
 	WSLBridgePort    int           // TCP bridge port (0 = random)
 	WSLIdleTimeout   time.Duration // How long to keep the distro running when idle (0 = never auto-stop)
 
@@ -274,7 +273,6 @@ func Load() (*Config, error) {
 	cfg.WSLVarDiskSizeGB = getEnvInt("WSL_VAR_DISK_SIZE_GB", 100)
 	cfg.WSLRootfsPath = getEnv("WSL_ROOTFS_ARCHIVE_PATH", "")
 	cfg.WSLImageRef = getEnv("WSL_IMAGE_REF", DefaultWSLImage())
-	cfg.WSLBridgeType = strings.ToLower(getEnv("WSL_BRIDGE_TYPE", "tcp"))
 	cfg.WSLBridgePort = getEnvInt("WSL_BRIDGE_PORT", 0)
 	cfg.WSLIdleTimeout = getEnvDuration("WSL_IDLE_TIMEOUT", 0)
 

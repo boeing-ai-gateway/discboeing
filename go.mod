@@ -30,7 +30,6 @@ require (
 require (
 	aidanwoods.dev/go-paseto v1.6.0
 	cloud.google.com/go/kms v1.23.2
-	github.com/Microsoft/go-winio v0.6.2
 	github.com/adrg/xdg v0.5.3
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-oidc/v3 v3.16.0
@@ -46,7 +45,10 @@ require (
 	golang.org/x/sys v0.41.0
 )
 
-require aidanwoods.dev/go-result v0.3.1 // indirect
+require (
+	aidanwoods.dev/go-result v0.3.1 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
