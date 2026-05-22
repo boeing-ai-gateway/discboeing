@@ -1,9 +1,11 @@
 package vz
 
+import "github.com/obot-platform/discobot/server/internal/sandbox/vm"
+
 // StatusDetails contains VZ-specific status details returned in ProviderStatus.Details.
 type StatusDetails struct {
-	Progress *DownloadProgress   `json:"progress,omitempty"`
-	Config   *ProviderConfigInfo `json:"config,omitempty"`
+	Progress *vm.DownloadProgress `json:"progress,omitempty"`
+	Config   *ProviderConfigInfo  `json:"config,omitempty"`
 }
 
 // ProviderConfigInfo contains VZ provider configuration information.

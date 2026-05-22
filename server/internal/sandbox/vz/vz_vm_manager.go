@@ -205,7 +205,7 @@ type VMManager struct {
 	initErr error
 
 	// imageDownloader handles async download of VZ images (for Status reporting).
-	imageDownloader *ImageDownloader
+	imageDownloader *vm.ImageDownloader
 
 	// systemManager tracks startup tasks (optional).
 	systemManager vm.SystemManager
@@ -245,24 +245,27 @@ func (m *VMManager) Status() sandbox.ProviderStatus {
 		details.Progress = &progress
 
 		switch progress.State {
-		case DownloadStateDownloading, DownloadStateExtracting:
+		case vm.DownloadStateDownloading, vm.DownloadStateExtracting:
 			status.State = "downloading"
 			status.Message = "Downloading VZ kernel and base disk images"
-		case DownloadStateReady:
+		case vm.DownloadStateReady:
 			status.State = "ready"
-			if kernelPath, baseDiskPath, ok := m.imageDownloader.GetPaths(); ok {
-				memoryMB := m.defaultMemoryMB()
-				cpuCount := m.defaultCPUCount()
-				dataDiskGB := m.defaultDataDiskGB()
-				details.Config = &ProviderConfigInfo{
-					KernelPath:   kernelPath,
-					BaseDiskPath: baseDiskPath,
-					MemoryMB:     memoryMB,
-					CPUCount:     cpuCount,
-					DataDiskGB:   dataDiskGB,
+			if kernelPath, ok := m.imageDownloader.GetArtifactPath(vzKernelArtifact); ok {
+				baseDiskPath, diskOK := m.imageDownloader.GetArtifactPath(vzBaseDiskArtifact)
+				if diskOK {
+					memoryMB := m.defaultMemoryMB()
+					cpuCount := m.defaultCPUCount()
+					dataDiskGB := m.defaultDataDiskGB()
+					details.Config = &ProviderConfigInfo{
+						KernelPath:   kernelPath,
+						BaseDiskPath: baseDiskPath,
+						MemoryMB:     memoryMB,
+						CPUCount:     cpuCount,
+						DataDiskGB:   dataDiskGB,
+					}
 				}
 			}
-		case DownloadStateFailed:
+		case vm.DownloadStateFailed:
 			status.State = "failed"
 			status.Message = progress.Error
 		default:
@@ -315,10 +318,7 @@ func NewVMManager(cfg vm.Config, systemManager vm.SystemManager, resolver vm.Pro
 
 		log.Printf("VZ kernel or base disk not configured, will download from %s", imageRef)
 
-		downloader := NewImageDownloader(DownloadConfig{
-			ImageRef: imageRef,
-			DataDir:  cfg.DataDir,
-		})
+		downloader := newImageDownloader(imageRef, cfg.DataDir)
 		mgr.imageDownloader = downloader
 
 		// Register startup task if system manager is available
@@ -380,10 +380,10 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 
 					// Check if complete or failed
 					switch progress.State {
-					case DownloadStateReady:
+					case vm.DownloadStateReady:
 						m.systemManager.CompleteTask("vz-download")
 						return
-					case DownloadStateFailed:
+					case vm.DownloadStateFailed:
 						m.systemManager.FailTask("vz-download", fmt.Errorf("%s", progress.Error))
 						return
 					}
@@ -414,10 +414,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 				}
 
 				// Reset downloader for retry
-				downloader = NewImageDownloader(DownloadConfig{
-					ImageRef: imageRef,
-					DataDir:  m.config.DataDir,
-				})
+				downloader = newImageDownloader(imageRef, m.config.DataDir)
 				m.imageDownloader = downloader
 				continue
 			}
@@ -431,8 +428,9 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 		}
 
 		// Get paths from downloader
-		kernelPath, baseDiskPath, ok := downloader.GetPaths()
-		if !ok {
+		kernelPath, kernelOK := downloader.GetArtifactPath(vzKernelArtifact)
+		baseDiskPath, diskOK := downloader.GetArtifactPath(vzBaseDiskArtifact)
+		if !kernelOK || !diskOK {
 			err := fmt.Errorf("failed to get VZ image paths after download")
 			log.Printf("%v", err)
 
@@ -446,10 +444,7 @@ func (m *VMManager) downloadAndInit(imageRef string) {
 					return
 				}
 
-				downloader = NewImageDownloader(DownloadConfig{
-					ImageRef: imageRef,
-					DataDir:  m.config.DataDir,
-				})
+				downloader = newImageDownloader(imageRef, m.config.DataDir)
 				m.imageDownloader = downloader
 				continue
 			}

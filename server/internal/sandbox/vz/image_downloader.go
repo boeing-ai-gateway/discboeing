@@ -1,433 +1,40 @@
 package vz
 
 import (
-	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
 	"github.com/ulikunitz/xz/lzma"
-)
 
-// DownloadState represents the current state of the image download process.
-type DownloadState int
+	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+)
 
 const (
-	DownloadStateNotStarted DownloadState = iota
-	DownloadStateDownloading
-	DownloadStateExtracting
-	DownloadStateReady
-	DownloadStateFailed
+	vzKernelArtifact   = "vmlinuz"
+	vzBaseDiskArtifact = "discobot-rootfs.squashfs"
 )
 
-func (s DownloadState) String() string {
-	switch s {
-	case DownloadStateNotStarted:
-		return "not_started"
-	case DownloadStateDownloading:
-		return "downloading"
-	case DownloadStateExtracting:
-		return "extracting"
-	case DownloadStateReady:
-		return "ready"
-	case DownloadStateFailed:
-		return "failed"
-	default:
-		return "unknown"
-	}
-}
-
-// DownloadConfig contains configuration for downloading VZ images.
-type DownloadConfig struct {
-	ImageRef string // e.g., "ghcr.io/obot-platform/discobot-vz:main"
-	DataDir  string // Storage location for extracted files
-}
-
-// DownloadProgress tracks the progress of an image download.
-type DownloadProgress struct {
-	State           DownloadState `json:"state"`
-	BytesDownloaded int64         `json:"bytes_downloaded"`
-	TotalBytes      int64         `json:"total_bytes"`
-	CurrentLayer    string        `json:"current_layer"`
-	Error           string        `json:"error,omitempty"`
-	StartedAt       time.Time     `json:"started_at"`
-	CompletedAt     time.Time     `json:"completed_at,omitzero"`
-}
-
-// ImageDownloader manages async download of VZ images from container registry.
-type ImageDownloader struct {
-	cfg        DownloadConfig
-	state      DownloadState
-	stateMu    sync.RWMutex
-	progress   DownloadProgress
-	progressMu sync.RWMutex
-	doneCh     chan struct{}
-
-	// Extracted paths (populated after successful download)
-	kernelPath   string
-	baseDiskPath string
-}
-
-// NewImageDownloader creates a new image downloader.
-func NewImageDownloader(cfg DownloadConfig) *ImageDownloader {
-	return &ImageDownloader{
-		cfg:    cfg,
-		state:  DownloadStateNotStarted,
-		doneCh: make(chan struct{}),
-		progress: DownloadProgress{
-			State: DownloadStateNotStarted,
+func newImageDownloader(imageRef string, dataDir string) *vm.ImageDownloader {
+	return vm.NewImageDownloader(vm.ImageDownloadConfig{
+		ImageRef:            imageRef,
+		DataDir:             dataDir,
+		ProviderName:        "VZ",
+		ArtifactDescription: "VZ kernel and base disk images",
+		Artifacts: []vm.ImageArtifactSpec{
+			{Name: vzKernelArtifact},
+			{Name: vzBaseDiskArtifact},
 		},
-	}
-}
-
-// Start begins the async download process.
-// It checks if the image is already cached before downloading.
-func (d *ImageDownloader) Start(ctx context.Context) error {
-	d.updateState(DownloadStateDownloading)
-	d.updateProgress(func(p *DownloadProgress) {
-		p.State = DownloadStateDownloading
-		p.StartedAt = time.Now()
+		PostProcess: func(paths map[string]string) error {
+			return decompressKernel(paths[vzKernelArtifact])
+		},
 	})
-
-	// Check if already cached
-	if cached, kernelPath, baseDiskPath := d.checkCache(); cached {
-		log.Printf("VZ images already cached: kernel=%s, disk=%s", kernelPath, baseDiskPath)
-		d.kernelPath = kernelPath
-		d.baseDiskPath = baseDiskPath
-		d.updateState(DownloadStateReady)
-		d.updateProgress(func(p *DownloadProgress) {
-			p.State = DownloadStateReady
-			p.CompletedAt = time.Now()
-		})
-		close(d.doneCh)
-		return nil
-	}
-
-	// Download and extract
-	if err := d.download(ctx); err != nil {
-		d.updateState(DownloadStateFailed)
-		d.updateProgress(func(p *DownloadProgress) {
-			p.State = DownloadStateFailed
-			p.Error = err.Error()
-		})
-		close(d.doneCh)
-		return err
-	}
-
-	d.updateState(DownloadStateReady)
-	d.updateProgress(func(p *DownloadProgress) {
-		p.State = DownloadStateReady
-		p.CompletedAt = time.Now()
-	})
-	close(d.doneCh)
-	return nil
-}
-
-// Status returns the current download status.
-func (d *ImageDownloader) Status() DownloadProgress {
-	d.progressMu.RLock()
-	defer d.progressMu.RUnlock()
-	return d.progress
-}
-
-// Wait blocks until the download completes or context is cancelled.
-func (d *ImageDownloader) Wait(ctx context.Context) error {
-	select {
-	case <-d.doneCh:
-		d.stateMu.RLock()
-		state := d.state
-		d.stateMu.RUnlock()
-		if state == DownloadStateFailed {
-			d.progressMu.RLock()
-			err := d.progress.Error
-			d.progressMu.RUnlock()
-			return fmt.Errorf("download failed: %s", err)
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// GetPaths returns the paths to the extracted kernel and base disk.
-// Returns ok=false if the download is not complete.
-func (d *ImageDownloader) GetPaths() (kernelPath, baseDiskPath string, ok bool) {
-	d.stateMu.RLock()
-	defer d.stateMu.RUnlock()
-	if d.state != DownloadStateReady {
-		return "", "", false
-	}
-	return d.kernelPath, d.baseDiskPath, true
-}
-
-// RecordError records an error that occurred after download completion.
-// This is used to surface errors from VM manager creation or other post-download failures.
-func (d *ImageDownloader) RecordError(err error) {
-	d.updateState(DownloadStateFailed)
-	d.updateProgress(func(p *DownloadProgress) {
-		p.State = DownloadStateFailed
-		p.Error = err.Error()
-		if p.CompletedAt.IsZero() {
-			p.CompletedAt = time.Now()
-		}
-	})
-
-	// Close doneCh if not already closed (safe to call multiple times via select)
-	select {
-	case <-d.doneCh:
-		// Already closed
-	default:
-		close(d.doneCh)
-	}
-}
-
-// checkCache verifies if the image is already cached locally.
-func (d *ImageDownloader) checkCache() (cached bool, kernelPath, baseDiskPath string) {
-	digest := d.computeDigest()
-	cacheDir := filepath.Join(d.cfg.DataDir, "images", digest)
-
-	kernelPath = filepath.Join(cacheDir, "vmlinuz")
-	baseDiskPath = filepath.Join(cacheDir, "discobot-rootfs.squashfs")
-
-	// Check if both files exist and have reasonable sizes
-	kernelInfo, kernelErr := os.Stat(kernelPath)
-	diskInfo, diskErr := os.Stat(baseDiskPath)
-
-	if kernelErr == nil && diskErr == nil && kernelInfo.Size() > 0 && diskInfo.Size() > 0 {
-		log.Printf("Found cached VZ images in %s", cacheDir)
-		return true, kernelPath, baseDiskPath
-	}
-
-	return false, "", ""
-}
-
-// computeDigest creates a stable digest from the image reference for cache key.
-func (d *ImageDownloader) computeDigest() string {
-	h := sha256.New()
-	h.Write([]byte(d.cfg.ImageRef))
-	return fmt.Sprintf("sha256-%x", h.Sum(nil))[:19] // Short hash for filesystem
-}
-
-// download pulls the image from the registry and extracts the kernel and disk files.
-func (d *ImageDownloader) download(ctx context.Context) error {
-	log.Printf("Downloading VZ images from %s", d.cfg.ImageRef)
-
-	// Parse image reference
-	ref, err := name.ParseReference(d.cfg.ImageRef)
-	if err != nil {
-		return fmt.Errorf("invalid image reference %s: %w", d.cfg.ImageRef, err)
-	}
-
-	// Resolve the correct platform for multi-arch images.
-	// VZ only runs on macOS (Apple Silicon = linux/arm64 guest).
-	platform := v1.Platform{
-		OS:           "linux",
-		Architecture: runtime.GOARCH,
-	}
-	log.Printf("Pulling image for platform %s/%s", platform.OS, platform.Architecture)
-
-	desc, err := remote.Get(ref, remote.WithContext(ctx), remote.WithPlatform(platform))
-	if err != nil {
-		return fmt.Errorf("failed to fetch image descriptor: %w", err)
-	}
-
-	img, err := desc.Image()
-	if err != nil {
-		return fmt.Errorf("failed to resolve image: %w", err)
-	}
-
-	// Get image size
-	manifest, err := img.Manifest()
-	if err != nil {
-		return fmt.Errorf("failed to get manifest: %w", err)
-	}
-
-	var totalBytes int64
-	for _, layer := range manifest.Layers {
-		totalBytes += layer.Size
-	}
-
-	d.updateProgress(func(p *DownloadProgress) {
-		p.TotalBytes = totalBytes
-	})
-
-	// Get layers
-	layers, err := img.Layers()
-	if err != nil {
-		return fmt.Errorf("failed to get layers: %w", err)
-	}
-
-	// Create temp directory for extraction
-	digest := d.computeDigest()
-	cacheDir := filepath.Join(d.cfg.DataDir, "images", digest)
-	tempDir := cacheDir + ".tmp"
-
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir) // Clean up temp dir on error
-
-	// Extract files from layers
-	d.updateState(DownloadStateExtracting)
-	d.updateProgress(func(p *DownloadProgress) {
-		p.State = DownloadStateExtracting
-	})
-
-	var kernelFound, diskFound bool
-	var bytesDownloaded int64
-
-	for i, layer := range layers {
-		layerDigest, err := layer.Digest()
-		if err != nil {
-			return fmt.Errorf("failed to get layer digest: %w", err)
-		}
-
-		d.updateProgress(func(p *DownloadProgress) {
-			p.CurrentLayer = layerDigest.String()
-		})
-
-		log.Printf("Extracting layer %d/%d: %s", i+1, len(layers), layerDigest)
-
-		// Get layer reader
-		rc, err := layer.Compressed()
-		if err != nil {
-			return fmt.Errorf("failed to get layer reader: %w", err)
-		}
-
-		// Uncompress layer
-		uncompressed, err := layer.Uncompressed()
-		if err != nil {
-			rc.Close()
-			return fmt.Errorf("failed to uncompress layer: %w", err)
-		}
-
-		// Extract files from tar
-		if err := d.extractFiles(uncompressed, tempDir, &kernelFound, &diskFound); err != nil {
-			rc.Close()
-			uncompressed.Close()
-			return fmt.Errorf("failed to extract files from layer: %w", err)
-		}
-
-		uncompressed.Close()
-		rc.Close()
-
-		// Update progress
-		size, _ := layer.Size()
-		bytesDownloaded += size
-		d.updateProgress(func(p *DownloadProgress) {
-			p.BytesDownloaded = bytesDownloaded
-		})
-	}
-
-	// Verify we found both files
-	if !kernelFound {
-		return fmt.Errorf("kernel file (vmlinuz) not found in image")
-	}
-	if !diskFound {
-		return fmt.Errorf("disk file (discobot-rootfs.squashfs) not found in image")
-	}
-
-	// Decompress vmlinuz for Apple VZ (which requires uncompressed ELF)
-	if err := d.decompressKernel(filepath.Join(tempDir, "vmlinuz")); err != nil {
-		return fmt.Errorf("failed to decompress kernel: %w", err)
-	}
-
-	// Write metadata
-	metadata := map[string]any{
-		"image_ref":   d.cfg.ImageRef,
-		"digest":      digest,
-		"pulled_at":   time.Now().Format(time.RFC3339),
-		"total_bytes": totalBytes,
-	}
-	metadataJSON, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(tempDir, "manifest.json"), metadataJSON, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata: %w", err)
-	}
-
-	// Remove any existing cache directory (e.g., from a previous partial download)
-	if err := os.RemoveAll(cacheDir); err != nil {
-		return fmt.Errorf("failed to remove existing cache directory: %w", err)
-	}
-
-	// Atomic rename from temp to final directory
-	if err := os.Rename(tempDir, cacheDir); err != nil {
-		return fmt.Errorf("failed to finalize cache directory: %w", err)
-	}
-
-	d.kernelPath = filepath.Join(cacheDir, "vmlinuz")
-	d.baseDiskPath = filepath.Join(cacheDir, "discobot-rootfs.squashfs")
-
-	log.Printf("VZ images extracted successfully: kernel=%s, disk=%s", d.kernelPath, d.baseDiskPath)
-	return nil
-}
-
-// extractFiles extracts vmlinuz and discobot-rootfs.squashfs from a tar stream.
-func (d *ImageDownloader) extractFiles(r io.Reader, destDir string, kernelFound, diskFound *bool) error {
-	tr := tar.NewReader(r)
-
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		// Look for /vmlinuz or /discobot-rootfs.squashfs
-		if header.Name == "vmlinuz" || strings.HasSuffix(header.Name, "/vmlinuz") {
-			destPath := filepath.Join(destDir, "vmlinuz")
-			if err := d.writeFile(tr, destPath, header.Mode); err != nil {
-				return fmt.Errorf("failed to write kernel: %w", err)
-			}
-			*kernelFound = true
-			log.Printf("Extracted kernel: %s (%d bytes)", header.Name, header.Size)
-		} else if header.Name == "discobot-rootfs.squashfs" || strings.HasSuffix(header.Name, "/discobot-rootfs.squashfs") {
-			destPath := filepath.Join(destDir, "discobot-rootfs.squashfs")
-			if err := d.writeFile(tr, destPath, header.Mode); err != nil {
-				return fmt.Errorf("failed to write disk: %w", err)
-			}
-			*diskFound = true
-			log.Printf("Extracted disk: %s (%d bytes)", header.Name, header.Size)
-		}
-	}
-
-	return nil
-}
-
-// writeFile writes a file from the tar reader to disk.
-func (d *ImageDownloader) writeFile(r io.Reader, destPath string, mode int64) error {
-	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(mode))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err := io.Copy(f, r); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // compressionFormat describes a known kernel compression format.
@@ -506,7 +113,7 @@ func isKernelImage(data []byte) bool {
 // For case 3, we use the Linux boot protocol header to locate the payload,
 // then fall back to scanning for compression magic bytes throughout the file
 // (like the kernel's scripts/extract-vmlinux).
-func (d *ImageDownloader) decompressKernel(path string) error {
+func decompressKernel(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -555,7 +162,7 @@ func (d *ImageDownloader) decompressKernel(path string) error {
 
 		if absOffset > 0 && absEnd <= len(data) && payloadLength > 0 {
 			payload := data[absOffset:absEnd]
-			result, err := d.tryDecompress(payload)
+			result, err := tryDecompress(payload)
 			if err == nil {
 				log.Printf("Successfully extracted kernel (%d bytes) via boot protocol header", len(result))
 				return os.WriteFile(path, result, 0644)
@@ -600,7 +207,7 @@ func (d *ImageDownloader) decompressKernel(path string) error {
 }
 
 // tryDecompress attempts to decompress data using each known format.
-func (d *ImageDownloader) tryDecompress(data []byte) ([]byte, error) {
+func tryDecompress(data []byte) ([]byte, error) {
 	for _, cf := range knownFormats {
 		if len(data) < len(cf.magic) || !bytes.Equal(data[:len(cf.magic)], cf.magic) {
 			continue
@@ -635,18 +242,4 @@ func (d *ImageDownloader) tryDecompress(data []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("no known compression format matched payload (starts with %x)", data[:min(4, len(data))])
-}
-
-// updateState updates the download state thread-safely.
-func (d *ImageDownloader) updateState(state DownloadState) {
-	d.stateMu.Lock()
-	d.state = state
-	d.stateMu.Unlock()
-}
-
-// updateProgress updates the download progress thread-safely.
-func (d *ImageDownloader) updateProgress(fn func(*DownloadProgress)) {
-	d.progressMu.Lock()
-	fn(&d.progress)
-	d.progressMu.Unlock()
 }
