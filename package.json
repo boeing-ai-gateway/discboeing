@@ -111,7 +111,10 @@
     "extraResources": [
       {
         "from": "src-tauri/binaries",
-        "to": "binaries"
+        "to": "binaries",
+        "filter": [
+          "discobot-server-*"
+        ]
       }
     ],
     "mac": {

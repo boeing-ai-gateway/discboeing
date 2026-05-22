@@ -10,13 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -233,178 +230,8 @@ func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 	}
 }
 
-func TestStatusReportsInstallingDistroAsStarting(t *testing.T) {
-	manager := NewManager(&config.Config{
-		WSLDistroName: "discobot",
-		WSLStateDir:   t.TempDir(),
-		WSLBridgePort: 23755,
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command name: %s", name)
-		}
-		if !slices.Equal(args, []string{"--list", "--verbose"}) {
-			t.Fatalf("unexpected command args: %v", args)
-		}
-		return []byte(distroListForTest("Installing")), nil
-	}
-
-	status := manager.Status()
-	if status.State != "starting" {
-		t.Fatalf("Status().State = %q, want %q", status.State, "starting")
-	}
-	if !strings.Contains(status.Message, "import is still being finalized") {
-		t.Fatalf("Status().Message = %q, want importing message", status.Message)
-	}
-}
-
-func TestStartTCPBridgeUsesSystemdRun(t *testing.T) {
-	manager := NewManager(&config.Config{
-		WSLDistroName: "discobot",
-		WSLStateDir:   t.TempDir(),
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command name: %s", name)
-		}
-		wantPrefix := []string{"-d", "discobot", "--", "sh", "-lc"}
-		if len(args) != len(wantPrefix)+1 || !slices.Equal(args[:len(wantPrefix)], wantPrefix) {
-			t.Fatalf("unexpected command args: %v", args)
-		}
-		command := args[len(args)-1]
-		if !strings.Contains(command, "systemd-run --unit=discobot-docker-bridge") {
-			t.Fatalf("startTCPBridge() command = %q, want systemd-run", command)
-		}
-		if !strings.Contains(command, "exec socat -b131072 TCP-LISTEN:23755,bind=0.0.0.0,reuseaddr,fork,shut-down UNIX-CONNECT:/var/run/docker.sock,shut-down") {
-			t.Fatalf("startTCPBridge() command = %q, want socat command", command)
-		}
-		if !strings.Contains(command, "/proc/net/tcp") {
-			t.Fatalf("startTCPBridge() command = %q, want /proc TCP listener check", command)
-		}
-		if strings.Contains(command, "ss -ltnH") || strings.Contains(command, "netstat -ltn") {
-			t.Fatalf("startTCPBridge() command = %q, want no dependency on ss/netstat", command)
-		}
-		return nil, nil
-	}
-
-	if err := manager.startTCPBridge(context.Background(), 23755); err != nil {
-		t.Fatalf("startTCPBridge() error = %v", err)
-	}
-}
-
-func TestEnsureBridgeReadyDoesNotPersistDynamicTCPPortBeforeStartupSucceeds(t *testing.T) {
-	manager := NewManager(&config.Config{
-		WSLDistroName: "discobot",
-		WSLStateDir:   t.TempDir(),
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command name: %s", name)
-		}
-		wantPrefix := []string{"-d", "discobot", "--", "sh", "-lc"}
-		if len(args) != len(wantPrefix)+1 || !slices.Equal(args[:len(wantPrefix)], wantPrefix) {
-			t.Fatalf("unexpected command args: %v", args)
-		}
-		return nil, errors.New("exit status 1")
-	}
-
-	_, _, err := manager.ensureBridgeReady(context.Background(), BridgeInfo{Type: BridgeTypeTCP})
-	if err == nil {
-		t.Fatal("ensureBridgeReady() error = nil, want startup error")
-	}
-
-	state, loadErr := manager.state.Load()
-	if loadErr != nil {
-		t.Fatalf("Load() error = %v", loadErr)
-	}
-	if state != (RuntimeState{}) {
-		t.Fatalf("Load() = %#v, want zero value after failed startup", state)
-	}
-}
-
-func TestProbeBridgeReadyUsesHTTPForTCPBridge(t *testing.T) {
-	manager := NewManager(&config.Config{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/_ping" {
-			t.Fatalf("request path = %q, want %q", r.URL.Path, "/_ping")
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	portText := server.URL[strings.LastIndex(server.URL, ":")+1:]
-	port, err := strconv.Atoi(portText)
-	if err != nil {
-		t.Fatalf("Atoi(%q) error = %v", portText, err)
-	}
-
-	ready, err := manager.probeBridgeReady(context.Background(), BridgeInfo{
-		Type:       BridgeTypeTCP,
-		DockerHost: fmt.Sprintf("tcp://127.0.0.1:%d", port),
-		Port:       port,
-	})
-	if err != nil {
-		t.Fatalf("probeBridgeReady() error = %v", err)
-	}
-	if !ready {
-		t.Fatal("probeBridgeReady() = false, want true")
-	}
-}
-
-func TestWaitForTCPBridgeReadyFailsWhenDistroStops(t *testing.T) {
-	manager := NewManager(&config.Config{
-		WSLDistroName: "discobot",
-		WSLStateDir:   t.TempDir(),
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command name: %s", name)
-		}
-		if !slices.Equal(args, []string{"--list", "--verbose"}) {
-			t.Fatalf("unexpected command args: %v", args)
-		}
-		return []byte(distroListForTest("Stopped")), nil
-	}
-
-	err := manager.waitForTCPBridgeReady(context.Background(), BridgeInfo{
-		Type:       BridgeTypeTCP,
-		DockerHost: "tcp://127.0.0.1:9",
-		Port:       9,
-	})
-	if err == nil {
-		t.Fatal("waitForTCPBridgeReady() error = nil, want stopped distro error")
-	}
-	if !strings.Contains(err.Error(), "managed WSL distro \"discobot\" stopped while waiting for WSL Docker bridge readiness") {
-		t.Fatalf("waitForTCPBridgeReady() error = %v", err)
-	}
-}
-
 func TestShouldRecoverBrokenDistroRecognizesUnexpectedStop(t *testing.T) {
-	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discobot\" stopped while waiting for WSL Docker bridge readiness")) {
+	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discobot\" stopped while waiting for docker.service readiness")) {
 		t.Fatal("shouldRecoverBrokenDistro() = false, want true for stopped distro error")
 	}
 	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discobot\" disappeared while waiting for /var readiness")) {
@@ -420,8 +247,8 @@ func TestVarDiskLabelSanitizesDistroName(t *testing.T) {
 		WSLStateDir:   t.TempDir(),
 	})
 
-	if got := manager.varDiskLabel(); got != "discobot-data-var" {
-		t.Fatalf("varDiskLabel() = %q, want %q", got, "discobot-data-var")
+	if got := manager.varDiskLabel(); got != "discobot-data-va" {
+		t.Fatalf("varDiskLabel() = %q, want %q", got, "discobot-data-va")
 	}
 }
 
@@ -438,124 +265,8 @@ func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 	if !strings.Contains(got, "DISCOBOT_GUEST_PLATFORM='wsl'") {
 		t.Fatalf("buildDiscobotWSLEnvFile() missing guest platform: %q", got)
 	}
-	if !strings.Contains(got, "DISCOBOT_VAR_DISK_LABEL='discobot-data-var'") {
+	if !strings.Contains(got, "DISCOBOT_VAR_DISK_LABEL='discobot-data-va'") {
 		t.Fatalf("buildDiscobotWSLEnvFile() missing quoted disk label: %q", got)
-	}
-}
-
-func TestEnsureVarDiskFileUsesElevatedHelperWhenCreateVirtualDiskNeedsPrivileges(t *testing.T) {
-	root := t.TempDir()
-	manager := NewManager(&config.Config{
-		WSLDistroName:  "discobot",
-		WSLStateDir:    root,
-		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
-	})
-
-	originalCreateDynamicVHD := createDynamicVHD
-	originalRunElevatedWSLHelper := runElevatedWSLHelper
-	originalFindWSLElevationHelperPath := findWSLElevationHelperPath
-	t.Cleanup(func() {
-		createDynamicVHD = originalCreateDynamicVHD
-		runElevatedWSLHelper = originalRunElevatedWSLHelper
-		findWSLElevationHelperPath = originalFindWSLElevationHelperPath
-	})
-
-	createDynamicVHD = func(path string, sizeBytes uint64) error {
-		if path != filepath.Join(root, "var.vhdx") {
-			t.Fatalf("createDynamicVHD() path = %q, want %q", path, filepath.Join(root, "var.vhdx"))
-		}
-		if sizeBytes != 100*1024*1024*1024 {
-			t.Fatalf("createDynamicVHD() sizeBytes = %d, want %d", sizeBytes, uint64(100*1024*1024*1024))
-		}
-		return errors.New("createvirtualdisk(\"C:\\\\var.vhdx\"): access is denied")
-	}
-
-	helperCalled := false
-	findWSLElevationHelperPath = func() (string, error) {
-		return filepath.Join(root, "discobot-wsl-helper.exe"), nil
-	}
-	runElevatedWSLHelper = func(_ context.Context, helperPath string, args ...string) (string, error) {
-		helperCalled = true
-		if helperPath == "" {
-			t.Fatal("runElevatedWSLHelper() helperPath = empty")
-		}
-		wantArgs := []string{"create-vhd", "--path", filepath.Join(root, "var.vhdx"), "--size-gb", "100"}
-		if !slices.Equal(args, wantArgs) {
-			t.Fatalf("runElevatedWSLHelper() args = %v, want %v", args, wantArgs)
-		}
-		return "", nil
-	}
-
-	err := manager.ensureVarDiskFile(context.Background())
-	if err != nil {
-		t.Fatalf("ensureVarDiskFile() error = %v", err)
-	}
-	if !helperCalled {
-		t.Fatal("ensureVarDiskFile() did not invoke elevated helper")
-	}
-}
-
-func TestAttachVarDiskBareUsesElevatedHelperWhenMountNeedsPrivileges(t *testing.T) {
-	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	manager := NewManager(&config.Config{
-		WSLDistroName:  "discobot",
-		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	originalRunElevatedWSLHelper := runElevatedWSLHelper
-	originalFindWSLElevationHelperPath := findWSLElevationHelperPath
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-		runElevatedWSLHelper = originalRunElevatedWSLHelper
-		findWSLElevationHelperPath = originalFindWSLElevationHelperPath
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command: %s %v", name, args)
-		}
-		return []byte("Access is denied."), errors.New("exit status 1")
-	}
-
-	helperCalled := false
-	findWSLElevationHelperPath = func() (string, error) {
-		return filepath.Join(root, "discobot-wsl-helper.exe"), nil
-	}
-	runElevatedWSLHelper = func(_ context.Context, helperPath string, args ...string) (string, error) {
-		helperCalled = true
-		if helperPath == "" {
-			t.Fatal("runElevatedWSLHelper() helperPath = empty")
-		}
-		wantArgs := []string{"mount-vhd-bare", "--path", varDiskPath}
-		if !slices.Equal(args, wantArgs) {
-			t.Fatalf("runElevatedWSLHelper() args = %v, want %v", args, wantArgs)
-		}
-		return "", nil
-	}
-
-	err := manager.attachVarDiskBare(context.Background())
-	if err == nil {
-		if !helperCalled {
-			t.Fatal("attachVarDiskBare() did not invoke elevated helper")
-		}
-		return
-	}
-	t.Fatalf("attachVarDiskBare() error = %v", err)
-}
-
-func TestIsUnformattedVarDiskMountErrorMatchesInvalidArgumentMountFailure(t *testing.T) {
-	t.Parallel()
-
-	err := errors.New("wsl.exe --mount --vhd C:\\var.vhdx --name discobot-var --type ext4: exit status 1: the disk was attached but failed to mount: invalid argument")
-	if !isUnformattedVarDiskMountError(err) {
-		t.Fatalf("isUnformattedVarDiskMountError(%q) = false, want true", err)
 	}
 }
 
@@ -592,9 +303,8 @@ func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 	}
 }
 
-func TestEnsureMainDistroReadyRecoversBrokenRuntimeDistro(t *testing.T) {
+func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *testing.T) {
 	root := t.TempDir()
-	stateDir := filepath.Join(root, "state")
 	installDir := filepath.Join(root, "discobot")
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -603,18 +313,10 @@ func TestEnsureMainDistroReadyRecoversBrokenRuntimeDistro(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	rootfsArchivePath := filepath.Join(root, "discobot-rootfs.tar.zst")
-	if err := writeTestRootfsArchive(rootfsArchivePath, map[string]string{
-		"./etc/hostname": "discobot\n",
-	}); err != nil {
-		t.Fatalf("writeTestRootfsArchive() error = %v", err)
-	}
-
 	manager := NewManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLInstallDir: installDir,
-		WSLStateDir:   stateDir,
-		WSLRootfsPath: rootfsArchivePath,
+		WSLStateDir:   filepath.Join(root, "state"),
 	})
 
 	type expectedCommand struct {
@@ -626,16 +328,6 @@ func TestEnsureMainDistroReadyRecoversBrokenRuntimeDistro(t *testing.T) {
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "Catastrophic failure\r\nError code: Wsl/Service/E_UNEXPECTED\r\n", err: errors.New("exit status 1")},
-		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"--terminate", "discobot"}},
-		{name: "wsl.exe", args: []string{"--unregister", "discobot"}},
-		{name: "wsl.exe", args: []string{"--import", "discobot", installDir, "", "--version", "2"}},
-		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Stopped")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "true"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 
@@ -651,68 +343,31 @@ func TestEnsureMainDistroReadyRecoversBrokenRuntimeDistro(t *testing.T) {
 		}
 		expected := sequence[callIndex]
 		callIndex++
-
 		if name != expected.name {
 			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
 		}
-		if len(args) != len(expected.args) {
-			t.Fatalf("command %d args length = %d, want %d (%v)", callIndex, len(args), len(expected.args), args)
-		}
-		for i := range args {
-			if expected.args[i] == "" && i == 3 && len(expected.args) > 4 && expected.args[0] == "--import" {
-				if filepath.Dir(args[i]) != stateDir {
-					t.Fatalf("command %d import tar path parent = %q, want %q", callIndex, filepath.Dir(args[i]), stateDir)
-				}
-				continue
-			}
-			if args[i] != expected.args[i] {
-				t.Fatalf("command %d arg %d = %q, want %q", callIndex, i, args[i], expected.args[i])
-			}
-		}
-		if len(args) > 0 && args[0] == "--import" {
-			if err := os.MkdirAll(installDir, 0755); err != nil {
-				t.Fatalf("MkdirAll() during import mock error = %v", err)
-			}
+		if !slices.Equal(args, expected.args) {
+			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
 		}
 		return []byte(expected.output), expected.err
 	}
 
-	distro, err := manager.ensureMainDistroReady(context.Background(), progressReporter{})
-	if err != nil {
-		t.Fatalf("ensureMainDistroReady() error = %v", err)
+	_, err := manager.ensureMainDistroReady(context.Background(), progressReporter{})
+	if err == nil {
+		t.Fatal("ensureMainDistroReady() error = nil, want bootstrap-required error")
 	}
-	if distro.State != "Running" {
-		t.Fatalf("ensureMainDistroReady() distro state = %q, want %q", distro.State, "Running")
+	var bootstrapErr *wslBootstrapRequiredError
+	if !errors.As(err, &bootstrapErr) {
+		t.Fatalf("ensureMainDistroReady() error = %T, want *wslBootstrapRequiredError", err)
+	}
+	if !slices.Contains(bootstrapErr.Actions, "repair-distro") {
+		t.Fatalf("bootstrap actions = %v, want repair-distro", bootstrapErr.Actions)
 	}
 	if callIndex != len(sequence) {
 		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
 	}
-	if _, err := os.Stat(installDir); err != nil {
-		t.Fatalf("reimported install dir missing after recovery: %v", err)
-	}
-}
-
-func TestUnregisterNamedDistroIgnoresDistroNotFound(t *testing.T) {
-	manager := NewManager(&config.Config{WSLDistroName: "discobot"})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "wsl.exe" {
-			t.Fatalf("unexpected command name: %s", name)
-		}
-		wantArgs := []string{"--unregister", "discobot"}
-		if !slices.Equal(args, wantArgs) {
-			t.Fatalf("runCommandOutput() args = %v, want %v", args, wantArgs)
-		}
-		return []byte("There is no distribution with the supplied name.\r\nError code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND"), errors.New("exit status 0xffffffff")
-	}
-
-	if err := manager.unregisterNamedDistro(context.Background(), "discobot", "managed WSL distro"); err != nil {
-		t.Fatalf("unregisterNamedDistro() error = %v, want nil", err)
+	if _, err := os.Stat(filepath.Join(installDir, "marker.txt")); err != nil {
+		t.Fatalf("install dir was modified during non-elevating recovery path: %v", err)
 	}
 }
 
@@ -780,145 +435,174 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 	}
 }
 
-func TestEnsureVarDiskAttachedFormatsNewDiskInSystemWSL(t *testing.T) {
+func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions(t *testing.T) {
 	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
 	manager := NewManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
+		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
 	})
 
-	type expectedCommand struct {
-		name   string
-		args   []string
-		output string
-		err    error
-	}
-	sequence := []expectedCommand{
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-		{name: "wsl.exe", args: []string{"--mount", "--vhd", varDiskPath, "--bare"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\nsdb disk\n"},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "value", "-s", "LABEL", "/dev/sdb"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "mkfs.ext4", "-F", "-L", "discobot-var", "/dev/sdb"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "value", "-s", "LABEL", "/dev/sdb"}, output: "discobot-var\n"},
-	}
-
-	originalRunCommandOutput := runCommandOutput
+	originalFindWSLStartupScriptPath := findWSLStartupScriptPath
+	originalRunWSLStartupPowerShell := runWSLStartupPowerShell
+	originalRunElevatedWSLStartupPowerShell := runElevatedWSLStartupPowerShell
 	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
+		findWSLStartupScriptPath = originalFindWSLStartupScriptPath
+		runWSLStartupPowerShell = originalRunWSLStartupPowerShell
+		runElevatedWSLStartupPowerShell = originalRunElevatedWSLStartupPowerShell
 	})
 
-	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if callIndex >= len(sequence) {
-			t.Fatalf("unexpected extra command: %s %v", name, args)
-		}
-		expected := sequence[callIndex]
-		callIndex++
-
-		if name != expected.name {
-			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
-		}
-		if len(args) != len(expected.args) {
-			t.Fatalf("command %d args length = %d, want %d (%v)", callIndex, len(args), len(expected.args), args)
-		}
-		for i := range args {
-			if args[i] != expected.args[i] {
-				t.Fatalf("command %d arg %d = %q, want %q", callIndex, i, args[i], expected.args[i])
-			}
-		}
-		return []byte(expected.output), expected.err
+	scriptPath := filepath.Join(root, "discobot-wsl-startup.ps1")
+	findWSLStartupScriptPath = func() (string, error) {
+		return scriptPath, nil
 	}
 
-	if err := manager.ensureVarDiskAttached(context.Background()); err != nil {
-		t.Fatalf("ensureVarDiskAttached() error = %v", err)
+	checks := []wslStartupScriptResult{
+		{
+			ExitCode: wslStartupExitActionsRequired,
+			Message:  "WSL host startup actions require elevation: create-var-disk, attach-var-disk.",
+			Actions:  []string{"create-var-disk", "attach-var-disk"},
+		},
+		{
+			ExitCode: wslStartupExitOK,
+			Message:  "WSL /var disk is attached.",
+		},
 	}
-	if callIndex != len(sequence) {
-		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
+	runWSLStartupPowerShell = func(_ context.Context, gotScriptPath string, args ...string) (wslStartupScriptResult, error) {
+		if gotScriptPath != scriptPath {
+			t.Fatalf("runWSLStartupPowerShell() scriptPath = %q, want %q", gotScriptPath, scriptPath)
+		}
+		assertStartupScriptModeArg(t, args, "check")
+		if len(checks) == 0 {
+			t.Fatal("runWSLStartupPowerShell() called too many times")
+		}
+		result := checks[0]
+		checks = checks[1:]
+		return result, nil
+	}
+
+	elevatedCalled := false
+	runElevatedWSLStartupPowerShell = func(_ context.Context, gotScriptPath string, resultPath string, args ...string) (wslStartupScriptResult, error) {
+		elevatedCalled = true
+		if gotScriptPath != scriptPath {
+			t.Fatalf("runElevatedWSLStartupPowerShell() scriptPath = %q, want %q", gotScriptPath, scriptPath)
+		}
+		if strings.TrimSpace(resultPath) == "" {
+			t.Fatal("runElevatedWSLStartupPowerShell() resultPath is empty")
+		}
+		assertStartupScriptModeArg(t, args, "execute")
+		return wslStartupScriptResult{
+			ExitCode: wslStartupExitOK,
+			Message:  "WSL host startup changes applied.",
+		}, nil
+	}
+
+	var operations []string
+	err := manager.ensureHostStartupWithPowerShell(context.Background(), progressReporter{
+		update: func(_ int, currentOperation string) {
+			operations = append(operations, currentOperation)
+		},
+	})
+	if err != nil {
+		t.Fatalf("ensureHostStartupWithPowerShell() error = %v", err)
+	}
+	if !elevatedCalled {
+		t.Fatal("ensureHostStartupWithPowerShell() did not run elevated execute")
+	}
+	if len(checks) != 0 {
+		t.Fatalf("remaining check results = %d, want 0", len(checks))
+	}
+	if got := operations[len(operations)-1]; got != "WSL host startup requirements are ready" {
+		t.Fatalf("last progress operation = %q, want ready", got)
 	}
 }
 
-func TestEnsureVarDiskAttachedFailsWhenDeviceNeverAppears(t *testing.T) {
+func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *testing.T) {
 	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
 	manager := NewManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
+		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
 	})
 
-	type expectedCommand struct {
-		name   string
-		args   []string
-		output string
-		err    error
-	}
-	sequence := []expectedCommand{
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-		{name: "wsl.exe", args: []string{"--mount", "--vhd", varDiskPath, "--bare"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-	}
-
-	originalRunCommandOutput := runCommandOutput
+	originalFindWSLStartupScriptPath := findWSLStartupScriptPath
+	originalRunWSLStartupPowerShell := runWSLStartupPowerShell
 	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
+		findWSLStartupScriptPath = originalFindWSLStartupScriptPath
+		runWSLStartupPowerShell = originalRunWSLStartupPowerShell
 	})
 
-	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if callIndex >= len(sequence) {
-			t.Fatalf("unexpected extra command: %s %v", name, args)
-		}
-		expected := sequence[callIndex]
-		callIndex++
-		if name != expected.name {
-			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
-		}
-		if !slices.Equal(args, expected.args) {
-			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
-		}
-		return []byte(expected.output), expected.err
+	findWSLStartupScriptPath = func() (string, error) {
+		return filepath.Join(root, "discobot-wsl-startup.ps1"), nil
+	}
+	runWSLStartupPowerShell = func(context.Context, string, ...string) (wslStartupScriptResult, error) {
+		return wslStartupScriptResult{
+			ExitCode: wslStartupExitWSLUnavailable,
+			Message:  "wsl_not_installed: WSL is not installed.",
+		}, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-
-	err := manager.ensureVarDiskAttached(ctx)
+	err := manager.ensureHostStartupWithPowerShell(context.Background(), progressReporter{})
 	if err == nil {
-		t.Fatal("ensureVarDiskAttached() error = nil, want hard failure")
+		t.Fatal("ensureHostStartupWithPowerShell() error = nil, want WSL unavailable error")
 	}
-	if !strings.Contains(err.Error(), "wait for attached WSL /var disk") {
-		t.Fatalf("ensureVarDiskAttached() error = %v, want attached disk failure", err)
+	var startupErr *wslStartupScriptError
+	if !errors.As(err, &startupErr) {
+		t.Fatalf("ensureHostStartupWithPowerShell() error = %T, want *wslStartupScriptError", err)
 	}
-	if callIndex != len(sequence) {
-		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
+	if startupErr.ExitCode != wslStartupExitWSLUnavailable {
+		t.Fatalf("startup error exit code = %d, want %d", startupErr.ExitCode, wslStartupExitWSLUnavailable)
+	}
+	if startupErr.Code != "wsl_not_installed" {
+		t.Fatalf("startup error code = %q, want wsl_not_installed", startupErr.Code)
 	}
 }
 
-func TestEnsureVarDiskAttachedRecoversAlreadyAttachedState(t *testing.T) {
-	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
+func TestReadWSLStartupScriptResultAcceptsUTF8BOM(t *testing.T) {
+	t.Parallel()
+
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	raw := append([]byte{0xef, 0xbb, 0xbf}, []byte(`{"mode":"check","exitCode":10,"message":"needs elevation","actions":["import-distro"]}`)...)
+	if err := os.WriteFile(resultPath, raw, 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
+	result, err := readWSLStartupScriptResultForExitCode(resultPath, []byte("script output"), wslStartupExitActionsRequired)
+	if err != nil {
+		t.Fatalf("readWSLStartupScriptResultForExitCode() error = %v", err)
+	}
+	if result.Mode != "check" {
+		t.Fatalf("result mode = %q, want check", result.Mode)
+	}
+	if result.ExitCode != wslStartupExitActionsRequired {
+		t.Fatalf("result exit code = %d, want %d", result.ExitCode, wslStartupExitActionsRequired)
+	}
+	if result.Message != "needs elevation" {
+		t.Fatalf("result message = %q, want needs elevation", result.Message)
+	}
+	if !slices.Equal(result.Actions, []string{"import-distro"}) {
+		t.Fatalf("result actions = %v, want import-distro", result.Actions)
+	}
+	if result.Output != "script output" {
+		t.Fatalf("result output = %q, want script output", result.Output)
+	}
+}
+
+func assertStartupScriptModeArg(t *testing.T, args []string, want string) {
+	t.Helper()
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "-Mode" && args[i+1] == want {
+			return
+		}
+	}
+	t.Fatalf("startup script args = %v, want -Mode %s", args, want)
+}
+
+func TestEnsureInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing.T) {
+	root := t.TempDir()
 	manager := NewManager(&config.Config{
-		WSLDistroName:  "discobot",
-		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
+		WSLDistroName: "discobot",
+		WSLStateDir:   root,
 	})
 
 	type expectedCommand struct {
@@ -928,114 +612,6 @@ func TestEnsureVarDiskAttachedRecoversAlreadyAttachedState(t *testing.T) {
 		err    error
 	}
 	sequence := []expectedCommand{
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-		{name: "wsl.exe", args: []string{"--mount", "--vhd", varDiskPath, "--bare"}, output: "That volume is already mounted inside WSL2.\nError code: Wsl/Service/DetachDisk/WSL_E_DISK_ALREADY_MOUNTED\n", err: errors.New("exit status 1")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--unmount", varDiskPath}, output: "The disk failed to detach: Invalid argument.\n", err: errors.New("exit status 1")},
-		{name: "wsl.exe", args: []string{"--shutdown"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-		{name: "wsl.exe", args: []string{"--mount", "--vhd", varDiskPath, "--bare"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\nsdb disk\n"},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "value", "-s", "LABEL", "/dev/sdb"}, output: "discobot-var\n"},
-	}
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if callIndex >= len(sequence) {
-			t.Fatalf("unexpected extra command: %s %v", name, args)
-		}
-		expected := sequence[callIndex]
-		callIndex++
-		if name != expected.name {
-			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
-		}
-		if !slices.Equal(args, expected.args) {
-			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
-		}
-		return []byte(expected.output), expected.err
-	}
-
-	if err := manager.ensureVarDiskAttached(context.Background()); err != nil {
-		t.Fatalf("ensureVarDiskAttached() error = %v", err)
-	}
-	if callIndex != len(sequence) {
-		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
-	}
-}
-
-func TestEnsureVarDiskAttachedSkipsAttachWhenAlreadyVisibleByLabel(t *testing.T) {
-	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	manager := NewManager(&config.Config{
-		WSLDistroName:  "discobot",
-		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
-	})
-
-	originalRunCommandOutput := runCommandOutput
-	t.Cleanup(func() {
-		runCommandOutput = originalRunCommandOutput
-	})
-
-	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		callIndex++
-		if name != "wsl.exe" {
-			t.Fatalf("command %d name = %q, want %q", callIndex, name, "wsl.exe")
-		}
-		wantArgs := []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}
-		if !slices.Equal(args, wantArgs) {
-			t.Fatalf("command %d args = %v, want %v", callIndex, args, wantArgs)
-		}
-		return []byte("/dev/sdg\n"), nil
-	}
-
-	if err := manager.ensureVarDiskAttached(context.Background()); err != nil {
-		t.Fatalf("ensureVarDiskAttached() error = %v", err)
-	}
-	if callIndex != 1 {
-		t.Fatalf("runCommandOutput() calls = %d, want 1", callIndex)
-	}
-}
-
-func TestEnsureInstalledLockedAttachesVarDiskBeforeDistroChecks(t *testing.T) {
-	root := t.TempDir()
-	varDiskPath := filepath.Join(root, "var.vhdx")
-	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	manager := NewManager(&config.Config{
-		WSLDistroName:  "discobot",
-		WSLStateDir:    root,
-		WSLVarDiskPath: varDiskPath,
-	})
-
-	type expectedCommand struct {
-		name   string
-		args   []string
-		output string
-		err    error
-	}
-	sequence := []expectedCommand{
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\n"},
-		{name: "wsl.exe", args: []string{"--mount", "--vhd", varDiskPath, "--bare"}},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "device", "-t", "LABEL=discobot-var"}, err: errors.New("exit status 2")},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "lsblk", "-dn", "-o", "NAME,TYPE"}, output: "sda disk\nsdb disk\n"},
-		{name: "wsl.exe", args: []string{"--system", "-u", "root", "--", "blkid", "-o", "value", "-s", "LABEL", "/dev/sdb"}, output: "discobot-var\n"},
-		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 

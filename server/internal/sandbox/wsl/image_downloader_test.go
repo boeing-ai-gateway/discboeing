@@ -14,16 +14,41 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+
+	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 )
+
+type wslDownloaderConfig struct {
+	ImageRef           string
+	DataDir            string
+	LocalRootfsArchive string
+	Image              v1.Image
+	ImageErr           error
+}
+
+func newWSLDownloader(cfg wslDownloaderConfig) *vm.ImageDownloader {
+	return vm.NewImageDownloader(vm.ImageDownloadConfig{
+		ImageRef:                 cfg.ImageRef,
+		DataDir:                  cfg.DataDir,
+		ArtifactName:             rootfsArchiveName,
+		LocalArtifactPath:        cfg.LocalRootfsArchive,
+		ProviderName:             "WSL",
+		ArtifactDescription:      "WSL rootfs artifact",
+		LocalArtifactDescription: "WSL rootfs archive",
+		GetDescriptor: func(context.Context, name.Reference, v1.Platform) (vm.ImageDescriptor, error) {
+			return fakeImageDescriptor{image: cfg.Image, err: cfg.ImageErr}, nil
+		},
+	})
+}
 
 func TestImageDownloaderCheckCache(t *testing.T) {
 	tempDir := t.TempDir()
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
 		DataDir:  tempDir,
 	})
 
-	digest := downloader.computeDigest()
+	digest := downloader.ComputeDigest()
 	cacheDir := filepath.Join(tempDir, "images", digest)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -35,15 +60,15 @@ func TestImageDownloaderCheckCache(t *testing.T) {
 		t.Fatalf("WriteFile(manifest) error = %v", err)
 	}
 
-	artifact, ok, err := downloader.checkCache()
+	artifact, ok, err := downloader.CheckCache()
 	if err != nil {
-		t.Fatalf("checkCache() error = %v", err)
+		t.Fatalf("CheckCache() error = %v", err)
 	}
 	if !ok {
-		t.Fatal("checkCache() ok = false, want true")
+		t.Fatal("CheckCache() ok = false, want true")
 	}
-	if artifact.RootfsArchive != filepath.Join(cacheDir, rootfsArchiveName) {
-		t.Fatalf("unexpected rootfs path %q", artifact.RootfsArchive)
+	if artifact.ArtifactPath != filepath.Join(cacheDir, rootfsArchiveName) {
+		t.Fatalf("unexpected rootfs path %q", artifact.ArtifactPath)
 	}
 }
 
@@ -62,76 +87,76 @@ func TestImageDownloaderExtractFiles(t *testing.T) {
 	}
 
 	destDir := t.TempDir()
-	found := false
-	downloader := NewImageDownloader(ImageDownloadConfig{})
-	if err := downloader.extractFiles(bytes.NewReader(buf.Bytes()), destDir, &found); err != nil {
-		t.Fatalf("extractFiles() error = %v", err)
+	found := map[string]bool{}
+	downloader := newWSLDownloader(wslDownloaderConfig{})
+	if err := downloader.ExtractFiles(bytes.NewReader(buf.Bytes()), destDir, found); err != nil {
+		t.Fatalf("ExtractFiles() error = %v", err)
 	}
-	if !found {
-		t.Fatal("extractFiles() found = false, want true")
+	if !found[rootfsArchiveName] {
+		t.Fatal("ExtractFiles() found = false, want true")
 	}
 	got, err := os.ReadFile(filepath.Join(destDir, rootfsArchiveName))
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	if string(got) != string(payload) {
-		t.Fatalf("extractFiles() wrote %q, want %q", string(got), string(payload))
+		t.Fatalf("ExtractFiles() wrote %q, want %q", string(got), string(payload))
 	}
 }
 
-func TestImageDownloaderEnsureRootfsUsesLocalArchive(t *testing.T) {
+func TestImageDownloaderEnsureArtifactUsesLocalArchive(t *testing.T) {
 	tempDir := t.TempDir()
 	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
 
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		DataDir:            tempDir,
 		LocalRootfsArchive: rootfsPath,
 	})
 
-	artifact, err := downloader.EnsureRootfs(context.Background())
+	artifact, err := downloader.EnsureArtifact(context.Background())
 	if err != nil {
-		t.Fatalf("EnsureRootfs() error = %v", err)
+		t.Fatalf("EnsureArtifact() error = %v", err)
 	}
-	if artifact.RootfsArchive != rootfsPath {
-		t.Fatalf("EnsureRootfs() rootfs = %q, want %q", artifact.RootfsArchive, rootfsPath)
+	if artifact.ArtifactPath != rootfsPath {
+		t.Fatalf("EnsureArtifact() rootfs = %q, want %q", artifact.ArtifactPath, rootfsPath)
 	}
 }
 
-func TestImageDownloaderEnsureRootfsUsesLocalArchiveReportsProgress(t *testing.T) {
+func TestImageDownloaderEnsureArtifactUsesLocalArchiveReportsProgress(t *testing.T) {
 	tempDir := t.TempDir()
 	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
 
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		DataDir:            tempDir,
 		LocalRootfsArchive: rootfsPath,
 	})
 
 	var operations []string
-	_, err := downloader.EnsureRootfsWithProgress(context.Background(), func(progress ImageDownloadProgress) {
+	_, err := downloader.EnsureArtifactWithProgress(context.Background(), func(progress vm.ImageDownloadProgress) {
 		operations = append(operations, progress.CurrentOperation)
 	})
 	if err != nil {
-		t.Fatalf("EnsureRootfsWithProgress() error = %v", err)
+		t.Fatalf("EnsureArtifactWithProgress() error = %v", err)
 	}
 	if len(operations) != 1 || operations[0] != "Using local WSL rootfs archive" {
-		t.Fatalf("EnsureRootfsWithProgress() operations = %#v, want local archive progress", operations)
+		t.Fatalf("EnsureArtifactWithProgress() operations = %#v, want local archive progress", operations)
 	}
 }
 
-func TestImageDownloaderEnsureRootfsUsesCacheReportsProgress(t *testing.T) {
+func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 	tempDir := t.TempDir()
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
 		DataDir:  tempDir,
 	})
 
-	digest := downloader.computeDigest()
+	digest := downloader.ComputeDigest()
 	cacheDir := filepath.Join(tempDir, "images", digest)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -144,17 +169,17 @@ func TestImageDownloaderEnsureRootfsUsesCacheReportsProgress(t *testing.T) {
 	}
 
 	var operations []string
-	artifact, err := downloader.EnsureRootfsWithProgress(context.Background(), func(progress ImageDownloadProgress) {
+	artifact, err := downloader.EnsureArtifactWithProgress(context.Background(), func(progress vm.ImageDownloadProgress) {
 		operations = append(operations, progress.CurrentOperation)
 	})
 	if err != nil {
-		t.Fatalf("EnsureRootfsWithProgress() error = %v", err)
+		t.Fatalf("EnsureArtifactWithProgress() error = %v", err)
 	}
-	if artifact.RootfsArchive != filepath.Join(cacheDir, rootfsArchiveName) {
-		t.Fatalf("EnsureRootfsWithProgress() rootfs = %q, want %q", artifact.RootfsArchive, filepath.Join(cacheDir, rootfsArchiveName))
+	if artifact.ArtifactPath != filepath.Join(cacheDir, rootfsArchiveName) {
+		t.Fatalf("EnsureArtifactWithProgress() rootfs = %q, want %q", artifact.ArtifactPath, filepath.Join(cacheDir, rootfsArchiveName))
 	}
 	if len(operations) != 1 || operations[0] != "Using cached WSL rootfs artifact" {
-		t.Fatalf("EnsureRootfsWithProgress() operations = %#v, want cached artifact progress", operations)
+		t.Fatalf("EnsureArtifactWithProgress() operations = %#v, want cached artifact progress", operations)
 	}
 }
 
@@ -163,40 +188,39 @@ func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 		"usr/share/discobot/" + rootfsArchiveName: []byte("downloaded-rootfs"),
 		"ignored.txt": []byte("ignored"),
 	})
-	restore := replaceImageDescriptor(t, image, nil)
-	defer restore()
 
 	tempDir := t.TempDir()
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		ImageRef: "example.com/discobot/wsl:test",
 		DataDir:  tempDir,
+		Image:    image,
 	})
 
 	var operations []string
-	artifact, err := downloader.download(context.Background(), func(progress ImageDownloadProgress) {
+	artifact, err := downloader.Download(context.Background(), func(progress vm.ImageDownloadProgress) {
 		operations = append(operations, progress.CurrentOperation)
 	})
 	if err != nil {
-		t.Fatalf("download() error = %v", err)
+		t.Fatalf("Download() error = %v", err)
 	}
 
-	wantDigest := computeImageRefDigest("example.com/discobot/wsl:test")
+	wantDigest := vm.ComputeShortDigest("example.com/discobot/wsl:test")
 	wantCacheDir := filepath.Join(tempDir, "images", wantDigest)
 	if artifact.Digest != wantDigest {
-		t.Fatalf("download() digest = %q, want %q", artifact.Digest, wantDigest)
+		t.Fatalf("Download() digest = %q, want %q", artifact.Digest, wantDigest)
 	}
-	if artifact.RootfsArchive != filepath.Join(wantCacheDir, rootfsArchiveName) {
-		t.Fatalf("download() rootfs = %q, want cached rootfs", artifact.RootfsArchive)
+	if artifact.ArtifactPath != filepath.Join(wantCacheDir, rootfsArchiveName) {
+		t.Fatalf("Download() rootfs = %q, want cached rootfs", artifact.ArtifactPath)
 	}
 	if artifact.ManifestPath != filepath.Join(wantCacheDir, "manifest.json") {
-		t.Fatalf("download() manifest = %q, want cached manifest", artifact.ManifestPath)
+		t.Fatalf("Download() manifest = %q, want cached manifest", artifact.ManifestPath)
 	}
-	rootfsBytes, err := os.ReadFile(artifact.RootfsArchive)
+	rootfsBytes, err := os.ReadFile(artifact.ArtifactPath)
 	if err != nil {
 		t.Fatalf("ReadFile(rootfs) error = %v", err)
 	}
 	if string(rootfsBytes) != "downloaded-rootfs" {
-		t.Fatalf("download() rootfs bytes = %q, want downloaded-rootfs", string(rootfsBytes))
+		t.Fatalf("Download() rootfs bytes = %q, want downloaded-rootfs", string(rootfsBytes))
 	}
 	manifestBytes, err := os.ReadFile(artifact.ManifestPath)
 	if err != nil {
@@ -214,11 +238,11 @@ func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 		"Finalizing cached WSL rootfs artifact",
 	}
 	if len(operations) != len(wantOperations) {
-		t.Fatalf("download() operations = %#v, want %#v", operations, wantOperations)
+		t.Fatalf("Download() operations = %#v, want %#v", operations, wantOperations)
 	}
 	for i := range wantOperations {
 		if operations[i] != wantOperations[i] {
-			t.Fatalf("download() operations = %#v, want %#v", operations, wantOperations)
+			t.Fatalf("Download() operations = %#v, want %#v", operations, wantOperations)
 		}
 	}
 }
@@ -227,44 +251,43 @@ func TestImageDownloaderDownloadFailsWhenRootfsMissing(t *testing.T) {
 	image := testImageWithLayer(t, map[string][]byte{
 		"not-rootfs.txt": []byte("not the artifact"),
 	})
-	restore := replaceImageDescriptor(t, image, nil)
-	defer restore()
 
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		ImageRef: "example.com/discobot/wsl:test",
 		DataDir:  t.TempDir(),
+		Image:    image,
 	})
 
-	if _, err := downloader.download(context.Background(), nil); err == nil {
-		t.Fatal("download() error = nil, want missing rootfs error")
+	if _, err := downloader.Download(context.Background(), nil); err == nil {
+		t.Fatal("Download() error = nil, want missing rootfs error")
 	}
 }
 
 func TestImageDownloaderDownloadRejectsInvalidImageReference(t *testing.T) {
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		ImageRef: "not a valid image ref",
 		DataDir:  t.TempDir(),
 	})
 
-	if _, err := downloader.download(context.Background(), nil); err == nil {
-		t.Fatal("download() error = nil, want invalid image reference error")
+	if _, err := downloader.Download(context.Background(), nil); err == nil {
+		t.Fatal("Download() error = nil, want invalid image reference error")
 	}
 }
 
-func TestImageDownloaderEnsureRootfsRejectsEmptyLocalArchive(t *testing.T) {
+func TestImageDownloaderEnsureArtifactRejectsEmptyLocalArchive(t *testing.T) {
 	tempDir := t.TempDir()
 	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, nil, 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
 
-	downloader := NewImageDownloader(ImageDownloadConfig{
+	downloader := newWSLDownloader(wslDownloaderConfig{
 		DataDir:            tempDir,
 		LocalRootfsArchive: rootfsPath,
 	})
 
-	if _, err := downloader.EnsureRootfs(context.Background()); err == nil {
-		t.Fatal("EnsureRootfs() error = nil, want non-nil")
+	if _, err := downloader.EnsureArtifact(context.Background()); err == nil {
+		t.Fatal("EnsureArtifact() error = nil, want non-nil")
 	}
 }
 
@@ -275,17 +298,6 @@ type fakeImageDescriptor struct {
 
 func (d fakeImageDescriptor) Image() (v1.Image, error) {
 	return d.image, d.err
-}
-
-func replaceImageDescriptor(t *testing.T, image v1.Image, err error) func() {
-	t.Helper()
-	original := getImageDescriptor
-	getImageDescriptor = func(context.Context, name.Reference, v1.Platform) (imageDescriptor, error) {
-		return fakeImageDescriptor{image: image, err: err}, nil
-	}
-	return func() {
-		getImageDescriptor = original
-	}
 }
 
 func testImageWithLayer(t *testing.T, files map[string][]byte) v1.Image {

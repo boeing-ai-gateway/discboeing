@@ -9,13 +9,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +21,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/windows/virtualdisk"
+	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 )
 
 const (
@@ -37,37 +33,19 @@ const (
 	defaultTempCleanupRetryDelay = 250 * time.Millisecond
 	defaultTempCleanupMaxRetries = 20
 	staleRootfsTempFileMaxAge    = 10 * time.Minute
-	dockerSockPath               = "/var/run/docker.sock"
-	bridgeLogPath                = "/tmp/discobot-docker-bridge.log"
-	bridgeUnitName               = "discobot-docker-bridge"
+	ext4VolumeLabelMaxLength     = 16
 	discobotWSLEnvPath           = "etc/default/discobot-wsl"
+	rootfsArchiveName            = "discobot-rootfs.tar.zst"
 )
 
 var (
 	renamePath       = os.Rename
 	removePath       = os.Remove
 	sleep            = time.Sleep
-	createDynamicVHD = virtualdisk.CreateDynamicVHDX
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, name, args...).CombinedOutput()
 	}
 )
-
-// RuntimeInfo contains the current runtime connection details returned by EnsureRunning.
-type RuntimeInfo struct {
-	DistroName        string `json:"distro_name"`
-	DistroInstalled   bool   `json:"distro_installed"`
-	DistroState       string `json:"distro_state,omitempty"`
-	DistroVersion     int    `json:"distro_version,omitempty"`
-	BridgeType        string `json:"bridge_type"`
-	BridgePort        int    `json:"bridge_port,omitempty"`
-	BridgeDockerHost  string `json:"bridge_docker_host,omitempty"`
-	InstallDir        string `json:"install_dir,omitempty"`
-	StateDir          string `json:"state_dir,omitempty"`
-	RootfsArchivePath string `json:"rootfs_archive_path,omitempty"`
-	ImageRef          string `json:"image_ref,omitempty"`
-	BridgeReady       bool   `json:"bridge_ready"`
-}
 
 // StatusDetails contains WSL-specific provider details.
 type StatusDetails struct {
@@ -82,9 +60,6 @@ type StatusDetails struct {
 	VarDiskLabel      string `json:"var_disk_label,omitempty"`
 	RootfsArchivePath string `json:"rootfs_archive_path,omitempty"`
 	ImageRef          string `json:"image_ref,omitempty"`
-	BridgeType        string `json:"bridge_type,omitempty"`
-	BridgePort        int    `json:"bridge_port,omitempty"`
-	BridgeDockerHost  string `json:"bridge_docker_host,omitempty"`
 }
 
 type progressReporter struct {
@@ -101,7 +76,7 @@ func (r progressReporter) Update(progress int, currentOperation string) {
 type Manager struct {
 	cfg        *config.Config
 	state      *StateStore
-	downloader *ImageDownloader
+	downloader *vm.ImageDownloader
 
 	lifecycleMu sync.Mutex
 	mu          sync.RWMutex
@@ -117,10 +92,14 @@ func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
 		cfg:   cfg,
 		state: NewStateStore(cfg.WSLStateDir),
-		downloader: NewImageDownloader(ImageDownloadConfig{
-			ImageRef:           cfg.WSLImageRef,
-			DataDir:            cfg.WSLStateDir,
-			LocalRootfsArchive: cfg.WSLRootfsPath,
+		downloader: vm.NewImageDownloader(vm.ImageDownloadConfig{
+			ImageRef:                 cfg.WSLImageRef,
+			DataDir:                  cfg.WSLStateDir,
+			ArtifactName:             rootfsArchiveName,
+			LocalArtifactPath:        cfg.WSLRootfsPath,
+			ProviderName:             "WSL",
+			ArtifactDescription:      "WSL rootfs artifact",
+			LocalArtifactDescription: "WSL rootfs archive",
 		}),
 	}
 }
@@ -129,15 +108,6 @@ func (m *Manager) mainDistro() managedDistro {
 	return managedDistro{
 		name:       strings.TrimSpace(m.cfg.WSLDistroName),
 		installDir: strings.TrimSpace(m.cfg.WSLInstallDir),
-	}
-}
-
-func (m *Manager) legacyDataDistro() managedDistro {
-	name := strings.TrimSpace(m.cfg.WSLDistroName) + "-data"
-	installDir := filepath.Join(m.cfg.WSLStateDir, "data-distro")
-	return managedDistro{
-		name:       name,
-		installDir: installDir,
 	}
 }
 
@@ -160,7 +130,7 @@ func (m *Manager) varDiskLabel() string {
 	if base == "" {
 		base = "discobot"
 	}
-	return sanitizeLowerDashName(base+"-var", "discobot-var")
+	return truncateLowerDashName(sanitizeLowerDashName(base+"-var", "discobot-var"), "discobot-var", ext4VolumeLabelMaxLength)
 }
 
 func sanitizeLowerDashName(value string, fallback string) string {
@@ -190,6 +160,17 @@ func sanitizeLowerDashName(value string, fallback string) string {
 	return sanitized
 }
 
+func truncateLowerDashName(value string, fallback string, maxLength int) string {
+	if maxLength <= 0 || len(value) <= maxLength {
+		return value
+	}
+	truncated := strings.Trim(value[:maxLength], "-")
+	if truncated == "" {
+		return fallback
+	}
+	return truncated
+}
+
 // EnsureInstalled verifies that WSL tooling is available and reserves the managed distro identity.
 func (m *Manager) EnsureInstalled(ctx context.Context) error {
 	return m.ensureInstalledWithProgress(ctx, progressReporter{})
@@ -211,116 +192,20 @@ func (m *Manager) ensureInstalledLocked(ctx context.Context, progress progressRe
 		log.Printf("Failed to clean stale WSL rootfs temp files in %q: %v", m.cfg.WSLStateDir, err)
 	}
 
-	progress.Update(10, "Ensuring persistent WSL /var disk exists and is attached")
-	if err := m.ensureVarDiskAttached(ctx); err != nil {
-		return err
-	}
-
-	progress.Update(20, "Checking managed WSL runtime image")
-	if err := m.upgradeIfNeededLocked(ctx); err != nil {
-		return err
-	}
-
 	progress.Update(25, "Checking managed WSL distro registration")
 	_, found, err := m.probeDistro(ctx)
 	if err != nil {
 		return err
 	}
 	if !found {
-		importProgress := progressReporter{
-			update: func(childProgress int, currentOperation string) {
-				mapped := 25 + (childProgress * 70 / 100)
-				progress.Update(mapped, currentOperation)
-			},
-		}
-		if err := m.importDistro(ctx, importProgress); err != nil {
-			return err
-		}
+		return fmt.Errorf("managed WSL distro %q is not installed", m.cfg.WSLDistroName)
 	}
 	if err := m.hideWindowsTerminalWSLProfiles(); err != nil {
 		log.Printf("Failed to hide managed WSL distro %q in Windows Terminal settings: %v", m.cfg.WSLDistroName, err)
 	}
 
-	progress.Update(100, "Managed WSL distro and WSL /var disk are installed")
+	progress.Update(100, "Managed WSL distro is installed")
 	return nil
-}
-
-// EnsureRunning ensures the managed distro exists, starts it if needed, and waits
-// for basic in-guest readiness before returning runtime connection details.
-func (m *Manager) EnsureRunning(ctx context.Context) (*RuntimeInfo, error) {
-	return m.ensureRunningWithProgress(ctx, progressReporter{})
-}
-
-func (m *Manager) ensureRunningWithProgress(ctx context.Context, progress progressReporter) (*RuntimeInfo, error) {
-	m.lifecycleMu.Lock()
-	defer m.lifecycleMu.Unlock()
-
-	progress.Update(5, "Ensuring managed WSL distro is installed")
-	if err := m.ensureInstalledLocked(ctx, progressReporter{}); err != nil {
-		return nil, err
-	}
-
-	progress.Update(15, "Ensuring persistent WSL /var disk exists and is attached")
-	if err := m.ensureVarDiskAttached(ctx); err != nil {
-		return nil, err
-	}
-
-	distro, err := m.ensureMainDistroReady(ctx, progress)
-	if err != nil {
-		return nil, err
-	}
-
-	progress.Update(85, "Cleaning up legacy WSL /var storage state")
-	if err := m.cleanupLegacyDataDistro(ctx); err != nil {
-		return nil, err
-	}
-
-	progress.Update(90, "Resolving WSL Docker bridge configuration")
-	bridgeInfo, err := m.resolveBridgeInfo()
-	if err != nil {
-		return nil, err
-	}
-	progress.Update(95, "Ensuring WSL Docker bridge is ready")
-	bridgeInfo, bridgeReady, err := m.ensureBridgeReady(ctx, bridgeInfo)
-	if err != nil {
-		if !shouldRecoverBrokenDistro(err) {
-			return nil, err
-		}
-		if err := m.recoverBrokenMainDistro(ctx, progress, err); err != nil {
-			return nil, err
-		}
-		progress.Update(40, "Rechecking managed WSL distro state")
-		distro, err = m.ensureMainDistroReady(ctx, progress)
-		if err != nil {
-			return nil, err
-		}
-		progress.Update(90, "Resolving WSL Docker bridge configuration")
-		bridgeInfo, err = m.resolveBridgeInfo()
-		if err != nil {
-			return nil, err
-		}
-		progress.Update(95, "Ensuring WSL Docker bridge is ready")
-		bridgeInfo, bridgeReady, err = m.ensureBridgeReady(ctx, bridgeInfo)
-		if err != nil {
-			return nil, err
-		}
-	}
-	progress.Update(100, "Managed WSL distro and Docker bridge are ready")
-
-	return &RuntimeInfo{
-		DistroName:        m.cfg.WSLDistroName,
-		DistroInstalled:   true,
-		DistroState:       distro.State,
-		DistroVersion:     distro.Version,
-		BridgeType:        bridgeInfo.Type,
-		BridgePort:        bridgeInfo.Port,
-		BridgeDockerHost:  bridgeInfo.DockerHost,
-		InstallDir:        m.cfg.WSLInstallDir,
-		StateDir:          m.cfg.WSLStateDir,
-		RootfsArchivePath: strings.TrimSpace(m.cfg.WSLRootfsPath),
-		ImageRef:          m.cfg.WSLImageRef,
-		BridgeReady:       bridgeReady,
-	}, nil
 }
 
 func (m *Manager) ensureMainDistroReady(ctx context.Context, progress progressReporter) (DistroInfo, error) {
@@ -422,234 +307,8 @@ func (m *Manager) Stop(ctx context.Context) error {
 	return nil
 }
 
-// UpgradeIfNeeded reconciles the managed WSL runtime image with the configured rootfs source.
-func (m *Manager) UpgradeIfNeeded(ctx context.Context) error {
-	m.lifecycleMu.Lock()
-	defer m.lifecycleMu.Unlock()
-
-	return m.upgradeIfNeededLocked(ctx)
-}
-
-func (m *Manager) upgradeIfNeededLocked(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	state, err := m.state.Load()
-	if err != nil {
-		return err
-	}
-
-	_, found, err := m.probeDistro(ctx)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return m.importDistro(ctx, progressReporter{})
-	}
-
-	if strings.EqualFold(state.DistroName, m.cfg.WSLDistroName) &&
-		strings.TrimSpace(state.ImageRef) != "" &&
-		strings.TrimSpace(state.ImageRef) != m.configuredRootfsSourceRef() {
-		if err := m.ensureVarDiskAttached(ctx); err != nil {
-			return err
-		}
-		if err := m.stopMainDistro(ctx); err != nil {
-			return err
-		}
-		if err := m.unregisterMainDistro(ctx); err != nil {
-			return err
-		}
-		if err := m.removeMainInstallDir(); err != nil {
-			return err
-		}
-		if err := m.state.Clear(); err != nil {
-			return err
-		}
-		return m.importDistro(ctx, progressReporter{})
-	}
-
-	if state == (RuntimeState{}) || !strings.EqualFold(state.DistroName, m.cfg.WSLDistroName) || strings.TrimSpace(state.ImageRef) == "" {
-		bridgeInfo, err := m.resolveBridgeInfo()
-		if err != nil {
-			return err
-		}
-		return m.state.Save(RuntimeState{
-			DistroName: m.cfg.WSLDistroName,
-			BridgeType: bridgeInfo.Type,
-			BridgePort: bridgeInfo.Port,
-			ImageRef:   m.configuredRootfsSourceRef(),
-		})
-	}
-
-	return nil
-}
-
-// Uninstall removes the managed distro registration, install directory, and runtime state.
-func (m *Manager) Uninstall(ctx context.Context) error {
-	m.lifecycleMu.Lock()
-	defer m.lifecycleMu.Unlock()
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, found, err := m.probeDistro(ctx); err != nil {
-		return err
-	} else if found {
-		if err := m.unregisterMainDistro(ctx); err != nil {
-			return err
-		}
-	}
-	if _, found, err := m.probeLegacyDataDistro(ctx); err != nil {
-		return err
-	} else if found {
-		if err := m.unregisterLegacyDataDistro(ctx); err != nil {
-			return err
-		}
-	}
-	if err := m.unmountVarDisk(ctx); err != nil {
-		return err
-	}
-
-	if err := m.removeMainInstallDir(); err != nil {
-		return err
-	}
-	if err := m.removeLegacyDataInstallDir(); err != nil {
-		return err
-	}
-	if err := m.removeVarDiskFile(); err != nil {
-		return err
-	}
-	if err := m.state.Clear(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Status returns the current provider status for UI and diagnostics.
-func (m *Manager) Status() sandbox.ProviderStatus {
-	details := StatusDetails{
-		DistroName:        m.cfg.WSLDistroName,
-		InstallDir:        m.cfg.WSLInstallDir,
-		StateDir:          m.cfg.WSLStateDir,
-		StatePath:         m.state.Path(),
-		VarDiskPath:       m.varDiskPath(),
-		VarDiskLabel:      m.varDiskLabel(),
-		RootfsArchivePath: strings.TrimSpace(m.cfg.WSLRootfsPath),
-		ImageRef:          m.cfg.WSLImageRef,
-		BridgeType:        BridgeTypeTCP,
-		BridgePort:        m.cfg.WSLBridgePort,
-	}
-
-	if _, err := exec.LookPath("wsl.exe"); err != nil {
-		return sandbox.ProviderStatus{Available: false, State: "not_available", Message: "wsl.exe is not available on PATH", Details: details}
-	}
-	if strings.TrimSpace(m.cfg.WSLDistroName) == "" {
-		return sandbox.ProviderStatus{Available: false, State: "failed", Message: "WSL_DISTRO_NAME is empty", Details: details}
-	}
-
-	bridgeInfo, err := m.resolveBridgeInfo()
-	if err != nil {
-		return sandbox.ProviderStatus{Available: false, State: "failed", Message: err.Error(), Details: details}
-	}
-	details.BridgeType = bridgeInfo.Type
-	details.BridgePort = bridgeInfo.Port
-	details.BridgeDockerHost = bridgeInfo.DockerHost
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultProbeTimeout)
-	defer cancel()
-
-	distro, found, err := m.probeDistro(ctx)
-	if err != nil {
-		return sandbox.ProviderStatus{Available: false, State: "failed", Message: err.Error(), Details: details}
-	}
-	if !found {
-		return sandbox.ProviderStatus{Available: true, State: "not_installed", Message: fmt.Sprintf("managed WSL distro %q is not installed yet", m.cfg.WSLDistroName), Details: details}
-	}
-
-	details.DistroInstalled = true
-	details.DistroState = distro.State
-	details.DistroVersion = distro.Version
-
-	bridgeReady, err := m.probeBridgeReady(ctx, bridgeInfo)
-	if err == nil && bridgeReady {
-		return sandbox.ProviderStatus{
-			Available: true,
-			State:     "ready",
-			Message:   "managed WSL distro and Docker bridge are ready",
-			Details:   details,
-		}
-	}
-
-	message := "managed WSL distro is running; Docker bridge will be started on demand"
-	state := "starting"
-	if strings.EqualFold(distro.State, "Stopped") {
-		message = "managed WSL distro is installed but currently stopped; it will be started on demand"
-		state = "stopped"
-	} else if strings.EqualFold(distro.State, "Installing") {
-		message = "managed WSL distro import is still being finalized"
-		state = "starting"
-	} else if !strings.EqualFold(distro.State, "Running") {
-		message = fmt.Sprintf("managed WSL distro is currently %s", distro.State)
-		state = "starting"
-	} else if strings.EqualFold(bridgeInfo.Type, BridgeTypeTCP) {
-		message = "managed WSL distro is running; TCP Docker bridge will be started on demand"
-	}
-
-	return sandbox.ProviderStatus{Available: true, State: state, Message: message, Details: details}
-}
-
-func (m *Manager) resolveBridgeInfo() (BridgeInfo, error) {
-	port := m.cfg.WSLBridgePort
-	if port == 0 {
-		state, err := m.state.Load()
-		if err != nil {
-			return BridgeInfo{}, err
-		}
-		if strings.EqualFold(state.BridgeType, BridgeTypeTCP) && state.BridgePort > 0 {
-			port = state.BridgePort
-		}
-	}
-	return ResolveBridgeInfo(port)
-}
-
-func (m *Manager) ensureBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) (BridgeInfo, bool, error) {
-	switch bridgeInfo.Type {
-	case BridgeTypeTCP:
-		if bridgeInfo.Port == 0 {
-			port, err := allocateLoopbackPort()
-			if err != nil {
-				return BridgeInfo{}, false, err
-			}
-			bridgeInfo.Port = port
-			bridgeInfo.DockerHost = fmt.Sprintf("tcp://127.0.0.1:%d", port)
-		}
-
-		ready, err := m.probeBridgeReady(ctx, bridgeInfo)
-		if err == nil && ready {
-			return bridgeInfo, true, nil
-		}
-
-		if err := m.startTCPBridge(ctx, bridgeInfo.Port); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		if err := m.waitForTCPBridgeReady(ctx, bridgeInfo); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		if err := m.saveBridgeRuntimeState(bridgeInfo); err != nil {
-			return BridgeInfo{}, false, err
-		}
-		return bridgeInfo, true, nil
-	default:
-		return BridgeInfo{}, false, fmt.Errorf("unsupported WSL bridge type %q", bridgeInfo.Type)
-	}
-}
-
 func (m *Manager) probeDistro(ctx context.Context) (DistroInfo, bool, error) {
 	return m.probeNamedDistro(ctx, m.mainDistro().name)
-}
-
-func (m *Manager) probeLegacyDataDistro(ctx context.Context) (DistroInfo, bool, error) {
-	return m.probeNamedDistro(ctx, m.legacyDataDistro().name)
 }
 
 func (m *Manager) probeNamedDistro(ctx context.Context, distroName string) (DistroInfo, bool, error) {
@@ -664,60 +323,6 @@ func (m *Manager) probeNamedDistro(ctx context.Context, distroName string) (Dist
 	}
 	distro, found := FindDistro(distros, distroName)
 	return distro, found, nil
-}
-
-func (m *Manager) importDistro(ctx context.Context, progress progressReporter) error {
-	return m.importNamedDistro(ctx, m.mainDistro(), "managed WSL distro", progress, true)
-}
-
-func (m *Manager) importNamedDistro(ctx context.Context, distro managedDistro, description string, progress progressReporter, saveRuntimeState bool) error {
-	progress.Update(30, "Preparing WSL rootfs artifact")
-	artifact, err := m.downloader.EnsureRootfsWithProgress(ctx, func(update ImageDownloadProgress) {
-		if strings.TrimSpace(update.CurrentOperation) == "" {
-			return
-		}
-		progress.Update(30, update.CurrentOperation)
-	})
-	if err != nil {
-		return fmt.Errorf("prepare WSL rootfs artifact: %w", err)
-	}
-
-	progress.Update(45, "Preparing "+description+" install directory")
-	if err := prepareInstallDirForImport(distro.installDir, distro.name); err != nil {
-		return err
-	}
-
-	progress.Update(60, "Customizing WSL rootfs archive")
-	rootfsTarPath, cleanup, err := m.prepareImportRootfsTar(artifact.RootfsArchive)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	progress.Update(75, "Importing "+description)
-	if _, err := m.runCommand(ctx, "wsl.exe", "--import", distro.name, distro.installDir, rootfsTarPath, "--version", "2"); err != nil {
-		return fmt.Errorf("import %s %q: %w", description, distro.name, err)
-	}
-	if !saveRuntimeState {
-		progress.Update(100, "Managed WSL distro import completed")
-		return nil
-	}
-
-	progress.Update(90, "Saving managed WSL runtime metadata")
-	bridgeInfo, err := m.resolveBridgeInfo()
-	if err != nil {
-		return err
-	}
-	if err := m.state.Save(RuntimeState{
-		DistroName: m.cfg.WSLDistroName,
-		BridgeType: bridgeInfo.Type,
-		BridgePort: bridgeInfo.Port,
-		ImageRef:   m.configuredRootfsSourceRef(),
-	}); err != nil {
-		return err
-	}
-	progress.Update(100, "Managed WSL distro import completed")
-	return nil
 }
 
 func (m *Manager) prepareInstallDirForImport() error {
@@ -1142,25 +747,6 @@ func (m *Manager) waitForVarReadyInDistro(ctx context.Context, distroName string
 	})
 }
 
-func (m *Manager) waitForTCPBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) error {
-	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for WSL Docker bridge readiness", func(ctx context.Context) error {
-		ready, err := m.probeBridgeReady(ctx, bridgeInfo)
-		if err != nil {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for WSL Docker bridge readiness"); stopErr != nil {
-				return stopErr
-			}
-			return err
-		}
-		if !ready {
-			if stopErr := m.checkNamedDistroUnexpectedState(ctx, m.mainDistro().name, "waiting for WSL Docker bridge readiness"); stopErr != nil {
-				return stopErr
-			}
-			return fmt.Errorf("docker bridge is not responding on %s", bridgeInfo.DockerHost)
-		}
-		return nil
-	})
-}
-
 func (m *Manager) waitForCommandSuccess(ctx context.Context, description string, fn func(context.Context) error) error {
 	return m.waitForCommandSuccessWithFallbackTimeout(ctx, description, defaultReadyTimeout, fn)
 }
@@ -1206,89 +792,10 @@ func (m *Manager) runInDistro(ctx context.Context, args ...string) (string, erro
 	return m.runInNamedDistro(ctx, m.mainDistro().name, args...)
 }
 
-func (m *Manager) runInSystem(ctx context.Context, args ...string) (string, error) {
-	base := []string{"--system", "-u", "root", "--"}
-	base = append(base, args...)
-	return m.runCommand(ctx, "wsl.exe", base...)
-}
-
 func (m *Manager) runInNamedDistro(ctx context.Context, distroName string, args ...string) (string, error) {
 	base := []string{"-d", distroName, "--"}
 	base = append(base, args...)
 	return m.runCommand(ctx, "wsl.exe", base...)
-}
-
-func (m *Manager) startTCPBridge(ctx context.Context, port int) error {
-	if port <= 0 {
-		return fmt.Errorf("tcp bridge port must be greater than zero")
-	}
-
-	bridgeCommand := fmt.Sprintf(
-		"exec socat -b131072 TCP-LISTEN:%d,bind=0.0.0.0,reuseaddr,fork,shut-down UNIX-CONNECT:%s,shut-down >>%s 2>&1",
-		port,
-		dockerSockPath,
-		bridgeLogPath,
-	)
-	listenerCheck := fmt.Sprintf(
-		"grep -qiE '^[[:space:]]*[0-9]+: [0-9A-Fa-f]{8,32}:%04X [0-9A-Fa-f]{8,32}:[0-9A-Fa-f]{4} 0A ' /proc/net/tcp /proc/net/tcp6 2>/dev/null",
-		port,
-	)
-	command := fmt.Sprintf(
-		"command -v socat >/dev/null 2>&1 || { echo 'socat is required for WSL TCP bridge startup' >&2; exit 127; }; "+
-			"if ! %s; then "+
-			"systemctl stop %s.service >/dev/null 2>&1 || true; "+
-			"systemctl reset-failed %s.service >/dev/null 2>&1 || true; "+
-			"systemd-run --unit=%s --property=Restart=always --property=RestartSec=1 --service-type=simple /bin/sh -lc %s; "+
-			"fi",
-		listenerCheck,
-		bridgeUnitName,
-		bridgeUnitName,
-		bridgeUnitName,
-		quoteShellEnvValue(bridgeCommand),
-	)
-	if _, err := m.runInDistro(ctx, "sh", "-lc", command); err != nil {
-		return fmt.Errorf("start WSL TCP Docker bridge on port %d: %w", port, err)
-	}
-	return nil
-}
-
-func (m *Manager) probeBridgeReady(ctx context.Context, bridgeInfo BridgeInfo) (bool, error) {
-	switch bridgeInfo.Type {
-	case BridgeTypeTCP:
-		if bridgeInfo.DockerHost == "" || bridgeInfo.Port <= 0 {
-			return false, nil
-		}
-
-		pingURL := bridgeTCPPingURL(bridgeInfo.Port)
-		if pingURL == "" {
-			return false, nil
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, pingURL, nil)
-		if err != nil {
-			return false, err
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return false, nil
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode == http.StatusOK, nil
-	default:
-		return false, fmt.Errorf("unsupported WSL bridge type %q", bridgeInfo.Type)
-	}
-}
-
-func (m *Manager) saveBridgeRuntimeState(bridgeInfo BridgeInfo) error {
-	return m.state.Save(RuntimeState{
-		DistroName: m.cfg.WSLDistroName,
-		BridgeType: bridgeInfo.Type,
-		BridgePort: bridgeInfo.Port,
-		ImageRef:   m.configuredRootfsSourceRef(),
-	})
-}
-
-func (m *Manager) clearBridgeRuntimeState() error {
-	return m.state.Clear()
 }
 
 func (m *Manager) configuredRootfsSourceRef() string {
@@ -1296,251 +803,6 @@ func (m *Manager) configuredRootfsSourceRef() string {
 		return rootfsPath
 	}
 	return strings.TrimSpace(m.cfg.WSLImageRef)
-}
-
-func (m *Manager) ensureVarDiskAttached(ctx context.Context) error {
-	err := m.ensureVarDiskAttachedOnce(ctx)
-	if err == nil {
-		return nil
-	}
-	if !shouldRecoverBrokenDistro(err) {
-		return err
-	}
-	if err := m.recoverBrokenMainDistro(ctx, progressReporter{}, err); err != nil {
-		return err
-	}
-	return m.ensureVarDiskAttachedOnce(ctx)
-}
-
-func (m *Manager) ensureVarDiskAttachedOnce(ctx context.Context) error {
-	if err := m.ensureVarDiskFile(ctx); err != nil {
-		return err
-	}
-
-	if _, found, err := m.findVarDiskDeviceByLabel(ctx); err != nil {
-		return err
-	} else if found {
-		return nil
-	}
-
-	before, err := m.listDiskDevices(ctx)
-	if err != nil {
-		return err
-	}
-
-	alreadyAttached, err := m.attachVarDiskBareWithStatus(ctx)
-	if err != nil {
-		return err
-	}
-	if alreadyAttached {
-		recovered, err := m.recoverVarDiskAttachment(ctx)
-		if err != nil {
-			return err
-		}
-		if !recovered {
-			return fmt.Errorf("attach WSL /var disk %q: label %q is still unavailable after attach", m.varDiskPath(), m.varDiskLabel())
-		}
-		before, err = m.listDiskDevices(ctx)
-		if err != nil {
-			return err
-		}
-		if _, err := m.attachVarDiskBareWithStatus(ctx); err != nil {
-			return err
-		}
-	}
-
-	_, found, err := m.findVarDiskDeviceByLabel(ctx)
-	if err != nil {
-		return err
-	}
-	if found {
-		return nil
-	}
-
-	devicePath, err := m.waitForNewDiskDevice(ctx, before)
-	if err != nil {
-		return fmt.Errorf("wait for attached WSL /var disk %q device: %w", m.varDiskPath(), err)
-	}
-
-	label, err := m.readDiskLabel(ctx, devicePath)
-	if err != nil {
-		return err
-	}
-	switch label {
-	case m.varDiskLabel():
-		return nil
-	case "":
-		return m.initializeAttachedVarDisk(ctx, devicePath)
-	default:
-		return fmt.Errorf("attached WSL /var disk %q appeared as %q with unexpected label %q", m.varDiskPath(), devicePath, label)
-	}
-}
-
-func (m *Manager) ensureVarDiskFile(ctx context.Context) error {
-	varDiskPath := m.varDiskPath()
-	if err := os.MkdirAll(filepath.Dir(varDiskPath), 0755); err != nil {
-		return fmt.Errorf("create WSL /var disk directory %q: %w", filepath.Dir(varDiskPath), err)
-	}
-	if _, err := os.Stat(varDiskPath); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat WSL /var disk %q: %w", varDiskPath, err)
-	}
-	if err := createDynamicVHD(varDiskPath, uint64(m.varDiskSizeGB())*1024*1024*1024); err != nil {
-		if shouldElevateVarDiskOperation(err) {
-			if _, helperErr := m.runWSLElevationHelper(ctx, "create-vhd", "--path", varDiskPath, "--size-gb", strconv.Itoa(m.varDiskSizeGB())); helperErr != nil {
-				return fmt.Errorf("create WSL /var disk %q with elevated helper: %w", varDiskPath, helperErr)
-			}
-			return nil
-		}
-		return fmt.Errorf("create WSL /var disk %q: %w", varDiskPath, err)
-	}
-	return nil
-}
-
-func (m *Manager) attachVarDiskBare(ctx context.Context) error {
-	_, err := m.attachVarDiskBareWithStatus(ctx)
-	return err
-}
-
-func (m *Manager) attachVarDiskBareWithStatus(ctx context.Context) (bool, error) {
-	if _, err := m.runCommand(ctx, "wsl.exe", "--mount", "--vhd", m.varDiskPath(), "--bare"); err != nil {
-		if isAlreadyMountedVarDiskError(err) {
-			return true, nil
-		}
-		if shouldElevateVarDiskOperation(err) {
-			if _, helperErr := m.runWSLElevationHelper(ctx, "mount-vhd-bare", "--path", m.varDiskPath()); helperErr != nil {
-				if isAlreadyMountedVarDiskError(helperErr) {
-					return true, nil
-				}
-				return false, fmt.Errorf("attach WSL /var disk %q in bare mode with elevated helper: %w", m.varDiskPath(), helperErr)
-			}
-			return false, nil
-		}
-		return false, fmt.Errorf("attach WSL /var disk %q in bare mode: %w", m.varDiskPath(), err)
-	}
-	return false, nil
-}
-
-func (m *Manager) unmountVarDisk(ctx context.Context) error {
-	if _, err := m.runCommand(ctx, "wsl.exe", "--unmount", m.varDiskPath()); err != nil {
-		if isAlreadyUnmountedVarDiskError(err) {
-			return nil
-		}
-		if shouldElevateVarDiskOperation(err) {
-			if _, helperErr := m.runWSLElevationHelper(ctx, "unmount-vhd", "--path", m.varDiskPath()); helperErr != nil {
-				return fmt.Errorf("unmount WSL /var disk %q with elevated helper: %w", m.varDiskPath(), helperErr)
-			}
-			return nil
-		}
-		return fmt.Errorf("unmount WSL /var disk %q: %w", m.varDiskPath(), err)
-	}
-	return nil
-}
-
-func (m *Manager) initializeAttachedVarDisk(ctx context.Context, devicePath string) error {
-	if _, err := m.runInSystem(ctx, "mkfs.ext4", "-F", "-L", m.varDiskLabel(), devicePath); err != nil {
-		return fmt.Errorf("format WSL /var disk %q as ext4 on %q: %w", m.varDiskPath(), devicePath, err)
-	}
-	label, err := m.readDiskLabel(ctx, devicePath)
-	if err != nil {
-		return err
-	}
-	if label != m.varDiskLabel() {
-		return fmt.Errorf("formatted WSL /var disk %q on %q but label is %q", m.varDiskPath(), devicePath, label)
-	}
-	return nil
-}
-
-func (m *Manager) listDiskDevices(ctx context.Context) ([]string, error) {
-	output, err := m.runInSystem(ctx, "lsblk", "-dn", "-o", "NAME,TYPE")
-	if err != nil {
-		return nil, fmt.Errorf("list WSL block devices: %w", err)
-	}
-	var devices []string
-	for rawLine := range strings.SplitSeq(output, "\n") {
-		fields := strings.Fields(rawLine)
-		if len(fields) != 2 || fields[1] != "disk" {
-			continue
-		}
-		devices = append(devices, "/dev/"+fields[0])
-	}
-	return devices, nil
-}
-
-func (m *Manager) findVarDiskDeviceByLabel(ctx context.Context) (string, bool, error) {
-	output, err := m.runInSystem(ctx, "blkid", "-o", "device", "-t", "LABEL="+m.varDiskLabel())
-	if err != nil {
-		if isNoBlkidMatchError(err) {
-			return "", false, nil
-		}
-		return "", false, fmt.Errorf("find WSL /var disk by label %q: %w", m.varDiskLabel(), err)
-	}
-	for rawLine := range strings.SplitSeq(output, "\n") {
-		devicePath := strings.TrimSpace(rawLine)
-		if devicePath != "" {
-			return devicePath, true, nil
-		}
-	}
-	return "", false, nil
-}
-
-func (m *Manager) readDiskLabel(ctx context.Context, devicePath string) (string, error) {
-	output, err := m.runInSystem(ctx, "blkid", "-o", "value", "-s", "LABEL", devicePath)
-	if err != nil {
-		if isNoBlkidMatchError(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("read WSL disk label for %q: %w", devicePath, err)
-	}
-	return strings.TrimSpace(output), nil
-}
-
-func (m *Manager) waitForNewDiskDevice(ctx context.Context, before []string) (string, error) {
-	beforeSet := make(map[string]struct{}, len(before))
-	for _, device := range before {
-		beforeSet[device] = struct{}{}
-	}
-
-	var newDevice string
-	if err := m.waitForCommandSuccess(ctx, "wait for attached WSL /var disk device", func(ctx context.Context) error {
-		current, err := m.listDiskDevices(ctx)
-		if err != nil {
-			return err
-		}
-		var newDevices []string
-		for _, device := range current {
-			if _, ok := beforeSet[device]; !ok {
-				newDevices = append(newDevices, device)
-			}
-		}
-		switch len(newDevices) {
-		case 0:
-			return fmt.Errorf("no new disk device detected")
-		case 1:
-			newDevice = newDevices[0]
-			return nil
-		default:
-			return fmt.Errorf("multiple new disk devices detected: %v", newDevices)
-		}
-	}); err != nil {
-		return "", err
-	}
-	return newDevice, nil
-}
-
-func (m *Manager) stopMainDistro(ctx context.Context) error {
-	distro, found, err := m.probeDistro(ctx)
-	if err != nil {
-		return err
-	}
-	if !found || strings.EqualFold(distro.State, "Stopped") {
-		return nil
-	}
-	if _, err := m.runCommand(ctx, "wsl.exe", "--terminate", m.mainDistro().name); err != nil {
-		return fmt.Errorf("terminate managed WSL distro %q: %w", m.mainDistro().name, err)
-	}
-	return nil
 }
 
 func shouldRecoverBrokenDistro(err error) bool {
@@ -1558,20 +820,6 @@ func shouldStopRetryingWaitError(err error) bool {
 	return shouldRecoverBrokenDistro(err)
 }
 
-func (m *Manager) checkNamedDistroUnexpectedState(ctx context.Context, distroName string, operation string) error {
-	distro, found, err := m.probeNamedDistro(ctx, distroName)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("managed WSL distro %q disappeared while %s", distroName, operation)
-	}
-	if strings.EqualFold(distro.State, "Stopped") {
-		return fmt.Errorf("managed WSL distro %q stopped while %s", distroName, operation)
-	}
-	return nil
-}
-
 func (m *Manager) checkNamedDistroStillRegistered(ctx context.Context, distroName string, operation string) error {
 	_, found, err := m.probeNamedDistro(ctx, distroName)
 	if err != nil {
@@ -1583,209 +831,11 @@ func (m *Manager) checkNamedDistroStillRegistered(ctx context.Context, distroNam
 	return nil
 }
 
-func isUnformattedVarDiskMountError(err error) bool {
-	if err == nil {
-		return false
+func (m *Manager) recoverBrokenMainDistro(_ context.Context, progress progressReporter, cause error) error {
+	log.Printf("Managed WSL distro %q appears broken after startup failure: %v", m.mainDistro().name, cause)
+	progress.Update(45, "WSL startup repair is required")
+	return &wslBootstrapRequiredError{
+		Actions: []string{"repair-distro"},
+		Cause:   cause,
 	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "incorrect function") ||
-		strings.Contains(message, "the parameter is incorrect") ||
-		strings.Contains(message, "failed to mount: invalid argument") ||
-		strings.Contains(message, "disk was attached but failed to mount") ||
-		strings.Contains(message, "invalid argument") ||
-		strings.Contains(message, "no such file or directory")
-}
-
-func isAlreadyMountedVarDiskError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "already mounted") ||
-		strings.Contains(message, "already attached")
-}
-
-func isAlreadyUnmountedVarDiskError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "not mounted") ||
-		strings.Contains(message, "not attached") ||
-		strings.Contains(message, "cannot find the path specified")
-}
-
-func isStaleVarDiskUnmountError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "failed to detach") ||
-		strings.Contains(message, "invalid argument")
-}
-
-func isNoBlkidMatchError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
-		return true
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "exit status 2")
-}
-
-func isDistroNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "there is no distribution with the supplied name") ||
-		strings.Contains(message, "wsl_e_distro_not_found")
-}
-
-func shouldElevateVarDiskOperation(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "do not have the required permission") ||
-		strings.Contains(message, "authorization policy") ||
-		strings.Contains(message, "administrator privileges") ||
-		strings.Contains(message, "requires elevation") ||
-		strings.Contains(message, "requested operation requires elevation") ||
-		strings.Contains(message, "access is denied")
-}
-
-func (m *Manager) recoverVarDiskAttachment(ctx context.Context) (bool, error) {
-	devicePath, found, err := m.findVarDiskDeviceByLabel(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	if found {
-		log.Printf(
-			"Recovering WSL /var disk attachment for %q: label %q is currently visible on %s",
-			m.varDiskPath(),
-			m.varDiskLabel(),
-			devicePath,
-		)
-	} else {
-		log.Printf(
-			"Recovering WSL /var disk attachment for %q: WSL reported the disk as already attached but label %q is unavailable",
-			m.varDiskPath(),
-			m.varDiskLabel(),
-		)
-	}
-
-	if err := m.unmountVarDisk(ctx); err == nil {
-		return true, nil
-	} else if !isStaleVarDiskUnmountError(err) {
-		return false, fmt.Errorf("detach WSL /var disk %q during attachment recovery: %w", m.varDiskPath(), err)
-	}
-
-	if _, err := m.runCommand(ctx, "wsl.exe", "--shutdown"); err != nil {
-		return false, fmt.Errorf("shutdown WSL to recover /var disk attachment %q: %w", m.varDiskPath(), err)
-	}
-	return true, nil
-}
-
-func (m *Manager) recoverBrokenMainDistro(ctx context.Context, progress progressReporter, cause error) error {
-	log.Printf("Recovering broken managed WSL distro %q after startup failure: %v", m.mainDistro().name, cause)
-	progress.Update(45, "Recovering broken managed WSL distro")
-
-	if err := m.stopMainDistro(ctx); err != nil {
-		log.Printf("Failed to terminate broken managed WSL distro %q before recovery: %v", m.mainDistro().name, err)
-	}
-
-	if err := m.unregisterMainDistro(ctx); err != nil {
-		return err
-	}
-	if err := m.removeMainInstallDir(); err != nil {
-		return err
-	}
-	if err := m.state.Clear(); err != nil {
-		return err
-	}
-
-	recoveryProgress := progressReporter{
-		update: func(childProgress int, currentOperation string) {
-			mapped := 50 + (childProgress * 35 / 100)
-			progress.Update(mapped, currentOperation)
-		},
-	}
-	return m.importDistro(ctx, recoveryProgress)
-}
-
-func (m *Manager) cleanupLegacyDataDistro(ctx context.Context) error {
-	if _, found, err := m.probeLegacyDataDistro(ctx); err != nil {
-		return err
-	} else if found {
-		if err := m.unregisterLegacyDataDistro(ctx); err != nil {
-			return err
-		}
-	}
-	return m.removeLegacyDataInstallDir()
-}
-
-func (m *Manager) unregisterMainDistro(ctx context.Context) error {
-	return m.unregisterNamedDistro(ctx, m.mainDistro().name, "managed WSL distro")
-}
-
-func (m *Manager) unregisterLegacyDataDistro(ctx context.Context) error {
-	return m.unregisterNamedDistro(ctx, m.legacyDataDistro().name, "legacy managed WSL data distro")
-}
-
-func (m *Manager) unregisterNamedDistro(ctx context.Context, distroName string, description string) error {
-	if _, err := m.runCommand(ctx, "wsl.exe", "--unregister", distroName); err != nil {
-		if isDistroNotFoundError(err) {
-			return nil
-		}
-		return fmt.Errorf("unregister %s %q: %w", description, distroName, err)
-	}
-	return nil
-}
-
-func (m *Manager) removeMainInstallDir() error {
-	return removeInstallDir(m.mainDistro().installDir)
-}
-
-func (m *Manager) removeLegacyDataInstallDir() error {
-	return removeInstallDir(m.legacyDataDistro().installDir)
-}
-
-func (m *Manager) removeVarDiskFile() error {
-	varDiskPath := strings.TrimSpace(m.varDiskPath())
-	if varDiskPath == "" {
-		return nil
-	}
-	if err := os.Remove(varDiskPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove WSL /var disk %q: %w", varDiskPath, err)
-	}
-	return nil
-}
-
-func removeInstallDir(installDir string) error {
-	installDir = strings.TrimSpace(installDir)
-	if installDir == "" {
-		return nil
-	}
-	if err := os.RemoveAll(installDir); err != nil {
-		return fmt.Errorf("remove WSL install dir %q: %w", installDir, err)
-	}
-	return nil
-}
-
-func allocateLoopbackPort() (int, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, fmt.Errorf("allocate loopback port: %w", err)
-	}
-	defer listener.Close()
-
-	addr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok || addr.Port <= 0 {
-		return 0, fmt.Errorf("allocate loopback port: unexpected listener addr %T", listener.Addr())
-	}
-	return addr.Port, nil
 }

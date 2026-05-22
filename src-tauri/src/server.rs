@@ -126,6 +126,7 @@ fn start_server(
         if let Ok(resource_dir) = app.path().resource_dir() {
             let wsl_dir = resource_dir.join("wsl");
             let rootfs_path = wsl_dir.join("discobot-rootfs.tar.zst");
+            let startup_script_path = wsl_dir.join("discobot-wsl-startup.ps1");
             let icon_path = resource_dir.join("icon.ico");
 
             if rootfs_path.exists() {
@@ -138,6 +139,12 @@ fn start_server(
                 );
             } else {
                 println!("No bundled WSL resources found, will download from registry");
+            }
+            if startup_script_path.exists() {
+                sidecar = sidecar.env(
+                    "WSL_STARTUP_SCRIPT_PATH",
+                    startup_script_path.to_string_lossy().to_string(),
+                );
             }
             if icon_path.exists() {
                 sidecar = sidecar.env(

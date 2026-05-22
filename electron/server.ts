@@ -161,6 +161,23 @@ function resolveBundledWSLEnv(): Record<string, string> {
     path.join(app.getAppPath(), "src-tauri", "icons", "icon.ico"),
     path.join(process.cwd(), "src-tauri", "icons", "icon.ico"),
   ];
+  const startupScriptCandidates = [
+    path.join(process.resourcesPath, "wsl", "discobot-wsl-startup.ps1"),
+    path.join(
+      app.getAppPath(),
+      "src-tauri",
+      "resources",
+      "wsl",
+      "discobot-wsl-startup.ps1",
+    ),
+    path.join(
+      process.cwd(),
+      "src-tauri",
+      "resources",
+      "wsl",
+      "discobot-wsl-startup.ps1",
+    ),
+  ];
 
   for (const rootfsPath of rootfsCandidates) {
     try {
@@ -175,6 +192,15 @@ function resolveBundledWSLEnv(): Record<string, string> {
     try {
       accessSync(iconPath, constants.R_OK);
       env.DISCOBOT_DESKTOP_ICON_PATH = iconPath;
+      break;
+    } catch {
+      // keep searching
+    }
+  }
+  for (const startupScriptPath of startupScriptCandidates) {
+    try {
+      accessSync(startupScriptPath, constants.R_OK);
+      env.WSL_STARTUP_SCRIPT_PATH = startupScriptPath;
       break;
     } catch {
       // keep searching

@@ -10,4 +10,8 @@
 /binaries/
 
 # Bundled guest runtime assets extracted for Tauri packaging
-/resources/
+/resources/*
+!/resources/
+!/resources/wsl/
+/resources/wsl/*
+!/resources/wsl/discobot-wsl-startup.ps1

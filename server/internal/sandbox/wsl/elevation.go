@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
-
-const wslElevationHelperBaseName = "discobot-wsl-helper"
 
 var (
 	osExecutablePath = os.Executable
@@ -47,34 +44,23 @@ type shellExecuteInfo struct {
 	HProcess     windows.Handle
 }
 
-var runElevatedWSLHelper = func(ctx context.Context, helperPath string, args ...string) (string, error) {
-	resultFile, err := os.CreateTemp("", "discobot-wsl-helper-result-*.log")
-	if err != nil {
-		return "", fmt.Errorf("create elevated helper result log: %w", err)
-	}
-	resultPath := resultFile.Name()
-	if err := resultFile.Close(); err != nil {
-		_ = os.Remove(resultPath)
-		return "", fmt.Errorf("close elevated helper result log %q: %w", resultPath, err)
-	}
-	defer os.Remove(resultPath)
-
-	parameters := joinWindowsCommandLineArgs(append([]string{"--result-file", resultPath}, args...))
+var runElevatedProgram = func(ctx context.Context, programPath string, args ...string) (uint32, error) {
+	parameters := joinWindowsCommandLineArgs(args)
 	verbPtr, err := windows.UTF16PtrFromString("runas")
 	if err != nil {
-		return "", fmt.Errorf("encode elevated helper verb: %w", err)
+		return 0, fmt.Errorf("encode elevated command verb: %w", err)
 	}
-	filePtr, err := windows.UTF16PtrFromString(helperPath)
+	filePtr, err := windows.UTF16PtrFromString(programPath)
 	if err != nil {
-		return "", fmt.Errorf("encode elevated helper path %q: %w", helperPath, err)
+		return 0, fmt.Errorf("encode elevated command path %q: %w", programPath, err)
 	}
 	parametersPtr, err := windows.UTF16PtrFromString(parameters)
 	if err != nil {
-		return "", fmt.Errorf("encode elevated helper arguments %q: %w", parameters, err)
+		return 0, fmt.Errorf("encode elevated command arguments %q: %w", parameters, err)
 	}
-	directoryPtr, err := windows.UTF16PtrFromString(filepath.Dir(helperPath))
+	directoryPtr, err := windows.UTF16PtrFromString(filepath.Dir(programPath))
 	if err != nil {
-		return "", fmt.Errorf("encode elevated helper directory %q: %w", filepath.Dir(helperPath), err)
+		return 0, fmt.Errorf("encode elevated command directory %q: %w", filepath.Dir(programPath), err)
 	}
 
 	info := shellExecuteInfo{
@@ -88,122 +74,24 @@ var runElevatedWSLHelper = func(ctx context.Context, helperPath string, args ...
 	}
 
 	if err := callShellExecuteEx(&info); err != nil {
-		return "", fmt.Errorf("launch elevated helper %q: %w", helperPath, err)
+		return 0, fmt.Errorf("launch elevated command %q: %w", programPath, err)
 	}
 	if info.HProcess == 0 {
-		return "", fmt.Errorf("launch elevated helper %q: missing process handle", helperPath)
+		return 0, fmt.Errorf("launch elevated command %q: missing process handle", programPath)
 	}
 	defer func() {
 		_ = windows.CloseHandle(info.HProcess)
 	}()
 
 	if err := waitForElevatedProcess(ctx, info.HProcess); err != nil {
-		return "", fmt.Errorf("wait for elevated helper %q: %w", helperPath, err)
+		return 0, fmt.Errorf("wait for elevated command %q: %w", programPath, err)
 	}
 
 	var exitCode uint32
 	if err := windows.GetExitCodeProcess(info.HProcess, &exitCode); err != nil {
-		return "", fmt.Errorf("get elevated helper exit code: %w", err)
+		return 0, fmt.Errorf("get elevated command exit code: %w", err)
 	}
-
-	resultBytes, readErr := os.ReadFile(resultPath)
-	resultText := strings.TrimSpace(string(resultBytes))
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return "", fmt.Errorf("read elevated helper result log %q: %w", resultPath, readErr)
-	}
-	if exitCode != 0 {
-		if resultText == "" {
-			resultText = fmt.Sprintf("elevated helper exited with code %d", exitCode)
-		}
-		return "", fmt.Errorf("%s", resultText)
-	}
-	return resultText, nil
-}
-
-var findWSLElevationHelperPath = defaultWSLElevationHelperPath
-
-func (m *Manager) runWSLElevationHelper(ctx context.Context, args ...string) (string, error) {
-	helperPath, err := findWSLElevationHelperPath()
-	if err != nil {
-		return "", err
-	}
-	return runElevatedWSLHelper(ctx, helperPath, args...)
-}
-
-func defaultWSLElevationHelperPath() (string, error) {
-	helperNames := []string{
-		wslElevationHelperBinaryName(),
-		wslElevationHelperBaseName + ".exe",
-	}
-	var (
-		candidates []string
-		seen       = make(map[string]struct{})
-	)
-
-	addCandidate := func(path string) {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return
-		}
-		if _, ok := seen[path]; ok {
-			return
-		}
-		seen[path] = struct{}{}
-		candidates = append(candidates, path)
-	}
-
-	addCandidatesFromBase := func(baseDir string) {
-		dir := strings.TrimSpace(baseDir)
-		for depth := 0; dir != "" && depth < 5; depth++ {
-			for _, helperName := range helperNames {
-				addCandidate(filepath.Join(dir, helperName))
-				addCandidate(filepath.Join(dir, "src-tauri", "binaries", helperName))
-			}
-
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
-			}
-			dir = parent
-		}
-	}
-
-	if exePath, err := osExecutablePath(); err == nil && strings.TrimSpace(exePath) != "" {
-		addCandidatesFromBase(filepath.Dir(exePath))
-	}
-	if cwd, err := osGetwdPath(); err == nil && strings.TrimSpace(cwd) != "" {
-		addCandidatesFromBase(cwd)
-	}
-
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			absPath, err := filepath.Abs(candidate)
-			if err == nil {
-				return absPath, nil
-			}
-			return candidate, nil
-		}
-	}
-
-	return "", fmt.Errorf(
-		"could not find a WSL elevation helper (%s); expected it next to the Discobot server binary or in a nearby src-tauri/binaries directory",
-		strings.Join(helperNames, " or "),
-	)
-}
-
-func wslElevationHelperBinaryName() string {
-	return wslElevationHelperBaseName + "-" + windowsTargetTriple() + ".exe"
-}
-
-func windowsTargetTriple() string {
-	switch runtime.GOARCH {
-	case "amd64":
-		return "x86_64-pc-windows-msvc"
-	case "arm64":
-		return "aarch64-pc-windows-msvc"
-	default:
-		return runtime.GOARCH + "-pc-windows-msvc"
-	}
+	return exitCode, nil
 }
 
 func callShellExecuteEx(info *shellExecuteInfo) error {

@@ -44,8 +44,12 @@ next-env.d.ts
 .claude/settings.json
 .claude/settings.local.json
 
-# VZ build artifacts (rootfs image, kernel)
-/src-tauri/resources
+# Bundled guest runtime artifacts (rootfs image, kernel)
+/src-tauri/resources/*
+!/src-tauri/resources/
+!/src-tauri/resources/wsl/
+/src-tauri/resources/wsl/*
+!/src-tauri/resources/wsl/discobot-wsl-startup.ps1
 
 # Binaries
 proxy/discobot-proxy

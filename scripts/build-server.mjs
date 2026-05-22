@@ -107,8 +107,11 @@ const targetTriple = getTargetTriple();
 const ext = targetTriple.includes("windows") ? ".exe" : "";
 const serverOutputName = `discobot-server-${targetTriple}${ext}`;
 const serverOutputPath = join(binariesDir, serverOutputName);
-const wslHelperOutputName = `discobot-wsl-helper-${targetTriple}${ext}`;
-const wslHelperOutputPath = join(binariesDir, wslHelperOutputName);
+const staleWSLHelperOutputPath = join(
+  binariesDir,
+  `discobot-wsl-helper-${targetTriple}${ext}`,
+);
+rmSync(staleWSLHelperOutputPath, { force: true });
 
 // Map target triple to Go cross-compilation env vars
 function getGoEnv(triple) {
@@ -143,18 +146,13 @@ const ldflags = [
   `-X github.com/obot-platform/discobot/server/internal/version.Version=${version}`,
   `-X github.com/obot-platform/discobot/server/internal/config.GitHubOAuthClientID=${githubOAuthClientID}`,
 ].join(" ");
-execSync(`go build -ldflags "${ldflags}" -o "${serverOutputPath}" ./cmd/server`, {
-  cwd: serverDir,
-  stdio: "inherit",
-  env: { ...process.env, ...goEnv },
-});
+execSync(
+  `go build -ldflags "${ldflags}" -o "${serverOutputPath}" ./cmd/server`,
+  {
+    cwd: serverDir,
+    stdio: "inherit",
+    env: { ...process.env, ...goEnv },
+  },
+);
 
 console.log(`Built: ${serverOutputPath} (version: ${version})`);
-
-execSync(`go build -o "${wslHelperOutputPath}" ./cmd/wsl-helper`, {
-  cwd: serverDir,
-  stdio: "inherit",
-  env: { ...process.env, ...goEnv },
-});
-
-console.log(`Built: ${wslHelperOutputPath}`);
