@@ -28,11 +28,12 @@ pnpm build:server       # Build the Go server binary
 ### Lint & Format
 
 ```bash
-pnpm check              # Run frontend, package.json, workflow, backend, and shell checks
-pnpm check:fix          # Run frontend fixes, package.json/workflow formatting, backend autofixes, and shellcheck
+pnpm check              # Run frontend, package.json, workflow, backend, shell, and Windows PowerShell checks
+pnpm check:fix          # Run autofixes/formatters, including Windows PowerShell when on Windows
+pnpm lint               # Run frontend, backend, shell, and Windows PowerShell linters
 pnpm check:frontend     # Delegate to the Svelte UI's Prettier + ESLint + typecheck flow
 pnpm check:backend      # golangci-lint (server + proxy + agent-go + authservice)
-pnpm format             # Run the Svelte UI Prettier formatter
+pnpm format             # Run the Svelte UI Prettier formatter, plus PowerShell formatting on Windows
 ```
 
 ### Tests
@@ -242,6 +243,7 @@ does not coordinate with shared app state directly, put it in `app/parts/`.
 - **Go**: gofmt + goimports with local prefix `github.com/obot-platform/discobot`
 - **Go version**: 1.26 — use `new(value)` to create a pointer to a value (e.g. `new(true)` for `*bool`); avoid `boolPtr`/`intPtr` helper functions
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
+- **PowerShell**: PSScriptAnalyzer for linting and Invoke-Formatter formatting on Windows
 - **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible. Always include a commit body after a blank line, even for small changes, and use it to explain the nature of the change, the key decisions, and any important context. Wrap body lines to 72 characters or fewer
 - **Code style**:
   - Optimize for code that a maintainer can read once and understand. Prefer

@@ -1,4 +1,5 @@
 # Ensure consistent line endings for source files
+* text=auto eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
 .dockerignore text eol=lf
@@ -34,6 +35,13 @@ vm-assets/** text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 scripts/* text eol=lf
+agent-go/assets/scripts/** text eol=lf
+container-assets/** text eol=lf
+ui-go/**/*.templ text eol=lf
+*.templ text eol=lf
+*.ps1 text eol=lf
+Caddyfile text eol=lf
+.node-version text eol=lf
 *.svelte text eol=lf
 *.rs text eol=lf
 *.svg text eol=lf
