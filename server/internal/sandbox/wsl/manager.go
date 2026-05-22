@@ -35,7 +35,6 @@ const (
 	staleRootfsTempFileMaxAge    = 10 * time.Minute
 	ext4VolumeLabelMaxLength     = 16
 	discobotWSLEnvPath           = "etc/default/discobot-wsl"
-	rootfsArchiveName            = "discobot-rootfs.tar.zst"
 )
 
 var (

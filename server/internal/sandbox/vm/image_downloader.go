@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -520,9 +521,7 @@ func (d *ImageDownloader) GetArtifactPaths() (map[string]string, bool) {
 		return nil, false
 	}
 	paths := make(map[string]string, len(d.artifactPaths))
-	for name, path := range d.artifactPaths {
-		paths[name] = path
-	}
+	maps.Copy(paths, d.artifactPaths)
 	return paths, true
 }
 
@@ -530,9 +529,7 @@ func (d *ImageDownloader) storeArtifactPaths(paths map[string]string) {
 	d.stateMu.Lock()
 	defer d.stateMu.Unlock()
 	d.artifactPaths = make(map[string]string, len(paths))
-	for name, path := range paths {
-		d.artifactPaths[name] = path
-	}
+	maps.Copy(d.artifactPaths, paths)
 }
 
 func (d *ImageDownloader) updateState(state DownloadState) {

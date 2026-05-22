@@ -4,7 +4,6 @@ package wsl
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -21,8 +20,6 @@ import (
 	"unicode/utf16"
 
 	"golang.org/x/sys/windows"
-
-	"github.com/klauspost/compress/zstd"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 )
@@ -882,43 +879,6 @@ func writeTestTar(tarPath string, files map[string]string) error {
 	}
 
 	return nil
-}
-
-func writeTestRootfsArchive(archivePath string, files map[string]string) error {
-	var tarBuffer bytes.Buffer
-	tarWriter := tar.NewWriter(&tarBuffer)
-	for name, contents := range files {
-		if err := tarWriter.WriteHeader(&tar.Header{
-			Name:     name,
-			Mode:     0644,
-			Size:     int64(len(contents)),
-			Typeflag: tar.TypeReg,
-		}); err != nil {
-			return err
-		}
-		if _, err := tarWriter.Write([]byte(contents)); err != nil {
-			return err
-		}
-	}
-	if err := tarWriter.Close(); err != nil {
-		return err
-	}
-
-	file, err := os.Create(archivePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder, err := zstd.NewWriter(file)
-	if err != nil {
-		return err
-	}
-	if _, err := encoder.Write(tarBuffer.Bytes()); err != nil {
-		encoder.Close()
-		return err
-	}
-	return encoder.Close()
 }
 
 func readTestTar(tarPath string) (map[string]string, error) {

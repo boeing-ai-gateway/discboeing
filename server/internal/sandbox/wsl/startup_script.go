@@ -94,11 +94,9 @@ func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress 
 	}
 
 	rootfsTarPath := ""
-	cleanup := func() {}
 	if wslStartupNeedsRootfs(check.Actions) {
 		progress.Update(35, "Preparing WSL rootfs artifact")
-		var err error
-		rootfsTarPath, cleanup, err = m.prepareStartupRootfsTar(ctx, progressReporter{
+		rootfsTar, cleanup, err := m.prepareStartupRootfsTar(ctx, progressReporter{
 			update: func(childProgress int, currentOperation string) {
 				progress.Update(35+(childProgress*10/100), currentOperation)
 			},
@@ -106,6 +104,7 @@ func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress 
 		if err != nil {
 			return err
 		}
+		rootfsTarPath = rootfsTar
 		defer cleanup()
 	}
 

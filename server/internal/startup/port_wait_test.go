@@ -80,7 +80,7 @@ func TestWaitForTCPBindTimesOutWhenPortStaysBusy(t *testing.T) {
 }
 
 func TestIsAddressInUseRecognizesWindowsBindMessage(t *testing.T) {
-	err := fmt.Errorf("listen tcp :3001: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.")
+	err := fmt.Errorf("listen tcp :3001: bind: only one usage of each socket address (protocol/network address/port) is normally permitted")
 	if !IsAddressInUse(err) {
 		t.Fatalf("IsAddressInUse(%v) = false, want true", err)
 	}

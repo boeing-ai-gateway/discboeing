@@ -9,7 +9,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
 
-func TestProviderSupportsProjectInspection(t *testing.T) {
+func TestProviderSupportsProjectInspection(_ *testing.T) {
 	var _ sandbox.ProjectInspectionManager = (*Provider)(nil)
 }
 
