@@ -63,6 +63,13 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 	}
 
 	c.enqueuePromptDispatch(ctx, submission)
+	if c.shouldQueuePromptUntilSessionReady(ctx, submission.SessionID) {
+		latest, err := c.store.GetPromptSubmissionByID(ctx, submission.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return latest, &sandboxapi.ChatStartedResponse{Status: "queued"}, nil
+	}
 	if err := c.DispatchPromptSubmission(ctx, submission.ID); err != nil {
 		latest, latestErr := c.store.GetPromptSubmissionByID(ctx, submission.ID)
 		if latestErr == nil && latest.Status == model.PromptSubmissionStatusAccepted {
@@ -89,6 +96,23 @@ func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, th
 		return latest, nil, fmt.Errorf("prompt dispatch did not reach sandbox")
 	}
 	return latest, started, nil
+}
+
+func (c *ChatService) shouldQueuePromptUntilSessionReady(ctx context.Context, sessionID string) bool {
+	if c.jobEnqueuer == nil {
+		return false
+	}
+	sess, err := c.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return false
+	}
+	switch sess.SandboxStatus {
+	case model.SessionStatusInitializing, model.SessionStatusReinitializing,
+		model.SessionStatusCloning, model.SessionStatusPullingImage, model.SessionStatusCreatingSandbox:
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *ChatService) DispatchPromptSubmission(ctx context.Context, submissionID string) error {

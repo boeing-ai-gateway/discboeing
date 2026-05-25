@@ -6,8 +6,18 @@ import (
 	"testing"
 
 	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 )
+
+type recordingJobEnqueuer struct {
+	count int
+}
+
+func (e *recordingJobEnqueuer) Enqueue(context.Context, jobs.JobPayload) error {
+	e.count++
+	return nil
+}
 
 func TestSubmitPromptReturnsQueuedWhileDispatchContinues(t *testing.T) {
 	st := setupTestStore(t)
@@ -65,6 +75,69 @@ func TestSubmitPromptReturnsQueuedWhileDispatchContinues(t *testing.T) {
 	}
 	if started.Status != "queued" {
 		t.Fatalf("expected queued status, got %q", started.Status)
+	}
+}
+
+func TestSubmitPromptQueuesWhileSessionInitializes(t *testing.T) {
+	ctx := context.Background()
+	st := setupTestStore(t)
+	enqueuer := &recordingJobEnqueuer{}
+	chatService := NewChatService(st, &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+	}, nil, enqueuer, nil, nil, nil)
+
+	workspace := &model.Workspace{
+		ID:         "workspace-initializing",
+		ProjectID:  "project-1",
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := st.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	session := &model.Session{
+		ID:            "session-initializing",
+		ProjectID:     "project-1",
+		WorkspaceID:   workspace.ID,
+		Name:          "Initializing Session",
+		SandboxStatus: model.SessionStatusInitializing,
+	}
+	if err := st.CreateSession(ctx, session); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	messages := []json.RawMessage{
+		json.RawMessage(`{"id":"msg-user-1","role":"user","parts":[{"type":"text","text":"hello"}]}`),
+	}
+	latest, started, err := chatService.SubmitPrompt(
+		ctx,
+		session.ProjectID,
+		session.ID,
+		session.ID,
+		messages,
+		"",
+		"",
+		"",
+		"",
+	)
+	if err != nil {
+		t.Fatalf("SubmitPrompt returned error: %v", err)
+	}
+	if latest == nil {
+		t.Fatal("SubmitPrompt returned nil submission")
+	}
+	if latest.Status != model.PromptSubmissionStatusPending {
+		t.Fatalf("expected pending submission status, got %q", latest.Status)
+	}
+	if started == nil {
+		t.Fatal("SubmitPrompt returned nil started response")
+	}
+	if started.Status != "queued" {
+		t.Fatalf("expected queued status, got %q", started.Status)
+	}
+	if enqueuer.count != 1 {
+		t.Fatalf("expected one queued dispatch job, got %d", enqueuer.count)
 	}
 }
 
