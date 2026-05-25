@@ -37,7 +37,7 @@ test("app header keeps window controls in a dedicated rightmost grid column on d
 	assert.match(source, /grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
 	assert.match(source, /class=\{`desktop-drag-region relative grid h-10/);
 	assert.match(source, /data-desktop-drag-region/);
-	assert.match(source, /data-tauri-drag-region/);
+	assert.doesNotMatch(source, /data-tauri-drag-region/);
 	assert.match(
 		source,
 		/\{#if !isMobile\.current\}[\s\S]*class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>[\s\S]*\{\/if\}/,
@@ -45,10 +45,6 @@ test("app header keeps window controls in a dedicated rightmost grid column on d
 	assert.ok(source.includes("<SessionToolbarStack />"));
 	assert.ok(source.includes('{isMobile.current ? "New" : "New Session"}'));
 	assert.match(source, /class="absolute inset-0 pointer-events-auto"/);
-	assert.match(
-		source,
-		/class="absolute inset-0 pointer-events-auto"[\s\S]*data-tauri-drag-region/,
-	);
 });
 
 test("app header shows the mobile Sessions toggle to the right of the logo", () => {

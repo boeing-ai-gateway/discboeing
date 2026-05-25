@@ -222,7 +222,7 @@ function setupDevContextMenu(window: BrowserWindow): void {
 }
 
 function appIconPath(): string {
-  const iconsDir = path.join(app.getAppPath(), "src-tauri", "icons");
+  const iconsDir = path.join(app.getAppPath(), "electron", "assets", "icons");
   if (process.platform === "win32") {
     return path.join(iconsDir, "icon.ico");
   }

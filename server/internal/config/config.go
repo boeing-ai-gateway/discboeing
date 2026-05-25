@@ -162,7 +162,7 @@ type Config struct {
 
 	// Desktop shell settings
 	DesktopMode     bool   // Running inside a desktop shell
-	DesktopRuntime  string // Desktop shell runtime (for example: tauri, electron)
+	DesktopRuntime  string // Desktop shell runtime (electron)
 	DesktopSecret   string // Shared secret for desktop shell auth
 	DesktopIconPath string // Path to the desktop app icon, when available
 }
@@ -328,9 +328,9 @@ func Load() (*Config, error) {
 	// Desktop shell settings
 	cfg.DesktopRuntime = strings.ToLower(getEnv("DISCOBOT_DESKTOP_RUNTIME", ""))
 	switch cfg.DesktopRuntime {
-	case "", "tauri", "electron":
+	case "", "electron":
 	default:
-		return nil, fmt.Errorf("DISCOBOT_DESKTOP_RUNTIME must be one of: tauri, electron")
+		return nil, fmt.Errorf("DISCOBOT_DESKTOP_RUNTIME must be electron")
 	}
 	cfg.DesktopMode = cfg.DesktopRuntime != ""
 	cfg.DesktopSecret = getEnv("DISCOBOT_DESKTOP_SECRET", getEnv("DISCOBOT_SECRET", ""))

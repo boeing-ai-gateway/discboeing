@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Extract WSL image files from Docker registry for Tauri bundling
+ * Extract WSL image files from Docker registry for Electron bundling
  *
  * This script uses `go tool crane` (from go-containerregistry) to pull a WSL
  * Docker image from the registry and extract the rootfs archive to
- * src-tauri/resources/wsl/ for bundling into the Windows app.
+ * electron/resources/wsl/ for bundling into the Windows app.
  *
  * Usage: node scripts/extract-wsl-image.mjs [image-ref] [arch]
  *   image-ref: Docker image reference (defaults to ghcr.io/obot-platform/discobot-wsl:main)
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
-const resourcesDir = join(projectRoot, "src-tauri", "resources", "wsl");
+const resourcesDir = join(projectRoot, "electron", "resources", "wsl");
 
 const imageRef = process.argv[2] || "ghcr.io/obot-platform/discobot-wsl:main";
 const arch = process.argv[3] || (process.arch === "arm64" ? "arm64" : "amd64");

@@ -2,7 +2,7 @@ import { nativeImage, type BrowserWindow, Menu, Tray, app } from "electron";
 import path from "node:path";
 
 function trayIconPath(): string {
-  const iconsDir = path.join(app.getAppPath(), "src-tauri", "icons");
+  const iconsDir = path.join(app.getAppPath(), "electron", "assets", "icons");
   if (process.platform === "win32") {
     return path.join(iconsDir, "icon.ico");
   }

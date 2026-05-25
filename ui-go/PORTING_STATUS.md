@@ -1956,7 +1956,7 @@ routes or browser-local islands:
 - Validation: `pnpm --dir /home/discobot/workspace/ui-go generate` and `pnpm --dir /home/discobot/workspace/ui-go check` passed
 - Notes:
   - Added the Windows-style right-side minimize/maximize/close control shell with matching SVG glyphs and data hooks.
-  - Record for later backend/client pass: wire controls to Tauri/native window minimize, maximize/unmaximize, and close commands, and mount conditionally for desktop window chrome.
+  - Record for later backend/client pass: wire controls to Electron/native window minimize, maximize/unmaximize, and close commands, and mount conditionally for desktop window chrome.
 
 ### [~] `ui/src/lib/components/app/parts/ServicePanel.svelte`
 

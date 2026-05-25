@@ -161,16 +161,17 @@ test("electron build script bundles main and preload entry points", () => {
 test("root package defines Electron build and distribution scripts", () => {
 	const source = readSource(ROOT_PACKAGE_JSON);
 
-	assert.match(source, /"build:app:electron"/);
-	assert.match(source, /"dist:app:electron"/);
+	assert.match(source, /"build:app"/);
+	assert.match(source, /"dist:app"/);
 	assert.match(
 		source,
-		/"build:app:electron": "pnpm build:frontend && pnpm build:server && node scripts\/build-electron\.mjs && electron-builder --dir"/,
+		/"build:app": "pnpm build:frontend && pnpm build:server && node scripts\/build-electron\.mjs && electron-builder --dir"/,
 	);
 	assert.match(
 		source,
-		/"dist:app:electron": "pnpm build:frontend && pnpm build:server && node scripts\/build-electron\.mjs && electron-builder"/,
+		/"dist:app": "pnpm build:frontend && pnpm build:server && node scripts\/build-electron\.mjs && electron-builder"/,
 	);
+	assert.doesNotMatch(source, /build:app:electron/);
 	assert.match(source, /"electron-builder"/);
 	assert.match(source, /"electron-updater"/);
 	assert.match(source, /"main": "\.electron-dist\/main\.js"/);

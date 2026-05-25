@@ -34,7 +34,7 @@ func AppHeader(snapshot viewmodel.HeaderSnapshot) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"desktop-drag-region relative grid h-10 items-center bg-background grid-cols-[auto_minmax(0,1fr)_auto_auto]\" data-desktop-drag-region data-tauri-drag-region><div class=\"absolute inset-0 pointer-events-auto\" data-tauri-drag-region></div><div class=\"relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3\"><div class=\"lg:hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"desktop-drag-region relative grid h-10 items-center bg-background grid-cols-[auto_minmax(0,1fr)_auto_auto]\" data-desktop-drag-region><div class=\"absolute inset-0 pointer-events-auto\"></div><div class=\"relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3\"><div class=\"lg:hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

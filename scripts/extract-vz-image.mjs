@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Extract VZ image files from Docker registry for Tauri bundling
+ * Extract VZ image files from Docker registry for Electron bundling
  *
  * This script uses `go tool crane` (from go-containerregistry) to pull a VZ
  * Docker image from the registry and extract the kernel and rootfs files to
- * src-tauri/resources/vz/ for bundling into the macOS app.
+ * electron/resources/vz/ for bundling into the macOS app.
  *
  * Usage: node scripts/extract-vz-image.mjs [image-ref] [arch]
  *   image-ref: Docker image reference (defaults to ghcr.io/obot-platform/discobot-vz:main)
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
-const resourcesDir = join(projectRoot, "src-tauri", "resources", "vz");
+const resourcesDir = join(projectRoot, "electron", "resources", "vz");
 
 const imageRef = process.argv[2] || "ghcr.io/obot-platform/discobot-vz:main";
 const arch = process.argv[3] || (process.arch === "arm64" ? "arm64" : "amd64");

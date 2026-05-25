@@ -45,11 +45,17 @@ next-env.d.ts
 .claude/settings.local.json
 
 # Bundled guest runtime artifacts (rootfs image, kernel)
-/src-tauri/resources/*
-!/src-tauri/resources/
-!/src-tauri/resources/wsl/
-/src-tauri/resources/wsl/*
-!/src-tauri/resources/wsl/.gitkeep
+/electron/resources/*
+!/electron/resources/
+!/electron/resources/wsl/
+/electron/resources/wsl/*
+!/electron/resources/wsl/.gitkeep
+!/electron/resources/vz/
+/electron/resources/vz/*
+!/electron/resources/vz/.gitkeep
+/electron/binaries/*
+!/electron/binaries/
+!/electron/binaries/.gitkeep
 
 # Binaries
 proxy/discobot-proxy

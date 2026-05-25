@@ -10,16 +10,16 @@ test("renderServiceOutputText preserves plain text", () => {
 test("renderServiceOutputText strips ANSI styling codes", () => {
 	assert.equal(
 		renderServiceOutputText(
-			"\u001b[1m\u001b[96m   Building\u001b[0m tauri-plugin-window-state v2.4.1",
+			"\u001b[1m\u001b[96m   Building\u001b[0m electron-builder v26.0.0",
 		),
-		"   Building tauri-plugin-window-state v2.4.1",
+		"   Building electron-builder v26.0.0",
 	);
 });
 
 test("renderServiceOutputText applies carriage-return line replacement", () => {
 	const raw = [
-		"\u001b[1m\u001b[96m   Building\u001b[0m [========>             ] 575/633: tauri-utils",
-		"\r\u001b[K\u001b[1m\u001b[96m   Building\u001b[0m [===================>  ] 586/633: tauri-plugin-opener",
+		"\u001b[1m\u001b[96m   Building\u001b[0m [========>             ] 575/633: electron-builder",
+		"\r\u001b[K\u001b[1m\u001b[96m   Building\u001b[0m [===================>  ] 586/633: electron-updater",
 		"\r\u001b[K\u001b[1m\u001b[92m   Compiling\u001b[0m discobot v0.1.0",
 	].join("");
 

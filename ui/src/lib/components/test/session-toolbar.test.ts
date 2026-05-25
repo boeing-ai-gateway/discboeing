@@ -27,11 +27,11 @@ test("session toolbar reserves a dedicated editor pane and hides its service fro
 	assert.match(source, />\s*Editor\s*<\/Button>/);
 });
 
-test("session toolbar preserves a Tauri drag region while keeping controls interactive", () => {
+test("session toolbar preserves a desktop drag region while keeping controls interactive", () => {
 	const source = readSessionToolbarSource();
 
 	assert.match(source, /data-desktop-drag-region/);
-	assert.match(source, /data-tauri-drag-region/);
+	assert.doesNotMatch(source, /data-tauri-drag-region/);
 	assert.match(
 		source,
 		/class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0\.5 shadow-xs"/,

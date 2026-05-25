@@ -1,4 +1,4 @@
-export type DesktopRuntimeKind = "browser" | "tauri" | "electron";
+export type DesktopRuntimeKind = "browser" | "electron";
 export type WindowControlsSide = "left" | "right";
 
 export type DesktopServerConfig = {

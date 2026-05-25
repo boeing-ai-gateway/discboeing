@@ -21,7 +21,6 @@ templ SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) {
 		data-session-vscode-available={ strconv.FormatBool(snapshot.VSCodeAvailable) }
 		data-session-diff-files-changed={ strconv.Itoa(snapshot.DiffStats.FilesChanged) }
 		data-desktop-drag-region
-		data-tauri-drag-region
 	>
 		<div class="desktop-no-drag hidden items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs lg:inline-flex">
 			<button type="button" class={ toolbarButtonClass(snapshot.ActiveView == "terminal") } data-session-view-toggle="terminal" aria-pressed={ strconv.FormatBool(snapshot.ActiveView == "terminal") } disabled>Terminal</button>

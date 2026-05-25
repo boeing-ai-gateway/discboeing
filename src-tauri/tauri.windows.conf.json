@@ -1,8 +1,0 @@
-{
-	"bundle": {
-		"resources": {
-			"icons/icon.ico": "icon.ico",
-			"resources/wsl/*": "wsl/"
-		}
-	}
-}

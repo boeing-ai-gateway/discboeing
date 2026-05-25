@@ -9,7 +9,7 @@ const projectRoot = dirname(__dirname);
 const serverDir = join(projectRoot, "server");
 const uiBuildDir = join(projectRoot, "ui", "build");
 const embeddedUIDir = join(serverDir, "static", "ui", "dist");
-const binariesDir = join(projectRoot, "src-tauri", "binaries");
+const binariesDir = join(projectRoot, "electron", "binaries");
 const packageJSON = JSON.parse(
   readFileSync(join(projectRoot, "package.json"), "utf-8"),
 );
@@ -43,7 +43,7 @@ const uiBuildEnv = {
   ...process.env,
   PUBLIC_SENTRY_APP_VERSION: process.env.PUBLIC_SENTRY_APP_VERSION || version,
   PUBLIC_SENTRY_RELEASE: process.env.PUBLIC_SENTRY_RELEASE || sentryRelease,
-  PUBLIC_SENTRY_DIST: process.env.PUBLIC_SENTRY_DIST || "tauri",
+  PUBLIC_SENTRY_DIST: process.env.PUBLIC_SENTRY_DIST || "electron",
   PUBLIC_SENTRY_GIT_COMMIT: process.env.PUBLIC_SENTRY_GIT_COMMIT || gitCommit,
   PUBLIC_SENTRY_GIT_TAG: process.env.PUBLIC_SENTRY_GIT_TAG || gitTag,
 };
@@ -81,9 +81,9 @@ function syncEmbeddedUI() {
 
 // Get target triple from environment or detect from current platform
 function getTargetTriple() {
-  // Use TAURI_TARGET_TRIPLE if set (from CI workflow)
-  if (process.env.TAURI_TARGET_TRIPLE) {
-    return process.env.TAURI_TARGET_TRIPLE;
+  // Use DISCOBOT_TARGET_TRIPLE if set (from CI workflow).
+  if (process.env.DISCOBOT_TARGET_TRIPLE) {
+    return process.env.DISCOBOT_TARGET_TRIPLE;
   }
 
   const platform = os.platform();

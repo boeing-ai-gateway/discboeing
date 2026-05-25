@@ -6,11 +6,8 @@
   "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev": "concurrently -n backend,app -c cyan,yellow \"pnpm dev:backend\" \"pnpm dev:app\"",
-    "dev:electron": "concurrently -n backend,app -c cyan,yellow \"pnpm dev:backend\" \"pnpm dev:app:electron\"",
     "dev:backend": "concurrently -n ui,server,agent,runtime -c cyan,green,magenta,yellow \"pnpm dev:frontend\" \"pnpm dev:server\" \"pnpm dev:agent\" \"pnpm dev:runtime\"",
-    "dev:app": "pnpm dev:app:tauri",
-    "dev:app:tauri": "pnpm build:server && tauri dev",
-    "dev:app:electron": "node scripts/build-electron.mjs && cross-env NODE_OPTIONS=--import=tsx electron ./electron/main.ts",
+    "dev:app": "node scripts/build-electron.mjs && cross-env NODE_OPTIONS=--import=tsx electron ./electron/main.ts",
     "dev:frontend": "pnpm ui:dev",
     "dev:server": "node scripts/dev-server.mjs",
     "dev:runtime": "node scripts/dev-runtime.mjs",
@@ -38,10 +35,7 @@
     "build:frontend": "pnpm ui:build",
     "build:server": "node scripts/build-server.mjs",
     "build:disco": "node scripts/build-disco.mjs",
-    "prepare:tauri-assets": "node scripts/prepare-tauri-assets.mjs",
-    "build:app": "node scripts/build-app.mjs",
-    "build:app:electron": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder --dir",
-    "dist:app:electron": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder",
+    "build:app": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder --dir",
     "preview": "pnpm --dir ./ui preview",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "concurrently \"pnpm test:server:unit\" \"pnpm test:proxy:unit\" \"pnpm test:agent-go:unit\" \"pnpm test:watcher\" \"pnpm test:ui\" \"pnpm test:ui-go\"",
@@ -89,16 +83,15 @@
     "lint:powershell:fix": "node scripts/check-powershell.mjs fix",
     "ci": "pnpm check && pnpm test:unit && node scripts/run-ci-tail.mjs",
     "temproot": "scripts/temproot.sh",
-    "tauri": "tauri",
     "refresh-models": "./scripts/refresh-models-data.sh",
-    "test:ui-go": "cd ui-go && go test -v ./..."
+    "test:ui-go": "cd ui-go && go test -v ./...",
+    "dist:app": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder"
   },
   "dependencies": {
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@tauri-apps/cli": "^2.11.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^42.0.0",
@@ -119,11 +112,11 @@
     "files": [
       ".electron-dist/**/*",
       "server/static/ui/dist/**/*",
-      "src-tauri/icons/**/*"
+      "electron/assets/icons/**/*"
     ],
     "extraResources": [
       {
-        "from": "src-tauri/binaries",
+        "from": "electron/binaries",
         "to": "binaries",
         "filter": [
           "discobot-server-*"
@@ -132,18 +125,18 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "src-tauri/icons/icon.icns",
+      "icon": "electron/assets/icons/icon.icns",
       "target": [
         "dir",
         "dmg",
         "zip"
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "entitlements": "src-tauri/entitlements.plist",
-      "entitlementsInherit": "src-tauri/entitlements.plist",
+      "entitlements": "electron/assets/entitlements.plist",
+      "entitlementsInherit": "electron/assets/entitlements.plist",
       "extraResources": [
         {
-          "from": "src-tauri/resources/vz",
+          "from": "electron/resources/vz",
           "to": "vz",
           "filter": [
             "**/*"
@@ -152,7 +145,7 @@
       ]
     },
     "win": {
-      "icon": "src-tauri/icons/icon.ico",
+      "icon": "electron/assets/icons/icon.ico",
       "target": [
         "nsis",
         "zip"
@@ -160,14 +153,14 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "extraResources": [
         {
-          "from": "src-tauri/resources/wsl",
+          "from": "electron/resources/wsl",
           "to": "wsl",
           "filter": [
             "**/*"
           ]
         },
         {
-          "from": "src-tauri/icons/icon.ico",
+          "from": "electron/assets/icons/icon.ico",
           "to": "icon.ico"
         }
       ]
@@ -179,7 +172,7 @@
     ],
     "linux": {
       "category": "Development",
-      "icon": "src-tauri/icons/icon.png",
+      "icon": "electron/assets/icons/icon.png",
       "maintainer": "Obot Platform <support@obot.ai>",
       "target": [
         "AppImage",

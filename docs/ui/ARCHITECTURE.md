@@ -81,7 +81,7 @@ All server data is fetched via `ui/src/lib/api-client.ts`. App-level project eve
 
 ### 3. API Configuration
 
-`ui/src/lib/api-config.ts` discovers `/api/server-config` to prefer the server's HTTPS listener for browser traffic when trusted HTTPS is available, while Tauri continues using its direct local HTTP connection.
+`ui/src/lib/api-config.ts` discovers `/api/server-config` to prefer the server's HTTPS listener for browser traffic when trusted HTTPS is available, while Electron packaged runs use the sidecar server configuration exposed by the preload bridge.
 
 ### 4. Chat Streaming
 
@@ -105,11 +105,11 @@ A native markdown engine (`ui/src/lib/markdown/`) preprocesses streaming content
 
 ### 6. Desktop Updates
 
-The desktop update settings live in the `AppUpdates` domain and now route through the shared desktop runtime facade. Tauri still uses Rust-side updater commands for `latest.json` and prerelease resolution, while Electron uses its main-process updater bridge.
+The desktop update settings live in the `AppUpdates` domain and route through the shared desktop runtime facade. Electron uses its main-process updater bridge for update checks, downloads, installation, and relaunch.
 
-Desktop-only renderer capabilities now flow through `ui/src/lib/desktop/`, with `ui/src/lib/shell.ts` acting as the runtime-neutral public facade for feature code. This keeps application components off direct `@tauri-apps/*` imports while preserving a browser fallback path plus dedicated Tauri and Electron adapters. The Electron shell now owns its own main-process bridge for window state persistence, tray behavior, sidecar boot, direct-to-Downloads file saves, and updater IPC, while the shared UI layer stays single-source. Shared window chrome now uses desktop-neutral drag-region names (`desktop-drag-region`, `desktop-no-drag`), while the main app header restores Tauri’s native drag-region overlay and the session toolbar also carries `data-tauri-drag-region` so macOS overlay titlebars keep native drag and double-click behavior.
+Desktop-only renderer capabilities flow through `ui/src/lib/desktop/`, with `ui/src/lib/shell.ts` acting as the runtime-neutral public facade for feature code. This keeps application components off direct Electron preload details while preserving a browser fallback path. The Electron shell owns window state persistence, tray behavior, sidecar boot, direct-to-Downloads file saves, and updater IPC, while the shared UI layer stays single-source. Shared window chrome uses desktop-neutral drag-region names (`desktop-drag-region`, `desktop-no-drag`).
 
-A current audit of the Tauri-specific desktop surface area, plus a dual-runtime Electron port plan, lives in `docs/ELECTRON_PORT_PLAN.md`.
+Current Electron desktop packaging notes live in `docs/ELECTRON_PORT_PLAN.md`.
 
 ## Key Dependencies
 

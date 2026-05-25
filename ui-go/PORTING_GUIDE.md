@@ -139,7 +139,7 @@ Compare the rendered DOM, not just the component name.
 - Conditional branches
 - Slots/children equivalents
 - `aria-*`, `role`, `title`, `alt`, and labels
-- `data-*` attributes used by Tauri, Datastar, tests, or scripts
+- `data-*` attributes used by Electron, Datastar, tests, or scripts
 - Icon choice and sizing
 - Empty, loading, selected, active, disabled, and error states
 

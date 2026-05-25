@@ -130,7 +130,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" data-desktop-drag-region data-tauri-drag-region><div class=\"desktop-no-drag hidden items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs lg:inline-flex\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" data-desktop-drag-region><div class=\"desktop-no-drag hidden items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs lg:inline-flex\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -159,7 +159,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "terminal"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 27, Col: 193}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 26, Col: 193}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -194,7 +194,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "desktop"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 28, Col: 190}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 27, Col: 190}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -230,7 +230,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "vscode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 30, Col: 188}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 29, Col: 188}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -276,7 +276,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "file"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 32, Col: 181}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 31, Col: 181}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -312,7 +312,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "diff-review"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 34, Col: 214}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 33, Col: 214}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -325,7 +325,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(toolbarDiffLabel(snapshot))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 34, Col: 256}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 33, Col: 256}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
@@ -338,7 +338,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.Additions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 35, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 34, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -351,7 +351,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.Deletions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 36, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 35, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -364,7 +364,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.FilesChanged))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 37, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 36, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -400,7 +400,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "services"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 40, Col: 193}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 39, Col: 193}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -440,7 +440,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.ActiveView == "diff-review"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 44, Col: 214}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 43, Col: 214}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -453,7 +453,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(toolbarDiffLabel(snapshot))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 44, Col: 256}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 43, Col: 256}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 			if templ_7745c5c3_Err != nil {
@@ -466,7 +466,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.Additions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 45, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 44, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 			if templ_7745c5c3_Err != nil {
@@ -479,7 +479,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.Deletions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 46, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 45, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -492,7 +492,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(snapshot.DiffStats.FilesChanged))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 47, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 46, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -511,7 +511,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(toolbarCommandLabel(snapshot.PrimaryCommand))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 53, Col: 286}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 52, Col: 286}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
@@ -524,7 +524,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(snapshot.PrimaryCommand.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 53, Col: 345}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 52, Col: 345}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 			if templ_7745c5c3_Err != nil {
@@ -537,7 +537,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(snapshot.PrimaryCommand.Group)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 53, Col: 406}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 52, Col: 406}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 			if templ_7745c5c3_Err != nil {
@@ -550,7 +550,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var41 string
 			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(snapshot.Busy))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 53, Col: 454}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 52, Col: 454}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 			if templ_7745c5c3_Err != nil {
@@ -584,7 +584,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(toolbarOperationLabel(snapshot))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 63, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 62, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -626,7 +626,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 						var templ_7745c5c3_Var43 string
 						templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(group.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 76, Col: 105}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 75, Col: 105}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 						if templ_7745c5c3_Err != nil {
@@ -645,7 +645,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 						var templ_7745c5c3_Var44 string
 						templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(command.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 79, Col: 167}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 78, Col: 167}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 						if templ_7745c5c3_Err != nil {
@@ -658,7 +658,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 						var templ_7745c5c3_Var45 string
 						templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(command.Group)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 79, Col: 212}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 78, Col: 212}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 						if templ_7745c5c3_Err != nil {
@@ -675,7 +675,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 						var templ_7745c5c3_Var46 string
 						templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(toolbarCommandLabel(command))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 81, Col: 40}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 80, Col: 40}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 						if templ_7745c5c3_Err != nil {
@@ -704,7 +704,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(toolbarPreferredIDE(snapshot))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 93, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 92, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -726,7 +726,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 99, Col: 170}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 98, Col: 170}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 			if templ_7745c5c3_Err != nil {
@@ -739,7 +739,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Family)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 99, Col: 211}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 98, Col: 211}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
@@ -752,7 +752,7 @@ func SessionToolbar(snapshot viewmodel.SessionToolbarSnapshot) templ.Component {
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 100, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/lib/components/app/session_toolbar.templ`, Line: 99, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {

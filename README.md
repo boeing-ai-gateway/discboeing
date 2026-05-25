@@ -39,15 +39,14 @@ pnpm build:app
 
 Useful build overrides:
 
+- `VZ_IMAGE_REF` controls the bundled macOS VZ image and defaults to
+  `ghcr.io/obot-platform/discobot-vz:main`
 - `WSL_IMAGE_REF` controls the bundled Windows WSL image and defaults to
   `ghcr.io/obot-platform/discobot-wsl:main`
 - `DISCOBOT_VERSION` controls the app/server version metadata used by the
   build scripts
-- `DISCOBOT_TAURI_VERSION` optionally overrides the Tauri bundle version with
-  an MSI-safe value such as `0.0.0-0` or `1.2.3-4`
-
-When `DISCOBOT_TAURI_VERSION` is unset, `pnpm build:app` derives an MSI-safe
-Tauri version automatically from `DISCOBOT_VERSION` or `package.json`.
+- `DISCOBOT_TARGET_TRIPLE` overrides the sidecar server target triple in CI and
+  cross-compilation builds
 
 ## Community
 

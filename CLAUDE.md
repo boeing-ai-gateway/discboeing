@@ -11,9 +11,9 @@ Discobot is a coding agent manager. It runs, monitors, and manages its own built
 ### Development
 
 ```bash
-pnpm dev                # Start all services (backend + Tauri app, plus VZ/WSL watcher on macOS/Windows)
+pnpm dev                # Start all services (backend + Electron app, plus VZ/WSL watcher on macOS/Windows)
 pnpm dev:backend        # Backend only (Svelte UI + Go server + agent watcher, plus VZ/WSL watcher on macOS/Windows)
-pnpm dev:app            # Tauri desktop app only
+pnpm dev:app            # Electron desktop app only
 pnpm dev:frontend       # Active frontend only (Svelte UI on port 3100)
 pnpm dev:server         # Go backend with hot-reload via air (port 3001)
 ```
@@ -21,7 +21,7 @@ pnpm dev:server         # Go backend with hot-reload via air (port 3001)
 ### Build
 
 ```bash
-pnpm build              # Build the Tauri app (fetches bundled VZ/WSL guest assets on macOS/Windows, then runs server + frontend builds)
+pnpm build              # Build the Electron app (server + frontend + Electron shell)
 pnpm build:server       # Build the Go server binary
 ```
 

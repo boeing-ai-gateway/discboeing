@@ -1010,7 +1010,7 @@ export interface ConfigInfo {
 	sandbox_image: string;
 	sandbox_image_remote?: string;
 	desktop_mode: boolean;
-	desktop_runtime?: "tauri" | "electron";
+	desktop_runtime?: "electron";
 	ssh_enabled: boolean;
 	ssh_port: number;
 	dispatcher_enabled: boolean;

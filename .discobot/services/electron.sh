@@ -11,4 +11,4 @@ if [ ! -d node_modules ] || [ ! -x node_modules/.bin/electron ]; then
     pnpm install
 fi
 
-exec pnpm dev:app:electron
+exec pnpm dev:app

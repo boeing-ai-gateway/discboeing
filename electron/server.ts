@@ -86,8 +86,8 @@ function resolveServerBinaryPath(): string {
   const executable = `discobot-server-${targetTriple}${platform === "win32" ? ".exe" : ""}`;
   const candidates = [
     path.join(process.resourcesPath, "binaries", executable),
-    path.join(app.getAppPath(), "src-tauri", "binaries", executable),
-    path.join(process.cwd(), "src-tauri", "binaries", executable),
+    path.join(app.getAppPath(), "electron", "binaries", executable),
+    path.join(process.cwd(), "electron", "binaries", executable),
   ];
 
   for (const candidate of candidates) {
@@ -109,10 +109,10 @@ function resolveBundledVZEnv(): Record<string, string> {
 
   const candidates = [
     path.join(process.resourcesPath, "vz"),
-    path.join(app.getAppPath(), "src-tauri", "resources"),
-    path.join(app.getAppPath(), "src-tauri", "resources", "vz"),
-    path.join(process.cwd(), "src-tauri", "resources"),
-    path.join(process.cwd(), "src-tauri", "resources", "vz"),
+    path.join(app.getAppPath(), "electron", "resources"),
+    path.join(app.getAppPath(), "electron", "resources", "vz"),
+    path.join(process.cwd(), "electron", "resources"),
+    path.join(process.cwd(), "electron", "resources", "vz"),
   ];
 
   for (const vzDir of candidates) {
@@ -143,14 +143,14 @@ function resolveBundledWSLEnv(): Record<string, string> {
     path.join(process.resourcesPath, "wsl", "discobot-rootfs.tar.zst"),
     path.join(
       app.getAppPath(),
-      "src-tauri",
+      "electron",
       "resources",
       "wsl",
       "discobot-rootfs.tar.zst",
     ),
     path.join(
       process.cwd(),
-      "src-tauri",
+      "electron",
       "resources",
       "wsl",
       "discobot-rootfs.tar.zst",
@@ -158,8 +158,8 @@ function resolveBundledWSLEnv(): Record<string, string> {
   ];
   const iconCandidates = [
     path.join(process.resourcesPath, "icon.ico"),
-    path.join(app.getAppPath(), "src-tauri", "icons", "icon.ico"),
-    path.join(process.cwd(), "src-tauri", "icons", "icon.ico"),
+    path.join(app.getAppPath(), "electron", "assets", "icons", "icon.ico"),
+    path.join(process.cwd(), "electron", "assets", "icons", "icon.ico"),
   ];
   for (const rootfsPath of rootfsCandidates) {
     try {
