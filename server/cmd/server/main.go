@@ -435,7 +435,7 @@ func main() {
 	r.Use(middleware.DesktopShellAuth(cfg))
 
 	// Initialize handlers
-	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, systemManager)
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, systemManager, connTracker)
 	spaHandler, err := static.NewSPAHandler()
 	if err != nil {
 		log.Fatalf("Failed to initialize embedded UI handler: %v", err)
@@ -1614,6 +1614,26 @@ func main() {
 						Meta: routes.Meta{
 							Group:       "Services",
 							Description: "Stop service",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "serviceId", Example: "my-server"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
+						Method: "POST", Pattern: "/services/{serviceId}/localhost",
+						Handler: h.BindServiceLocalhost,
+						Meta: routes.Meta{
+							Group:       "Services",
+							Description: "Bind service to localhost",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "serviceId", Example: "my-server"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
+						Method: "DELETE", Pattern: "/services/{serviceId}/localhost",
+						Handler: h.UnbindServiceLocalhost,
+						Meta: routes.Meta{
+							Group:       "Services",
+							Description: "Unbind service from localhost",
 							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "serviceId", Example: "my-server"}},
 						},
 					})

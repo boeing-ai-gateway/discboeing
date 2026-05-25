@@ -100,6 +100,26 @@ export function createSessionServicesDomain(
 				await resource.refresh();
 			}
 		},
+		bindLocalhost: async (serviceId: string, port: number) => {
+			if (!args.hasSession()) {
+				return;
+			}
+			try {
+				await api.bindServiceLocalhost(args.sessionId, serviceId, { port });
+			} finally {
+				await resource.refresh();
+			}
+		},
+		unbindLocalhost: async (serviceId: string) => {
+			if (!args.hasSession()) {
+				return;
+			}
+			try {
+				await api.unbindServiceLocalhost(args.sessionId, serviceId);
+			} finally {
+				await resource.refresh();
+			}
+		},
 		refresh: async () => {
 			await resource.refresh();
 		},

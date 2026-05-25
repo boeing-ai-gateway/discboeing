@@ -14,6 +14,7 @@ This module implements business logic, orchestrating between handlers, store, an
 | `internal/service/chat.go` | Chat routing |
 | `internal/service/sandbox.go` | Sandbox lifecycle |
 | `internal/service/sandbox_client.go` | Sandbox HTTP client |
+| `internal/service/service_localhost_bind.go` | Host localhost TCP bindings for sandbox services |
 | `internal/service/credential.go` | Credential encryption |
 | `internal/service/git.go` | Git operations |
 

@@ -339,6 +339,7 @@ export function toServiceItem(service: Service): ServiceItem {
 		status: service.status,
 		passive: service.passive,
 		exitCode: service.exitCode,
+		localhost: service.localhost,
 	};
 }
 

@@ -75,6 +75,8 @@ import type {
 	GitHubExchangeResponse,
 	GitHubPollRequest,
 	GitHubPollResponse,
+	BindServiceLocalhostRequest,
+	BindServiceLocalhostResponse,
 	HookOutputResponse,
 	HookRerunResponse,
 	HooksStateResponse,
@@ -111,6 +113,7 @@ import type {
 	StartChatResponse,
 	StartServiceResponse,
 	StopServiceResponse,
+	UnbindServiceLocalhostResponse,
 	Suggestion,
 	SupportInfoResponse,
 	Thread,
@@ -1097,6 +1100,41 @@ class ApiClient {
 		return this.fetch<StopServiceResponse>(
 			`/sessions/${sessionId}/services/${serviceId}/stop`,
 			{ method: "POST" },
+		);
+	}
+
+	/**
+	 * Bind a service target port to a host localhost port.
+	 * @param sessionId Session ID
+	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param request Localhost bind options
+	 */
+	async bindServiceLocalhost(
+		sessionId: string,
+		serviceId: string,
+		request: BindServiceLocalhostRequest,
+	): Promise<BindServiceLocalhostResponse> {
+		return this.fetch<BindServiceLocalhostResponse>(
+			`/sessions/${sessionId}/services/${serviceId}/localhost`,
+			{
+				method: "POST",
+				body: JSON.stringify(request),
+			},
+		);
+	}
+
+	/**
+	 * Unbind a service from its host localhost port.
+	 * @param sessionId Session ID
+	 * @param serviceId Service ID (filename in .discobot/services/)
+	 */
+	async unbindServiceLocalhost(
+		sessionId: string,
+		serviceId: string,
+	): Promise<UnbindServiceLocalhostResponse> {
+		return this.fetch<UnbindServiceLocalhostResponse>(
+			`/sessions/${sessionId}/services/${serviceId}/localhost`,
+			{ method: "DELETE" },
 		);
 	}
 

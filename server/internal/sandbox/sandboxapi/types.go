@@ -506,19 +506,29 @@ type AnswerQuestionResponse struct {
 
 // Service represents a user-defined service in the sandbox.
 type Service struct {
-	ID          string `json:"id"`                    // Filename in .discobot/services/
-	Name        string `json:"name"`                  // Display name (from config or id)
-	Description string `json:"description,omitempty"` // Description from config
-	Order       *int   `json:"order,omitempty"`       // Optional UI ordering hint (lower first)
-	HTTP        int    `json:"http,omitempty"`        // HTTP port if http service
-	HTTPS       int    `json:"https,omitempty"`       // HTTPS port if https service
-	Path        string `json:"path"`                  // Absolute path to service file
-	URLPath     string `json:"urlPath,omitempty"`     // Default URL path for web preview (e.g., "/app")
-	Status      string `json:"status"`                // "running", "stopped", "starting", "stopping"
-	Passive     bool   `json:"passive,omitempty"`     // True if passive service (external HTTP endpoint, not started/stopped)
-	PID         int    `json:"pid,omitempty"`         // Process ID if running
-	StartedAt   string `json:"startedAt,omitempty"`   // ISO timestamp when started
-	ExitCode    *int   `json:"exitCode,omitempty"`    // Exit code if stopped after running
+	ID          string                `json:"id"`                    // Filename in .discobot/services/
+	Name        string                `json:"name"`                  // Display name (from config or id)
+	Description string                `json:"description,omitempty"` // Description from config
+	Order       *int                  `json:"order,omitempty"`       // Optional UI ordering hint (lower first)
+	HTTP        int                   `json:"http,omitempty"`        // HTTP port if http service
+	HTTPS       int                   `json:"https,omitempty"`       // HTTPS port if https service
+	Path        string                `json:"path"`                  // Absolute path to service file
+	URLPath     string                `json:"urlPath,omitempty"`     // Default URL path for web preview (e.g., "/app")
+	Status      string                `json:"status"`                // "running", "stopped", "starting", "stopping"
+	Passive     bool                  `json:"passive,omitempty"`     // True if passive service (external HTTP endpoint, not started/stopped)
+	PID         int                   `json:"pid,omitempty"`         // Process ID if running
+	StartedAt   string                `json:"startedAt,omitempty"`   // ISO timestamp when started
+	ExitCode    *int                  `json:"exitCode,omitempty"`    // Exit code if stopped after running
+	Localhost   *ServiceLocalhostBind `json:"localhost,omitempty"`
+}
+
+// ServiceLocalhostBind describes a host localhost listener forwarding to a
+// service port inside the sandbox.
+type ServiceLocalhostBind struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	TargetPort int    `json:"targetPort"`
+	URL        string `json:"url"`
 }
 
 // ListServicesResponse is the GET /services response.

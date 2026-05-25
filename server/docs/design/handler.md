@@ -17,6 +17,7 @@ This module implements HTTP request handlers for all REST API endpoints.
 | `internal/handler/files.go` | File operations |
 | `internal/handler/terminal.go` | Terminal WebSocket |
 | `internal/handler/git.go` | Git operations |
+| `internal/handler/services.go` | Sandbox service control, logs, and localhost bindings |
 | `internal/handler/events.go` | SSE event streaming |
 | `internal/handler/status.go` | Health check |
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/conntrack"
 	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/git"
 	"github.com/obot-platform/discobot/server/internal/jobs"
@@ -35,6 +36,7 @@ type Handler struct {
 	sandboxService      *service.SandboxService
 	sessionService      *service.SessionService
 	chatService         *service.ChatService
+	serviceBindManager  *service.LocalhostBindManager
 	modelsService       *service.ModelsService
 	workspaceService    *service.WorkspaceService
 	projectService      *service.ProjectService
@@ -50,7 +52,7 @@ type Handler struct {
 }
 
 // New creates a new Handler with the required application services.
-func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxSvc *service.SandboxService, eventBroker *events.Broker, jobQueue *jobs.Queue, systemManager *startup.SystemManager) *Handler {
+func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxSvc *service.SandboxService, eventBroker *events.Broker, jobQueue *jobs.Queue, systemManager *startup.SystemManager, connectionTracker *conntrack.Tracker) *Handler {
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 
 	credSvc, err := service.NewCredentialService(s, cfg)
@@ -82,6 +84,10 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxSv
 
 	// Create chat service
 	chatSvc := service.NewChatService(s, cfg, sessionSvc, jobQueue, eventBroker, sandboxSvc, gitSvc)
+	var serviceBindManager *service.LocalhostBindManager
+	if sandboxSvc != nil {
+		serviceBindManager = service.NewLocalhostBindManager(sandboxSvc, connectionTracker)
+	}
 
 	// Create remaining services
 	workspaceSvc := service.NewWorkspaceService(s, gitProvider, sandboxSvc, eventBroker, jobQueue)
@@ -91,25 +97,26 @@ func New(s *store.Store, cfg *config.Config, gitProvider git.Provider, sandboxSv
 	modelsSvc := service.NewModelsService(credSvc)
 
 	h := &Handler{
-		store:             s,
-		cfg:               cfg,
-		authService:       service.NewAuthService(s, cfg),
-		credentialService: credSvc,
-		gitService:        gitSvc,
-		gitProvider:       gitProvider,
-		sandboxService:    sandboxSvc,
-		sessionService:    sessionSvc,
-		chatService:       chatSvc,
-		modelsService:     modelsSvc,
-		workspaceService:  workspaceSvc,
-		projectService:    projectSvc,
-		preferenceService: preferenceSvc,
-		jobQueue:          jobQueue,
-		eventBroker:       eventBroker,
-		systemManager:     systemManager,
-		terminalManager:   terminal.NewManager(),
-		shutdownCtx:       shutdownCtx,
-		shutdownCancel:    shutdownCancel,
+		store:              s,
+		cfg:                cfg,
+		authService:        service.NewAuthService(s, cfg),
+		credentialService:  credSvc,
+		gitService:         gitSvc,
+		gitProvider:        gitProvider,
+		sandboxService:     sandboxSvc,
+		sessionService:     sessionSvc,
+		chatService:        chatSvc,
+		serviceBindManager: serviceBindManager,
+		modelsService:      modelsSvc,
+		workspaceService:   workspaceSvc,
+		projectService:     projectSvc,
+		preferenceService:  preferenceSvc,
+		jobQueue:           jobQueue,
+		eventBroker:        eventBroker,
+		systemManager:      systemManager,
+		terminalManager:    terminal.NewManager(),
+		shutdownCtx:        shutdownCtx,
+		shutdownCancel:     shutdownCancel,
 	}
 
 	// Create localhost OAuth callback server (will be started on first use)
@@ -184,6 +191,9 @@ func (h *Handler) Close() {
 	h.BeginShutdown()
 	if h.oauthCallbackServer != nil {
 		h.oauthCallbackServer.Stop()
+	}
+	if h.serviceBindManager != nil {
+		h.serviceBindManager.Close()
 	}
 }
 

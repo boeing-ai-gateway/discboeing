@@ -1296,6 +1296,14 @@ export interface SessionSingleFileDiffResponse {
 /** Service status representing the lifecycle of a service */
 export type ServiceStatus = "running" | "stopped" | "starting" | "stopping";
 
+/** Host localhost listener forwarding to a sandbox service port */
+export interface ServiceLocalhostBind {
+	host: string;
+	port: number;
+	targetPort: number;
+	url: string;
+}
+
 /** Service represents a user-defined service in the sandbox */
 export interface Service {
 	/** Filename in .discobot/services/ */
@@ -1327,6 +1335,8 @@ export interface Service {
 	startedAt?: string;
 	/** Exit code if stopped after running */
 	exitCode?: number;
+	/** Current host localhost binding, if enabled */
+	localhost?: ServiceLocalhostBind;
 }
 
 /** Response from listing services */
@@ -1343,6 +1353,22 @@ export interface StartServiceResponse {
 /** Response from stopping a service */
 export interface StopServiceResponse {
 	status: "stopped";
+	serviceId: string;
+}
+
+/** Request to bind a service to localhost */
+export interface BindServiceLocalhostRequest {
+	port?: number;
+}
+
+/** Response from binding a service to localhost */
+export interface BindServiceLocalhostResponse {
+	localhost: ServiceLocalhostBind;
+}
+
+/** Response from unbinding a service from localhost */
+export interface UnbindServiceLocalhostResponse {
+	status: "unbound";
 	serviceId: string;
 }
 

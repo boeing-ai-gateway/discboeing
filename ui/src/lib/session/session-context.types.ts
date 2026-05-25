@@ -10,6 +10,7 @@ import type {
 	HooksStatusResponse,
 	QueuedPrompt,
 	ServiceStatus,
+	ServiceLocalhostBind,
 	Session,
 	SessionCredentialAssignment,
 	SessionDiffFileEntry,
@@ -59,6 +60,7 @@ export type ServiceItem = {
 	status: ServiceStatus;
 	passive?: boolean;
 	exitCode?: number;
+	localhost?: ServiceLocalhostBind;
 };
 
 export type SessionHooksService = {
@@ -168,6 +170,8 @@ export type SessionServicesDomain = {
 	open: (serviceId: string) => void;
 	start: (serviceId: string) => Promise<void>;
 	stop: (serviceId: string) => Promise<void>;
+	bindLocalhost: (serviceId: string, port: number) => Promise<void>;
+	unbindLocalhost: (serviceId: string) => Promise<void>;
 	refresh: () => Promise<void>;
 	invalidate: () => void;
 };

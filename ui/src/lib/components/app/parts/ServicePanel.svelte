@@ -36,6 +36,8 @@
 		onSelectService: (serviceId: string) => void;
 		onStart: (serviceId: string) => Promise<void>;
 		onStop: (serviceId: string) => Promise<void>;
+		onBindLocalhost: (serviceId: string, port: number) => Promise<void>;
+		onUnbindLocalhost: (serviceId: string) => Promise<void>;
 		onToggleDockMaximized: () => void;
 		services: ServiceItem[];
 		sessionId: string;
@@ -69,6 +71,8 @@
 		onSelectService,
 		onStart,
 		onStop,
+		onBindLocalhost,
+		onUnbindLocalhost,
 		onToggleDockMaximized,
 		services,
 		sessionId,
@@ -89,6 +93,9 @@
 	let isLogsNearBottom = $state(true);
 	let hasUnreadLogs = $state(false);
 	let isMutatingService = $state(false);
+	let isMutatingLocalhost = $state(false);
+	let localhostPortInput = $state("");
+	let localhostError = $state<string | null>(null);
 	let previousStatus = $state<ServiceItem["status"]>("stopped");
 
 	const service = $derived.by(
@@ -100,6 +107,10 @@
 	const hasHttp = $derived.by(() =>
 		service ? hasHttpService(service) : false,
 	);
+	const targetPort = $derived.by(() =>
+		service ? getServiceTargetPort(service) : null,
+	);
+	const localhostBind = $derived.by(() => service?.localhost ?? null);
 	const passive = $derived.by(() => service?.passive === true);
 	const showViewTabs = $derived.by(() => hasHttp && !passive);
 	const shouldShowIframe = $derived.by(
@@ -172,6 +183,16 @@
 		return typeof value.http === "number" || typeof value.https === "number";
 	}
 
+	function getServiceTargetPort(value: ServiceItem): number | null {
+		if (typeof value.https === "number") {
+			return value.https;
+		}
+		if (typeof value.http === "number") {
+			return value.http;
+		}
+		return null;
+	}
+
 	function normalizePath(path?: string): string {
 		const trimmed = path?.trim() ?? "";
 		if (!trimmed) {
@@ -232,6 +253,25 @@
 			return;
 		}
 		void openUrl(serviceUrl);
+	}
+
+	function openLocalhost() {
+		if (!localhostBind) {
+			return;
+		}
+		void openUrl(localhostBind.url);
+	}
+
+	function parseLocalhostPort(): number | null {
+		const value = Number(localhostPortInput.trim());
+		if (!Number.isInteger(value) || value < 1 || value > 65535) {
+			return null;
+		}
+		return value;
+	}
+
+	function getErrorMessage(value: unknown): string {
+		return value instanceof Error ? value.message : "Request failed";
 	}
 
 	function statusClass(): string {
@@ -328,14 +368,47 @@
 		}
 	}
 
+	async function handleLocalhostToggle() {
+		if (!service || targetPort === null || isMutatingLocalhost) {
+			return;
+		}
+
+		localhostError = null;
+		isMutatingLocalhost = true;
+		try {
+			if (localhostBind) {
+				await onUnbindLocalhost(service.id);
+				return;
+			}
+
+			const port = parseLocalhostPort();
+			if (port === null) {
+				localhostError = "Enter a TCP port from 1 to 65535.";
+				return;
+			}
+			await onBindLocalhost(service.id, port);
+		} catch (nextError) {
+			localhostError = getErrorMessage(nextError);
+		} finally {
+			isMutatingLocalhost = false;
+		}
+	}
+
 	$effect(() => {
 		const currentService = service;
 		void currentService?.id;
 		void currentService?.urlPath;
 		void currentService?.http;
 		void currentService?.https;
+		void currentService?.localhost?.port;
 		currentPath = normalizePath(currentService?.urlPath);
 		inputPath = normalizePath(currentService?.urlPath);
+		localhostPortInput = String(
+			currentService?.localhost?.port ??
+				(currentService ? getServiceTargetPort(currentService) : "") ??
+				"",
+		);
+		localhostError = null;
 		isLoading = true;
 		error = null;
 		internalRefreshKey = 0;
@@ -344,6 +417,7 @@
 		isLogsNearBottom = true;
 		hasUnreadLogs = false;
 		isMutatingService = false;
+		isMutatingLocalhost = false;
 		viewMode =
 			currentService && hasHttpService(currentService) ? "preview" : "logs";
 		previousStatus = untrack(() => currentService?.status ?? "stopped");
@@ -576,49 +650,104 @@
 					</div>
 				{/if}
 			</div>
-			{#if isRunnable}
-				<div class="flex items-center gap-1">
-					{#if canRestart}
-						<Button
-							size="xs"
-							variant="outline"
-							class="gap-1.5"
-							title={`Restart ${service.label}`}
-							aria-label={`Restart ${service.label}`}
-							disabled={isMutatingService ||
-								service.status === "starting" ||
-								service.status === "stopping"}
-							onclick={handleServiceRestart}
-						>
-							<RefreshCwIcon
-								class={cn("size-3.5", isMutatingService && "animate-spin")}
+			{#if hasHttp || isRunnable}
+				<div class="flex flex-wrap items-center justify-end gap-1">
+					{#if hasHttp}
+						<div class="flex items-center gap-1">
+							<span class="text-[11px] text-muted-foreground">localhost</span>
+							<Input
+								class="h-6 w-20 px-2 text-xs"
+								inputmode="numeric"
+								aria-label="Localhost port"
+								disabled={!!localhostBind || isMutatingLocalhost}
+								value={localhostPortInput}
+								oninput={(event) => {
+									const target = event.currentTarget as HTMLInputElement;
+									localhostPortInput = target.value;
+								}}
 							/>
-							Restart
-						</Button>
+							<Button
+								size="xs"
+								variant={localhostBind ? "outline" : "secondary"}
+								title={localhostBind
+									? `Unbind ${service.label} from localhost`
+									: `Bind ${service.label} to localhost`}
+								aria-label={localhostBind
+									? `Unbind ${service.label} from localhost`
+									: `Bind ${service.label} to localhost`}
+								disabled={isMutatingLocalhost || targetPort === null}
+								onclick={handleLocalhostToggle}
+							>
+								{#if isMutatingLocalhost}
+									<Loader2Icon class="size-3.5 animate-spin" />
+								{/if}
+								{localhostBind ? "Unbind" : "Bind"}
+							</Button>
+							{#if localhostBind}
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									title={localhostBind.url}
+									aria-label="Open localhost binding"
+									onclick={openLocalhost}
+								>
+									<ExternalLinkIcon class="size-3.5" />
+								</Button>
+							{/if}
+						</div>
 					{/if}
-					<Button
-						size="xs"
-						variant={canStop ? "outline" : "default"}
-						class="gap-1.5"
-						title={`${actionLabel} ${service.label}`}
-						aria-label={`${actionLabel} ${service.label}`}
-						disabled={isMutatingService ||
-							service.status === "starting" ||
-							service.status === "stopping"}
-						onclick={handleServiceAction}
-					>
-						{#if service.status === "starting" || service.status === "stopping" || isMutatingService}
-							<Loader2Icon class="size-3.5 animate-spin" />
-						{:else if canStop}
-							<SquareIcon class="size-3.5 fill-current" />
-						{:else}
-							<PlayIcon class="size-3.5 fill-current" />
-						{/if}
-						{actionLabel}
-					</Button>
+					{#if isRunnable}
+						<div class="flex items-center gap-1">
+							{#if canRestart}
+								<Button
+									size="xs"
+									variant="outline"
+									class="gap-1.5"
+									title={`Restart ${service.label}`}
+									aria-label={`Restart ${service.label}`}
+									disabled={isMutatingService ||
+										service.status === "starting" ||
+										service.status === "stopping"}
+									onclick={handleServiceRestart}
+								>
+									<RefreshCwIcon
+										class={cn("size-3.5", isMutatingService && "animate-spin")}
+									/>
+									Restart
+								</Button>
+							{/if}
+							<Button
+								size="xs"
+								variant={canStop ? "outline" : "default"}
+								class="gap-1.5"
+								title={`${actionLabel} ${service.label}`}
+								aria-label={`${actionLabel} ${service.label}`}
+								disabled={isMutatingService ||
+									service.status === "starting" ||
+									service.status === "stopping"}
+								onclick={handleServiceAction}
+							>
+								{#if service.status === "starting" || service.status === "stopping" || isMutatingService}
+									<Loader2Icon class="size-3.5 animate-spin" />
+								{:else if canStop}
+									<SquareIcon class="size-3.5 fill-current" />
+								{:else}
+									<PlayIcon class="size-3.5 fill-current" />
+								{/if}
+								{actionLabel}
+							</Button>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
+		{#if localhostError}
+			<div
+				class="border-b bg-destructive/10 px-2 py-1 text-xs text-destructive"
+			>
+				{localhostError}
+			</div>
+		{/if}
 	{/if}
 
 	{#if service && hasHttp && (passive || viewMode === "preview")}

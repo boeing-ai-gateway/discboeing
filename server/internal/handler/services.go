@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -9,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/obot-platform/discobot/server/internal/service"
 )
 
 // ============================================================================
@@ -36,6 +40,7 @@ func (h *Handler) ListServices(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, status, err.Error())
 		return
 	}
+	h.applyLocalhostServiceBinds(sessionID, result)
 
 	h.JSON(w, http.StatusOK, result)
 }
@@ -100,8 +105,126 @@ func (h *Handler) StopService(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, status, err.Error())
 		return
 	}
+	if h.serviceBindManager != nil {
+		h.serviceBindManager.Unbind(sessionID, serviceID)
+	}
 
 	h.JSON(w, http.StatusOK, result)
+}
+
+type bindServiceLocalhostRequest struct {
+	Port *int `json:"port,omitempty"`
+}
+
+type bindServiceLocalhostResponse struct {
+	Localhost sandboxapi.ServiceLocalhostBind `json:"localhost"`
+}
+
+type unbindServiceLocalhostResponse struct {
+	Status    string `json:"status"`
+	ServiceID string `json:"serviceId"`
+}
+
+// BindServiceLocalhost binds a sandbox service target port to a host localhost port.
+// POST /api/projects/{projectId}/sessions/{sessionId}/services/{serviceId}/localhost
+func (h *Handler) BindServiceLocalhost(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+	serviceID := chi.URLParam(r, "serviceId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	if serviceID == "" {
+		h.Error(w, http.StatusBadRequest, "serviceId is required")
+		return
+	}
+	if h.serviceBindManager == nil {
+		h.Error(w, http.StatusServiceUnavailable, "localhost service binding is unavailable")
+		return
+	}
+
+	var req bindServiceLocalhostRequest
+	if err := h.DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
+		h.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	services, err := h.chatService.ListServices(ctx, projectID, sessionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	selected, ok := findService(services.Services, serviceID)
+	if !ok {
+		h.Error(w, http.StatusNotFound, "service not found")
+		return
+	}
+	targetPort, scheme, ok := serviceTargetPort(selected)
+	if !ok {
+		h.Error(w, http.StatusBadRequest, "service does not expose an HTTP or HTTPS port")
+		return
+	}
+
+	port := targetPort
+	if req.Port != nil {
+		port = *req.Port
+	}
+	bind, err := h.serviceBindManager.Bind(sessionID, serviceID, port, targetPort, scheme)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidLocalhostPort):
+			h.Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, service.ErrLocalhostPortInUse):
+			h.Error(w, http.StatusConflict, err.Error())
+		default:
+			h.Error(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	h.JSON(w, http.StatusOK, bindServiceLocalhostResponse{Localhost: *bind})
+}
+
+// UnbindServiceLocalhost closes the host localhost listener for a service.
+// DELETE /api/projects/{projectId}/sessions/{sessionId}/services/{serviceId}/localhost
+func (h *Handler) UnbindServiceLocalhost(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+	serviceID := chi.URLParam(r, "serviceId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	if serviceID == "" {
+		h.Error(w, http.StatusBadRequest, "serviceId is required")
+		return
+	}
+	if _, err := h.chatService.GetSession(ctx, projectID, sessionID); err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	if h.serviceBindManager != nil {
+		h.serviceBindManager.Unbind(sessionID, serviceID)
+	}
+	h.JSON(w, http.StatusOK, unbindServiceLocalhostResponse{
+		Status:    "unbound",
+		ServiceID: serviceID,
+	})
 }
 
 // GetServiceOutput streams the output of a service via SSE.
@@ -176,4 +299,32 @@ func writeServiceSSEError(w http.ResponseWriter, errorText string) {
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+func (h *Handler) applyLocalhostServiceBinds(sessionID string, result *sandboxapi.ListServicesResponse) {
+	if h.serviceBindManager == nil || result == nil {
+		return
+	}
+	for i := range result.Services {
+		result.Services[i].Localhost = h.serviceBindManager.Get(sessionID, result.Services[i].ID)
+	}
+}
+
+func findService(services []sandboxapi.Service, serviceID string) (sandboxapi.Service, bool) {
+	for _, svc := range services {
+		if svc.ID == serviceID {
+			return svc, true
+		}
+	}
+	return sandboxapi.Service{}, false
+}
+
+func serviceTargetPort(svc sandboxapi.Service) (int, string, bool) {
+	if svc.HTTPS > 0 {
+		return svc.HTTPS, "https", true
+	}
+	if svc.HTTP > 0 {
+		return svc.HTTP, "http", true
+	}
+	return 0, "", false
 }

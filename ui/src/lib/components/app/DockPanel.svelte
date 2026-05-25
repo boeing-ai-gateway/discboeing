@@ -229,6 +229,8 @@ ${selectedText}
 				onClose={sessionView.openChat}
 				onStart={session.services.start}
 				onStop={session.services.stop}
+				onBindLocalhost={session.services.bindLocalhost}
+				onUnbindLocalhost={session.services.unbindLocalhost}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				{shiftWindowControlsForSidebar}
 			/>

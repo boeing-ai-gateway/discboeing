@@ -175,7 +175,7 @@ func NewTestServer(t *testing.T) *TestServer {
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
 	sandboxSvc.SetProviderManager(sandboxProviderManager)
 
-	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil, nil)
 
 	// Create and start dispatcher for job processing
 	cfg.DispatcherEnabled = true
@@ -482,7 +482,7 @@ func NewTestServerNoAuth(t *testing.T) *TestServer {
 	sandboxSvc := service.NewSandboxService(s, mockSandbox, cfg, nil, eventBroker, jobQueue, nil)
 	sandboxSvc.SetProviderManager(sandboxProviderManager)
 
-	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil)
+	h := handler.New(s, cfg, gitProvider, sandboxSvc, eventBroker, jobQueue, nil, nil)
 
 	// Create and start dispatcher for job processing
 	cfg.DispatcherEnabled = true
