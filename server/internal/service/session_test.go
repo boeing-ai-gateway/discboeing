@@ -424,6 +424,58 @@ func TestInitializeMarksCreateFailureTerminal(t *testing.T) {
 	}
 }
 
+func TestInitializeMarksRecreateFailureRecoverable(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	provider := mocksandbox.NewProvider()
+	provider.CreateFunc = func(context.Context, []byte, string, sandbox.CreateOptions) (*sandbox.Sandbox, []byte, error) {
+		return nil, nil, errors.New("provider quota exceeded")
+	}
+	sandboxSvc := NewSandboxService(testStore, provider, testSandboxConfig(), nil, nil, nil, nil)
+	svc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	project := &model.Project{ID: "project-recreate-error", Name: "recreate error project"}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-recreate-error",
+		ProjectID:  project.ID,
+		Path:       "/workspace",
+		SourceType: model.WorkspaceSourceTypeLocal,
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	workspacePath := "/workspace"
+	dbSession := &model.Session{
+		ID:            "session-recreate-error",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		Name:          "Recreate Error Session",
+		SandboxStatus: model.SessionStatusReinitializing,
+		WorkspacePath: &workspacePath,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := svc.Initialize(ctx, dbSession.ID); err == nil {
+		t.Fatal("expected Initialize to fail")
+	}
+	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if stored.SandboxStatus != model.SessionStatusError {
+		t.Fatalf("status = %q, want %q", stored.SandboxStatus, model.SessionStatusError)
+	}
+	if stored.ErrorMessage == nil || !strings.Contains(*stored.ErrorMessage, "provider quota exceeded") {
+		t.Fatalf("error message = %v", stored.ErrorMessage)
+	}
+}
+
 func TestStopSessionResetsCreateFailedWithoutSandbox(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)

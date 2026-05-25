@@ -899,11 +899,13 @@ func (s *SessionService) Initialize(
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 
+	initialCreate := sessionModel.SandboxStatus == model.SessionStatusInitializing
+
 	// Convert to service Session for initializeSync
 	session := s.mapSession(sessionModel)
 
 	// Run initialization synchronously
-	return s.initializeSync(ctx, session.ProjectID, session, workspace)
+	return s.initializeSync(ctx, session.ProjectID, session, workspace, initialCreate)
 }
 
 // initializeSync runs the initialization flow synchronously.
@@ -913,6 +915,7 @@ func (s *SessionService) initializeSync(
 	projectID string,
 	session *Session,
 	workspace *model.Workspace,
+	initialCreate bool,
 ) error {
 	sessionID := session.ID
 	if s.sandboxService == nil {
@@ -1102,7 +1105,11 @@ func (s *SessionService) initializeSync(
 
 		if err := s.sandboxService.CreateSessionSandbox(ctx, sessionID, opts); err != nil {
 			log.Printf("Sandbox creation failed for session %s: %v", sessionID, err)
-			s.updateStatusWithEvent(ctx, projectID, sessionID, model.SessionStatusCreateFailed, ptrString("sandbox creation failed: "+err.Error()))
+			status := model.SessionStatusError
+			if initialCreate {
+				status = model.SessionStatusCreateFailed
+			}
+			s.updateStatusWithEvent(ctx, projectID, sessionID, status, ptrString("sandbox creation failed: "+err.Error()))
 			return fmt.Errorf("sandbox creation failed: %w", err)
 		}
 		if s.sessionIsRemoving(ctx, sessionID) {

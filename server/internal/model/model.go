@@ -193,7 +193,7 @@ const (
 	SessionStatusCloning         = "cloning"          // Cloning git repository
 	SessionStatusPullingImage    = "pulling_image"    // Pulling runtime image
 	SessionStatusCreatingSandbox = "creating_sandbox" // Creating sandbox environment
-	SessionStatusCreateFailed    = "create_failed"    // Sandbox creation failed and requires explicit user action
+	SessionStatusCreateFailed    = "create_failed"    // Initial sandbox creation failed and requires explicit user action
 	SessionStatusReady           = "ready"            // Session is ready for use
 	SessionStatusStopped         = "stopped"          // Sandbox is stopped, will restart on demand
 	SessionStatusError           = "error"            // Something failed during setup
