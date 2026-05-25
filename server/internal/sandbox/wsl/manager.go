@@ -690,10 +690,6 @@ func (m *Manager) waitForCommandSuccessWithFallbackTimeout(ctx context.Context, 
 	}
 }
 
-func (m *Manager) runInDistro(ctx context.Context, args ...string) (string, error) {
-	return m.runInNamedDistro(ctx, m.mainDistro().name, args...)
-}
-
 func (m *Manager) runInNamedDistro(ctx context.Context, distroName string, args ...string) (string, error) {
 	base := []string{"-d", distroName, "--"}
 	base = append(base, args...)
