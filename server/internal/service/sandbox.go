@@ -479,15 +479,15 @@ func (s *SandboxService) CurrentSandboxImageID(ctx context.Context) (string, err
 }
 
 // EnsureSandboxReady checks the session state from the database and ensures
-// the sandbox is ready. Stopped sessions trigger reconciliation, while errored
-// sessions return their stored error instead of retrying indefinitely.
+// the sandbox is ready. Stopped and errored sessions trigger reconciliation,
+// while create_failed sessions return their stored error until explicitly reset.
 func (s *SandboxService) EnsureSandboxReady(ctx context.Context, sessionID string) error {
 	return s.ensureSandboxReady(ctx, sessionID)
 }
 
 // ensureSandboxReady checks the session state from the database and ensures
-// the sandbox is ready. Stopped sessions trigger reconciliation, while errored
-// sessions return their stored error instead of retrying indefinitely.
+// the sandbox is ready. Stopped and errored sessions trigger reconciliation,
+// while create_failed sessions return their stored error until explicitly reset.
 func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID string) error {
 	sess, err := s.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -497,9 +497,9 @@ func (s *SandboxService) ensureSandboxReady(ctx context.Context, sessionID strin
 	switch sess.SandboxStatus {
 	case model.SessionStatusReady, legacySessionStatusRunning:
 		return s.ensureSandboxRunningAndHealthy(ctx, sessionID, sess.SandboxStatus)
-	case model.SessionStatusStopped:
+	case model.SessionStatusStopped, model.SessionStatusError:
 		return s.ReconcileSandbox(ctx, sessionID)
-	case model.SessionStatusError, model.SessionStatusCreateFailed:
+	case model.SessionStatusCreateFailed:
 		return sessionNotReadyError(sess)
 	case model.SessionStatusInitializing, model.SessionStatusReinitializing,
 		model.SessionStatusCloning, model.SessionStatusPullingImage, model.SessionStatusCreatingSandbox:

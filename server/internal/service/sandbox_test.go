@@ -618,7 +618,7 @@ func TestSandboxService_EnsureSandboxReady_ReconcilesAfterWaitWhenHealthProbeFai
 	}
 }
 
-func TestSandboxService_EnsureSandboxReady_DoesNotReconcileErroredSession(t *testing.T) {
+func TestSandboxService_EnsureSandboxReady_ReconcilesErroredSession(t *testing.T) {
 	provider := newHealthAwareProvider(testImage, http.StatusOK)
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
@@ -627,16 +627,40 @@ func TestSandboxService_EnsureSandboxReady_DoesNotReconcileErroredSession(t *tes
 	svc.SetSessionInitializer(initializer)
 
 	ctx := context.Background()
-	sessionID := "test-session-error-no-reconcile"
+	sessionID := "test-session-error-reconcile"
 	createTestSession(t, testStore, sessionID, "/workspace")
 	errorMessage := "sandbox creation failed: image not found"
 	if err := testStore.UpdateSessionStatus(ctx, sessionID, model.SessionStatusError, &errorMessage); err != nil {
 		t.Fatalf("failed to set session error: %v", err)
 	}
 
+	if err := svc.ensureSandboxReady(ctx, sessionID); err != nil {
+		t.Fatalf("ensureSandboxReady failed: %v", err)
+	}
+	if initializer.calls != 1 {
+		t.Fatalf("expected one reconciliation, got %d", initializer.calls)
+	}
+}
+
+func TestSandboxService_EnsureSandboxReady_DoesNotReconcileCreateFailedSession(t *testing.T) {
+	provider := newHealthAwareProvider(testImage, http.StatusOK)
+	testStore := setupTestStore(t)
+	cfg := &config.Config{EncryptionKey: testEncryptionKey}
+	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	initializer := &countingInitializer{}
+	svc.SetSessionInitializer(initializer)
+
+	ctx := context.Background()
+	sessionID := "test-session-create-failed-no-reconcile"
+	createTestSession(t, testStore, sessionID, "/workspace")
+	errorMessage := "sandbox creation failed: image not found"
+	if err := testStore.UpdateSessionStatus(ctx, sessionID, model.SessionStatusCreateFailed, &errorMessage); err != nil {
+		t.Fatalf("failed to set session create_failed: %v", err)
+	}
+
 	err := svc.ensureSandboxReady(ctx, sessionID)
 	if err == nil {
-		t.Fatal("expected ensureSandboxReady to fail for errored session")
+		t.Fatal("expected ensureSandboxReady to fail for create_failed session")
 	}
 	if !strings.Contains(err.Error(), errorMessage) {
 		t.Fatalf("expected stored session error, got %v", err)
