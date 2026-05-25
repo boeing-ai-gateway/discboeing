@@ -18,6 +18,8 @@ import (
 	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 )
 
+const testRootfsArchiveName = "discobot-rootfs.tar.zst"
+
 type wslDownloaderConfig struct {
 	ImageRef           string
 	DataDir            string
@@ -30,7 +32,7 @@ func newWSLDownloader(cfg wslDownloaderConfig) *vm.ImageDownloader {
 	return vm.NewImageDownloader(vm.ImageDownloadConfig{
 		ImageRef:                 cfg.ImageRef,
 		DataDir:                  cfg.DataDir,
-		ArtifactName:             rootfsArchiveName,
+		ArtifactName:             testRootfsArchiveName,
 		LocalArtifactPath:        cfg.LocalRootfsArchive,
 		ProviderName:             "WSL",
 		ArtifactDescription:      "WSL rootfs artifact",
@@ -53,7 +55,7 @@ func TestImageDownloaderCheckCache(t *testing.T) {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(cacheDir, rootfsArchiveName), []byte("zstd"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cacheDir, testRootfsArchiveName), []byte("zstd"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(cacheDir, "manifest.json"), []byte("{}\n"), 0644); err != nil {
@@ -67,7 +69,7 @@ func TestImageDownloaderCheckCache(t *testing.T) {
 	if !ok {
 		t.Fatal("CheckCache() ok = false, want true")
 	}
-	if artifact.ArtifactPath != filepath.Join(cacheDir, rootfsArchiveName) {
+	if artifact.ArtifactPath != filepath.Join(cacheDir, testRootfsArchiveName) {
 		t.Fatalf("unexpected rootfs path %q", artifact.ArtifactPath)
 	}
 }
@@ -76,7 +78,7 @@ func TestImageDownloaderExtractFiles(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	payload := []byte("archive-bytes")
-	if err := tw.WriteHeader(&tar.Header{Name: "nested/" + rootfsArchiveName, Mode: 0644, Size: int64(len(payload))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Name: "nested/" + testRootfsArchiveName, Mode: 0644, Size: int64(len(payload))}); err != nil {
 		t.Fatalf("WriteHeader() error = %v", err)
 	}
 	if _, err := tw.Write(payload); err != nil {
@@ -92,10 +94,10 @@ func TestImageDownloaderExtractFiles(t *testing.T) {
 	if err := downloader.ExtractFiles(bytes.NewReader(buf.Bytes()), destDir, found); err != nil {
 		t.Fatalf("ExtractFiles() error = %v", err)
 	}
-	if !found[rootfsArchiveName] {
+	if !found[testRootfsArchiveName] {
 		t.Fatal("ExtractFiles() found = false, want true")
 	}
-	got, err := os.ReadFile(filepath.Join(destDir, rootfsArchiveName))
+	got, err := os.ReadFile(filepath.Join(destDir, testRootfsArchiveName))
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -106,7 +108,7 @@ func TestImageDownloaderExtractFiles(t *testing.T) {
 
 func TestImageDownloaderEnsureArtifactUsesLocalArchive(t *testing.T) {
 	tempDir := t.TempDir()
-	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	rootfsPath := filepath.Join(tempDir, testRootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
@@ -127,7 +129,7 @@ func TestImageDownloaderEnsureArtifactUsesLocalArchive(t *testing.T) {
 
 func TestImageDownloaderEnsureArtifactUsesLocalArchiveReportsProgress(t *testing.T) {
 	tempDir := t.TempDir()
-	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	rootfsPath := filepath.Join(tempDir, testRootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, []byte("local-rootfs"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
@@ -161,7 +163,7 @@ func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(cacheDir, rootfsArchiveName), []byte("zstd"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cacheDir, testRootfsArchiveName), []byte("zstd"), 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(cacheDir, "manifest.json"), []byte("{}\n"), 0644); err != nil {
@@ -175,8 +177,8 @@ func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureArtifactWithProgress() error = %v", err)
 	}
-	if artifact.ArtifactPath != filepath.Join(cacheDir, rootfsArchiveName) {
-		t.Fatalf("EnsureArtifactWithProgress() rootfs = %q, want %q", artifact.ArtifactPath, filepath.Join(cacheDir, rootfsArchiveName))
+	if artifact.ArtifactPath != filepath.Join(cacheDir, testRootfsArchiveName) {
+		t.Fatalf("EnsureArtifactWithProgress() rootfs = %q, want %q", artifact.ArtifactPath, filepath.Join(cacheDir, testRootfsArchiveName))
 	}
 	if len(operations) != 1 || operations[0] != "Using cached WSL rootfs artifact" {
 		t.Fatalf("EnsureArtifactWithProgress() operations = %#v, want cached artifact progress", operations)
@@ -185,7 +187,7 @@ func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 
 func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 	image := testImageWithLayer(t, map[string][]byte{
-		"usr/share/discobot/" + rootfsArchiveName: []byte("downloaded-rootfs"),
+		"usr/share/discobot/" + testRootfsArchiveName: []byte("downloaded-rootfs"),
 		"ignored.txt": []byte("ignored"),
 	})
 
@@ -209,7 +211,7 @@ func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 	if artifact.Digest != wantDigest {
 		t.Fatalf("Download() digest = %q, want %q", artifact.Digest, wantDigest)
 	}
-	if artifact.ArtifactPath != filepath.Join(wantCacheDir, rootfsArchiveName) {
+	if artifact.ArtifactPath != filepath.Join(wantCacheDir, testRootfsArchiveName) {
 		t.Fatalf("Download() rootfs = %q, want cached rootfs", artifact.ArtifactPath)
 	}
 	if artifact.ManifestPath != filepath.Join(wantCacheDir, "manifest.json") {
@@ -226,7 +228,7 @@ func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(manifest) error = %v", err)
 	}
-	if !bytes.Contains(manifestBytes, []byte(`"artifact": "`+rootfsArchiveName+`"`)) {
+	if !bytes.Contains(manifestBytes, []byte(`"artifact": "`+testRootfsArchiveName+`"`)) {
 		t.Fatalf("manifest %s did not record artifact name: %s", artifact.ManifestPath, string(manifestBytes))
 	}
 
@@ -276,7 +278,7 @@ func TestImageDownloaderDownloadRejectsInvalidImageReference(t *testing.T) {
 
 func TestImageDownloaderEnsureArtifactRejectsEmptyLocalArchive(t *testing.T) {
 	tempDir := t.TempDir()
-	rootfsPath := filepath.Join(tempDir, rootfsArchiveName)
+	rootfsPath := filepath.Join(tempDir, testRootfsArchiveName)
 	if err := os.WriteFile(rootfsPath, nil, 0644); err != nil {
 		t.Fatalf("WriteFile(rootfs) error = %v", err)
 	}

@@ -14,4 +14,4 @@
 !/resources/
 !/resources/wsl/
 /resources/wsl/*
-!/resources/wsl/discobot-wsl-startup.ps1
+!/resources/wsl/.gitkeep

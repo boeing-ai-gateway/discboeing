@@ -12,7 +12,7 @@ import (
 
 func (m *Manager) runCommand(ctx context.Context, name string, args ...string) (string, error) {
 	output, err := runCommandOutput(ctx, name, args...)
-	trimmed := strings.TrimSpace(decodeCommandOutput(output))
+	trimmed := strings.TrimSpace(output)
 	if err != nil {
 		if trimmed == "" {
 			return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
@@ -46,7 +46,7 @@ func looksLikeUTF16(output []byte, order binary.ByteOrder) bool {
 
 	zeroCount := 0
 	pairs := len(output) / 2
-	for i := 0; i+1 < len(output); i += 2 {
+	for i := 0; i < len(output); i += 2 {
 		var candidate byte
 		if order == binary.LittleEndian {
 			candidate = output[i+1]
@@ -69,9 +69,9 @@ func decodeUTF16(output []byte, order binary.ByteOrder) string {
 		return ""
 	}
 
-	words := make([]uint16, 0, len(output)/2)
-	for i := 0; i+1 < len(output); i += 2 {
-		words = append(words, order.Uint16(output[i:i+2]))
+	words := make([]uint16, len(output)/2)
+	for i := 0; i < len(output); i += 2 {
+		words[i/2] = order.Uint16(output[i : i+2])
 	}
 
 	return string(utf16.Decode(words))

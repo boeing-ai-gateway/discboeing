@@ -3,11 +3,8 @@ package wsl
 import (
 	"fmt"
 	"path"
-	"regexp"
 	"strings"
 )
-
-var windowsDrivePathPattern = regexp.MustCompile(`^[A-Za-z]:[\\/].*`)
 
 // TranslatePath converts a Windows absolute path into the corresponding WSL path
 // used for bind mounts. Paths that are already Unix-style absolute paths are
@@ -28,7 +25,7 @@ func TranslatePath(source string) (string, error) {
 	if strings.HasPrefix(source, `\\`) || strings.HasPrefix(source, `//`) {
 		return "", fmt.Errorf("UNC paths are not supported: %q", source)
 	}
-	if !windowsDrivePathPattern.MatchString(source) {
+	if !isWindowsDrivePath(source) {
 		return "", fmt.Errorf("path must be an absolute Windows path or Unix path: %q", source)
 	}
 
@@ -41,4 +38,14 @@ func TranslatePath(source string) (string, error) {
 		translated = "/mnt/" + drive
 	}
 	return translated, nil
+}
+
+func isWindowsDrivePath(source string) bool {
+	if len(source) < 3 {
+		return false
+	}
+	drive := source[0]
+	return ((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')) &&
+		source[1] == ':' &&
+		(source[2] == '\\' || source[2] == '/')
 }

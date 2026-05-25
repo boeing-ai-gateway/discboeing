@@ -41,9 +41,8 @@ func ParseDistroList(output string) ([]DistroInfo, error) {
 
 		state := fields[len(fields)-2]
 		nameFields := fields[:len(fields)-2]
-		isDefault := false
-		if len(nameFields) > 0 && nameFields[0] == "*" {
-			isDefault = true
+		isDefault := len(nameFields) > 0 && nameFields[0] == "*"
+		if isDefault {
 			nameFields = nameFields[1:]
 		}
 		if len(nameFields) == 0 {
@@ -62,8 +61,9 @@ func ParseDistroList(output string) ([]DistroInfo, error) {
 }
 
 func FindDistro(distros []DistroInfo, name string) (DistroInfo, bool) {
+	name = strings.TrimSpace(name)
 	for _, distro := range distros {
-		if strings.EqualFold(strings.TrimSpace(distro.Name), strings.TrimSpace(name)) {
+		if strings.EqualFold(strings.TrimSpace(distro.Name), name) {
 			return distro, true
 		}
 	}

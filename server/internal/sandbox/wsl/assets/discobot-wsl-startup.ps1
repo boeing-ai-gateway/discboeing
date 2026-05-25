@@ -607,6 +607,7 @@ function Invoke-Check {
     }
 
     if ($actions.Count -eq 0) {
+        Save-RuntimeState
         Complete $ExitOK "Managed WSL distro '$DistroName' and WSL /var disk '$VarDiskPath' are ready."
     }
     Complete $ExitActionsRequired "WSL startup actions require elevation: $($actions -join ', ')." @($actions)
@@ -633,6 +634,7 @@ function Invoke-Execute {
 
     $device = Find-DiskByLabel
     if ($device -ne "") {
+        Save-RuntimeState
         Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
     }
 
@@ -641,6 +643,7 @@ function Invoke-Execute {
     if ($alreadyAttached) {
         $device = Find-DiskByLabel
         if ($device -ne "") {
+            Save-RuntimeState
             Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
         }
         Recover-AlreadyAttachedDisk
@@ -650,6 +653,7 @@ function Invoke-Execute {
 
     $device = Find-DiskByLabel
     if ($device -ne "") {
+        Save-RuntimeState
         Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
     }
 
@@ -661,6 +665,7 @@ function Invoke-Execute {
         throw "WSL /var disk '$VarDiskPath' was attached and formatted, but label '$VarDiskLabel' is still unavailable."
     }
 
+    Save-RuntimeState
     Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
 }
 

@@ -49,7 +49,7 @@ next-env.d.ts
 !/src-tauri/resources/
 !/src-tauri/resources/wsl/
 /src-tauri/resources/wsl/*
-!/src-tauri/resources/wsl/discobot-wsl-startup.ps1
+!/src-tauri/resources/wsl/.gitkeep
 
 # Binaries
 proxy/discobot-proxy

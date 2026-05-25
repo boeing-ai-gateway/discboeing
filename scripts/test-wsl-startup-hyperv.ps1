@@ -15,7 +15,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$RootfsArchivePath,
 
-    [string]$StartupScriptPath = (Join-Path $PSScriptRoot "..\src-tauri\resources\wsl\discobot-wsl-startup.ps1"),
+    [string]$StartupScriptPath = (Join-Path $PSScriptRoot "..\server\internal\sandbox\wsl\assets\discobot-wsl-startup.ps1"),
 
     [string]$HostOutputDir = (Join-Path $PSScriptRoot "..\build\wsl-startup-hyperv-test"),
 

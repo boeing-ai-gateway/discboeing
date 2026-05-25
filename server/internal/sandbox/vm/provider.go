@@ -712,6 +712,10 @@ func (p *Provider) ensureImageInVM(ctx context.Context, dockerProv *docker.Provi
 	return nil
 }
 
+type workspaceMountSourceResolver interface {
+	WorkspaceMountSource(string) (string, error)
+}
+
 // getOrCreateDockerProvider gets or creates a Docker provider for the given project.
 // It ensures the project VM exists (creating one if needed) and sets up a Docker
 // provider connected to the VM's Docker daemon via the VM's dialer.
@@ -753,6 +757,9 @@ func (p *Provider) getOrCreateDockerProvider(ctx context.Context, projectID stri
 	// The provider kicks off image pull in the background on creation.
 	opts := []docker.Option{
 		docker.WithVsockDialer(pvm.DockerDialer()),
+	}
+	if resolver, ok := pvm.(workspaceMountSourceResolver); ok {
+		opts = append(opts, docker.WithWorkspaceMountSourceResolver(resolver.WorkspaceMountSource))
 	}
 	if p.systemManager != nil {
 		opts = append(opts, docker.WithSystemManager(p.systemManager))

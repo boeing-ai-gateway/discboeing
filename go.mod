@@ -19,6 +19,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/obot-platform/discobot/modelsdev v0.0.0
+	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	github.com/things-go/go-socks5 v0.0.5
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.34.0

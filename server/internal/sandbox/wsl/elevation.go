@@ -5,17 +5,11 @@ package wsl
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-)
-
-var (
-	osExecutablePath = os.Executable
-	osGetwdPath      = os.Getwd
 )
 
 var shellExecuteExW = windows.NewLazySystemDLL("shell32.dll").NewProc("ShellExecuteExW")

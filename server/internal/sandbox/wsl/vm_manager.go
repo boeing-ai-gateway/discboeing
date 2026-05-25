@@ -6,21 +6,15 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
-
-	winio "github.com/Microsoft/go-winio"
-	"github.com/Microsoft/go-winio/pkg/guid"
 
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
 	"github.com/obot-platform/discobot/server/internal/startup"
 )
-
-const dockerVsockPort = 2375
 
 // VMManager adapts the managed WSL distro lifecycle to vm.ProjectVMManager.
 type VMManager struct {
@@ -32,9 +26,9 @@ type VMManager struct {
 
 	mu         sync.RWMutex
 	projectVMs map[string]*projectVM
-	vmID       guid.GUID
-	vmIDErr    error
-	vmIDOnce   sync.Once
+
+	bridgeMu     sync.Mutex
+	dockerBridge dockerBridge
 }
 
 func NewVMManager(cfg *config.Config, systemManager *startup.SystemManager) *VMManager {
@@ -72,9 +66,7 @@ func (m *VMManager) GetOrCreateVM(ctx context.Context, projectID string) (vm.Pro
 	if err := m.ensureManagedDistroRunning(ctx); err != nil {
 		return nil, err
 	}
-
-	vmID, err := m.resolveVMID()
-	if err != nil {
+	if _, err := m.ensureDockerBridge(ctx); err != nil {
 		return nil, err
 	}
 
@@ -85,9 +77,8 @@ func (m *VMManager) GetOrCreateVM(ctx context.Context, projectID string) (vm.Pro
 	}
 
 	projectVM := &projectVM{
+		manager:   m,
 		projectID: projectID,
-		distro:    strings.TrimSpace(m.cfg.WSLDistroName),
-		vmID:      vmID,
 	}
 	m.projectVMs[projectID] = projectVM
 	return projectVM, nil
@@ -117,6 +108,7 @@ func (m *VMManager) RemoveVM(projectID string) error {
 	m.mu.Unlock()
 
 	if remaining == 0 {
+		m.closeDockerBridge()
 		return m.manager.Stop(context.Background())
 	}
 	return nil
@@ -126,6 +118,7 @@ func (m *VMManager) Shutdown() {
 	m.mu.Lock()
 	m.projectVMs = make(map[string]*projectVM)
 	m.mu.Unlock()
+	m.closeDockerBridge()
 	_ = m.manager.Stop(context.Background())
 }
 
@@ -163,10 +156,10 @@ func (m *VMManager) Status() sandbox.ProviderStatus {
 	details.DistroState = distro.State
 	details.DistroVersion = distro.Version
 
-	if strings.EqualFold(distro.State, "Running") {
+	if isRunningDistroState(distro.State) {
 		return sandbox.ProviderStatus{Available: true, State: "ready", Message: "managed WSL distro is running", Details: details}
 	}
-	if strings.EqualFold(distro.State, "Stopped") {
+	if isStoppedDistroState(distro.State) {
 		return sandbox.ProviderStatus{Available: true, State: "stopped", Message: "managed WSL distro is installed but currently stopped; it will be started on demand", Details: details}
 	}
 	return sandbox.ProviderStatus{Available: true, State: "starting", Message: fmt.Sprintf("managed WSL distro is currently %s", distro.State), Details: details}
@@ -199,25 +192,9 @@ func (m *VMManager) ensureManagedDistroRunning(ctx context.Context) error {
 	return nil
 }
 
-func (m *VMManager) resolveVMID() (guid.GUID, error) {
-	m.vmIDOnce.Do(func() {
-		value := strings.TrimSpace(os.Getenv("WSL_VM_ID"))
-		if value == "" {
-			value = strings.TrimSpace(os.Getenv("DISCOBOT_WSL_VM_ID"))
-		}
-		if value == "" {
-			m.vmIDErr = fmt.Errorf("WSL VMID is required for hvsock; set WSL_VM_ID or DISCOBOT_WSL_VM_ID")
-			return
-		}
-		m.vmID, m.vmIDErr = guid.FromString(value)
-	})
-	return m.vmID, m.vmIDErr
-}
-
 type projectVM struct {
+	manager   *VMManager
 	projectID string
-	distro    string
-	vmID      guid.GUID
 }
 
 func (p *projectVM) ProjectID() string {
@@ -225,27 +202,77 @@ func (p *projectVM) ProjectID() string {
 }
 
 func (p *projectVM) DockerDialer() func(context.Context, string, string) (net.Conn, error) {
-	return p.hvsockDialer(dockerVsockPort)
+	return func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return p.manager.dialDockerBridge(ctx)
+	}
 }
 
 func (p *projectVM) PortDialer(port uint32) func(context.Context, string, string) (net.Conn, error) {
-	return p.hvsockDialer(port)
+	return p.tcpPortDialer(port)
+}
+
+func (p *projectVM) WorkspaceMountSource(source string) (string, error) {
+	return TranslatePath(source)
 }
 
 func (p *projectVM) Shutdown() error {
 	return nil
 }
 
-func (p *projectVM) hvsockDialer(port uint32) func(context.Context, string, string) (net.Conn, error) {
+func (p *projectVM) tcpPortDialer(port uint32) func(context.Context, string, string) (net.Conn, error) {
 	return func(ctx context.Context, _, _ string) (net.Conn, error) {
-		dialer := &winio.HvsockDialer{
-			Retries:   30,
-			RetryWait: 200 * time.Millisecond,
-		}
-		return dialer.Dial(ctx, &winio.HvsockAddr{
-			VMID:      p.vmID,
-			ServiceID: winio.VsockServiceID(port),
-		})
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(int(port))))
+	}
+}
+
+func (m *VMManager) dialDockerBridge(ctx context.Context) (net.Conn, error) {
+	bridge, err := m.ensureDockerBridge(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := bridge.Dial(ctx)
+	if err == nil {
+		return conn, nil
+	}
+	if bridge.Running() {
+		return nil, err
+	}
+
+	m.closeDockerBridge()
+	bridge, restartErr := m.ensureDockerBridge(ctx)
+	if restartErr != nil {
+		return nil, restartErr
+	}
+	return bridge.Dial(ctx)
+}
+
+func (m *VMManager) ensureDockerBridge(ctx context.Context) (dockerBridge, error) {
+	m.bridgeMu.Lock()
+	defer m.bridgeMu.Unlock()
+
+	if m.dockerBridge != nil && m.dockerBridge.Running() {
+		return m.dockerBridge, nil
+	}
+	if m.dockerBridge != nil {
+		_ = m.dockerBridge.Close()
+		m.dockerBridge = nil
+	}
+
+	bridge, err := startWSLDockerBridge(ctx, strings.TrimSpace(m.cfg.WSLDistroName))
+	if err != nil {
+		return nil, err
+	}
+	m.dockerBridge = bridge
+	return bridge, nil
+}
+
+func (m *VMManager) closeDockerBridge() {
+	m.bridgeMu.Lock()
+	defer m.bridgeMu.Unlock()
+	if m.dockerBridge != nil {
+		_ = m.dockerBridge.Close()
+		m.dockerBridge = nil
 	}
 }
 
@@ -253,13 +280,13 @@ func (m *Manager) ensureVMRunningWithProgress(ctx context.Context, progress prog
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
 
-	progress.Update(5, "Ensuring managed WSL distro is installed")
-	if err := m.ensureInstalledLocked(ctx, progressReporter{}); err != nil {
+	progress.Update(5, "Verifying managed WSL distro installation")
+	if err := m.verifyInstalledLocked(ctx, progressReporter{}); err != nil {
 		return err
 	}
 
-	progress.Update(15, "Checking WSL host startup requirements")
-	if err := m.checkHostStartupReadyWithPowerShell(ctx, progressReporter{
+	progress.Update(15, "Ensuring WSL host startup requirements")
+	if err := m.ensureHostStartupWithPowerShell(ctx, progressReporter{
 		update: func(childProgress int, currentOperation string) {
 			progress.Update(15+(childProgress*20/100), currentOperation)
 		},

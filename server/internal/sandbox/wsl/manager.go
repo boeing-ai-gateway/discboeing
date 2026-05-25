@@ -28,21 +28,20 @@ const (
 	defaultProbeTimeout          = 5 * time.Second
 	defaultReadyTimeout          = 30 * time.Second
 	defaultReadyPollDelay        = 500 * time.Millisecond
-	defaultMoveRetryDelay        = 250 * time.Millisecond
-	defaultMoveMaxRetries        = 40
 	defaultTempCleanupRetryDelay = 250 * time.Millisecond
 	defaultTempCleanupMaxRetries = 20
+	rootfsArchiveName            = "discobot-rootfs.tar.zst"
 	staleRootfsTempFileMaxAge    = 10 * time.Minute
 	ext4VolumeLabelMaxLength     = 16
 	discobotWSLEnvPath           = "etc/default/discobot-wsl"
 )
 
 var (
-	renamePath       = os.Rename
 	removePath       = os.Remove
 	sleep            = time.Sleep
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, name, args...).CombinedOutput()
+	runCommandOutput = func(ctx context.Context, name string, args ...string) (string, error) {
+		output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+		return decodeCommandOutput(output), err
 	}
 )
 
@@ -172,17 +171,17 @@ func truncateLowerDashName(value string, fallback string, maxLength int) string 
 
 // EnsureInstalled verifies that WSL tooling is available and reserves the managed distro identity.
 func (m *Manager) EnsureInstalled(ctx context.Context) error {
-	return m.ensureInstalledWithProgress(ctx, progressReporter{})
+	return m.verifyInstalledWithProgress(ctx, progressReporter{})
 }
 
-func (m *Manager) ensureInstalledWithProgress(ctx context.Context, progress progressReporter) error {
+func (m *Manager) verifyInstalledWithProgress(ctx context.Context, progress progressReporter) error {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
 
-	return m.ensureInstalledLocked(ctx, progress)
+	return m.verifyInstalledLocked(ctx, progress)
 }
 
-func (m *Manager) ensureInstalledLocked(ctx context.Context, progress progressReporter) error {
+func (m *Manager) verifyInstalledLocked(ctx context.Context, progress progressReporter) error {
 	progress.Update(5, "Checking WSL availability")
 	if _, err := exec.LookPath("wsl.exe"); err != nil {
 		return fmt.Errorf("wsl.exe not found: %w", err)
@@ -191,7 +190,7 @@ func (m *Manager) ensureInstalledLocked(ctx context.Context, progress progressRe
 		log.Printf("Failed to clean stale WSL rootfs temp files in %q: %v", m.cfg.WSLStateDir, err)
 	}
 
-	progress.Update(25, "Checking managed WSL distro registration")
+	progress.Update(25, "Verifying managed WSL distro registration")
 	_, found, err := m.probeDistro(ctx)
 	if err != nil {
 		return err
@@ -203,7 +202,7 @@ func (m *Manager) ensureInstalledLocked(ctx context.Context, progress progressRe
 		log.Printf("Failed to hide managed WSL distro %q in Windows Terminal settings: %v", m.cfg.WSLDistroName, err)
 	}
 
-	progress.Update(100, "Managed WSL distro is installed")
+	progress.Update(100, "Managed WSL distro registration verified")
 	return nil
 }
 
@@ -250,7 +249,7 @@ func (m *Manager) ensureMainDistroReady(ctx context.Context, progress progressRe
 }
 
 func (m *Manager) waitForMainDistroReadiness(ctx context.Context, distro DistroInfo, progress progressReporter) error {
-	if !strings.EqualFold(distro.State, "Stopped") && !strings.EqualFold(distro.State, "Running") {
+	if !isRunnableDistroState(distro.State) {
 		progress.Update(50, "Waiting for managed WSL distro import to settle")
 		var err error
 		distro, err = m.waitForNamedDistroRunnableState(ctx, m.mainDistro().name)
@@ -258,25 +257,24 @@ func (m *Manager) waitForMainDistroReadiness(ctx context.Context, distro DistroI
 			return err
 		}
 	}
-	if strings.EqualFold(distro.State, "Stopped") {
+	if isStoppedDistroState(distro.State) {
 		progress.Update(50, "Starting managed WSL distro")
 		if err := m.startDistro(ctx); err != nil {
 			return err
 		}
 	}
-	if strings.EqualFold(distro.State, "Stopped") || strings.EqualFold(distro.State, "Running") {
-		progress.Update(65, "Waiting for systemd readiness")
-		if err := m.waitForSystemdReady(ctx); err != nil {
-			return err
-		}
-		progress.Update(72, "Waiting for /var runtime paths")
-		if err := m.waitForVarReady(ctx); err != nil {
-			return err
-		}
-		progress.Update(80, "Waiting for docker.service readiness")
-		if err := m.waitForDockerReady(ctx); err != nil {
-			return err
-		}
+
+	progress.Update(65, "Waiting for systemd readiness")
+	if err := m.waitForSystemdReady(ctx); err != nil {
+		return err
+	}
+	progress.Update(72, "Waiting for /var runtime paths")
+	if err := m.waitForVarReady(ctx); err != nil {
+		return err
+	}
+	progress.Update(80, "Waiting for docker.service readiness")
+	if err := m.waitForDockerReady(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -296,7 +294,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 	if !found {
 		return nil
 	}
-	if strings.EqualFold(distro.State, "Stopped") {
+	if isStoppedDistroState(distro.State) {
 		return nil
 	}
 
@@ -322,89 +320,6 @@ func (m *Manager) probeNamedDistro(ctx context.Context, distroName string) (Dist
 	}
 	distro, found := FindDistro(distros, distroName)
 	return distro, found, nil
-}
-
-func (m *Manager) prepareInstallDirForImport() error {
-	mainDistro := m.mainDistro()
-	return prepareInstallDirForImport(mainDistro.installDir, mainDistro.name)
-}
-
-func prepareInstallDirForImport(installDir string, distroName string) error {
-	if err := os.MkdirAll(filepath.Dir(installDir), 0755); err != nil {
-		return fmt.Errorf("create WSL install parent dir: %w", err)
-	}
-
-	installDir = strings.TrimSpace(installDir)
-	if installDir == "" {
-		return fmt.Errorf("WSL install dir is empty")
-	}
-
-	if _, err := os.Stat(installDir); err == nil {
-		backupDir := fmt.Sprintf("%s.stale-%d", installDir, time.Now().UTC().UnixNano())
-		if err := moveInstallDirAsideWithRetry(installDir, backupDir); err != nil {
-			return err
-		}
-		log.Printf(
-			"Moved stale WSL install dir %q to %q before re-importing unregistered distro %q",
-			installDir,
-			backupDir,
-			distroName,
-		)
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat WSL install dir %q: %w", installDir, err)
-	}
-
-	return nil
-}
-
-func moveInstallDirAsideWithRetry(installDir string, backupDir string) error {
-	for attempt := 1; ; attempt++ {
-		if err := renamePath(installDir, backupDir); err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			if !isRetryableInstallDirMoveError(err) || attempt >= defaultMoveMaxRetries {
-				if isRetryableInstallDirMoveError(err) {
-					return fmt.Errorf(
-						"move stale WSL install dir %q to %q after %d attempts: %w; WSL may still be releasing files in %q. Try running `wsl.exe --shutdown` and then restart Discobot",
-						installDir,
-						backupDir,
-						attempt,
-						err,
-						installDir,
-					)
-				}
-				return fmt.Errorf("move stale WSL install dir %q to %q: %w", installDir, backupDir, err)
-			}
-
-			log.Printf(
-				"Retrying move of stale WSL install dir %q to %q after Windows filesystem error (%d/%d): %v",
-				installDir,
-				backupDir,
-				attempt,
-				defaultMoveMaxRetries,
-				err,
-			)
-			sleep(defaultMoveRetryDelay)
-			continue
-		}
-
-		return nil
-	}
-}
-
-func isRetryableInstallDirMoveError(err error) bool {
-	if os.IsPermission(err) {
-		return true
-	}
-
-	var errno windows.Errno
-	if errors.As(err, &errno) {
-		return errno == windows.ERROR_ACCESS_DENIED || errno == windows.ERROR_SHARING_VIOLATION
-	}
-
-	return false
 }
 
 func (m *Manager) decompressRootfsArchive(rootfsArchivePath string) (string, func(), error) {
@@ -497,16 +412,19 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 
 	tr := tar.NewReader(src)
 	tw := tar.NewWriter(dst)
+	fail := func(err error) (string, func(), error) {
+		_ = tw.Close()
+		_ = dst.Close()
+		cleanup()
+		return "", nil, err
+	}
 	for {
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			_ = tw.Close()
-			_ = dst.Close()
-			cleanup()
-			return "", nil, fmt.Errorf("read temp rootfs tar %q: %w", sourceTarPath, err)
+			return fail(fmt.Errorf("read temp rootfs tar %q: %w", sourceTarPath, err))
 		}
 		if normalizeTarPath(hdr.Name) == discobotWSLEnvPath {
 			continue
@@ -514,19 +432,13 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 
 		headerCopy := *hdr
 		if err := tw.WriteHeader(&headerCopy); err != nil {
-			_ = tw.Close()
-			_ = dst.Close()
-			cleanup()
-			return "", nil, fmt.Errorf("write customized rootfs header %q: %w", headerCopy.Name, err)
+			return fail(fmt.Errorf("write customized rootfs header %q: %w", headerCopy.Name, err))
 		}
 		if hdr.Size == 0 {
 			continue
 		}
 		if _, err := io.CopyN(tw, tr, hdr.Size); err != nil {
-			_ = tw.Close()
-			_ = dst.Close()
-			cleanup()
-			return "", nil, fmt.Errorf("copy customized rootfs entry %q: %w", headerCopy.Name, err)
+			return fail(fmt.Errorf("copy customized rootfs entry %q: %w", headerCopy.Name, err))
 		}
 	}
 
@@ -538,16 +450,10 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 		Typeflag: tar.TypeReg,
 		ModTime:  time.Unix(0, 0),
 	}); err != nil {
-		_ = tw.Close()
-		_ = dst.Close()
-		cleanup()
-		return "", nil, fmt.Errorf("write customized rootfs header %q: %w", discobotWSLEnvPath, err)
+		return fail(fmt.Errorf("write customized rootfs header %q: %w", discobotWSLEnvPath, err))
 	}
 	if _, err := tw.Write(envBytes); err != nil {
-		_ = tw.Close()
-		_ = dst.Close()
-		cleanup()
-		return "", nil, fmt.Errorf("write customized rootfs contents %q: %w", discobotWSLEnvPath, err)
+		return fail(fmt.Errorf("write customized rootfs contents %q: %w", discobotWSLEnvPath, err))
 	}
 	if err := tw.Close(); err != nil {
 		_ = dst.Close()
@@ -627,19 +533,14 @@ func isRootfsTempTarName(name string) bool {
 }
 
 func isRetryableCleanupError(err error) bool {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		var errno windows.Errno
-		if errors.As(pathErr.Err, &errno) {
-			return errno == windows.ERROR_ACCESS_DENIED || errno == windows.ERROR_SHARING_VIOLATION
-		}
-	}
+	return isWindowsAccessOrSharingError(err)
+}
 
+func isWindowsAccessOrSharingError(err error) bool {
 	var errno windows.Errno
 	if errors.As(err, &errno) {
 		return errno == windows.ERROR_ACCESS_DENIED || errno == windows.ERROR_SHARING_VIOLATION
 	}
-
 	return false
 }
 
@@ -679,7 +580,7 @@ func (m *Manager) waitForNamedDistroRunnableState(ctx context.Context, distroNam
 		if !found {
 			return fmt.Errorf("managed WSL distro %q disappeared while waiting to become runnable", distroName)
 		}
-		if strings.EqualFold(distro.State, "Stopped") || strings.EqualFold(distro.State, "Running") {
+		if isRunnableDistroState(distro.State) {
 			readyDistro = distro
 			return nil
 		}
@@ -694,7 +595,7 @@ func (m *Manager) waitForSystemdReadyInDistro(ctx context.Context, distroName st
 	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for systemd readiness", func(ctx context.Context) error {
 		args := []string{"-d", distroName, "--", "systemctl", "is-system-running"}
 		output, err := runCommandOutput(ctx, "wsl.exe", args...)
-		state := strings.TrimSpace(decodeCommandOutput(output))
+		state := strings.TrimSpace(output)
 		if state == "running" || state == "degraded" {
 			return nil
 		}
@@ -712,19 +613,21 @@ func (m *Manager) waitForSystemdReadyInDistro(ctx context.Context, distroName st
 }
 
 func (m *Manager) waitForDockerReady(ctx context.Context) error {
+	distroName := m.mainDistro().name
 	return m.waitForCommandSuccessUntilCanceled(ctx, "wait for docker.service readiness", func(ctx context.Context) error {
-		output, err := m.runInDistro(ctx, "systemctl", "is-active", "docker.service")
+		output, err := m.runInNamedDistro(ctx, distroName, "systemctl", "is-active", "docker.service")
+		state := strings.TrimSpace(output)
 		if err != nil {
-			if stopErr := m.checkNamedDistroStillRegistered(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
+			if stopErr := m.checkNamedDistroStillRegistered(ctx, distroName, "waiting for docker.service readiness"); stopErr != nil {
 				return stopErr
 			}
 			return err
 		}
-		if strings.TrimSpace(output) != "active" {
-			if stopErr := m.checkNamedDistroStillRegistered(ctx, m.mainDistro().name, "waiting for docker.service readiness"); stopErr != nil {
+		if state != "active" {
+			if stopErr := m.checkNamedDistroStillRegistered(ctx, distroName, "waiting for docker.service readiness"); stopErr != nil {
 				return stopErr
 			}
-			return fmt.Errorf("docker.service state is %q", strings.TrimSpace(output))
+			return fmt.Errorf("docker.service state is %q", state)
 		}
 		return nil
 	})
@@ -775,7 +678,7 @@ func (m *Manager) waitForCommandSuccessWithFallbackTimeout(ctx context.Context, 
 		if lastErr == nil {
 			return nil
 		}
-		if shouldStopRetryingWaitError(lastErr) {
+		if shouldRecoverBrokenDistro(lastErr) {
 			return lastErr
 		}
 
@@ -809,14 +712,23 @@ func shouldRecoverBrokenDistro(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "managed wsl distro") {
+		return strings.Contains(message, "stopped while") || strings.Contains(message, "disappeared while")
+	}
 	return strings.Contains(message, "wsl/service/e_unexpected") ||
-		strings.Contains(message, "catastrophic failure") ||
-		(strings.Contains(message, "managed wsl distro") && strings.Contains(message, "stopped while")) ||
-		(strings.Contains(message, "managed wsl distro") && strings.Contains(message, "disappeared while"))
+		strings.Contains(message, "catastrophic failure")
 }
 
-func shouldStopRetryingWaitError(err error) bool {
-	return shouldRecoverBrokenDistro(err)
+func isRunnableDistroState(state string) bool {
+	return isStoppedDistroState(state) || isRunningDistroState(state)
+}
+
+func isStoppedDistroState(state string) bool {
+	return strings.EqualFold(state, "Stopped")
+}
+
+func isRunningDistroState(state string) bool {
+	return strings.EqualFold(state, "Running")
 }
 
 func (m *Manager) checkNamedDistroStillRegistered(ctx context.Context, distroName string, operation string) error {

@@ -212,6 +212,21 @@ func TestResolveWorkspaceMountSource(t *testing.T) {
 	}
 }
 
+func TestProviderWorkspaceMountSourceResolverOption(t *testing.T) {
+	provider := &Provider{}
+	WithWorkspaceMountSourceResolver(func(source string) (string, error) {
+		return "translated:" + source, nil
+	})(provider)
+
+	got, err := provider.resolveWorkspaceMountSource(`E:\src\discobot`)
+	if err != nil {
+		t.Fatalf("resolveWorkspaceMountSource error = %v", err)
+	}
+	if got != `translated:E:\src\discobot` {
+		t.Fatalf("resolveWorkspaceMountSource = %q", got)
+	}
+}
+
 func TestWSLDockerDialCommand(t *testing.T) {
 	name, args, err := wslDockerDialCommand(" Ubuntu-24.04 ")
 	if err != nil {

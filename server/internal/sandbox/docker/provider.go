@@ -95,6 +95,10 @@ type Provider struct {
 	// vsockDialer is an optional custom dialer for VSOCK connections
 	vsockDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
+	// workspaceMountSourceResolver converts host workspace paths into paths that
+	// are valid on the Docker daemon host.
+	workspaceMountSourceResolver func(string) (string, error)
+
 	// sessionProjectResolver looks up session -> project mapping from the database.
 	sessionProjectResolver SessionProjectResolver
 
@@ -132,6 +136,14 @@ func WithVsockDialer(dialer func(ctx context.Context, network, addr string) (net
 	}
 }
 
+// WithWorkspaceMountSourceResolver configures how host workspace paths are
+// resolved before they are sent to the Docker daemon as bind-mount sources.
+func WithWorkspaceMountSourceResolver(resolver func(string) (string, error)) Option {
+	return func(p *Provider) {
+		p.workspaceMountSourceResolver = resolver
+	}
+}
+
 // WithSystemManager configures the Docker provider with a system manager for tracking startup tasks
 func WithSystemManager(sm SystemManager) Option {
 	return func(p *Provider) {
@@ -158,6 +170,9 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 	// Apply options
 	for _, opt := range opts {
 		opt(p)
+	}
+	if p.workspaceMountSourceResolver == nil {
+		p.workspaceMountSourceResolver = resolveWorkspaceMountSource
 	}
 
 	var cli *client.Client
@@ -321,6 +336,14 @@ func resolveWorkspaceMountSource(sourcePath string) (string, error) {
 		return "", err
 	}
 	return absPath, nil
+}
+
+func (p *Provider) resolveWorkspaceMountSource(sourcePath string) (string, error) {
+	resolver := p.workspaceMountSourceResolver
+	if resolver == nil {
+		resolver = resolveWorkspaceMountSource
+	}
+	return resolver(sourcePath)
 }
 
 func isWindowsAbsolutePath(path string) bool {
@@ -590,7 +613,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 
 	// Mount workspace directory (always a local path)
 	if opts.WorkspacePath != "" {
-		sourcePath, err := resolveWorkspaceMountSource(opts.WorkspacePath)
+		sourcePath, err := p.resolveWorkspaceMountSource(opts.WorkspacePath)
 		if err != nil {
 			return nil, state, fmt.Errorf("%w: failed to resolve workspace mount source: %v", sandbox.ErrStartFailed, err)
 		}

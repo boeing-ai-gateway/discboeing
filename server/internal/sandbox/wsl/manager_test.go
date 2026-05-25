@@ -4,6 +4,7 @@ package wsl
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -14,7 +15,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -23,90 +23,6 @@ import (
 
 	"github.com/obot-platform/discobot/server/internal/config"
 )
-
-func TestPrepareInstallDirForImportMovesStaleInstallDirAside(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	installDir := filepath.Join(root, "distro")
-	if err := os.MkdirAll(installDir, 0755); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	markerPath := filepath.Join(installDir, "marker.txt")
-	if err := os.WriteFile(markerPath, []byte("stale"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	manager := &Manager{cfg: &config.Config{
-		WSLDistroName: "discobot",
-		WSLInstallDir: installDir,
-	}}
-	if err := manager.prepareInstallDirForImport(); err != nil {
-		t.Fatalf("prepareInstallDirForImport() error = %v", err)
-	}
-
-	if _, err := os.Stat(installDir); !os.IsNotExist(err) {
-		t.Fatalf("install dir still exists after prepareInstallDirForImport(): %v", err)
-	}
-
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatalf("ReadDir() error = %v", err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("ReadDir() entries = %d, want 1", len(entries))
-	}
-	if !strings.HasPrefix(entries[0].Name(), "distro.stale-") {
-		t.Fatalf("backup dir = %q, want prefix %q", entries[0].Name(), "distro.stale-")
-	}
-	if _, err := os.Stat(filepath.Join(root, entries[0].Name(), "marker.txt")); err != nil {
-		t.Fatalf("backup marker missing: %v", err)
-	}
-}
-
-func TestPrepareInstallDirForImportRetriesTransientRenameFailure(t *testing.T) {
-	root := t.TempDir()
-	installDir := filepath.Join(root, "distro")
-	if err := os.MkdirAll(installDir, 0755); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	markerPath := filepath.Join(installDir, "marker.txt")
-	if err := os.WriteFile(markerPath, []byte("stale"), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	originalRename := renamePath
-	originalSleep := sleep
-	t.Cleanup(func() {
-		renamePath = originalRename
-		sleep = originalSleep
-	})
-
-	attempts := 0
-	renamePath = func(oldpath, newpath string) error {
-		attempts++
-		if attempts == 1 {
-			return &os.PathError{Op: "rename", Path: oldpath, Err: syscall.ERROR_ACCESS_DENIED}
-		}
-		return os.Rename(oldpath, newpath)
-	}
-	sleep = func(time.Duration) {}
-
-	manager := &Manager{cfg: &config.Config{
-		WSLDistroName: "discobot",
-		WSLInstallDir: installDir,
-	}}
-	if err := manager.prepareInstallDirForImport(); err != nil {
-		t.Fatalf("prepareInstallDirForImport() error = %v", err)
-	}
-
-	if attempts != 2 {
-		t.Fatalf("rename attempts = %d, want 2", attempts)
-	}
-	if _, err := os.Stat(installDir); !os.IsNotExist(err) {
-		t.Fatalf("install dir still exists after prepareInstallDirForImport(): %v", err)
-	}
-}
 
 func TestDecodeCommandOutputUTF16LE(t *testing.T) {
 	input := encodeUTF16ForTest("  NAME                   STATE           VERSION\r\n* Ubuntu-24.04           Running         2\r\n  discobot               Stopped         2\r\n", binary.LittleEndian)
@@ -174,14 +90,14 @@ func TestWaitForSystemdReadyInDistroAcceptsDegradedState(t *testing.T) {
 		runCommandOutput = originalRunCommandOutput
 	})
 
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
 		if !slices.Equal(args, []string{"-d", "discobot", "--", "systemctl", "is-system-running"}) {
 			t.Fatalf("unexpected command args: %v", args)
 		}
-		return []byte("degraded\n"), errors.New("exit status 1")
+		return "degraded\n", errors.New("exit status 1")
 	}
 
 	if err := manager.waitForSystemdReadyInDistro(context.Background(), "discobot"); err != nil {
@@ -201,7 +117,7 @@ func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 	})
 
 	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
@@ -210,9 +126,9 @@ func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 		}
 		callIndex++
 		if callIndex == 1 {
-			return []byte(distroListForTest("Installing")), nil
+			return distroListForTest("Installing"), nil
 		}
-		return []byte(distroListForTest("Stopped")), nil
+		return distroListForTest("Stopped"), nil
 	}
 
 	distro, err := manager.waitForNamedDistroRunnableState(context.Background(), "discobot")
@@ -279,16 +195,16 @@ func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 	})
 
 	mountpointCalls := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
 		if slices.Equal(args, []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}) {
 			mountpointCalls++
-			return nil, nil
+			return "", nil
 		}
 		t.Fatalf("unexpected command args: %v", args)
-		return nil, nil
+		return "", nil
 	}
 
 	err := manager.waitForVarReadyInDistro(context.Background(), "discobot")
@@ -334,7 +250,7 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 	})
 
 	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if callIndex >= len(sequence) {
 			t.Fatalf("unexpected extra command: %s %v", name, args)
 		}
@@ -346,7 +262,7 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 		if !slices.Equal(args, expected.args) {
 			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
 		}
-		return []byte(expected.output), expected.err
+		return expected.output, expected.err
 	}
 
 	_, err := manager.ensureMainDistroReady(context.Background(), progressReporter{})
@@ -404,7 +320,7 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 	})
 
 	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if callIndex >= len(sequence) {
 			t.Fatalf("unexpected extra command: %s %v", name, args)
 		}
@@ -417,7 +333,7 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 		if !slices.Equal(args, expected.args) {
 			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
 		}
-		return []byte(expected.output), expected.err
+		return expected.output, expected.err
 	}
 
 	distro, err := manager.ensureMainDistroReady(context.Background(), progressReporter{})
@@ -514,6 +430,146 @@ func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions
 	}
 }
 
+func TestDefaultWSLStartupScriptPathStagesEmbeddedScript(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(wslStartupScriptEnv, "")
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
+
+	scriptPath, err := defaultWSLStartupScriptPath()
+	if err != nil {
+		t.Fatalf("defaultWSLStartupScriptPath() error = %v", err)
+	}
+	if filepath.Ext(scriptPath) != ".ps1" {
+		t.Fatalf("defaultWSLStartupScriptPath() extension = %q, want .ps1", filepath.Ext(scriptPath))
+	}
+
+	staged, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", scriptPath, err)
+	}
+	if !bytes.Equal(staged, embeddedWSLStartupScript) {
+		t.Fatal("staged WSL startup script does not match embedded script")
+	}
+}
+
+func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testing.T) {
+	root := t.TempDir()
+	fakeBin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(fakeBin, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "wsl.exe"), []byte(""), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
+
+	manager := NewManager(&config.Config{
+		WSLDistroName:  "discobot",
+		WSLStateDir:    root,
+		WSLInstallDir:  filepath.Join(root, "distro"),
+		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
+	})
+
+	originalFindWSLStartupScriptPath := findWSLStartupScriptPath
+	originalRunWSLStartupPowerShell := runWSLStartupPowerShell
+	originalRunElevatedWSLStartupPowerShell := runElevatedWSLStartupPowerShell
+	originalRunCommandOutput := runCommandOutput
+	t.Cleanup(func() {
+		findWSLStartupScriptPath = originalFindWSLStartupScriptPath
+		runWSLStartupPowerShell = originalRunWSLStartupPowerShell
+		runElevatedWSLStartupPowerShell = originalRunElevatedWSLStartupPowerShell
+		runCommandOutput = originalRunCommandOutput
+	})
+
+	scriptPath := filepath.Join(root, "discobot-wsl-startup.ps1")
+	findWSLStartupScriptPath = func() (string, error) {
+		return scriptPath, nil
+	}
+
+	checks := []wslStartupScriptResult{
+		{
+			ExitCode: wslStartupExitActionsRequired,
+			Message:  "WSL host startup actions require elevation: attach-var-disk.",
+			Actions:  []string{"attach-var-disk", "format-var-disk-if-needed"},
+		},
+		{
+			ExitCode: wslStartupExitOK,
+			Message:  "WSL /var disk is attached.",
+		},
+	}
+	runWSLStartupPowerShell = func(_ context.Context, gotScriptPath string, args ...string) (wslStartupScriptResult, error) {
+		if gotScriptPath != scriptPath {
+			t.Fatalf("runWSLStartupPowerShell() scriptPath = %q, want %q", gotScriptPath, scriptPath)
+		}
+		assertStartupScriptModeArg(t, args, "check")
+		if len(checks) == 0 {
+			t.Fatal("runWSLStartupPowerShell() called too many times")
+		}
+		result := checks[0]
+		checks = checks[1:]
+		return result, nil
+	}
+
+	elevatedCalled := false
+	runElevatedWSLStartupPowerShell = func(_ context.Context, gotScriptPath string, resultPath string, args ...string) (wslStartupScriptResult, error) {
+		elevatedCalled = true
+		if gotScriptPath != scriptPath {
+			t.Fatalf("runElevatedWSLStartupPowerShell() scriptPath = %q, want %q", gotScriptPath, scriptPath)
+		}
+		if strings.TrimSpace(resultPath) == "" {
+			t.Fatal("runElevatedWSLStartupPowerShell() resultPath is empty")
+		}
+		assertStartupScriptModeArg(t, args, "execute")
+		return wslStartupScriptResult{
+			ExitCode: wslStartupExitOK,
+			Message:  "WSL host startup changes applied.",
+		}, nil
+	}
+
+	type expectedCommand struct {
+		name   string
+		args   []string
+		output string
+	}
+	sequence := []expectedCommand{
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
+	}
+	callIndex := 0
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
+		if callIndex >= len(sequence) {
+			t.Fatalf("unexpected extra command: %s %v", name, args)
+		}
+		expected := sequence[callIndex]
+		callIndex++
+		if name != expected.name {
+			t.Fatalf("command %d name = %q, want %q", callIndex, name, expected.name)
+		}
+		if !slices.Equal(args, expected.args) {
+			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
+		}
+		return expected.output, nil
+	}
+
+	if err := manager.ensureVMRunningWithProgress(context.Background(), progressReporter{}); err != nil {
+		t.Fatalf("ensureVMRunningWithProgress() error = %v", err)
+	}
+	if !elevatedCalled {
+		t.Fatal("ensureVMRunningWithProgress() did not run elevated host startup")
+	}
+	if len(checks) != 0 {
+		t.Fatalf("remaining check results = %d, want 0", len(checks))
+	}
+	if callIndex != len(sequence) {
+		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
+	}
+}
+
 func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *testing.T) {
 	root := t.TempDir()
 	manager := NewManager(&config.Config{
@@ -595,7 +651,7 @@ func assertStartupScriptModeArg(t *testing.T, args []string, want string) {
 	t.Fatalf("startup script args = %v, want -Mode %s", args, want)
 }
 
-func TestEnsureInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing.T) {
+func TestVerifyInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing.T) {
 	root := t.TempDir()
 	manager := NewManager(&config.Config{
 		WSLDistroName: "discobot",
@@ -618,7 +674,7 @@ func TestEnsureInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 	})
 
 	callIndex := 0
-	runCommandOutput = func(_ context.Context, name string, args ...string) ([]byte, error) {
+	runCommandOutput = func(_ context.Context, name string, args ...string) (string, error) {
 		if callIndex >= len(sequence) {
 			t.Fatalf("unexpected extra command: %s %v", name, args)
 		}
@@ -630,11 +686,11 @@ func TestEnsureInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 		if !slices.Equal(args, expected.args) {
 			t.Fatalf("command %d args = %v, want %v", callIndex, args, expected.args)
 		}
-		return []byte(expected.output), expected.err
+		return expected.output, expected.err
 	}
 
-	if err := manager.ensureInstalledLocked(context.Background(), progressReporter{}); err != nil {
-		t.Fatalf("ensureInstalledLocked() error = %v", err)
+	if err := manager.verifyInstalledLocked(context.Background(), progressReporter{}); err != nil {
+		t.Fatalf("verifyInstalledLocked() error = %v", err)
 	}
 	if callIndex != len(sequence) {
 		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
