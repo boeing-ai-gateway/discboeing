@@ -535,37 +535,39 @@ type sandboxConfigureEvent struct {
 }
 
 func (c *SandboxAgentClient) NeedsConfigure(ctx context.Context, sessionID string) (bool, error) {
-	lease, err := c.acquireHTTPClient(ctx, sessionID)
-	if err != nil {
-		return true, err
-	}
-	defer lease.Release()
+	return retryWithBackoff(ctx, func() (bool, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return true, 0, err
+		}
+		defer lease.Release()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL(), nil)
-	if err != nil {
-		return false, err
-	}
-	if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
-		return false, err
-	}
-	resp, err := lease.Client.Do(req)
-	if err != nil {
-		return true, err
-	}
-	defer resp.Body.Close()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL(), nil)
+		if err != nil {
+			return false, 0, err
+		}
+		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			return false, 0, err
+		}
+		resp, err := lease.Client.Do(req)
+		if err != nil {
+			return true, 0, err
+		}
+		defer resp.Body.Close()
 
-	var body struct {
-		Code       string `json:"code"`
-		Configured *bool  `json:"configured"`
-	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
-	if body.Code == "AGENT_NOT_CONFIGURED" {
-		return true, nil
-	}
-	if body.Configured != nil {
-		return !*body.Configured, nil
-	}
-	return false, nil
+		var body struct {
+			Code       string `json:"code"`
+			Configured *bool  `json:"configured"`
+		}
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+		if body.Code == "AGENT_NOT_CONFIGURED" {
+			return true, 0, nil
+		}
+		if body.Configured != nil {
+			return !*body.Configured, 0, nil
+		}
+		return false, resp.StatusCode, nil
+	})
 }
 
 // Configure posts dynamic runtime configuration to an agent-go instance that is
@@ -577,38 +579,50 @@ func (c *SandboxAgentClient) Configure(ctx context.Context, sessionID string, cf
 		return fmt.Errorf("failed to marshal configure request: %w", err)
 	}
 
+	var configureLease *sandbox.HTTPClientLease
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)
 		if err != nil {
 			return nil, 0, err
 		}
-		defer lease.Release()
+		client := *lease.Client
+		client.Timeout = 0
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.configureURL(), bytes.NewReader(bodyBytes))
 		if err != nil {
+			lease.Release()
 			return nil, 0, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
 		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
+			lease.Release()
 			return nil, 0, err
 		}
 
-		resp, err := lease.Client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
+			lease.Release()
 			return nil, 0, err
 		}
 		if isRetryableStatus(resp.StatusCode) {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
+			lease.Release()
 			return nil, resp.StatusCode, fmt.Errorf("configure returned status %d", resp.StatusCode)
 		}
+		configureLease = lease
 		return resp, resp.StatusCode, nil
 	})
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	defer func() {
+		if configureLease != nil {
+			configureLease.Release()
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))

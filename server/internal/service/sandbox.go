@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -67,6 +69,8 @@ type SandboxService struct {
 const healthCacheTTL = 10 * time.Second
 
 const sandboxHealthWaitTimeout = 30 * time.Second
+
+const sessionReadyWaitTimeout = 2 * time.Minute
 
 // NewSandboxService creates a new sandbox service.
 // connTracker may be nil; when set it tracks active streaming connections so the
@@ -426,6 +430,9 @@ func (s *SandboxService) StartSessionSandbox(ctx context.Context, sessionID stri
 	if err := s.saveProviderStateIfChanged(ctx, sessionID, state, newState); err != nil {
 		return err
 	}
+	if err := s.waitForSandboxHealth(ctx, sessionID); err != nil {
+		return fmt.Errorf("sandbox health check failed: %w", err)
+	}
 	return s.configureStartedSandbox(ctx, sessionID)
 }
 
@@ -545,12 +552,9 @@ func (s *SandboxService) ensureSandboxRunningAndHealthy(ctx context.Context, ses
 
 // waitForSessionReady polls the session status until it reaches a terminal state.
 func (s *SandboxService) waitForSessionReady(ctx context.Context, sessionID string) error {
-	const (
-		pollInterval = 500 * time.Millisecond
-		maxWait      = 30 * time.Second
-	)
+	const pollInterval = 500 * time.Millisecond
 
-	deadline := time.Now().Add(maxWait)
+	deadline := time.Now().Add(sessionReadyWaitTimeout)
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
@@ -735,6 +739,11 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 	}
 	if err := s.saveProviderState(ctx, sessionID, state); err != nil {
 		return fmt.Errorf("failed to save sandbox provider state: %w", err)
+	}
+
+	if err := s.waitForSandboxHealth(ctx, sessionID); err != nil {
+		_ = s.removeSandbox(ctx, sessionID)
+		return fmt.Errorf("sandbox health check failed: %w", err)
 	}
 
 	if err := s.configureSandboxAgent(ctx, sessionID, session, workspace, workspaceCommit, ""); err != nil {
@@ -972,7 +981,7 @@ func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID str
 
 	delay := retryInitialDelay
 	for {
-		statusCode, err := s.checkSandboxHealth(waitCtx, sessionID)
+		statusCode, err := s.checkSandboxStartupHealth(waitCtx, sessionID)
 		if err == nil && !isRetryableStatus(statusCode) {
 			s.recordSandboxHealthy(sessionID)
 			return nil
@@ -996,6 +1005,14 @@ func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID str
 }
 
 func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID string) (int, error) {
+	return s.checkSandboxHealthResponse(ctx, sessionID, false)
+}
+
+func (s *SandboxService) checkSandboxStartupHealth(ctx context.Context, sessionID string) (int, error) {
+	return s.checkSandboxHealthResponse(ctx, sessionID, true)
+}
+
+func (s *SandboxService) checkSandboxHealthResponse(ctx context.Context, sessionID string, acceptAgentNotConfigured bool) (int, error) {
 	httpClientLease, err := s.acquireHTTPClient(ctx, sessionID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get HTTP client: %w", err)
@@ -1012,6 +1029,16 @@ func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID strin
 		return 0, err
 	}
 	defer resp.Body.Close()
+
+	if acceptAgentNotConfigured {
+		var body struct {
+			Code string `json:"code"`
+		}
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+		if body.Code == "AGENT_NOT_CONFIGURED" {
+			return http.StatusOK, nil
+		}
+	}
 
 	return resp.StatusCode, nil
 }

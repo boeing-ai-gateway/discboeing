@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -975,6 +976,122 @@ func TestIsRetryableError(t *testing.T) {
 				t.Errorf("isRetryableError(%v) = %v, expected %v", tt.err, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestSandboxAgentClient_ConfigureIgnoresBaseClientTimeoutForStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/configure" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+
+		time.Sleep(25 * time.Millisecond)
+		_, _ = w.Write([]byte("data: {\"status\":\"ready\"}\n\n"))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	targetURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &mockSandboxProvider{
+		client: &http.Client{
+			Timeout: time.Millisecond,
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				req = req.Clone(req.Context())
+				req.URL.Scheme = targetURL.Scheme
+				req.URL.Host = targetURL.Host
+				return http.DefaultTransport.RoundTrip(req)
+			}),
+		},
+	}
+	client := NewSandboxAgentClient(provider, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := client.Configure(ctx, "test-session", sandboxConfigureRequest{}, nil); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+}
+
+func TestSandboxAgentClient_NeedsConfigureRetriesStartupConnectionRefused(t *testing.T) {
+	var attempts atomic.Int32
+	provider := &mockSandboxProviderWithTransport{
+		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempt := attempts.Add(1)
+			if req.Method != http.MethodGet || req.URL.Path != "/health" {
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			}
+			if attempt < 3 {
+				return nil, syscall.ECONNREFUSED
+			}
+
+			rec := httptest.NewRecorder()
+			rec.Header().Set("Content-Type", "application/json")
+			rec.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = rec.Write([]byte(`{"code":"AGENT_NOT_CONFIGURED","configured":false}`))
+			return rec.Result(), nil
+		}),
+	}
+	client := NewSandboxAgentClient(provider, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	needsConfigure, err := client.NeedsConfigure(ctx, "test-session")
+	if err != nil {
+		t.Fatalf("NeedsConfigure() error = %v", err)
+	}
+	if !needsConfigure {
+		t.Fatal("NeedsConfigure() = false, want true")
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Fatalf("attempts = %d, want 3", got)
+	}
+}
+
+func TestSandboxAgentClient_NeedsConfigureDoesNotRetryAgentNotConfigured(t *testing.T) {
+	var attempts atomic.Int32
+	provider := &mockSandboxProviderWithTransport{
+		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts.Add(1)
+			if req.Method != http.MethodGet || req.URL.Path != "/health" {
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			}
+
+			rec := httptest.NewRecorder()
+			rec.Header().Set("Content-Type", "application/json")
+			rec.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = rec.Write([]byte(`{"code":"AGENT_NOT_CONFIGURED","configured":false}`))
+			return rec.Result(), nil
+		}),
+	}
+	client := NewSandboxAgentClient(provider, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	needsConfigure, err := client.NeedsConfigure(ctx, "test-session")
+	if err != nil {
+		t.Fatalf("NeedsConfigure() error = %v", err)
+	}
+	if !needsConfigure {
+		t.Fatal("NeedsConfigure() = false, want true")
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("attempts = %d, want 1", got)
 	}
 }
 
