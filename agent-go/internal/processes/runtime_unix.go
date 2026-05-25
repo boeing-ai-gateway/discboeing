@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -128,18 +127,6 @@ func sudoUserArg(value string) string {
 		}
 	}
 	return "#" + value
-}
-
-func isCurrentUserTarget(targetUser string) bool {
-	current, err := user.Current()
-	if err != nil {
-		return false
-	}
-	userPart, groupPart, hasGroup := strings.Cut(targetUser, ":")
-	if userPart != current.Username && userPart != current.Uid {
-		return false
-	}
-	return !hasGroup || groupPart == "" || groupPart == current.Gid
 }
 
 func (s *platformStream) Read(p []byte) (int, error) {

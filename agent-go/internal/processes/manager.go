@@ -472,6 +472,18 @@ func homeDirForUser(targetUser string) (string, error) {
 	return u.HomeDir, nil
 }
 
+func isCurrentUserTarget(targetUser string) bool {
+	current, err := user.Current()
+	if err != nil {
+		return false
+	}
+	userPart, groupPart, hasGroup := strings.Cut(targetUser, ":")
+	if userPart != current.Username && userPart != current.Uid {
+		return false
+	}
+	return !hasGroup || groupPart == "" || groupPart == current.Gid
+}
+
 func isNumericUser(value string) bool {
 	for _, r := range value {
 		if r < '0' || r > '9' {
