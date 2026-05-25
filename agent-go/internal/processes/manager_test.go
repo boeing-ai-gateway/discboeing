@@ -109,6 +109,58 @@ func TestManagerEventsSupportSequenceAndFilters(t *testing.T) {
 	}
 }
 
+func TestDefaultShellIgnoresMissingShellEnv(t *testing.T) {
+	t.Setenv("SHELL", "/usr/bin/definitely-missing-discobot-shell")
+
+	got := defaultShell("")
+	if len(got) == 0 {
+		t.Fatal("defaultShell() returned no command")
+	}
+	if got[0] == "/usr/bin/definitely-missing-discobot-shell" {
+		t.Fatalf("defaultShell() used missing SHELL env: %#v", got)
+	}
+}
+
+func TestManagerHomeDirRequestUsesCurrentUserHome(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	mgr := NewManager(workDir)
+	session, err := mgr.Start(context.Background(), CreateRequest{
+		Cmd:     []string{"/bin/sh", "-c", "printf '%s\n%s\n' \"$PWD\" \"$HOME\""},
+		HomeDir: true,
+	})
+	if err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	if session.WorkDir != homeDir {
+		t.Fatalf("session WorkDir = %q, want %q", session.WorkDir, homeDir)
+	}
+
+	waitForProcessStatus(t, mgr, session.ID, StatusExited)
+	events, err := mgr.Output(session.ID)
+	if err != nil {
+		t.Fatalf("Output() failed: %v", err)
+	}
+	var output strings.Builder
+	for _, event := range events {
+		if event.Type == "stdout" {
+			output.WriteString(event.Data)
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("output = %q, want PWD and HOME lines", output.String())
+	}
+	if lines[0] != homeDir {
+		t.Fatalf("PWD = %q, want %q", lines[0], homeDir)
+	}
+	if lines[1] != homeDir {
+		t.Fatalf("HOME = %q, want %q", lines[1], homeDir)
+	}
+}
+
 func TestNewManagerDoesNotCleanupCurrentProcessGroupFromStaleMetadata(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)

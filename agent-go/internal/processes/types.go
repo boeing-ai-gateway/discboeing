@@ -52,6 +52,8 @@ type CreateRequest struct {
 	Cmd []string `json:"cmd,omitempty"`
 	// WorkDir is the process working directory. If empty, the manager default is used.
 	WorkDir string `json:"workDir,omitempty"`
+	// HomeDir starts the process in the requested user's home directory.
+	HomeDir bool `json:"homeDir,omitempty"`
 	// Env contains environment variable overrides added to the process environment.
 	Env map[string]string `json:"env,omitempty"`
 	// User requests the OS user to run as. Unsupported user switches fail clearly.

@@ -249,7 +249,7 @@
 		const cols = terminal.cols;
 		const rootParam = nextRootEnabled ? "&root=true" : "";
 		const wsUrl = appendAuthToken(
-			`${getWsBase()}/sessions/${nextSessionId}/terminal/ws?rows=${rows}&cols=${cols}${rootParam}`,
+			`${getWsBase()}/sessions/${nextSessionId}/terminal/ws?rows=${rows}&cols=${cols}&workdir=workspace${rootParam}`,
 		);
 		const nextSocket = new WebSocket(wsUrl);
 		socket = nextSocket;

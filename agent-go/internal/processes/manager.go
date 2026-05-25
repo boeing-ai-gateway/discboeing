@@ -8,8 +8,10 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -66,7 +68,15 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 	if len(req.Cmd) == 0 {
 		req.Cmd = defaultShell(req.User)
 	}
-	if req.WorkDir == "" {
+	homeWorkDir := ""
+	if req.HomeDir {
+		homeDir, err := homeDirForUser(req.User)
+		if err != nil {
+			return nil, err
+		}
+		req.WorkDir = homeDir
+		homeWorkDir = homeDir
+	} else if req.WorkDir == "" {
 		req.WorkDir = m.defaultWorkDir
 	}
 	if req.Rows <= 0 {
@@ -83,6 +93,9 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 		env := make(map[string]string, len(req.Env)+1)
 		maps.Copy(env, req.Env)
 		req.Env = env
+	}
+	if homeWorkDir != "" {
+		req.Env["HOME"] = homeWorkDir
 	}
 	req.Env[processSessionEnv] = id
 	log, err := newOutputLog(id, req.TTY, req.LogDir, req.LogPath)
@@ -425,10 +438,45 @@ func defaultShell(_ string) []string {
 		return []string{"cmd.exe"}
 	}
 	if shell := os.Getenv("SHELL"); shell != "" {
-		return []string{shell, "-l"}
+		if info, err := os.Stat(shell); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return []string{shell, "-l"}
+		}
 	}
 	if _, err := os.Stat("/bin/bash"); err == nil {
 		return []string{"/bin/bash", "-l"}
 	}
 	return []string{"/bin/sh"}
+}
+
+func homeDirForUser(targetUser string) (string, error) {
+	targetUser = strings.TrimSpace(targetUser)
+	if targetUser == "" || isCurrentUserTarget(targetUser) {
+		return os.UserHomeDir()
+	}
+
+	userPart, _, _ := strings.Cut(targetUser, ":")
+	if userPart == "" {
+		return os.UserHomeDir()
+	}
+	if isNumericUser(userPart) {
+		u, err := user.LookupId(userPart)
+		if err != nil {
+			return "", err
+		}
+		return u.HomeDir, nil
+	}
+	u, err := user.Lookup(userPart)
+	if err != nil {
+		return "", err
+	}
+	return u.HomeDir, nil
+}
+
+func isNumericUser(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
 }

@@ -26,6 +26,8 @@ import (
 const (
 	minTermRows = 20
 	minTermCols = 80
+
+	terminalWorkspaceDir = "/home/discobot/workspace"
 )
 
 // upgrader configures the WebSocket upgrader.
@@ -68,6 +70,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Check if root access is requested
 	runAsRoot := r.URL.Query().Get("root") == "true"
+	workDir := terminalWorkDir(r)
 
 	ctx := r.Context()
 
@@ -109,7 +112,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Get or create the persistent terminal session for this (sandbox, user) pair.
 	// If one already exists (from a previous WebSocket connection) it is reused —
 	// the caller never sees the PTY directly, only a subscriber channel.
-	termKey := sessionID + ":" + user
+	termKey := terminalReuseKey(sessionID, user, workDir)
 	termSession, err := h.terminalManager.GetOrCreate(ctx, termKey, func(ctx context.Context) (sandbox.PTY, error) {
 		consoleSudoToken, err := secureRandomHex(32)
 		if err != nil {
@@ -124,7 +127,7 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 		if runAsRoot {
 			execUser = "root"
 		}
-		return h.sandboxService.AttachTerminal(ctx, sessionID, rows, cols, execUser, termKey, terminalEnv)
+		return h.sandboxService.AttachTerminal(ctx, sessionID, rows, cols, execUser, workDir, termKey, terminalEnv)
 	})
 	if err != nil {
 		log.Printf("failed to attach to sandbox PTY: %v", err)
@@ -153,6 +156,21 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer termSession.Unsubscribe(sub)
 
 	handlePersistentTerminalSession(ctx, termSession, sub, conn)
+}
+
+func terminalWorkDir(r *http.Request) string {
+	if r.URL.Query().Get("workdir") == "workspace" {
+		return terminalWorkspaceDir
+	}
+	return ""
+}
+
+func terminalReuseKey(sessionID, user, workDir string) string {
+	key := sessionID + ":" + user
+	if workDir != "" {
+		key += ":" + workDir
+	}
+	return key
 }
 
 func secureRandomHex(bytesLen int) (string, error) {

@@ -43,6 +43,33 @@ type mockPTY struct {
 	onWrite     func()        // Callback for write operations
 }
 
+func TestTerminalWorkDir(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/terminal/ws", nil)
+	if got := terminalWorkDir(req); got != "" {
+		t.Fatalf("terminalWorkDir() = %q, want empty", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/terminal/ws?workdir=workspace", nil)
+	if got := terminalWorkDir(req); got != terminalWorkspaceDir {
+		t.Fatalf("terminalWorkDir() = %q, want %q", got, terminalWorkspaceDir)
+	}
+}
+
+func TestTerminalReuseKeyIncludesWorkDir(t *testing.T) {
+	homeKey := terminalReuseKey("session-1", "1000:1000", "")
+	if homeKey != "session-1:1000:1000" {
+		t.Fatalf("terminalReuseKey() = %q, want home key", homeKey)
+	}
+
+	workspaceKey := terminalReuseKey("session-1", "1000:1000", terminalWorkspaceDir)
+	if workspaceKey == homeKey {
+		t.Fatal("workspace terminal reuse key should differ from home terminal reuse key")
+	}
+	if !strings.Contains(workspaceKey, terminalWorkspaceDir) {
+		t.Fatalf("workspace terminal reuse key %q does not include workdir", workspaceKey)
+	}
+}
+
 func newMockPTY() *mockPTY {
 	return &mockPTY{
 		readBuffer:  bytes.NewBuffer(nil),

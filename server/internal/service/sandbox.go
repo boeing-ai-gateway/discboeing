@@ -895,11 +895,11 @@ func (s *SandboxService) Attach(ctx context.Context, sessionID string, rows, col
 }
 
 // AttachTerminal creates or reuses a persistent terminal PTY for a session.
-func (s *SandboxService) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, reuseKey string, env map[string]string) (sandbox.PTY, error) {
+func (s *SandboxService) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, workDir, reuseKey string, env map[string]string) (sandbox.PTY, error) {
 	if err := s.ensureSandboxReady(ctx, sessionID); err != nil {
 		return nil, err
 	}
-	return s.newAgentClient(ctx).AttachTerminal(ctx, sessionID, rows, cols, user, reuseKey, env)
+	return s.newAgentClient(ctx).AttachTerminal(ctx, sessionID, rows, cols, user, workDir, reuseKey, env)
 }
 
 // ExecStream runs a command with bidirectional streaming I/O in the session's sandbox.

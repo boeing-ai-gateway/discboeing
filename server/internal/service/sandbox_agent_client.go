@@ -397,7 +397,7 @@ func (c *SandboxAgentClient) Attach(ctx context.Context, sessionID string, rows,
 }
 
 // AttachTerminal creates or reuses a persistent terminal PTY for a session.
-func (c *SandboxAgentClient) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, reuseKey string, env map[string]string) (sandbox.PTY, error) {
+func (c *SandboxAgentClient) AttachTerminal(ctx context.Context, sessionID string, rows, cols int, user, workDir, reuseKey string, env map[string]string) (sandbox.PTY, error) {
 	lease, err := c.acquireHTTPClient(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -406,6 +406,8 @@ func (c *SandboxAgentClient) AttachTerminal(ctx context.Context, sessionID strin
 		Kind:     "user",
 		Name:     "terminal",
 		ReuseKey: "terminal:" + reuseKey,
+		HomeDir:  workDir == "",
+		WorkDir:  workDir,
 		Env:      env,
 		User:     user,
 		TTY:      true,

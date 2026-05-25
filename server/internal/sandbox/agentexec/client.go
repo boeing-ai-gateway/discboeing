@@ -24,6 +24,7 @@ type CreateRequest struct {
 	ReuseKey string            `json:"reuseKey,omitempty"`
 	Cmd      []string          `json:"cmd,omitempty"`
 	WorkDir  string            `json:"workDir,omitempty"`
+	HomeDir  bool              `json:"homeDir,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	User     string            `json:"user,omitempty"`
 	TTY      bool              `json:"tty,omitempty"`
