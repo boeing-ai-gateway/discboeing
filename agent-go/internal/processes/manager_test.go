@@ -153,8 +153,16 @@ func TestManagerHomeDirRequestUsesCurrentUserHome(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("output = %q, want PWD and HOME lines", output.String())
 	}
-	if lines[0] != homeDir {
-		t.Fatalf("PWD = %q, want %q", lines[0], homeDir)
+	gotPath, err := filepath.EvalSymlinks(lines[0])
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q) failed: %v", lines[0], err)
+	}
+	wantPath, err := filepath.EvalSymlinks(homeDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q) failed: %v", homeDir, err)
+	}
+	if gotPath != wantPath {
+		t.Fatalf("PWD = %q, want %q", gotPath, wantPath)
 	}
 	if lines[1] != homeDir {
 		t.Fatalf("HOME = %q, want %q", lines[1], homeDir)

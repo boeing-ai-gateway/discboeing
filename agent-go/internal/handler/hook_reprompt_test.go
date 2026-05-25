@@ -571,15 +571,19 @@ exit 1
 
 	var queue []promptqueue.Prompt
 	var err error
-	for range 20 {
-		queue, err = queueStore.List("thread-1")
-		if err != nil {
-			t.Fatal(err)
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for len(queue) == 0 {
+		select {
+		case <-deadline:
+			t.Fatalf("queued prompts = %d, want 1", len(queue))
+		case <-tick.C:
+			queue, err = queueStore.List("thread-1")
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		if len(queue) > 0 {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
 	}
 	if len(queue) != 1 {
 		t.Fatalf("queued prompts = %d, want 1", len(queue))
