@@ -26,6 +26,7 @@ type mockSubAgent struct {
 	submitAnswerFn         func(threadID, approvalID string, req api.AnswerQuestionRequest) error
 	hasInterruptedTurnFn   func(threadID string) (bool, error)
 	getThreadInfoFn        func(threadID string) (agent.ThreadInfo, error)
+	getTokenUsageFn        func(threadID string) (agent.ThreadTokenUsageDetails, error)
 	createThreadFn         func(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error)
 	validateSubagentTypeFn func(subagentType string) error
 }
@@ -52,6 +53,12 @@ func (m *mockSubAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) 
 		return m.getThreadInfoFn(threadID)
 	}
 	return agent.ThreadInfo{ID: threadID}, nil
+}
+func (m *mockSubAgent) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	if m.getTokenUsageFn != nil {
+		return m.getTokenUsageFn(threadID)
+	}
+	return agent.ThreadTokenUsageDetails{ThreadID: threadID}, nil
 }
 func (m *mockSubAgent) CreateThread(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	if m.createThreadFn != nil {
@@ -312,6 +319,9 @@ func (a *recursiveTaskAgent) ListThreads() ([]string, error)                    
 func (a *recursiveTaskAgent) ListThreadInfos() ([]agent.ThreadInfo, error)      { return nil, nil }
 func (a *recursiveTaskAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: threadID}, nil
+}
+func (a *recursiveTaskAgent) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	return agent.ThreadTokenUsageDetails{ThreadID: threadID}, nil
 }
 func (a *recursiveTaskAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil

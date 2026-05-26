@@ -130,6 +130,10 @@ type Agent interface {
 	// GetThreadInfo returns metadata for a single thread.
 	GetThreadInfo(threadID string) (ThreadInfo, error)
 
+	// GetThreadTokenUsageDetails returns per-turn and per-step token usage for
+	// a single thread.
+	GetThreadTokenUsageDetails(threadID string) (ThreadTokenUsageDetails, error)
+
 	// CreateThread creates a thread and returns its metadata.
 	CreateThread(ctx context.Context, req CreateThreadRequest) (ThreadInfo, error)
 
@@ -184,6 +188,38 @@ type TokenUsageInfo struct {
 	ModelMaxTokens  int
 	MaxOutputTokens int
 	Prices          message.TokenPrices
+}
+
+type ThreadTokenUsageDetails struct {
+	ThreadID string
+	Summary  TokenUsageInfo
+	Turns    []TokenUsageTurn
+}
+
+type TokenUsageTurn struct {
+	ID              string
+	Model           string
+	Reasoning       string
+	ServiceTier     string
+	ModelMaxTokens  int
+	MaxOutputTokens int
+	Prices          message.TokenPrices
+	Usage           message.Usage
+	StartedAt       string
+	FinishedAt      string
+	Steps           []TokenUsageStep
+}
+
+type TokenUsageStep struct {
+	Index              int
+	AssistantMessageID string
+	ToolCalls          []TokenUsageToolCall
+	Usage              message.Usage
+}
+
+type TokenUsageToolCall struct {
+	ID   string
+	Name string
 }
 
 // ThreadState is the user-visible terminal state shown for a thread.

@@ -289,6 +289,22 @@ func (c *ChatService) GetThread(ctx context.Context, projectID, sessionID, threa
 	return thread, err
 }
 
+// GetThreadTokenUsage retrieves detailed token usage for a session thread.
+func (c *ChatService) GetThreadTokenUsage(ctx context.Context, projectID, sessionID, threadID string) (*sandboxapi.ThreadTokenUsageDetails, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.GetThreadTokenUsage(ctx, threadID)
+}
+
 // CreateThread creates a thread for a session in the sandbox agent.
 func (c *ChatService) CreateThread(ctx context.Context, projectID, sessionID string, req *sandboxapi.CreateThreadRequest) (*sandboxapi.Thread, error) {
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {

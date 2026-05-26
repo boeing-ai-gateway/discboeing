@@ -151,6 +151,13 @@ func (c *SessionClient) GetThread(ctx context.Context, threadID string) (*sandbo
 	})
 }
 
+// GetThreadTokenUsage retrieves detailed token usage for a thread.
+func (c *SessionClient) GetThreadTokenUsage(ctx context.Context, threadID string) (*sandboxapi.ThreadTokenUsageDetails, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.ThreadTokenUsageDetails, error) {
+		return c.inner.GetThreadTokenUsage(ctx, c.sessionID, threadID)
+	})
+}
+
 // CreateThread creates a new thread in the sandbox.
 func (c *SessionClient) CreateThread(ctx context.Context, req *sandboxapi.CreateThreadRequest) (*sandboxapi.Thread, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.Thread, error) {

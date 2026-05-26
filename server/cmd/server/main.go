@@ -1362,6 +1362,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/threads/{threadId}/token-usage",
+						Handler: h.GetThreadTokenUsage,
+						Meta: routes.Meta{
+							Group:       "Threads",
+							Description: "Get detailed token usage for a session thread",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "threadId", Example: "thread-1"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "PUT", Pattern: "/threads/{threadId}",
 						Handler: h.UpdateThread,
 						Meta: routes.Meta{

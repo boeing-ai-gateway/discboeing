@@ -43,6 +43,10 @@ func (m *activityStreamThreadManager) GetThreadInfo(string) (agent.ThreadInfo, e
 	return agent.ThreadInfo{}, nil
 }
 
+func (m *activityStreamThreadManager) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	return agent.ThreadTokenUsageDetails{ThreadID: threadID}, nil
+}
+
 func (m *activityStreamThreadManager) CreateThread(context.Context, agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{}, nil
 }

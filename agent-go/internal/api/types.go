@@ -140,6 +140,38 @@ func (u TokenUsageInfo) IsZero() bool {
 		u.Prices.IsZero()
 }
 
+type ThreadTokenUsageDetails struct {
+	ThreadID string           `json:"threadId"`
+	Summary  TokenUsageInfo   `json:"summary,omitzero"`
+	Turns    []TokenUsageTurn `json:"turns,omitempty"`
+}
+
+type TokenUsageTurn struct {
+	ID              string              `json:"id"`
+	Model           string              `json:"model,omitempty"`
+	Reasoning       string              `json:"reasoning,omitempty"`
+	ServiceTier     string              `json:"serviceTier,omitempty"`
+	ModelMaxTokens  int                 `json:"modelMaxTokens,omitempty"`
+	MaxOutputTokens int                 `json:"maxOutputTokens,omitempty"`
+	Prices          message.TokenPrices `json:"prices,omitzero"`
+	Usage           message.Usage       `json:"usage,omitzero"`
+	StartedAt       string              `json:"startedAt,omitempty"`
+	FinishedAt      string              `json:"finishedAt,omitempty"`
+	Steps           []TokenUsageStep    `json:"steps,omitempty"`
+}
+
+type TokenUsageStep struct {
+	Index              int                  `json:"index"`
+	AssistantMessageID string               `json:"assistantMessageId,omitempty"`
+	ToolCalls          []TokenUsageToolCall `json:"toolCalls,omitempty"`
+	Usage              message.Usage        `json:"usage,omitzero"`
+}
+
+type TokenUsageToolCall struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
 type QueuedPrompt struct {
 	ID          string            `json:"id"`
 	CreatedAt   string            `json:"createdAt,omitempty"`

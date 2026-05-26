@@ -185,6 +185,10 @@ func (cm *ConversationManager) GetThreadInfo(threadID string) (ThreadInfo, error
 	return info, nil
 }
 
+func (cm *ConversationManager) GetThreadTokenUsageDetails(threadID string) (ThreadTokenUsageDetails, error) {
+	return cm.agent.GetThreadTokenUsageDetails(threadID)
+}
+
 func (cm *ConversationManager) CreateThread(ctx context.Context, req CreateThreadRequest) (ThreadInfo, error) {
 	info, err := cm.agent.CreateThread(ctx, req)
 	if err != nil {

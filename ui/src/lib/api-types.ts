@@ -39,6 +39,38 @@ export interface TokenUsageInfo {
 	prices?: TokenPrices;
 }
 
+export interface ThreadTokenUsageDetails {
+	threadId: string;
+	summary?: TokenUsageInfo;
+	turns?: TokenUsageTurn[];
+}
+
+export interface TokenUsageTurn {
+	id: string;
+	model?: string;
+	reasoning?: string;
+	serviceTier?: string;
+	modelMaxTokens?: number;
+	maxOutputTokens?: number;
+	prices?: TokenPrices;
+	usage?: TokenUsage;
+	startedAt?: string;
+	finishedAt?: string;
+	steps?: TokenUsageStep[];
+}
+
+export interface TokenUsageStep {
+	index: number;
+	assistantMessageId?: string;
+	toolCalls?: TokenUsageToolCall[];
+	usage?: TokenUsage;
+}
+
+export interface TokenUsageToolCall {
+	id: string;
+	name?: string;
+}
+
 export interface TokenUsage {
 	inputTokens: InputTokenUsage;
 	outputTokens: OutputTokenUsage;

@@ -27,6 +27,17 @@ func (a *Agent) GetThreadInfo(threadID string) (discobotagent.ThreadInfo, error)
 	return threadInfoToAgent(info), nil
 }
 
+func (a *Agent) GetThreadTokenUsageDetails(threadID string) (discobotagent.ThreadTokenUsageDetails, error) {
+	info, err := a.store.GetThreadInfo(threadID)
+	if err != nil {
+		return discobotagent.ThreadTokenUsageDetails{}, err
+	}
+	return discobotagent.ThreadTokenUsageDetails{
+		ThreadID: threadID,
+		Summary:  tokenUsageInfoToAgent(info.TokenUsage),
+	}, nil
+}
+
 func (a *Agent) CreateThread(_ context.Context, req discobotagent.CreateThreadRequest) (discobotagent.ThreadInfo, error) {
 	info, err := a.store.CreateThreadInfo(a.cwd, thread.CreateThreadRequest(req))
 	if err != nil {
@@ -45,26 +56,30 @@ func (a *Agent) UpdateThread(_ context.Context, threadID string, req discobotage
 
 func threadInfoToAgent(info thread.Info) discobotagent.ThreadInfo {
 	return discobotagent.ThreadInfo{
-		ID:           info.ID,
-		Name:         info.Name,
-		CWD:          info.CWD,
-		LastMessage:  info.LastMessage,
-		ErrorMessage: info.ErrorMessage,
-		Model:        info.Model,
-		Reasoning:    info.Reasoning,
-		ServiceTier:  info.ServiceTier,
-		State:        discobotagent.ThreadState(info.State),
-		TokenUsage: discobotagent.TokenUsageInfo{
-			Total:           info.TokenUsage.Total,
-			LastStep:        info.TokenUsage.LastStep,
-			LastTurn:        info.TokenUsage.LastTurn,
-			ModelMaxTokens:  info.TokenUsage.ModelMaxTokens,
-			MaxOutputTokens: info.TokenUsage.MaxOutputTokens,
-			Prices:          info.TokenUsage.Prices,
-		},
+		ID:              info.ID,
+		Name:            info.Name,
+		CWD:             info.CWD,
+		LastMessage:     info.LastMessage,
+		ErrorMessage:    info.ErrorMessage,
+		Model:           info.Model,
+		Reasoning:       info.Reasoning,
+		ServiceTier:     info.ServiceTier,
+		State:           discobotagent.ThreadState(info.State),
+		TokenUsage:      tokenUsageInfoToAgent(info.TokenUsage),
 		PendingQuestion: info.PendingQuestion,
 		ActiveCommand:   info.ActiveCommand,
 		Metadata:        info.Metadata,
+	}
+}
+
+func tokenUsageInfoToAgent(info thread.TokenUsageInfo) discobotagent.TokenUsageInfo {
+	return discobotagent.TokenUsageInfo{
+		Total:           info.Total,
+		LastStep:        info.LastStep,
+		LastTurn:        info.LastTurn,
+		ModelMaxTokens:  info.ModelMaxTokens,
+		MaxOutputTokens: info.MaxOutputTokens,
+		Prices:          info.Prices,
 	}
 }
 

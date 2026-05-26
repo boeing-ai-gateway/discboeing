@@ -265,6 +265,46 @@ func (s *Store) ListThreads() ([]string, error) {
 	return ids, nil
 }
 
+// ListTurnIDs returns durable turn IDs for a thread.
+func (s *Store) ListTurnIDs(threadID string) ([]string, error) {
+	entries, err := os.ReadDir(s.turnsDir(threadID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list turns: %w", err)
+	}
+
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			ids = append(ids, entry.Name())
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
+// ListStepResultIndexes returns completed step result indexes for a turn.
+func (s *Store) ListStepResultIndexes(threadID, turnID string) ([]int, error) {
+	pattern := filepath.Join(s.turnsDir(threadID), turnID, "step-*-result.json")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob step results for turn %s: %w", turnID, err)
+	}
+	sort.Strings(matches)
+
+	indexes := make([]int, 0, len(matches))
+	for _, match := range matches {
+		var step int
+		if _, err := fmt.Sscanf(filepath.Base(match), "step-%03d-result.json", &step); err != nil {
+			continue
+		}
+		indexes = append(indexes, step)
+	}
+	return indexes, nil
+}
+
 func (s *Store) threadDir(threadID string) string {
 	return filepath.Join(s.baseDir, threadID)
 }

@@ -78,6 +78,9 @@ func (m *streamTestAgent) ListThreadInfos() ([]agent.ThreadInfo, error) {
 func (m *streamTestAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: threadID}, nil
 }
+func (m *streamTestAgent) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	return agent.ThreadTokenUsageDetails{ThreadID: threadID}, nil
+}
 func (m *streamTestAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil
 }

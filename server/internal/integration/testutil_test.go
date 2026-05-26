@@ -340,6 +340,7 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 					r.Get("/threads", h.ListThreads)
 					r.Post("/threads", h.CreateThread)
 					r.Get("/threads/{threadId}", h.GetThread)
+					r.Get("/threads/{threadId}/token-usage", h.GetThreadTokenUsage)
 					r.Put("/threads/{threadId}", h.UpdateThread)
 					r.Patch("/threads/{threadId}", h.UpdateThread)
 					r.Delete("/threads/{threadId}", h.DeleteThread)

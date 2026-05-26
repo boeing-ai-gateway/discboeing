@@ -65,6 +65,54 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 	return thread
 }
 
+func tokenUsageDetailsResponse(details agent.ThreadTokenUsageDetails) api.ThreadTokenUsageDetails {
+	turns := make([]api.TokenUsageTurn, 0, len(details.Turns))
+	for _, turn := range details.Turns {
+		steps := make([]api.TokenUsageStep, 0, len(turn.Steps))
+		for _, step := range turn.Steps {
+			toolCalls := make([]api.TokenUsageToolCall, 0, len(step.ToolCalls))
+			for _, toolCall := range step.ToolCalls {
+				toolCalls = append(toolCalls, api.TokenUsageToolCall{
+					ID:   toolCall.ID,
+					Name: toolCall.Name,
+				})
+			}
+			steps = append(steps, api.TokenUsageStep{
+				Index:              step.Index,
+				AssistantMessageID: step.AssistantMessageID,
+				ToolCalls:          toolCalls,
+				Usage:              step.Usage,
+			})
+		}
+		turns = append(turns, api.TokenUsageTurn{
+			ID:              turn.ID,
+			Model:           turn.Model,
+			Reasoning:       turn.Reasoning,
+			ServiceTier:     turn.ServiceTier,
+			ModelMaxTokens:  turn.ModelMaxTokens,
+			MaxOutputTokens: turn.MaxOutputTokens,
+			Prices:          turn.Prices,
+			Usage:           turn.Usage,
+			StartedAt:       turn.StartedAt,
+			FinishedAt:      turn.FinishedAt,
+			Steps:           steps,
+		})
+	}
+
+	return api.ThreadTokenUsageDetails{
+		ThreadID: details.ThreadID,
+		Summary: api.TokenUsageInfo{
+			Total:           details.Summary.Total,
+			LastStep:        details.Summary.LastStep,
+			LastTurn:        details.Summary.LastTurn,
+			ModelMaxTokens:  details.Summary.ModelMaxTokens,
+			MaxOutputTokens: details.Summary.MaxOutputTokens,
+			Prices:          details.Summary.Prices,
+		},
+		Turns: turns,
+	}
+}
+
 func (h *Handler) threadActivityState(thread api.Thread) *api.SessionThreadActivityState {
 	state := api.SessionThreadActivityState{ThreadID: thread.ID}
 	if thread.PendingQuestion {
@@ -398,6 +446,27 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, h.threadResponse(info))
+}
+
+// GetThreadTokenUsage handles GET /threads/{id}/token-usage.
+func (h *Handler) GetThreadTokenUsage(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversations(w) {
+		return
+	}
+
+	threadID := chi.URLParam(r, "id")
+	if strings.TrimSpace(threadID) == "" {
+		h.Error(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	details, err := h.threadManager.GetThreadTokenUsageDetails(threadID)
+	if err != nil {
+		h.Error(w, http.StatusNotFound, "thread not found")
+		return
+	}
+
+	h.JSON(w, http.StatusOK, tokenUsageDetailsResponse(details))
 }
 
 // UpdateThread handles PUT/PATCH /threads/{id} — updates thread metadata.

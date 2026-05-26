@@ -69,6 +69,10 @@ func (m *mockAgent) GetThreadInfo(threadID string) (ThreadInfo, error) {
 	return ThreadInfo{ID: threadID}, nil
 }
 
+func (m *mockAgent) GetThreadTokenUsageDetails(threadID string) (ThreadTokenUsageDetails, error) {
+	return ThreadTokenUsageDetails{ThreadID: threadID}, nil
+}
+
 func (m *mockAgent) CreateThread(_ context.Context, req CreateThreadRequest) (ThreadInfo, error) {
 	m.threads = append(m.threads, req.ID)
 	return ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, LastMessage: req.LastMessage, Metadata: req.Metadata}, nil

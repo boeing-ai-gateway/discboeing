@@ -107,6 +107,10 @@ func (testAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{ID: threadID}, nil
 }
 
+func (testAgent) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	return agent.ThreadTokenUsageDetails{ThreadID: threadID}, nil
+}
+
 func (testAgent) CreateThread(context.Context, agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	return agent.ThreadInfo{}, nil
 }

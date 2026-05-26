@@ -2005,6 +2005,97 @@ func (a *DefaultAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) 
 	return threadInfoToAgent(info), nil
 }
 
+func (a *DefaultAgent) GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error) {
+	info, err := a.GetThreadInfo(threadID)
+	if err != nil {
+		return agent.ThreadTokenUsageDetails{}, err
+	}
+
+	turnIDs, err := a.store.ListTurnIDs(threadID)
+	if err != nil {
+		return agent.ThreadTokenUsageDetails{}, err
+	}
+
+	turns := make([]agent.TokenUsageTurn, 0, len(turnIDs))
+	for _, turnID := range turnIDs {
+		record, err := a.store.LoadTurnRecord(threadID, turnID)
+		if err != nil {
+			return agent.ThreadTokenUsageDetails{}, err
+		}
+		if record == nil {
+			continue
+		}
+
+		stepIndexes, err := a.store.ListStepResultIndexes(threadID, turnID)
+		if err != nil {
+			return agent.ThreadTokenUsageDetails{}, err
+		}
+
+		turnUsage := message.Usage{}
+		steps := make([]agent.TokenUsageStep, 0, len(stepIndexes))
+		for _, stepIndex := range stepIndexes {
+			result, err := a.store.LoadStepResult(threadID, turnID, stepIndex)
+			if err != nil {
+				return agent.ThreadTokenUsageDetails{}, err
+			}
+			if result == nil {
+				continue
+			}
+
+			toolCalls := make([]agent.TokenUsageToolCall, 0, len(result.ToolCalls))
+			for _, toolCall := range result.ToolCalls {
+				toolCalls = append(toolCalls, agent.TokenUsageToolCall{
+					ID:   toolCall.ToolCallID,
+					Name: toolCall.ToolName,
+				})
+			}
+			turnUsage = addAgentUsage(turnUsage, result.Usage)
+			steps = append(steps, agent.TokenUsageStep{
+				Index:              stepIndex,
+				AssistantMessageID: strings.TrimSpace(result.AssistantMessageID),
+				ToolCalls:          toolCalls,
+				Usage:              result.Usage,
+			})
+		}
+
+		startedAt := ""
+		if record.StartedAt != nil {
+			startedAt = record.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		finishedAt := ""
+		if record.FinishedAt != nil {
+			finishedAt = record.FinishedAt.UTC().Format(time.RFC3339Nano)
+		}
+
+		turns = append(turns, agent.TokenUsageTurn{
+			ID:              record.ID,
+			Model:           record.Config.Model,
+			Reasoning:       string(record.Config.Reasoning),
+			ServiceTier:     record.Config.ServiceTier,
+			ModelMaxTokens:  record.Config.ContextWindow,
+			MaxOutputTokens: record.Config.MaxOutputTokens,
+			Prices:          record.Config.TokenPrices,
+			Usage:           turnUsage,
+			StartedAt:       startedAt,
+			FinishedAt:      finishedAt,
+			Steps:           steps,
+		})
+	}
+
+	slices.SortStableFunc(turns, func(a, b agent.TokenUsageTurn) int {
+		if a.StartedAt != b.StartedAt {
+			return strings.Compare(a.StartedAt, b.StartedAt)
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+
+	return agent.ThreadTokenUsageDetails{
+		ThreadID: threadID,
+		Summary:  info.TokenUsage,
+		Turns:    turns,
+	}, nil
+}
+
 func (a *DefaultAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
 	info, err := a.store.CreateThreadInfo(a.cwd, thread.CreateThreadRequest(req))
 	if err != nil {
@@ -2044,6 +2135,17 @@ func threadInfoToAgent(info thread.Info) agent.ThreadInfo {
 		ActiveCommand:   info.ActiveCommand,
 		Metadata:        info.Metadata,
 	}
+}
+
+func addAgentUsage(a, b message.Usage) message.Usage {
+	a.InputTokens.Total += b.InputTokens.Total
+	a.InputTokens.NoCache += b.InputTokens.NoCache
+	a.InputTokens.CacheRead += b.InputTokens.CacheRead
+	a.InputTokens.CacheWrite += b.InputTokens.CacheWrite
+	a.OutputTokens.Total += b.OutputTokens.Total
+	a.OutputTokens.Text += b.OutputTokens.Text
+	a.OutputTokens.Reasoning += b.OutputTokens.Reasoning
+	return a
 }
 
 func (a *DefaultAgent) DeleteThread(_ context.Context, threadID string) error {

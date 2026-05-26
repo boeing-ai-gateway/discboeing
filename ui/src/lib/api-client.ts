@@ -117,6 +117,7 @@ import type {
 	Suggestion,
 	SupportInfoResponse,
 	Thread,
+	ThreadTokenUsageDetails,
 	SystemStatusResponse,
 	TerminalExecuteResponse,
 	UpdateThreadRequest,
@@ -745,6 +746,15 @@ class ApiClient {
 	async getThread(sessionId: string, threadId: string): Promise<Thread> {
 		return this.fetch<Thread>(
 			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}`,
+		);
+	}
+
+	async getThreadTokenUsage(
+		sessionId: string,
+		threadId: string,
+	): Promise<ThreadTokenUsageDetails> {
+		return this.fetch<ThreadTokenUsageDetails>(
+			`/sessions/${sessionId}/threads/${encodeURIComponent(threadId)}/token-usage`,
 		);
 	}
 

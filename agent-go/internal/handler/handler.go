@@ -45,6 +45,7 @@ type Handler struct {
 type threadManager interface {
 	ListThreadInfos() ([]agent.ThreadInfo, error)
 	GetThreadInfo(threadID string) (agent.ThreadInfo, error)
+	GetThreadTokenUsageDetails(threadID string) (agent.ThreadTokenUsageDetails, error)
 	CreateThread(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error)
 	UpdateThread(ctx context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error)
 	DeleteThread(ctx context.Context, threadID string) error
@@ -184,6 +185,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/", Handler: h.GetThread,
 			Meta: routes.Meta{Group: "Threads", Description: "Get thread metadata"}})
+		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/token-usage", Handler: h.GetThreadTokenUsage,
+			Meta: routes.Meta{Group: "Threads", Description: "Get detailed thread token usage"}})
 		threadReg.Register(r, routes.Route{Method: "GET", Pattern: "/messages", Handler: h.ListMessages,
 			Meta: routes.Meta{
 				Group:       "Threads",
