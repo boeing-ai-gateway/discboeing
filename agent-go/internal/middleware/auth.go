@@ -22,6 +22,8 @@ var publicPaths = map[string]bool{
 	"/sudo/authorize": true,
 }
 
+const authClockSkew = 12 * time.Hour
+
 // Auth returns middleware that validates Bearer tokens against a trusted public
 // key or legacy shared secret hash. If both are empty, auth is disabled.
 func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
@@ -194,11 +196,41 @@ func verifyPASETOTokenDetail(token, trustKey string) (bool, string) {
 	if err != nil {
 		return false, "invalid_trust_key"
 	}
-	_, err = paseto.NewParserForValidNow().ParseV4Public(publicKey, token, nil)
+	_, err = paseto.MakeParser([]paseto.Rule{validAtWithClockSkew(time.Now().UTC(), authClockSkew)}).ParseV4Public(publicKey, token, nil)
 	if err != nil {
 		return false, diagnosePASETOTokenFailure(publicKey, token, err)
 	}
 	return true, "matched"
+}
+
+func validAtWithClockSkew(now time.Time, skew time.Duration) paseto.Rule {
+	return func(token paseto.Token) error {
+		issuedAt, err := token.GetIssuedAt()
+		if err != nil {
+			return err
+		}
+		if now.Add(skew).Before(issuedAt) {
+			return fmt.Errorf("the ValidAt time plus clock skew is before this token was issued")
+		}
+
+		notBefore, err := token.GetNotBefore()
+		if err != nil {
+			return err
+		}
+		if now.Add(skew).Before(notBefore) {
+			return fmt.Errorf("the ValidAt time plus clock skew is before this token's not before time")
+		}
+
+		expiresAt, err := token.GetExpiration()
+		if err != nil {
+			return err
+		}
+		if now.Add(-skew).After(expiresAt) {
+			return fmt.Errorf("the ValidAt time minus clock skew is after this token expires")
+		}
+
+		return nil
+	}
 }
 
 func diagnosePASETOTokenFailure(publicKey paseto.V4AsymmetricPublicKey, token string, validationErr error) string {
@@ -213,12 +245,13 @@ func diagnosePASETOTokenFailure(publicKey paseto.V4AsymmetricPublicKey, token st
 		return "token_validation_failed: invalid_iat: " + err.Error()
 	}
 	issuedAt = issuedAt.UTC()
-	if now.Before(issuedAt) {
+	if now.Add(authClockSkew).Before(issuedAt) {
 		return fmt.Sprintf(
-			"token_issued_in_future iat=%s now=%s skew=%s",
+			"token_issued_in_future iat=%s now=%s skew=%s tolerance=%s",
 			formatAuthTime(issuedAt),
 			formatAuthTime(now),
 			issuedAt.Sub(now).Round(time.Second),
+			authClockSkew,
 		)
 	}
 
@@ -227,12 +260,13 @@ func diagnosePASETOTokenFailure(publicKey paseto.V4AsymmetricPublicKey, token st
 		return "token_validation_failed: invalid_nbf: " + err.Error()
 	}
 	notBefore = notBefore.UTC()
-	if now.Before(notBefore) {
+	if now.Add(authClockSkew).Before(notBefore) {
 		return fmt.Sprintf(
-			"token_not_yet_valid nbf=%s now=%s skew=%s",
+			"token_not_yet_valid nbf=%s now=%s skew=%s tolerance=%s",
 			formatAuthTime(notBefore),
 			formatAuthTime(now),
 			notBefore.Sub(now).Round(time.Second),
+			authClockSkew,
 		)
 	}
 
@@ -241,12 +275,13 @@ func diagnosePASETOTokenFailure(publicKey paseto.V4AsymmetricPublicKey, token st
 		return "token_validation_failed: invalid_exp: " + err.Error()
 	}
 	expiresAt = expiresAt.UTC()
-	if now.After(expiresAt) {
+	if now.Add(-authClockSkew).After(expiresAt) {
 		return fmt.Sprintf(
-			"token_expired exp=%s now=%s age=%s",
+			"token_expired exp=%s now=%s age=%s tolerance=%s",
 			formatAuthTime(expiresAt),
 			formatAuthTime(now),
 			now.Sub(expiresAt).Round(time.Second),
+			authClockSkew,
 		)
 	}
 

@@ -171,9 +171,9 @@ func TestInspectBearerTokenReportsTrustKeyValidationFailure(t *testing.T) {
 
 	token := paseto.NewToken()
 	now := time.Now()
-	token.SetIssuedAt(now.Add(-2 * time.Minute))
-	token.SetNotBefore(now.Add(-2 * time.Minute))
-	token.SetExpiration(now.Add(-time.Minute))
+	token.SetIssuedAt(now.Add(-14 * time.Hour))
+	token.SetNotBefore(now.Add(-14 * time.Hour))
+	token.SetExpiration(now.Add(-13 * time.Hour))
 	tokenText := token.V4Sign(pasetoKey, nil)
 
 	result := inspectBearerToken(tokenText, "", base64.StdEncoding.EncodeToString(publicKey))
@@ -185,6 +185,29 @@ func TestInspectBearerTokenReportsTrustKeyValidationFailure(t *testing.T) {
 	}
 	if !strings.Contains(result.Detail, "trust_key=token_expired") {
 		t.Fatalf("detail = %q, want expired token detail", result.Detail)
+	}
+}
+
+func TestInspectBearerTokenAcceptsExpiredTokenWithinClockSkew(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	pasetoKey, err := paseto.NewV4AsymmetricSecretKeyFromEd25519(privateKey)
+	if err != nil {
+		t.Fatalf("failed to convert key: %v", err)
+	}
+
+	token := paseto.NewToken()
+	now := time.Now()
+	token.SetIssuedAt(now.Add(-2 * time.Hour))
+	token.SetNotBefore(now.Add(-2 * time.Hour))
+	token.SetExpiration(now.Add(-time.Minute))
+	tokenText := token.V4Sign(pasetoKey, nil)
+
+	result := inspectBearerToken(tokenText, "", base64.StdEncoding.EncodeToString(publicKey))
+	if !result.OK {
+		t.Fatalf("expected token expired within clock skew to be accepted: %s", result.Detail)
 	}
 }
 
@@ -201,8 +224,8 @@ func TestInspectBearerTokenReportsNotYetValidToken(t *testing.T) {
 	token := paseto.NewToken()
 	now := time.Now()
 	token.SetIssuedAt(now)
-	token.SetNotBefore(now.Add(time.Minute))
-	token.SetExpiration(now.Add(2 * time.Minute))
+	token.SetNotBefore(now.Add(13 * time.Hour))
+	token.SetExpiration(now.Add(14 * time.Hour))
 	tokenText := token.V4Sign(pasetoKey, nil)
 
 	result := inspectBearerToken(tokenText, "", base64.StdEncoding.EncodeToString(publicKey))
@@ -211,6 +234,29 @@ func TestInspectBearerTokenReportsNotYetValidToken(t *testing.T) {
 	}
 	if !strings.Contains(result.Detail, "trust_key=token_not_yet_valid") {
 		t.Fatalf("detail = %q, want not-yet-valid token detail", result.Detail)
+	}
+}
+
+func TestInspectBearerTokenAcceptsFutureTokenWithinClockSkew(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	pasetoKey, err := paseto.NewV4AsymmetricSecretKeyFromEd25519(privateKey)
+	if err != nil {
+		t.Fatalf("failed to convert key: %v", err)
+	}
+
+	token := paseto.NewToken()
+	now := time.Now()
+	token.SetIssuedAt(now.Add(time.Minute))
+	token.SetNotBefore(now.Add(time.Minute))
+	token.SetExpiration(now.Add(2 * time.Hour))
+	tokenText := token.V4Sign(pasetoKey, nil)
+
+	result := inspectBearerToken(tokenText, "", base64.StdEncoding.EncodeToString(publicKey))
+	if !result.OK {
+		t.Fatalf("expected future token within clock skew to be accepted: %s", result.Detail)
 	}
 }
 

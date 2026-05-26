@@ -15,6 +15,8 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
+const sandboxAuthTokenTTL = 12 * time.Hour
+
 func encodeSandboxKey(key []byte) string {
 	return base64.StdEncoding.EncodeToString(key)
 }
@@ -139,7 +141,7 @@ func (s *SandboxService) createSandboxAuthToken(ctx context.Context, sessionID s
 	if err != nil {
 		return "", err
 	}
-	return createSandboxAuthToken(privateKey, time.Minute)
+	return createSandboxAuthToken(privateKey, sandboxAuthTokenTTL)
 }
 
 func (s *SandboxService) sandboxTrustKeyForUser(ctx context.Context, userID *string) (string, error) {
