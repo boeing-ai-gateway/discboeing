@@ -195,7 +195,7 @@ After the overlay filesystem is mounted, the agent bind-mounts cache directories
    - Bind mount source to target using `syscall.Mount()`
 
 ```go
-// In agent/cmd/agent/main.go
+// In sandbox-init/cmd/sandbox-init/main.go
 source := filepath.Join("/.data/cache", subDir)
 target := "/home/discobot/.npm"
 syscall.Mount(source, target, "none", syscall.MS_BIND, "")

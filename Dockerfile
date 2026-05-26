@@ -31,17 +31,17 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
-# Stage 1b: Build the agent init process from source
-FROM root-go-deps AS agent-builder
+# Stage 1b: Build the sandbox init process from source
+FROM root-go-deps AS sandbox-init-builder
 
-# Copy agent source (including embedded proxy config)
-COPY agent/ ./agent/
+# Copy sandbox-init source (including embedded proxy config)
+COPY sandbox-init/ ./sandbox-init/
 
-# Build the agent binary (static for portability)
-# The go:embed directive will include agent/internal/proxy/default-config.yaml
+# Build the sandbox init binary (static for portability)
+# The go:embed directive will include sandbox-init/cmd/sandbox-init/default-proxy-config.yaml
 RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-agent ./agent/cmd/agent
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
 
 # Stage 2: Download shared Go module dependencies for agent-go
 FROM golang:1.26 AS agent-go-deps
@@ -370,7 +370,7 @@ FROM scratch AS runtime-overlay
 # Copy binaries to /opt/discobot/bin
 COPY --from=agent-go-builder --chmod=755 /discobot-agent-api /opt/discobot/bin/discobot-agent-api
 COPY --from=proxy-builder --chmod=755 /proxy /opt/discobot/bin/proxy
-COPY --from=agent-builder --chmod=755 /discobot-agent /opt/discobot/bin/discobot-agent
+COPY --from=sandbox-init-builder --chmod=755 /discobot-sandbox-init /opt/discobot/bin/discobot-sandbox-init
 
 # Copy browser-harness runtime and expose it at /usr/local/bin/browser-harness
 COPY --from=browser-harness-builder /opt/browser-harness /opt/browser-harness
@@ -407,7 +407,7 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     serial-getty@.service \
     && systemctl disable docker.service containerd.service \
     && systemctl enable \
-    discobot-setup.service \
+    discobot-sandbox-init.service \
     discobot-proxy.service \
     docker.socket \
     discobot-agent-api.service \
@@ -429,7 +429,7 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     systemd-logind.service \
     && systemctl disable docker.service containerd.service \
     && systemctl enable \
-    discobot-setup.service \
+    discobot-sandbox-init.service \
     discobot-proxy.service \
     docker.socket \
     discobot-agent-api.service \

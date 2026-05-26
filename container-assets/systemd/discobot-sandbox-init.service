@@ -16,7 +16,7 @@ RemainAfterExit=yes
 ExecStartPre=/bin/bash -c 'mkdir -p /run/discobot && tr "\\0" "\\n" < /proc/1/environ > /run/discobot/container-env'
 EnvironmentFile=-/run/discobot/container-env
 
-ExecStart=/opt/discobot/bin/discobot-agent setup
+ExecStart=/opt/discobot/bin/discobot-sandbox-init setup
 
 StandardOutput=journal+console
 StandardError=journal+console

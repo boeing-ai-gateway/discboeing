@@ -2,7 +2,7 @@
 /**
  * Agent Image Watcher - Entry point
  *
- * Watches the ./agent-go, ./agent directories and ./Dockerfile for changes
+ * Watches the ./agent-go, ./sandbox-init directories and ./Dockerfile for changes
  * and automatically rebuilds the Docker image, then updates server/.env with
  * the new image digest.
  *
@@ -17,7 +17,7 @@ import { AgentWatcher, imageRepositoryFromRef } from "./watcher.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, "../..");
 const AGENT_GO_DIR = join(ROOT_DIR, "agent-go");
-const AGENT_DIR = join(ROOT_DIR, "agent");
+const AGENT_DIR = join(ROOT_DIR, "sandbox-init");
 const SERVER_ENV_PATH = join(ROOT_DIR, "server", ".env");
 
 /** Parse a .env file into a key/value map. Silently returns {} if missing. */

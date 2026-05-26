@@ -1,6 +1,6 @@
 # Init Process Design
 
-This document describes the design of the `discobot-agent` init process.
+This document describes the design of the `discobot-sandbox-init` init process.
 
 ## Problem Statement
 
@@ -382,13 +382,13 @@ docker stop test-agent  # Should exit cleanly
 
 ```bash
 # Build and test locally
-go build -o discobot-agent ./agent/cmd/agent
+go build -o discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
 
 # Test user lookup
-AGENT_USER=$USER DISCOBOT_SESSION_ID=test ./discobot-agent --help
+AGENT_USER=$USER DISCOBOT_SESSION_ID=test ./discobot-sandbox-init --help
 
 # Test as PID 1 (requires root)
-sudo unshare -p -f --mount-proc ./discobot-agent
+sudo unshare -p -f --mount-proc ./discobot-sandbox-init
 ```
 
 ## Container Requirements

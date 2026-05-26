@@ -1,7 +1,7 @@
 [Unit]
 Description=Discobot VS Code socket activation
-After=discobot-setup.service
-Requires=discobot-setup.service
+After=discobot-sandbox-init.service
+Requires=discobot-sandbox-init.service
 
 [Socket]
 ListenStream=13337

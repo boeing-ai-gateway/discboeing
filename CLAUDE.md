@@ -288,9 +288,9 @@ When making changes, update the relevant docs:
 - `docs/ui/ARCHITECTURE.md` — Frontend patterns
 - `docs/design/` — Cross-cutting design docs
 - `server/docs/` — Server architecture and design docs
-- `agent/docs/` — Agent init process docs
+- `sandbox-init/docs/` — Sandbox init process docs
 - `agent-go/docs/` — Agent API docs
-- `server/README.md`, `agent/README.md`, `proxy/README.md` — Component READMEs
+- `server/README.md`, `sandbox-init/README.md`, `proxy/README.md` — Component READMEs
 
 ## Known Quirks
 

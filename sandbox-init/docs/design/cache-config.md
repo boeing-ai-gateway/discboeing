@@ -97,7 +97,7 @@ func loadCacheConfig() *cacheConfig {
     
     var cfg cacheConfig
     if err := json.Unmarshal(data, &cfg); err != nil {
-        fmt.Printf("discobot-agent: warning: failed to parse cache config: %v\n", err)
+        fmt.Printf("discobot-sandbox-init: warning: failed to parse cache config: %v\n", err)
         return &cacheConfig{}
     }
     
@@ -151,4 +151,4 @@ Users should be instructed to:
 ## See Also
 
 - [Server Cache Documentation](../../../server/docs/design/cache.md) - Full technical details
-- [Agent Architecture](../ARCHITECTURE.md) - Overall agent design
+- [Sandbox Init Architecture](../ARCHITECTURE.md) - Overall agent design

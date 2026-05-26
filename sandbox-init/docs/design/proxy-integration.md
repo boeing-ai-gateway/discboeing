@@ -259,9 +259,9 @@ Response:
 The proxy logs to stdout/stderr (captured by container logs):
 
 ```
-discobot-agent: found proxy at /opt/discobot/bin/proxy, starting HTTP proxy...
-discobot-agent: proxy started (pid=42), waiting for health check...
-discobot-agent: HTTP proxy ready on port 17080
+discobot-sandbox-init: found proxy at /opt/discobot/bin/proxy, starting HTTP proxy...
+discobot-sandbox-init: proxy started (pid=42), waiting for health check...
+discobot-sandbox-init: HTTP proxy ready on port 17080
 ```
 
 During operation:
@@ -390,7 +390,7 @@ sudo update-ca-trust extract
 
 Check logs for:
 ```
-discobot-agent: Proxy daemon not started: proxy binary not found at /opt/discobot/bin/proxy
+discobot-sandbox-init: Proxy daemon not started: proxy binary not found at /opt/discobot/bin/proxy
 ```
 
 **Solution**: Verify the proxy binary is included in the container image at `/opt/discobot/bin/proxy`.
@@ -398,7 +398,7 @@ discobot-agent: Proxy daemon not started: proxy binary not found at /opt/discobo
 ### Proxy Not Ready
 
 ```
-discobot-agent: proxy did not become ready: timeout waiting for proxy health check
+discobot-sandbox-init: proxy did not become ready: timeout waiting for proxy health check
 ```
 
 **Solution**: Check if port 17081 is available. Increase `proxyStartupTimeout` in agent code if needed.
@@ -441,7 +441,7 @@ The cache is stored on disk, but active entries are indexed in memory. To reduce
 
 ### Agent Changes
 
-- `agent/cmd/agent/main.go`:
+- `sandbox-init/cmd/sandbox-init/main.go`:
   - Added proxy startup constants (ports, timeouts)
   - Added `startProxyDaemon()` function
   - Added `waitForProxyReady()` health check
@@ -475,5 +475,5 @@ Potential improvements:
 
 - [Proxy README](./proxy/README.md) - Main proxy documentation
 - [Docker Caching Guide](./proxy/docs/DOCKER_CACHING.md) - Detailed caching guide
-- [Agent Architecture](./agent/docs/ARCHITECTURE.md) - Agent design docs
-- [Agent Init Process](./agent/docs/design/init.md) - Init process details
+- [Sandbox Init Architecture](../ARCHITECTURE.md) - Sandbox init design docs
+- [Agent Init Process](init.md) - Init process details

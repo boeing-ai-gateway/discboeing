@@ -1,4 +1,4 @@
-// Package main is the entry point for the discobot-agent init process.
+// Package main is the entry point for the discobot-sandbox-init init process.
 // This binary provides two subcommands:
 // - setup: Container initialization (workspace, overlayfs, certs, env files)
 // - proxy: VSOCK port proxy for VZ VMs (Docker event watching + socat forwarding)
@@ -53,7 +53,7 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: discobot-agent <setup|proxy>\n")
+		fmt.Fprintf(os.Stderr, "usage: discobot-sandbox-init <setup|proxy>\n")
 		os.Exit(1)
 	}
 
@@ -64,12 +64,12 @@ func main() {
 	case "proxy":
 		err = runProxy()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\nusage: discobot-agent <setup|proxy>\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "unknown command: %s\nusage: discobot-sandbox-init <setup|proxy>\n", os.Args[1])
 		os.Exit(1)
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent %s: %v\n", os.Args[1], err)
+		fmt.Fprintf(os.Stderr, "discobot-sandbox-init %s: %v\n", os.Args[1], err)
 		os.Exit(1)
 	}
 }
@@ -79,7 +79,7 @@ func main() {
 // environment files for other systemd services and exits.
 func runSetup() error {
 	startupStart := time.Now()
-	fmt.Printf("discobot-agent: setup beginning at %s\n", startupStart.Format(time.RFC3339))
+	fmt.Printf("discobot-sandbox-init: setup beginning at %s\n", startupStart.Format(time.RFC3339))
 
 	// Change to root directory to avoid issues with overlayfs mounting
 	if err := os.Chdir("/"); err != nil {
@@ -88,12 +88,12 @@ func runSetup() error {
 
 	// Step 0: Fix localhost resolution
 	if err := fixLocalhostResolution(); err != nil {
-		fmt.Printf("discobot-agent: warning: failed to fix localhost resolution: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: failed to fix localhost resolution: %v\n", err)
 	}
 
 	// Fix MTU for nested Docker
 	if err := fixMTUForNestedDocker(); err != nil {
-		fmt.Printf("discobot-agent: warning: failed to fix MTU for nested Docker: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: failed to fix MTU for nested Docker: %v\n", err)
 	}
 
 	// Determine configuration from environment
@@ -114,7 +114,7 @@ func runSetup() error {
 	if err := setupGitSafeDirectories(""); err != nil {
 		return fmt.Errorf("git safe.directory setup failed: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] git safe.directory setup completed\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] git safe.directory setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 1: Setup base home directory
 	stepStart = time.Now()
@@ -124,11 +124,11 @@ func runSetup() error {
 	if err := removeObsoleteBundledHomeConfig(baseHomeDir); err != nil {
 		return fmt.Errorf("obsolete bundled config cleanup failed: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] base home setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 3: Setup and mount OverlayFS for copy-on-write session isolation
 	stepStart = time.Now()
-	fmt.Printf("discobot-agent: using OverlayFS\n")
+	fmt.Printf("discobot-sandbox-init: using OverlayFS\n")
 
 	if err := setupOverlayFS(sessionID, userInfo); err != nil {
 		return fmt.Errorf("overlayfs setup failed: %w", err)
@@ -139,35 +139,35 @@ func runSetup() error {
 	if err := ensureWorkspaceDirectory(userInfo); err != nil {
 		return fmt.Errorf("workspace directory setup failed: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
 
 	// Step 5: Mount cache directories
 	stepStart = time.Now()
 	if err := mountCacheDirectories(); err != nil {
-		fmt.Printf("discobot-agent: Cache mount failed: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: Cache mount failed: %v\n", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
 
 	// Step 6: Setup proxy configuration
 	stepStart = time.Now()
 	if err := setupProxyConfig(userInfo); err != nil {
-		fmt.Printf("discobot-agent: Proxy config setup failed: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: Proxy config setup failed: %v\n", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] proxy config setup completed\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] proxy config setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 7: Generate CA certificate
 	stepStart = time.Now()
 	if err := setupProxyCertificate(userInfo); err != nil {
-		fmt.Printf("discobot-agent: Proxy certificate setup failed: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: Proxy certificate setup failed: %v\n", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 8: Write Docker daemon configuration
 	stepStart = time.Now()
 	if err := writeDockerDaemonConfig(); err != nil {
-		fmt.Printf("discobot-agent: Docker daemon config failed: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: Docker daemon config failed: %v\n", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] Docker daemon config written\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] Docker daemon config written\n", time.Since(stepStart).Seconds())
 
 	// Step 8.5: Remove stale buildx default-builder config so that no session
 	// inherits a pointer to a remote BuildKit instance from a previous run.
@@ -177,24 +177,24 @@ func runSetup() error {
 		filepath.Join(buildxDir, "instances", "discobot-shared"),
 	} {
 		if err := os.Remove(stale); err != nil && !os.IsNotExist(err) {
-			fmt.Printf("discobot-agent: warning: failed to remove stale buildx config %s: %v\n", stale, err)
+			fmt.Printf("discobot-sandbox-init: warning: failed to remove stale buildx config %s: %v\n", stale, err)
 		}
 	}
 
 	// Step 9: Write environment files for systemd services
 	stepStart = time.Now()
 	if err := writeProxyEnvironmentFile(); err != nil {
-		fmt.Printf("discobot-agent: warning: failed to write proxy env file: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: failed to write proxy env file: %v\n", err)
 	}
 	if err := writeAgentEnvironmentFile(userInfo); err != nil {
 		return fmt.Errorf("failed to write agent environment file: %w", err)
 	}
-	fmt.Printf("discobot-agent: [%.3fs] environment files written\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] environment files written\n", time.Since(stepStart).Seconds())
 
 	// Notify systemd that setup is complete so dependent services can start.
-	fmt.Printf("discobot-agent: [%.3fs] setup completed successfully\n", time.Since(startupStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] setup completed successfully\n", time.Since(startupStart).Seconds())
 	if err := sdNotifyReady(); err != nil {
-		fmt.Printf("discobot-agent: warning: sd_notify failed: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: sd_notify failed: %v\n", err)
 	}
 
 	return nil
@@ -271,7 +271,7 @@ func writeDockerDaemonConfig() error {
 	if err := os.WriteFile("/etc/docker/daemon.json", configBytes, 0644); err != nil {
 		return fmt.Errorf("failed to write daemon.json: %w", err)
 	}
-	fmt.Printf("discobot-agent: configured Docker daemon with MTU=%d (interface MTU: %d, overhead: 100)\n", dockerMTU, currentMTU)
+	fmt.Printf("discobot-sandbox-init: configured Docker daemon with MTU=%d (interface MTU: %d, overhead: 100)\n", dockerMTU, currentMTU)
 
 	return nil
 }
@@ -298,11 +298,11 @@ func writeProxyEnvironmentFile() error {
 		return fmt.Errorf("failed to write proxy env file: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: proxy environment written to %s\n", proxyEnvPath)
+	fmt.Printf("discobot-sandbox-init: proxy environment written to %s\n", proxyEnvPath)
 
 	// Also set proxy in /etc/profile.d for login shells
 	if err := setProxyInProfile(); err != nil {
-		fmt.Printf("discobot-agent: warning: failed to set proxy in /etc/profile.d: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: failed to set proxy in /etc/profile.d: %v\n", err)
 	}
 
 	return nil
@@ -328,7 +328,7 @@ func writeAgentEnvironmentFile(u *userInfo) error {
 		return fmt.Errorf("failed to write agent env file: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: agent environment written to %s\n", envPath)
+	fmt.Printf("discobot-sandbox-init: agent environment written to %s\n", envPath)
 	return nil
 }
 
@@ -405,7 +405,7 @@ func fixLocalhostResolution() error {
 			}
 			// If no remaining hostnames, the line is dropped entirely
 			modified = true
-			fmt.Printf("discobot-agent: removed 'localhost' from ::1 line in /etc/hosts\n")
+			fmt.Printf("discobot-sandbox-init: removed 'localhost' from ::1 line in /etc/hosts\n")
 		default:
 			// Some other IP with localhost, keep it
 			newLines = append(newLines, line)
@@ -416,11 +416,11 @@ func fixLocalhostResolution() error {
 	if !hasIPv4Localhost {
 		newLines = append([]string{"127.0.0.1\tlocalhost"}, newLines...)
 		modified = true
-		fmt.Printf("discobot-agent: added '127.0.0.1 localhost' to /etc/hosts\n")
+		fmt.Printf("discobot-sandbox-init: added '127.0.0.1 localhost' to /etc/hosts\n")
 	}
 
 	if !modified {
-		fmt.Printf("discobot-agent: /etc/hosts already configured correctly for localhost\n")
+		fmt.Printf("discobot-sandbox-init: /etc/hosts already configured correctly for localhost\n")
 		return nil
 	}
 
@@ -430,7 +430,7 @@ func fixLocalhostResolution() error {
 		return fmt.Errorf("failed to write %s: %w", hostsPath, err)
 	}
 
-	fmt.Printf("discobot-agent: /etc/hosts updated to ensure localhost resolves to 127.0.0.1\n")
+	fmt.Printf("discobot-sandbox-init: /etc/hosts updated to ensure localhost resolves to 127.0.0.1\n")
 	return nil
 }
 
@@ -459,7 +459,7 @@ func fixMTUForNestedDocker() error {
 		return fmt.Errorf("failed to enable TCP MTU probing: %w (output: %s)", err, output)
 	}
 
-	fmt.Printf("discobot-agent: configured TCP MTU probing for nested Docker (PMTUD disabled, TCP probing enabled)\n")
+	fmt.Printf("discobot-sandbox-init: configured TCP MTU probing for nested Docker (PMTUD disabled, TCP probing enabled)\n")
 	return nil
 }
 
@@ -480,14 +480,14 @@ func setupGitSafeDirectories(workspacePath string) error {
 		dirs = append([]string{workspacePath}, dirs...)
 	}
 
-	fmt.Printf("discobot-agent: configuring git safe.directory for workspace paths\n")
+	fmt.Printf("discobot-sandbox-init: configuring git safe.directory for workspace paths\n")
 	for _, dir := range dirs {
 		cmd := exec.Command("git", "config", "--system", "--add", "safe.directory", dir)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			// Log but don't fail - some paths may not exist yet
-			fmt.Printf("discobot-agent: warning: git config safe.directory %s: %v\n", dir, err)
+			fmt.Printf("discobot-sandbox-init: warning: git config safe.directory %s: %v\n", dir, err)
 		}
 	}
 
@@ -498,7 +498,7 @@ func setupGitSafeDirectories(workspacePath string) error {
 // or syncs new files if it already exists.
 func setupBaseHome(u *userInfo) error {
 	if _, err := os.Stat(baseHomeDir); err == nil {
-		fmt.Printf("discobot-agent: base home already exists at %s, syncing new files\n", baseHomeDir)
+		fmt.Printf("discobot-sandbox-init: base home already exists at %s, syncing new files\n", baseHomeDir)
 		if err := syncNewFiles(mountHome, baseHomeDir, u); err != nil {
 			return fmt.Errorf("failed to sync new files: %w", err)
 		}
@@ -507,7 +507,7 @@ func setupBaseHome(u *userInfo) error {
 		return fmt.Errorf("failed to stat base home: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: copying %s to %s\n", mountHome, baseHomeDir)
+	fmt.Printf("discobot-sandbox-init: copying %s to %s\n", mountHome, baseHomeDir)
 
 	// Create parent directory
 	if err := os.MkdirAll(filepath.Dir(baseHomeDir), 0755); err != nil {
@@ -524,7 +524,7 @@ func setupBaseHome(u *userInfo) error {
 		return fmt.Errorf("failed to chown base home: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: base home created successfully\n")
+	fmt.Printf("discobot-sandbox-init: base home created successfully\n")
 	return nil
 }
 
@@ -552,7 +552,7 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 		}
 
 		if info.IsDir() {
-			fmt.Printf("discobot-agent: syncing new directory %s\n", relPath)
+			fmt.Printf("discobot-sandbox-init: syncing new directory %s\n", relPath)
 			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
 				return err
 			}
@@ -564,7 +564,7 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("discobot-agent: syncing new symlink %s\n", relPath)
+			fmt.Printf("discobot-sandbox-init: syncing new symlink %s\n", relPath)
 			if err := os.Symlink(link, dstPath); err != nil {
 				return err
 			}
@@ -572,7 +572,7 @@ func syncNewFiles(src, dst string, u *userInfo) error {
 				return err
 			}
 		} else if info.Mode().IsRegular() {
-			fmt.Printf("discobot-agent: syncing new file %s\n", relPath)
+			fmt.Printf("discobot-sandbox-init: syncing new file %s\n", relPath)
 			if err := copyFile(srcPath, dstPath); err != nil {
 				return err
 			}
@@ -661,7 +661,7 @@ func copyFile(src, dst string) error {
 	}
 	defer func() {
 		if closeErr := srcFile.Close(); closeErr != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to close source file %s: %v\n", src, closeErr)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: warning: failed to close source file %s: %v\n", src, closeErr)
 		}
 	}()
 
@@ -676,7 +676,7 @@ func copyFile(src, dst string) error {
 	}
 	defer func() {
 		if closeErr := dstFile.Close(); closeErr != nil {
-			fmt.Fprintf(os.Stderr, "discobot-agent: warning: failed to close destination file %s: %v\n", dst, closeErr)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: warning: failed to close destination file %s: %v\n", dst, closeErr)
 		}
 	}()
 
@@ -688,7 +688,7 @@ func copyFile(src, dst string) error {
 func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspaceCommit string, u *userInfo) error {
 	// If workspace already exists, nothing to do
 	if _, err := os.Stat(workspaceDir); err == nil {
-		fmt.Printf("discobot-agent: workspace already exists at %s\n", workspaceDir)
+		fmt.Printf("discobot-sandbox-init: workspace already exists at %s\n", workspaceDir)
 		return nil
 	}
 
@@ -696,7 +696,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 
 	// If no workspace path specified, create empty workspace owned by user
 	if cloneSource == "" {
-		fmt.Println("discobot-agent: no workspace source specified, creating empty workspace")
+		fmt.Println("discobot-sandbox-init: no workspace source specified, creating empty workspace")
 		if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 			return fmt.Errorf("failed to create workspace directory: %w", err)
 		}
@@ -706,7 +706,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 		return nil
 	}
 
-	fmt.Printf("discobot-agent: cloning workspace from %s\n", cloneSource)
+	fmt.Printf("discobot-sandbox-init: cloning workspace from %s\n", cloneSource)
 
 	// Clean up any existing staging directory
 	if err := os.RemoveAll(stagingDir); err != nil {
@@ -730,7 +730,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 	cmd := exec.Command("git", cloneArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	fmt.Printf("discobot-agent: running: git %v\n", cloneArgs)
+	fmt.Printf("discobot-sandbox-init: running: git %v\n", cloneArgs)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git clone failed: %w", err)
 	}
@@ -746,7 +746,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 		cmd = exec.Command("git", "-C", stagingDir, "reset", "--hard", workspaceCommit)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		fmt.Printf("discobot-agent: resetting branch %s to commit %s\n", branchName, workspaceCommit)
+		fmt.Printf("discobot-sandbox-init: resetting branch %s to commit %s\n", branchName, workspaceCommit)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("git reset --hard %s failed: %w", workspaceCommit, err)
 		}
@@ -754,7 +754,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 		cmd = exec.Command("git", "-C", stagingDir, "reset", "--hard", workspaceTargetRef)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		fmt.Printf("discobot-agent: resetting branch %s to target ref %s\n", branchName, workspaceTargetRef)
+		fmt.Printf("discobot-sandbox-init: resetting branch %s to target ref %s\n", branchName, workspaceTargetRef)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("git reset --hard %s failed: %w", workspaceTargetRef, err)
 		}
@@ -765,7 +765,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 	}
 
 	// Change ownership of all files to the target user
-	fmt.Printf("discobot-agent: changing workspace ownership to %s\n", u.username)
+	fmt.Printf("discobot-sandbox-init: changing workspace ownership to %s\n", u.username)
 	if err := chownRecursive(stagingDir, u.uid, u.gid); err != nil {
 		return fmt.Errorf("failed to chown workspace: %w", err)
 	}
@@ -775,7 +775,7 @@ func setupWorkspace(workspacePath, workspaceSource, workspaceTargetRef, workspac
 		return fmt.Errorf("failed to move staging to workspace: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: workspace cloned successfully\n")
+	fmt.Printf("discobot-sandbox-init: workspace cloned successfully\n")
 	return nil
 }
 
@@ -849,7 +849,7 @@ func ensureGitMirrorCache(cloneSource string) (string, error) {
 		cmd := exec.Command("git", "clone", "--mirror", cloneSource, mirrorDir)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		fmt.Printf("discobot-agent: creating git mirror cache at %s\n", mirrorDir)
+		fmt.Printf("discobot-sandbox-init: creating git mirror cache at %s\n", mirrorDir)
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("git clone --mirror failed: %w", err)
 		}
@@ -861,7 +861,7 @@ func ensureGitMirrorCache(cloneSource string) (string, error) {
 	cmd := exec.Command("git", "-C", mirrorDir, "remote", "update", "--prune")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	fmt.Printf("discobot-agent: updating git mirror cache at %s\n", mirrorDir)
+	fmt.Printf("discobot-sandbox-init: updating git mirror cache at %s\n", mirrorDir)
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("git remote update failed for mirror cache: %w", err)
 	}
@@ -902,14 +902,14 @@ func ensureBranchTracksOrigin(repoDir, branchName string) error {
 	verifyCmd.Stdout = io.Discard
 	verifyCmd.Stderr = io.Discard
 	if err := verifyCmd.Run(); err != nil {
-		fmt.Printf("discobot-agent: skipping upstream tracking setup for %s; remote ref %s not found\n", branchName, upstreamRef)
+		fmt.Printf("discobot-sandbox-init: skipping upstream tracking setup for %s; remote ref %s not found\n", branchName, upstreamRef)
 		return nil
 	}
 
 	cmd := exec.Command("git", "-C", repoDir, "branch", "--set-upstream-to", upstreamRef, branchName)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	fmt.Printf("discobot-agent: setting branch %s to track %s\n", branchName, upstreamRef)
+	fmt.Printf("discobot-sandbox-init: setting branch %s to track %s\n", branchName, upstreamRef)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set upstream %s for branch %s: %w", upstreamRef, branchName, err)
 	}
@@ -947,7 +947,7 @@ func setupOverlayFS(sessionID string, u *userInfo) error {
 	upperDir := filepath.Join(sessionDir, "upper")
 	workDir := filepath.Join(sessionDir, "work")
 
-	fmt.Printf("discobot-agent: setting up overlayfs directories at %s\n", sessionDir)
+	fmt.Printf("discobot-sandbox-init: setting up overlayfs directories at %s\n", sessionDir)
 
 	// Create all directories
 	for _, dir := range []string{overlayFSDir, sessionDir, upperDir, workDir} {
@@ -963,7 +963,7 @@ func setupOverlayFS(sessionID string, u *userInfo) error {
 		}
 	}
 
-	fmt.Printf("discobot-agent: overlayfs directories created successfully\n")
+	fmt.Printf("discobot-sandbox-init: overlayfs directories created successfully\n")
 	return nil
 }
 
@@ -979,14 +979,14 @@ func mountOverlayFS(sessionID string) error {
 	// workdir = scratch space for overlayfs internal use
 	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", baseHomeDir, upperDir, workDir)
 
-	fmt.Printf("discobot-agent: mounting overlayfs at %s\n", mountHome)
-	fmt.Printf("discobot-agent: overlayfs options: %s\n", opts)
+	fmt.Printf("discobot-sandbox-init: mounting overlayfs at %s\n", mountHome)
+	fmt.Printf("discobot-sandbox-init: overlayfs options: %s\n", opts)
 
 	if err := syscall.Mount("overlay", mountHome, "overlay", 0, opts); err != nil {
 		return fmt.Errorf("overlayfs mount failed: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: overlayfs mounted successfully\n")
+	fmt.Printf("discobot-sandbox-init: overlayfs mounted successfully\n")
 	return nil
 }
 
@@ -1026,7 +1026,7 @@ func setProxyInProfile() error {
 	caCertPath := filepath.Join(dataDir, "proxy", "certs", "ca.crt")
 
 	content := fmt.Sprintf(`# Discobot Proxy Configuration
-# Automatically generated by discobot-agent
+# Automatically generated by discobot-sandbox-init
 # This file sets proxy environment variables for all login shells
 
 export HTTP_PROXY=%s
@@ -1051,7 +1051,7 @@ export UV_SYSTEM_CERTS=1
 		return fmt.Errorf("failed to write %s: %w", profilePath, err)
 	}
 
-	fmt.Printf("discobot-agent: proxy settings written to %s\n", profilePath)
+	fmt.Printf("discobot-sandbox-init: proxy settings written to %s\n", profilePath)
 	return nil
 }
 
@@ -1069,7 +1069,7 @@ func setProxyInEtcProfile() error {
 
 	content := fmt.Sprintf(`
 
-# Discobot Proxy Configuration (added by discobot-agent)
+# Discobot Proxy Configuration (added by discobot-sandbox-init)
 export HTTP_PROXY=%s
 export HTTPS_PROXY=%s
 export http_proxy=%s
@@ -1093,7 +1093,7 @@ export UV_SYSTEM_CERTS=1
 		return fmt.Errorf("failed to write to %s: %w", profilePath, err)
 	}
 
-	fmt.Printf("discobot-agent: proxy settings appended to %s\n", profilePath)
+	fmt.Printf("discobot-sandbox-init: proxy settings appended to %s\n", profilePath)
 	return nil
 }
 
@@ -1114,17 +1114,17 @@ func setupProxyCertificate(u *userInfo) error {
 		return err
 	}
 	if usable {
-		fmt.Printf("discobot-agent: proxy CA certificate already exists at %s\n", certPath)
+		fmt.Printf("discobot-sandbox-init: proxy CA certificate already exists at %s\n", certPath)
 		// Certificate exists, ensure it's installed in browser and system trust stores
 		return installCertificateTrust(certPath, u)
 	}
 
-	fmt.Printf("discobot-agent: generating proxy CA certificate...\n")
+	fmt.Printf("discobot-sandbox-init: generating proxy CA certificate...\n")
 	if err := generateCACertificate(certPath, keyPath); err != nil {
 		return fmt.Errorf("failed to generate CA certificate: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: proxy CA certificate generated at %s\n", certPath)
+	fmt.Printf("discobot-sandbox-init: proxy CA certificate generated at %s\n", certPath)
 
 	// Install certificate in browser and system trust stores
 	return installCertificateTrust(certPath, u)
@@ -1140,14 +1140,14 @@ func hasUsableProxyCertificate(certPath, keyPath string) (bool, error) {
 
 	if _, err := os.Stat(keyPath); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("discobot-agent: proxy CA key missing at %s; regenerating certificate\n", keyPath)
+			fmt.Printf("discobot-sandbox-init: proxy CA key missing at %s; regenerating certificate\n", keyPath)
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to stat proxy CA key: %w", err)
 	}
 
 	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
-		fmt.Printf("discobot-agent: proxy CA certificate/key are unusable; regenerating certificate: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: proxy CA certificate/key are unusable; regenerating certificate: %v\n", err)
 		return false, nil
 	}
 
@@ -1232,7 +1232,7 @@ func installCertificateTrust(certPath string, u *userInfo) error {
 // installCertificateInSystemTrust installs the CA certificate in the system trust store.
 // Supports Debian/Ubuntu, Fedora/RHEL, and Alpine Linux.
 func installCertificateInSystemTrust(certPath string) error {
-	fmt.Printf("discobot-agent: installing proxy CA certificate in system trust store...\n")
+	fmt.Printf("discobot-sandbox-init: installing proxy CA certificate in system trust store...\n")
 
 	// Detect which certificate update method to use
 	// Try in order: update-ca-certificates (Debian/Alpine), update-ca-trust (Fedora)
@@ -1248,9 +1248,9 @@ func installCertificateInSystemTrust(certPath string) error {
 	}
 
 	// If no cert update tool found, warn but don't fail
-	fmt.Printf("discobot-agent: warning: no certificate update tool found (update-ca-certificates or update-ca-trust)\n")
-	fmt.Printf("discobot-agent: warning: proxy CA certificate not installed in system trust store\n")
-	fmt.Printf("discobot-agent: warning: HTTPS interception may not work for some clients\n")
+	fmt.Printf("discobot-sandbox-init: warning: no certificate update tool found (update-ca-certificates or update-ca-trust)\n")
+	fmt.Printf("discobot-sandbox-init: warning: proxy CA certificate not installed in system trust store\n")
+	fmt.Printf("discobot-sandbox-init: warning: HTTPS interception may not work for some clients\n")
 	return nil
 }
 
@@ -1286,7 +1286,7 @@ func installCertDebianStyle(certPath string) error {
 		return fmt.Errorf("failed to verify system CA bundle %s: %w", bundlePath, err)
 	}
 	if !installed {
-		fmt.Printf("discobot-agent: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
+		fmt.Printf("discobot-sandbox-init: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
 		if err := runUpdateCACertificates("--fresh"); err != nil {
 			return err
 		}
@@ -1299,7 +1299,7 @@ func installCertDebianStyle(certPath string) error {
 		}
 	}
 
-	fmt.Printf("discobot-agent: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
+	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
 	return nil
 }
 
@@ -1395,7 +1395,7 @@ func installCertFedoraStyle(certPath string) error {
 		return fmt.Errorf("failed to run update-ca-trust: %w", err)
 	}
 
-	fmt.Printf("discobot-agent: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
+	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
 	return nil
 }
 
@@ -1407,7 +1407,7 @@ func installCertificateInUserNSSDB(certPath string, u *userInfo) error {
 	}
 
 	if _, err := exec.LookPath("certutil"); err != nil {
-		fmt.Printf("discobot-agent: warning: certutil not found; skipping Chromium/NSS trust setup\n")
+		fmt.Printf("discobot-sandbox-init: warning: certutil not found; skipping Chromium/NSS trust setup\n")
 		return nil
 	}
 
@@ -1445,7 +1445,7 @@ func installCertificateInUserNSSDB(certPath string, u *userInfo) error {
 		return fmt.Errorf("failed to set ownership on NSS DB %s: %w", nssDBDir, err)
 	}
 
-	fmt.Printf("discobot-agent: proxy CA certificate installed in NSS DB for %s at %s\n", u.username, nssDBDir)
+	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in NSS DB for %s at %s\n", u.username, nssDBDir)
 	return nil
 }
 
@@ -1463,7 +1463,7 @@ func setupProxyConfig(userInfo *userInfo) error {
 
 	// Always use built-in defaults (with Docker caching enabled)
 	// Security: Never read workspace config during init as it's untrusted code
-	fmt.Printf("discobot-agent: using default proxy config with Docker caching enabled\n")
+	fmt.Printf("discobot-sandbox-init: using default proxy config with Docker caching enabled\n")
 
 	// Write config with restrictive permissions (0644) and keep as root-owned
 	// This prevents the discobot user from modifying the proxy configuration
@@ -1659,7 +1659,7 @@ func loadCacheConfig() *cacheConfig {
 
 	var cfg cacheConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		fmt.Printf("discobot-agent: warning: failed to parse cache config: %v\n", err)
+		fmt.Printf("discobot-sandbox-init: warning: failed to parse cache config: %v\n", err)
 		return &cacheConfig{}
 	}
 
@@ -1677,7 +1677,7 @@ func getAllCachePaths(cfg *cacheConfig) []string {
 		if isValidCachePath(p) {
 			paths = append(paths, p)
 		} else {
-			fmt.Printf("discobot-agent: warning: ignoring invalid cache path from config: %s\n", p)
+			fmt.Printf("discobot-sandbox-init: warning: ignoring invalid cache path from config: %s\n", p)
 		}
 	}
 
@@ -1715,14 +1715,14 @@ func isValidCachePath(path string) bool {
 func mountCacheDirectories() error {
 	// Check if CACHE_ENABLED environment variable is set
 	if cacheEnabled := os.Getenv("CACHE_ENABLED"); cacheEnabled == "false" {
-		fmt.Printf("discobot-agent: cache volumes disabled via CACHE_ENABLED=false\n")
+		fmt.Printf("discobot-sandbox-init: cache volumes disabled via CACHE_ENABLED=false\n")
 		return nil
 	}
 
 	// Check if /.data/cache exists (created by Docker provider)
 	cacheVolumeBase := filepath.Join(dataDir, "cache")
 	if _, err := os.Stat(cacheVolumeBase); os.IsNotExist(err) {
-		fmt.Printf("discobot-agent: cache volume not found at %s, skipping cache mounts\n", cacheVolumeBase)
+		fmt.Printf("discobot-sandbox-init: cache volume not found at %s, skipping cache mounts\n", cacheVolumeBase)
 		return nil
 	}
 
@@ -1747,7 +1747,7 @@ func mountCacheDirectories() error {
 		// Ensure the source directory exists in the cache volume with world-writable permissions
 		// This allows all users/processes to write to cache directories
 		if err := os.MkdirAll(source, 0777); err != nil {
-			fmt.Printf("discobot-agent: warning: failed to create cache dir %s: %v\n", source, err)
+			fmt.Printf("discobot-sandbox-init: warning: failed to create cache dir %s: %v\n", source, err)
 			continue
 		}
 		// Explicitly set permissions to 0777 on the entire tree (umask may have restricted MkdirAll)
@@ -1755,7 +1755,7 @@ func mountCacheDirectories() error {
 
 		// Ensure the target directory exists in the overlay with world-writable permissions
 		if err := os.MkdirAll(cachePath, 0777); err != nil {
-			fmt.Printf("discobot-agent: warning: failed to create target dir %s: %v\n", cachePath, err)
+			fmt.Printf("discobot-sandbox-init: warning: failed to create target dir %s: %v\n", cachePath, err)
 			continue
 		}
 		// Explicitly set permissions to 0777 on the entire tree (umask may have restricted MkdirAll).
@@ -1769,7 +1769,7 @@ func mountCacheDirectories() error {
 
 		// Bind mount the cache directory
 		if err := syscall.Mount(source, cachePath, "none", syscall.MS_BIND, ""); err != nil {
-			fmt.Printf("discobot-agent: warning: failed to bind mount %s to %s: %v\n", source, cachePath, err)
+			fmt.Printf("discobot-sandbox-init: warning: failed to bind mount %s to %s: %v\n", source, cachePath, err)
 			continue
 		}
 
@@ -1777,7 +1777,7 @@ func mountCacheDirectories() error {
 	}
 
 	if mounted > 0 {
-		fmt.Printf("discobot-agent: mounted %d cache directories\n", mounted)
+		fmt.Printf("discobot-sandbox-init: mounted %d cache directories\n", mounted)
 	}
 
 	return nil

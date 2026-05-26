@@ -133,10 +133,10 @@ cache:
 ### Agent Integration
 
 **New Files:**
-- `agent/cmd/agent/default-proxy-config.yaml` - Embedded default config
+- `sandbox-init/cmd/sandbox-init/default-proxy-config.yaml` - Embedded default config
 
 **Modified Files:**
-- `agent/cmd/agent/main.go` - Added proxy startup, config setup, environment variables
+- `sandbox-init/cmd/sandbox-init/main.go` - Added proxy startup, config setup, environment variables
 
 **Key Changes in main.go:**
 ```go
@@ -221,7 +221,7 @@ PASS: 15/15 tests
 $ go build -o /tmp/test-proxy ./proxy/cmd/proxy
 ✓ Success
 
-$ go build -o /tmp/test-agent ./agent/cmd/agent
+$ go build -o /tmp/test-agent ./sandbox-init/cmd/sandbox-init
 ✓ Success (includes embedded config)
 ```
 
@@ -265,9 +265,9 @@ Response:
 
 Proxy logs are captured in container logs:
 ```
-discobot-agent: found proxy at /opt/discobot/bin/proxy, starting HTTP proxy...
-discobot-agent: proxy started (pid=42), waiting for health check...
-discobot-agent: HTTP proxy ready on port 17080
+discobot-sandbox-init: found proxy at /opt/discobot/bin/proxy, starting HTTP proxy...
+discobot-sandbox-init: proxy started (pid=42), waiting for health check...
+discobot-sandbox-init: HTTP proxy ready on port 17080
 ```
 
 During operation:
@@ -309,7 +309,7 @@ INFO  response   method=GET host=registry-1.docker.io status=200 duration=5ms
 
 **Symptom:**
 ```
-discobot-agent: Proxy daemon not started: proxy binary not found at /opt/discobot/bin/proxy
+discobot-sandbox-init: Proxy daemon not started: proxy binary not found at /opt/discobot/bin/proxy
 ```
 
 **Solution:** Verify proxy binary is in container image at `/opt/discobot/bin/proxy`
@@ -318,7 +318,7 @@ discobot-agent: Proxy daemon not started: proxy binary not found at /opt/discobo
 
 **Symptom:**
 ```
-discobot-agent: proxy did not become ready: timeout waiting for proxy health check
+discobot-sandbox-init: proxy did not become ready: timeout waiting for proxy health check
 ```
 
 **Solutions:**
@@ -365,7 +365,7 @@ Potential improvements:
 - [PROXY_INTEGRATION.md](./PROXY_INTEGRATION.md) - Integration architecture and usage
 - [proxy/README.md](./proxy/README.md) - Main proxy documentation
 - [proxy/docs/DOCKER_CACHING.md](./proxy/docs/DOCKER_CACHING.md) - Detailed caching guide
-- [agent/README.md](./agent/README.md) - Agent init process documentation
+- [sandbox-init/README.md](../../README.md) - Sandbox init process documentation
 
 ## Conclusion
 

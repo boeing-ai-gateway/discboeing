@@ -1,10 +1,10 @@
-# Agent Architecture
+# Sandbox Init Architecture
 
-This document describes the architecture of the `discobot-agent` init process.
+This document describes the architecture of the `discobot-sandbox-init` init process.
 
 ## Overview
 
-The `discobot-agent` binary serves as the container's PID 1 process, providing:
+The `discobot-sandbox-init` binary serves as the container's PID 1 process, providing:
 
 1. Home directory initialization (copy from template)
 2. Workspace initialization (git clone)
@@ -192,7 +192,7 @@ The `discobot-agent` binary serves as the container's PID 1 process, providing:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     discobot-agent (PID 1)                       │
+│                     discobot-sandbox-init (PID 1)                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │

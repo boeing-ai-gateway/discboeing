@@ -6,7 +6,7 @@ This document describes the overall architecture of Discobot, an IDE-like chat i
 
 - [UI Architecture](./ui/ARCHITECTURE.md) - Frontend Svelte + Vite architecture
 - [Server Documentation](../server/README.md) - Go backend server
-- [Agent Documentation](../agent/README.md) - Container init process (PID 1)
+- [Sandbox Init Documentation](../sandbox-init/README.md) - Container init process (PID 1)
 - [Agent API Documentation](../agent-api/README.md) - Container agent API service
 - [Proxy Documentation](../proxy/README.md) - HTTP/SOCKS5 proxy with header injection
 
@@ -151,11 +151,11 @@ Credentials are encrypted with AES-256-GCM before storage.
          │    │   Agent Container    │     │   MITM Proxy         │
          │    │   (per session)      │     │   (per container)    │
          │    │   ┌──────────────┐   │     │   ┌──────────────┐   │
-         │    │   │ discobot-agent   │   │     │   │ HTTP/SOCKS5  │   │
+         │    │   │ discobot-sandbox-init   │   │     │   │ HTTP/SOCKS5  │   │
          │    │   │ (PID 1 init) │   │     │   │ + TLS MITM   │   │
          │    │   │      ↓       │   │     │   └──────────────┘   │
-         │    │   │ discobot-agent-  │   │ ──▶ │                      │
-         │    │   │ api + AI CLI │   │     │                      │
+         │    │   │ discobot-agent-api      │   │ ──▶ │                      │
+         │    │   │ + AI CLI     │   │     │                      │
          │    │   └──────────────┘   │     │                      │
          │    └──────────────────────┘     └──────────────────────┘
          │                                            │
@@ -381,7 +381,7 @@ The proxy caches Docker registry responses:
 - **Persistent storage**: Cache survives container restarts at `/.data/proxy/cache`
 - **Workspace config**: Teams can customize caching patterns per workspace
 
-See [agent/docs/design/proxy-integration.md](../agent/docs/design/proxy-integration.md) for implementation details.
+See [sandbox-init/docs/design/proxy-integration.md](../sandbox-init/docs/design/proxy-integration.md) for implementation details.
 
 ## Security Model
 
@@ -441,6 +441,6 @@ Each workspace will have an associated Docker container:
 
 - [UI Architecture](./ui/ARCHITECTURE.md) - Frontend architecture and components
 - [Server README](../server/README.md) - Go backend documentation
-- [Agent README](../agent/README.md) - Container init process documentation
+- [Sandbox Init README](../sandbox-init/README.md) - Container init process documentation
 - [Agent API README](../agent-api/README.md) - Container agent API documentation
 - [CLAUDE.md](../CLAUDE.md) - Repository agent guidelines

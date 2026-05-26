@@ -25,7 +25,7 @@ Without the CA in the appropriate trust stores, clients would see certificate er
 
 ### Step 1: Certificate Generation
 
-**Location**: `agent/cmd/agent/main.go` - `setupProxyCertificate()` and `generateCACertificate()`
+**Location**: `sandbox-init/cmd/sandbox-init/main.go` - `setupProxyCertificate()` and `generateCACertificate()`
 
 **Process**:
 ```go
@@ -90,7 +90,7 @@ certutil -d sql:/home/discobot/.pki/nssdb -A \
 
 This is the trust path Chromium-based browsers actually consult in this environment.
 
-**Location**: `agent/cmd/agent/main.go` - `installCertificateInSystemTrust()`
+**Location**: `sandbox-init/cmd/sandbox-init/main.go` - `installCertificateInSystemTrust()`
 
 **Detection Logic**:
 ```go
@@ -320,7 +320,7 @@ grep "Discobot Proxy" /etc/ssl/certs/ca-certificates.crt
 ## Files Modified
 
 ### Agent Code
-- **`agent/cmd/agent/main.go`**:
+- **`sandbox-init/cmd/sandbox-init/main.go`**:
   - Added crypto imports: `crypto/rand`, `crypto/rsa`, `crypto/x509`, `crypto/x509/pkix`, `encoding/pem`, `math/big`
   - `setupProxyCertificate()` - Main orchestration
   - `generateCACertificate()` - Go crypto certificate generation with localhost SANs

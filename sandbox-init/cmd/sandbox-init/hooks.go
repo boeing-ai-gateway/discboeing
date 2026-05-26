@@ -192,7 +192,7 @@ func updateSessionHookStatus(dataDir, hookID, hookName string, success bool, exi
 	}
 
 	if err := saveHookStatus(dataDir, status); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: failed to save hook status: %v\n", err)
+		fmt.Fprintf(os.Stderr, "discobot-sandbox-init: failed to save hook status: %v\n", err)
 	}
 }
 
@@ -387,7 +387,7 @@ func runSessionHook(hookPath string, config hookConfig, workspacePath, sessionID
 
 	outPath := hookOutputPath(dataDir, hookID)
 	if err := os.WriteFile(outPath, result.output, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: failed to save hook output: %v\n", err)
+		fmt.Fprintf(os.Stderr, "discobot-sandbox-init: failed to save hook output: %v\n", err)
 	} else {
 		_ = os.Chown(outPath, u.uid, u.gid)
 	}
@@ -433,17 +433,17 @@ func runSessionHookWithRetry(name string, runner func(attempt int) sessionHookAt
 		}
 
 		if attempt < sessionHookMaxAttempts {
-			fmt.Fprintf(os.Stderr, "discobot-agent: retrying session hook %q (attempt %d/%d)\n", name, attempt+1, sessionHookMaxAttempts)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: retrying session hook %q (attempt %d/%d)\n", name, attempt+1, sessionHookMaxAttempts)
 		}
 	}
 
 	finalResult.output = combinedOutput.Bytes()
-	fmt.Fprintf(os.Stderr, "discobot-agent: session hook %q failed after %d attempts\n", name, sessionHookMaxAttempts)
+	fmt.Fprintf(os.Stderr, "discobot-sandbox-init: session hook %q failed after %d attempts\n", name, sessionHookMaxAttempts)
 	return finalResult
 }
 
 func runSessionHookAttempt(hookPath, name, runAs, workspacePath, sessionID string, u *userInfo, attempt int) sessionHookAttemptResult {
-	fmt.Printf("discobot-agent: running session hook %q (run_as: %s, attempt %d/%d)\n", name, runAs, attempt, sessionHookMaxAttempts)
+	fmt.Printf("discobot-sandbox-init: running session hook %q (run_as: %s, attempt %d/%d)\n", name, runAs, attempt, sessionHookMaxAttempts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), sessionHookTimeout)
 	defer cancel()
@@ -477,12 +477,12 @@ func runSessionHookAttempt(hookPath, name, runAs, workspacePath, sessionID strin
 		exitCode := 1
 		if ctx.Err() == context.DeadlineExceeded {
 			exitCode = 124
-			fmt.Fprintf(os.Stderr, "discobot-agent: session hook %q attempt %d/%d timed out after %s\n", name, attempt, sessionHookMaxAttempts, sessionHookTimeout)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: session hook %q attempt %d/%d timed out after %s\n", name, attempt, sessionHookMaxAttempts, sessionHookTimeout)
 		} else if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
-			fmt.Fprintf(os.Stderr, "discobot-agent: session hook %q attempt %d/%d failed (%.1fs): %v\n", name, attempt, sessionHookMaxAttempts, duration.Seconds(), runErr)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: session hook %q attempt %d/%d failed (%.1fs): %v\n", name, attempt, sessionHookMaxAttempts, duration.Seconds(), runErr)
 		} else {
-			fmt.Fprintf(os.Stderr, "discobot-agent: session hook %q attempt %d/%d failed (%.1fs): %v\n", name, attempt, sessionHookMaxAttempts, duration.Seconds(), runErr)
+			fmt.Fprintf(os.Stderr, "discobot-sandbox-init: session hook %q attempt %d/%d failed (%.1fs): %v\n", name, attempt, sessionHookMaxAttempts, duration.Seconds(), runErr)
 		}
 
 		return sessionHookAttemptResult{
@@ -493,9 +493,9 @@ func runSessionHookAttempt(hookPath, name, runAs, workspacePath, sessionID strin
 	}
 
 	if attempt == 1 {
-		fmt.Printf("discobot-agent: session hook %q completed (%.1fs)\n", name, duration.Seconds())
+		fmt.Printf("discobot-sandbox-init: session hook %q completed (%.1fs)\n", name, duration.Seconds())
 	} else {
-		fmt.Printf("discobot-agent: session hook %q completed on attempt %d/%d (%.1fs)\n", name, attempt, sessionHookMaxAttempts, duration.Seconds())
+		fmt.Printf("discobot-sandbox-init: session hook %q completed on attempt %d/%d (%.1fs)\n", name, attempt, sessionHookMaxAttempts, duration.Seconds())
 	}
 
 	return sessionHookAttemptResult{
@@ -523,7 +523,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 		return noop
 	}
 
-	fmt.Printf("discobot-agent: found %d session hook(s)\n", len(paths))
+	fmt.Printf("discobot-sandbox-init: found %d session hook(s)\n", len(paths))
 
 	sessionID := os.Getenv("DISCOBOT_SESSION_ID")
 	dataDir := hooksDataDir(u.homeDir, sessionID)
@@ -532,7 +532,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 	// so the agent-api (which runs as discobot) can also write to it later.
 	outputDir := filepath.Join(dataDir, "output")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "discobot-agent: failed to create hooks data dir: %v\n", err)
+		fmt.Fprintf(os.Stderr, "discobot-sandbox-init: failed to create hooks data dir: %v\n", err)
 	} else {
 		// Chown the entire tree to discobot user
 		for _, dir := range []string{
@@ -563,7 +563,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 
 	// Phase 1: Run blocking hooks synchronously — these gate startup
 	if len(blockingHooks) > 0 {
-		fmt.Printf("discobot-agent: running %d blocking session hook(s)\n", len(blockingHooks))
+		fmt.Printf("discobot-sandbox-init: running %d blocking session hook(s)\n", len(blockingHooks))
 		succeeded, failed := 0, 0
 		for _, h := range blockingHooks {
 			if runSessionHook(h.path, h.config, workspacePath, sessionID, dataDir, u) {
@@ -572,7 +572,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 				failed++
 			}
 		}
-		fmt.Printf("discobot-agent: blocking session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
+		fmt.Printf("discobot-sandbox-init: blocking session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
 	}
 
 	// Phase 2: Launch non-blocking hooks in a background goroutine
@@ -582,7 +582,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	fmt.Printf("discobot-agent: launching %d non-blocking session hook(s) in background\n", len(backgroundHooks))
+	fmt.Printf("discobot-sandbox-init: launching %d non-blocking session hook(s) in background\n", len(backgroundHooks))
 	go func() {
 		defer wg.Done()
 		succeeded, failed := 0, 0
@@ -593,7 +593,7 @@ func runSessionHooks(workspacePath string, u *userInfo) func() {
 				failed++
 			}
 		}
-		fmt.Printf("discobot-agent: background session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
+		fmt.Printf("discobot-sandbox-init: background session hooks completed (%d succeeded, %d failed)\n", succeeded, failed)
 	}()
 
 	return wg.Wait

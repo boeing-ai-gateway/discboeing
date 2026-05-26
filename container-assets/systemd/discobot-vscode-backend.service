@@ -1,7 +1,7 @@
 [Unit]
 Description=Discobot VS Code backend (code-server)
-After=discobot-setup.service
-Requires=discobot-setup.service
+After=discobot-sandbox-init.service
+Requires=discobot-sandbox-init.service
 
 [Service]
 Type=simple

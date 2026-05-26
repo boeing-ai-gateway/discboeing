@@ -664,7 +664,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 	}}
 
 	// Enable privileged mode for running Docker daemon inside container
-	// The container runs its own Docker daemon (started by discobot-agent if dockerd is available)
+	// The container runs its own Docker daemon (started by discobot-sandbox-init if dockerd is available)
 	hostConfig.Privileged = true
 
 	// Always expose port 3002 with a random host port

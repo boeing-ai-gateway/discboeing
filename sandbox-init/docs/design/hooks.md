@@ -1,6 +1,6 @@
 # Session Hooks (Agent Init)
 
-Session hooks are scripts in `.discobot/hooks/` with `type: session` that run once during container startup. They are executed by the Go agent init process (PID 1) before the agent-api starts.
+Session hooks are scripts in `.discobot/hooks/` with `type: session` that run once during container startup. They are executed by the Go sandbox init process (PID 1) before the agent-api starts.
 
 ## Execution Point
 

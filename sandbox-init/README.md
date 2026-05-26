@@ -1,6 +1,6 @@
-# Discobot Agent - Container Init Process
+# Discobot Sandbox Init - Container Init Process
 
-The `discobot-agent` binary is a minimal PID 1 init process for container environments. It handles workspace initialization, AgentFS setup, and process management for Discobot containers.
+The `discobot-sandbox-init` binary is a minimal PID 1 init process for container environments. It handles workspace initialization, AgentFS setup, and process management for Discobot containers.
 
 ## Features
 
@@ -73,7 +73,7 @@ The agent is built as part of the Docker multi-stage build:
 
 ```bash
 # Build just the agent binary
-go build -o discobot-agent ./agent/cmd/agent
+go build -o discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
 
 # Or via Docker (as part of full build)
 docker build -t discobot .
@@ -86,7 +86,7 @@ Container Start (root)
         │
         ▼
 ┌───────────────────┐
-│   discobot-agent      │  ← PID 1 (runs as root)
+│   discobot-sandbox-init      │  ← PID 1 (runs as root)
 │   (init process)  │
 │                   │
 │   1. Copy home    │
@@ -109,7 +109,7 @@ Container Start (root)
 ### Signal Flow
 
 ```
-SIGTERM/SIGINT → discobot-agent → forwards to child process group
+SIGTERM/SIGINT → discobot-sandbox-init → forwards to child process group
                       │
                       └→ Waits up to 10s for graceful shutdown
                       └→ Force-kills child if timeout exceeded
@@ -117,7 +117,7 @@ SIGTERM/SIGINT → discobot-agent → forwards to child process group
 
 ### Process Reaping
 
-As PID 1, `discobot-agent` is responsible for calling `wait()` on orphaned processes. This prevents zombie process accumulation when child processes fork and their parents exit.
+As PID 1, `discobot-sandbox-init` is responsible for calling `wait()` on orphaned processes. This prevents zombie process accumulation when child processes fork and their parents exit.
 
 ## AgentFS Mount Flags
 
