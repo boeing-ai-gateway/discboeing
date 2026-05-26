@@ -165,6 +165,25 @@ func TestVarDiskLabelSanitizesDistroName(t *testing.T) {
 	}
 }
 
+func TestIsStaleVarDiskUnmountError(t *testing.T) {
+	t.Parallel()
+
+	for _, message := range []string{
+		"failed to detach disk",
+		"invalid argument",
+		"not mounted",
+		"not attached",
+		"The system cannot find the path specified",
+	} {
+		if !isStaleVarDiskUnmountError(message) {
+			t.Fatalf("isStaleVarDiskUnmountError(%q) = false, want true", message)
+		}
+	}
+	if isStaleVarDiskUnmountError("access is denied") {
+		t.Fatal("isStaleVarDiskUnmountError(access is denied) = true, want false")
+	}
+}
+
 func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 	t.Parallel()
 

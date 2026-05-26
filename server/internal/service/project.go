@@ -351,7 +351,7 @@ func providerVMResourcesFromInfo(info *sandbox.ProviderResourceInfo) ProviderVMR
 		return ProviderVMResources{}
 	}
 
-	return ProviderVMResources{
+	resources := ProviderVMResources{
 		CPUCount:                 info.CPUCount,
 		MemoryMB:                 info.MemoryMB,
 		DataDiskGB:               info.DataDiskGB,
@@ -361,4 +361,9 @@ func providerVMResourcesFromInfo(info *sandbox.ProviderResourceInfo) ProviderVMR
 		RestartRequiredForDisk:   true,
 		RestartRequiredForMemory: true,
 	}
+	if info.Provider == "wsl" {
+		resources.CanChangeMemory = false
+		resources.RestartRequiredForMemory = false
+	}
+	return resources
 }

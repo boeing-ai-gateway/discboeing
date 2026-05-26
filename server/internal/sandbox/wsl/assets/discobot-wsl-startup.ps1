@@ -582,6 +582,15 @@ function Format-VarDiskIfNeeded {
     }
 }
 
+function Resize-VarFilesystemIfNeeded {
+    param([Parameter(Mandatory = $true)][string]$DevicePath)
+
+    $resize = Invoke-WSL -Arguments @("--system", "-u", "root", "--", "resize2fs", $DevicePath)
+    if ($resize.ExitCode -ne 0) {
+        throw "resize WSL /var filesystem '$VarDiskPath' on '$DevicePath' failed: $($resize.Output)"
+    }
+}
+
 function Invoke-Check {
     Assert-WSLAvailable
 
@@ -634,6 +643,7 @@ function Invoke-Execute {
 
     $device = Find-DiskByLabel
     if ($device -ne "") {
+        Resize-VarFilesystemIfNeeded -DevicePath $device
         Save-RuntimeState
         Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
     }
@@ -643,6 +653,7 @@ function Invoke-Execute {
     if ($alreadyAttached) {
         $device = Find-DiskByLabel
         if ($device -ne "") {
+            Resize-VarFilesystemIfNeeded -DevicePath $device
             Save-RuntimeState
             Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
         }
@@ -653,12 +664,14 @@ function Invoke-Execute {
 
     $device = Find-DiskByLabel
     if ($device -ne "") {
+        Resize-VarFilesystemIfNeeded -DevicePath $device
         Save-RuntimeState
         Complete $ExitOK "WSL /var disk '$VarDiskPath' is attached as $device."
     }
 
     $newDevice = Wait-ForNewDiskDevice -Before $before
     Format-VarDiskIfNeeded -DevicePath $newDevice
+    Resize-VarFilesystemIfNeeded -DevicePath $newDevice
 
     $device = Find-DiskByLabel
     if ($device -eq "") {

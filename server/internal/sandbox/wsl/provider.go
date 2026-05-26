@@ -25,10 +25,12 @@ type SessionProjectResolver func(ctx context.Context, sessionID string) (project
 // provider handles Docker-backed sandboxes inside that runtime.
 type Provider struct {
 	*vm.Provider
+
+	resourceResolver vm.ProviderResourceResolver
 }
 
 // NewProvider creates a new WSL-backed sandbox provider.
-func NewProvider(cfg *config.Config, resolver SessionProjectResolver, systemManager *startup.SystemManager) (*Provider, error) {
+func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceResolver vm.ProviderResourceResolver, systemManager *startup.SystemManager) (*Provider, error) {
 	if resolver == nil {
 		return nil, fmt.Errorf("sessionProjectResolver is required")
 	}
@@ -37,6 +39,22 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, systemMana
 
 	opts := []vm.Option{
 		vm.WithPostVMSetup(vm.StartProxyContainer(cfg.SandboxImage)),
+		vm.WithProviderResourceResolver(func(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
+			resources := vm.ProviderResourceConfig{
+				DataDiskGB: vmManager.manager.varDiskSizeGB(),
+			}
+			if resourceResolver == nil {
+				return resources, nil
+			}
+			resolved, err := resourceResolver(ctx, projectID)
+			if err != nil {
+				return vm.ProviderResourceConfig{}, err
+			}
+			if resolved.DataDiskGB > 0 {
+				resources.DataDiskGB = resolved.DataDiskGB
+			}
+			return resources, nil
+		}),
 		vm.WithProviderName("wsl"),
 	}
 	if cfg.WSLIdleTimeout > 0 {
@@ -50,7 +68,15 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, systemMana
 		systemManager,
 		opts...,
 	)
-	return &Provider{Provider: provider}, nil
+	return &Provider{Provider: provider, resourceResolver: resourceResolver}, nil
+}
+
+// ApplyProviderResourceUpdate only allows resizing the managed /var VHD.
+func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProviderResourcesRequest) error {
+	if req.MemoryMB != nil {
+		return fmt.Errorf("memory resource updates are not supported for WSL2")
+	}
+	return p.Provider.ApplyProviderResourceUpdate(ctx, projectID, req)
 }
 
 func (p *Provider) Definition() sandbox.ProviderDefinition {

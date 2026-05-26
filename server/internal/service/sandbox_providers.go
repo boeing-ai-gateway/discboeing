@@ -435,6 +435,10 @@ func (s *SandboxService) UpdateProviderResourcesForProvider(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	currentResources := providerVMResourcesFromInfo(currentInfo)
+	if req.MemoryMB != nil && !currentResources.CanChangeMemory {
+		return nil, newValidationError("memory updates are not supported for this provider")
+	}
 	if req.MemoryMB != nil {
 		if *req.MemoryMB <= 0 {
 			return nil, newValidationError("memoryMB must be greater than 0")
@@ -482,7 +486,7 @@ func (s *SandboxService) UpdateProviderResourcesForProvider(ctx context.Context,
 	}
 	return &ProviderResourcesUpdateResult{
 		Provider:        updatedInfo.Provider,
-		Previous:        providerVMResourcesFromInfo(currentInfo),
+		Previous:        currentResources,
 		Current:         providerVMResourcesFromInfo(updatedInfo),
 		RestartRequired: true,
 	}, nil

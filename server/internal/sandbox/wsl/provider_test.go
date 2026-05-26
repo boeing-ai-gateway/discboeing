@@ -17,6 +17,22 @@ func TestProviderSupportsProjectInspection(_ *testing.T) {
 	var _ sandbox.ProjectInspectionManager = (*Provider)(nil)
 }
 
+func TestProviderSupportsProviderResources(_ *testing.T) {
+	var _ sandbox.ProviderResourceManager = (*Provider)(nil)
+}
+
+func TestProviderRejectsMemoryResourceUpdates(t *testing.T) {
+	provider := &Provider{}
+	memoryMB := 4096
+
+	err := provider.ApplyProviderResourceUpdate(context.Background(), "project-1", sandbox.UpdateProviderResourcesRequest{
+		MemoryMB: &memoryMB,
+	})
+	if err == nil {
+		t.Fatal("ApplyProviderResourceUpdate() error = nil, want error")
+	}
+}
+
 func TestProviderDefinition(t *testing.T) {
 	provider := &Provider{}
 	definition := provider.Definition()

@@ -70,7 +70,9 @@
 	);
 
 	function hydrateDrafts(nextResources: ProjectResources) {
-		memoryDraft = String(nextResources.vm.memoryMB / 1024);
+		memoryDraft = nextResources.vm.canChangeMemory
+			? String(nextResources.vm.memoryMB / 1024)
+			: "";
 		diskDraft = String(nextResources.vm.dataDiskGB);
 	}
 
@@ -164,7 +166,10 @@
 	const parsedDisk = $derived.by(() => Number.parseInt(diskDraft, 10));
 	const parsedMemoryMB = $derived.by(() => parsedMemory * 1024);
 	const hasValidMemoryDraft = $derived.by(
-		() => Number.isInteger(parsedMemory) && parsedMemory > 0,
+		() =>
+			resources !== null &&
+			(!resources.vm.canChangeMemory ||
+				(Number.isInteger(parsedMemory) && parsedMemory > 0)),
 	);
 	const hasValidDiskDraft = $derived.by(
 		() => Number.isInteger(parsedDisk) && parsedDisk > 0,
@@ -178,7 +183,9 @@
 	const isDirty = $derived.by(
 		() =>
 			resources !== null &&
-			((hasValidMemoryDraft && parsedMemoryMB !== resources.vm.memoryMB) ||
+			((resources.vm.canChangeMemory &&
+				hasValidMemoryDraft &&
+				parsedMemoryMB !== resources.vm.memoryMB) ||
 				(hasValidDiskDraft && parsedDisk !== resources.vm.dataDiskGB)),
 	);
 	const canSave = $derived.by(
@@ -202,7 +209,10 @@
 		saveSuccess = null;
 		try {
 			const payload: { memoryMB?: number; dataDiskGB?: number } = {};
-			if (parsedMemoryMB !== resources.vm.memoryMB) {
+			if (
+				resources.vm.canChangeMemory &&
+				parsedMemoryMB !== resources.vm.memoryMB
+			) {
 				payload.memoryMB = parsedMemoryMB;
 			}
 			if (parsedDisk !== resources.vm.dataDiskGB) {
@@ -269,40 +279,48 @@
 							<ItemContent>
 								<ItemTitle>Provider</ItemTitle>
 								<ItemDescription>
-									{resources.provider} · {resources.vm.cpuCount} CPU{resources
-										.vm.cpuCount === 1
-										? ""
-										: "s"}
+									{#if resources.vm.cpuCount > 0}
+										{resources.provider} · {resources.vm.cpuCount} CPU{resources
+											.vm.cpuCount === 1
+											? ""
+											: "s"}
+									{:else}
+										{resources.provider}
+									{/if}
 								</ItemDescription>
 							</ItemContent>
 						</Item>
-						<ItemSeparator />
-						<Item size="sm">
-							<ItemContent>
-								<ItemTitle>Memory</ItemTitle>
-								<ItemDescription>
-									Whole GiB only (1 GiB = 1024 MB). Changes apply after the next
-									runtime restart.
-								</ItemDescription>
-							</ItemContent>
-							<ItemActions class="ml-auto w-40 justify-end">
-								<Label for="project-memory" class="sr-only">Memory (GiB)</Label>
-								<Input
-									id="project-memory"
-									type="number"
-									min="1"
-									step="1"
-									value={memoryDraft}
-									oninput={(event) => {
-										memoryDraft = (event.currentTarget as HTMLInputElement)
-											.value;
-										saveError = null;
-										saveSuccess = null;
-									}}
-									class="text-right"
-								/>
-							</ItemActions>
-						</Item>
+						{#if resources.vm.canChangeMemory}
+							<ItemSeparator />
+							<Item size="sm">
+								<ItemContent>
+									<ItemTitle>Memory</ItemTitle>
+									<ItemDescription>
+										Whole GiB only (1 GiB = 1024 MB). Changes apply after the
+										next runtime restart.
+									</ItemDescription>
+								</ItemContent>
+								<ItemActions class="ml-auto w-40 justify-end">
+									<Label for="project-memory" class="sr-only"
+										>Memory (GiB)</Label
+									>
+									<Input
+										id="project-memory"
+										type="number"
+										min="1"
+										step="1"
+										value={memoryDraft}
+										oninput={(event) => {
+											memoryDraft = (event.currentTarget as HTMLInputElement)
+												.value;
+											saveError = null;
+											saveSuccess = null;
+										}}
+										class="text-right"
+									/>
+								</ItemActions>
+							</Item>
+						{/if}
 						<ItemSeparator />
 						<Item size="sm">
 							<ItemContent>
@@ -332,8 +350,12 @@
 
 					{#if !hasValidMemoryDraft || !hasValidDiskDraft}
 						<p class="text-xs text-destructive">
-							Memory must be a positive whole number of GiB. Disk must be a
-							positive whole number.
+							{#if resources.vm.canChangeMemory}
+								Memory must be a positive whole number of GiB. Disk must be a
+								positive whole number.
+							{:else}
+								Disk must be a positive whole number.
+							{/if}
 						</p>
 					{:else if diskWouldDecrease}
 						<p class="text-xs text-destructive">
@@ -341,8 +363,13 @@
 						</p>
 					{:else}
 						<p class="text-xs text-muted-foreground">
-							Both memory and disk changes require the runtime to restart before
-							they take effect.
+							{#if resources.vm.canChangeMemory}
+								Both memory and disk changes require the runtime to restart
+								before they take effect.
+							{:else}
+								Disk changes require the runtime to restart before they take
+								effect.
+							{/if}
 						</p>
 					{/if}
 
