@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/obot-platform/discobot/agent-go/internal/config"
@@ -47,7 +48,7 @@ func TestSetupConfiguredWorkspaceClonesWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read cloned file: %v", err)
 	}
-	if string(content) != "hello\n" {
+	if strings.ReplaceAll(string(content), "\r\n", "\n") != "hello\n" {
 		t.Fatalf("cloned file = %q, want hello", string(content))
 	}
 	if _, err := os.Stat(filepath.Join(workspaceDir, ".git")); err != nil {
@@ -78,6 +79,25 @@ func TestSetupConfiguredWorkspaceCreatesEmptyWorkspace(t *testing.T) {
 	}
 	if !reflect.DeepEqual(progress, []string{"creating empty workspace"}) {
 		t.Fatalf("progress = %#v", progress)
+	}
+}
+
+func TestBuildWorkspaceCloneArgsMarksLocalSourceSafe(t *testing.T) {
+	got := buildWorkspaceCloneArgs("/.workspace", "main", "", "/workspace.staging")
+	want := []string{"-c", "safe.directory=/.workspace", "clone", "--single-branch", "--branch", "main", "/.workspace", "/workspace.staging"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("clone args = %#v, want %#v", got, want)
+	}
+}
+
+func TestRedactGitErrorDetail(t *testing.T) {
+	input := "fatal: unable to access 'https://user:secret@example.com/repo.git?token=abc&x=1': authentication failed"
+	got := redactGitErrorDetail(input)
+	if got == input {
+		t.Fatalf("redactGitErrorDetail did not redact input")
+	}
+	if strings.Contains(got, "secret") || strings.Contains(got, "token=abc") {
+		t.Fatalf("redactGitErrorDetail leaked secret: %q", got)
 	}
 }
 

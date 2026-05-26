@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -8,7 +9,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/obot-platform/discobot/agent-go/internal/config"
@@ -18,6 +21,11 @@ import (
 const agentDataDir = "/.data"
 
 type workspaceSetupProgress func(message string)
+
+var (
+	gitBasicAuthURLPattern   = regexp.MustCompile(`(?i)(https?://)([^/\s@]+)@`)
+	gitSensitiveQueryPattern = regexp.MustCompile(`(?i)([?&](?:token|access_token|api_key|password|secret)=)[^&\s]+`)
+)
 
 // setupConfiguredWorkspace prepares the agent working tree after dynamic
 // configuration arrives. The init process may have created an empty workspace
@@ -74,6 +82,9 @@ func setupConfiguredWorkspace(ctx context.Context, cfg *config.Config, initialCr
 	emit("cloning workspace")
 	cloneArgs := buildWorkspaceCloneArgs(cloneSource, cfg.WorkspaceRef, mirrorDir, stagingDir)
 	if err := runGit(ctx, "", initialCreds.Credentials, cloneArgs...); err != nil {
+		if cleanupErr := os.RemoveAll(stagingDir); cleanupErr != nil {
+			return fmt.Errorf("git clone failed: %w; failed to remove workspace staging directory: %v", err, cleanupErr)
+		}
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
@@ -159,6 +170,9 @@ func workspaceDirectoryReadyForClone(workspaceDir string) (bool, error) {
 
 func buildWorkspaceCloneArgs(cloneSource, workspaceTargetRef, mirrorDir, destination string) []string {
 	args := []string{"clone"}
+	if safeDirectory := gitSafeDirectoryForCloneSource(cloneSource); safeDirectory != "" {
+		args = []string{"-c", "safe.directory=" + safeDirectory, "clone"}
+	}
 	if branch := branchNameFromTargetRef(workspaceTargetRef); branch != "" {
 		args = append(args, "--single-branch", "--branch", branch)
 	} else if strings.TrimSpace(workspaceTargetRef) == "" || strings.TrimSpace(workspaceTargetRef) == "HEAD" {
@@ -168,6 +182,19 @@ func buildWorkspaceCloneArgs(cloneSource, workspaceTargetRef, mirrorDir, destina
 		args = append(args, "--reference-if-able", mirrorDir)
 	}
 	return append(args, cloneSource, destination)
+}
+
+func gitSafeDirectoryForCloneSource(cloneSource string) string {
+	if isGitURL(cloneSource) {
+		return ""
+	}
+	if strings.HasPrefix(cloneSource, "/") {
+		return path.Clean(cloneSource)
+	}
+	if filepath.IsAbs(cloneSource) {
+		return filepath.Clean(cloneSource)
+	}
+	return ""
 }
 
 func shouldResetWorkspaceToTargetRef(targetRef string) bool {
@@ -267,9 +294,17 @@ func runGit(ctx context.Context, dir string, creds []credentials.EnvVar, args ..
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = gitCommandEnv(creds)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	var output bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &output)
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(output.String())
+		if detail != "" {
+			return fmt.Errorf("%w: %s", err, trimGitErrorDetail(redactGitErrorDetail(detail)))
+		}
+		return err
+	}
+	return nil
 }
 
 func runGitQuiet(ctx context.Context, dir string, args ...string) error {
@@ -300,4 +335,17 @@ func gitCommandEnv(creds []credentials.EnvVar) []string {
 		env = append(env, cred.EnvVar+"="+cred.Value)
 	}
 	return env
+}
+
+func trimGitErrorDetail(detail string) string {
+	const maxLen = 4096
+	if len(detail) <= maxLen {
+		return detail
+	}
+	return detail[:maxLen] + "...[truncated]"
+}
+
+func redactGitErrorDetail(detail string) string {
+	detail = gitBasicAuthURLPattern.ReplaceAllString(detail, "${1}[redacted]@")
+	return gitSensitiveQueryPattern.ReplaceAllString(detail, "${1}[redacted]")
 }
