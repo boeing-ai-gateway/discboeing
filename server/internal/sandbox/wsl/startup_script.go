@@ -246,6 +246,7 @@ func (m *Manager) wslStartupScriptCommand(mode string, resultFile string) (strin
 		"-VarDiskPath", m.varDiskPath(),
 		"-VarDiskSizeGB", fmt.Sprintf("%d", m.varDiskSizeGB()),
 		"-VarDiskLabel", m.varDiskLabel(),
+		"-RuntimeID", m.runtimeID,
 		"-DistroName", mainDistro.name,
 		"-InstallDir", mainDistro.installDir,
 		"-StatePath", m.state.Path(),

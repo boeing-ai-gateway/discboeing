@@ -14,6 +14,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$VarDiskLabel,
 
+    [string]$RuntimeID = "",
+
     [Parameter(Mandatory = $true)]
     [string]$DistroName,
 
@@ -273,6 +275,71 @@ function Get-RuntimeState {
     }
 }
 
+function Get-RuntimeStateInt {
+    param(
+        [AllowNull()]
+        [object]$State,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    if ($null -eq $State) {
+        return 0
+    }
+    $property = $State.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return 0
+    }
+    try {
+        return [int]$property.Value
+    }
+    catch {
+        return 0
+    }
+}
+
+function Get-RuntimeVarDiskSizeGB {
+    $state = Get-RuntimeState
+    $sizeGB = Get-RuntimeStateInt -State $state -Name "var_disk_size_gb"
+    if ($sizeGB -gt 0) {
+        return $sizeGB
+    }
+    return $VarDiskSizeGB
+}
+
+function Get-DesiredVarDiskSizeGB {
+    $state = Get-RuntimeState
+    $sizeGB = Get-RuntimeStateInt -State $state -Name "desired_var_disk_size_gb"
+    if ($sizeGB -gt 0) {
+        return $sizeGB
+    }
+    return $VarDiskSizeGB
+}
+
+function Get-VarDiskResizeRequestedBy {
+    $state = Get-RuntimeState
+    if ($null -eq $state) {
+        return ""
+    }
+    $property = $state.PSObject.Properties["var_disk_resize_requested_by"]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return ""
+    }
+    return [string]$property.Value
+}
+
+function Test-VarDiskResizePending {
+    if (-not (Test-Path -LiteralPath $VarDiskPath)) {
+        return $false
+    }
+    if ((Get-DesiredVarDiskSizeGB) -le (Get-RuntimeVarDiskSizeGB)) {
+        return $false
+    }
+    $requestedBy = Get-VarDiskResizeRequestedBy
+    return $requestedBy -eq "" -or $requestedBy -ne $RuntimeID
+}
+
 function Test-RuntimeImageCurrent {
     $state = Get-RuntimeState
     if ($null -eq $state) {
@@ -282,15 +349,36 @@ function Test-RuntimeImageCurrent {
 }
 
 function Save-RuntimeState {
+    param([int]$AppliedVarDiskSizeGB = 0)
+
     $stateDir = Split-Path -Parent $StatePath
     if ($stateDir -ne "") {
         New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
     }
+    $state = Get-RuntimeState
+    $varDiskSizeGB = $AppliedVarDiskSizeGB
+    if ($varDiskSizeGB -le 0) {
+        $varDiskSizeGB = Get-RuntimeStateInt -State $state -Name "var_disk_size_gb"
+    }
+    if ($varDiskSizeGB -le 0) {
+        $varDiskSizeGB = $VarDiskSizeGB
+    }
+    $desiredVarDiskSizeGB = Get-RuntimeStateInt -State $state -Name "desired_var_disk_size_gb"
+    if ($desiredVarDiskSizeGB -le 0) {
+        $desiredVarDiskSizeGB = $VarDiskSizeGB
+    }
+    $resizeRequestedBy = Get-VarDiskResizeRequestedBy
+    if ($AppliedVarDiskSizeGB -gt 0) {
+        $resizeRequestedBy = ""
+    }
     $payload = [ordered]@{
-        version     = 1
-        distro_name = $DistroName
-        image_ref   = $ImageRef
-        updated_at  = (Get-Date).ToUniversalTime().ToString("o")
+        version                      = 1
+        distro_name                  = $DistroName
+        image_ref                    = $ImageRef
+        var_disk_size_gb             = $varDiskSizeGB
+        desired_var_disk_size_gb     = $desiredVarDiskSizeGB
+        var_disk_resize_requested_by = $resizeRequestedBy
+        updated_at                   = (Get-Date).ToUniversalTime().ToString("o")
     }
     $json = $payload | ConvertTo-Json -Depth 4
     Set-Utf8NoBomFile -Path $StatePath -Value $json
@@ -455,6 +543,40 @@ exit
     }
 }
 
+function Resize-VarDiskHostIfNeeded {
+    if (-not (Test-VarDiskResizePending)) {
+        return
+    }
+
+    $desiredSizeGB = Get-DesiredVarDiskSizeGB
+    Stop-DistroIfNeeded
+    $unmount = Invoke-WSL -Arguments @("--unmount", $VarDiskPath)
+    if ($unmount.ExitCode -ne 0 -and -not (Test-StaleUnmountMessage $unmount.Output)) {
+        throw "unmount WSL /var disk '$VarDiskPath' before resize failed: $($unmount.Output)"
+    }
+
+    $diskPartScript = New-TemporaryFile
+    try {
+        $maximumMB = [int64]$desiredSizeGB * 1024
+        $diskPartContent = @"
+select vdisk file="$VarDiskPath"
+expand vdisk maximum=$maximumMB
+exit
+"@
+        Set-Utf8NoBomFile -Path $diskPartScript -Value $diskPartContent
+
+        $result = Invoke-NativeCommand -FilePath "diskpart.exe" -Arguments @("/s", $diskPartScript.FullName)
+        if ($result.ExitCode -ne 0) {
+            throw "resize WSL /var disk '$VarDiskPath' to ${desiredSizeGB}GB failed: $($result.Output)"
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $diskPartScript.FullName -Force -ErrorAction SilentlyContinue
+    }
+
+    Save-RuntimeState -AppliedVarDiskSizeGB $desiredSizeGB
+}
+
 function Test-AlreadyMountedMessage {
     param([string]$Message)
     $text = $Message.ToLowerInvariant()
@@ -582,13 +704,41 @@ function Format-VarDiskIfNeeded {
     }
 }
 
+function Test-ResizeRequiresFilesystemCheck {
+    param([string]$Message)
+
+    $text = $Message.ToLowerInvariant()
+    return $text.Contains("please run") -and $text.Contains("e2fsck") -and $text.Contains("first")
+}
+
+function Repair-VarFilesystemForResize {
+    param([Parameter(Mandatory = $true)][string]$DevicePath)
+
+    Stop-DistroIfNeeded
+
+    $e2fsck = Invoke-WSL -Arguments @("--system", "-u", "root", "--", "e2fsck", "-f", "-p", $DevicePath)
+    if ($e2fsck.ExitCode -gt 1) {
+        throw "check WSL /var filesystem '$VarDiskPath' on '$DevicePath' failed: $($e2fsck.Output)"
+    }
+}
+
 function Resize-VarFilesystemIfNeeded {
     param([Parameter(Mandatory = $true)][string]$DevicePath)
 
     $resize = Invoke-WSL -Arguments @("--system", "-u", "root", "--", "resize2fs", $DevicePath)
-    if ($resize.ExitCode -ne 0) {
-        throw "resize WSL /var filesystem '$VarDiskPath' on '$DevicePath' failed: $($resize.Output)"
+    if ($resize.ExitCode -eq 0) {
+        return
     }
+
+    if (Test-ResizeRequiresFilesystemCheck -Message $resize.Output) {
+        Repair-VarFilesystemForResize -DevicePath $DevicePath
+        $resize = Invoke-WSL -Arguments @("--system", "-u", "root", "--", "resize2fs", $DevicePath)
+        if ($resize.ExitCode -eq 0) {
+            return
+        }
+    }
+
+    throw "resize WSL /var filesystem '$VarDiskPath' on '$DevicePath' failed: $($resize.Output)"
 }
 
 function Invoke-Check {
@@ -605,6 +755,9 @@ function Invoke-Check {
         $actions.Add("ensure-var-disk")
     }
     else {
+        if (Test-VarDiskResizePending) {
+            $actions.Add("resize-var-disk")
+        }
         $device = Find-DiskByLabel
         if ($device -eq "") {
             if (-not (Test-Path -LiteralPath $VarDiskPath)) {
@@ -612,6 +765,9 @@ function Invoke-Check {
             }
             $actions.Add("attach-var-disk")
             $actions.Add("format-var-disk-if-needed")
+        }
+        elseif ($actions.Contains("resize-var-disk")) {
+            $actions.Add("attach-var-disk")
         }
     }
 
@@ -640,6 +796,7 @@ function Invoke-Execute {
     if (-not (Test-Path -LiteralPath $VarDiskPath)) {
         New-VarDisk
     }
+    Resize-VarDiskHostIfNeeded
 
     $device = Find-DiskByLabel
     if ($device -ne "") {

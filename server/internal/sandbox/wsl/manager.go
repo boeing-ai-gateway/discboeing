@@ -75,6 +75,7 @@ type Manager struct {
 	cfg        *config.Config
 	state      *StateStore
 	downloader *vm.ImageDownloader
+	runtimeID  string
 
 	lifecycleMu sync.Mutex
 	mu          sync.RWMutex
@@ -99,6 +100,7 @@ func NewManager(cfg *config.Config) *Manager {
 			ArtifactDescription:      "WSL rootfs artifact",
 			LocalArtifactDescription: "WSL rootfs archive",
 		}),
+		runtimeID: fmt.Sprintf("%d", time.Now().UTC().UnixNano()),
 	}
 }
 

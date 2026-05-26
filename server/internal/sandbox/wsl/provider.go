@@ -26,6 +26,7 @@ type SessionProjectResolver func(ctx context.Context, sessionID string) (project
 type Provider struct {
 	*vm.Provider
 
+	manager          *Manager
 	resourceResolver vm.ProviderResourceResolver
 }
 
@@ -68,15 +69,23 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceRe
 		systemManager,
 		opts...,
 	)
-	return &Provider{Provider: provider, resourceResolver: resourceResolver}, nil
+	return &Provider{Provider: provider, manager: vmManager.manager, resourceResolver: resourceResolver}, nil
 }
 
-// ApplyProviderResourceUpdate only allows resizing the managed /var VHD.
+// ApplyProviderResourceUpdate records managed /var VHD resize requests for the
+// next WSL startup. The startup script applies the host resize while the managed
+// runtime is stopped instead of resizing under a running sandbox.
 func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProviderResourcesRequest) error {
 	if req.MemoryMB != nil {
 		return fmt.Errorf("memory resource updates are not supported for WSL2")
 	}
-	return p.Provider.ApplyProviderResourceUpdate(ctx, projectID, req)
+	if req.DataDiskGB == nil {
+		return nil
+	}
+	if p.manager == nil {
+		return fmt.Errorf("WSL manager is not initialized")
+	}
+	return p.manager.RequestVarDiskResize(ctx, *req.DataDiskGB)
 }
 
 func (p *Provider) Definition() sandbox.ProviderDefinition {

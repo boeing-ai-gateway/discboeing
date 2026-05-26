@@ -199,6 +199,19 @@
 			!savePending,
 	);
 
+	function resourceSaveMessage(result: {
+		provider: string;
+		restartRequired: boolean;
+	}) {
+		if (!result.restartRequired) {
+			return "Saved.";
+		}
+		if (result.provider === "wsl") {
+			return "Saved. Restart Discobot to apply the disk resize on next startup.";
+		}
+		return "Saved. Restart the runtime by opening a new session to apply the change.";
+	}
+
 	async function handleSave() {
 		if (!canSave || resources === null) {
 			return;
@@ -224,9 +237,7 @@
 				: await api.updateProjectResources(payload);
 			resources = { provider: result.provider, vm: result.current };
 			hydrateDrafts(resources);
-			saveSuccess = result.restartRequired
-				? "Saved. Restart the runtime by opening a new session to apply the change."
-				: "Saved.";
+			saveSuccess = resourceSaveMessage(result);
 		} catch (error) {
 			saveError =
 				error instanceof Error ? error.message : "Failed to update resources.";

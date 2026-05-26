@@ -343,6 +343,16 @@ func (m *Manager) ResizeVarDisk(ctx context.Context, sizeGB int) error {
 	return m.applyVarDiskSize(ctx, varDiskPath, sizeGB, createDisk)
 }
 
+// RequestVarDiskResize records the intended /var disk size for the next WSL
+// startup. The startup script performs the resize later while the managed WSL
+// runtime is stopped.
+func (m *Manager) RequestVarDiskResize(_ context.Context, sizeGB int) error {
+	if sizeGB <= 0 {
+		return fmt.Errorf("var disk size must be greater than 0")
+	}
+	return m.state.RequestVarDiskSize(sizeGB, m.varDiskSizeGB(), m.runtimeID)
+}
+
 func (m *Manager) applyVarDiskSize(ctx context.Context, varDiskPath string, sizeGB int, createDisk bool) error {
 	if err := os.MkdirAll(filepath.Dir(varDiskPath), 0755); err != nil {
 		return fmt.Errorf("create WSL /var disk parent directory: %w", err)
