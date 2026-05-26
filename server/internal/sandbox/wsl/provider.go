@@ -75,7 +75,7 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceRe
 // ApplyProviderResourceUpdate records managed /var VHD resize requests for the
 // next WSL startup. The startup script applies the host resize while the managed
 // runtime is stopped instead of resizing under a running sandbox.
-func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, projectID string, req sandbox.UpdateProviderResourcesRequest) error {
+func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, _ string, req sandbox.UpdateProviderResourcesRequest) error {
 	if req.MemoryMB != nil {
 		return fmt.Errorf("memory resource updates are not supported for WSL2")
 	}
