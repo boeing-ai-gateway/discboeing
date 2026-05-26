@@ -272,6 +272,54 @@ func TestSandboxAgentClient_StartChat_UsesProvidedThreadID(t *testing.T) {
 	}
 }
 
+func TestSandboxAgentClient_StartChatRetriesWithSecretAfterUnauthorized(t *testing.T) {
+	var authHeaders []string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/chat") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		authHeaders = append(authHeaders, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		if len(authHeaders) == 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"completionId": "test-123",
+			"status":       "started",
+		})
+	})
+
+	provider := &mockSandboxProvider{
+		handler: handler,
+		secret:  "provider-secret",
+	}
+	client := NewSandboxAgentClient(provider, nil, &SandboxAgentClientConfig{
+		GetAuthToken: func(context.Context, string) (string, error) {
+			return "user-token", nil
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	messages := json.RawMessage(`[{"role":"user","content":"hello"}]`)
+	started, err := client.StartChat(ctx, "test-session", "test-thread", messages, "", nil)
+	if err != nil {
+		t.Fatalf("StartChat failed: %v", err)
+	}
+	if started.CompletionID != "test-123" {
+		t.Fatalf("expected completion ID test-123, got %#v", started)
+	}
+	wantHeaders := []string{"Bearer user-token", "Bearer provider-secret"}
+	if !slices.Equal(authHeaders, wantHeaders) {
+		t.Fatalf("authorization headers = %#v, want %#v", authHeaders, wantHeaders)
+	}
+}
+
 func TestSandboxAgentClient_SendMessages_Non202Error(t *testing.T) {
 	// Create handler that returns 400 Bad Request
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1023,6 +1071,51 @@ func TestSandboxAgentClient_ConfigureIgnoresBaseClientTimeoutForStream(t *testin
 
 	if err := client.Configure(ctx, "test-session", sandboxConfigureRequest{}, nil); err != nil {
 		t.Fatalf("Configure() error = %v", err)
+	}
+}
+
+func TestSandboxAgentClient_ConfigureRetriesWithSecretAfterUnauthorized(t *testing.T) {
+	var authHeaders []string
+	provider := &mockSandboxProviderWithTransport{
+		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost || req.URL.Path != "/configure" {
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			}
+			authHeaders = append(authHeaders, req.Header.Get("Authorization"))
+
+			rec := httptest.NewRecorder()
+			switch req.Header.Get("Authorization") {
+			case "Bearer user-token":
+				rec.Header().Set("Content-Type", "application/json")
+				rec.WriteHeader(http.StatusUnauthorized)
+				_, _ = rec.Write([]byte(`{"error":"Unauthorized"}`))
+			case "Bearer provider-secret":
+				rec.Header().Set("Content-Type", "text/event-stream")
+				rec.WriteHeader(http.StatusOK)
+				_, _ = rec.Write([]byte("data: {\"status\":\"ready\"}\n\n"))
+			default:
+				rec.WriteHeader(http.StatusUnauthorized)
+			}
+			return rec.Result(), nil
+		}),
+	}
+	client := NewSandboxAgentClient(provider, nil, &SandboxAgentClientConfig{
+		GetAuthToken: func(context.Context, string) (string, error) {
+			return "user-token", nil
+		},
+		GetSecret: func(context.Context, string) (string, error) {
+			return "provider-secret", nil
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Configure(ctx, "test-session", sandboxConfigureRequest{}, nil); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if got, want := authHeaders, []string{"Bearer user-token", "Bearer provider-secret"}; !slices.Equal(got, want) {
+		t.Fatalf("Authorization headers = %v, want %v", got, want)
 	}
 }
 

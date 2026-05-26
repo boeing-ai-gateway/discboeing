@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -280,24 +281,43 @@ func (c *SandboxAgentClient) withSandboxAuth(ctx context.Context, lease *sandbox
 }
 
 func (c *SandboxAgentClient) sandboxAuthToken(ctx context.Context, sessionID string) string {
+	tokens := c.sandboxAuthTokens(ctx, sessionID)
+	if len(tokens) > 0 {
+		return tokens[0]
+	}
+	return ""
+}
+
+func (c *SandboxAgentClient) sandboxAuthTokens(ctx context.Context, sessionID string) []string {
+	var tokens []string
+	addToken := func(token string) {
+		if token == "" {
+			return
+		}
+		if slices.Contains(tokens, token) {
+			return
+		}
+		tokens = append(tokens, token)
+	}
+
 	if c.getAuthTokenFunc != nil {
 		token, err := c.getAuthTokenFunc(ctx, sessionID)
-		if err == nil && token != "" {
-			return token
+		if err == nil {
+			addToken(token)
 		}
 	}
 	if c.getSecretFunc != nil {
 		secret, err := c.getSecretFunc(ctx, sessionID)
-		if err == nil && secret != "" {
-			return secret
+		if err == nil {
+			addToken(secret)
 		}
-		return ""
+		return tokens
 	}
 	secret, err := c.provider.GetSecret(ctx, nil, sessionID)
-	if err != nil {
-		return ""
+	if err == nil {
+		addToken(secret)
 	}
-	return secret
+	return tokens
 }
 
 type sandboxAuthTransport struct {
@@ -307,7 +327,7 @@ type sandboxAuthTransport struct {
 
 func (t *sandboxAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clone := req.Clone(req.Context())
-	if token := t.authToken(req.Context()); token != "" {
+	if token := t.authToken(req.Context()); token != "" && clone.Header.Get("Authorization") == "" {
 		clone.Header.Set("Authorization", "Bearer "+token)
 	}
 	return t.baseTransport().RoundTrip(clone)
@@ -449,6 +469,7 @@ type RequestOptions struct {
 	// SkipCredentials opts out of automatic credential fetching.
 	// By default, credentials are fetched and sent with requests.
 	SkipCredentials bool
+	authToken       string
 
 	// Reasoning controls extended thinking using a string reasoning level such as
 	// "auto", "low", "medium", "high", "xhigh", "none", "default", or
@@ -472,6 +493,26 @@ func optsRunAfter(opts *RequestOptions) string {
 	return opts.RunAfter
 }
 
+func (c *SandboxAgentClient) requestAuthTokens(ctx context.Context, sessionID string, opts *RequestOptions) []string {
+	if opts != nil && opts.authToken != "" {
+		return []string{opts.authToken}
+	}
+	tokens := c.sandboxAuthTokens(ctx, sessionID)
+	if len(tokens) == 0 {
+		return []string{""}
+	}
+	return tokens
+}
+
+func requestOptionsWithAuthToken(opts *RequestOptions, authToken string) *RequestOptions {
+	if opts == nil {
+		return &RequestOptions{authToken: authToken}
+	}
+	copied := *opts
+	copied.authToken = authToken
+	return &copied
+}
+
 type GetCommitsRequest struct {
 	TargetCommit string
 	HeadCommit   string
@@ -482,7 +523,13 @@ type GetCommitsRequest struct {
 // Credentials are automatically fetched unless SkipCredentials is set.
 func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
 	// Add Authorization header with Bearer token
-	if token := c.sandboxAuthToken(ctx, sessionID); token != "" {
+	token := ""
+	if opts != nil && opts.authToken != "" {
+		token = opts.authToken
+	} else {
+		token = c.sandboxAuthToken(ctx, sessionID)
+	}
+	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
@@ -582,39 +629,52 @@ func (c *SandboxAgentClient) Configure(ctx context.Context, sessionID string, cf
 	}
 
 	var configureLease *sandbox.HTTPClientLease
+	authTokens := c.sandboxAuthTokens(ctx, sessionID)
+	if len(authTokens) == 0 {
+		authTokens = []string{""}
+	}
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
-		lease, err := c.acquireHTTPClient(ctx, sessionID)
-		if err != nil {
-			return nil, 0, err
-		}
-		client := *lease.Client
-		client.Timeout = 0
+		for i, authToken := range authTokens {
+			lease, err := c.acquireHTTPClient(ctx, sessionID)
+			if err != nil {
+				return nil, 0, err
+			}
+			client := *lease.Client
+			client.Timeout = 0
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.configureURL(), bytes.NewReader(bodyBytes))
-		if err != nil {
-			lease.Release()
-			return nil, 0, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "text/event-stream")
-		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
-			lease.Release()
-			return nil, 0, err
-		}
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.configureURL(), bytes.NewReader(bodyBytes))
+			if err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "text/event-stream")
+			if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true, authToken: authToken}); err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			lease.Release()
-			return nil, 0, err
+			resp, err := client.Do(req)
+			if err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
+			if resp.StatusCode == http.StatusUnauthorized && i < len(authTokens)-1 {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+				lease.Release()
+				continue
+			}
+			if isRetryableStatus(resp.StatusCode) {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+				lease.Release()
+				return nil, resp.StatusCode, fmt.Errorf("configure returned status %d", resp.StatusCode)
+			}
+			configureLease = lease
+			return resp, resp.StatusCode, nil
 		}
-		if isRetryableStatus(resp.StatusCode) {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
-			lease.Release()
-			return nil, resp.StatusCode, fmt.Errorf("configure returned status %d", resp.StatusCode)
-		}
-		configureLease = lease
-		return resp, resp.StatusCode, nil
+		return nil, 0, fmt.Errorf("configure failed before request")
 	})
 	if err != nil {
 		return err
@@ -690,30 +750,43 @@ func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	authTokens := c.requestAuthTokens(ctx, sessionID, opts)
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
-		lease, err := c.acquireHTTPClient(ctx, sessionID)
-		if err != nil {
-			return nil, 0, err
-		}
-		defer lease.Release()
-		client := lease.Client
+		for i, authToken := range authTokens {
+			lease, err := c.acquireHTTPClient(ctx, sessionID)
+			if err != nil {
+				return nil, 0, err
+			}
+			client := lease.Client
 
-		req, err := http.NewRequestWithContext(ctx, "POST", c.threadURL(threadID, "/chat"), bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
+			req, err := http.NewRequestWithContext(ctx, "POST", c.threadURL(threadID, "/chat"), bytes.NewReader(bodyBytes))
+			if err != nil {
+				lease.Release()
+				return nil, 0, fmt.Errorf("failed to create request: %w", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
 
-		if err := c.applyRequestAuth(ctx, req, sessionID, opts); err != nil {
-			return nil, 0, err
-		}
+			if err := c.applyRequestAuth(ctx, req, sessionID, requestOptionsWithAuthToken(opts, authToken)); err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, 0, err
+			resp, err := client.Do(req)
+			if err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
+			if resp.StatusCode == http.StatusUnauthorized && i < len(authTokens)-1 {
+				log.Printf("[SandboxAgentClient] Sandbox returned 401 for session %s start chat using auth candidate %d/%d; retrying next candidate", sessionID, i+1, len(authTokens))
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+				lease.Release()
+				continue
+			}
+			lease.Release()
+			return resp, resp.StatusCode, nil
 		}
-
-		return resp, resp.StatusCode, nil
+		return nil, 0, fmt.Errorf("chat start failed before request")
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -785,39 +858,51 @@ func (c *SandboxAgentClient) SendMessages(ctx context.Context, sessionID, thread
 func (c *SandboxAgentClient) GetStream(ctx context.Context, sessionID, threadID string, opts *RequestOptions) (<-chan SSELine, error) {
 	// Use retry logic to handle transient connection errors during container startup
 	var streamLease *sandbox.HTTPClientLease
+	authTokens := c.requestAuthTokens(ctx, sessionID, opts)
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
-		lease, err := c.acquireHTTPClient(ctx, sessionID)
-		if err != nil {
-			// Don't retry on sandbox not running - let caller handle reconciliation
-			return nil, 0, err
-		}
-		client := *lease.Client
-		client.Timeout = 0 // SSE stream - no timeout
+		for i, authToken := range authTokens {
+			lease, err := c.acquireHTTPClient(ctx, sessionID)
+			if err != nil {
+				// Don't retry on sandbox not running - let caller handle reconciliation
+				return nil, 0, err
+			}
+			client := *lease.Client
+			client.Timeout = 0 // SSE stream - no timeout
 
-		// URL host is ignored - the client's transport handles routing to the sandbox
-		req, err := http.NewRequestWithContext(ctx, "GET", c.threadURL(threadID, "/chat/stream"), nil)
-		if err != nil {
-			lease.Release()
-			return nil, 0, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Accept", "text/event-stream")
-		if opts != nil && opts.LastEventID != "" {
-			req.Header.Set("Last-Event-ID", opts.LastEventID)
-		}
+			// URL host is ignored - the client's transport handles routing to the sandbox
+			req, err := http.NewRequestWithContext(ctx, "GET", c.threadURL(threadID, "/chat/stream"), nil)
+			if err != nil {
+				lease.Release()
+				return nil, 0, fmt.Errorf("failed to create request: %w", err)
+			}
+			req.Header.Set("Accept", "text/event-stream")
+			if opts != nil && opts.LastEventID != "" {
+				req.Header.Set("Last-Event-ID", opts.LastEventID)
+			}
 
-		if err := c.applyRequestAuth(ctx, req, sessionID, opts); err != nil {
-			return nil, 0, err
+			if err := c.applyRequestAuth(ctx, req, sessionID, requestOptionsWithAuthToken(opts, authToken)); err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				lease.Release()
+				return nil, 0, err
+			}
+			if resp.StatusCode == http.StatusUnauthorized && i < len(authTokens)-1 {
+				log.Printf("[SandboxAgentClient] Sandbox returned 401 for session %s chat stream using auth candidate %d/%d; retrying next candidate", sessionID, i+1, len(authTokens))
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+				lease.Release()
+				continue
+			}
+
+			streamLease = lease
+
+			return resp, resp.StatusCode, nil
 		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lease.Release()
-			return nil, 0, err
-		}
-
-		streamLease = lease
-
-		return resp, resp.StatusCode, nil
+		return nil, 0, fmt.Errorf("chat stream failed before request")
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)

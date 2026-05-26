@@ -807,6 +807,72 @@ func TestSessionService_Initialize_FailsWhenSandboxHealthProbeFails(t *testing.T
 	}
 }
 
+func TestSessionService_Initialize_ConfiguresRunningBootstrapSandbox(t *testing.T) {
+	ctx := context.Background()
+	provider := mock.NewProviderWithImage(testImage)
+	testStore := setupTestStore(t)
+	cfg := &config.Config{
+		SandboxIdleTimeout: 30 * time.Minute,
+		EncryptionKey:      testEncryptionKey,
+	}
+	sandboxSvc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
+	sessionSvc := NewSessionService(testStore, nil, sandboxSvc, nil, nil)
+
+	sessionID := "session-running-bootstrap"
+	createTestSession(t, testStore, sessionID, "/workspace-running-bootstrap")
+	if err := testStore.UpdateSessionStatus(ctx, sessionID, model.SessionStatusInitializing, nil); err != nil {
+		t.Fatalf("failed to set session initializing: %v", err)
+	}
+
+	if _, _, err := provider.Create(ctx, nil, sessionID, sandbox.CreateOptions{}); err != nil {
+		t.Fatalf("failed to create existing sandbox: %v", err)
+	}
+	if _, err := provider.Start(ctx, nil, sessionID); err != nil {
+		t.Fatalf("failed to start existing sandbox: %v", err)
+	}
+
+	configured := false
+	configureRequests := 0
+	provider.HTTPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/health":
+			w.Header().Set("Content-Type", "application/json")
+			if !configured {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"code":"AGENT_NOT_CONFIGURED","configured":false}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"configured":true}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/configure":
+			configureRequests++
+			configured = true
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"status\":\"ready\"}\n\n"))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	provider.RemoveFunc = func(context.Context, []byte, string, ...sandbox.RemoveOption) ([]byte, error) {
+		t.Fatal("bootstrap sandbox should not be removed")
+		return nil, nil
+	}
+
+	if err := sessionSvc.Initialize(ctx, sessionID); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	if configureRequests != 1 {
+		t.Fatalf("configure requests = %d, want 1", configureRequests)
+	}
+	updatedSession, err := testStore.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("failed to reload session: %v", err)
+	}
+	if updatedSession.SandboxStatus != model.SessionStatusReady {
+		t.Fatalf("expected session status %q, got %q", model.SessionStatusReady, updatedSession.SandboxStatus)
+	}
+}
+
 func TestReconcileSandboxes_UsesImageIDAndRunsCleanup(t *testing.T) {
 	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
 	testStore := setupTestStore(t)

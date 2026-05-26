@@ -1001,6 +1001,7 @@ func (s *SessionService) initializeSync(
 			}
 			log.Printf("Sandbox for session %s is already running (verified healthy)", sessionID)
 			needsCreation = false
+			needsHealthCheck = true
 
 		case sandbox.StatusCreated, sandbox.StatusStopped:
 			if err := s.sandboxService.WaitForSandboxImageOpsReady(ctx); err != nil {

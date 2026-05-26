@@ -939,8 +939,10 @@ func (s *SandboxService) RemoveForDeletedSession(ctx context.Context, sessionID 
 }
 
 // probeSandboxHealth does a fast, single-attempt HTTP health check against the
-// sandbox's agent-api. It uses a short timeout (2s) to quickly detect dead or
-// dying containers without blocking for the full retry backoff (~14s).
+// sandbox's agent-api. It accepts the bootstrap "not configured" response as a
+// live agent so initialization can configure it instead of recreating it. It
+// uses a short timeout (2s) to quickly detect dead or dying containers without
+// blocking for the full retry backoff (~14s).
 // Results are cached per session for healthCacheTTL to reduce probe frequency.
 func (s *SandboxService) probeSandboxHealth(ctx context.Context, sessionID string) error {
 	s.healthCacheMu.RLock()
@@ -953,7 +955,7 @@ func (s *SandboxService) probeSandboxHealth(ctx context.Context, sessionID strin
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	statusCode, err := s.checkSandboxHealth(probeCtx, sessionID)
+	statusCode, err := s.checkSandboxStartupHealth(probeCtx, sessionID)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
@@ -1002,10 +1004,6 @@ func (s *SandboxService) waitForSandboxHealth(ctx context.Context, sessionID str
 
 		delay = min(time.Duration(float64(delay)*retryMultiplier), retryMaxDelay)
 	}
-}
-
-func (s *SandboxService) checkSandboxHealth(ctx context.Context, sessionID string) (int, error) {
-	return s.checkSandboxHealthResponse(ctx, sessionID, false)
 }
 
 func (s *SandboxService) checkSandboxStartupHealth(ctx context.Context, sessionID string) (int, error) {
