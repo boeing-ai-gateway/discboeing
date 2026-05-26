@@ -10,7 +10,7 @@ import (
 	"unicode/utf16"
 )
 
-func (m *Manager) runCommand(ctx context.Context, name string, args ...string) (string, error) {
+func runCommand(ctx context.Context, name string, args ...string) (string, error) {
 	output, err := runCommandOutput(ctx, name, args...)
 	trimmed := strings.TrimSpace(output)
 	if err != nil {

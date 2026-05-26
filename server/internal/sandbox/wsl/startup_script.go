@@ -79,9 +79,24 @@ var (
 	runElevatedWSLStartupPowerShell = defaultRunElevatedWSLStartupPowerShell
 )
 
-func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress progressReporter) error {
+type wslStartupOptions struct {
+	downloader                  *vm.ImageDownloader
+	distroName                  string
+	installDir                  string
+	varDiskPath                 string
+	varDiskSizeGB               int
+	varDiskLabel                string
+	runtimeID                   string
+	statePath                   string
+	imageRef                    string
+	stateDir                    string
+	prepareImportRootfsTar      func(string) (string, func(), error)
+	cleanupStaleRootfsTempFiles func() error
+}
+
+func ensureHostStartupWithPowerShell(ctx context.Context, options wslStartupOptions, progress progressReporter) error {
 	progress.Update(5, "Checking WSL host startup requirements")
-	check, err := m.runWSLStartupScript(ctx, "check")
+	check, err := runWSLStartupScript(ctx, options, "check")
 	if err != nil {
 		return err
 	}
@@ -100,7 +115,7 @@ func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress 
 	rootfsTarPath := ""
 	if wslStartupNeedsRootfs(check.Actions) {
 		progress.Update(35, "Preparing WSL rootfs artifact")
-		rootfsTar, cleanup, err := m.prepareStartupRootfsTar(ctx, progressReporter{
+		rootfsTar, cleanup, err := prepareStartupRootfsTar(ctx, options, progressReporter{
 			update: func(childProgress int, currentOperation string) {
 				progress.Update(35+(childProgress*10/100), currentOperation)
 			},
@@ -113,7 +128,7 @@ func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress 
 	}
 
 	progress.Update(50, "Applying WSL host startup changes with elevation")
-	execute, err := m.runElevatedWSLStartupScript(ctx, "execute", rootfsTarPath)
+	execute, err := runElevatedWSLStartupScript(ctx, options, "execute", rootfsTarPath)
 	if err != nil {
 		return err
 	}
@@ -126,7 +141,7 @@ func (m *Manager) ensureHostStartupWithPowerShell(ctx context.Context, progress 
 		return wslStartupExitError(execute)
 	}
 
-	verify, err := m.runWSLStartupScript(ctx, "check")
+	verify, err := runWSLStartupScript(ctx, options, "check")
 	if err != nil {
 		return err
 	}
@@ -155,8 +170,15 @@ func wslStartupNeedsRootfs(actions []string) bool {
 	return slices.Contains(actions, "import-distro") || slices.Contains(actions, "upgrade-distro")
 }
 
-func (m *Manager) prepareStartupRootfsTar(ctx context.Context, progress progressReporter) (string, func(), error) {
-	artifact, err := m.downloader.EnsureArtifactWithProgress(ctx, func(update vm.ImageDownloadProgress) {
+func prepareStartupRootfsTar(ctx context.Context, options wslStartupOptions, progress progressReporter) (string, func(), error) {
+	if options.downloader == nil {
+		return "", nil, fmt.Errorf("prepare WSL rootfs artifact: image downloader is not configured")
+	}
+	if options.prepareImportRootfsTar == nil {
+		return "", nil, fmt.Errorf("prepare WSL rootfs artifact: import rootfs preparer is not configured")
+	}
+
+	artifact, err := options.downloader.EnsureArtifactWithProgress(ctx, func(update vm.ImageDownloadProgress) {
 		if strings.TrimSpace(update.CurrentOperation) == "" {
 			return
 		}
@@ -166,7 +188,7 @@ func (m *Manager) prepareStartupRootfsTar(ctx context.Context, progress progress
 		return "", nil, fmt.Errorf("prepare WSL rootfs artifact: %w", err)
 	}
 
-	rootfsTarPath, cleanup, err := m.prepareImportRootfsTar(artifact.ArtifactPath)
+	rootfsTarPath, cleanup, err := options.prepareImportRootfsTar(artifact.ArtifactPath)
 	if err != nil {
 		return "", nil, err
 	}
@@ -174,8 +196,11 @@ func (m *Manager) prepareStartupRootfsTar(ctx context.Context, progress progress
 		if cleanup != nil {
 			cleanup()
 		}
-		if err := m.cleanupStaleRootfsTempFiles(); err != nil {
-			log.Printf("Failed to clean stale WSL rootfs temp files in %q: %v", m.cfg.WSLStateDir, err)
+		if options.cleanupStaleRootfsTempFiles == nil {
+			return
+		}
+		if err := options.cleanupStaleRootfsTempFiles(); err != nil {
+			log.Printf("Failed to clean stale WSL rootfs temp files in %q: %v", options.stateDir, err)
 		}
 	}, nil
 }
@@ -207,22 +232,22 @@ func wslStartupExitError(result wslStartupScriptResult) error {
 	}
 }
 
-func (m *Manager) runWSLStartupScript(ctx context.Context, mode string) (wslStartupScriptResult, error) {
-	scriptPath, args, err := m.wslStartupScriptCommand(mode, "")
+func runWSLStartupScript(ctx context.Context, options wslStartupOptions, mode string) (wslStartupScriptResult, error) {
+	scriptPath, args, err := wslStartupScriptCommand(options, mode, "")
 	if err != nil {
 		return wslStartupScriptResult{}, err
 	}
 	return runWSLStartupPowerShell(ctx, scriptPath, args...)
 }
 
-func (m *Manager) runElevatedWSLStartupScript(ctx context.Context, mode string, rootfsTarPath string) (wslStartupScriptResult, error) {
+func runElevatedWSLStartupScript(ctx context.Context, options wslStartupOptions, mode string, rootfsTarPath string) (wslStartupScriptResult, error) {
 	resultPath, cleanup, err := createTempWSLStartupResultFile("discobot-wsl-startup-result-*.json", "elevated WSL startup result")
 	if err != nil {
 		return wslStartupScriptResult{}, err
 	}
 	defer cleanup()
 
-	scriptPath, args, err := m.wslStartupScriptCommand(mode, resultPath)
+	scriptPath, args, err := wslStartupScriptCommand(options, mode, resultPath)
 	if err != nil {
 		return wslStartupScriptResult{}, err
 	}
@@ -232,25 +257,24 @@ func (m *Manager) runElevatedWSLStartupScript(ctx context.Context, mode string, 
 	return runElevatedWSLStartupPowerShell(ctx, scriptPath, resultPath, args...)
 }
 
-func (m *Manager) wslStartupScriptCommand(mode string, resultFile string) (string, []string, error) {
+func wslStartupScriptCommand(options wslStartupOptions, mode string, resultFile string) (string, []string, error) {
 	scriptPath, err := findWSLStartupScriptPath()
 	if err != nil {
 		return "", nil, err
 	}
-	mainDistro := m.mainDistro()
 	args := []string{
 		"-NoProfile",
 		"-ExecutionPolicy", "Bypass",
 		"-File", scriptPath,
 		"-Mode", mode,
-		"-VarDiskPath", m.varDiskPath(),
-		"-VarDiskSizeGB", fmt.Sprintf("%d", m.varDiskSizeGB()),
-		"-VarDiskLabel", m.varDiskLabel(),
-		"-RuntimeID", m.runtimeID,
-		"-DistroName", mainDistro.name,
-		"-InstallDir", mainDistro.installDir,
-		"-StatePath", m.state.Path(),
-		"-ImageRef", m.configuredRootfsSourceRef(),
+		"-VarDiskPath", options.varDiskPath,
+		"-VarDiskSizeGB", fmt.Sprintf("%d", options.varDiskSizeGB),
+		"-VarDiskLabel", options.varDiskLabel,
+		"-RuntimeID", options.runtimeID,
+		"-DistroName", options.distroName,
+		"-InstallDir", options.installDir,
+		"-StatePath", options.statePath,
+		"-ImageRef", options.imageRef,
 	}
 	if strings.TrimSpace(resultFile) != "" {
 		args = append(args, "-ResultFile", resultFile)

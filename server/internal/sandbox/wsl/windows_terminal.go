@@ -11,8 +11,8 @@ import (
 	"github.com/tailscale/hujson"
 )
 
-func (m *Manager) hideWindowsTerminalWSLProfiles() error {
-	distroName := strings.TrimSpace(m.cfg.WSLDistroName)
+func hideWindowsTerminalWSLProfiles(distroName string, iconPath string) error {
+	distroName = strings.TrimSpace(distroName)
 	if distroName == "" {
 		return nil
 	}
@@ -26,7 +26,7 @@ func (m *Manager) hideWindowsTerminalWSLProfiles() error {
 			return fmt.Errorf("read Windows Terminal settings %q: %w", settingsPath, err)
 		}
 
-		updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(data, distroName, m.cfg.DesktopIconPath)
+		updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(data, distroName, iconPath)
 		if err != nil {
 			return fmt.Errorf("update Windows Terminal settings %q: %w", settingsPath, err)
 		}

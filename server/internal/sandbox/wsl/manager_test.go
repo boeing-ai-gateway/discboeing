@@ -41,7 +41,7 @@ func TestWaitForCommandSuccessWithFallbackTimeoutUsesProvidedTimeout(t *testing.
 	t.Parallel()
 
 	start := time.Now()
-	err := (&Manager{}).waitForCommandSuccessWithFallbackTimeout(context.Background(), "test wait", 20*time.Millisecond, func(context.Context) error {
+	err := (&DistroManager{}).waitForCommandSuccessWithFallbackTimeout(context.Background(), "test wait", 20*time.Millisecond, func(context.Context) error {
 		return fmt.Errorf("not ready")
 	})
 	if err == nil {
@@ -65,7 +65,7 @@ func TestWaitForCommandSuccessUntilCanceledWaitsForCallerContext(t *testing.T) {
 	}()
 
 	start := time.Now()
-	err := (&Manager{}).waitForCommandSuccessUntilCanceled(ctx, "test wait", func(context.Context) error {
+	err := (&DistroManager{}).waitForCommandSuccessUntilCanceled(ctx, "test wait", func(context.Context) error {
 		return fmt.Errorf("not ready")
 	})
 	if err == nil {
@@ -80,7 +80,7 @@ func TestWaitForCommandSuccessUntilCanceledWaitsForCallerContext(t *testing.T) {
 }
 
 func TestWaitForSystemdReadyInDistroAcceptsDegradedState(t *testing.T) {
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLStateDir:   t.TempDir(),
 	})
@@ -106,7 +106,7 @@ func TestWaitForSystemdReadyInDistroAcceptsDegradedState(t *testing.T) {
 }
 
 func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLStateDir:   t.TempDir(),
 	})
@@ -155,7 +155,7 @@ func TestShouldRecoverBrokenDistroRecognizesUnexpectedStop(t *testing.T) {
 func TestVarDiskLabelSanitizesDistroName(t *testing.T) {
 	t.Parallel()
 
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "Discobot Data",
 		WSLStateDir:   t.TempDir(),
 	})
@@ -187,7 +187,7 @@ func TestIsStaleVarDiskUnmountError(t *testing.T) {
 func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 	t.Parallel()
 
-	manager := &Manager{cfg: &config.Config{
+	manager := &DistroManager{cfg: &config.Config{
 		WSLDistroName: "Discobot Data",
 		WSLStateDir:   t.TempDir(),
 	}}
@@ -203,7 +203,7 @@ func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 }
 
 func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLStateDir:   t.TempDir(),
 	})
@@ -245,7 +245,7 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLInstallDir: installDir,
 		WSLStateDir:   filepath.Join(root, "state"),
@@ -305,12 +305,13 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 
 func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
 	varDiskPath := filepath.Join(root, "var.vhdx")
 	if err := os.WriteFile(varDiskPath, []byte("existing"), 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
 		WSLVarDiskPath: varDiskPath,
@@ -369,7 +370,7 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 
 func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions(t *testing.T) {
 	root := t.TempDir()
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
@@ -430,7 +431,7 @@ func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions
 	}
 
 	var operations []string
-	err := manager.ensureHostStartupWithPowerShell(context.Background(), progressReporter{
+	err := ensureHostStartupWithPowerShell(context.Background(), startupOptionsForTest(manager), progressReporter{
 		update: func(_ int, currentOperation string) {
 			operations = append(operations, currentOperation)
 		},
@@ -483,7 +484,7 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
 
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
 		WSLInstallDir:  filepath.Join(root, "distro"),
@@ -553,7 +554,6 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 	}
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
 		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
 		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
@@ -591,7 +591,7 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 
 func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *testing.T) {
 	root := t.TempDir()
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName:  "discobot",
 		WSLStateDir:    root,
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
@@ -614,7 +614,7 @@ func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *t
 		}, nil
 	}
 
-	err := manager.ensureHostStartupWithPowerShell(context.Background(), progressReporter{})
+	err := ensureHostStartupWithPowerShell(context.Background(), startupOptionsForTest(manager), progressReporter{})
 	if err == nil {
 		t.Fatal("ensureHostStartupWithPowerShell() error = nil, want WSL unavailable error")
 	}
@@ -670,9 +670,28 @@ func assertStartupScriptModeArg(t *testing.T, args []string, want string) {
 	t.Fatalf("startup script args = %v, want -Mode %s", args, want)
 }
 
-func TestVerifyInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing.T) {
+func startupOptionsForTest(manager *DistroManager) wslStartupOptions {
+	mainDistro := manager.mainDistro()
+	return wslStartupOptions{
+		downloader:                  manager.downloader,
+		distroName:                  mainDistro.name,
+		installDir:                  mainDistro.installDir,
+		varDiskPath:                 manager.varDiskPath(),
+		varDiskSizeGB:               manager.varDiskSizeGB(),
+		varDiskLabel:                manager.varDiskLabel(),
+		runtimeID:                   manager.runtimeID,
+		statePath:                   manager.state.Path(),
+		imageRef:                    manager.configuredRootfsSourceRef(),
+		stateDir:                    manager.cfg.WSLStateDir,
+		prepareImportRootfsTar:      manager.prepareImportRootfsTar,
+		cleanupStaleRootfsTempFiles: manager.cleanupStaleRootfsTempFiles,
+	}
+}
+
+func TestEnsureMainDistroReadyDoesNotRequireVarDiskBeforeDistroChecks(t *testing.T) {
 	root := t.TempDir()
-	manager := NewManager(&config.Config{
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName: "discobot",
 		WSLStateDir:   root,
 	})
@@ -684,6 +703,10 @@ func TestVerifyInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 		err    error
 	}
 	sequence := []expectedCommand{
+		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running"},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active"},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 
@@ -708,8 +731,8 @@ func TestVerifyInstalledLockedDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 		return expected.output, expected.err
 	}
 
-	if err := manager.verifyInstalledLocked(context.Background(), progressReporter{}); err != nil {
-		t.Fatalf("verifyInstalledLocked() error = %v", err)
+	if _, err := manager.ensureMainDistroReady(context.Background(), progressReporter{}); err != nil {
+		t.Fatalf("ensureMainDistroReady() error = %v", err)
 	}
 	if callIndex != len(sequence) {
 		t.Fatalf("runCommandOutput() calls = %d, want %d", callIndex, len(sequence))
@@ -793,12 +816,12 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	manager := NewManager(&config.Config{
+	manager := NewDistroManager(&config.Config{
 		WSLDistroName:   "Discobot",
 		WSLStateDir:     t.TempDir(),
 		DesktopIconPath: filepath.Join(root, "Discobot", "icon.ico"),
 	})
-	if err := manager.hideWindowsTerminalWSLProfiles(); err != nil {
+	if err := hideWindowsTerminalWSLProfiles(manager.cfg.WSLDistroName, manager.cfg.DesktopIconPath); err != nil {
 		t.Fatalf("hideWindowsTerminalWSLProfiles() error = %v", err)
 	}
 
@@ -903,7 +926,7 @@ func TestCleanupStaleRootfsTempFilesRemovesOnlyOldMatchingFiles(t *testing.T) {
 		}
 	}
 
-	manager := NewManager(&config.Config{WSLStateDir: root})
+	manager := NewDistroManager(&config.Config{WSLStateDir: root})
 	if err := manager.cleanupStaleRootfsTempFiles(); err != nil {
 		t.Fatalf("cleanupStaleRootfsTempFiles() error = %v", err)
 	}

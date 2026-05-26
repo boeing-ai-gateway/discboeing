@@ -45,7 +45,7 @@ func TestProviderDefinition(t *testing.T) {
 }
 
 func TestProjectVMDialersExist(t *testing.T) {
-	manager := NewVMManager(testConfig(t), nil)
+	manager := NewDistroManager(testConfig(t), nil)
 	projectVM := &projectVM{manager: manager, projectID: "project-1"}
 	if projectVM.ProjectID() != "project-1" {
 		t.Fatalf("ProjectID() = %q", projectVM.ProjectID())
@@ -74,7 +74,7 @@ func TestProjectVMWorkspaceMountSourceTranslatesWindowsPath(t *testing.T) {
 }
 
 func TestProjectVMDockerDialerUsesLongLivedBridge(t *testing.T) {
-	manager := NewVMManager(testConfig(t), nil)
+	manager := NewDistroManager(testConfig(t), nil)
 	projectVM := &projectVM{manager: manager, projectID: "project-1"}
 	bridge := &countingDockerBridge{t: t, running: true}
 
@@ -139,8 +139,8 @@ func TestProjectVMPortDialerUsesLocalTCP(t *testing.T) {
 	}
 }
 
-func TestVMManagerReady(t *testing.T) {
-	manager := NewVMManager(testConfig(t), nil)
+func TestDistroManagerReady(t *testing.T) {
+	manager := NewDistroManager(testConfig(t), nil)
 	select {
 	case <-manager.Ready():
 	default:

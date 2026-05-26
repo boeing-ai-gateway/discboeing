@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	startupTaskWSLInstallID = "wsl-install"
-	startupTaskWSLStartID   = "wsl-start"
+	startupTaskWSLStartID = "wsl-start"
 )
 
 // SessionProjectResolver maps session IDs to project IDs.
@@ -26,7 +25,7 @@ type SessionProjectResolver func(ctx context.Context, sessionID string) (project
 type Provider struct {
 	*vm.Provider
 
-	manager          *Manager
+	distroManager    *DistroManager
 	resourceResolver vm.ProviderResourceResolver
 }
 
@@ -36,12 +35,12 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceRe
 		return nil, fmt.Errorf("sessionProjectResolver is required")
 	}
 
-	vmManager := NewVMManager(cfg, systemManager)
+	distroManager := NewDistroManager(cfg, systemManager)
 
 	opts := []vm.Option{
 		vm.WithProviderResourceResolver(func(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
 			resources := vm.ProviderResourceConfig{
-				DataDiskGB: vmManager.manager.varDiskSizeGB(),
+				DataDiskGB: distroManager.varDiskSizeGB(),
 			}
 			if resourceResolver == nil {
 				return resources, nil
@@ -63,12 +62,12 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceRe
 
 	provider := vm.NewProvider(
 		cfg,
-		vmManager,
+		distroManager,
 		vm.SessionProjectResolver(resolver),
 		systemManager,
 		opts...,
 	)
-	return &Provider{Provider: provider, manager: vmManager.manager, resourceResolver: resourceResolver}, nil
+	return &Provider{Provider: provider, distroManager: distroManager, resourceResolver: resourceResolver}, nil
 }
 
 // ApplyProviderResourceUpdate records managed /var VHD resize requests for the
@@ -81,10 +80,10 @@ func (p *Provider) ApplyProviderResourceUpdate(ctx context.Context, _ string, re
 	if req.DataDiskGB == nil {
 		return nil
 	}
-	if p.manager == nil {
+	if p.distroManager == nil {
 		return fmt.Errorf("WSL manager is not initialized")
 	}
-	return p.manager.RequestVarDiskResize(ctx, *req.DataDiskGB)
+	return p.distroManager.RequestVarDiskResize(ctx, *req.DataDiskGB)
 }
 
 func (p *Provider) Definition() sandbox.ProviderDefinition {
