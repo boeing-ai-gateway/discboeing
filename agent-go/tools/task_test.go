@@ -1676,6 +1676,156 @@ func TestTask_ResumeInputReattachesToBackgroundTask(t *testing.T) {
 	}
 }
 
+func TestTask_ResumeInputAddsPromptToCancelledTask(t *testing.T) {
+	const (
+		taskID = "parent-thread.sub.cancelled"
+		prompt = "continue after cancellation"
+		want   = "resumed cancelled task complete"
+	)
+
+	done := make(chan struct{})
+	close(done)
+	rec := &taskRecord{
+		taskID:      taskID,
+		status:      "cancelled",
+		depth:       1,
+		subThreadID: taskID,
+		done:        done,
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	var mu sync.Mutex
+	var gotPrompt string
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			if threadID != taskID {
+				t.Fatalf("Prompt threadID = %q, want %q", threadID, taskID)
+			}
+			mu.Lock()
+			if len(req.UserParts) == 1 {
+				if text, ok := req.UserParts[0].(message.UITextPart); ok {
+					gotPrompt = text.Text
+				}
+			}
+			mu.Unlock()
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		finalResponseFn: func(_ string) (string, error) { return want, nil },
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-resume",
+		ToolName:   "Task",
+		Input:      `{"resume":"` + taskID + `","prompt":"` + prompt + `","subagent_type":"helper"}`,
+	}
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute resume: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatal("expected Async handle from cancelled task resume")
+	}
+	res := waitHandle(t, result.Async, 5*time.Second)
+	if got := textOutput(res); got != want {
+		t.Fatalf("task output: got %q, want %q", got, want)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotPrompt != prompt {
+		t.Fatalf("prompt = %q, want %q", gotPrompt, prompt)
+	}
+}
+
+func TestTask_ResumeInputAddsPromptToPersistedFinishedTask(t *testing.T) {
+	const (
+		taskID = "parent-thread.sub.finished"
+		prompt = "do another pass"
+	)
+
+	var mu sync.Mutex
+	promptCount := 0
+	subAgent := &mockSubAgent{
+		promptFn: func(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			if threadID != taskID {
+				t.Fatalf("Prompt threadID = %q, want %q", threadID, taskID)
+			}
+			if len(req.UserParts) != 1 {
+				t.Fatalf("UserParts = %#v", req.UserParts)
+			}
+			text, ok := req.UserParts[0].(message.UITextPart)
+			if !ok || text.Text != prompt {
+				t.Fatalf("prompt part = %#v, want %q", req.UserParts[0], prompt)
+			}
+			mu.Lock()
+			promptCount++
+			mu.Unlock()
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+		finalResponseFn: func(_ string) (string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if promptCount > 0 {
+				return "new final response", nil
+			}
+			return "old final response", nil
+		},
+	}
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	toolCtx := &thread.ToolContext{ThreadID: "parent-thread", Agent: subAgent}
+	call := message.ToolCallPart{
+		ToolCallID: t.Name() + "-resume",
+		ToolName:   "Task",
+		Input:      `{"resume":"` + taskID + `","prompt":"` + prompt + `","subagent_type":"helper"}`,
+	}
+	result, err := exec.Execute(context.Background(), toolCtx, call)
+	if err != nil {
+		t.Fatalf("Execute resume: %v", err)
+	}
+	if result.Async == nil {
+		t.Fatalf("expected Async handle from finished task resume, got result %#v", result.Result)
+	}
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	res := waitHandle(t, result.Async, 5*time.Second)
+	if got := textOutput(res); got != "new final response" {
+		t.Fatalf("task output: got %q, want %q", got, "new final response")
+	}
+}
+
+func TestTaskOutputReportsCancelledTaskWithoutFinalResponse(t *testing.T) {
+	taskID := t.Name()
+	done := make(chan struct{})
+	close(done)
+	rec := &taskRecord{
+		taskID:      taskID,
+		status:      "cancelled",
+		subThreadID: taskID,
+		done:        done,
+	}
+	globalTasks.mu.Lock()
+	globalTasks.tasks[taskID] = rec
+	globalTasks.mu.Unlock()
+	t.Cleanup(func() { cleanupTask(taskID) })
+
+	exec := New(t.TempDir(), t.TempDir(), "parent-thread")
+	result, err := exec.Execute(context.Background(), nil, makeTaskOutputCall(t, taskID, false))
+	if err != nil {
+		t.Fatalf("TaskOutput execute: %v", err)
+	}
+	got := textOutput(result.Result)
+	for _, want := range []string{"cancelled", "final response"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("TaskOutput = %q, want substring %q", got, want)
+		}
+	}
+}
+
 func TestTask_BootstrapsThreadMetadataAndEmitsThreadUpdate(t *testing.T) {
 	store := thread.NewStore(t.TempDir())
 	subAgent := &storeBackedMockSubAgent{
