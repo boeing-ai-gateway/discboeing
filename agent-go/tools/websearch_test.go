@@ -28,105 +28,25 @@ func runWebSearch(t *testing.T, e *Executor, input map[string]any) message.ToolR
 	return result.Result.Output
 }
 
-func TestWebSearch_UsesDefaultDiscobotProxyURLWhenTokenSet(t *testing.T) {
-	t.Setenv("DISCOBOT_TOKEN", "discobot-token")
-	oldBaseURL := discobotServicesURL
-	defer func() { discobotServicesURL = oldBaseURL }()
+func TestWebSearch_UsesTavilyWhenApiKeySet(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", "test-key")
 
-	calledProxy := false
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calledProxy = true
-		if got := r.Header.Get("X-Discobot-Id"); got != "discobot-token" {
-			t.Fatalf("expected X-Discobot-Id header, got %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"results":[{"title":"Example","url":"https://example.com","content":"via default base url"}]}`))
-	}))
-	defer proxy.Close()
-	discobotServicesURL = proxy.URL
+	oldTavilyURL := tavilySearchURL
+	defer func() { tavilySearchURL = oldTavilyURL }()
 
-	e := New(t.TempDir(), t.TempDir(), t.Name())
-	out := runWebSearch(t, e, map[string]any{"query": "golang"})
-
-	if !calledProxy {
-		t.Fatal("expected Discobot proxy endpoint to be called via default base URL")
-	}
-	textOut, ok := out.(message.TextOutput)
-	if !ok {
-		t.Fatalf("expected TextOutput, got %T", out)
-	}
-	if !strings.Contains(textOut.Value, "via default base url") {
-		t.Fatalf("expected default proxy content in output, got %q", textOut.Value)
-	}
-}
-
-func TestWebSearch_UsesDiscobotProxyFromHiddenCredential(t *testing.T) {
-	calledProxy := false
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calledProxy = true
-		if got := r.Header.Get("X-Discobot-Id"); got != "hidden-discobot-token" {
-			t.Fatalf("expected hidden X-Discobot-Id header, got %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"results":[{"title":"Hidden","url":"https://example.com/hidden","content":"used hidden credential"}]}`))
-	}))
-	defer proxy.Close()
-	t.Setenv("DISCOBOT_SERVICES_URL", proxy.URL)
-
-	e := New(t.TempDir(), t.TempDir(), t.Name())
-	e.SetEnvLookup(func(key string) string {
-		if key == "DISCOBOT_TOKEN" {
-			return "hidden-discobot-token"
-		}
-		return ""
-	})
-	out := runWebSearch(t, e, map[string]any{"query": "golang"})
-
-	if !calledProxy {
-		t.Fatal("expected Discobot proxy endpoint to be called")
-	}
-	textOut, ok := out.(message.TextOutput)
-	if !ok {
-		t.Fatalf("expected TextOutput, got %T", out)
-	}
-	if !strings.Contains(textOut.Value, "used hidden credential") {
-		t.Fatalf("expected hidden credential content in output, got %q", textOut.Value)
-	}
-}
-
-func TestWebSearch_UsesDiscobotProxyWhenTokenSet(t *testing.T) {
-	t.Setenv("DISCOBOT_TOKEN", "discobot-token")
-	t.Setenv("TAVILY_API_KEY", "should-not-be-used")
-
-	calledProxy := false
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calledProxy = true
-		if r.URL.Path != "/v1/tavily/search" {
-			t.Fatalf("expected /v1/tavily/search, got %s", r.URL.Path)
-		}
+	calledTavily := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calledTavily = true
 		if r.Method != http.MethodPost {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
-		if got := r.Header.Get("X-Discobot-Id"); got != "discobot-token" {
-			t.Fatalf("expected X-Discobot-Id header, got %q", got)
-		}
-		if got := r.Header.Get("Accept"); got != "application/json" {
-			t.Fatalf("expected Accept application/json, got %q", got)
-		}
 
-		var req struct {
-			APIKey         string   `json:"api_key"`
-			Query          string   `json:"query"`
-			SearchDepth    string   `json:"search_depth"`
-			MaxResults     int      `json:"max_results"`
-			IncludeDomains []string `json:"include_domains"`
-			ExcludeDomains []string `json:"exclude_domains"`
-		}
+		var req tavilyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
-		if req.APIKey != "" {
-			t.Fatalf("expected no api_key in proxy request, got %q", req.APIKey)
+		if req.APIKey != "test-key" {
+			t.Fatalf("expected api_key test-key, got %q", req.APIKey)
 		}
 		if req.Query != "golang" {
 			t.Fatalf("expected query golang, got %q", req.Query)
@@ -147,8 +67,8 @@ func TestWebSearch_UsesDiscobotProxyWhenTokenSet(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"results":[{"title":"Go","url":"https://go.dev","content":"The Go programming language"}]}`))
 	}))
-	defer proxy.Close()
-	t.Setenv("DISCOBOT_SERVICES_URL", proxy.URL)
+	defer server.Close()
+	tavilySearchURL = server.URL
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	out := runWebSearch(t, e, map[string]any{
@@ -157,8 +77,8 @@ func TestWebSearch_UsesDiscobotProxyWhenTokenSet(t *testing.T) {
 		"blocked_domains": []string{"example.com"},
 	})
 
-	if !calledProxy {
-		t.Fatal("expected Discobot proxy endpoint to be called")
+	if !calledTavily {
+		t.Fatal("expected Tavily endpoint to be called")
 	}
 	textOut, ok := out.(message.TextOutput)
 	if !ok {
@@ -169,5 +89,21 @@ func TestWebSearch_UsesDiscobotProxyWhenTokenSet(t *testing.T) {
 	}
 	if !strings.Contains(textOut.Value, "The Go programming language") {
 		t.Fatalf("expected search result content in output, got %q", textOut.Value)
+	}
+}
+
+func TestWebSearchProviderRequiredMessageMentionsSupportedProviders(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("BRAVE_SEARCH_API_KEY", "")
+
+	e := New(t.TempDir(), t.TempDir(), t.Name())
+	out := runWebSearch(t, e, map[string]any{"query": "golang"})
+
+	textOut, ok := out.(message.ErrorTextOutput)
+	if !ok {
+		t.Fatalf("expected ErrorTextOutput, got %T", out)
+	}
+	if !strings.Contains(textOut.Value, "TAVILY_API_KEY") {
+		t.Fatalf("provider error should mention TAVILY_API_KEY, got %q", textOut.Value)
 	}
 }

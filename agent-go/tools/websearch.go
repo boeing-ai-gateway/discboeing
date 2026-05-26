@@ -25,6 +25,8 @@ type searchResult struct {
 	Content string
 }
 
+var tavilySearchURL = "https://api.tavily.com/search"
+
 func (e *Executor) executeWebSearch(ctx context.Context, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	var input webSearchInput
 	if err := unmarshalInput(call, &input); err != nil {
@@ -32,15 +34,6 @@ func (e *Executor) executeWebSearch(ctx context.Context, call message.ToolCallPa
 	}
 	if input.Query == "" {
 		return errResult(call, "query is required"), nil
-	}
-
-	// Try Discobot proxy if configured (managed/hosted environment).
-	if token := e.getenv("DISCOBOT_TOKEN"); token != "" {
-		baseURL := e.getenv("DISCOBOT_SERVICES_URL")
-		if baseURL == "" {
-			baseURL = discobotServicesURL
-		}
-		return e.searchDiscobot(ctx, call, input, token, baseURL)
 	}
 
 	// Try Tavily API if configured.
@@ -53,7 +46,7 @@ func (e *Executor) executeWebSearch(ctx context.Context, call message.ToolCallPa
 		return e.searchBrave(ctx, call, input, apiKey)
 	}
 
-	return errResult(call, "WebSearch requires a search provider. Set DISCOBOT_TOKEN, or set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY to enable web search."), nil
+	return errResult(call, "WebSearch requires a search provider. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY to enable web search."), nil
 }
 
 func formatSearchResults(results []searchResult) string {
@@ -100,7 +93,7 @@ func (e *Executor) searchTavily(ctx context.Context, call message.ToolCallPart, 
 	}
 
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.tavily.com/search",
+	req, err := http.NewRequestWithContext(ctx, "POST", tavilySearchURL,
 		strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return errResult(call, err.Error()), nil
@@ -182,56 +175,6 @@ func (e *Executor) searchBrave(ctx context.Context, call message.ToolCallPart, i
 		results = append(results, searchResult{Title: r.Title, URL: r.URL, Content: r.Description})
 	}
 
-	return textResult(call, formatSearchResults(results)), nil
-}
-
-// --- Discobot proxy ---
-
-func (e *Executor) searchDiscobot(ctx context.Context, call message.ToolCallPart, input webSearchInput, token, baseURL string) (thread.ToolExecuteResult, error) {
-	reqBody := struct {
-		Query          string   `json:"query"`
-		SearchDepth    string   `json:"search_depth"`
-		MaxResults     int      `json:"max_results"`
-		IncludeDomains []string `json:"include_domains,omitempty"`
-		ExcludeDomains []string `json:"exclude_domains,omitempty"`
-	}{
-		Query:          input.Query,
-		SearchDepth:    "basic",
-		MaxResults:     5,
-		IncludeDomains: input.AllowedDomains,
-		ExcludeDomains: input.BlockedDomains,
-	}
-
-	bodyBytes, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(baseURL, "/")+"/v1/tavily/search",
-		strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		return errResult(call, err.Error()), nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Discobot-Id", token)
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return errResult(call, fmt.Sprintf("discobot search request failed: %v", err)), nil
-	}
-	defer resp.Body.Close()
-
-	data, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return errResult(call, fmt.Sprintf("discobot search API error %d: %s", resp.StatusCode, string(data))), nil
-	}
-
-	var result tavilyResponse
-	if err := json.Unmarshal(data, &result); err != nil {
-		return errResult(call, fmt.Sprintf("failed to parse search response: %v", err)), nil
-	}
-
-	var results []searchResult
-	for _, r := range result.Results {
-		results = append(results, searchResult{Title: r.Title, URL: r.URL, Content: r.Content})
-	}
 	return textResult(call, formatSearchResults(results)), nil
 }
 

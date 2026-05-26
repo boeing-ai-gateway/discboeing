@@ -215,7 +215,6 @@ var startupCredentialImportSpecs = []startupCredentialImportSpec{
 	{provider: ProviderOpenAI, authType: AuthTypeAPIKey, envVar: "OPENAI_API_KEY"},
 	{provider: ProviderCodex, authType: AuthTypeOAuth, envVar: "CODEX_TOKEN"},
 	{provider: ProviderTavily, authType: AuthTypeAPIKey, envVar: "TAVILY_API_KEY"},
-	{provider: ProviderDiscobot, authType: AuthTypeID, envVar: "DISCOBOT_TOKEN"},
 }
 
 // NewCredentialService creates a new credential service
@@ -1318,6 +1317,9 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 					continue
 				}
 				for _, secretEnvVar := range data.EnvVars {
+					if strings.TrimSpace(secretEnvVar.Key) == "" {
+						continue
+					}
 					result = append(result, CredentialEnvVar{
 						CredentialID:        c.ID,
 						SessionCredentialID: sessionCredentialID,

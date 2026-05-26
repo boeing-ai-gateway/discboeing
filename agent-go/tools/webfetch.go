@@ -28,8 +28,6 @@ const defaultWebFetchUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/53
 
 var tavilyExtractURL = "https://api.tavily.com/extract"
 
-var discobotServicesURL = "https://api.discobot.ai"
-
 var httpClient = &http.Client{
 	Timeout: 30 * time.Second,
 	CheckRedirect: func(_ *http.Request, via []*http.Request) error {
@@ -56,29 +54,8 @@ func (e *Executor) executeWebFetch(ctx context.Context, toolCtx *thread.ToolCont
 	}
 
 	prompt := strings.TrimSpace(input.Prompt)
-	if prompt != "" && e.getenv("DISCOBOT_TOKEN") == "" && e.getenv("TAVILY_API_KEY") == "" {
-		return errResult(call, "prompt requires Tavily-backed WebFetch extraction (configure DISCOBOT_TOKEN or TAVILY_API_KEY)"), nil
-	}
-
-	// Use Discobot proxy if configured (managed/hosted environment).
-	if token := e.getenv("DISCOBOT_TOKEN"); token != "" {
-		baseURL := e.getenv("DISCOBOT_SERVICES_URL")
-		if baseURL == "" {
-			baseURL = discobotServicesURL
-		}
-		markdown, err := fetchWithDiscobot(ctx, rawURL, token, baseURL, prompt)
-		if err == nil {
-			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, markdown), nil
-		}
-
-		// Fall back to native fetching so WebFetch still works when the proxy cannot
-		// extract a specific URL.
-		fallbackMarkdown, fallbackErr := fetchWithNativeHTTP(ctx, rawURL)
-		if fallbackErr == nil && prompt == "" {
-			return e.webFetchResult(ctx, toolCtx, call, rawURL, prompt, fallbackMarkdown), nil
-		}
-
-		return errResult(call, fmt.Sprintf("discobot extract request failed: %v; native fallback failed: %v", err, fallbackErr)), nil
+	if prompt != "" && e.getenv("TAVILY_API_KEY") == "" {
+		return errResult(call, "prompt requires Tavily-backed WebFetch extraction (configure TAVILY_API_KEY)"), nil
 	}
 
 	if apiKey := e.getenv("TAVILY_API_KEY"); apiKey != "" {
@@ -162,61 +139,6 @@ func fetchWithNativeHTTP(ctx context.Context, rawURL string) (string, error) {
 	}
 
 	return string(body), nil
-}
-
-func fetchWithDiscobot(ctx context.Context, rawURL, token, baseURL, prompt string) (string, error) {
-	reqBody := tavilyExtractRequest{
-		URLs:         []string{rawURL},
-		ExtractDepth: "basic",
-		OutputFormat: "markdown",
-	}
-	applyWebFetchPrompt(&reqBody, prompt)
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("marshal discobot extract request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(baseURL, "/")+"/v1/tavily/extract", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Discobot-Id", token)
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
-	if err != nil {
-		return "", fmt.Errorf("read discobot extract response: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
-	}
-
-	var parsed tavilyExtractResponse
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", fmt.Errorf("parse discobot extract response: %w", err)
-	}
-	if len(parsed.Results) == 0 {
-		return "", fmt.Errorf("no content returned for URL")
-	}
-
-	content := parsed.Results[0].Markdown
-	if content == "" {
-		content = parsed.Results[0].Content
-	}
-	if content == "" {
-		content = parsed.Results[0].RawContent
-	}
-	if content == "" {
-		return "", fmt.Errorf("no extractable content in discobot extract response")
-	}
-	return content, nil
 }
 
 func fetchWithTavily(ctx context.Context, rawURL, apiKey, prompt string) (string, error) {
