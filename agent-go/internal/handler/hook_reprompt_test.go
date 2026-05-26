@@ -353,6 +353,12 @@ exit 1
 	defaultAgent := agentimpl.NewDefaultAgent(store, nil, nil, t.TempDir(), agentimpl.MCPConfig{})
 
 	release := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
 	reqCh := make(chan agent.PromptRequest, 2)
 	ma := &streamTestAgent{
 		promptFn: func(ctx context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
@@ -387,15 +393,19 @@ exit 1
 
 	var queue []promptqueue.Prompt
 	var err error
-	for range 20 {
-		queue, err = queueStore.List("thread-1")
-		if err != nil {
-			t.Fatal(err)
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for len(queue) == 0 {
+		select {
+		case <-deadline:
+			t.Fatalf("prompt queue length = %d, want 1", len(queue))
+		case <-tick.C:
+			queue, err = queueStore.List("thread-1")
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		if len(queue) > 0 {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
 	}
 	if len(queue) != 1 {
 		t.Fatalf("prompt queue length = %d, want 1", len(queue))
@@ -409,6 +419,7 @@ exit 1
 	}
 
 	close(release)
+	released = true
 	select {
 	case queuedReq := <-reqCh:
 		part, ok := queuedReq.UserParts[0].(message.UITextPart)
