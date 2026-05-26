@@ -39,7 +39,6 @@ func NewProvider(cfg *config.Config, resolver SessionProjectResolver, resourceRe
 	vmManager := NewVMManager(cfg, systemManager)
 
 	opts := []vm.Option{
-		vm.WithPostVMSetup(vm.StartProxyContainer(cfg.SandboxImage)),
 		vm.WithProviderResourceResolver(func(ctx context.Context, projectID string) (vm.ProviderResourceConfig, error) {
 			resources := vm.ProviderResourceConfig{
 				DataDiskGB: vmManager.manager.varDiskSizeGB(),
