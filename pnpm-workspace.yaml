@@ -1,6 +1,7 @@
 packages:
   - ui
   - ui-go
+  - ui-go2
 
 allowBuilds:
   "@parcel/watcher": true

@@ -1,0 +1,28 @@
+package ai
+
+import (
+	"fmt"
+
+	"github.com/obot-platform/discobot/ui-go2/content/lib/viewmodel"
+)
+
+templ HelloWorld(greeting viewmodel.GreetingSnapshot) {
+	<div id="hello-world" class="space-y-4" data-signals={ fmt.Sprintf("{subject: %q}", greeting.Subject) }>
+		<div>
+			<p class="text-sm font-medium uppercase tracking-wide text-muted-foreground">Hello world</p>
+			<h1 class="mt-2 text-4xl font-semibold tracking-tight">
+				{ greeting.Message }, <span data-text="$subject">{ greeting.Subject }</span>!
+			</h1>
+		</div>
+		<label class="block space-y-2">
+			<span class="text-sm font-medium">Local Datastar signal</span>
+			<input class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2" data-bind:subject placeholder="Who should be greeted?"/>
+		</label>
+		<div class="flex items-center gap-3">
+			<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" data-on:click="@post('/ui/commands/greet')">
+				Ask backend to greet
+			</button>
+			<span class="text-sm text-muted-foreground">Backend count: { fmt.Sprint(greeting.Count) }</span>
+		</div>
+	</div>
+}

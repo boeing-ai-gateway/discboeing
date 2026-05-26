@@ -6,4 +6,5 @@ use (
 	./controlsocket
 	./modelsdev
 	./ui-go
+	./ui-go2
 )

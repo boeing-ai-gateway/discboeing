@@ -1,0 +1,26 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/ui-go2/content/lib/components/ai"
+	"github.com/obot-platform/discobot/ui-go2/content/lib/components/app/parts"
+	"github.com/obot-platform/discobot/ui-go2/content/lib/components/ui"
+	"github.com/obot-platform/discobot/ui-go2/content/lib/viewmodel"
+)
+
+templ AppShell(snapshot viewmodel.ShellSnapshot) {
+	<main id="app-shell" class="min-h-dvh bg-background p-6 text-foreground">
+		<div class="mx-auto flex max-w-3xl flex-col gap-6">
+			<header class="space-y-2">
+				<p class="text-sm font-medium text-primary">{ snapshot.App.Name }</p>
+				<h1 class="text-2xl font-semibold tracking-tight">{ snapshot.Title }</h1>
+				<p class="text-muted-foreground">{ snapshot.App.Description }</p>
+			</header>
+			@ui.Card() {
+				<div class="space-y-4">
+					@ai.HelloWorld(snapshot.Greeting)
+					@parts.GreetingSummary(snapshot.Greeting)
+				</div>
+			}
+		</div>
+	</main>
+}
