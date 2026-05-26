@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -207,7 +207,10 @@ export async function startBundledServer(
     return null;
   }
 
-  const child = spawn(resolveServerBinaryPath(), [], {
+  const serverBinaryPath = resolveServerBinaryPath();
+  const serverLogPath = await getLogFilePath();
+  const serverLog = createWriteStream(serverLogPath, { flags: "a" });
+  const child = spawn(serverBinaryPath, [], {
     cwd: app.getPath("userData"),
     env: {
       ...process.env,
@@ -221,7 +224,8 @@ export async function startBundledServer(
       DISCOBOT_DESKTOP_SECRET: state.secret,
       SUGGESTIONS_ENABLED: "true",
       STDIN_KEEPALIVE: "true",
-      LOG_FILE: await getLogFilePath(),
+      LOG_FILE: serverLogPath,
+      SERVER_LOG_PATH: serverLogPath,
       ...resolveBundledVZEnv(),
       ...resolveBundledWSLEnv(),
     },
@@ -230,9 +234,18 @@ export async function startBundledServer(
 
   child.stdout.on("data", (chunk) => {
     process.stdout.write(`[discobot-server] ${chunk}`);
+    serverLog.write(chunk);
   });
   child.stderr.on("data", (chunk) => {
     process.stderr.write(`[discobot-server] ${chunk}`);
+    serverLog.write(chunk);
+  });
+  child.on("close", () => {
+    serverLog.end();
+  });
+  child.on("error", (error) => {
+    serverLog.write(`[discobot-server] failed to start: ${error.message}\n`);
+    serverLog.end();
   });
 
   return child;
