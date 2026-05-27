@@ -392,7 +392,54 @@ func performCompaction(
 
 // summaryRequestPrompt is appended to the real conversation so the LLM
 // summarises from context rather than from a formatted transcript.
-const summaryRequestPrompt = `Summarize the conversation above in detail. Your response will replace the conversation history, so it must be thorough enough to continue the work without losing context. Cover all important requests, decisions, code changes (with file paths and snippets), errors and fixes, and any pending or in-progress tasks.`
+const summaryRequestPrompt = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
+
+Your response will replace the conversation history, so it must be thorough enough to continue the work without losing context.
+
+Pay special attention to the latest user instruction and the current turn state. Determine whether the latest instruction has been fully satisfied. If it has not, clearly state that work is still in progress, preserve the exact remaining obligation, and list the next steps needed to complete it. Do not describe the task as complete unless the assistant has actually delivered the requested final result.
+
+<template>
+## Goal
+- [single-sentence task summary]
+
+## Latest Instruction Status
+- [complete, in progress, blocked, or needs clarification]
+- [what the latest user asked for]
+- [whether the latest instruction has been fully satisfied and why]
+- [remaining obligation if not complete, or "(none)"]
+
+## Constraints & Preferences
+- [user constraints, preferences, specs, or "(none)"]
+
+## Progress
+### Done
+- [completed work or "(none)"]
+
+### In Progress
+- [current work or "(none)"]
+
+### Blocked
+- [blockers or "(none)"]
+
+## Key Decisions
+- [decision and why, or "(none)"]
+
+## Next Steps
+- [ordered next actions or "(none)"]
+
+## Critical Context
+- [important technical facts, errors, open questions, exact commands, or "(none)"]
+
+## Relevant Files
+- [file or directory path: why it matters, or "(none)"]
+</template>
+
+Rules:
+- Keep every section, even when empty.
+- Use terse bullets, not prose paragraphs.
+- Preserve exact file paths, commands, error strings, identifiers, and code snippets when known.
+- Treat an interrupted or partially completed latest instruction as in-progress work, not as a completed conversation.
+- Do not mention the summary process or that context was compacted.`
 
 // safeSplitPoint returns the largest index ≤ n at which messages can safely
 // be split for summarisation. A safe split point is after:
