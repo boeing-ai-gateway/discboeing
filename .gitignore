@@ -82,11 +82,6 @@ __pycache__/
 # misc
 /TODO
 /dev.log
-/ui-go/build
-/ui-go/build-errors.log
-/ui-go/node_modules
-/ui-go/static/assets
-/ui-go/static/files
 /discobot/build
 /discobot/build-errors.log
 /discobot/node_modules

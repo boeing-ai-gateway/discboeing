@@ -1,7 +1,0 @@
-package codeblock
-
-import ahtempl "github.com/a-h/templ"
-
-templ CodeBlock(block View, className string, children ahtempl.Component) {
-	@CodeBlockContainer(block.Language, className, templ.Join(children, CodeBlockContent(block.Code, block.ShowLineNumbers, "")))
-}

@@ -1,8 +1,0 @@
-package spinner
-
-import lucide "github.com/bryanvaz/go-templ-lucide-icons/icons"
-import ahtempl "github.com/a-h/templ"
-
-templ Spinner(className string) {
-	@lucide.LoaderCircle(ahtempl.Attributes{"role": "status", "aria-label": "Loading", "class": spinnerClass(className)})
-}

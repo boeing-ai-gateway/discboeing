@@ -1,7 +1,7 @@
 // Package api contains the public Discobot server API contract and client.
 //
 // The server's current handler/model types mostly live under server/internal,
-// which keeps them unavailable to external consumers such as ui-go. This package
+// which keeps them unavailable to external consumers such as alternate frontends. This package
 // is the public boundary we can grow into a shared contract for both server
 // handlers and Go clients.
 package api

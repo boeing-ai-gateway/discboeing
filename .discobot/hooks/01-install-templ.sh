@@ -5,16 +5,16 @@
 #---
 set -euo pipefail
 
-module_dir="${DISCOBOT_WORKSPACE:-$(pwd)}/ui-go"
+module_dir="${DISCOBOT_WORKSPACE:-$(pwd)}/discobot"
 
 if [[ ! -f "$module_dir/go.mod" ]]; then
-	echo "ui-go/go.mod not found; skipping Templ install"
+	echo "discobot/go.mod not found; skipping Templ install"
 	exit 0
 fi
 
 version="$(cd "$module_dir" && go list -m -f '{{.Version}}' github.com/a-h/templ 2>/dev/null || true)"
 if [[ -z "$version" ]]; then
-	echo "github.com/a-h/templ is not listed in ui-go/go.mod; skipping Templ install"
+	echo "github.com/a-h/templ is not listed in discobot/go.mod; skipping Templ install"
 	exit 0
 fi
 

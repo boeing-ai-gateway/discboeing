@@ -37,7 +37,6 @@ vm-assets/** text eol=lf
 scripts/* text eol=lf
 agent-go/assets/scripts/** text eol=lf
 container-assets/** text eol=lf
-ui-go/**/*.templ text eol=lf
 *.templ text eol=lf
 *.ps1 text eol=lf
 Caddyfile text eol=lf

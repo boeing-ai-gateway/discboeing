@@ -110,8 +110,10 @@ Project → Workspace (git repo or local folder) → Session (chat thread + cont
 
 ### Frontend Patterns
 
-- `./ui` is the current Svelte frontend. `./ui-go` is the Go/templ port and
-  should follow the same component boundaries while migration work continues.
+- The UI is being migrated from the SvelteKit frontend in `./ui` to the
+  Go + templ + Datastar implementation in `./discobot`. New migration UI work
+  should happen in `./discobot` unless a task explicitly targets the legacy
+  SvelteKit frontend.
 - **Styling**: Tailwind CSS v4 with CSS custom properties. Use design tokens (`bg-background`, `text-foreground`, `border-border`) and IDE tokens (`bg-tree-hover`, `bg-diff-add`)
 - **Icons**: Theme-aware via `IconRenderer` component. SVGs with `currentColor` must be inlined, not `<img>`
 
@@ -161,72 +163,11 @@ Make a component a **context consumer** when it would require threading the same
 
 The practical test: if removing `useXxxContext()` would mean adding three or more props that just relay data the context already holds, it belongs in context. If the component makes sense anywhere in the tree without a specific ancestor, it should be pure.
 
-### Go UI (`./ui-go`)
-
-The Go UI is the templ/Datastar port of the Svelte frontend. Build and develop
-it from the `./ui-go` directory:
-
-```bash
-cd ui-go && pnpm dev       # Air dev server on port 3200
-cd ui-go && pnpm build     # Build assets, generate templ, build Go binary
-cd ui-go && pnpm check     # Build assets, generate, test, and lint
-```
-
-#### Component folders
-
-The Go UI mirrors the Svelte component boundaries under
-`ui-go/content/lib/components/`:
-
-| Folder | Role | State |
-|--------|------|-------|
-| `ui/` | Pure primitives — buttons, inputs, dialogs, popovers, etc. | No app/session/thread read-model coupling |
-| `ai/` | Self-contained compound components | Component-local state only |
-| `app/` | App shell — session UI, composer, panels | Reads app/session/thread view-model data |
-| `app/parts/` | Pure app sub-components | Props/read-model snapshots only |
-
-**`ui/` is always pure.** Do not import app view models, command routes, or
-session-specific behavior into primitive components. If a primitive needs
-browser behavior, expose attributes or a small generic JS island that app
-components can opt into.
-
-**`ai/` is self-contained.** Keep compound AI components grouped by directory and
-avoid app/session/thread read-model coupling unless the Svelte source already
-requires an app-level wrapper.
-
-**`app/` root** contains components that bind global read-model state, command
-URLs, Datastar patch targets, or app/session/thread coordination.
-**`app/parts/`** contains props-only implementation details used by app root
-components. If a templ component only receives a snapshot or scalar props and
-does not coordinate with shared app state directly, put it in `app/parts/`.
-
-#### Porting rules
-
-- Compare against the Svelte source before changing a ported component. Preserve
-  markup structure, Tailwind classes, ARIA attributes, keyboard behavior, and
-  default primitive behavior where practical.
-- Prefer existing ui-go primitives (`ui/dialog`, `ui/popover`, `ui/select`,
-  etc.) over hand-rolled markup when the Svelte source used the matching
-  primitive.
-- Do not edit generated `*_templ.go` files directly. Change `.templ` and helper
-  `.go` files, then run `cd ui-go && pnpm generate` or `pnpm check`.
-- Keep browser-only behavior in component-scoped TypeScript under
-  `ui-go/assets/js/components/`. Register islands from
-  `ui-go/assets/js/components/index.ts`.
-- Keep committed/shared state server-authoritative in Go read models and command
-  handlers. Use local browser state only for transient behavior such as focus,
-  cursor position, in-progress text input, popover visibility, resize state, and
-  debounce timers.
-- Update `ui-go/PORTING_STATUS.md` when starting or completing a component port,
-  and use `ui-go/PORTING_GUIDE.md` for single-file migration workflow.
-- Tailwind classes should use the same design tokens as the Svelte UI. Do not
-  add ad hoc CSS unless utilities cannot express behavior the Svelte component
-  already had.
-
 ### Adding Features
 
 1. Add Go handler/service/store in `server/internal/`
 2. Build current Svelte UI changes in `ui/src/`, or migration UI changes in
-   `ui-go/content` and `ui-go/assets`
+   `discobot/content` and `discobot/static`
 
 ## Testing
 

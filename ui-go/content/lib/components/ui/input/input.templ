@@ -1,5 +1,0 @@
-package input
-
-templ Input(inputTypeValue string, value string, placeholder string, name string, dataSlot string, className string, disabled bool, required bool, readOnly bool, invalid bool) {
-	<input data-slot={ inputDataSlot(dataSlot) } class={ inputClass(inputTypeValue, className) } type={ inputType(inputTypeValue) } value={ value } placeholder={ placeholder } name={ name } disabled?={ disabled } required?={ required } readonly?={ readOnly } aria-invalid?={ invalid } />
-}

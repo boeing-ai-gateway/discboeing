@@ -135,7 +135,7 @@ func DefaultData() Data {
 		Title: "Discobot",
 		App: App{
 			Name:        "discobot",
-			Description: "A small Datastar + templ scaffold mirroring ui-go structure.",
+			Description: "A small Datastar + templ scaffold for the Discobot UI.",
 		},
 		Workspaces: []Workspace{
 			{

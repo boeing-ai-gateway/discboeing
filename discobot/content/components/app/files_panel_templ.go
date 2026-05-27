@@ -61,7 +61,7 @@ func FilesPanel() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, name := range []string{".agents", ".claude", ".discobot", ".electron-dist", ".github", ".idea", "agent-go", "authservice", "build", "container-assets", "controlsocket", "dist", "docs", "electron", "meta", "modelsdev", "node_modules", "proxy", "sandbox-init", "scripts", "server", "ui", "ui-go", "Discobot", "vm-assets", "workspaces"} {
+		for _, name := range []string{".agents", ".claude", ".discobot", ".electron-dist", ".github", ".idea", "agent-go", "authservice", "build", "container-assets", "controlsocket", "dist", "docs", "electron", "meta", "modelsdev", "node_modules", "proxy", "sandbox-init", "scripts", "server", "ui", "Discobot", "vm-assets", "workspaces"} {
 			templ_7745c5c3_Err = TreeFolder(name).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

@@ -1,7 +1,0 @@
-package sonner
-
-// Sonner renders the static toaster mount point. Runtime toast creation and
-// theme synchronization are handled by the future client-side toast island.
-templ Sonner(theme string) {
-	<div data-slot="sonner" data-theme={ toasterTheme(theme) } class="toaster group" style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"></div>
-}
