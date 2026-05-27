@@ -168,6 +168,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	if h.browserManager != nil {
 		reg.Register(r, routes.Route{Method: "GET", Pattern: "/sessions/{sessionId}/browser", Handler: h.GetBrowserSession,
 			Meta: routes.Meta{Group: "Browser", Description: "Get session-scoped browser runtime info"}})
+		reg.Register(r, routes.Route{Method: "GET", Pattern: "/sessions/{sessionId}/browser/cdp", Handler: h.ProxyBrowserCDP,
+			Meta: routes.Meta{Group: "Browser", Description: "Proxy session-scoped browser CDP WebSocket"}})
 	}
 
 	// Thread routes

@@ -102,6 +102,66 @@ func TestAuthSkipsSudoAuthorize(t *testing.T) {
 	}
 }
 
+func TestAuthSkipsBrowserCDP(t *testing.T) {
+	called := false
+	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/session-1/browser/cdp?token=browser-token", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("expected wrapped handler to be called")
+	}
+}
+
+func TestAuthRequiresTokenForBrowserInfo(t *testing.T) {
+	called := false
+	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/session-1/browser", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if called {
+		t.Fatal("wrapped handler should not be called")
+	}
+}
+
+func TestAuthRequiresTokenForNestedBrowserCDPPath(t *testing.T) {
+	called := false
+	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/session-1/extra/browser/cdp?token=browser-token", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+	if called {
+		t.Fatal("wrapped handler should not be called")
+	}
+}
+
 func TestAuthStillRequiresTokenForOtherRoutes(t *testing.T) {
 	called := false
 	handler := Auth("salt:hash", "invalid-trust-key")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

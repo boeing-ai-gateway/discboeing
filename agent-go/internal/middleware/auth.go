@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -24,6 +25,8 @@ var publicPaths = map[string]bool{
 
 const authClockSkew = 12 * time.Hour
 
+type authenticatedContextKey struct{}
+
 // Auth returns middleware that validates Bearer tokens against a trusted public
 // key or legacy shared secret hash. If both are empty, auth is disabled.
 func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
@@ -35,7 +38,7 @@ func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
 			}
 
 			// Skip auth for public paths
-			if publicPaths[r.URL.Path] {
+			if isPublicPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -67,9 +70,31 @@ func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
 				return
 			}
 
+			r = r.WithContext(context.WithValue(r.Context(), authenticatedContextKey{}, true))
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func requestAuthenticated(r *http.Request) bool {
+	authenticated, _ := r.Context().Value(authenticatedContextKey{}).(bool)
+	return authenticated
+}
+
+func isPublicPath(path string) bool {
+	if publicPaths[path] {
+		return true
+	}
+	return isBrowserCDPPath(path)
+}
+
+func isBrowserCDPPath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return len(parts) == 4 &&
+		parts[0] == "sessions" &&
+		parts[1] != "" &&
+		parts[2] == "browser" &&
+		parts[3] == "cdp"
 }
 
 type authResult struct {

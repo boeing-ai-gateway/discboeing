@@ -327,11 +327,6 @@ func (r *agentRuntime) routes() http.Handler {
 	)
 
 	router := chi.NewRouter()
-	if r.browserManager != nil {
-		// Browser CDP uses its own session-token auth in the query string, so it
-		// stays outside the normal bearer-token and credential middleware stack.
-		router.Get("/sessions/{sessionId}/browser/cdp", apiHandler.ProxyBrowserCDP)
-	}
 
 	authed := chi.NewRouter()
 	authed.Use(middleware.Auth(r.cfg.SecretHash, r.cfg.TrustKey))

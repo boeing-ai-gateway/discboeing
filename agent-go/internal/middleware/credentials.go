@@ -17,6 +17,11 @@ const (
 func Credentials(mgr *credentials.Manager, onCredentialsApplied func()) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !requestAuthenticated(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			credHeader := r.Header.Get(credentialsHeader)
 			gitName := r.Header.Get(gitUserNameHeader)
 			gitEmail := r.Header.Get(gitUserEmailHeader)
