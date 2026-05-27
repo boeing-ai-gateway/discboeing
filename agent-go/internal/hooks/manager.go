@@ -539,8 +539,8 @@ func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
 		return nil
 	}
 
-	allDirty := DirtyFiles(m.workspaceRoot)
-	matching := matchFiles(allDirty, hook.Pattern)
+	allDirty := filterIgnoredFiles(DirtyFiles(m.workspaceRoot), m.globalIgnorePatterns())
+	matching := matchHookFiles(allDirty, hook)
 	if len(matching) == 0 {
 		matching = allDirty // run even with no matches
 	}
@@ -836,7 +836,8 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 	}
 
 	// Find files changed since marker
-	newFiles := m.findChangedFilesSinceMarker()
+	globalIgnorePatterns := m.globalIgnorePatterns()
+	newFiles := filterIgnoredFiles(m.findChangedFilesSinceMarker(), globalIgnorePatterns)
 
 	addedNewPending := false
 	if len(newFiles) > 0 {
@@ -846,7 +847,7 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 			if hook.Pattern == "" {
 				continue
 			}
-			if len(matchFiles(newFiles, hook.Pattern)) > 0 {
+			if len(matchHookFiles(newFiles, hook)) > 0 {
 				pendingIDs = append(pendingIDs, hook.ID)
 			}
 		}
@@ -877,7 +878,7 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 	}
 
 	// Get all dirty files for pattern matching
-	allDirty := DirtyFiles(m.workspaceRoot)
+	allDirty := filterIgnoredFiles(DirtyFiles(m.workspaceRoot), globalIgnorePatterns)
 
 	for _, hookID := range pendingIDs {
 		hook, ok := hooksByID[hookID]
@@ -885,14 +886,18 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 			continue
 		}
 
-		matching := matchFiles(allDirty, hook.Pattern)
+		matching := matchHookFiles(allDirty, hook)
 		if len(matching) == 0 {
 			// Files were committed/fixed — remove from pending
 			_ = RemovePendingHook(m.hooksDataDir, hook.ID)
 			m.emitCurrentStatusChunk()
 			continue
 		}
-		reportFiles := matchFiles(m.changedFilesSinceHookMarker(hook.ID), hook.Pattern)
+		changedSinceHook := filterIgnoredFiles(
+			m.changedFilesSinceHookMarker(hook.ID),
+			globalIgnorePatterns,
+		)
+		reportFiles := matchHookFiles(changedSinceHook, hook)
 		if len(reportFiles) == 0 {
 			continue
 		}
@@ -1143,6 +1148,10 @@ func (m *Manager) changedFilesSinceHookMarker(hookID string) []string {
 	return DirtyFilesSinceMarker(m.workspaceRoot, hookMarkerPath(m.hooksDataDir, hookID))
 }
 
+func (m *Manager) globalIgnorePatterns() []string {
+	return readHookIgnoreFile(filepath.Join(m.workspaceRoot, HooksDir, "ignore"))
+}
+
 // touchMarker creates or updates the .last-eval marker file.
 func (m *Manager) touchMarker() {
 	_ = os.MkdirAll(m.hooksDataDir, 0o755)
@@ -1169,6 +1178,61 @@ func matchFiles(files []string, pattern string) []string {
 		}
 	}
 	return matched
+}
+
+func matchHookFiles(files []string, hook Hook) []string {
+	matched := matchFiles(files, hook.Pattern)
+	if hook.Ignore == "" {
+		return matched
+	}
+	return filterIgnoredFiles(matched, []string{hook.Ignore})
+}
+
+func filterIgnoredFiles(files, ignorePatterns []string) []string {
+	if len(files) == 0 || len(ignorePatterns) == 0 {
+		return files
+	}
+
+	var filtered []string
+	for _, file := range files {
+		if matchesAnyPattern(file, ignorePatterns) {
+			continue
+		}
+		filtered = append(filtered, file)
+	}
+	return filtered
+}
+
+func matchesAnyPattern(file string, patterns []string) bool {
+	file = filepath.ToSlash(file)
+	for _, pattern := range patterns {
+		pattern = filepath.ToSlash(strings.TrimSpace(pattern))
+		if pattern == "" {
+			continue
+		}
+		ok, err := doublestar.Match(pattern, file)
+		if err == nil && ok {
+			return true
+		}
+	}
+	return false
+}
+
+func readHookIgnoreFile(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var patterns []string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns
 }
 
 // buildHookFailureEvalResult builds the evaluation response for a failed hook.

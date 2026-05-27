@@ -42,6 +42,7 @@ type Hook struct {
 	RunAs       string     `json:"runAs"` // "root" or "user"
 	Blocking    bool       `json:"blocking"`
 	Pattern     string     `json:"pattern,omitempty"`
+	Ignore      string     `json:"ignore,omitempty"`
 	NotifyLLM   bool       `json:"notifyLlm"`
 	Prompt      string     `json:"prompt,omitempty"`
 	Subagent    string     `json:"subagent,omitempty"`
@@ -57,6 +58,7 @@ type hookConfig struct {
 	RunAs       string
 	Blocking    bool
 	Pattern     string
+	Ignore      string
 	Subagent    string
 	NotifyLLM   *bool // nil = default (true)
 }
@@ -194,6 +196,8 @@ func parseHookFrontMatter(content string) *hookConfig {
 			cfg.Blocking = strings.EqualFold(value, "true")
 		case "pattern":
 			cfg.Pattern = value
+		case "ignore", "exclude":
+			cfg.Ignore = value
 		case "subagent", "subagent_type", "sub_agent":
 			cfg.Subagent = value
 		case "notify_llm":
@@ -326,6 +330,7 @@ func DiscoverHooks(hooksDir string) ([]Hook, error) {
 			RunAs:       runAs,
 			Blocking:    cfg.Blocking,
 			Pattern:     cfg.Pattern,
+			Ignore:      cfg.Ignore,
 			NotifyLLM:   notifyLLM,
 			Prompt:      prompt,
 			Subagent:    cfg.Subagent,

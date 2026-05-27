@@ -105,8 +105,15 @@ SESSION (type: session)
 
 FILE (type: file)
   Runs after each LLM turn when matching files changed.
-  Fields: name, type, description, pattern (required, glob), notify_llm (default: true), engine (script|ai), subagent (AI only)
+  Fields: name, type, description, pattern (required, glob), ignore/exclude
+  (optional glob), notify_llm (default: true), engine (script|ai),
+  subagent (AI only)
   Env for script hooks: DISCOBOT_CHANGED_FILES (space-separated paths), DISCOBOT_SESSION_ID, DISCOBOT_HOOK_TYPE=file
+  Files matching a hook's ignore/exclude glob are skipped for that hook.
+  Files matching .discobot/hooks/ignore are skipped for all file hooks.
+  .discobot/hooks/ignore is plain text: one glob per line; blank lines and
+  # comments are ignored. It uses the same glob syntax as pattern and does not
+  support gitignore-specific features such as ! negation.
   If notify_llm is true and hook fails, the LLM is re-prompted (max 3 retries).
   If notify_llm is false, runs silently (useful for auto-fixers).
   Glob uses picomatch: "*.go", "src/**/*.ts", "*.{ts,tsx}", "{package.json,pnpm*.yaml}"
@@ -148,6 +155,7 @@ apt-get update && apt-get install -y postgresql-client
 # name: Go format check
 # type: file
 # pattern: "*.go"
+# ignore: "*_templ.go"
 #---
 gofmt -l $DISCOBOT_CHANGED_FILES
 ```

@@ -277,15 +277,18 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 
 **Additional fields:**
 
-| Field        | Type    | Default      | Description                                                      |
-| ------------ | ------- | ------------ | ---------------------------------------------------------------- |
-| `pattern`    | string  | **Required** | Glob pattern for file matching (e.g., `"*.go"`, `"src/**/*.ts"`) |
-| `notify_llm` | boolean | `true`       | Whether to re-prompt the LLM on failure                          |
+| Field        | Type    | Default      | Description                                                       |
+| ------------ | ------- | ------------ | ----------------------------------------------------------------- |
+| `pattern`    | string  | **Required** | Glob pattern for file matching (e.g., `"*.go"`, `"src/**/*.ts"`)  |
+| `ignore`     | string  | none         | Glob pattern to ignore for this hook (alias: `exclude`)           |
+| `notify_llm` | boolean | `true`       | Whether to re-prompt the LLM on failure                           |
 
 **Behavior:**
 
 - Run after the LLM completion finishes and the SSE stream closes
 - Only triggered when files matching the `pattern` have changed since the last evaluation
+- Files matching a hook's `ignore`/`exclude` field are skipped for that hook
+- Files matching `.discobot/hooks/ignore` are skipped for all file hooks
 - On failure with `notify_llm: true`: the LLM receives the hook output and attempts to fix the issue (up to 3 retries per user message)
 - On failure with `notify_llm: false`: the hook runs silently — useful for auto-fixers like formatters
 - Hooks that fail block subsequent hooks from running until fixed
@@ -309,6 +312,11 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 | `"**/*.go"`                   | All `.go` files recursively               |
 | `"{package.json,pnpm*.yaml}"` | `package.json` and any `pnpm*.yaml` files |
 
+`.discobot/hooks/ignore` is a plain text file with one glob pattern per line.
+Blank lines and lines starting with `#` are ignored. It uses the same glob
+syntax as `pattern`; gitignore-specific features such as `!` negation are not
+supported.
+
 **Example — Lint Go files:**
 
 ```bash
@@ -317,6 +325,7 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 # name: Go format check
 # type: file
 # pattern: "*.go"
+# ignore: "*_templ.go"
 #---
 gofmt -l $DISCOBOT_CHANGED_FILES
 ```

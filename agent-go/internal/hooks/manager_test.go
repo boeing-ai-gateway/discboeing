@@ -136,6 +136,48 @@ func TestBuildHookFailureMessageMetadata_RelativizesAbsoluteHookPath(t *testing.
 	}
 }
 
+func TestDiscoverHooks_ParsesIgnoreAndExcludeFields(t *testing.T) {
+	hooksDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(hooksDir, "ignore-field.md"), []byte(`---
+name: Ignore Field
+type: file
+engine: ai
+pattern: "*.go"
+ignore: "*_templ.go"
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(ignore-field) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "exclude-field.md"), []byte(`---
+name: Exclude Field
+type: file
+engine: ai
+pattern: "*.go"
+exclude: "mock_*.go"
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(exclude-field) failed: %v", err)
+	}
+
+	hooks, err := DiscoverHooks(hooksDir)
+	if err != nil {
+		t.Fatalf("DiscoverHooks() failed: %v", err)
+	}
+
+	ignoresByName := map[string]string{}
+	for _, hook := range hooks {
+		ignoresByName[hook.Name] = hook.Ignore
+	}
+	if ignoresByName["Ignore Field"] != "*_templ.go" {
+		t.Fatalf("ignore field = %q, want *_templ.go", ignoresByName["Ignore Field"])
+	}
+	if ignoresByName["Exclude Field"] != "mock_*.go" {
+		t.Fatalf("exclude field = %q, want mock_*.go", ignoresByName["Exclude Field"])
+	}
+}
+
 func TestRerunHook_FailureWithNotifyLLMReturnsReprompt(t *testing.T) {
 	testHomeDir := t.TempDir()
 	t.Setenv("HOME", testHomeDir)        // Unix
@@ -619,6 +661,81 @@ Review Markdown changes.
 	}
 	if strings.Contains(runner.prompts[1], "- main.go") {
 		t.Fatalf("pending Go hook should not rerun with old files, got:\n%s", runner.prompts[1])
+	}
+}
+
+func TestEvaluateFileHooks_IgnoresPerHookAndGlobalPatterns(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "review-go.md"), []byte(`---
+name: Review Go
+type: file
+engine: ai
+pattern: "*.go"
+ignore: "*_templ.go"
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review-go) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "review-md.md"), []byte(`---
+name: Review Markdown
+type: file
+engine: ai
+pattern: "*.md"
+---
+Review Markdown changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review-md) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "ignore"), []byte("# generated docs\nignored.md\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(ignore) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "view_templ.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(view_templ.go) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "ignored.md"), []byte("# generated\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(ignored.md) failed: %v", err)
+	}
+
+	runner := &testAIHookAgent{response: "SUCCESS: looks good"}
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	result := mgr.EvaluateFileHooks()
+	if result.ShouldReprompt {
+		t.Fatal("expected ignored files not to request reprompt")
+	}
+	if len(runner.prompts) != 1 {
+		t.Fatalf("hook prompts = %d, want 1; prompts:\n%v", len(runner.prompts), runner.prompts)
+	}
+	if !strings.Contains(runner.prompts[0], "- main.go") {
+		t.Fatalf("prompt should include non-ignored Go file, got:\n%s", runner.prompts[0])
+	}
+	for _, ignored := range []string{"view_templ.go", "ignored.md"} {
+		if strings.Contains(runner.prompts[0], ignored) {
+			t.Fatalf("prompt should not include ignored file %q, got:\n%s", ignored, runner.prompts[0])
+		}
 	}
 }
 

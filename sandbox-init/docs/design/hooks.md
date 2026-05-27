@@ -62,8 +62,15 @@ type HookConfig struct {
     Subagent    string // Optional sub-agent name for AI hooks
     Description string // Human-readable description
     RunAs       string // "root" or "user" (default: "user")
+    Pattern     string // File hook include glob
+    Ignore      string // File hook ignore glob (alias: exclude)
 }
 ```
+
+File hooks can also use `.discobot/hooks/ignore`, a plain text file with one
+glob pattern per line, to skip matching files for every hook. Blank lines and
+lines starting with `#` are ignored. The `ignore`/`exclude` front matter field
+and the global ignore file use the same glob syntax as `pattern`.
 
 ### Execution
 
