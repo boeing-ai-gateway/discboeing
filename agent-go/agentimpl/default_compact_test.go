@@ -448,21 +448,21 @@ func TestListCommands_IncludesBuiltinCommands(t *testing.T) {
 	}
 
 	foundCompact := false
-	foundReset := false
+	foundClear := false
 	for _, cmd := range commands {
 		if cmd.Name == "compact" {
 			foundCompact = true
 		}
-		if cmd.Name == "reset" {
-			foundReset = true
+		if cmd.Name == "clear" {
+			foundClear = true
 		}
 	}
 
 	if !foundCompact {
 		t.Fatal("expected compact built-in command")
 	}
-	if !foundReset {
-		t.Fatal("expected reset built-in command")
+	if !foundClear {
+		t.Fatal("expected clear built-in command")
 	}
 }
 

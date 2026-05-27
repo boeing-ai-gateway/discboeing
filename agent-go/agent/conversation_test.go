@@ -238,7 +238,7 @@ func TestConversationManager_Chat_InterceptsCompactBeforePrompt(t *testing.T) {
 	}
 }
 
-func TestConversationManager_Chat_InterceptsResetBeforePrompt(t *testing.T) {
+func TestConversationManager_Chat_InterceptsClearBeforePrompt(t *testing.T) {
 	promptCalled := false
 	resetCalled := false
 	agent := &mockAgent{
@@ -254,25 +254,25 @@ func TestConversationManager_Chat_InterceptsResetBeforePrompt(t *testing.T) {
 	cm := NewConversationManager(agent)
 
 	if _, err := cm.Chat("thread1", PromptRequest{
-		UserParts: []message.UIPart{message.UITextPart{Text: "/reset"}},
+		UserParts: []message.UIPart{message.UITextPart{Text: "/clear"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	waitForDone(t, cm, "thread1")
 
 	if promptCalled {
-		t.Fatal("reset command should not dispatch to Prompt")
+		t.Fatal("clear command should not dispatch to Prompt")
 	}
 	if !resetCalled {
 		t.Fatal("expected Reset to be called")
 	}
 	result := cm.PollChunks("thread1", 0)
 	if result == nil || !result.Done {
-		t.Fatal("expected completed reset result")
+		t.Fatal("expected completed clear result")
 	}
 	assertTextAfterStart(t, result.Chunks)
 	if cm.ActiveCompletionID("thread1") != "" {
-		t.Fatal("reset completion should not remain active")
+		t.Fatal("clear completion should not remain active")
 	}
 }
 

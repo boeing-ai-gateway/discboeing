@@ -288,7 +288,7 @@ func BuiltinSlashCommand(parts []message.UIPart) string {
 	switch strings.TrimSpace(textPart.Text) {
 	case "/compact":
 		return "compact"
-	case "/reset":
+	case "/clear":
 		return "reset"
 	default:
 		return ""

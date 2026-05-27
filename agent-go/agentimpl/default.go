@@ -1880,7 +1880,7 @@ func (a *DefaultAgent) clearActiveCommand(
 // of any user-defined skills or legacy commands.
 var builtinCommands = []agent.Command{
 	{Name: "compact", Description: "Force conversation compaction immediately.", Kind: agent.CommandKindBuiltin},
-	{Name: "reset", Description: "Reset the active conversation context.", Kind: agent.CommandKindBuiltin},
+	{Name: "clear", Description: "Clear the active conversation context.", Kind: agent.CommandKindBuiltin},
 }
 
 // ListCommands returns all slash commands available to the user: user-defined
