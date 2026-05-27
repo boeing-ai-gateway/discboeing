@@ -10,8 +10,6 @@ This document describes the overall architecture of Discobot, an IDE-like chat i
 - [Agent API Documentation](../agent-api/README.md) - Container agent API service
 - [Proxy Documentation](../proxy/README.md) - HTTP/SOCKS5 proxy with header injection
 
-Discobot can also be paired with the new Go-based `authservice` component, which acts as an OIDC provider for Discobot clients and federates user login through upstream identity providers such as Google and GitHub. Like the main server, `authservice` now supports HTTPS with ephemeral certificates, static certificate/key files, and ACME-managed certificates with encrypted autocert cache storage in its database.
-
 ## Overview
 
 Discobot is a web-based development environment built around Discobot's own coding agent runtime. Each workspace can contain multiple chat sessions, and users can configure the built-in agent with custom prompts, MCP servers, and supported model providers such as Anthropic and OpenAI.

@@ -32,7 +32,7 @@ pnpm check              # Run frontend, package.json, workflow, backend, shell, 
 pnpm check:fix          # Run autofixes/formatters, including Windows PowerShell when on Windows
 pnpm lint               # Run frontend, backend, shell, and Windows PowerShell linters
 pnpm check:frontend     # Delegate to the Svelte UI's Prettier + ESLint + typecheck flow
-pnpm check:backend      # golangci-lint (server + proxy + agent-go + authservice)
+pnpm check:backend      # golangci-lint (server + proxy + agent-go)
 pnpm format             # Run the Svelte UI Prettier formatter, plus PowerShell formatting on Windows
 ```
 

@@ -125,16 +125,6 @@ This builds `ui/build`, copies it into `server/static/ui/dist`, and then compile
 
 If you only run `go build` directly inside `server/`, the binary will not include the freshly built SPA assets.
 
-### Authservice container image
-
-Use the dedicated authservice Dockerfile when you want to package the standalone `authservice` executable:
-
-```bash
-docker build -f authservice/Dockerfile -t discobot-authservice .
-```
-
-The local rolling deployment setup under `authservice/docker-compose.rolling.yml` builds this image from the repository root with `context: ..`.
-
 ## API Endpoints
 
 ### Projects
