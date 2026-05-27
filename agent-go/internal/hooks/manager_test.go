@@ -277,6 +277,7 @@ Only approve idiomatic Go changes.
 	runner := &testAIHookAgent{response: "SUCCESS looks good"}
 	mgr := NewManager(workspaceRoot, "session-123")
 	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
 	if err := mgr.Init(); err != nil {
 		t.Fatalf("Init() failed: %v", err)
 	}
@@ -314,7 +315,7 @@ Only approve idiomatic Go changes.
 	}
 	for _, got := range runner.metadataTypes {
 		if got != "hook" {
-			t.Fatalf("metadata type = %q, want hook", got)
+			t.Fatalf("metadata type = %q, want hook; all types: %v", got, runner.metadataTypes)
 		}
 	}
 	if runner.promptThreadIDs[0] != runner.promptThreadIDs[1] {
@@ -326,6 +327,12 @@ Only approve idiomatic Go changes.
 	if !strings.Contains(runner.prompts[0], "Only approve idiomatic Go changes.") {
 		t.Fatalf("expected prompt to include hook body, got:\n%s", runner.prompts[0])
 	}
+	if !strings.Contains(runner.prompts[1], "New changes are available for review: Review.") {
+		t.Fatalf("expected follow-up prompt to describe new changes, got:\n%s", runner.prompts[1])
+	}
+	if strings.Contains(runner.prompts[1], "You are running the Discobot hook") {
+		t.Fatalf("follow-up prompt should not reintroduce hook execution, got:\n%s", runner.prompts[1])
+	}
 	contextDir := filepath.Dir(aiHookContextFilePath(runner.createdThreadID, "review-md", time.Now().UTC()))
 	contextFiles, err := filepath.Glob(filepath.Join(contextDir, "context-*.md"))
 	if err != nil {
@@ -335,8 +342,8 @@ Only approve idiomatic Go changes.
 		t.Fatalf("context files = %d, want 2", len(contextFiles))
 	}
 	contextPath := contextFiles[0]
-	if !strings.Contains(runner.prompts[0], contextPath) && !strings.Contains(runner.prompts[1], contextPath) {
-		t.Fatalf("expected prompt to reference context file %q, got:\n%s\n%s", contextPath, runner.prompts[0], runner.prompts[1])
+	if !strings.Contains(runner.prompts[0], contextPath) {
+		t.Fatalf("expected prompt to reference context file %q, got:\n%s", contextPath, runner.prompts[0])
 	}
 	contextData, err := os.ReadFile(contextPath)
 	if err != nil {
@@ -364,6 +371,7 @@ func TestRunAIHook_UsesProvidedModel(t *testing.T) {
 	runner := &testAIHookAgent{response: "SUCCESS looks good"}
 	mgr := NewManager(workspaceRoot, "session-123")
 	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
 
 	result := mgr.runAIHook(Hook{
 		ID:          "review-md",
@@ -380,11 +388,237 @@ func TestRunAIHook_UsesProvidedModel(t *testing.T) {
 	if !result.Success {
 		t.Fatalf("expected AI hook to pass, output: %s", result.Output)
 	}
-	if len(runner.models) != 1 {
-		t.Fatalf("prompt models = %d, want 1", len(runner.models))
+	if len(runner.models) != 2 {
+		t.Fatalf("prompt models = %d, want 2", len(runner.models))
 	}
-	if runner.models[0] != "openai/gpt-5.5" {
-		t.Fatalf("prompt model = %q, want openai/gpt-5.5", runner.models[0])
+	for _, got := range runner.models {
+		if got != "openai/gpt-5.5" {
+			t.Fatalf("prompt model = %q, want openai/gpt-5.5", got)
+		}
+	}
+}
+
+func TestEvaluateFileHooks_AIHookReportsFilesSinceLastRun(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	hookPath := filepath.Join(hooksDir, "review.md")
+	hookSource := `---
+name: Review
+type: file
+engine: ai
+pattern: "*.go"
+---
+Review Go changes.
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o644); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+
+	runner := &testAIHookAgent{response: "FEEDBACK: add a test"}
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	first := mgr.EvaluateFileHooks()
+	if !first.ShouldReprompt {
+		t.Fatal("expected first AI hook failure to request reprompt")
+	}
+	if !strings.Contains(runner.prompts[0], "- main.go") {
+		t.Fatalf("first prompt should include main.go, got:\n%s", runner.prompts[0])
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "helper.go"), []byte("package main\n\nvar helper = true\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(helper.go) failed: %v", err)
+	}
+
+	second := mgr.EvaluateFileHooks()
+	if !second.ShouldReprompt {
+		t.Fatal("expected second AI hook failure to request reprompt")
+	}
+	if len(runner.prompts) < 2 {
+		t.Fatalf("prompts = %d, want at least 2", len(runner.prompts))
+	}
+	secondHookPrompt := runner.prompts[1]
+	if !strings.Contains(secondHookPrompt, "- helper.go") {
+		t.Fatalf("second prompt should include helper.go, got:\n%s", secondHookPrompt)
+	}
+	if strings.Contains(secondHookPrompt, "- main.go") {
+		t.Fatalf("second prompt should only report files changed since the last hook run, got:\n%s", secondHookPrompt)
+	}
+}
+
+func TestEvaluateFileHooks_DoesNotMissFilesChangedDuringHookRun(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "review.md"), []byte(`---
+name: Review
+type: file
+engine: ai
+pattern: "*.go"
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+
+	wroteDuringRun := false
+	runner := &testAIHookAgent{response: "SUCCESS: looks good"}
+	runner.onPrompt = func() {
+		if wroteDuringRun {
+			return
+		}
+		wroteDuringRun = true
+		time.Sleep(20 * time.Millisecond)
+		if err := os.WriteFile(filepath.Join(workspaceRoot, "helper.go"), []byte("package main\n\nvar helper = true\n"), 0o644); err != nil {
+			t.Errorf("WriteFile(helper.go) failed: %v", err)
+		}
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	first := mgr.EvaluateFileHooks()
+	if first.ShouldReprompt {
+		t.Fatal("expected first AI hook success not to request reprompt")
+	}
+	if len(runner.prompts) != 1 {
+		t.Fatalf("hook prompts = %d, want 1", len(runner.prompts))
+	}
+	if !strings.Contains(runner.prompts[0], "- main.go") {
+		t.Fatalf("first prompt should include main.go, got:\n%s", runner.prompts[0])
+	}
+
+	second := mgr.EvaluateFileHooks()
+	if second.ShouldReprompt {
+		t.Fatal("expected second AI hook success not to request reprompt")
+	}
+	if len(runner.prompts) != 2 {
+		t.Fatalf("hook prompts = %d, want 2; prompts:\n%v", len(runner.prompts), runner.prompts)
+	}
+	if !strings.Contains(runner.prompts[1], "- helper.go") {
+		t.Fatalf("second prompt should include file changed during first run, got:\n%s", runner.prompts[1])
+	}
+	if strings.Contains(runner.prompts[1], "- main.go") {
+		t.Fatalf("second prompt should only include changes after the first run cutoff, got:\n%s", runner.prompts[1])
+	}
+}
+
+func TestEvaluateFileHooks_SkipsPendingHookWithoutNewMatchingFiles(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "review-go.md"), []byte(`---
+name: Review Go
+type: file
+engine: ai
+pattern: "*.go"
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review-go) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "review-md.md"), []byte(`---
+name: Review Markdown
+type: file
+engine: ai
+pattern: "*.md"
+---
+Review Markdown changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review-md) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+
+	runner := &testAIHookAgent{response: "FEEDBACK: add a test"}
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+	mgr.SetAIHookEvaluator(runner)
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	first := mgr.EvaluateFileHooks()
+	if !first.ShouldReprompt {
+		t.Fatal("expected first AI hook failure to request reprompt")
+	}
+	if len(runner.prompts) != 1 {
+		t.Fatalf("hook prompts = %d, want 1", len(runner.prompts))
+	}
+	if !strings.Contains(runner.prompts[0], "- main.go") {
+		t.Fatalf("first prompt should include main.go, got:\n%s", runner.prompts[0])
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "README.md"), []byte("# readme\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(README.md) failed: %v", err)
+	}
+
+	second := mgr.EvaluateFileHooks()
+	if !second.ShouldReprompt {
+		t.Fatal("expected second AI hook failure to request reprompt")
+	}
+	if len(runner.prompts) != 2 {
+		t.Fatalf("hook prompts = %d, want 2; prompts:\n%v", len(runner.prompts), runner.prompts)
+	}
+	if !strings.Contains(runner.prompts[1], "- README.md") {
+		t.Fatalf("second prompt should include README.md, got:\n%s", runner.prompts[1])
+	}
+	if strings.Contains(runner.prompts[1], "- main.go") {
+		t.Fatalf("pending Go hook should not rerun with old files, got:\n%s", runner.prompts[1])
 	}
 }
 
@@ -737,9 +971,11 @@ type testAIHookAgent struct {
 	finalResponses  map[string]string
 	promptThreadIDs []string
 	prompts         []string
+	evalPrompts     []string
 	subagents       []string
 	models          []string
 	metadataTypes   []string
+	onPrompt        func()
 }
 
 func (a *testAIHookAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
@@ -747,7 +983,9 @@ func (a *testAIHookAgent) CreateThread(_ context.Context, req agent.CreateThread
 		a.threads = map[string]bool{}
 	}
 	a.threads[req.ID] = true
-	a.createdThreadID = req.ID
+	if a.createdThreadID == "" && strings.HasPrefix(req.ID, "hook-") && !strings.HasSuffix(req.ID, "-evaluation") {
+		a.createdThreadID = req.ID
+	}
 	a.recordMetadataType(req.Metadata)
 	return agent.ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, Metadata: req.Metadata}, nil
 }
@@ -780,18 +1018,37 @@ func (a *testAIHookAgent) Prompt(_ context.Context, threadID string, req agent.P
 	a.promptThreadIDs = append(a.promptThreadIDs, threadID)
 	a.subagents = append(a.subagents, req.SubagentType)
 	a.models = append(a.models, req.Model)
+	response := a.response
 	if len(req.UserParts) == 1 {
 		if part, ok := req.UserParts[0].(message.UITextPart); ok {
 			a.prompts = append(a.prompts, part.Text)
 		}
 	}
+	if a.onPrompt != nil {
+		a.onPrompt()
+	}
 	if a.finalResponses == nil {
 		a.finalResponses = map[string]string{}
 	}
-	a.finalResponses[threadID] = a.response
+	a.finalResponses[threadID] = response
 	return func(yield func(message.MessageChunk, error) bool) {
-		yield(message.TextDeltaChunk{Delta: a.response}, nil)
+		yield(message.TextDeltaChunk{Delta: response}, nil)
 	}
+}
+
+func (a *testAIHookAgent) CompleteText(_ context.Context, model string, messages []message.Message, _ *int) (string, error) {
+	a.models = append(a.models, model)
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if text, ok := part.(message.TextPart); ok {
+				a.evalPrompts = append(a.evalPrompts, text.Text)
+			}
+		}
+	}
+	if strings.Contains(a.response, "SUCCESS") {
+		return `{"success":true,"notifyLLM":false,"reason":"passed"}`, nil
+	}
+	return `{"success":false,"notifyLLM":true,"reason":"feedback"}`, nil
 }
 
 func (a *testAIHookAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) (agent.ResumeResult, error) {

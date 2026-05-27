@@ -53,6 +53,11 @@ type AIHookAgent interface {
 	tools.PromptTaskAgent
 }
 
+// AIHookEvaluator runs one-off AI judgments for AI hook responses.
+type AIHookEvaluator interface {
+	CompleteText(ctx context.Context, model string, messages []message.Message, maxTokens *int) (string, error)
+}
+
 // HookFailureMessageMetadata carries structured hook-failure details for UI rendering.
 type HookFailureMessageMetadata struct {
 	Kind            string   `json:"kind"`
@@ -95,17 +100,18 @@ type Manager struct {
 	hooksDataDir  string
 	processes     *processes.Manager
 
-	mu             sync.Mutex
-	sessionHooks   []Hook
-	fileHooks      []Hook
-	preCommitHooks []Hook
-	initialized    bool
-	chunkEmitter   func(message.MessageChunk)
-	envSnapshot    func() map[string]string
-	startupHookEnv func(Hook) map[string]string
-	conversations  Conversation
-	promptQueue    *promptqueue.Manager
-	aiHookAgent    AIHookAgent
+	mu              sync.Mutex
+	sessionHooks    []Hook
+	fileHooks       []Hook
+	preCommitHooks  []Hook
+	initialized     bool
+	chunkEmitter    func(message.MessageChunk)
+	envSnapshot     func() map[string]string
+	startupHookEnv  func(Hook) map[string]string
+	conversations   Conversation
+	promptQueue     *promptqueue.Manager
+	aiHookAgent     AIHookAgent
+	aiHookEvaluator AIHookEvaluator
 
 	hookRetryCount     map[string]int
 	hookNotificationTo map[string]string
@@ -134,6 +140,14 @@ func (m *Manager) SetAIHookAgent(aiHookAgent AIHookAgent) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.aiHookAgent = aiHookAgent
+}
+
+// SetAIHookEvaluator configures the direct model caller used to judge AI hook
+// responses.
+func (m *Manager) SetAIHookEvaluator(evaluator AIHookEvaluator) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.aiHookEvaluator = evaluator
 }
 
 // SetRepromptRunner configures how failed hook notifications start follow-up
@@ -349,12 +363,13 @@ func (m *Manager) runStartupHook(run startupHookRun) {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
+	runCutoff := time.Now()
 	result := m.runHook(hook, runHookOptions{
 		env:        run.env,
 		outputPath: outputPath,
 	})
 
-	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath, runCutoff)
 	_ = UpdateLastEvaluatedAt(m.hooksDataDir)
 	m.emitCurrentStatusChunk()
 }
@@ -534,6 +549,7 @@ func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
+	runCutoff := time.Now()
 	result := m.runHook(hook, runHookOptions{
 		env:          m.visibleEnvSnapshot(),
 		changedFiles: matching,
@@ -545,7 +561,7 @@ func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
 		eval = buildHookFailureEvalResult(result, matching, outputPath, m.workspaceRoot)
 	}
 
-	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath, runCutoff)
 
 	if result.Success {
 		_ = RemovePendingHook(m.hooksDataDir, hook.ID)
@@ -562,12 +578,13 @@ func (m *Manager) rerunSessionHook(hook Hook) *HookRunResult {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
+	runCutoff := time.Now()
 	result := m.runHook(hook, runHookOptions{
 		env:        m.visibleStartupHookEnv(hook),
 		outputPath: outputPath,
 	})
 
-	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath, runCutoff)
 	_ = UpdateLastEvaluatedAt(m.hooksDataDir)
 	m.emitCurrentStatusChunk()
 
@@ -599,6 +616,7 @@ func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
 	start := time.Now()
 	m.mu.Lock()
 	aiHookAgent := m.aiHookAgent
+	aiHookEvaluator := m.aiHookEvaluator
 	m.mu.Unlock()
 
 	if aiHookAgent == nil {
@@ -614,13 +632,14 @@ func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
 	}
 
 	threadID := aiHookThreadID(m.sessionID, hook.ID)
+	followUp := aiHookThreadExists(aiHookAgent, threadID)
 	taskResult, err := tools.RunPromptTask(context.Background(), aiHookAgent, tools.PromptTaskRequest{
 		ThreadID:       threadID,
 		Type:           "hook",
 		Name:           "Hook: " + hook.Name,
 		CWD:            m.workspaceRoot,
 		Description:    hook.Description,
-		Prompt:         formatAIHookPrompt(threadID, hook, opts.changedFiles, m.workspaceRoot),
+		Prompt:         formatAIHookPrompt(threadID, hook, opts.changedFiles, m.workspaceRoot, followUp),
 		Model:          opts.model,
 		SubagentType:   hook.Subagent,
 		ParentThreadID: m.sessionID,
@@ -638,14 +657,18 @@ func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
 		output += "AI hook did not complete: " + taskResult.Status
 	}
 
-	success := err == nil && taskResult.Status == "completed" && aiHookSucceeded(output)
+	eval := aiHookEvaluation{Success: false, NotifyLLM: true}
+	if err == nil && taskResult.Status == "completed" {
+		eval = m.evaluateAIHookResponse(aiHookEvaluator, hook, output, opts.model)
+	}
 	exitCode := 0
-	if !success {
+	if !eval.Success {
 		exitCode = 1
 	}
 
 	result := HookResult{
-		Success:    success,
+		Success:    eval.Success,
+		NotifyLLM:  &eval.NotifyLLM,
 		ExitCode:   exitCode,
 		Output:     output,
 		Hook:       hook,
@@ -653,6 +676,16 @@ func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
 	}
 	writeOutputFile(opts.outputPath, output)
 	return result
+}
+
+func aiHookThreadExists(aiHookAgent AIHookAgent, threadID string) bool {
+	if aiHookAgent == nil {
+		return false
+	}
+	if _, err := aiHookAgent.GetThreadInfo(threadID); err != nil {
+		return false
+	}
+	return true
 }
 
 func aiHookThreadID(sessionID, hookID string) string {
@@ -670,7 +703,7 @@ type aiHookDiff struct {
 	Truncated bool
 }
 
-func formatAIHookPrompt(threadID string, hook Hook, changedFiles []string, workspaceRoot string) string {
+func formatAIHookPrompt(threadID string, hook Hook, changedFiles []string, workspaceRoot string, followUp bool) string {
 	diff := gitDiffForHook(workspaceRoot, changedFiles)
 	data := sessionconfig.AIHookPromptData{
 		HookName:      hook.Name,
@@ -679,6 +712,7 @@ func formatAIHookPrompt(threadID string, hook Hook, changedFiles []string, works
 		ChangedFiles:  changedFiles,
 		Diff:          diff.Inline,
 		DiffTruncated: diff.Truncated,
+		FollowUp:      followUp,
 	}
 	if path, err := writeAIHookContextFile(threadID, hook.ID, data, diff.Full); err != nil {
 		log.Printf("hooks: warning: write AI hook context for %s: %v", hook.ID, err)
@@ -736,9 +770,51 @@ func gitDiffForHook(workspaceRoot string, changedFiles []string) aiHookDiff {
 	return result
 }
 
-func aiHookSucceeded(output string) bool {
+type aiHookEvaluation struct {
+	Success   bool   `json:"success"`
+	NotifyLLM bool   `json:"notifyLLM"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+func (m *Manager) evaluateAIHookResponse(evaluator AIHookEvaluator, hook Hook, output, model string) aiHookEvaluation {
+	if evaluator == nil {
+		return aiHookEvaluation{Success: false, NotifyLLM: true}
+	}
+	maxTokens := 300
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	response, err := evaluator.CompleteText(ctx, model, []message.Message{
+		{
+			Role: "user",
+			Parts: []message.Part{message.TextPart{Text: sessionconfig.FormatAIHookEvaluationPrompt(sessionconfig.AIHookEvaluationPromptData{
+				HookName:     hook.Name,
+				Instructions: hook.Prompt,
+				Output:       output,
+			})}},
+		},
+	}, &maxTokens)
+	if err != nil {
+		return aiHookEvaluation{Success: false, NotifyLLM: true}
+	}
+	eval, ok := parseAIHookEvaluation(response)
+	if !ok {
+		return aiHookEvaluation{Success: false, NotifyLLM: true}
+	}
+	return eval
+}
+
+func parseAIHookEvaluation(output string) (aiHookEvaluation, bool) {
 	trimmed := strings.TrimSpace(output)
-	return strings.HasPrefix(trimmed, "SUCCESS")
+	trimmed = strings.TrimPrefix(trimmed, "```json")
+	trimmed = strings.TrimPrefix(trimmed, "```")
+	trimmed = strings.TrimSuffix(trimmed, "```")
+	trimmed = strings.TrimSpace(trimmed)
+
+	var eval aiHookEvaluation
+	if err := json.Unmarshal([]byte(trimmed), &eval); err != nil {
+		return aiHookEvaluation{}, false
+	}
+	return eval, true
 }
 
 // EvaluateFileHooks evaluates file hooks after a completion.
@@ -816,19 +892,24 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 			m.emitCurrentStatusChunk()
 			continue
 		}
+		reportFiles := matchFiles(m.changedFilesSinceHookMarker(hook.ID), hook.Pattern)
+		if len(reportFiles) == 0 {
+			continue
+		}
 
 		outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
 		_ = SetHookRunning(m.hooksDataDir, hook)
 		m.emitCurrentStatusChunk()
 
+		runCutoff := time.Now()
 		result := m.runHook(hook, runHookOptions{
 			env:          m.visibleEnvSnapshot(),
-			changedFiles: matching,
+			changedFiles: reportFiles,
 			outputPath:   outputPath,
 			model:        hookModel,
 		})
 
-		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
+		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath, runCutoff)
 		m.emitCurrentStatusChunk()
 
 		if result.Success {
@@ -838,7 +919,7 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 		}
 
 		// Hook failed
-		return buildHookFailureEvalResult(result, matching, outputPath, m.workspaceRoot)
+		return buildHookFailureEvalResult(result, reportFiles, outputPath, m.workspaceRoot)
 	}
 
 	// All pending hooks cleared
@@ -1058,6 +1139,10 @@ func (m *Manager) findChangedFilesSinceMarker() []string {
 	return DirtyFilesSinceMarker(m.workspaceRoot, filepath.Join(m.hooksDataDir, ".last-eval"))
 }
 
+func (m *Manager) changedFilesSinceHookMarker(hookID string) []string {
+	return DirtyFilesSinceMarker(m.workspaceRoot, hookMarkerPath(m.hooksDataDir, hookID))
+}
+
 // touchMarker creates or updates the .last-eval marker file.
 func (m *Manager) touchMarker() {
 	_ = os.MkdirAll(m.hooksDataDir, 0o755)
@@ -1091,7 +1176,11 @@ func buildHookFailureEvalResult(result HookResult, matchingFiles []string, outpu
 	if result.Success {
 		return FileHookEvalResult{}
 	}
-	if !result.Hook.NotifyLLM {
+	notifyLLM := result.Hook.NotifyLLM
+	if result.NotifyLLM != nil {
+		notifyLLM = *result.NotifyLLM
+	}
+	if !notifyLLM {
 		return FileHookEvalResult{
 			Evaluated:      true,
 			ShouldReprompt: false,

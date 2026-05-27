@@ -19,22 +19,27 @@ Discobot supports two hook execution engines in agent-go:
   subprocesses.
 - `engine: ai`: prompt files are run by agent-go as task-style AI reviews in
   a stable thread dedicated to that hook. The hook body after front matter is
-  used as the hook instruction prompt. Each run adds a new input describing the
-  relevant changed files and diff to the same hook thread, and the assistant
-  response is written to the hook output log. AI hook runs use the same
-  in-memory task runner as the Task/TaskOutput tools, so active review turns are
-  registered with completion tracking and can be reported or cancelled through
-  the normal task/completion path. Before each prompt, agent-go writes the full
-  hook run context to `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md` and
-  includes that path in the prompt so the agent can read the complete diff if
-  inline prompt context is truncated. AI hooks may set `subagent: <name>` to run
-  with a configured sub-agent's prompt, model, and tool restrictions.
+  used as the hook instruction prompt. The first run introduces the hook review;
+  later runs tell the same thread that new changes are available. Each run adds
+  an input describing the files changed since that hook last ran, plus their
+  diff, and the assistant response is written to the hook output log. AI hook
+  runs use the same in-memory task runner as the Task/TaskOutput tools, so
+  active review turns are registered with completion tracking and can be
+  reported or cancelled through the normal task/completion path. Before each
+  prompt, agent-go writes the full hook run context to
+  `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md`
+  and includes that path in the prompt so the agent can read the complete diff
+  if inline prompt context is truncated. AI hooks may set `subagent: <name>` to
+  run with a configured sub-agent's prompt, model, and tool restrictions.
 
-AI hooks should respond with `SUCCESS` when the change passes, or
-`FEEDBACK: <actionable feedback>` when it needs attention. Output that starts
-with `SUCCESS` is recorded as a successful hook run; all other output is
-recorded as a failed run so feedback appears in normal hook output and
-follow-up flows.
+AI hook responses are evaluated by a separate AI judgment prompt that decides
+whether the hook passed and whether the main conversation should be notified.
+This avoids relying on literal prefix matching of the review response. Runtime
+hook state also records per-hook timestamp markers under
+`~/.discobot/threads/{sessionId}/hooks/timestamps/` so subsequent runs can focus
+on changes made since that hook last ran. The marker value persisted after a
+run is the cutoff captured immediately before starting the hook, so file edits
+that happen while the hook is running remain visible to the next evaluation.
 
 ### Hook Discovery
 

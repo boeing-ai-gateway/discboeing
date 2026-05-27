@@ -145,8 +145,9 @@ func RecoverInterruptedHooks(hooksDataDir string, rerunnableHookIDs []string) er
 	return SaveStatus(hooksDataDir, status)
 }
 
-// UpdateHookStatus updates the status after a hook execution.
-func UpdateHookStatus(hooksDataDir string, result HookResult, outputPath string) error {
+// UpdateHookStatus updates the status after a hook execution and records the
+// per-hook file-change cutoff captured before the hook started.
+func UpdateHookStatus(hooksDataDir string, result HookResult, outputPath string, runCutoff time.Time) error {
 	status := LoadStatus(hooksDataDir)
 
 	existing, ok := status.Hooks[result.Hook.ID]
@@ -172,7 +173,27 @@ func UpdateHookStatus(hooksDataDir string, result HookResult, outputPath string)
 	}
 
 	status.Hooks[result.Hook.ID] = existing
-	return SaveStatus(hooksDataDir, status)
+	if err := SaveStatus(hooksDataDir, status); err != nil {
+		return err
+	}
+	saveHookMarker(hooksDataDir, result.Hook.ID, runCutoff)
+	return nil
+}
+
+// saveHookMarker stores the cutoff captured before a hook starts. Persisting the
+// pre-run time keeps files changed during the hook visible to the next run.
+func saveHookMarker(hooksDataDir, hookID string, at time.Time) {
+	path := hookMarkerPath(hooksDataDir, hookID)
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.Chtimes(path, at, at); err != nil {
+		if err := os.WriteFile(path, nil, 0o644); err == nil {
+			_ = os.Chtimes(path, at, at)
+		}
+	}
+}
+
+func hookMarkerPath(hooksDataDir, hookID string) string {
+	return filepath.Join(hooksDataDir, "timestamps", hookID)
 }
 
 // UpdateLastEvaluatedAt sets the lastEvaluatedAt timestamp.

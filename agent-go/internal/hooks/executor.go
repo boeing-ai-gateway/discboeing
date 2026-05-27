@@ -23,6 +23,7 @@ const DefaultTimeout = 15 * time.Minute
 // HookResult is the result of executing a hook.
 type HookResult struct {
 	Success    bool
+	NotifyLLM  *bool
 	ExitCode   int
 	Output     string
 	Hook       Hook

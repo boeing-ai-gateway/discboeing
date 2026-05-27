@@ -236,6 +236,7 @@ func (r *agentRuntime) initHooks() {
 		r.conversations.EmitEphemeralChunk(chunk)
 	})
 	r.hookManager.SetAIHookAgent(r.defaultAgent)
+	r.hookManager.SetAIHookEvaluator(hookEvaluationResolver{registry: r.providerRegistry})
 	r.hookManager.SetRepromptRunner(r.conversations, r.promptQueue)
 }
 
@@ -392,6 +393,39 @@ func (r credentialUseAuthorizerResolver) CompleteText(ctx context.Context, model
 		Model:     providers.ModelRef{ProviderID: model.ProviderID, ModelID: model.ModelID},
 		Messages:  messages,
 		MaxTokens: maxTokens,
+	}) {
+		if err != nil {
+			return "", err
+		}
+		switch delta := chunk.(type) {
+		case message.TextDeltaChunk:
+			b.WriteString(delta.Delta)
+		}
+	}
+	return strings.TrimSpace(b.String()), nil
+}
+
+type hookEvaluationResolver struct {
+	registry *providers.ProviderRegistry
+}
+
+// CompleteText adapts the provider registry to the hook evaluator's one-off
+// text completion interface.
+func (r hookEvaluationResolver) CompleteText(ctx context.Context, model string, messages []message.Message, maxTokens *int) (string, error) {
+	ref, err := r.registry.ResolveModel(model, providers.ModelTaskAuthorization, providers.ModelTaskChat)
+	if err != nil {
+		return "", err
+	}
+	provider, err := r.registry.Get(ref.ProviderID)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for chunk, err := range provider.Complete(ctx, providers.CompleteRequest{
+		Model:     ref,
+		Messages:  messages,
+		MaxTokens: maxTokens,
+		Reasoning: providers.ReasoningNone,
 	}) {
 		if err != nil {
 			return "", err
