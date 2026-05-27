@@ -19,7 +19,7 @@ Discobot is a coding agent session manager. It runs Discobot's built-in coding a
 
 ## Customization
 
-Automate session setup, enforce code quality, and run dev servers with [`.discobot/hooks/` and `.discobot/services/`](docs/CUSTOMIZATION.md).
+Automate session setup, enforce code quality with script or AI hooks, and run dev servers with [`.discobot/hooks/` and `.discobot/services/`](docs/CUSTOMIZATION.md).
 
 ## Install
 

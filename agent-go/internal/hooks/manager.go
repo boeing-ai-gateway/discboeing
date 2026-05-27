@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,9 @@ import (
 	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/promptqueue"
+	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/obot-platform/discobot/agent-go/tools"
 )
 
 const (
@@ -42,6 +46,11 @@ type Conversation interface {
 	Chat(threadID string, req agent.PromptRequest) (string, error)
 	Resume(threadID string, req agent.PromptRequest) (string, error)
 	HasInterruptedTurn(threadID string) (bool, error)
+}
+
+// AIHookAgent runs prompts for AI-powered hooks.
+type AIHookAgent interface {
+	tools.PromptTaskAgent
 }
 
 // HookFailureMessageMetadata carries structured hook-failure details for UI rendering.
@@ -96,6 +105,7 @@ type Manager struct {
 	startupHookEnv func(Hook) map[string]string
 	conversations  Conversation
 	promptQueue    *promptqueue.Manager
+	aiHookAgent    AIHookAgent
 
 	hookRetryCount     map[string]int
 	hookNotificationTo map[string]string
@@ -117,6 +127,13 @@ func NewManager(workspaceRoot, sessionID string, processManager ...*processes.Ma
 		hookRetryCount:     make(map[string]int),
 		hookNotificationTo: make(map[string]string),
 	}
+}
+
+// SetAIHookAgent configures the agent used to run AI-powered hooks.
+func (m *Manager) SetAIHookAgent(aiHookAgent AIHookAgent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.aiHookAgent = aiHookAgent
 }
 
 // SetRepromptRunner configures how failed hook notifications start follow-up
@@ -332,12 +349,9 @@ func (m *Manager) runStartupHook(run startupHookRun) {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
-	result := ExecuteHook(hook, ExecuteOptions{
-		Cwd:        m.workspaceRoot,
-		Env:        run.env,
-		SessionID:  m.sessionID,
-		OutputPath: outputPath,
-		Processes:  m.processes,
+	result := m.runHook(hook, runHookOptions{
+		env:        run.env,
+		outputPath: outputPath,
 	})
 
 	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
@@ -520,13 +534,10 @@ func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
-	result := ExecuteHook(hook, ExecuteOptions{
-		Cwd:          m.workspaceRoot,
-		Env:          m.visibleEnvSnapshot(),
-		ChangedFiles: matching,
-		SessionID:    m.sessionID,
-		OutputPath:   outputPath,
-		Processes:    m.processes,
+	result := m.runHook(hook, runHookOptions{
+		env:          m.visibleEnvSnapshot(),
+		changedFiles: matching,
+		outputPath:   outputPath,
 	})
 
 	eval := FileHookEvalResult{}
@@ -551,12 +562,9 @@ func (m *Manager) rerunSessionHook(hook Hook) *HookRunResult {
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
 
-	result := ExecuteHook(hook, ExecuteOptions{
-		Cwd:        m.workspaceRoot,
-		Env:        m.visibleStartupHookEnv(hook),
-		SessionID:  m.sessionID,
-		OutputPath: outputPath,
-		Processes:  m.processes,
+	result := m.runHook(hook, runHookOptions{
+		env:        m.visibleStartupHookEnv(hook),
+		outputPath: outputPath,
 	})
 
 	_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
@@ -564,6 +572,171 @@ func (m *Manager) rerunSessionHook(hook Hook) *HookRunResult {
 	m.emitCurrentStatusChunk()
 
 	return &HookRunResult{Result: result}
+}
+
+type runHookOptions struct {
+	env          map[string]string
+	changedFiles []string
+	outputPath   string
+}
+
+func (m *Manager) runHook(hook Hook, opts runHookOptions) HookResult {
+	if hook.Engine == HookEngineAI {
+		return m.runAIHook(hook, opts)
+	}
+	return ExecuteHook(hook, ExecuteOptions{
+		Cwd:          m.workspaceRoot,
+		Env:          opts.env,
+		ChangedFiles: opts.changedFiles,
+		SessionID:    m.sessionID,
+		OutputPath:   opts.outputPath,
+		Processes:    m.processes,
+	})
+}
+
+func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
+	start := time.Now()
+	m.mu.Lock()
+	aiHookAgent := m.aiHookAgent
+	m.mu.Unlock()
+
+	if aiHookAgent == nil {
+		result := HookResult{
+			Success:    false,
+			ExitCode:   127,
+			Output:     "AI hook runner unavailable",
+			Hook:       hook,
+			DurationMs: time.Since(start).Milliseconds(),
+		}
+		writeOutputFile(opts.outputPath, result.Output)
+		return result
+	}
+
+	threadID := aiHookThreadID(m.sessionID, hook.ID)
+	taskResult, err := tools.RunPromptTask(context.Background(), aiHookAgent, tools.PromptTaskRequest{
+		ThreadID:       threadID,
+		Type:           "hook",
+		Name:           "Hook: " + hook.Name,
+		CWD:            m.workspaceRoot,
+		Description:    hook.Description,
+		Prompt:         formatAIHookPrompt(threadID, hook, opts.changedFiles, m.workspaceRoot),
+		SubagentType:   hook.Subagent,
+		ParentThreadID: m.sessionID,
+	})
+	output := taskResult.Output
+	if err != nil {
+		if strings.TrimSpace(output) != "" {
+			output += "\n\n"
+		}
+		output += "AI hook failed: " + err.Error()
+	} else if taskResult.Status != "completed" {
+		if strings.TrimSpace(output) != "" {
+			output += "\n\n"
+		}
+		output += "AI hook did not complete: " + taskResult.Status
+	}
+
+	success := err == nil && taskResult.Status == "completed" && aiHookSucceeded(output)
+	exitCode := 0
+	if !success {
+		exitCode = 1
+	}
+
+	result := HookResult{
+		Success:    success,
+		ExitCode:   exitCode,
+		Output:     output,
+		Hook:       hook,
+		DurationMs: time.Since(start).Milliseconds(),
+	}
+	writeOutputFile(opts.outputPath, output)
+	return result
+}
+
+func aiHookThreadID(sessionID, hookID string) string {
+	if strings.TrimSpace(sessionID) == "" {
+		return "hook-" + hookID
+	}
+	return "hook-" + sessionID + "-" + hookID
+}
+
+const aiHookInlineDiffMaxBytes = 60 * 1024
+
+type aiHookDiff struct {
+	Full      string
+	Inline    string
+	Truncated bool
+}
+
+func formatAIHookPrompt(threadID string, hook Hook, changedFiles []string, workspaceRoot string) string {
+	diff := gitDiffForHook(workspaceRoot, changedFiles)
+	data := sessionconfig.AIHookPromptData{
+		HookName:      hook.Name,
+		Instructions:  hook.Prompt,
+		Pattern:       hook.Pattern,
+		ChangedFiles:  changedFiles,
+		Diff:          diff.Inline,
+		DiffTruncated: diff.Truncated,
+	}
+	if path, err := writeAIHookContextFile(threadID, hook.ID, data, diff.Full); err != nil {
+		log.Printf("hooks: warning: write AI hook context for %s: %v", hook.ID, err)
+	} else {
+		data.ContextFilePath = path
+	}
+	return sessionconfig.FormatAIHookPrompt(data)
+}
+
+func writeAIHookContextFile(threadID, hookID string, data sessionconfig.AIHookPromptData, fullDiff string) (string, error) {
+	path := aiHookContextFilePath(threadID, hookID, time.Now().UTC())
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	data.Diff = fullDiff
+	data.DiffTruncated = false
+	data.ContextFilePath = ""
+	content := sessionconfig.FormatAIHookContext(data)
+	if err := thread.WriteFileAtomic(path, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func aiHookContextFilePath(threadID, hookID string, at time.Time) string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(
+		home,
+		".discobot",
+		"threads",
+		threadID,
+		"ai-hooks",
+		hookID,
+		"context-"+at.Format("20060102T150405.000000000Z")+".md",
+	)
+}
+
+func gitDiffForHook(workspaceRoot string, changedFiles []string) aiHookDiff {
+	args := []string{"diff", "--no-ext-diff", "--"}
+	args = append(args, changedFiles...)
+	diff, err := gitOutput(workspaceRoot, args...)
+	if err != nil || strings.TrimSpace(diff) == "" {
+		args = []string{"diff", "--no-ext-diff", "--cached", "--"}
+		args = append(args, changedFiles...)
+		diff, _ = gitOutput(workspaceRoot, args...)
+	}
+	result := aiHookDiff{
+		Full:   diff,
+		Inline: diff,
+	}
+	if len(diff) > aiHookInlineDiffMaxBytes {
+		result.Inline = diff[:aiHookInlineDiffMaxBytes] + "\n[diff truncated]\n"
+		result.Truncated = true
+	}
+	return result
+}
+
+func aiHookSucceeded(output string) bool {
+	trimmed := strings.TrimSpace(output)
+	return strings.HasPrefix(trimmed, "SUCCESS")
 }
 
 // EvaluateFileHooks evaluates file hooks after a completion.
@@ -642,13 +815,10 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 		_ = SetHookRunning(m.hooksDataDir, hook)
 		m.emitCurrentStatusChunk()
 
-		result := ExecuteHook(hook, ExecuteOptions{
-			Cwd:          m.workspaceRoot,
-			Env:          m.visibleEnvSnapshot(),
-			ChangedFiles: matching,
-			SessionID:    m.sessionID,
-			OutputPath:   outputPath,
-			Processes:    m.processes,
+		result := m.runHook(hook, runHookOptions{
+			env:          m.visibleEnvSnapshot(),
+			changedFiles: matching,
+			outputPath:   outputPath,
 		})
 
 		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)

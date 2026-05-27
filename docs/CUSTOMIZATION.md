@@ -4,10 +4,10 @@ Discobot supports per-workspace customization through the `.discobot/` directory
 
 - **Environment file** (`.discobot/env`) — Environment variables loaded into tools, console sessions, hooks, and services
 - **Scripts** (`.discobot/scripts/`) — User-facing executable slash commands exposed to the agent through the Skill tool
-- **Hooks** (`.discobot/hooks/`) — Automation scripts that run at specific lifecycle points
+- **Hooks** (`.discobot/hooks/`) — Automation scripts or AI review prompts that run at specific lifecycle points
 - **Services** (`.discobot/services/`) — Background processes and HTTP endpoints
 
-Scripts, hooks, and executable services use the same file format: executable scripts with YAML front matter.
+Scripts, script hooks, and executable services use the same file format: executable scripts with YAML front matter. AI hooks and passive services use front matter with a non-executable body or declaration.
 
 ```
 .discobot/
@@ -175,7 +175,17 @@ pnpm run generate
 
 ## Hooks
 
-Hooks are executable scripts in `.discobot/hooks/` that run at specific points during a session. They enable automated setup, validation, and enforcement of code quality standards.
+Hooks are files in `.discobot/hooks/` that run at specific points during a session. Script hooks execute commands, while AI hooks ask the session's AI agent to review the relevant changes. They enable automated setup, validation, and enforcement of code quality standards.
+
+Discobot supports two hook engines:
+
+| Engine            | How it runs                                                                 | File requirements                         |
+| ----------------- | --------------------------------------------------------------------------- | ----------------------------------------- |
+| `script` default  | Executes the hook file as a subprocess                                      | Executable bit, shebang, front matter     |
+| `ai`              | Sends the hook body and change context to the session's AI agent            | Front matter only; no shebang or `chmod`  |
+
+Script hooks are shell, Python, Node, or other executable files. AI hooks are
+prompt files: the text after front matter is used as the hook's instructions.
 
 ### Hook Types
 
@@ -189,22 +199,24 @@ There are three hook types, set via the `type` field in front matter:
 
 ### Common Fields
 
-| Field         | Type   | Required | Description                         |
-| ------------- | ------ | -------- | ----------------------------------- |
-| `name`        | string | No       | Display name (defaults to filename) |
-| `type`        | string | **Yes**  | `session`, `file`, or `pre-commit`  |
-| `description` | string | No       | Human-readable description          |
+| Field         | Type   | Required | Description                                  |
+| ------------- | ------ | -------- | -------------------------------------------- |
+| `name`        | string | No       | Display name (defaults to filename)          |
+| `type`        | string | **Yes**  | `session`, `file`, or `pre-commit`           |
+| `engine`      | string | No       | `script` default, or `ai` for AI hooks       |
+| `description` | string | No       | Human-readable description                   |
+| `subagent`    | string | No       | Sub-agent name for `engine: ai` hooks        |
 
 ### File Requirements
 
 Hook files must:
 
 - Be in the `.discobot/hooks/` directory
-- Be executable (`chmod +x`)
-- Have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
 - Have front matter with a valid `type` field
+- For `engine: script` hooks, be executable (`chmod +x`) and have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
+- For `engine: ai` hooks, have `engine: ai`; no executable bit or shebang is required
 
-On Windows, Discobot uses the hook's shebang to choose an interpreter. Bash-based hooks therefore require `bash` to be available on `PATH`.
+On Windows, Discobot uses a script hook's shebang to choose an interpreter. Bash-based hooks therefore require `bash` to be available on `PATH`.
 
 Files are sorted alphabetically by filename, so prefix with numbers to control execution order (e.g., `01-install.sh`, `02-lint.sh`).
 
@@ -348,6 +360,37 @@ for f in $DISCOBOT_CHANGED_FILES; do
 	(cd "$dir" && go mod tidy 2>&1)
 done
 ```
+
+**Example — AI review hook:**
+
+```markdown
+---
+name: Go reviewer
+type: file
+engine: ai
+pattern: "**/*.go"
+subagent: reviewer
+---
+Review the changed Go files for correctness, missing tests, and maintainability.
+Approve only when the code is ready to merge.
+```
+
+AI hooks run as task-style reviews in a stable thread dedicated to that hook.
+Each run sends a new prompt into the same thread with the hook instructions,
+matching changed files, and an inline diff when available. Active AI hook
+reviews are registered with the same task/completion infrastructure used by the
+`Task` and `TaskOutput` tools, so the thread is visible to normal completion
+tracking while the hook waits for the final review output. Discobot also writes
+the complete run context
+to `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md`
+and includes that path in the prompt so the AI can read the full diff if the
+inline context is truncated.
+
+The AI hook response becomes the hook output. Responses that start with
+`SUCCESS` pass the hook. Any other response fails the hook, so use
+`FEEDBACK: <actionable feedback>` when the change needs attention. `subagent` is
+optional and selects a configured session sub-agent, including its prompt, model
+override, and tool restrictions. AI `pre-commit` hooks are not supported.
 
 ### Pre-commit Hooks
 

@@ -13,13 +13,37 @@ Session hooks run after the workspace and filesystem are fully set up but before
 
 ## Implementation
 
+Discobot supports two hook execution engines in agent-go:
+
+- `engine: script` (default): executable files with a shebang are run as
+  subprocesses.
+- `engine: ai`: prompt files are run by agent-go as task-style AI reviews in
+  a stable thread dedicated to that hook. The hook body after front matter is
+  used as the hook instruction prompt. Each run adds a new input describing the
+  relevant changed files and diff to the same hook thread, and the assistant
+  response is written to the hook output log. AI hook runs use the same
+  in-memory task runner as the Task/TaskOutput tools, so active review turns are
+  registered with completion tracking and can be reported or cancelled through
+  the normal task/completion path. Before each prompt, agent-go writes the full
+  hook run context to `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md` and
+  includes that path in the prompt so the agent can read the complete diff if
+  inline prompt context is truncated. AI hooks may set `subagent: <name>` to run
+  with a configured sub-agent's prompt, model, and tool restrictions.
+
+AI hooks should respond with `SUCCESS` when the change passes, or
+`FEEDBACK: <actionable feedback>` when it needs attention. Output that starts
+with `SUCCESS` is recorded as a successful hook run; all other output is
+recorded as a failed run so feedback appears in normal hook output and
+follow-up flows.
+
 ### Hook Discovery
 
 The Go agent scans `/home/discobot/workspace/.discobot/hooks/` for files that:
 1. Are regular files (not directories, not hidden)
-2. Have the executable bit set
-3. Have a shebang line (`#!`)
-4. Have front matter with `type: session`
+2. For script hooks, have the executable bit set and a shebang line (`#!`)
+3. For AI hooks, have front matter with `engine: ai` (no executable bit or
+   shebang required)
+4. Have front matter with a supported `type`
 
 ### Front Matter Parsing
 
@@ -29,6 +53,8 @@ Minimal Go implementation of the same YAML front matter parser used by the TypeS
 type HookConfig struct {
     Name        string // Display name
     Type        string // "session", "file", "pre-commit"
+    Engine      string // "script" (default) or "ai"
+    Subagent    string // Optional sub-agent name for AI hooks
     Description string // Human-readable description
     RunAs       string // "root" or "user" (default: "user")
 }
@@ -50,6 +76,13 @@ For each hook:
 - Retries: session hooks are retried immediately up to 10 total attempts before the overall run is marked as failed
 - stdout/stderr captured and logged
 - **On failure after all retries: log error and continue** (don't block session startup)
+
+AI hooks are executed by agent-go rather than sandbox-init, because they need
+the session's model/provider configuration and thread store. They use the same
+session/file trigger decisions as script hooks once agent-go is running. AI
+`pre-commit` hooks are not supported. When `subagent` is set, the name must
+match a sub-agent configured for the session, such as one discovered from
+`.claude/agents/*.md`.
 
 ### Environment Variables
 
@@ -87,4 +120,17 @@ apt-get update && apt-get install -y postgresql-client
 #---
 pnpm install
 cp .env.example .env
+```
+
+```markdown
+---
+name: Review Go changes
+type: file
+engine: ai
+pattern: "**/*.go"
+subagent: reviewer
+---
+Review the changed Go files for correctness, missing tests, and maintainability.
+Respond with SUCCESS if there is nothing to fix, otherwise respond with
+FEEDBACK: followed by concise actionable feedback.
 ```

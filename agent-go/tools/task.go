@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,42 @@ type taskInput struct {
 type taskContinuation struct {
 	TaskID      string `json:"taskId,omitempty"`
 	SubThreadID string `json:"subThreadId"`
+}
+
+// PromptTaskAgent is the subset of agent behavior needed to run a Task-style
+// prompt on a managed thread.
+type PromptTaskAgent interface {
+	CreateThread(ctx context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error)
+	UpdateThread(ctx context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error)
+	GetThreadInfo(threadID string) (agent.ThreadInfo, error)
+	Prompt(ctx context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error]
+	Resume(ctx context.Context, threadID string, req agent.PromptRequest) (agent.ResumeResult, error)
+	HasInterruptedTurn(threadID string) (bool, error)
+	PendingQuestion(threadID string) (*agent.PendingQuestion, error)
+	FinalResponse(threadID string) (string, error)
+}
+
+// PromptTaskRequest describes a Task-style prompt run on a caller-selected
+// stable thread ID.
+type PromptTaskRequest struct {
+	ThreadID       string
+	Type           string
+	Name           string
+	CWD            string
+	Description    string
+	Prompt         string
+	SubagentType   string
+	ParentThreadID string
+	ParentTaskID   string
+	Depth          int
+}
+
+// PromptTaskResult is the final status and output of a PromptTaskRequest.
+type PromptTaskResult struct {
+	TaskID   string
+	ThreadID string
+	Status   string
+	Output   string
 }
 
 // taskRecord tracks an in-progress or completed Task.
@@ -160,6 +197,153 @@ func taskIsTerminal(status string) bool {
 	default:
 		return false
 	}
+}
+
+// RunPromptTask runs a prompt through the same in-memory task runner used by
+// the Task/TaskOutput tools, but on a stable thread ID supplied by the caller.
+// This makes the run visible to external completion tracking while still
+// allowing system features such as hooks to wait synchronously for the result.
+func RunPromptTask(ctx context.Context, taskAgent PromptTaskAgent, req PromptTaskRequest) (PromptTaskResult, error) {
+	threadID := strings.TrimSpace(req.ThreadID)
+	if threadID == "" {
+		return PromptTaskResult{}, fmt.Errorf("thread ID is required")
+	}
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return PromptTaskResult{}, fmt.Errorf("prompt is required")
+	}
+	if taskAgent == nil {
+		return PromptTaskResult{}, fmt.Errorf("task agent is required")
+	}
+	if validator, ok := taskAgent.(subagentTypeValidator); ok {
+		if err := validator.ValidateSubagentType(req.SubagentType); err != nil {
+			return PromptTaskResult{}, err
+		}
+	}
+
+	threadType := strings.TrimSpace(req.Type)
+	if threadType == "" {
+		threadType = "task"
+	}
+	created := time.Now()
+	metadata := thread.ConfigMetadata{
+		Type:           threadType,
+		TaskID:         threadID,
+		ParentThreadID: req.ParentThreadID,
+		ParentTaskID:   req.ParentTaskID,
+		SubagentType:   req.SubagentType,
+		Description:    req.Description,
+		Prompt:         prompt,
+		StartedAt:      created.UTC(),
+	}
+	if req.Depth == 0 {
+		req.Depth = subagentDepthFromThreadID(threadID)
+	}
+
+	rec, err := preparePromptTaskThread(ctx, taskAgent, req, metadata, created)
+	if err != nil {
+		return PromptTaskResult{}, err
+	}
+
+	startSubAgentRun(rec, taskAgent, threadID, agent.PromptRequest{
+		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		SubagentType:  req.SubagentType,
+		ParentTaskID:  threadID,
+		SubagentDepth: req.Depth,
+	})
+
+	select {
+	case <-rec.done:
+	case <-ctx.Done():
+		rec.mu.Lock()
+		cancel := rec.cancel
+		rec.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		return PromptTaskResult{}, ctx.Err()
+	}
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return PromptTaskResult{
+		TaskID:   rec.taskID,
+		ThreadID: rec.subThreadID,
+		Status:   rec.status,
+		Output:   rec.output,
+	}, nil
+}
+
+func preparePromptTaskThread(ctx context.Context, taskAgent PromptTaskAgent, req PromptTaskRequest, metadata thread.ConfigMetadata, created time.Time) (*taskRecord, error) {
+	threadID := strings.TrimSpace(req.ThreadID)
+	globalTasks.mu.Lock()
+	rec := globalTasks.tasks[threadID]
+	if rec == nil {
+		rec = &taskRecord{
+			taskID:         threadID,
+			created:        created,
+			parentThreadID: req.ParentThreadID,
+			parentTaskID:   req.ParentTaskID,
+			depth:          req.Depth,
+			subThreadID:    threadID,
+		}
+		globalTasks.tasks[threadID] = rec
+	}
+	globalTasks.mu.Unlock()
+
+	rec.mu.Lock()
+	status := rec.status
+	done := rec.done
+	rec.mu.Unlock()
+	if status == "in_progress" && done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	if _, err := taskAgent.GetThreadInfo(threadID); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		name := strings.TrimSpace(req.Name)
+		if name == "" {
+			name = taskThreadName(metadata)
+		}
+		if _, err := taskAgent.CreateThread(ctx, agent.CreateThreadRequest{
+			ID:          threadID,
+			Name:        name,
+			CWD:         req.CWD,
+			LastMessage: metadata.Prompt,
+			Metadata:    metadata.RawMessage(),
+		}); err != nil {
+			globalTasks.mu.Lock()
+			if globalTasks.tasks[threadID] == rec {
+				delete(globalTasks.tasks, threadID)
+			}
+			globalTasks.mu.Unlock()
+			return nil, err
+		}
+		return rec, nil
+	}
+
+	name := strings.TrimSpace(req.Name)
+	update := agent.UpdateThreadRequest{
+		LastMessage:       &metadata.Prompt,
+		ClearErrorMessage: true,
+		Metadata:          metadata.RawMessage(),
+	}
+	if name != "" {
+		update.Name = &name
+	}
+	if cwd := strings.TrimSpace(req.CWD); cwd != "" {
+		update.CWD = &cwd
+	}
+	if _, err := taskAgent.UpdateThread(ctx, threadID, update); err != nil {
+		return nil, err
+	}
+	return rec, nil
 }
 
 func (e *Executor) executeTask(ctx context.Context, toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
@@ -475,7 +659,7 @@ func bootstrapTaskThread(toolCtx *thread.ToolContext, threadID string, metadata 
 	return info, nil
 }
 
-func persistTaskThreadError(subAgent agent.Agent, threadID, message string) {
+func persistTaskThreadError(subAgent PromptTaskAgent, threadID, message string) {
 	trimmed := strings.TrimSpace(message)
 	_, _ = subAgent.UpdateThread(context.Background(), threadID, agent.UpdateThreadRequest{ErrorMessage: &trimmed})
 }
@@ -526,7 +710,7 @@ func mustMarshalJSON(v any) json.RawMessage {
 	return data
 }
 
-func startSubAgentRun(rec *taskRecord, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) {
+func startSubAgentRun(rec *taskRecord, subAgent PromptTaskAgent, subThreadID string, req agent.PromptRequest) {
 	// Create the context before starting the goroutine so rec.cancel is always
 	// set by the time taskHandle.Wait can observe it — no race on cancellation.
 	subCtx, cancel := context.WithCancel(context.Background())
@@ -547,7 +731,7 @@ func startSubAgentRun(rec *taskRecord, subAgent agent.Agent, subThreadID string,
 // runSubAgentGoroutine runs a full agent turn loop for a sub-agent task.
 // ctx is created by the caller before the goroutine starts so rec.cancel is
 // always populated by the time taskHandle.Wait can fire.
-func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) {
+func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent PromptTaskAgent, subThreadID string, req agent.PromptRequest) {
 	defer close(rec.done)
 	defer rec.cancel()
 
@@ -625,7 +809,7 @@ func runSubAgentGoroutine(ctx context.Context, rec *taskRecord, subAgent agent.A
 	persistTaskThreadError(subAgent, subThreadID, "")
 }
 
-func drainSubAgentRun(ctx context.Context, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) error {
+func drainSubAgentRun(ctx context.Context, subAgent PromptTaskAgent, subThreadID string, req agent.PromptRequest) error {
 	if req.UserParts == nil {
 		return drainSubAgentResume(ctx, subAgent, subThreadID, req)
 	}
@@ -644,7 +828,7 @@ func drainSubAgentRun(ctx context.Context, subAgent agent.Agent, subThreadID str
 	return nil
 }
 
-func drainSubAgentResume(ctx context.Context, subAgent agent.Agent, subThreadID string, req agent.PromptRequest) error {
+func drainSubAgentResume(ctx context.Context, subAgent PromptTaskAgent, subThreadID string, req agent.PromptRequest) error {
 	resumeReq := req
 	resumeReq.UserParts = nil
 	result, err := subAgent.Resume(ctx, subThreadID, resumeReq)

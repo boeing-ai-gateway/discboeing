@@ -235,6 +235,7 @@ func (r *agentRuntime) initHooks() {
 	r.hookManager.SetChunkEmitter(func(chunk message.MessageChunk) {
 		r.conversations.EmitEphemeralChunk(chunk)
 	})
+	r.hookManager.SetAIHookAgent(r.defaultAgent)
 	r.hookManager.SetRepromptRunner(r.conversations, r.promptQueue)
 }
 

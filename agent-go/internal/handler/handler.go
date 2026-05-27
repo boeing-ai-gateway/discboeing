@@ -108,6 +108,9 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	if hookManager != nil && conversations != nil {
 		hookManager.SetRepromptRunner(conversations, h.promptQueue)
 	}
+	if hookManager != nil && defaultAgent != nil {
+		hookManager.SetAIHookAgent(defaultAgent)
+	}
 	if conversations != nil {
 		conversations.AddCompletionListener(h)
 	}

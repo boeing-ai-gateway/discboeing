@@ -1,14 +1,18 @@
 package hooks
 
 import (
+	"context"
 	"encoding/json"
+	"iter"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/obot-platform/discobot/agent-go/agent"
 	"github.com/obot-platform/discobot/agent-go/message"
 )
 
@@ -243,6 +247,111 @@ echo "$DISCOBOT_SESSION_ID:$SESSION_HOOK_RERUN_ENV" > session-hook-ran
 	}
 	if got.Type != string(HookTypeSession) {
 		t.Fatalf("hook type = %q, want %q", got.Type, HookTypeSession)
+	}
+}
+
+func TestRerunHook_RunsAIHookInStableThread(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "review.md")
+	hookSource := `---
+name: Review
+type: file
+engine: ai
+pattern: "*.go"
+subagent: reviewer
+---
+Only approve idiomatic Go changes.
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o644); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	runner := &testAIHookAgent{response: "SUCCESS looks good"}
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	first, err := mgr.RerunHook("review-md")
+	if err != nil {
+		t.Fatalf("RerunHook() failed: %v", err)
+	}
+	if first == nil {
+		t.Fatal("expected rerun result")
+	}
+	if !first.Result.Success {
+		t.Fatalf("expected AI hook to pass, output: %s", first.Result.Output)
+	}
+	if first.Result.Output != "SUCCESS looks good" {
+		t.Fatalf("output = %q, want SUCCESS output", first.Result.Output)
+	}
+
+	runner.response = "FEEDBACK: add a test"
+	second, err := mgr.RerunHook("review-md")
+	if err != nil {
+		t.Fatalf("second RerunHook() failed: %v", err)
+	}
+	if second.Result.Success {
+		t.Fatal("expected AI feedback to fail the hook")
+	}
+	if second.Result.Output != "FEEDBACK: add a test" {
+		t.Fatalf("output = %q, want feedback", second.Result.Output)
+	}
+	if len(runner.promptThreadIDs) != 2 {
+		t.Fatalf("prompt calls = %d, want 2", len(runner.promptThreadIDs))
+	}
+	if len(runner.metadataTypes) != 2 {
+		t.Fatalf("metadata type updates = %d, want 2", len(runner.metadataTypes))
+	}
+	for _, got := range runner.metadataTypes {
+		if got != "hook" {
+			t.Fatalf("metadata type = %q, want hook", got)
+		}
+	}
+	if runner.promptThreadIDs[0] != runner.promptThreadIDs[1] {
+		t.Fatalf("AI hook used different threads: %q then %q", runner.promptThreadIDs[0], runner.promptThreadIDs[1])
+	}
+	if runner.createdThreadID != runner.promptThreadIDs[0] {
+		t.Fatalf("created thread = %q, prompt thread = %q", runner.createdThreadID, runner.promptThreadIDs[0])
+	}
+	if !strings.Contains(runner.prompts[0], "Only approve idiomatic Go changes.") {
+		t.Fatalf("expected prompt to include hook body, got:\n%s", runner.prompts[0])
+	}
+	contextDir := filepath.Dir(aiHookContextFilePath(runner.createdThreadID, "review-md", time.Now().UTC()))
+	contextFiles, err := filepath.Glob(filepath.Join(contextDir, "context-*.md"))
+	if err != nil {
+		t.Fatalf("Glob(context) failed: %v", err)
+	}
+	if len(contextFiles) != 2 {
+		t.Fatalf("context files = %d, want 2", len(contextFiles))
+	}
+	contextPath := contextFiles[0]
+	if !strings.Contains(runner.prompts[0], contextPath) && !strings.Contains(runner.prompts[1], contextPath) {
+		t.Fatalf("expected prompt to reference context file %q, got:\n%s\n%s", contextPath, runner.prompts[0], runner.prompts[1])
+	}
+	contextData, err := os.ReadFile(contextPath)
+	if err != nil {
+		t.Fatalf("ReadFile(context) failed: %v", err)
+	}
+	if !strings.Contains(string(contextData), "Only approve idiomatic Go changes.") {
+		t.Fatalf("expected context file to include hook body, got:\n%s", string(contextData))
+	}
+	if len(runner.subagents) != 2 {
+		t.Fatalf("subagent calls = %d, want 2", len(runner.subagents))
+	}
+	for _, got := range runner.subagents {
+		if got != "reviewer" {
+			t.Fatalf("subagent = %q, want reviewer", got)
+		}
 	}
 }
 
@@ -586,4 +695,89 @@ func TestGetHookOutput_ReturnsTailWhenOverLimit(t *testing.T) {
 	if !output.TooLarge {
 		t.Fatal("expected output to be marked too large")
 	}
+}
+
+type testAIHookAgent struct {
+	response        string
+	createdThreadID string
+	threads         map[string]bool
+	finalResponses  map[string]string
+	promptThreadIDs []string
+	prompts         []string
+	subagents       []string
+	metadataTypes   []string
+}
+
+func (a *testAIHookAgent) CreateThread(_ context.Context, req agent.CreateThreadRequest) (agent.ThreadInfo, error) {
+	if a.threads == nil {
+		a.threads = map[string]bool{}
+	}
+	a.threads[req.ID] = true
+	a.createdThreadID = req.ID
+	a.recordMetadataType(req.Metadata)
+	return agent.ThreadInfo{ID: req.ID, Name: req.Name, CWD: req.CWD, Metadata: req.Metadata}, nil
+}
+
+func (a *testAIHookAgent) UpdateThread(_ context.Context, threadID string, req agent.UpdateThreadRequest) (agent.ThreadInfo, error) {
+	if a.threads == nil || !a.threads[threadID] {
+		return agent.ThreadInfo{}, os.ErrNotExist
+	}
+	a.recordMetadataType(req.Metadata)
+	return agent.ThreadInfo{ID: threadID, Metadata: req.Metadata}, nil
+}
+
+func (a *testAIHookAgent) recordMetadataType(metadata json.RawMessage) {
+	var values map[string]any
+	if err := json.Unmarshal(metadata, &values); err == nil {
+		if value, ok := values["type"].(string); ok {
+			a.metadataTypes = append(a.metadataTypes, value)
+		}
+	}
+}
+
+func (a *testAIHookAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, error) {
+	if a.threads != nil && a.threads[threadID] {
+		return agent.ThreadInfo{ID: threadID}, nil
+	}
+	return agent.ThreadInfo{}, os.ErrNotExist
+}
+
+func (a *testAIHookAgent) Prompt(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+	a.promptThreadIDs = append(a.promptThreadIDs, threadID)
+	a.subagents = append(a.subagents, req.SubagentType)
+	if len(req.UserParts) == 1 {
+		if part, ok := req.UserParts[0].(message.UITextPart); ok {
+			a.prompts = append(a.prompts, part.Text)
+		}
+	}
+	if a.finalResponses == nil {
+		a.finalResponses = map[string]string{}
+	}
+	a.finalResponses[threadID] = a.response
+	return func(yield func(message.MessageChunk, error) bool) {
+		yield(message.TextDeltaChunk{Delta: a.response}, nil)
+	}
+}
+
+func (a *testAIHookAgent) Resume(_ context.Context, _ string, _ agent.PromptRequest) (agent.ResumeResult, error) {
+	return agent.ResumeResult{
+		Stream: func(yield func(message.MessageChunk, error) bool) {
+			yield(message.TextDeltaChunk{Delta: a.response}, nil)
+		},
+	}, nil
+}
+
+func (a *testAIHookAgent) HasInterruptedTurn(string) (bool, error) {
+	return false, nil
+}
+
+func (a *testAIHookAgent) PendingQuestion(string) (*agent.PendingQuestion, error) {
+	return nil, nil
+}
+
+func (a *testAIHookAgent) FinalResponse(threadID string) (string, error) {
+	if a.finalResponses == nil {
+		return "", nil
+	}
+	return a.finalResponses[threadID], nil
 }
