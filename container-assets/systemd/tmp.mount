@@ -1,0 +1,16 @@
+[Unit]
+Description=Persistent /tmp bind mount
+DefaultDependencies=no
+Requires=discobot-persistent-tmp-prepare.service
+After=discobot-persistent-tmp-prepare.service
+Before=local-fs.target systemd-tmpfiles-setup.service discobot-sandbox-init.service
+Conflicts=umount.target
+
+[Mount]
+What=/.data/tmp
+Where=/tmp
+Type=none
+Options=bind,rw
+
+[Install]
+WantedBy=local-fs.target

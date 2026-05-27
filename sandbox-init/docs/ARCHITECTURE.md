@@ -331,6 +331,7 @@ Responsible for:
 │  │   └── {sessionID}/          (upper + work dirs)         │
 │  ├── proxy/                     (session-scoped)            │
 │  │   └── config.yaml            (proxy configuration)       │
+│  ├── tmp/                       (backing storage for /tmp)  │
 │  └── cache/                     (project-scoped volume)     │
 │      └── proxy/                 (proxy cache & certs)       │
 │          ├── certs/             (CA certificates)           │
@@ -345,9 +346,16 @@ Responsible for:
 │  └── workspace/                 (COW of /.data/discobot/ws)  │
 │                                                             │
 │  /nix                            (writable Nix store root)   │
+│  /tmp                            (bind mount from /.data/tmp)│
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+The `/tmp` bind mount is prepared by
+`discobot-persistent-tmp-prepare.service` and mounted by systemd's
+`tmp.mount` before `local-fs.target`, `systemd-tmpfiles-setup.service`, and
+`discobot-sandbox-init.service`. This keeps session-persistent temporary data
+available before application services begin startup.
 
 ## Security Considerations
 

@@ -7,6 +7,7 @@ The `discobot-sandbox-init` binary is a minimal PID 1 init process for container
 - **Home Directory Setup**: Copies `/home/discobot` to persistent storage on first run, syncs in new image-provided files on later starts without overwriting existing files, and removes migrated legacy bundled commands
 - **Workspace Cloning**: Clones git repositories to persistent storage with atomic staging
 - **AgentFS Integration**: Initializes and mounts copy-on-write filesystem directly over `/home/discobot`
+- **Systemd Integration**: Runs after early systemd mounts, including the persistent `/tmp` bind mount from `/.data/tmp`
 - **PID 1 Process Reaping**: Collects zombie processes to prevent resource leaks
 - **User Switching**: Drops privileges from root to the `discobot` user
 - **Signal Forwarding**: Forwards SIGTERM, SIGINT, SIGQUIT, and SIGHUP to child processes
@@ -52,6 +53,7 @@ docker run -e DISCOBOT_SESSION_ID=abc123 discobot
 │   ├── .bashrc                  # User shell config
 │   ├── .profile                 # User profile
 │   └── workspace/               # Cloned repository
+├── tmp/                          # Backing storage for /tmp
 └── .agentfs/
     └── {sessionID}.db          # AgentFS SQLite database
 ```
@@ -63,9 +65,12 @@ After setup, the filesystem is configured as:
 | System Path | Source | Description |
 |-------------|--------|-------------|
 | `/home/discobot` | AgentFS mount | COW overlay of `/.data/discobot` |
+| `/tmp` | Bind mount from `/.data/tmp` | Session-persistent temporary data |
 | `/nix` | Image directory | Writable Nix store root owned by `discobot` |
 
 The AgentFS mount provides copy-on-write semantics - reads come from the base layer (`/.data/discobot`), writes are captured in the SQLite database.
+The `/tmp` mount is managed by systemd's `tmp.mount` unit before sandbox init
+and other application services start.
 
 ## Building
 

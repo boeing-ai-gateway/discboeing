@@ -407,6 +407,7 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     serial-getty@.service \
     && systemctl disable docker.service containerd.service \
     && systemctl enable \
+    tmp.mount \
     discobot-sandbox-init.service \
     discobot-proxy.service \
     docker.socket \
@@ -429,6 +430,7 @@ RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
     systemd-logind.service \
     && systemctl disable docker.service containerd.service \
     && systemctl enable \
+    tmp.mount \
     discobot-sandbox-init.service \
     discobot-proxy.service \
     docker.socket \

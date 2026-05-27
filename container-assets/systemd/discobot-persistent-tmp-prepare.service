@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare persistent /tmp backing directory
+DefaultDependencies=no
+Before=tmp.mount local-fs.target systemd-tmpfiles-setup.service discobot-sandbox-init.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p -m 1777 /.data/tmp /tmp
+ExecStart=/bin/chmod 1777 /.data/tmp /tmp
+
+[Install]
+WantedBy=local-fs.target

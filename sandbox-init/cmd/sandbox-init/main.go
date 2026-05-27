@@ -141,35 +141,35 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] filesystem setup completed (overlayfs)\n", time.Since(stepStart).Seconds())
 
-	// Step 5: Mount cache directories
+	// Step 4: Mount cache directories
 	stepStart = time.Now()
 	if err := mountCacheDirectories(); err != nil {
 		fmt.Printf("discobot-sandbox-init: Cache mount failed: %v\n", err)
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] cache directories mounted\n", time.Since(stepStart).Seconds())
 
-	// Step 6: Setup proxy configuration
+	// Step 5: Setup proxy configuration
 	stepStart = time.Now()
 	if err := setupProxyConfig(userInfo); err != nil {
 		fmt.Printf("discobot-sandbox-init: Proxy config setup failed: %v\n", err)
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] proxy config setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 7: Generate CA certificate
+	// Step 6: Generate CA certificate
 	stepStart = time.Now()
 	if err := setupProxyCertificate(userInfo); err != nil {
 		fmt.Printf("discobot-sandbox-init: Proxy certificate setup failed: %v\n", err)
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 8: Write Docker daemon configuration
+	// Step 7: Write Docker daemon configuration
 	stepStart = time.Now()
 	if err := writeDockerDaemonConfig(); err != nil {
 		fmt.Printf("discobot-sandbox-init: Docker daemon config failed: %v\n", err)
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] Docker daemon config written\n", time.Since(stepStart).Seconds())
 
-	// Step 8.5: Remove stale buildx default-builder config so that no session
+	// Step 7.5: Remove stale buildx default-builder config so that no session
 	// inherits a pointer to a remote BuildKit instance from a previous run.
 	buildxDir := filepath.Join(userInfo.homeDir, ".docker", "buildx")
 	for _, stale := range []string{
@@ -181,7 +181,7 @@ func runSetup() error {
 		}
 	}
 
-	// Step 9: Write environment files for systemd services
+	// Step 8: Write environment files for systemd services
 	stepStart = time.Now()
 	if err := writeProxyEnvironmentFile(); err != nil {
 		fmt.Printf("discobot-sandbox-init: warning: failed to write proxy env file: %v\n", err)
