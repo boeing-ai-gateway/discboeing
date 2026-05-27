@@ -1,0 +1,20 @@
+package ui
+
+templ MenuPanel(menuID string, parentPath string, path string, items []MenuItem, submenu bool) {
+	<div
+		id={ menuPanelID(menuID, path) }
+		class={ templ.KV("menu__panel", true), templ.KV("menu__submenu", submenu) }
+		role="menu"
+		hidden
+		data-menu-panel?={ !submenu }
+		data-menu-submenu?={ submenu }
+		data-menu-parent={ menuPanelParentID(menuID, parentPath, submenu) }
+	>
+		for index, item := range items {
+			if item.SeparatorBefore {
+				<div class="menu__separator" role="separator"></div>
+			}
+			@MenuItemView(menuID, path, menuItemPath(path, index), item)
+		}
+	</div>
+}

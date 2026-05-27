@@ -238,9 +238,7 @@ func buildWebSocketIncrementalBody(baseBody map[string]any, msgs []message.Messa
 	incrementalBody := cloneWebSocketBody(baseBody)
 	incrementalBody["input"] = incrementalInput
 	delete(incrementalBody, "tools")
-	if incrementalInstructions == "" {
-		delete(incrementalBody, "instructions")
-	} else {
+	if incrementalInstructions != "" {
 		incrementalBody["instructions"] = incrementalInstructions
 	}
 

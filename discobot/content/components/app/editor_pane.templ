@@ -1,0 +1,118 @@
+package app
+
+import "github.com/obot-platform/discobot/discobot/internal/state"
+
+templ EditorPane(session state.Session, view state.View) {
+	<style>
+		@layer components {
+			.editor-pane {
+				display: flex;
+				min-width: 0;
+				flex: 1 1 0%;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			.editor-pane__tabs {
+				display: flex;
+				min-height: 34px;
+				align-items: end;
+				overflow-x: auto;
+				border-bottom: 1px solid var(--border-subtle);
+				background: var(--surface-canvas-muted);
+			}
+
+			.editor-pane__tab {
+				display: flex;
+				max-width: 220px;
+				min-width: 0;
+				align-items: center;
+				gap: 6px;
+				height: 32px;
+				border-right: 1px solid var(--border-subtle);
+				background: transparent;
+				padding: 0 11px;
+				color: var(--muted-foreground);
+				font-size: 12px;
+			}
+
+			.editor-pane__tab--active {
+				background: var(--surface-card);
+				color: var(--foreground);
+			}
+
+			.editor-pane__tab-name {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.editor-pane__body {
+				display: grid;
+				min-height: 0;
+				flex: 1 1 0%;
+				place-items: center;
+				background: var(--surface-card);
+				padding: 24px;
+			}
+
+			.editor-pane__placeholder {
+				width: min(520px, 100%);
+				border: 1px dashed var(--border);
+				border-radius: 10px;
+				background: color-mix(in srgb, var(--surface-canvas-muted) 72%, transparent);
+				padding: 28px;
+				text-align: center;
+			}
+
+			.editor-pane__eyebrow {
+				color: var(--muted-foreground);
+				font-size: 11px;
+				font-weight: 600;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+			}
+
+			.editor-pane__title {
+				margin-top: 10px;
+				color: var(--foreground);
+				font-size: 18px;
+				font-weight: 600;
+			}
+
+			.editor-pane__path {
+				margin-top: 8px;
+				overflow-wrap: anywhere;
+				color: var(--muted-foreground);
+				font-family: var(--font-mono);
+				font-size: 12px;
+			}
+		}
+	</style>
+	<section class="ide-panel editor-pane" aria-label="Editor">
+		<div class="editor-pane__tabs" role="tablist" aria-label="Open files">
+			for _, file := range editorOpenFiles(session, view) {
+				<div class={ editorTabClass(file.ID, view.ActiveFileID) } role="tab" aria-selected={ boolString(file.ID == view.ActiveFileID) }>
+					@IconText("icon-xs")
+					<span class="editor-pane__tab-name">{ file.Name }</span>
+				</div>
+			}
+		</div>
+		<div class="editor-pane__body">
+			{{ activeFile, ok := editorActiveFile(session, view) }}
+			if ok {
+				<div class="editor-pane__placeholder">
+					<div class="editor-pane__eyebrow">Editor placeholder</div>
+					<div class="editor-pane__title">{ activeFile.Name }</div>
+					<div class="editor-pane__path">{ editorFilePath(session.Files, activeFile) }</div>
+				</div>
+			} else {
+				<div class="editor-pane__placeholder">
+					<div class="editor-pane__eyebrow">Editor placeholder</div>
+					<div class="editor-pane__title">No file open</div>
+					<div class="editor-pane__path">Select a file to open it here.</div>
+				</div>
+			}
+		</div>
+	</section>
+}

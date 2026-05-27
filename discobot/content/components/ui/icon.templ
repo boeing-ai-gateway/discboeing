@@ -1,0 +1,7 @@
+package ui
+
+templ Codicon(symbol string, class string) {
+	<svg class={ "ui-icon " + class } aria-hidden="true" focusable="false">
+		<use href={ "/vendor/codicons.svg#codicon-" + symbol }></use>
+	</svg>
+}

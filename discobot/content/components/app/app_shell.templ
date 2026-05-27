@@ -1,0 +1,67 @@
+package app
+
+import (
+	"strconv"
+
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ AppShell(shell state.Shell) {
+	<main id="app-shell" class="app-shell" data-ui-generation={ strconv.FormatUint(shell.Generation, 10) }>
+		<style>
+			@layer components {
+				.app-shell {
+					height: 100dvh;
+					overflow: hidden;
+					background: var(--surface-canvas);
+					color: var(--foreground);
+					font-size: 13px;
+					-webkit-font-smoothing: antialiased;
+					-moz-osx-font-smoothing: grayscale;
+				}
+
+				.app-shell__window {
+					display: flex;
+					flex-direction: column;
+					height: 100%;
+					min-height: 720px;
+					overflow: hidden;
+					background: var(--surface-canvas);
+				}
+
+				.app-shell__content {
+					display: flex;
+					min-height: 0;
+					flex: 1 1 0%;
+				}
+
+				.app-shell__main {
+					display: flex;
+					min-width: 0;
+					flex: 1 1 0%;
+					flex-direction: column;
+					background: var(--surface-canvas);
+				}
+
+				.app-shell__body {
+					display: flex;
+					min-height: 0;
+					flex: 1 1 0%;
+					gap: var(--workspace-gap);
+					padding: 0 10px 10px 10px;
+				}
+			}
+		</style>
+		<div class="app-shell__window">
+			@WindowChrome(shell.View)
+			<div class="app-shell__content">
+				@SessionsSidebar(shell.Data, shell.View)
+				<section class="app-shell__main">
+					<div class="app-shell__body">
+						@SessionWorkspace(shell.Data, shell.View)
+					</div>
+				</section>
+			</div>
+		</div>
+	</main>
+}

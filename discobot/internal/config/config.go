@@ -1,0 +1,29 @@
+package config
+
+import "os"
+
+// Config contains runtime settings for the Discobot server.
+type Config struct {
+	Port      string
+	StaticDir string
+	DevReload bool
+}
+
+// FromEnv reads Discobot configuration from the process environment.
+func FromEnv() Config {
+	port := os.Getenv("DISCOBOT_PORT")
+	if port == "" {
+		port = "3300"
+	}
+
+	staticDir := os.Getenv("DISCOBOT_STATIC_DIR")
+	if staticDir == "" {
+		staticDir = "static"
+	}
+
+	return Config{
+		Port:      port,
+		StaticDir: staticDir,
+		DevReload: os.Getenv("DISCOBOT_DEV_RELOAD") == "1",
+	}
+}

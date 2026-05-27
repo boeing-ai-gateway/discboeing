@@ -1,0 +1,179 @@
+@layer reset, tokens, base, utilities, components;
+
+@layer base {
+	html,
+	body {
+		height: 100%;
+	}
+
+	body {
+		margin: 0;
+		background: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	button,
+	kbd {
+		font: inherit;
+	}
+
+	:focus-visible {
+		outline: 1px solid color-mix(in srgb, var(--ring) 55%, transparent);
+		outline-offset: 1px;
+	}
+}
+
+@layer utilities {
+	.absolute { position: absolute; }
+	.relative { position: relative; }
+	.static { position: static; }
+	.block { display: block; }
+	.flex { display: flex; }
+	.grid { display: grid; }
+	.hidden { display: none; }
+
+	.items-center { align-items: center; }
+	.justify-between { justify-content: space-between; }
+	.place-items-center { place-items: center; }
+	.flex-col { flex-direction: column; }
+	.flex-1 { flex: 1 1 0%; }
+	.shrink-0 { flex-shrink: 0; }
+	.min-w-0 { min-width: 0; }
+	.min-h-0 { min-height: 0; }
+	.overflow-hidden { overflow: hidden; }
+
+	.h-full { height: 100%; }
+	.w-full { width: 100%; }
+	.h-dvh { height: 100dvh; }
+	.mt-auto { margin-top: auto; }
+	.ml-auto { margin-left: auto; }
+	.w-px { width: 1px; }
+	.border { border-width: 1px; }
+	.border-l { border-left-width: 1px; }
+	.border-t { border-top-width: 1px; }
+	.border-b { border-bottom-width: 1px; }
+	.border-transparent { border-color: transparent; }
+	.border-current { border-color: currentColor; }
+	.border-border { border-color: var(--border); }
+	.bg-card { background: var(--card); }
+	.text-card-foreground { color: var(--card-foreground); }
+	.font-mono { font-family: var(--font-mono); }
+	.font-normal { font-weight: 400; }
+	.font-medium { font-weight: 500; }
+	.font-semibold { font-weight: 600; }
+	.leading-none { line-height: 1; }
+	.uppercase { text-transform: uppercase; }
+	.antialiased { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+	.ui-icon { display: block; flex-shrink: 0; fill: currentColor; color: currentColor; }
+
+	.p-6 { padding: 1.5rem; }
+	.rounded-full { border-radius: 9999px; }
+	.rounded-xl { border-radius: 0.75rem; }
+
+	.shadow-sm { box-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
+}
+
+@layer components {
+	.divider-vertical-subtle {
+		width: 1px;
+		height: 16px;
+		background: var(--border);
+	}
+
+	.panel-toolbar,
+	.panel-tabs,
+	.toolbar-actions,
+	.tree-row {
+		display: flex;
+		align-items: center;
+	}
+
+	.panel-toolbar {
+		justify-content: space-between;
+	}
+
+	.ide-panel {
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--border);
+		border-radius: var(--workspace-panel-radius);
+		background: var(--surface-card);
+	}
+
+	.files-panel {
+		width: var(--workspace-files-width);
+		flex-shrink: 0;
+	}
+
+	.panel-toolbar {
+		height: var(--workspace-toolbar-height);
+		flex-shrink: 0;
+		padding-inline: 12px;
+		color: var(--muted-foreground);
+	}
+
+	.panel-tabs {
+		gap: 4px;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.tab {
+		padding-inline: 2px;
+		color: var(--muted-foreground);
+	}
+
+	.tab-active {
+		border-radius: 4px;
+		background: var(--surface-control-active);
+		padding: 3px 7px;
+		color: var(--accent-foreground);
+	}
+
+	.toolbar-actions {
+		gap: 12px;
+	}
+
+	.panel-content {
+		min-height: 0;
+		flex: 1 1 0%;
+		overflow: hidden;
+		padding: 1px 13px 8px;
+		font-size: 13px;
+		line-height: var(--workspace-tree-row-height);
+	}
+
+	.tree-row {
+		gap: 5px;
+		color: var(--foreground);
+	}
+
+	.tree-root {
+		gap: 3px;
+		color: var(--foreground);
+	}
+
+	.tree-indent {
+		padding-left: 13px;
+	}
+
+	.tree-list {
+		margin-top: 2px;
+	}
+
+	.icon-2xs { width: 11px; height: 11px; }
+	.icon-12 { width: 12px; height: 12px; }
+	.icon-xs { width: 13px; height: 13px; }
+	.icon-14 { width: 14px; height: 14px; }
+	.icon-sm { width: 15px; height: 15px; }
+	.icon-md { width: 16px; height: 16px; }
+	.icon-lg { width: 17px; height: 17px; }
+	.icon-subtle { color: color-mix(in oklab, var(--primary) 68%, var(--muted-foreground)); }
+	.icon-folder { color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
+	.icon-file { color: var(--primary); }
+	.icon-action { color: var(--muted-foreground); }
+	.icon-send-disabled { color: color-mix(in oklab, var(--muted-foreground) 62%, var(--background)); }
+}

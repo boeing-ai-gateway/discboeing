@@ -1,0 +1,163 @@
+package app
+
+templ ComposerWorkspace(sidePane bool) {
+	<style>
+		@layer components {
+			.composer-workspace,
+			.composer-workspace__title,
+			.composer-workspace__actions,
+			.composer-workspace__action-group,
+			.composer-workspace__status,
+			.composer-workspace__status-group {
+				display: flex;
+				align-items: center;
+			}
+
+			.composer-workspace {
+				position: relative;
+				min-width: 0;
+				flex: 1 1 0%;
+				flex-direction: column;
+			}
+
+			.composer-workspace--side-pane {
+				flex: 0 0 clamp(320px, 33.333%, 460px);
+				max-width: 460px;
+			}
+
+			.composer-workspace--side-pane .composer-workspace__center {
+				max-width: 100%;
+				padding-inline: 16px;
+			}
+
+			.composer-workspace__center {
+				position: absolute;
+				top: 44.2%;
+				left: 50%;
+				width: 100%;
+				max-width: 754px;
+				padding-inline: 20px;
+				transform: translate(-50%, -50%);
+			}
+
+			.composer-workspace__title {
+				margin-bottom: 16px;
+				gap: 5px;
+				color: var(--text-subtle);
+				font-size: 18px;
+				font-weight: 400;
+				letter-spacing: -0.01em;
+			}
+
+			.composer-workspace__title-strong {
+				color: var(--foreground);
+			}
+
+			.composer-workspace__title-separator {
+				margin-inline: 3px;
+			}
+
+			.composer-workspace__card {
+				border: 1px solid var(--focus-accent);
+				border-radius: var(--workspace-panel-radius);
+				background: var(--surface-card);
+				box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-accent) 18%, transparent);
+			}
+
+			.composer-workspace__prompt {
+				height: 58px;
+				padding: 12px 10px 0;
+				color: var(--text-muted);
+				font-size: 13px;
+				font-weight: 600;
+			}
+
+			.composer-workspace__actions {
+				height: 27px;
+				justify-content: space-between;
+				padding: 0 10px 9px;
+				color: var(--muted-foreground);
+				font-size: 11px;
+			}
+
+			.composer-workspace__action-group {
+				gap: 14px;
+			}
+
+			.composer-workspace__action {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+
+			.composer-workspace__status {
+				justify-content: space-between;
+				margin-top: 10px;
+				padding-inline: 10px;
+				color: var(--muted-foreground);
+				font-size: 11px;
+			}
+
+			.composer-workspace__status-group {
+				gap: 17px;
+			}
+
+			.composer-workspace__status-item {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+			}
+
+			.composer-workspace__status-muted {
+				color: color-mix(in oklab, var(--muted-foreground) 70%, var(--background));
+			}
+		}
+	</style>
+	<section class={ composerWorkspaceClass(sidePane) }>
+		<div class="composer-workspace__center">
+			<div class="composer-workspace__title">
+				<span>New session in</span>
+				@IconFolder("icon-lg")
+				<span class="composer-workspace__title-strong">discobot</span>
+				@IconChevronDown("icon-14")
+				<span class="composer-workspace__title-separator">with</span>
+				@IconBot("icon-lg")
+				<span class="composer-workspace__title-strong">Copilot CLI</span>
+				@IconChevronDown("icon-14")
+			</div>
+			<div class="composer-workspace__card">
+				<div class="composer-workspace__prompt">What feature are you dreaming up?</div>
+				<div class="composer-workspace__actions">
+					<div class="composer-workspace__action-group">
+						@IconPlus("icon-sm icon-action")
+						<div class="composer-workspace__action">
+							@IconPaperclip("icon-xs")
+							<span>Agent</span>
+						</div>
+						<span>Claude Sonnet 4.6 · Medium</span>
+					</div>
+					@IconArrowUp("icon-sm icon-send-disabled")
+				</div>
+			</div>
+			<div class="composer-workspace__status">
+				<div class="composer-workspace__action">
+					@IconShield("icon-xs")
+					<span>Default Approvals</span>
+					@IconChevronDown("icon-2xs")
+				</div>
+				<div class="composer-workspace__status-group">
+					<div class="composer-workspace__status-item">
+						@IconFolder("icon-xs")
+						<span>Folder</span>
+						@IconChevronDown("icon-2xs")
+					</div>
+					<div class="composer-workspace__status-item composer-workspace__status-muted">
+						@IconBranch("icon-xs")
+						<span>main</span>
+						@IconChevronDown("icon-2xs")
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+}

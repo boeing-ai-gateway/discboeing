@@ -1,0 +1,17 @@
+package app
+
+import "github.com/obot-platform/discobot/discobot/internal/state"
+
+templ SessionsSidebarHeader(view state.View) {
+	<div class="sessions-sidebar__header">
+		<h1 class="sessions-sidebar__title">Sessions</h1>
+		<div class="sessions-sidebar__actions">
+			<button class="sessions-sidebar__new-button">
+				<span>New</span>
+				<kbd class="sessions-sidebar__shortcut">Ctrl+N</kbd>
+			</button>
+			@SessionsSidebarFilterMenu(view)
+			@IconSearch("icon-md")
+		</div>
+	</div>
+}

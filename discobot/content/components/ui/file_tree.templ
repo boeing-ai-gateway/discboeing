@@ -1,0 +1,494 @@
+package ui
+
+templ FileTree(tree FileTreeData) {
+	<style>
+		@layer components {
+			.file-tree {
+				--file-tree-row-height: 21px;
+				--file-tree-indent: 12px;
+				min-width: 0;
+				color: var(--foreground);
+				font-size: 12px;
+				line-height: 1.35;
+				user-select: none;
+			}
+
+			.file-tree--default {
+				--file-tree-row-height: 25px;
+				--file-tree-indent: 14px;
+			}
+
+			.file-tree--relaxed {
+				--file-tree-row-height: 29px;
+				--file-tree-indent: 16px;
+				font-size: 13px;
+			}
+
+			.file-tree__header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 6px;
+				margin-bottom: 4px;
+			}
+
+			.file-tree__label {
+				min-width: 0;
+				padding-inline: 2px;
+				color: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));
+				font-size: 11px;
+				font-weight: 600;
+				letter-spacing: 0.025em;
+				text-transform: uppercase;
+			}
+
+			.file-tree__controls {
+				display: flex;
+				align-items: center;
+				gap: 1px;
+			}
+
+			.file-tree__control {
+				display: grid;
+				width: 20px;
+				height: 20px;
+				place-items: center;
+				border: 0;
+				border-radius: 4px;
+				background: transparent;
+				padding: 0;
+				color: var(--muted-foreground);
+			}
+
+			.file-tree__control:hover,
+			.file-tree__control:focus-visible {
+				background: var(--surface-control-active);
+				color: var(--foreground);
+			}
+
+			.file-tree__search-wrap {
+				position: relative;
+				margin-bottom: 5px;
+			}
+
+			.file-tree__search-icon {
+				position: absolute;
+				left: 6px;
+				top: 50%;
+				translate: 0 -50%;
+				color: var(--muted-foreground);
+				pointer-events: none;
+			}
+
+			.file-tree__search {
+				width: 100%;
+				height: 24px;
+				border: 1px solid var(--border-subtle);
+				border-radius: 5px;
+				background: var(--surface-control);
+				padding: 0 7px 0 23px;
+				color: var(--foreground);
+				font-size: 12px;
+			}
+
+			.file-tree__search:focus-visible {
+				outline: 1px solid var(--ring);
+				outline-offset: 1px;
+			}
+
+			.file-tree__node {
+				display: grid;
+				grid-template-columns: 14px minmax(0, 1fr) auto 20px;
+				column-gap: 2px;
+				align-items: center;
+				min-height: var(--file-tree-row-height);
+				border-radius: 3px;
+				color: var(--foreground);
+			}
+
+			.file-tree__node:hover,
+			.file-tree__node:focus-visible,
+			.file-tree__node--drag-over {
+				background: var(--tree-hover);
+				outline: none;
+			}
+
+			.file-tree__node--drag-over {
+				box-shadow: inset 0 0 0 1px var(--ring);
+			}
+
+			.file-tree__root-drop {
+				min-height: 8px;
+				border-radius: 3px;
+			}
+
+			.file-tree__root-drop--active {
+				background: color-mix(in srgb, var(--ring) 18%, transparent);
+				box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring) 60%, transparent);
+			}
+
+			.file-tree__large-notice {
+				margin-top: 4px;
+				padding: 3px 4px;
+				color: var(--muted-foreground);
+				font-size: 11px;
+			}
+
+			.file-tree__icon--go,
+			.file-tree__icon--code { color: var(--diff-modify-line); }
+			.file-tree__icon--json { color: var(--diff-add-line); }
+			.file-tree__icon--markdown { color: var(--accent); }
+			.file-tree__icon--shell { color: var(--terminal-fg); }
+			.file-tree__icon--media { color: var(--diff-remove-line); }
+
+			.file-tree__node--selected {
+				background: var(--accent);
+				color: var(--accent-foreground);
+			}
+
+			.file-tree__node--expanded {
+				color: color-mix(in srgb, var(--foreground) 94%, var(--accent));
+			}
+
+			.file-tree__node--directory {
+				font-weight: 500;
+			}
+
+			.file-tree__node--file {
+				color: color-mix(in srgb, var(--foreground) 86%, var(--muted-foreground));
+			}
+
+			.file-tree__node--status-ignored {
+				opacity: 0.56;
+			}
+
+			.file-tree__node--status-deleted .file-tree__name-text {
+				text-decoration: line-through;
+			}
+
+			.file-tree__node--status-renamed .file-tree__name-text {
+				font-style: italic;
+			}
+
+			.file-tree__toggle,
+			.file-tree__actions {
+				display: grid;
+				width: 100%;
+				height: var(--file-tree-row-height);
+				place-items: center;
+				border: 0;
+				background: transparent;
+				padding: 0;
+				color: var(--muted-foreground);
+			}
+
+			.file-tree__toggle:hover,
+			.file-tree__actions:hover {
+				color: var(--foreground);
+			}
+
+			.file-tree__chevron {
+				transition: transform 120ms ease;
+			}
+
+			.file-tree__toggle[aria-expanded="true"] .file-tree__chevron {
+				transform: rotate(90deg);
+			}
+
+			.file-tree__spacer {
+				width: 14px;
+			}
+
+			.file-tree__icon {
+				display: grid;
+				width: 16px;
+				height: var(--file-tree-row-height);
+				place-items: center;
+				color: color-mix(in srgb, var(--muted-foreground) 80%, var(--foreground));
+			}
+
+			.file-tree__name {
+				display: flex;
+				align-items: center;
+				gap: 3px;
+				min-width: 0;
+				overflow: hidden;
+				padding-right: 4px;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.file-tree__name-text {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.file-tree__highlight {
+				border-radius: 2px;
+				background: color-mix(in srgb, var(--accent) 50%, transparent);
+				color: var(--foreground);
+			}
+
+			.file-tree__descendant-dot {
+				width: 5px;
+				height: 5px;
+				border-radius: 999px;
+				background: var(--diff-add-line);
+			}
+
+			.file-tree__status {
+				justify-self: end;
+				min-width: 14px;
+				padding-inline: 2px;
+				border-radius: 3px;
+				font-size: 10px;
+				font-weight: 700;
+				line-height: 1.25;
+				text-align: center;
+			}
+
+			.file-tree__node--status-modified .file-tree__status { color: var(--diff-modify-line); }
+			.file-tree__node--status-added .file-tree__status,
+			.file-tree__node--status-untracked .file-tree__status { color: var(--diff-add-line); }
+			.file-tree__node--status-deleted .file-tree__status { color: var(--diff-remove-line); }
+			.file-tree__node--status-renamed .file-tree__status { color: var(--accent); }
+			.file-tree__node--status-ignored .file-tree__status { color: var(--muted-foreground); }
+
+			.file-tree__actions {
+				opacity: 0;
+				transition:
+					color 120ms ease,
+					opacity 120ms ease;
+			}
+
+			.file-tree__node:hover .file-tree__actions,
+			.file-tree__actions:focus-within,
+			.file-tree__node:focus-within .file-tree__actions {
+				opacity: 1;
+			}
+
+			.file-tree__actions .menu__trigger {
+				width: 20px;
+				height: var(--file-tree-row-height);
+				border: 0;
+				border-radius: 3px;
+			}
+		}
+	</style>
+	<div class={ fileTreeClass(tree) } role="tree" aria-label={ tree.Label } data-file-tree data-file-tree-trigger-mode={ fileTreeTriggerMode(tree) } data-file-tree-search-active={ fileTreeSearchActive(tree.Search) }>
+		if tree.Label != "" || tree.Controls.ExpandAllCommand.URL != "" || tree.Controls.CollapseAllCommand.URL != "" {
+			<div class="file-tree__header">
+				if tree.Label != "" {
+					<div class="file-tree__label">{ tree.Label }</div>
+				}
+				<div class="file-tree__controls" data-on:click__stop="evt.stopPropagation()">
+					if tree.Controls.ExpandAllCommand.URL != "" {
+						<button class="file-tree__control" type="button" aria-label="Expand all files" title="Expand all" data-on:click={ fileTreeCommandAction(tree.Controls.ExpandAllCommand) }>
+							@Codicon("expand-all", "icon-xs")
+						</button>
+					}
+					if tree.Controls.CollapseAllCommand.URL != "" {
+						<button class="file-tree__control" type="button" aria-label="Collapse all files" title="Collapse all" data-on:click={ fileTreeCommandAction(tree.Controls.CollapseAllCommand) }>
+							@Codicon("collapse-all", "icon-xs")
+						</button>
+					}
+				</div>
+			</div>
+		}
+		if tree.Controls.SearchCommand.URL != "" {
+			<div class="file-tree__search-wrap" data-on:click__stop="evt.stopPropagation()">
+				<span class="file-tree__search-icon" aria-hidden="true">
+					@Codicon("search", "icon-xs")
+				</span>
+				<input class="file-tree__search" type="search" value={ tree.Search } placeholder="Search files" aria-label="Search files" data-on:input__debounce.200ms={ fileTreeSearchAction(tree.Controls.SearchCommand) }/>
+			</div>
+		}
+		for index, node := range tree.Nodes {
+			<div class={ fileTreeNodeClass(node) } role="treeitem" tabindex="0" aria-selected={ boolString(node.Selected) } aria-expanded?={ node.Kind == FileTreeNodeDirectory && node.HasChildren } draggable={ boolString(fileTreeCanDrag(tree, node)) } style={ fileTreeNodePadding(node.Depth) } data-file-tree-row data-file-id={ node.ID } data-file-move-url={ node.MoveCommand.URL } data-file-drop-url={ node.DropCommand.URL } data-file-can-drop={ boolString(node.CanDrop) } data-file-toggle-url={ node.ToggleCommand.URL } data-file-expanded={ boolString(node.Expanded) } data-file-row-index={ fileTreeIndexString(index) } data-on:click={ fileTreeNodeClickAction(node) }>
+				if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+					<button class="file-tree__toggle" type="button" aria-label={ "Toggle " + node.Name } aria-expanded={ boolString(node.Expanded) } data-on:click__stop={ fileTreeCommandAction(node.ToggleCommand) }>
+						@Codicon("chevron-right", "icon-12 file-tree__chevron")
+					</button>
+				} else {
+					<span class="file-tree__spacer"></span>
+				}
+				<span class="file-tree__name">
+					if node.Kind == FileTreeNodeFile {
+						<span class="file-tree__icon" aria-hidden="true">
+							@Codicon(fileTreeNodeIcon(node), fileTreeNodeIconClass(node))
+						</span>
+					}
+					<span class="file-tree__name-text">
+						{{ before, match, after, ok := fileTreeHighlightedName(node.Name, tree.Search) }}
+						if ok {
+							{ before }<mark class="file-tree__highlight">{ match }</mark>{ after }
+						} else {
+							{ node.Name }
+						}
+					</span>
+					if node.Kind == FileTreeNodeDirectory && node.HasChangedDescendants {
+						<span class="file-tree__descendant-dot" title="Contains changed files" aria-label="Contains changed files"></span>
+					}
+				</span>
+				if fileTreeStatusLabel(node.GitStatus) != "" {
+					<span class="file-tree__status" title={ fileTreeStatusTitle(node.GitStatus) }>{ fileTreeStatusLabel(node.GitStatus) }</span>
+				} else {
+					<span></span>
+				}
+				<div class="file-tree__actions" data-on:click__stop="evt.stopPropagation()" data-file-tree-menu>
+					@Menu(fileTreeMenu(node))
+				</div>
+			</div>
+		}
+		if fileTreeCanRootDrop(tree) {
+			<div class="file-tree__root-drop" data-file-tree-root-drop data-file-drop-url={ tree.Controls.RootDropCommand.URL } aria-label="Drop files at root"></div>
+		}
+		if fileTreeLargeNotice(tree) != "" {
+			<div class="file-tree__large-notice">{ fileTreeLargeNotice(tree) }</div>
+		}
+	</div>
+	<script type="module">
+		const initFileTree = (root) => {
+			if (root.dataset.fileTreeReady === "true") {
+				return;
+			}
+			root.dataset.fileTreeReady = "true";
+			let draggedRow = null;
+			let autoOpenTimer = 0;
+
+			const command = window.discobot?.command;
+			const dragAllowed = () => root.dataset.fileTreeSearchActive !== "true";
+			const sendMove = async (sourceRow, targetID, dropURL) => {
+				const url = sourceRow?.dataset.fileMoveUrl || dropURL;
+				if (!url || !command) {
+					return;
+				}
+				await command.send({
+					method: "POST",
+					url,
+					payload: { targetID: targetID || "" },
+				});
+			};
+			const clearDragState = () => {
+				window.clearTimeout(autoOpenTimer);
+				root.querySelectorAll(".file-tree__node--drag-over").forEach((row) => row.classList.remove("file-tree__node--drag-over"));
+				root.querySelector("[data-file-tree-root-drop]")?.classList.remove("file-tree__root-drop--active");
+			};
+			const openMenuForRow = (row) => {
+				const mode = root.dataset.fileTreeTriggerMode || "both";
+				if (mode === "button") {
+					return;
+				}
+				row.querySelector("[data-file-tree-menu] [data-menu-trigger]")?.click();
+			};
+
+			root.addEventListener("dragstart", (event) => {
+				const row = event.target.closest?.("[data-file-tree-row]");
+				if (!row || !dragAllowed() || row.getAttribute("draggable") !== "true") {
+					event.preventDefault();
+					return;
+				}
+				draggedRow = row;
+				event.dataTransfer.effectAllowed = "move";
+				event.dataTransfer.setData("text/plain", row.dataset.fileId || "");
+			});
+			root.addEventListener("dragover", (event) => {
+				if (!draggedRow || !dragAllowed()) {
+					return;
+				}
+				const row = event.target.closest?.("[data-file-tree-row]");
+				const rootDrop = event.target.closest?.("[data-file-tree-root-drop]");
+				if (row?.dataset.fileCanDrop === "true" || rootDrop) {
+					event.preventDefault();
+					event.dataTransfer.dropEffect = "move";
+				}
+			});
+			root.addEventListener("dragenter", (event) => {
+				if (!draggedRow || !dragAllowed()) {
+					return;
+				}
+				const row = event.target.closest?.("[data-file-tree-row]");
+				if (row?.dataset.fileCanDrop === "true") {
+					row.classList.add("file-tree__node--drag-over");
+					window.clearTimeout(autoOpenTimer);
+					if (row.dataset.fileExpanded !== "true" && row.dataset.fileToggleUrl && command) {
+						autoOpenTimer = window.setTimeout(() => command.send({ method: "POST", url: row.dataset.fileToggleUrl }), 650);
+					}
+				}
+				if (event.target.closest?.("[data-file-tree-root-drop]")) {
+					root.querySelector("[data-file-tree-root-drop]")?.classList.add("file-tree__root-drop--active");
+				}
+			});
+			root.addEventListener("dragleave", (event) => {
+				const row = event.target.closest?.("[data-file-tree-row]");
+				if (row && !row.contains(event.relatedTarget)) {
+					row.classList.remove("file-tree__node--drag-over");
+				}
+				const rootDrop = event.target.closest?.("[data-file-tree-root-drop]");
+				if (rootDrop && !rootDrop.contains(event.relatedTarget)) {
+					rootDrop.classList.remove("file-tree__root-drop--active");
+				}
+			});
+			root.addEventListener("drop", async (event) => {
+				if (!draggedRow || !dragAllowed()) {
+					return;
+				}
+				const row = event.target.closest?.("[data-file-tree-row]");
+				const rootDrop = event.target.closest?.("[data-file-tree-root-drop]");
+				if (row?.dataset.fileCanDrop === "true") {
+					event.preventDefault();
+					await sendMove(draggedRow, row.dataset.fileId, row.dataset.fileDropUrl);
+				} else if (rootDrop) {
+					event.preventDefault();
+					await sendMove(draggedRow, "", rootDrop.dataset.fileDropUrl);
+				}
+				clearDragState();
+				draggedRow = null;
+			});
+			root.addEventListener("dragend", () => {
+				clearDragState();
+				draggedRow = null;
+			});
+			root.addEventListener("contextmenu", (event) => {
+				const row = event.target.closest?.("[data-file-tree-row]");
+				if (!row || !root.contains(row)) {
+					return;
+				}
+				event.preventDefault();
+				openMenuForRow(row);
+			});
+			root.addEventListener("keydown", (event) => {
+				const row = event.target.closest?.("[data-file-tree-row]");
+				if (!row || !root.contains(row)) {
+					return;
+				}
+				const rows = Array.from(root.querySelectorAll("[data-file-tree-row]"));
+				const index = rows.indexOf(row);
+				if (event.key === "ArrowDown") {
+					event.preventDefault();
+					rows[Math.min(index + 1, rows.length - 1)]?.focus();
+				} else if (event.key === "ArrowUp") {
+					event.preventDefault();
+					rows[Math.max(index - 1, 0)]?.focus();
+				} else if (event.key === "ArrowRight") {
+					const toggle = row.querySelector(".file-tree__toggle[aria-expanded='false']");
+					if (toggle) {
+						event.preventDefault();
+						toggle.click();
+					}
+				} else if (event.key === "ArrowLeft") {
+					const toggle = row.querySelector(".file-tree__toggle[aria-expanded='true']");
+					if (toggle) {
+						event.preventDefault();
+						toggle.click();
+					}
+				} else if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					row.click();
+				}
+			});
+		};
+		document.querySelectorAll("[data-file-tree]").forEach(initFileTree);
+	</script>
+}

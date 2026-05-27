@@ -626,6 +626,7 @@ func TestCompleteViaWebSocket_CodexInstructionsFreshVsReusedConnection(t *testin
 		mu                         sync.Mutex
 		connCount                  int
 		firstTurnInstructions      string
+		secondTurnInstructions     string
 		secondTurnHasInstructions  bool
 		restartTurnPrevID          string
 		restartTurnInstructions    string
@@ -656,6 +657,7 @@ func TestCompleteViaWebSocket_CodexInstructionsFreshVsReusedConnection(t *testin
 				case 1:
 					firstTurnInstructions, _ = req["instructions"].(string)
 				case 2:
+					secondTurnInstructions, _ = req["instructions"].(string)
 					_, secondTurnHasInstructions = req["instructions"]
 				}
 
@@ -745,8 +747,11 @@ func TestCompleteViaWebSocket_CodexInstructionsFreshVsReusedConnection(t *testin
 	if firstTurnInstructions != "You are Codex." {
 		t.Fatalf("first turn should include instructions, got %q", firstTurnInstructions)
 	}
-	if secondTurnHasInstructions {
-		t.Fatal("reused-connection continuation should omit instructions")
+	if !secondTurnHasInstructions {
+		t.Fatal("reused-connection continuation should include instructions")
+	}
+	if secondTurnInstructions != "You are Codex." {
+		t.Fatalf("reused-connection continuation should preserve instructions, got %q", secondTurnInstructions)
 	}
 	if restartTurnPrevID != "" {
 		t.Fatalf("fresh-connection continuation should drop previous_response_id, got %q", restartTurnPrevID)
@@ -761,6 +766,7 @@ func TestCompleteViaWebSocket_CodexInstructionsFreshVsReusedConnection(t *testin
 
 func TestCompleteViaWebSocket_SendsStreamFalse(t *testing.T) {
 	// WebSocket requests must NOT include "stream":true — streaming is implicit.
+	// They should keep store:false so WebSocket mode remains compatible with ZDR.
 	ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
 		_, data, err := conn.Read(r.Context())
 		if err != nil {
@@ -770,6 +776,9 @@ func TestCompleteViaWebSocket_SendsStreamFalse(t *testing.T) {
 		json.Unmarshal(data, &req)
 		if _, hasStream := req["stream"]; hasStream {
 			t.Error("WebSocket request must not include stream field")
+		}
+		if store, ok := req["store"].(bool); !ok || store {
+			t.Errorf("WebSocket request should include store:false, got %#v", req["store"])
 		}
 		sendWSEvents(r.Context(), t, conn, minimalWSCompletion("resp_1"))
 	})
@@ -855,6 +864,10 @@ func TestCompleteViaWebSocket_TracksAndInjectsPreviousResponseID(t *testing.T) {
 		secondReqPrevID    string
 		firstReqHasTools   bool
 		secondReqHasTools  bool
+		firstReqHasStore   bool
+		secondReqHasStore  bool
+		firstReqStore      bool
+		secondReqStore     bool
 		firstReqInputLen   int
 		secondReqInputLen  int
 		secondReqUserInput string
@@ -876,14 +889,19 @@ func TestCompleteViaWebSocket_TracksAndInjectsPreviousResponseID(t *testing.T) {
 
 			inputItems, _ := req["input"].([]any)
 			_, hasTools := req["tools"]
+			store, hasStore := req["store"].(bool)
 			switch turn {
 			case 1:
 				firstReqPrevID, _ = req["previous_response_id"].(string)
 				firstReqHasTools = hasTools
+				firstReqHasStore = hasStore
+				firstReqStore = store
 				firstReqInputLen = len(inputItems)
 			case 2:
 				secondReqPrevID, _ = req["previous_response_id"].(string)
 				secondReqHasTools = hasTools
+				secondReqHasStore = hasStore
+				secondReqStore = store
 				secondReqInputLen = len(inputItems)
 				if len(inputItems) > 0 {
 					if item, ok := inputItems[0].(map[string]any); ok {
@@ -940,6 +958,9 @@ func TestCompleteViaWebSocket_TracksAndInjectsPreviousResponseID(t *testing.T) {
 	if !firstReqHasTools {
 		t.Error("first request should include tools")
 	}
+	if !firstReqHasStore || firstReqStore {
+		t.Errorf("first websocket request should include store:false, got present=%t value=%t", firstReqHasStore, firstReqStore)
+	}
 	if firstReqInputLen != 1 {
 		t.Errorf("first request should include full input (1 item), got %d", firstReqInputLen)
 	}
@@ -948,6 +969,9 @@ func TestCompleteViaWebSocket_TracksAndInjectsPreviousResponseID(t *testing.T) {
 	}
 	if secondReqHasTools {
 		t.Error("continuation request should omit tools")
+	}
+	if !secondReqHasStore || secondReqStore {
+		t.Errorf("continuation websocket request should include store:false, got present=%t value=%t", secondReqHasStore, secondReqStore)
 	}
 	if secondReqInputLen != 1 {
 		t.Errorf("continuation request should include only incremental input (1 item), got %d", secondReqInputLen)

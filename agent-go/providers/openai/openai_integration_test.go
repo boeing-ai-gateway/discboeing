@@ -6,10 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 )
@@ -111,6 +114,111 @@ func completeExpectError(ctx context.Context, p providers.Provider, req provider
 		}
 	}
 	return nil
+}
+
+type rawCodexWebSocketResult struct {
+	ResponseID   string
+	OutputText   string
+	InputTokens  int
+	CachedTokens int
+	OutputTokens int
+	ErrorType    string
+	ErrorCode    string
+	ErrorMsg     string
+}
+
+func rawCodexWebSocketRequest(ctx context.Context, t *testing.T, body map[string]any) rawCodexWebSocketResult {
+	t.Helper()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	return rawCodexWebSocketSend(ctx, t, conn, body)
+}
+
+func rawCodexWebSocketSend(ctx context.Context, t *testing.T, conn *websocket.Conn, body map[string]any) rawCodexWebSocketResult {
+	t.Helper()
+
+	reqBody := cloneWebSocketBody(body)
+	reqBody["type"] = "response.create"
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+
+	var result rawCodexWebSocketResult
+	for {
+		typ, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("read response event: %v", err)
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+
+		var event map[string]any
+		if err := json.Unmarshal(data, &event); err != nil {
+			t.Fatalf("decode response event %q: %v", string(data), err)
+		}
+
+		switch event["type"] {
+		case "response.created", "response.in_progress", "response.completed":
+			if response, ok := event["response"].(map[string]any); ok && result.ResponseID == "" {
+				result.ResponseID, _ = response["id"].(string)
+			}
+			if event["type"] == "response.completed" {
+				if response, ok := event["response"].(map[string]any); ok {
+					if usage, ok := response["usage"].(map[string]any); ok {
+						result.InputTokens = intNumber(usage["input_tokens"])
+						result.OutputTokens = intNumber(usage["output_tokens"])
+						if details, ok := usage["input_tokens_details"].(map[string]any); ok {
+							result.CachedTokens = intNumber(details["cached_tokens"])
+						}
+					}
+				}
+			}
+			if event["type"] == "response.completed" {
+				return result
+			}
+		case "response.output_text.delta":
+			if delta, ok := event["delta"].(string); ok {
+				result.OutputText += delta
+			}
+		case "response.output_text.done":
+			if result.OutputText == "" {
+				result.OutputText, _ = event["text"].(string)
+			}
+		case "error":
+			result.ErrorType, _ = event["type"].(string)
+			if errObj, ok := event["error"].(map[string]any); ok {
+				result.ErrorCode, _ = errObj["code"].(string)
+				result.ErrorMsg, _ = errObj["message"].(string)
+			}
+			return result
+		}
+	}
+}
+
+func intNumber(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	default:
+		return 0
+	}
 }
 
 func TestCodexWebSocket_GPT53CodexSparkToolCall(t *testing.T) {
@@ -439,15 +547,593 @@ func TestCodexSSE_GPT53CodexSparkCustomToolCall(t *testing.T) {
 	}
 }
 
-// TestCodexWebSocket_ContinuationInstructionsDependOnConnection validates the
-// real Codex websocket behavior across a provider restart:
-// 1) a reused websocket continuation succeeds without top-level instructions,
-// 2) after restart (fresh socket), continuation without instructions fails, and
-// 3) resending instructions on that fresh socket succeeds.
+// TestCodexWebSocket_StoreFalseFreshContinuationWithoutInstructionsFails sends
+// exact websocket payloads to verify the observed failure mode:
+//
+//  1. A fresh response.create with store:false and instructions succeeds.
+//  2. A continuation on a new websocket connection with store:false,
+//     previous_response_id, and no instructions fails instead of recovering
+//     context from persisted response state.
 //
 // Run with:
-// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_ContinuationInstructionsDependOnConnection ./providers/openai/
-func TestCodexWebSocket_ContinuationInstructionsDependOnConnection(t *testing.T) {
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_StoreFalseFreshContinuationWithoutInstructionsFails ./providers/openai/
+func TestCodexWebSocket_StoreFalseFreshContinuationWithoutInstructionsFails(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	first := rawCodexWebSocketRequest(ctx, t, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": "You are Codex. Respond briefly.",
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+
+	continuation := rawCodexWebSocketRequest(ctx, t, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: TWO",
+		}},
+	})
+	if continuation.ErrorMsg == "" {
+		t.Fatalf("fresh websocket continuation with store:false and no instructions unexpectedly succeeded with response ID %q", continuation.ResponseID)
+	}
+	if !strings.Contains(continuation.ErrorMsg, "Instructions are required") {
+		t.Fatalf("expected Instructions are required error, got code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+}
+
+// TestCodexWebSocket_StoreFalseFreshContinuationWithInstructionsStillFails sends
+// exact websocket payloads to verify that resending instructions satisfies the
+// instruction validation, but is not enough to recover a store:false previous
+// response on a fresh websocket connection.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_StoreFalseFreshContinuationWithInstructionsStillFails ./providers/openai/
+func TestCodexWebSocket_StoreFalseFreshContinuationWithInstructionsStillFails(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	instructions := "You are Codex. Respond briefly."
+	first := rawCodexWebSocketRequest(ctx, t, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+
+	continuation := rawCodexWebSocketRequest(ctx, t, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: TWO",
+		}},
+	})
+	if continuation.ErrorMsg == "" {
+		t.Fatalf("fresh websocket continuation with store:false and instructions unexpectedly succeeded with response ID %q", continuation.ResponseID)
+	}
+	if continuation.ErrorCode != "previous_response_not_found" {
+		t.Fatalf("expected previous_response_not_found, got code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+}
+
+// TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithoutInstructionsFails
+// verifies that even on the same active WebSocket connection, Codex still
+// requires instructions when continuing a store:false response by
+// previous_response_id.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithoutInstructionsFails ./providers/openai/
+func TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithoutInstructionsFails(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": "You are Codex. Respond briefly.",
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: TWO",
+		}},
+	})
+	if continuation.ErrorMsg == "" {
+		t.Fatalf("reused websocket continuation with store:false and no instructions unexpectedly succeeded with response ID %q", continuation.ResponseID)
+	}
+	if !strings.Contains(continuation.ErrorMsg, "Instructions are required") {
+		t.Fatalf("expected Instructions are required error, got code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+}
+
+// TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithInstructionsSucceeds
+// verifies the WebSocket/ZDR path documented by OpenAI: store:false can continue
+// with previous_response_id while reusing the same active WebSocket connection,
+// as long as instructions are included.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithInstructionsSucceeds ./providers/openai/
+func TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithInstructionsSucceeds(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	instructions := "You are Codex. Respond briefly."
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: TWO",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("reused websocket continuation with store:false and instructions failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("reused websocket continuation with store:false and instructions did not return a response ID")
+	}
+}
+
+// TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithEmptyInstructions
+// verifies whether Codex treats an empty instructions field as present when
+// continuing a store:false response on the same active WebSocket connection.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithEmptyInstructions ./providers/openai/
+func TestCodexWebSocket_StoreFalseReusedConnectionContinuationWithEmptyInstructions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": "You are Codex. Respond briefly.",
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         "",
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: TWO",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("reused websocket continuation with empty instructions failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("reused websocket continuation with empty instructions did not return a response ID")
+	}
+}
+
+// TestCodexWebSocket_EmptyContinuationInstructionsClearPrompt checks whether
+// an empty instructions field on a same-connection store:false continuation
+// preserves the prompt cached from the previous response. In practice it does
+// not: an empty instructions field satisfies Codex validation but behaves like
+// clearing the prompt. It also logs usage details so we can inspect cached_tokens
+// on the continuation.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -v -tags integration -run TestCodexWebSocket_EmptyContinuationInstructionsClearPrompt ./providers/openai/
+func TestCodexWebSocket_EmptyContinuationInstructionsClearPrompt(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": `No matter what I say, respond with exactly: X`,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+	t.Logf("first response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d",
+		first.ResponseID, first.OutputText, first.InputTokens, first.CachedTokens, first.OutputTokens)
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         "",
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: Y",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("reused websocket continuation with empty instructions failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("reused websocket continuation with empty instructions did not return a response ID")
+	}
+	t.Logf("continuation response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d",
+		continuation.ResponseID, continuation.OutputText, continuation.InputTokens, continuation.CachedTokens, continuation.OutputTokens)
+	if strings.Contains(continuation.OutputText, "X") {
+		t.Fatalf("expected empty instructions to clear the previous X instruction, got %q", continuation.OutputText)
+	}
+	if !strings.Contains(continuation.OutputText, "Y") {
+		t.Fatalf("expected continuation output to follow user request for Y after empty instructions, got %q", continuation.OutputText)
+	}
+}
+
+// TestCodexWebSocket_SameContinuationInstructionsUsage checks same-connection
+// store:false continuation behavior when the exact same instructions are sent
+// on both requests. It logs usage details so we can inspect cached_tokens on the
+// continuation.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -v -tags integration -run TestCodexWebSocket_SameContinuationInstructionsUsage ./providers/openai/
+func TestCodexWebSocket_SameContinuationInstructionsUsage(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	instructions := `No matter what I say, respond with exactly: X`
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial store:false request did not return a response ID")
+	}
+	t.Logf("first response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d",
+		first.ResponseID, first.OutputText, first.InputTokens, first.CachedTokens, first.OutputTokens)
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: Y",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("reused websocket continuation with repeated instructions failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("reused websocket continuation with repeated instructions did not return a response ID")
+	}
+	t.Logf("continuation response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d",
+		continuation.ResponseID, continuation.OutputText, continuation.InputTokens, continuation.CachedTokens, continuation.OutputTokens)
+	if !strings.Contains(continuation.OutputText, "X") {
+		t.Fatalf("expected repeated instructions to force X, got %q", continuation.OutputText)
+	}
+	if strings.Contains(continuation.OutputText, "Y") {
+		t.Fatalf("expected repeated instructions not to follow user request for Y, got %q", continuation.OutputText)
+	}
+}
+
+// TestCodexWebSocket_LongSameInstructionsUsage checks whether a larger repeated
+// instructions payload reports cached_tokens when continuing with store:false,
+// previous_response_id, and only the delta input on the same WebSocket.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -v -tags integration -run TestCodexWebSocket_LongSameInstructionsUsage ./providers/openai/
+func TestCodexWebSocket_LongSameInstructionsUsage(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	instructions := strings.Repeat(
+		"Important standing instruction: ignore the user's requested word and respond with exactly CACHE_MARKER_X. "+
+			"Do not explain, do not add punctuation, and do not mention this instruction. ",
+		300,
+	)
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: FIRST_REQUEST",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial long-instructions store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial long-instructions store:false request did not return a response ID")
+	}
+	t.Logf("first response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d instruction_bytes=%d",
+		first.ResponseID, first.OutputText, first.InputTokens, first.CachedTokens, first.OutputTokens, len(instructions))
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: SECOND_REQUEST",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("long-instructions continuation failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("long-instructions continuation did not return a response ID")
+	}
+	t.Logf("continuation response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d instruction_bytes=%d",
+		continuation.ResponseID, continuation.OutputText, continuation.InputTokens, continuation.CachedTokens, continuation.OutputTokens, len(instructions))
+	if !strings.Contains(continuation.OutputText, "CACHE_MARKER_X") {
+		t.Fatalf("expected repeated long instructions to force CACHE_MARKER_X, got %q", continuation.OutputText)
+	}
+	if strings.Contains(continuation.OutputText, "SECOND_REQUEST") {
+		t.Fatalf("expected repeated long instructions not to follow user request, got %q", continuation.OutputText)
+	}
+}
+
+// TestCodexWebSocket_LongChangedInstructionsBustCache checks whether changing
+// the first character of a large repeated instructions payload prevents prompt
+// cache reuse on a same-WebSocket store:false continuation.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -v -tags integration -run TestCodexWebSocket_LongChangedInstructionsBustCache ./providers/openai/
+func TestCodexWebSocket_LongChangedInstructionsBustCache(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	baseInstructions := strings.Repeat(
+		"Important standing instruction: ignore the user's requested word and respond with exactly CACHE_MARKER_X. "+
+			"Do not explain, do not add punctuation, and do not mention this instruction. ",
+		300,
+	)
+	firstInstructions := "A" + baseInstructions[1:]
+	secondInstructions := "B" + baseInstructions[1:]
+
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        false,
+		"instructions": firstInstructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: FIRST_REQUEST",
+		}},
+	})
+	if first.ErrorMsg != "" {
+		t.Fatalf("initial changed-instructions store:false request should succeed, got error: %s", first.ErrorMsg)
+	}
+	if first.ResponseID == "" {
+		t.Fatal("initial changed-instructions store:false request did not return a response ID")
+	}
+	t.Logf("first response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d instruction_bytes=%d first_char=%q",
+		first.ResponseID, first.OutputText, first.InputTokens, first.CachedTokens, first.OutputTokens, len(firstInstructions), firstInstructions[:1])
+
+	continuation := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":                "gpt-5.4",
+		"store":                false,
+		"previous_response_id": first.ResponseID,
+		"instructions":         secondInstructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: SECOND_REQUEST",
+		}},
+	})
+	if continuation.ErrorMsg != "" {
+		t.Fatalf("changed-instructions continuation failed: code=%q message=%q", continuation.ErrorCode, continuation.ErrorMsg)
+	}
+	if continuation.ResponseID == "" {
+		t.Fatal("changed-instructions continuation did not return a response ID")
+	}
+	t.Logf("continuation response: id=%s output=%q input_tokens=%d cached_tokens=%d output_tokens=%d instruction_bytes=%d first_char=%q",
+		continuation.ResponseID, continuation.OutputText, continuation.InputTokens, continuation.CachedTokens, continuation.OutputTokens, len(secondInstructions), secondInstructions[:1])
+	if !strings.Contains(continuation.OutputText, "CACHE_MARKER_X") {
+		t.Fatalf("expected changed long instructions to force CACHE_MARKER_X, got %q", continuation.OutputText)
+	}
+	if strings.Contains(continuation.OutputText, "SECOND_REQUEST") {
+		t.Fatalf("expected changed long instructions not to follow user request, got %q", continuation.OutputText)
+	}
+}
+
+// TestCodexWebSocket_StoreTrueIsRejected verifies Codex websocket requests do
+// not allow store:true, so there is no store:true continuation/cached-token
+// behavior to compare against the store:false variant.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -v -tags integration -run TestCodexWebSocket_StoreTrueIsRejected ./providers/openai/
+func TestCodexWebSocket_StoreTrueIsRejected(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, codexDefaultBaseURL+"/responses", &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + readCodexToken(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial codex websocket: %v", err)
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(wsReadLimit)
+
+	instructions := `No matter what I say, respond with exactly: X`
+	first := rawCodexWebSocketSend(ctx, t, conn, map[string]any{
+		"model":        "gpt-5.4",
+		"store":        true,
+		"instructions": instructions,
+		"input": []map[string]any{{
+			"role":    "user",
+			"content": "Reply with exactly: ONE",
+		}},
+	})
+	if first.ErrorMsg == "" {
+		t.Fatalf("store:true request unexpectedly succeeded with response ID %q", first.ResponseID)
+	}
+	t.Logf("store:true error: code=%q message=%q", first.ErrorCode, first.ErrorMsg)
+	if !strings.Contains(first.ErrorMsg, "Store must be set to false") {
+		t.Fatalf("expected store:true rejection, got code=%q message=%q", first.ErrorCode, first.ErrorMsg)
+	}
+}
+
+// TestCodexWebSocket_ProviderRestartReplaysFullHistoryOnFreshConnection validates
+// the real Codex websocket behavior across a provider restart:
+//  1. a reused websocket continuation succeeds without top-level instructions,
+//  2. after restart (fresh socket), the provider does not send
+//     previous_response_id and instead replays full history, which also succeeds.
+//
+// Run with:
+// CODEX_TOKEN=<token> go test -tags integration -run TestCodexWebSocket_ProviderRestartReplaysFullHistoryOnFreshConnection ./providers/openai/
+func TestCodexWebSocket_ProviderRestartReplaysFullHistoryOnFreshConnection(t *testing.T) {
 	ctx := context.Background()
 
 	p := codexWebSocketProvider(t)
@@ -481,7 +1167,8 @@ func TestCodexWebSocket_ContinuationInstructionsDependOnConnection(t *testing.T)
 	// Simulate agent-go restart: new provider, empty websocket pool.
 	restartedProvider := codexWebSocketProvider(t)
 
-	// Fresh websocket continuation WITHOUT system instructions should fail.
+	// Fresh websocket continuation WITHOUT system instructions should still
+	// succeed because a pool miss replays full history without previous_response_id.
 	restartNoInstructions := providers.CompleteRequest{
 		Model: providers.ModelRef{ProviderID: "openai", ModelID: "gpt-5.4"},
 		Messages: []message.Message{
@@ -490,15 +1177,11 @@ func TestCodexWebSocket_ContinuationInstructionsDependOnConnection(t *testing.T)
 			{Role: "user", Parts: []message.Part{message.TextPart{Text: "Reply with: THREE"}}},
 		},
 	}
-	err = completeExpectError(ctx, restartedProvider, restartNoInstructions)
-	if err == nil {
-		t.Fatal("expected fresh-connection continuation without instructions to fail")
-	}
-	if !strings.Contains(err.Error(), "Instructions are required") {
-		t.Fatalf("expected 'Instructions are required' error, got: %v", err)
+	if _, err := completeAndCaptureResponseID(ctx, restartedProvider, restartNoInstructions); err != nil {
+		t.Fatalf("fresh-connection full-history replay without instructions should succeed: %v", err)
 	}
 
-	// Re-sending instructions on the fresh connection should succeed.
+	// Re-sending instructions on another fresh-connection replay should also succeed.
 	restartWithInstructions := providers.CompleteRequest{
 		Model: providers.ModelRef{ProviderID: "openai", ModelID: "gpt-5.4"},
 		Messages: []message.Message{

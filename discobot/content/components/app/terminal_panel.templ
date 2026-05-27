@@ -1,0 +1,63 @@
+package app
+
+templ TerminalPanel() {
+	<style>
+		@layer components {
+			.terminal-panel {
+				display: flex;
+				min-height: 180px;
+				max-height: 280px;
+				flex: 0 0 220px;
+				flex-direction: column;
+				overflow: hidden;
+				background: color-mix(in srgb, var(--surface-card) 92%, black);
+			}
+
+			.terminal-panel__header {
+				display: flex;
+				height: 34px;
+				align-items: center;
+				justify-content: space-between;
+				border-bottom: 1px solid var(--border-subtle);
+				padding: 0 12px;
+				color: var(--muted-foreground);
+				font-size: 12px;
+			}
+
+			.terminal-panel__title {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				color: var(--foreground);
+				font-weight: 600;
+			}
+
+			.terminal-panel__body {
+				min-height: 0;
+				flex: 1 1 0%;
+				overflow: hidden;
+				padding: 14px;
+				color: var(--muted-foreground);
+				font-family: var(--font-mono);
+				font-size: 12px;
+			}
+
+			.terminal-panel__prompt {
+				color: var(--diff-add-line);
+			}
+		}
+	</style>
+	<section class="ide-panel terminal-panel" aria-label="Terminal">
+		<header class="terminal-panel__header">
+			<div class="terminal-panel__title">
+				@IconTerminal("icon-sm")
+				<span>Terminal</span>
+			</div>
+			<span>Placeholder</span>
+		</header>
+		<div class="terminal-panel__body">
+			<div><span class="terminal-panel__prompt">discobot $</span> terminal placeholder</div>
+			<div>Interactive terminal output will appear here.</div>
+		</div>
+	</section>
+}

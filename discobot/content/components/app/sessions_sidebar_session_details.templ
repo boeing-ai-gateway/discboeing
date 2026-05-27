@@ -1,0 +1,16 @@
+package app
+
+import (
+	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ SessionsSidebarSessionDetails(session state.Session, fileTree appui.FileTreeData) {
+	<div class="sessions-sidebar__meta">
+		<span class="sessions-sidebar__diff-stat sessions-sidebar__diff-stat--add">+{ sessionDiffStat(session.Additions) }</span>
+		<span class="sessions-sidebar__diff-stat sessions-sidebar__diff-stat--delete">-{ sessionDiffStat(session.Deletions) }</span>
+	</div>
+	<div class="sessions-sidebar__file-tree">
+		@appui.FileTree(fileTree)
+	</div>
+}

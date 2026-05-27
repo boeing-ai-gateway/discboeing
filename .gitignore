@@ -87,6 +87,6 @@ __pycache__/
 /ui-go/node_modules
 /ui-go/static/assets
 /ui-go/static/files
-/ui-go2/build
-/ui-go2/build-errors.log
-/ui-go2/node_modules
+/discobot/build
+/discobot/build-errors.log
+/discobot/node_modules

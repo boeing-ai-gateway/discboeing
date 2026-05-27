@@ -1,0 +1,123 @@
+package app
+
+templ iconUse(symbol string, class string) {
+	<svg class={ "ui-icon " + class } aria-hidden="true" focusable="false">
+		<use href={ "/vendor/codicons.svg#codicon-" + symbol }></use>
+	</svg>
+}
+
+templ IconPanel(class string) {
+	@iconUse("layout-sidebar-left", class)
+}
+
+templ IconPanelRight(class string) {
+	@iconUse("layout-sidebar-right", class)
+}
+
+templ IconArrowLeft(class string) {
+	@iconUse("arrow-left", class)
+}
+
+templ IconArrowRight(class string) {
+	@iconUse("arrow-right", class)
+}
+
+templ IconArrowUp(class string) {
+	@iconUse("arrow-up", class)
+}
+
+templ IconArrowDown(class string) {
+	@iconUse("arrow-down", class)
+}
+
+templ IconChevronDown(class string) {
+	@iconUse("chevron-down", class)
+}
+
+templ IconChevronRight(class string) {
+	@iconUse("chevron-right", class)
+}
+
+templ IconFolder(class string) {
+	@iconUse("folder", class)
+}
+
+templ IconSearch(class string) {
+	@iconUse("search", class)
+}
+
+templ IconSliders(class string) {
+	@iconUse("settings", class)
+}
+
+templ IconPlus(class string) {
+	@iconUse("add", class)
+}
+
+templ IconPaperclip(class string) {
+	@iconUse("attach", class)
+}
+
+templ IconShield(class string) {
+	@iconUse("shield", class)
+}
+
+templ IconBranch(class string) {
+	@iconUse("git-branch", class)
+}
+
+templ IconBot(class string) {
+	@iconUse("robot", class)
+}
+
+templ IconRefresh(class string) {
+	@iconUse("refresh", class)
+}
+
+templ IconTerminal(class string) {
+	@iconUse("terminal", class)
+}
+
+templ IconPlay(class string) {
+	@iconUse("play", class)
+}
+
+templ IconSquare(class string) {
+	@iconUse("chrome-maximize", class)
+}
+
+templ IconWindowMinimize(class string) {
+	@iconUse("chrome-minimize", class)
+}
+
+templ IconWindowMaximize(class string) {
+	@iconUse("chrome-maximize", class)
+}
+
+templ IconWindowClose(class string) {
+	@iconUse("chrome-close", class)
+}
+
+templ IconCode(class string) {
+	@iconUse("code", class)
+}
+
+templ IconX(class string) {
+	@iconUse("close", class)
+}
+
+templ IconDocker(class string) {
+	@iconUse("file-code", class)
+}
+
+templ IconGear(class string) {
+	@iconUse("gear", class)
+}
+
+templ IconDiamond(class string) {
+	@iconUse("symbol-color", class)
+}
+
+templ IconText(class string) {
+	@iconUse("file-text", class)
+}

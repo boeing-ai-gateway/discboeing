@@ -1,0 +1,23 @@
+package app
+
+import (
+	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeData, selected bool, expanded bool) {
+	<div class={ sessionsSidebarItemClass(selected, expanded) } data-on:click={ sessionsSidebarSessionSelectCommand(session.ID) }>
+		<div class="sessions-sidebar__item-row">
+			<button type="button" class="sessions-sidebar__expander" aria-label={ sessionsSidebarExpanderLabel(session, expanded) } aria-expanded={ boolString(expanded) } data-on:click__stop={ sessionsSidebarSessionToggleCommand(session.ID) }>
+				@IconChevronRight("icon-sm sessions-sidebar__expander-icon")
+			</button>
+			<button type="button" class="sessions-sidebar__item-toggle" aria-current?={ selected }>
+			<span class={ sessionsSidebarStatusDotClass(session.Status) }></span>
+			<span class="sessions-sidebar__session-title">{ session.Title }</span>
+			</button>
+		</div>
+		if expanded {
+			@SessionsSidebarSessionDetails(session, fileTree)
+		}
+	</div>
+}

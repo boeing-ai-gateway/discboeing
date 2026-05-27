@@ -1,0 +1,179 @@
+package app
+
+import "github.com/obot-platform/discobot/discobot/internal/state"
+
+templ WindowChrome(view state.View) {
+	<style>
+		@layer components {
+			.window-chrome {
+				position: relative;
+				display: block;
+				height: var(--workspace-titlebar-height);
+				flex-shrink: 0;
+				border-bottom: 1px solid transparent;
+				padding: 10px;
+				background: var(--surface-canvas);
+				color: var(--muted-foreground);
+				-webkit-app-region: drag;
+			}
+
+			.window-chrome__group,
+			.window-chrome__right,
+			.window-chrome__theme-switcher,
+			.window-chrome__controls {
+				display: flex;
+				align-items: center;
+			}
+
+			.window-chrome > :first-child {
+				position: absolute;
+				top: 50%;
+				left: 13px;
+				transform: translateY(-50%);
+			}
+
+			.window-chrome__right {
+				position: absolute;
+				top: 50%;
+				right: 14px;
+				gap: 22px;
+				transform: translateY(-50%);
+			}
+
+			.window-chrome button,
+			.window-chrome [role="button"],
+			.window-chrome__group,
+			.window-chrome__right,
+			.window-chrome__theme-switcher,
+			.window-chrome__controls {
+				-webkit-app-region: no-drag;
+			}
+
+			.window-chrome__group {
+				gap: 11px;
+			}
+
+			.window-chrome__tools {
+				gap: 8px;
+				color: var(--muted-foreground);
+			}
+
+			.window-chrome__icon-button {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				gap: 6px;
+				border: 0;
+				border-radius: 5px;
+				background: transparent;
+				padding: 0;
+				color: inherit;
+				line-height: 1;
+				cursor: pointer;
+			}
+
+			.window-chrome__icon-button:hover,
+			.window-chrome__icon-button--active,
+			.window-chrome [role="button"]:hover {
+				background-color: color-mix(in srgb, var(--tree-hover) 75%, transparent);
+			}
+
+			.window-chrome__icon-button--active {
+				color: var(--foreground);
+			}
+
+			.window-chrome__theme-switcher {
+				gap: 6px;
+				color: var(--muted-foreground);
+				font-size: 11px;
+			}
+
+			.window-chrome__theme-switcher select {
+				height: 22px;
+				max-width: 168px;
+				border: 1px solid var(--border);
+				border-radius: 5px;
+				background: var(--surface-control);
+				color: var(--foreground);
+				padding: 0 22px 0 7px;
+				font-size: 11px;
+				line-height: 1;
+			}
+
+			:root.dark .window-chrome__theme-switcher select {
+				color-scheme: dark;
+			}
+
+			.window-chrome__controls {
+				gap: 23px;
+				color: var(--foreground);
+			}
+
+			.window-chrome__divider {
+				width: 1px;
+				height: 15px;
+				background: var(--border);
+			}
+
+			.window-chrome__avatar {
+				display: grid;
+				width: 18px;
+				height: 18px;
+				place-items: center;
+				overflow: hidden;
+				border-radius: 9999px;
+				background-image: linear-gradient(to bottom right, var(--chart-2), var(--chart-4), var(--chart-5));
+				font-size: 10px;
+			}
+
+			.window-chrome__icon-disabled {
+				color: color-mix(in oklab, var(--muted-foreground) 60%, var(--background));
+			}
+		}
+	</style>
+	<header class="window-chrome">
+		<div class="window-chrome__group">
+			<button id="sessions-sidebar-toggle" type="button" class="window-chrome__icon-button" aria-label={ sessionsSidebarToggleLabel(view) } title={ sessionsSidebarToggleLabel(view) } data-on:click="@post('/ui/commands/sidebar/toggle')">
+				@IconPanel("icon-sm")
+			</button>
+			@IconArrowLeft("icon-14")
+			@IconArrowRight("icon-14 window-chrome__icon-disabled")
+		</div>
+		<div class="window-chrome__right">
+			<div class="window-chrome__group window-chrome__tools">
+				@IconCode("icon-md")
+				<div class="window-chrome__divider"></div>
+				@IconPlay("icon-14")
+				@IconChevronDown("icon-12")
+				<button type="button" class={ terminalToggleClass(view) } aria-label={ terminalToggleLabel(view) } title={ terminalToggleLabel(view) } aria-pressed={ boolString(view.TerminalPanelVisible) } data-on:click="@discobotCommand('/ui/commands/terminal/toggle', {method: 'POST'})">
+					@IconTerminal("icon-sm")
+				</button>
+				@IconSquare("icon-14")
+				<div class="window-chrome__avatar">🤖</div>
+			</div>
+			<label class="window-chrome__theme-switcher">
+				<span>Theme</span>
+				<select id="theme-select" data-theme-select>
+					<option value="default-dark">Default Dark</option>
+					<option value="default-light">Default Light</option>
+					<option value="nord">Nord</option>
+					<option value="tokyo-night">Tokyo Night</option>
+					<option value="dracula">Dracula</option>
+					<option value="catppuccin-mocha">Catppuccin Mocha</option>
+					<option value="catppuccin-macchiato">Catppuccin Macchiato</option>
+					<option value="catppuccin-frappe">Catppuccin Frappé</option>
+					<option value="flexoki-dark">Flexoki Dark</option>
+					<option value="solarized">Solarized Light</option>
+					<option value="flexoki-light">Flexoki Light</option>
+					<option value="alucard">Alucard</option>
+					<option value="catppuccin-latte">Catppuccin Latte</option>
+				</select>
+			</label>
+			<div class="window-chrome__group window-chrome__controls">
+				@IconWindowMinimize("icon-xs")
+				@IconWindowMaximize("icon-xs")
+				@IconWindowClose("icon-xs")
+			</div>
+		</div>
+	</header>
+}

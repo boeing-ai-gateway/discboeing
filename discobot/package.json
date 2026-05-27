@@ -1,0 +1,17 @@
+{
+  "name": "@discobot/discobot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "go run github.com/air-verse/air@latest -c .air.toml",
+    "assets:build": "pnpm icons:build",
+    "icons:build": "node ./scripts/build-codicon-sprite.mjs",
+    "generate": "go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate",
+    "build": "pnpm assets:build && pnpm generate && go build -o ./build/discobot ./cmd/discobot",
+    "check": "pnpm assets:build && pnpm generate && go test ./...",
+    "check:fix": "pnpm assets:build && pnpm generate && gofmt -w ."
+  },
+  "devDependencies": {
+    "@vscode/codicons": "0.0.45"
+  }
+}

@@ -1,0 +1,40 @@
+package app
+
+import "github.com/obot-platform/discobot/discobot/internal/state"
+
+templ SessionWorkspace(data state.Data, view state.View) {
+	<style>
+		@layer components {
+			.session-workspace {
+				display: flex;
+				min-width: 0;
+				min-height: 0;
+				flex: 1 1 0%;
+				flex-direction: column;
+				gap: var(--workspace-gap);
+			}
+
+			.session-workspace__main {
+				display: flex;
+				min-width: 0;
+				min-height: 0;
+				flex: 1 1 0%;
+				gap: var(--workspace-gap);
+			}
+		}
+	</style>
+	<section class="session-workspace" aria-label="Session workspace">
+		<div class="session-workspace__main">
+			{{ session, ok := selectedSession(data, view) }}
+			if ok && len(view.OpenFileIDs) > 0 {
+				@EditorPane(session, view)
+				@ComposerWorkspace(true)
+			} else {
+				@ComposerWorkspace(false)
+			}
+		</div>
+		if view.TerminalPanelVisible {
+			@TerminalPanel()
+		}
+	</section>
+}
