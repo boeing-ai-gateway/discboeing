@@ -27,14 +27,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Depot
-        uses: depot/setup-action@v1
+        uses: depot/setup-action@v1.7.1
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -42,7 +42,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v6.1.0
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -52,7 +52,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push runtime image
-        uses: depot/build-push-action@v1
+        uses: depot/build-push-action@v1.18.0
         with:
           project: bbqjs4tj1g
           context: .
@@ -74,13 +74,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Depot
-        uses: depot/setup-action@v1
+        uses: depot/setup-action@v1.7.1
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -88,7 +88,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v6.1.0
         with:
           images: ghcr.io/${{ github.repository }}-vz
           tags: |
@@ -107,7 +107,7 @@ jobs:
           echo "image=ghcr.io/${{ github.repository }}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push VZ image
-        uses: depot/build-push-action@v1
+        uses: depot/build-push-action@v1.18.0
         with:
           project: bbqjs4tj1g
           context: .
@@ -132,13 +132,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Depot
-        uses: depot/setup-action@v1
+        uses: depot/setup-action@v1.7.1
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -146,7 +146,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v6.1.0
         with:
           images: ghcr.io/${{ github.repository }}-wsl
           tags: |
@@ -165,7 +165,7 @@ jobs:
           echo "image=ghcr.io/${{ github.repository }}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push WSL image
-        uses: depot/build-push-action@v1
+        uses: depot/build-push-action@v1.18.0
         with:
           project: bbqjs4tj1g
           context: .
@@ -255,10 +255,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.4.0
         with:
           node-version-file: .node-version
 
@@ -266,7 +266,7 @@ jobs:
         uses: pnpm/action-setup@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.26"
 

@@ -36,10 +36,10 @@ require (
 	github.com/coreos/go-oidc/v3 v3.16.0
 	github.com/docker/go-sdk/context v0.1.0-alpha012
 	github.com/getkin/kin-openapi v0.137.0
-	github.com/go-jose/go-jose/v4 v4.1.3
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/go-containerregistry v0.19.0
 	github.com/googleapis/gax-go/v2 v2.15.0
-	github.com/klauspost/compress v1.18.3
+	github.com/klauspost/compress v1.18.6
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.48.0
