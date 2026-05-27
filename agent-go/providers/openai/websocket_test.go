@@ -967,8 +967,8 @@ func TestCompleteViaWebSocket_TracksAndInjectsPreviousResponseID(t *testing.T) {
 	if secondReqPrevID != "resp_1" {
 		t.Errorf("second request should carry previous_response_id=%q, got %q", "resp_1", secondReqPrevID)
 	}
-	if secondReqHasTools {
-		t.Error("continuation request should omit tools")
+	if !secondReqHasTools {
+		t.Error("continuation request should include tools")
 	}
 	if !secondReqHasStore || secondReqStore {
 		t.Errorf("continuation websocket request should include store:false, got present=%t value=%t", secondReqHasStore, secondReqStore)
@@ -1834,8 +1834,8 @@ func TestCompleteViaWebSocket_FallsBackToFullHistoryWhenCacheIsGone(t *testing.T
 	if continuationReqPrevID != "resp_1" {
 		t.Errorf("continuation request should include previous_response_id=%q, got %q", "resp_1", continuationReqPrevID)
 	}
-	if continuationHasTools {
-		t.Error("continuation request should omit tools")
+	if !continuationHasTools {
+		t.Error("continuation request should include tools")
 	}
 	if continuationInputLen != 1 {
 		t.Errorf("continuation request should include only incremental input (1 item), got %d", continuationInputLen)
