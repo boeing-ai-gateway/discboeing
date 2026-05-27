@@ -90,3 +90,5 @@ __pycache__/
 /discobot/build
 /discobot/build-errors.log
 /discobot/node_modules
+/vscode-lite/web/node_modules
+/vscode-lite/web/dist

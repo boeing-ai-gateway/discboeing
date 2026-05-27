@@ -90,7 +90,13 @@
     "refresh-models": "./scripts/refresh-models-data.sh",
     "test:ui-go": "cd ui-go && go test -v ./...",
     "test:discobot": "cd discobot && go test -v ./...",
-    "dist:app": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder"
+    "dist:app": "pnpm build:frontend && pnpm build:server && node scripts/build-electron.mjs && electron-builder",
+    "vscode-lite:web:dev": "pnpm --dir ./vscode-lite/web dev",
+    "vscode-lite:web:build": "pnpm --dir ./vscode-lite/web build",
+    "vscode-lite:web:check": "pnpm --dir ./vscode-lite/web check",
+    "vscode-lite:server:dev": "go run ./vscode-lite/cmd/vscode-lite",
+    "vscode-lite:server:build": "go build ./vscode-lite/cmd/vscode-lite",
+    "vscode-lite:test": "go test ./vscode-lite/..."
   },
   "dependencies": {
     "electron-updater": "^6.8.3"

@@ -2,6 +2,7 @@ packages:
   - ui
   - ui-go
   - discobot
+  - vscode-lite/web
 
 allowBuilds:
   "@parcel/watcher": true

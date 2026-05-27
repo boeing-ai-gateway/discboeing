@@ -1,0 +1,23 @@
+{
+	"name": "vscode-lite-web",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 0.0.0.0 --port 3334",
+		"build": "vite build",
+		"check": "svelte-check --tsconfig ./tsconfig.json"
+	},
+	"dependencies": {
+		"monaco-editor": "latest",
+		"svelte": "latest",
+		"vscode-languageserver-protocol": "latest"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "latest",
+		"svelte-check": "latest",
+		"typescript": "latest",
+		"vite": "latest",
+		"typescript-language-server": "latest"
+	}
+}
