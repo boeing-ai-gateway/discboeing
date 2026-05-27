@@ -578,6 +578,7 @@ type runHookOptions struct {
 	env          map[string]string
 	changedFiles []string
 	outputPath   string
+	model        string
 }
 
 func (m *Manager) runHook(hook Hook, opts runHookOptions) HookResult {
@@ -620,6 +621,7 @@ func (m *Manager) runAIHook(hook Hook, opts runHookOptions) HookResult {
 		CWD:            m.workspaceRoot,
 		Description:    hook.Description,
 		Prompt:         formatAIHookPrompt(threadID, hook, opts.changedFiles, m.workspaceRoot),
+		Model:          opts.model,
 		SubagentType:   hook.Subagent,
 		ParentThreadID: m.sessionID,
 	})
@@ -740,8 +742,12 @@ func aiHookSucceeded(output string) bool {
 }
 
 // EvaluateFileHooks evaluates file hooks after a completion.
-func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
+func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 	noAction := FileHookEvalResult{}
+	hookModel := ""
+	if len(model) > 0 {
+		hookModel = strings.TrimSpace(model[0])
+	}
 
 	m.mu.Lock()
 	m.checkAndReloadHooks()
@@ -819,6 +825,7 @@ func (m *Manager) EvaluateFileHooks() FileHookEvalResult {
 			env:          m.visibleEnvSnapshot(),
 			changedFiles: matching,
 			outputPath:   outputPath,
+			model:        hookModel,
 		})
 
 		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath)
@@ -843,7 +850,7 @@ func (m *Manager) OnTurnComplete(threadID string) {
 	if m == nil || !m.HasFileHooks() {
 		return
 	}
-	go m.scheduleEvaluation(threadID)
+	go m.scheduleEvaluation(threadID, m.threadModel(threadID))
 }
 
 // StartFailureReprompt sends or queues a hook-failure follow-up message to the
@@ -911,11 +918,11 @@ func hookFailurePromptRequest(result FileHookEvalResult) agent.PromptRequest {
 	}
 }
 
-func (m *Manager) scheduleEvaluation(threadID string) {
+func (m *Manager) scheduleEvaluation(threadID, model string) {
 	// 200ms grace period to let SSE flush.
 	time.Sleep(200 * time.Millisecond)
 
-	result := m.EvaluateFileHooks()
+	result := m.EvaluateFileHooks(model)
 	m.reconcileNotificationState()
 	if !result.ShouldReprompt {
 		return
@@ -941,6 +948,20 @@ func (m *Manager) scheduleEvaluation(threadID string) {
 	if err := m.StartFailureReprompt(threadID, result); err != nil {
 		log.Printf("hooks: failed to start re-prompt: %v", err)
 	}
+}
+
+func (m *Manager) threadModel(threadID string) string {
+	m.mu.Lock()
+	aiHookAgent := m.aiHookAgent
+	m.mu.Unlock()
+	if aiHookAgent == nil {
+		return ""
+	}
+	info, err := aiHookAgent.GetThreadInfo(threadID)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(info.Model)
 }
 
 func (m *Manager) reconcileNotificationState() {

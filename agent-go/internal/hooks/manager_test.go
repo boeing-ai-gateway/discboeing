@@ -355,6 +355,39 @@ Only approve idiomatic Go changes.
 	}
 }
 
+func TestRunAIHook_UsesProvidedModel(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+
+	runner := &testAIHookAgent{response: "SUCCESS looks good"}
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetAIHookAgent(runner)
+
+	result := mgr.runAIHook(Hook{
+		ID:          "review-md",
+		Name:        "Review",
+		Description: "Review changes",
+		Engine:      HookEngineAI,
+		Prompt:      "Only approve safe changes.",
+		Subagent:    "reviewer",
+	}, runHookOptions{
+		outputPath: filepath.Join(testHomeDir, "hook.log"),
+		model:      "openai/gpt-5.5",
+	})
+
+	if !result.Success {
+		t.Fatalf("expected AI hook to pass, output: %s", result.Output)
+	}
+	if len(runner.models) != 1 {
+		t.Fatalf("prompt models = %d, want 1", len(runner.models))
+	}
+	if runner.models[0] != "openai/gpt-5.5" {
+		t.Fatalf("prompt model = %q, want openai/gpt-5.5", runner.models[0])
+	}
+}
+
 func TestRunSessionHooks_CapturesBackgroundHookEnv(t *testing.T) {
 	testHomeDir := t.TempDir()
 	t.Setenv("HOME", testHomeDir)
@@ -705,6 +738,7 @@ type testAIHookAgent struct {
 	promptThreadIDs []string
 	prompts         []string
 	subagents       []string
+	models          []string
 	metadataTypes   []string
 }
 
@@ -745,6 +779,7 @@ func (a *testAIHookAgent) GetThreadInfo(threadID string) (agent.ThreadInfo, erro
 func (a *testAIHookAgent) Prompt(_ context.Context, threadID string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
 	a.promptThreadIDs = append(a.promptThreadIDs, threadID)
 	a.subagents = append(a.subagents, req.SubagentType)
+	a.models = append(a.models, req.Model)
 	if len(req.UserParts) == 1 {
 		if part, ok := req.UserParts[0].(message.UITextPart); ok {
 			a.prompts = append(a.prompts, part.Text)

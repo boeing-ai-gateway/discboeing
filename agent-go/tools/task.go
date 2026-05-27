@@ -57,6 +57,7 @@ type PromptTaskRequest struct {
 	CWD            string
 	Description    string
 	Prompt         string
+	Model          string
 	SubagentType   string
 	ParentThreadID string
 	ParentTaskID   string
@@ -247,6 +248,7 @@ func RunPromptTask(ctx context.Context, taskAgent PromptTaskAgent, req PromptTas
 
 	startSubAgentRun(rec, taskAgent, threadID, agent.PromptRequest{
 		UserParts:     []message.UIPart{message.UITextPart{Text: prompt}},
+		Model:         req.Model,
 		SubagentType:  req.SubagentType,
 		ParentTaskID:  threadID,
 		SubagentDepth: req.Depth,
