@@ -1,9 +1,9 @@
 package handler
 
-import "github.com/obot-platform/discobot/server/api"
+import "github.com/obot-platform/discobot/server/client"
 
-type ChatRequest = api.ChatRequest
-type ChatResponse = api.ChatResponse
-type ModelInfo = api.ModelInfo
-type ResizeData = api.ResizeData
-type TerminalMessage = api.TerminalMessage
+type ChatRequest = client.ChatRequest
+type ChatResponse = client.ChatResponse
+type ModelInfo = client.ModelInfo
+type ResizeData = client.ResizeData
+type TerminalMessage = client.TerminalMessage

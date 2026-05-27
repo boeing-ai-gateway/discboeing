@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
-	"github.com/obot-platform/discobot/server/api"
+	"github.com/obot-platform/discobot/server/client"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/terminal"
@@ -208,7 +208,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 				log.Printf("terminal: JSON marshal error: %v", err)
 				return
 			}
-			msg := api.TerminalMessage{Type: "output", Data: json.RawMessage(data)}
+			msg := client.TerminalMessage{Type: "output", Data: json.RawMessage(data)}
 			if err := conn.WriteJSON(msg); err != nil {
 				// WebSocket write failed (client disconnected); stop sending.
 				return
@@ -227,7 +227,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 	go func() {
 		defer close(inputDone)
 		for {
-			var msg api.TerminalMessage
+			var msg client.TerminalMessage
 			if err := conn.ReadJSON(&msg); err != nil {
 				if websocket.IsUnexpectedCloseError(err,
 					websocket.CloseNormalClosure,
@@ -251,7 +251,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 				}
 
 			case "resize":
-				var resize api.ResizeData
+				var resize client.ResizeData
 				if err := json.Unmarshal(msg.Data, &resize); err != nil {
 					log.Printf("terminal: failed to unmarshal resize: %v", err)
 					continue

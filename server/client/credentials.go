@@ -1,4 +1,4 @@
-package api
+package client
 
 // CredentialVisibility controls where a credential may be exposed.
 type CredentialVisibility struct {

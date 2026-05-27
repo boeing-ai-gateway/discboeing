@@ -3,17 +3,17 @@ package handler
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/server/api"
+	"github.com/obot-platform/discobot/server/client"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/providers"
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
 // toModelInfos converts service models to API response models.
-func toModelInfos(models []service.Model) []api.ModelInfo {
-	modelInfos := make([]api.ModelInfo, len(models))
+func toModelInfos(models []service.Model) []client.ModelInfo {
+	modelInfos := make([]client.ModelInfo, len(models))
 	for i, m := range models {
-		modelInfos[i] = api.ModelInfo{
+		modelInfos[i] = client.ModelInfo{
 			ID:               m.ID,
 			Name:             m.Name,
 			Provider:         m.Provider,
@@ -41,7 +41,7 @@ func (h *Handler) GetProjectModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.ModelsResponse{Models: toModelInfos(models)})
+	h.JSON(w, http.StatusOK, client.ModelsResponse{Models: toModelInfos(models)})
 }
 
 // GetAuthProviders returns available auth providers from models.dev data

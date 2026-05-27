@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/server/api"
+	"github.com/obot-platform/discobot/server/client"
 	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/oauth"
@@ -22,7 +22,7 @@ func (h *Handler) GetCredentialTypes(w http.ResponseWriter, _ *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{"credentialTypes": providers.GetCredentialTypes()})
 }
 
-func credentialVisibilityFromAPI(visibility api.CredentialVisibility) service.CredentialVisibility {
+func credentialVisibilityFromAPI(visibility client.CredentialVisibility) service.CredentialVisibility {
 	return service.CredentialVisibility{
 		Tools:    visibility.Tools,
 		Console:  visibility.Console,
@@ -48,7 +48,7 @@ func (h *Handler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req api.CreateCredentialRequest
+	var req client.CreateCredentialRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -420,7 +420,7 @@ func (h *Handler) AnthropicAuthorize(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req api.AnthropicExchangeRequest
+	var req client.AnthropicExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -494,7 +494,7 @@ func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCopilotDeviceCode initiates device flow
 func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req api.GitHubCopilotDeviceCodeRequest
+	var req client.GitHubCopilotDeviceCodeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		// Allow empty body, default to github.com
 		req.DeploymentType = "github.com"
@@ -523,7 +523,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Convert to camelCase for frontend
-	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, client.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: deviceResp.VerificationURI,
@@ -537,7 +537,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 func (h *Handler) GitHubCopilotPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req api.GitHubCopilotPollRequest
+	var req client.GitHubCopilotPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -638,7 +638,7 @@ func normalizeGitHubDomain(raw string) string {
 
 // GitHubDeviceCode initiates device flow for GitHub git operations (repo scope)
 func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req api.GitHubDeviceCodeRequest
+	var req client.GitHubDeviceCodeRequest
 	// Allow empty body, default to github.com
 	_ = h.DecodeJSON(r, &req)
 
@@ -656,7 +656,7 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, client.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: deviceResp.VerificationURI,
@@ -674,7 +674,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req api.GitHubAuthorizeRequest
+	var req client.GitHubAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
 	domain := normalizeGitHubDomain(req.EnterpriseURL)
@@ -718,7 +718,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusOK, api.GitHubAuthorizeResponse{
+	h.JSON(w, http.StatusOK, client.GitHubAuthorizeResponse{
 		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
@@ -731,7 +731,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req api.GitHubPollRequest
+	var req client.GitHubPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -827,7 +827,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req api.GitHubExchangeRequest
+	var req client.GitHubExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -893,7 +893,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) GitHubCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req api.GitHubCallbackStatusRequest
+	var req client.GitHubCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -966,7 +966,7 @@ func (h *Handler) CodexDeviceCode(w http.ResponseWriter, r *http.Request) {
 		interval = 5
 	}
 
-	h.JSON(w, http.StatusOK, api.CodexDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, client.CodexDeviceCodeResponse{
 		DeviceAuthID:    deviceResp.DeviceAuthID,
 		UserCode:        deviceResp.UserCode,
 		VerificationURI: oauth.CodexDevicePageURL,
@@ -982,7 +982,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req api.CodexAuthorizeRequest
+	var req client.CodexAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
 	redirectURI := strings.TrimSpace(req.RedirectURI)
@@ -1005,7 +1005,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusOK, api.CodexAuthorizeResponse{
+	h.JSON(w, http.StatusOK, client.CodexAuthorizeResponse{
 		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
@@ -1018,7 +1018,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req api.CodexPollRequest
+	var req client.CodexPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -1094,7 +1094,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req api.CodexExchangeRequest
+	var req client.CodexExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -1151,7 +1151,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 
 // CodexCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) CodexCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req api.CodexCallbackStatusRequest
+	var req client.CodexCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

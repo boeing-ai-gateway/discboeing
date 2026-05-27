@@ -1,4 +1,4 @@
-package api
+package client
 
 import (
 	"bytes"
@@ -30,11 +30,11 @@ type Client struct {
 	Terminal    *TerminalService
 }
 
-// ClientOption customizes a Client.
-type ClientOption func(*Client)
+// Option customizes a Client.
+type Option func(*Client)
 
 // WithHTTPClient sets the HTTP client used for API requests.
-func WithHTTPClient(httpClient *http.Client) ClientOption {
+func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient != nil {
 			c.httpClient = httpClient
@@ -44,7 +44,7 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 
 // NewClient creates a Discobot API client rooted at baseURL, for example
 // http://127.0.0.1:3001.
-func NewClient(baseURL string, opts ...ClientOption) (*Client, error) {
+func NewClient(baseURL string, opts ...Option) (*Client, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		return nil, fmt.Errorf("base URL is required")
 	}

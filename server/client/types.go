@@ -4,7 +4,7 @@
 // which keeps them unavailable to external consumers such as alternate frontends. This package
 // is the public boundary we can grow into a shared contract for both server
 // handlers and Go clients.
-package api
+package client
 
 import (
 	"encoding/json"

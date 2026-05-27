@@ -1,4 +1,4 @@
-package api
+package client
 
 // CredentialsService covers project credentials and OAuth/device-code flows.
 type CredentialsService struct{ client *Client }

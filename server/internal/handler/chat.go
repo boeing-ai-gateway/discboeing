@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/api"
+	"github.com/obot-platform/discobot/server/client"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
@@ -41,7 +41,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(ctx)
 
 	// Parse request
-	var req api.ChatRequest
+	var req client.ChatRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -119,7 +119,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := api.ChatResponse{
+	response := client.ChatResponse{
 		WorkspaceID: sessionWorkspaceID,
 		SessionID:   sessionID,
 		ThreadID:    threadID,
