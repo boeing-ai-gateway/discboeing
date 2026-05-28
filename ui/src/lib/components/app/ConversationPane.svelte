@@ -46,6 +46,7 @@
 	import OptimizedToolRenderer from "$lib/components/ai/tool-renderers/OptimizedToolRenderer.svelte";
 	import type { DynamicToolPart } from "$lib/components/ai/types";
 	import ConversationComposer from "$lib/components/app/ConversationComposer.svelte";
+	import AssistantMessageCopyActions from "$lib/components/app/parts/AssistantMessageCopyActions.svelte";
 	import ConversationSelectionComment from "$lib/components/app/parts/ConversationSelectionComment.svelte";
 	import MessageResponseWithCommand from "$lib/components/app/parts/MessageResponseWithCommand.svelte";
 	import {
@@ -1771,6 +1772,9 @@
 																			),
 																		)}
 																	</MessageContent>
+																	<AssistantMessageCopyActions
+																		message={groupedAssistantMessage}
+																	/>
 																</Message>
 															{/each}
 															{#if partGroups && partGroups.collapsedParts.length > 0}
@@ -1784,6 +1788,9 @@
 																			partGroups.collapsedParts,
 																		)}
 																	</MessageContent>
+																	<AssistantMessageCopyActions
+																		message={assistantMessage}
+																	/>
 																</Message>
 															{/if}
 														</div>
@@ -1808,6 +1815,7 @@
 															),
 												)}
 											</MessageContent>
+											<AssistantMessageCopyActions message={assistantMessage} />
 										</Message>
 									{/if}
 								{/if}
