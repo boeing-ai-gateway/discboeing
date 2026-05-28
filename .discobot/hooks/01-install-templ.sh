@@ -12,7 +12,10 @@ if [[ ! -f "$module_dir/go.mod" ]]; then
 	exit 0
 fi
 
-version="$(cd "$module_dir" && go list -m -f '{{.Version}}' github.com/a-h/templ 2>/dev/null || true)"
+version="$(
+	cd "$module_dir"
+	go list -m -f '{{.Version}}' github.com/a-h/templ 2>/dev/null || true
+)"
 if [[ -z "$version" ]]; then
 	echo "github.com/a-h/templ is not listed in discobot/go.mod; skipping Templ install"
 	exit 0
