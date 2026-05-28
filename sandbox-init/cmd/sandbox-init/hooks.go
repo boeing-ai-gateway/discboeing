@@ -58,6 +58,8 @@ type hookStatusFile struct {
 	Hooks           map[string]hookRunStatus `json:"hooks"`
 	PendingHooks    []string                 `json:"pendingHooks"`
 	LastEvaluatedAt string                   `json:"lastEvaluatedAt"`
+	ReportingPaused bool                     `json:"reportingPaused"`
+	LastThreadID    string                   `json:"lastThreadId,omitempty"`
 }
 
 // hooksDataDir returns the hooks data directory for a session: ~/.discobot/threads/{sessionId}/hooks/

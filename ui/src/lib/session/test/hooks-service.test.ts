@@ -66,6 +66,7 @@ const hooksStatusResponse: HooksStatusResponse = {
 	},
 	pendingHooks: ["hook-2"],
 	lastEvaluatedAt: "2026-03-11T00:00:01.000Z",
+	reportingPaused: false,
 };
 
 test("toHooksStatus maps API hook response fields into session hook state", () => {

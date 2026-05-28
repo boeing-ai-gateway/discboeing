@@ -176,6 +176,43 @@ func (m *Manager) SetStartupHookEnv(fn func(Hook) map[string]string) {
 	m.mu.Unlock()
 }
 
+// SetReportingPaused controls whether hook failures are reported back to the
+// LLM. Hooks continue to run and update status while reporting is paused.
+func (m *Manager) SetReportingPaused(paused bool) error {
+	status := LoadStatus(m.hooksDataDir)
+	if status.ReportingPaused == paused {
+		return nil
+	}
+	status.ReportingPaused = paused
+	if err := SaveStatus(m.hooksDataDir, status); err != nil {
+		return err
+	}
+	m.emitStatusChunk(status)
+	if !paused && status.LastThreadID != "" {
+		go m.scheduleEvaluation(status.LastThreadID, m.threadModel(status.LastThreadID), true)
+	}
+	return nil
+}
+
+// ReportingPaused returns whether hook failures are currently suppressed.
+func (m *Manager) ReportingPaused() bool {
+	return LoadStatus(m.hooksDataDir).ReportingPaused
+}
+
+func (m *Manager) setLastEvaluationThread(threadID string) {
+	if strings.TrimSpace(threadID) == "" {
+		return
+	}
+	status := LoadStatus(m.hooksDataDir)
+	if status.LastThreadID == threadID {
+		return
+	}
+	status.LastThreadID = threadID
+	if err := SaveStatus(m.hooksDataDir, status); err != nil {
+		log.Printf("hooks: failed to record last hook thread: %v", err)
+	}
+}
+
 func (m *Manager) visibleStartupHookEnv(hook Hook) map[string]string {
 	env := m.visibleEnvSnapshot()
 	m.mu.Lock()
@@ -819,12 +856,15 @@ func parseAIHookEvaluation(output string) (aiHookEvaluation, bool) {
 
 // EvaluateFileHooks evaluates file hooks after a completion.
 func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
-	noAction := FileHookEvalResult{}
 	hookModel := ""
 	if len(model) > 0 {
 		hookModel = strings.TrimSpace(model[0])
 	}
+	return m.evaluateFileHooks(hookModel, false)
+}
 
+func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHookEvalResult {
+	noAction := FileHookEvalResult{}
 	m.mu.Lock()
 	m.checkAndReloadHooks()
 	fileHooks := make([]Hook, len(m.fileHooks))
@@ -868,7 +908,7 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 	}
 
 	// Skip guard: if no new files and didn't add new pending, don't re-run failed hooks
-	if len(newFiles) == 0 && !addedNewPending {
+	if len(newFiles) == 0 && !addedNewPending && !forcePending {
 		return noAction
 	}
 
@@ -898,6 +938,9 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 			globalIgnorePatterns,
 		)
 		reportFiles := matchHookFiles(changedSinceHook, hook)
+		if len(reportFiles) == 0 && forcePending {
+			reportFiles = matching
+		}
 		if len(reportFiles) == 0 {
 			continue
 		}
@@ -936,12 +979,16 @@ func (m *Manager) OnTurnComplete(threadID string) {
 	if m == nil || !m.HasFileHooks() {
 		return
 	}
-	go m.scheduleEvaluation(threadID, m.threadModel(threadID))
+	m.setLastEvaluationThread(threadID)
+	go m.scheduleEvaluation(threadID, m.threadModel(threadID), false)
 }
 
 // StartFailureReprompt sends or queues a hook-failure follow-up message to the
 // LLM.
 func (m *Manager) StartFailureReprompt(threadID string, result FileHookEvalResult) error {
+	if m.ReportingPaused() {
+		return nil
+	}
 	req := hookFailurePromptRequest(result)
 	m.mu.Lock()
 	conversations := m.conversations
@@ -1004,13 +1051,16 @@ func hookFailurePromptRequest(result FileHookEvalResult) agent.PromptRequest {
 	}
 }
 
-func (m *Manager) scheduleEvaluation(threadID, model string) {
+func (m *Manager) scheduleEvaluation(threadID, model string, forcePending bool) {
 	// 200ms grace period to let SSE flush.
 	time.Sleep(200 * time.Millisecond)
 
-	result := m.EvaluateFileHooks(model)
+	result := m.evaluateFileHooks(model, forcePending)
 	m.reconcileNotificationState()
 	if !result.ShouldReprompt {
+		return
+	}
+	if m.ReportingPaused() {
 		return
 	}
 

@@ -3,6 +3,8 @@
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import DownloadIcon from "@lucide/svelte/icons/download";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
+	import PauseCircleIcon from "@lucide/svelte/icons/pause-circle";
+	import PlayCircleIcon from "@lucide/svelte/icons/play-circle";
 	import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 	import XCircleIcon from "@lucide/svelte/icons/x-circle";
 	import { api } from "$lib/api-client";
@@ -19,9 +21,16 @@
 		hooksStatus: HooksStatus;
 		outputById: Record<string, HookOutputState>;
 		onRerunHook: (hookId: string) => void;
+		onSetReportingPaused: (paused: boolean) => void;
 	};
 
-	let { expanded, hooksStatus, outputById, onRerunHook }: Props = $props();
+	let {
+		expanded,
+		hooksStatus,
+		outputById,
+		onRerunHook,
+		onSetReportingPaused,
+	}: Props = $props();
 
 	const session = useSessionContext();
 	const sessionView = session.ui;
@@ -157,10 +166,30 @@
 
 {#if expanded && hooksStatus.hooks.length > 0}
 	<div class="mb-2 rounded-lg border border-border bg-background shadow-sm">
-		<div
-			class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
-		>
-			Hooks ({hookPassedCount()} passed)
+		<div class="flex items-center gap-2 border-b border-border px-3 py-2">
+			<div class="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+				Hooks ({hookPassedCount()} passed)
+				{#if hooksStatus.reportingPaused}
+					<span class="text-amber-500"> · reporting paused</span>
+				{/if}
+			</div>
+			<Button
+				variant="ghost"
+				size="xs"
+				class="h-7 gap-1.5 px-2"
+				onclick={() => onSetReportingPaused(!hooksStatus.reportingPaused)}
+				title={hooksStatus.reportingPaused
+					? "Resume reporting hook failures to the LLM"
+					: "Pause reporting hook failures to the LLM"}
+			>
+				{#if hooksStatus.reportingPaused}
+					<PlayCircleIcon class="size-3.5" />
+					Resume
+				{:else}
+					<PauseCircleIcon class="size-3.5" />
+					Pause
+				{/if}
+			</Button>
 		</div>
 		<div class="max-h-48 overflow-auto p-1">
 			{#each hooksStatus.hooks as hook (hook.hookId)}

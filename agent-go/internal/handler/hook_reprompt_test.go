@@ -78,6 +78,40 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 	}
 }
 
+func TestStartHookFailureReprompt_SuppressedWhenReportingPaused(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(_ context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	cm := agent.NewConversationManager(ma)
+	hookManager := hooks.NewManager(t.TempDir(), "paused-session")
+	hookManager.SetRepromptRunner(cm, nil)
+	if err := hookManager.SetReportingPaused(true); err != nil {
+		t.Fatalf("SetReportingPaused() failed: %v", err)
+	}
+
+	err := hookManager.StartFailureReprompt("thread-1", hooks.FileHookEvalResult{
+		ShouldReprompt: true,
+		LLMMessage:     "### Hook failed: Go Check",
+	})
+	if err != nil {
+		t.Fatalf("StartFailureReprompt() failed: %v", err)
+	}
+
+	select {
+	case <-reqCh:
+		t.Fatal("expected paused hook reporting not to send prompt request")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestStartHookFailureReprompt_UsesResumeForInterruptedTurn(t *testing.T) {
 	type resumeCall struct {
 		threadID string
@@ -305,6 +339,89 @@ exit 1
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting for second hook evaluation to finish")
+}
+
+func TestResumeHookReporting_ReevaluatesPendingHooksOnLastThread(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, hooks.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+echo "lint failed"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hookManager := hooks.NewManager(workspaceRoot, "session-123")
+	if err := hookManager.Init(); err != nil {
+		t.Fatal(err)
+	}
+	if err := hookManager.SetReportingPaused(true); err != nil {
+		t.Fatal(err)
+	}
+
+	reqThreadCh := make(chan string, 2)
+	ma := &streamTestAgent{
+		promptFn: func(_ context.Context, threadID string, _ agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqThreadCh <- threadID
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	cm := agent.NewConversationManager(ma)
+	_ = New("", cm, hookManager, nil, nil)
+
+	hookManager.OnTurnComplete("thread-1")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		status := hookManager.GetStatus()
+		if status.Hooks["go-check"].RunCount > 0 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	status := hookManager.GetStatus()
+	if status.Hooks["go-check"].RunCount == 0 {
+		t.Fatal("timed out waiting for paused hook evaluation")
+	}
+	select {
+	case got := <-reqThreadCh:
+		t.Fatalf("unexpected hook notification while paused for %q", got)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if err := hookManager.SetReportingPaused(false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-reqThreadCh:
+		if got != "thread-1" {
+			t.Fatalf("resumed hook notification thread = %q, want %q", got, "thread-1")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for hook notification after resume")
+	}
 }
 
 func TestScheduleHookEvaluation_QueuesHookRepromptWhenThreadBusy(t *testing.T) {

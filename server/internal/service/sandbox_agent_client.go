@@ -2540,6 +2540,55 @@ func (c *SandboxAgentClient) RerunHook(ctx context.Context, sessionID, hookID st
 	return &result, nil
 }
 
+// UpdateHooksReporting toggles whether hook failures report back to the LLM.
+func (c *SandboxAgentClient) UpdateHooksReporting(ctx context.Context, sessionID string, paused bool) (*sandboxapi.HooksStatusResponse, error) {
+	body, err := json.Marshal(sandboxapi.UpdateHooksReportingRequest{Paused: paused})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		req, err := http.NewRequestWithContext(ctx, "PATCH", "http://sandbox/hooks/reporting", bytes.NewReader(body))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update hook reporting: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.HooksStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // ============================================================================
 // Service Methods
 // ============================================================================

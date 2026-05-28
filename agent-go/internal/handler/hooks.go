@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -25,6 +26,7 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 			Hooks:           map[string]api.HookRunStatus{},
 			PendingHooks:    []string{},
 			LastEvaluatedAt: "",
+			ReportingPaused: false,
 		}
 	}
 
@@ -33,6 +35,7 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 		Hooks:           make(map[string]api.HookRunStatus, len(status.Hooks)),
 		PendingHooks:    status.PendingHooks,
 		LastEvaluatedAt: status.LastEvaluatedAt,
+		ReportingPaused: status.ReportingPaused,
 	}
 	if resp.PendingHooks == nil {
 		resp.PendingHooks = []string{}
@@ -54,6 +57,27 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 	}
 
 	return resp
+}
+
+// UpdateHooksReporting handles PATCH /hooks/reporting — toggles LLM reporting.
+func (h *Handler) UpdateHooksReporting(w http.ResponseWriter, r *http.Request) {
+	if h.hookManager == nil {
+		h.Error(w, http.StatusNotFound, "Hooks not enabled")
+		return
+	}
+
+	var req api.UpdateHooksReportingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := h.hookManager.SetReportingPaused(req.Paused); err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, h.hooksStatusResponse())
 }
 
 // HooksState handles GET /hooks/state — returns hook status and inline outputs.

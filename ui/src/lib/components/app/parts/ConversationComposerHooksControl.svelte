@@ -1,6 +1,7 @@
 <script lang="ts">
 	import AlertTriangleIcon from "@lucide/svelte/icons/alert-triangle";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
+	import PauseCircleIcon from "@lucide/svelte/icons/pause-circle";
 	import ZapIcon from "@lucide/svelte/icons/zap";
 	import { Button } from "$lib/components/ui/button";
 	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
@@ -51,7 +52,9 @@
 			expanded = !expanded;
 		}}
 	>
-		{#if hookHasRunning()}
+		{#if hooksStatus.reportingPaused}
+			<PauseCircleIcon class="size-3.5 text-amber-500" />
+		{:else if hookHasRunning()}
 			<Loader2Icon class="size-3.5 animate-spin text-blue-500" />
 		{:else if hookHasFailures()}
 			<AlertTriangleIcon class="size-3.5 text-yellow-500" />

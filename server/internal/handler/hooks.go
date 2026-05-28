@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
+	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 )
 
 // GetHooksStatus returns hook evaluation status for a session's sandbox.
@@ -48,6 +50,37 @@ func (h *Handler) GetHooksState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.chatService.GetHooksState(ctx, projectID, sessionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
+// UpdateHooksReporting toggles whether hook failures report back to the LLM.
+// PATCH /api/projects/{projectId}/sessions/{sessionId}/hooks/reporting
+func (h *Handler) UpdateHooksReporting(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+
+	var req sandboxapi.UpdateHooksReportingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	result, err := h.chatService.UpdateHooksReporting(ctx, projectID, sessionID, req.Paused)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "not found") {

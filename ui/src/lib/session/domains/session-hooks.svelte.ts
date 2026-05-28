@@ -154,6 +154,13 @@ export function createSessionHooksDomain(
 				}
 			})();
 		},
+		setReportingPaused: async (paused: boolean) => {
+			if (!args.hasSession()) {
+				return;
+			}
+			streamedStatus = await api.updateHooksReporting(args.sessionId, paused);
+			resource.invalidate();
+		},
 		refresh,
 		invalidate: resource.invalidate,
 		applyStatusUpdate,

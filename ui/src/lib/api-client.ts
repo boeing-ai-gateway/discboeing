@@ -1219,6 +1219,25 @@ class ApiClient {
 		);
 	}
 
+	/**
+	 * Toggle whether hook failures report back to the LLM.
+	 * Hooks still run and update status while reporting is paused.
+	 * @param sessionId Session ID
+	 * @param paused Whether reporting should be paused
+	 */
+	async updateHooksReporting(
+		sessionId: string,
+		paused: boolean,
+	): Promise<HooksStatusResponse> {
+		return this.fetch<HooksStatusResponse>(
+			`/sessions/${sessionId}/hooks/reporting`,
+			{
+				method: "PATCH",
+				body: JSON.stringify({ paused }),
+			},
+		);
+	}
+
 	// User Preferences (user-scoped, not project-scoped)
 
 	/**

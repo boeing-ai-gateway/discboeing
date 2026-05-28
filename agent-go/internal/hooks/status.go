@@ -28,6 +28,8 @@ type StatusFile struct {
 	Hooks           map[string]HookRunStatus `json:"hooks"`
 	PendingHooks    []string                 `json:"pendingHooks"`
 	LastEvaluatedAt string                   `json:"lastEvaluatedAt"`
+	ReportingPaused bool                     `json:"reportingPaused"`
+	LastThreadID    string                   `json:"lastThreadId,omitempty"`
 }
 
 // GetHooksDataDir returns the hooks data directory for a session.

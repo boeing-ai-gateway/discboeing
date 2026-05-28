@@ -1543,6 +1543,7 @@ export interface HooksStatusResponse {
 	hooks: Record<string, HookRunStatus>;
 	pendingHooks: string[];
 	lastEvaluatedAt: string;
+	reportingPaused: boolean;
 }
 
 /** Hook output log response */

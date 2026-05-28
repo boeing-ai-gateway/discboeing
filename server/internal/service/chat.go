@@ -664,6 +664,22 @@ func (c *ChatService) GetHooksState(ctx context.Context, projectID, sessionID st
 	return client.GetHooksState(ctx)
 }
 
+// UpdateHooksReporting toggles whether sandbox hook failures report back to the LLM.
+// The sandbox is automatically reconciled if not running.
+func (c *ChatService) UpdateHooksReporting(ctx context.Context, projectID, sessionID string, paused bool) (*sandboxapi.HooksStatusResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.UpdateHooksReporting(ctx, paused)
+}
+
 // GetHookOutput retrieves the output log for a specific hook from the sandbox.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) GetHookOutput(ctx context.Context, projectID, sessionID, hookID string) (*sandboxapi.HookOutputResponse, error) {

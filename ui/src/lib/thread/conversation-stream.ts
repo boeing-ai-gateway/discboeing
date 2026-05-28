@@ -164,6 +164,10 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			hooks,
 			pendingHooks: [...value.pendingHooks],
 			lastEvaluatedAt: value.lastEvaluatedAt,
+			reportingPaused:
+				typeof value.reportingPaused === "boolean"
+					? value.reportingPaused
+					: false,
 		};
 	};
 

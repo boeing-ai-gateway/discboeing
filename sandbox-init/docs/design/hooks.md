@@ -112,6 +112,13 @@ Session hook failures are retried up to 10 times, then logged without preventing
 
 Runtime hook state is persisted under `~/.discobot/threads/{sessionId}/hooks/`, including `status.json` and per-hook output logs in the `output/` subdirectory.
 
+Hook reporting can be paused from the UI. While paused, hooks continue to run,
+write output logs, and update status, but failed hook results are not sent back
+to the main LLM conversation. The pause flag is stored in `status.json` as
+`reportingPaused`. Agent-go also records `lastThreadId` so resuming reporting can
+re-run pending hook checks against the last conversation thread that completed a
+turn.
+
 ## Example
 
 ```bash
