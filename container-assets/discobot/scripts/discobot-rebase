@@ -62,7 +62,8 @@ run_and_print_section "git fetch ${remote_name}" git fetch "$remote_name"
 
 if ! run_and_print_section "GIT_EDITOR=true git rebase --autostash ${upstream}" env GIT_EDITOR=true git rebase --autostash "$upstream"; then
 	echo "Discobot rebase failed while rebasing onto ${upstream}." >&2
-	echo "If there are conflicts, explain them clearly to the user, resolve them, then continue with GIT_EDITOR=true git rebase --continue. If the user wants to stop, use git rebase --abort." >&2
+	echo "If there are conflicts, automatically resolve them, then continue with GIT_EDITOR=true git rebase --continue." >&2
+	echo "Do not ask the user to resolve conflicts unless you are blocked by missing information. If the user wants to stop, use git rebase --abort." >&2
 	echo >&2
 	print_section "git status --short --branch" git status --short --branch >&2 || true
 	print_section "git diff --name-only --diff-filter=U" git diff --name-only --diff-filter=U >&2 || true
