@@ -29,8 +29,19 @@ type CompactionRecord struct {
 // tokenBudget holds the calculated token budgets for compaction.
 type tokenBudget struct {
 	InputLimit        int // max tokens for input (history + tools)
-	CompactionTrigger int // 80% of InputLimit — threshold to fire compaction
+	CompactionTrigger int // 90% of InputLimit — threshold to fire compaction
 	SummaryMaxTokens  int // 20% of InputLimit — cap on generated summary
+}
+
+type compactionItem struct {
+	message message.Message
+	leafID  string
+}
+
+type compactionPlan struct {
+	messagesToSummarize []message.Message
+	tail                []message.Message
+	leafID              string
 }
 
 // computeBudget calculates token budgets from the model's context window.
@@ -54,16 +65,18 @@ func computeBudget(cfg *TurnConfig) tokenBudget {
 		return tokenBudget{} // no context window info — skip compaction
 	}
 
-	// Reserve for output: use MaxOutputTokens if available, else 25%.
+	// Reserve for output: use MaxOutputTokens if available, else 25% capped at
+	// 16k so large-context models do not compact too early.
 	if outputReserve == 0 {
 		outputReserve = cw / 4
+		outputReserve = min(outputReserve, 16_000)
 	}
 
 	// Input budget is everything minus the output reserve.
 	inputLimit := cw - outputReserve
 
-	// Compaction fires at 80% of the input budget.
-	compactionTrigger := inputLimit * 80 / 100
+	// Compaction fires at 90% of the input budget.
+	compactionTrigger := inputLimit * 90 / 100
 
 	// Summary generation gets at most 20% of the input budget.
 	summaryMaxTokens := inputLimit * 20 / 100
@@ -219,7 +232,7 @@ func maybeCompact(
 	}
 
 	// No existing compaction — count tokens on the full history.
-	// Compact at 80% of input budget (CompactionTrigger).
+	// Compact at 90% of input budget (CompactionTrigger).
 	if countTokens(fullHistory, lastUsage) <= budget.CompactionTrigger {
 		return fullHistory, nil
 	}
@@ -246,7 +259,7 @@ func forceCompact(
 		// summarisation possible (128k input, 20% summary cap).
 		budget = tokenBudget{
 			InputLimit:        128_000,
-			CompactionTrigger: 102_400,
+			CompactionTrigger: 115_200,
 			SummaryMaxTokens:  25_600,
 		}
 	}
@@ -301,10 +314,9 @@ func ForceCompactThread(
 
 // performCompaction summarizes a conversation and returns compacted history.
 //
-// baseMessages, when non-nil, is used as the input to summarisation instead of
-// the raw full history. Pass the already-compacted form (old summary + new
-// messages) here on re-compaction so the LLM builds on the previous summary
-// rather than re-processing all raw messages from scratch.
+// baseMessages, when non-nil, indicates re-compaction should build on the
+// existing summary plus messages after the existing compaction leaf rather than
+// re-processing all raw messages from scratch.
 // Pass nil for a first-time compaction of the full conversation.
 func performCompaction(
 	ctx context.Context,
@@ -332,36 +344,13 @@ func performCompaction(
 		reminderEnd++
 	}
 
-	// Determine what to summarise.
-	// On re-compaction (baseMessages != nil) use [old_summary + new_messages]
-	// so the LLM sees the previous summary as context.
-	// On first compaction use all non-system messages.
-	// System-reminder messages are framework-injected per-turn; strip them from
-	// every position so the LLM only sees real conversation content.
-	var rawToSummarize []message.Message
-	if baseMessages != nil {
-		for _, m := range baseMessages {
-			if m.Role != "system" {
-				rawToSummarize = append(rawToSummarize, m)
-			}
-		}
-	} else {
-		rawToSummarize = fullHistory[reminderEnd:]
-	}
-
-	var messagesToSummarize []message.Message
-	for _, m := range rawToSummarize {
-		if !isSystemReminder(m) {
-			messagesToSummarize = append(messagesToSummarize, m)
-		}
-	}
-
-	if len(messagesToSummarize) == 0 {
+	plan := buildCompactionPlan(store, threadID, entries, reminderEnd, baseMessages != nil)
+	if len(plan.messagesToSummarize) == 0 {
 		return fullHistory, nil
 	}
 
 	// Generate the summary.
-	summaryText, err := generateSummary(ctx, provider, providerResolver, cfg, messagesToSummarize, budget)
+	summaryText, err := generateSummary(ctx, provider, providerResolver, cfg, plan.messagesToSummarize, budget)
 	if err != nil {
 		return fullHistory, fmt.Errorf("generate summary: %w", err)
 	}
@@ -374,7 +363,7 @@ func performCompaction(
 	// Persist compaction record.
 	record := CompactionRecord{
 		SummaryText:   summaryText,
-		LeafMessageID: entries[len(entries)-1].ID,
+		LeafMessageID: plan.leafID,
 		SummaryTokens: summaryTokens,
 		Model:         cfg.Model,
 		CreatedAt:     time.Now(),
@@ -383,11 +372,113 @@ func performCompaction(
 		log.Printf("compaction: failed to save record: %v", err)
 	}
 
-	// Build compacted history: [system messages] + [system-reminder messages] + [summary].
-	compacted := make([]message.Message, 0, reminderEnd+2)
+	// Build compacted history: [system messages] + [system-reminder messages]
+	// + [summary] + [recent raw tail].
+	compacted := make([]message.Message, 0, reminderEnd+2+len(plan.tail))
 	compacted = append(compacted, fullHistory[:reminderEnd]...)
 	compacted = append(compacted, summaryMsg)
+	compacted = append(compacted, plan.tail...)
 	return compacted, nil
+}
+
+func buildCompactionPlan(store *Store, threadID string, entries []HistoryEntry, reminderEnd int, compactExisting bool) compactionPlan {
+	items := compactionItems(store, threadID, entries, reminderEnd, compactExisting)
+	if len(items) == 0 {
+		return compactionPlan{}
+	}
+
+	messages := make([]message.Message, len(items))
+	for i, item := range items {
+		messages[i] = item.message
+	}
+
+	split := splitForRecentTail(messages)
+	if split <= 0 {
+		return compactionPlan{}
+	}
+
+	toSummarize := make([]message.Message, split)
+	copy(toSummarize, messages[:split])
+
+	tail := make([]message.Message, len(messages)-split)
+	copy(tail, messages[split:])
+
+	return compactionPlan{
+		messagesToSummarize: toSummarize,
+		tail:                tail,
+		leafID:              items[split-1].leafID,
+	}
+}
+
+func compactionItems(store *Store, threadID string, entries []HistoryEntry, reminderEnd int, compactExisting bool) []compactionItem {
+	if compactExisting {
+		if existing, _ := store.LoadCompaction(threadID); existing != nil {
+			items := []compactionItem{{
+				message: makeSummaryMessage(existing.SummaryText),
+				leafID:  existing.LeafMessageID,
+			}}
+			afterExisting := false
+			for i := reminderEnd; i < len(entries); i++ {
+				if !afterExisting {
+					afterExisting = entries[i].ID == existing.LeafMessageID
+					continue
+				}
+				if isSystemReminder(entries[i].Message) {
+					continue
+				}
+				items = append(items, compactionItem{
+					message: entries[i].Message,
+					leafID:  entries[i].ID,
+				})
+			}
+			if !afterExisting {
+				return rawCompactionItems(entries, reminderEnd)
+			}
+			return items
+		}
+	}
+	return rawCompactionItems(entries, reminderEnd)
+}
+
+func rawCompactionItems(entries []HistoryEntry, reminderEnd int) []compactionItem {
+	var items []compactionItem
+	for i := reminderEnd; i < len(entries); i++ {
+		if isSystemReminder(entries[i].Message) {
+			continue
+		}
+		items = append(items, compactionItem{
+			message: entries[i].Message,
+			leafID:  entries[i].ID,
+		})
+	}
+	return items
+}
+
+func splitForRecentTail(messages []message.Message) int {
+	if len(messages) <= 1 {
+		return len(messages)
+	}
+
+	totalTokens := estimateTokens(messages)
+	targetTokens := totalTokens * 3 / 4
+	tokenTotal := 0
+	targetIndex := 0
+	for i, msg := range messages {
+		nextTotal := tokenTotal + estimateTokens([]message.Message{msg})
+		if nextTotal > targetTokens {
+			break
+		}
+		tokenTotal = nextTotal
+		targetIndex = i + 1
+	}
+	if targetIndex == 0 {
+		targetIndex = 1
+	}
+	if targetIndex >= len(messages) {
+		targetIndex = len(messages) - 1
+	}
+
+	return safeSplitPoint(messages, targetIndex)
 }
 
 // summaryRequestPrompt is appended to the real conversation so the LLM

@@ -107,9 +107,9 @@ func TestComputeBudget(t *testing.T) {
 		if b.InputLimit != 8000 {
 			t.Errorf("expected InputLimit=8000, got %d", b.InputLimit)
 		}
-		// CompactionTrigger = 8000 * 80/100 = 6400
-		if b.CompactionTrigger != 6400 {
-			t.Errorf("expected CompactionTrigger=6400, got %d", b.CompactionTrigger)
+		// CompactionTrigger = 8000 * 90/100 = 7200
+		if b.CompactionTrigger != 7200 {
+			t.Errorf("expected CompactionTrigger=7200, got %d", b.CompactionTrigger)
 		}
 		// SummaryMaxTokens = 8000 * 20/100 = 1600
 		if b.SummaryMaxTokens != 1600 {
@@ -125,9 +125,23 @@ func TestComputeBudget(t *testing.T) {
 		if b.InputLimit != 6000 {
 			t.Errorf("expected InputLimit=6000, got %d", b.InputLimit)
 		}
-		// CompactionTrigger = 6000 * 80/100 = 4800
-		if b.CompactionTrigger != 4800 {
-			t.Errorf("expected CompactionTrigger=4800, got %d", b.CompactionTrigger)
+		// CompactionTrigger = 6000 * 90/100 = 5400
+		if b.CompactionTrigger != 5400 {
+			t.Errorf("expected CompactionTrigger=5400, got %d", b.CompactionTrigger)
+		}
+	})
+
+	t.Run("fallback output reserve capped", func(t *testing.T) {
+		cfg := &TurnConfig{ContextWindow: 200000}
+		b := computeBudget(cfg)
+		// outputReserve = min(200000/4, 16000) = 16000
+		// InputLimit = 200000 - 16000 = 184000
+		if b.InputLimit != 184000 {
+			t.Errorf("expected InputLimit=184000, got %d", b.InputLimit)
+		}
+		// CompactionTrigger = 184000 * 90/100 = 165600
+		if b.CompactionTrigger != 165600 {
+			t.Errorf("expected CompactionTrigger=165600, got %d", b.CompactionTrigger)
 		}
 	})
 
@@ -506,9 +520,9 @@ func TestMaybeCompact_CompactionTriggered(t *testing.T) {
 	entries, _ := store.BuildHistoryWithIDs(threadID, prevID)
 
 	// Total tokens ≈ ceil(16/4) + 10*ceil(100/4) = 4 + 250 = 254.
-	// Set context window so CompactionTrigger (= cw * 0.75 * 0.80 = cw * 0.6) < 254.
-	// Need cw * 0.6 < 254 → cw < 424. Use 400.
-	cfg := &TurnConfig{Model: "test", ContextWindow: 400}
+	// Set context window so CompactionTrigger (= cw * 0.75 * 0.90 = cw * 0.675) < 254.
+	// Need cw * 0.675 < 254 → cw < 376. Use 350.
+	cfg := &TurnConfig{Model: "test", ContextWindow: 350}
 	turnState := &TurnState{LeafMsgID: prevID}
 
 	prov := &compactionMockProvider{
@@ -529,9 +543,9 @@ func TestMaybeCompact_CompactionTriggered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Full-conversation compaction: result should be [system] + [summary] = 2 messages.
-	if len(result) != 2 {
-		t.Fatalf("expected 2 messages (system + summary), got %d", len(result))
+	// Compaction keeps a recent raw tail after the summary.
+	if len(result) != 5 {
+		t.Fatalf("expected 5 messages (system + summary + tail), got %d", len(result))
 	}
 	if result[0].Role != "system" {
 		t.Errorf("expected first message to be system, got %s", result[0].Role)
@@ -545,6 +559,12 @@ func TestMaybeCompact_CompactionTriggered(t *testing.T) {
 	if !strings.Contains(tp.Text, "Summary: user did stuff.") {
 		t.Errorf("expected summary text, got %q", tp.Text)
 	}
+	if result[1].Metadata == nil {
+		t.Error("expected summary metadata")
+	}
+	if result[len(result)-1].Role != "assistant" {
+		t.Errorf("expected recent raw tail after summary, got last role %s", result[len(result)-1].Role)
+	}
 
 	// Compaction record should be persisted.
 	record, err := store.LoadCompaction(threadID)
@@ -557,9 +577,8 @@ func TestMaybeCompact_CompactionTriggered(t *testing.T) {
 	if record.SummaryText != "Summary: user did stuff." {
 		t.Errorf("expected persisted summary, got %q", record.SummaryText)
 	}
-	// LeafMessageID should be the last message in the chain.
-	if record.LeafMessageID != prevID {
-		t.Errorf("expected LeafMessageID=%s, got %s", prevID, record.LeafMessageID)
+	if record.LeafMessageID != "msg7" {
+		t.Errorf("expected compaction leaf msg7, got %s", record.LeafMessageID)
 	}
 }
 
@@ -729,9 +748,9 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Re-compaction: [system] + [summary] = 2 messages.
-	if len(result) != 2 {
-		t.Fatalf("expected 2 messages after re-compaction, got %d", len(result))
+	// Re-compaction keeps a recent raw tail after the summary.
+	if len(result) != 4 {
+		t.Fatalf("expected 4 messages after re-compaction, got %d", len(result))
 	}
 
 	// Summary should be the fresh one, not the old one.
@@ -748,8 +767,8 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 	if record.SummaryText != "Fresh full summary." {
 		t.Errorf("expected fresh summary in record, got %q", record.SummaryText)
 	}
-	if record.LeafMessageID != prevID {
-		t.Errorf("expected LeafMessageID=%s, got %s", prevID, record.LeafMessageID)
+	if record.LeafMessageID != "msg8" {
+		t.Errorf("expected LeafMessageID=msg8, got %s", record.LeafMessageID)
 	}
 
 	// The LLM should have received the compacted base (old summary + new messages)
@@ -776,6 +795,93 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 	}
 	if !strings.Contains(transcript.String(), "Old partial summary.") {
 		t.Error("expected old summary text to appear in summarization input")
+	}
+}
+
+func TestMaybeCompact_ReCompactionWithStaleRecordUsesRawHistory(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-stale-recompact"
+
+	msgs := []StoredMessage{
+		{ID: "sys", Message: message.Message{Role: "system", Parts: []message.Part{message.TextPart{Text: "sys"}}}},
+	}
+	prevID := "sys"
+	for i := 1; i <= 10; i++ {
+		role := "user"
+		if i%2 == 0 {
+			role = "assistant"
+		}
+		id := fmt.Sprintf("msg%d", i)
+		msgs = append(msgs, StoredMessage{
+			ID:       id,
+			ParentID: prevID,
+			Message: message.Message{
+				Role:  role,
+				Parts: []message.Part{message.TextPart{Text: strings.Repeat("r", 480)}},
+			},
+		})
+		prevID = id
+	}
+	for _, sm := range msgs {
+		if err := store.SaveMessage(threadID, sm); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := store.SaveCompaction(threadID, CompactionRecord{
+		SummaryText:   "Stale summary should not be reused.",
+		LeafMessageID: "missing-leaf",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := store.BuildHistoryWithIDs(threadID, prevID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &TurnConfig{Model: "test", ContextWindow: 900}
+	prov := &compactionMockProvider{
+		responses: [][]message.ProviderMessageChunk{{
+			message.StreamStartChunk{},
+			message.TextStartChunk{ID: "s1"},
+			message.TextDeltaChunk{ID: "s1", Delta: "Fresh raw summary."},
+			message.TextEndChunk{ID: "s1"},
+			message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+		}},
+	}
+
+	result, err := maybeCompact(context.Background(), prov, nil, store, threadID, &TurnState{LeafMsgID: prevID}, cfg, entries, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) < 3 {
+		t.Fatalf("expected summary plus raw tail, got %d messages", len(result))
+	}
+
+	record, err := store.LoadCompaction(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record == nil {
+		t.Fatal("expected compaction record")
+	}
+	if record.LeafMessageID == "missing-leaf" {
+		t.Fatal("stale compaction leaf should have been replaced")
+	}
+
+	if len(prov.requests) == 0 {
+		t.Fatal("expected summarization request")
+	}
+	var transcript strings.Builder
+	for _, msg := range prov.requests[0].Messages {
+		for _, part := range msg.Parts {
+			if tp, ok := part.(message.TextPart); ok {
+				transcript.WriteString(tp.Text)
+			}
+		}
+	}
+	if strings.Contains(transcript.String(), "Stale summary should not be reused.") {
+		t.Fatal("stale summary leaked into re-compaction input")
 	}
 }
 
@@ -884,8 +990,8 @@ func TestMaybeCompact_SystemRemindersFilteredFromSummaryInput(t *testing.T) {
 
 	// Context window sized so compaction is triggered.
 	// Total tokens ≈ sys(1) + 5*reminders(60) + 5*real(250) = 311.
-	// CompactionTrigger = 500*0.75*0.80 = 300 < 311.
-	cfg := &TurnConfig{Model: "test", ContextWindow: 500}
+	// CompactionTrigger = 450*0.75*0.90 = 303 < 311.
+	cfg := &TurnConfig{Model: "test", ContextWindow: 450}
 	turnState := &TurnState{LeafMsgID: prevID}
 
 	prov := &compactionMockProvider{
@@ -1216,7 +1322,7 @@ func TestRunTurn_WithCompaction(t *testing.T) {
 
 	// Context window sized so compaction is triggered.
 	// Total tokens ≈ 10*ceil(200/4) + ceil(11/4) = 500 + 3 = 503.
-	// CompactionTrigger = 700*0.75*0.80 = 420 < 503.
+	// CompactionTrigger = 700*0.75*0.90 = 472 < 503.
 	chunks := collectChunks(t, RunTurn(
 		context.Background(), prov, &mockExecutor{}, store,
 		threadID, prevID, TurnConfig{
@@ -1607,7 +1713,7 @@ func TestMaybeCompact_TriggersCompactionFromLastUsage(t *testing.T) {
 		}
 	}
 
-	// ContextWindow=10000, MaxOutputTokens=2000 → InputLimit=8000, Trigger=6400
+	// ContextWindow=10000, MaxOutputTokens=2000 → InputLimit=8000, Trigger=7200
 	cfg := &TurnConfig{
 		ProviderID:      "mock",
 		Model:           "m",
@@ -1627,17 +1733,17 @@ func TestMaybeCompact_TriggersCompactionFromLastUsage(t *testing.T) {
 		responses: [][]message.ProviderMessageChunk{summaryResponse},
 	}
 
-	// lastUsage reports 7000 total tokens — above the 6400 trigger.
-	lastUsage := makeUsage(6500, 500)
+	// lastUsage reports 7500 total tokens — above the 7200 trigger.
+	lastUsage := makeUsage(7000, 500)
 
 	result, err := maybeCompact(context.Background(), prov, nil, store, threadID, turnState, cfg, entries, lastUsage)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Result should be compacted: [system] + [summary].
-	if len(result) != 2 {
-		t.Fatalf("expected 2 messages (system + summary), got %d", len(result))
+	// Result should be compacted with recent raw tail preserved.
+	if len(result) != 4 {
+		t.Fatalf("expected 4 messages (system + summary + tail), got %d", len(result))
 	}
 	record, err := store.LoadCompaction(threadID)
 	if err != nil || record == nil {
@@ -1678,7 +1784,7 @@ func TestMaybeCompact_SkipsCompactionFromLastUsage(t *testing.T) {
 
 	prov := &compactionMockProvider{}
 
-	// lastUsage reports only 2000 total tokens — well below the 6400 trigger.
+	// lastUsage reports only 2000 total tokens — well below the 7200 trigger.
 	lastUsage := makeUsage(1800, 200)
 
 	result, err := maybeCompact(context.Background(), prov, nil, store, threadID, turnState, cfg, entries, lastUsage)
