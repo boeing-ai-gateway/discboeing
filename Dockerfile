@@ -269,7 +269,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-websockify \
     scrot \
     x11vnc \
+    x11-xserver-utils \
     xdotool \
+    xserver-xorg-core \
+    xserver-xorg-video-dummy \
     xterm \
     xvfb \
     && printf '%s\n' \
@@ -348,7 +351,8 @@ RUN mkdir -p /home/discobot/Desktop \
 
 ENV DISPLAY=:0
 
-EXPOSE 5900
+# Desktop access is served through the localhost-bound websockify proxy socket.
+EXPOSE 6080
 
 # Stage 3b: Package browser-harness under its upstream command name
 FROM runtime-base AS browser-harness-builder
@@ -382,9 +386,11 @@ COPY container-assets/discobot/skills/ /opt/discobot/skills/
 # buildx builders always load images into the local daemon.
 COPY --chmod=755 container-assets/docker-wrapper.sh /usr/local/bin/docker
 COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobot-session-env
+COPY --chmod=755 container-assets/discobot-vnc-websockify /usr/local/bin/discobot-vnc-websockify
 
 # Copy systemd service files for container service management
 COPY container-assets/systemd/ /etc/systemd/system/
+COPY container-assets/xorg-dummy.conf /etc/X11/xorg-dummy.conf
 
 # Copy code-server default profile templates
 COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-defaults/

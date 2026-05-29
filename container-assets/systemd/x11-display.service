@@ -1,9 +1,9 @@
 [Unit]
-Description=X11 display :0 socket proxy to Xvfb
+Description=X11 display :0 socket proxy
 Requires=xvfb.service
 After=xvfb.service
 
 [Service]
 Type=notify
-# Proxy X11 unix socket connections to Xvfb's TCP listener on port 6000
+# Proxy X11 unix socket connections to the X server TCP listener on port 6000
 ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:6000

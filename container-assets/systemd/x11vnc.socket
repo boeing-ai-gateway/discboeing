@@ -1,8 +1,10 @@
 [Unit]
-Description=x11vnc VNC server socket activation on port 5900
+Description=x11vnc VNC server socket activation on localhost port 5900
 
 [Socket]
-ListenStream=5900
+# x11vnc is unauthenticated; keep the raw VNC socket container-local and let
+# the local websockify wrapper mediate browser access.
+ListenStream=127.0.0.1:5900
 Accept=true
 
 [Install]

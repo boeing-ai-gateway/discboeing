@@ -52,8 +52,6 @@
 		urlOrChannel: string | WebSocket,
 	) => RFBInstance;
 
-	const DESKTOP_WIDTH = 1280;
-	const DESKTOP_HEIGHT = 1024;
 	const DESKTOP_CONNECT_RETRY_DELAYS = [250, 750, 1500];
 
 	let {
@@ -113,12 +111,19 @@
 	);
 	const titleLabel = $derived.by(() => desktopName.trim() || statusLabel);
 
-	function getDesktopWsUrl(sessionId: string) {
+	function getDesktopWsUrl(sessionId: string, host: HTMLElement) {
 		const apiRoot = getApiRootBase();
 		const parsed = new URL(apiRoot);
 		const subdomain = `${sessionId}-svc-discobot-desktop`;
 		const protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-		return appendAuthToken(`${protocol}//${subdomain}.${parsed.host}`);
+		const url = new URL(`${protocol}//${subdomain}.${parsed.host}`);
+		const width = Math.floor(host.clientWidth);
+		const height = Math.floor(host.clientHeight);
+		if (width > 0 && height > 0) {
+			url.searchParams.set("x", String(width));
+			url.searchParams.set("y", String(height));
+		}
+		return appendAuthToken(url.toString());
 	}
 
 	function clearDesktopHost(host: HTMLDivElement) {
@@ -221,7 +226,9 @@
 						return;
 					}
 
-					const nextSocket = new WebSocket(getDesktopWsUrl(currentSessionId));
+					const nextSocket = new WebSocket(
+						getDesktopWsUrl(currentSessionId, host),
+					);
 					socket = nextSocket;
 
 					nextSocket.addEventListener("open", () => {
@@ -352,8 +359,7 @@
 
 		<div
 			bind:this={desktopHost}
-			class="desktop-vnc-host w-full overflow-hidden rounded-md border border-white/10 bg-zinc-900"
-			style={`aspect-ratio: ${DESKTOP_WIDTH} / ${DESKTOP_HEIGHT};`}
+			class="desktop-vnc-host h-full w-full overflow-hidden rounded-md border border-white/10 bg-zinc-900"
 		></div>
 	</div>
 </DockWindowChrome>

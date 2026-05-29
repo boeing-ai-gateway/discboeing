@@ -1,8 +1,19 @@
 [Unit]
-Description=WebSocket to VNC proxy (websockify)
+Description=WebSocket to VNC proxy with desktop resize support
+Requires=xvfb.service
+After=xvfb.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/websockify localhost:6081 localhost:5900
+User=discobot
+Group=discobot
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ExecStart=/usr/local/bin/discobot-vnc-websockify
 Restart=on-failure
 RestartSec=2

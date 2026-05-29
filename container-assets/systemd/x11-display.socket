@@ -1,7 +1,7 @@
 [Unit]
 Description=X11 display :0 socket activation
 # When an X11 program connects to DISPLAY=:0, systemd intercepts the connection
-# and starts x11-display.service which proxies it to Xvfb
+# and starts x11-display.service which proxies it to the X server.
 
 [Socket]
 ListenStream=/tmp/.X11-unix/X0
