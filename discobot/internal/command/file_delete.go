@@ -11,29 +11,31 @@ import (
 // FileDelete removes a file tree node and all descendants from server data.
 func (h *Handler) FileDelete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	generation := h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(func(data *state.Data, view *state.View) {
 		deleted := deleteFiles(data, id)
+		sessionPanel := state.EnsureSessionPanelState(view)
+		editorPanel := state.EnsureEditorPanelState(view)
 		for deletedID := range deleted {
-			delete(view.ExpandedFileIDs, deletedID)
+			delete(sessionPanel.ExpandedFileIDs, deletedID)
 		}
-		if deleted[view.SelectedFileID] {
-			view.SelectedFileID = ""
+		if deleted[sessionPanel.SelectedFileID] {
+			sessionPanel.SelectedFileID = ""
 		}
-		if deleted[view.ActiveFileID] {
-			view.ActiveFileID = ""
+		if deleted[editorPanel.ActiveFileID] {
+			editorPanel.ActiveFileID = ""
 		}
-		openFileIDs := view.OpenFileIDs[:0]
-		for _, openFileID := range view.OpenFileIDs {
+		openFileIDs := editorPanel.OpenFileIDs[:0]
+		for _, openFileID := range editorPanel.OpenFileIDs {
 			if !deleted[openFileID] {
 				openFileIDs = append(openFileIDs, openFileID)
 			}
 		}
-		view.OpenFileIDs = openFileIDs
-		if view.ActiveFileID == "" && len(view.OpenFileIDs) > 0 {
-			view.ActiveFileID = view.OpenFileIDs[len(view.OpenFileIDs)-1]
+		editorPanel.OpenFileIDs = openFileIDs
+		if editorPanel.ActiveFileID == "" && len(editorPanel.OpenFileIDs) > 0 {
+			editorPanel.ActiveFileID = editorPanel.OpenFileIDs[len(editorPanel.OpenFileIDs)-1]
 		}
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 func deleteFiles(data *state.Data, id string) map[string]bool {

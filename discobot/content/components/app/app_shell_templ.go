@@ -9,8 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"strconv"
-
+	"github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
@@ -35,44 +34,178 @@ func AppShell(shell state.Shell) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<main id=\"app-shell\" class=\"app-shell\" data-ui-generation=\"")
+		session, _ := selectedSession(shell.Data, shell.View)
+		sessionID := session.ID
+		sessionPanel := shell.View.PanelLayout.Panels["session"]
+		editorPanel := shell.View.PanelLayout.Panels["editor"]
+		composerPanel := shell.View.PanelLayout.Panels["composer"]
+		terminalPanel := shell.View.PanelLayout.Panels["terminal"]
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<main id=\"app-shell\" class=\"h-dvh overflow-hidden bg-[var(--surface-canvas)] text-[13px] text-[var(--foreground)] antialiased\"><style>\n\t\t\t.app-workspace-grid {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: minmax(0, auto) var(--workspace-gap) minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);\n\t\t\t\tgrid-template-rows: minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) {\n\t\t\t\tgrid-template-columns: minmax(0, 1fr);\n\t\t\t\tgrid-template-rows: minmax(0, 1fr);\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) > :not(.panel--maximized) {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) [data-discobot-resize] {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.panel--maximized {\n\t\t\t\tgrid-column: 1 / -1 !important;\n\t\t\t\tgrid-row: 1 / -1 !important;\n\t\t\t}\n\n\t\t\t.panel > :not(.panel--controls) {\n\t\t\t\twidth: 100%;\n\t\t\t\theight: 100%;\n\t\t\t}\n\t\t</style><div class=\"flex h-full min-h-[720px] flex-col overflow-hidden bg-[var(--surface-canvas)]\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatUint(shell.Generation, 10))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/app_shell.templ`, Line: 10, Col: 101}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
+		templ_7745c5c3_Err = WindowChrome(shell).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><style>\n\t\t\t@layer components {\n\t\t\t\t.app-shell {\n\t\t\t\t\theight: 100dvh;\n\t\t\t\t\toverflow: hidden;\n\t\t\t\t\tbackground: var(--surface-canvas);\n\t\t\t\t\tcolor: var(--foreground);\n\t\t\t\t\tfont-size: 13px;\n\t\t\t\t\t-webkit-font-smoothing: antialiased;\n\t\t\t\t\t-moz-osx-font-smoothing: grayscale;\n\t\t\t\t}\n\n\t\t\t\t.app-shell__window {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t\theight: 100%;\n\t\t\t\t\tmin-height: 720px;\n\t\t\t\t\toverflow: hidden;\n\t\t\t\t\tbackground: var(--surface-canvas);\n\t\t\t\t}\n\n\t\t\t\t.app-shell__content {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tmin-height: 0;\n\t\t\t\t\tflex: 1 1 0%;\n\t\t\t\t}\n\n\t\t\t\t.app-shell__main {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tmin-width: 0;\n\t\t\t\t\tflex: 1 1 0%;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t\tbackground: var(--surface-canvas);\n\t\t\t\t}\n\n\t\t\t\t.app-shell__body {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tmin-height: 0;\n\t\t\t\t\tflex: 1 1 0%;\n\t\t\t\t\tgap: var(--workspace-gap);\n\t\t\t\t\tpadding: 0 10px 10px 10px;\n\t\t\t\t}\n\t\t\t}\n\t\t</style><div class=\"app-shell__window\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"min-h-0 min-w-0 flex-1 p-[10px] pt-0 app-workspace-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = WindowChrome(shell.View).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			if sessionPanel.Visible {
+				templ_7745c5c3_Err = SessionsSidebar(shell, sessionID, sessionPanel).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Panel("session", "Session", sessionPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"app-shell__content\">")
+		templ_7745c5c3_Err = ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+			Visible:    sessionPanel.Visible,
+			GridColumn: "2",
+			GridRow:    "1 / -1",
+			Handle: ui.ResizeHandleProps{
+				Axis:    ui.ResizeAxisX,
+				Target:  "#panel-session",
+				PanelID: sessionPanel.ID,
+				Command: "/ui/commands/layout/resize",
+				Label:   "Resize sessions panel",
+				Min:     sessionPanel.MinWidth,
+				Max:     sessionPanel.MaxWidth,
+				Value:   sessionPanel.Width,
+			},
+		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = SessionsSidebar(shell.Data, shell.View).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Var3 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = EditorPane(shell, sessionID, editorPanel).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Panel("editor", "Editor", editorPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<section class=\"app-shell__main\"><div class=\"app-shell__body\">")
+		templ_7745c5c3_Err = ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+			Visible:    composerPanel.Visible && (editorPanel.Visible || terminalPanel.Visible),
+			GridColumn: "4",
+			GridRow:    composerPanel.GridRow,
+			Handle: ui.ResizeHandleProps{
+				Axis:    ui.ResizeAxisX,
+				Target:  "#panel-composer",
+				PanelID: composerPanel.ID,
+				Command: "/ui/commands/layout/resize",
+				Label:   "Resize session workspace panel",
+				Min:     composerPanel.MinWidth,
+				Max:     composerPanel.MaxWidth,
+				Value:   composerPanel.Width,
+			},
+		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = SessionWorkspace(shell.Data, shell.View).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Var4 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = SessionWorkspace(shell, sessionID, composerPanel).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Panel("composer", "Session Workspace", composerPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></section></div></div></main>")
+		templ_7745c5c3_Err = ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+			Visible:    terminalPanel.Visible && editorPanel.Visible,
+			GridColumn: terminalPanel.GridColumn,
+			GridRow:    "2",
+			Handle: ui.ResizeHandleProps{
+				Axis:      ui.ResizeAxisY,
+				Target:    "#panel-terminal",
+				PanelID:   terminalPanel.ID,
+				Command:   "/ui/commands/layout/resize",
+				Direction: ui.ResizeDirectionReverse,
+				Label:     "Resize terminal panel",
+				Min:       terminalPanel.MinHeight,
+				Max:       terminalPanel.MaxHeight,
+				Value:     terminalPanel.Height,
+			},
+		}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var5 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = TerminalPanel(shell, sessionID, terminalPanel).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Panel("terminal", "Terminal", terminalPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = SettingsDialog(shell).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -35,7 +35,7 @@ Important integration points:
   `content/components/app/sessions_sidebar_session_details.templ`
 - Tree component: `content/components/ui/file_tree.go`,
   `content/components/ui/file_tree.templ`
-- Codicon sprite builder: `scripts/build-codicon-sprite.mjs`
+- Lucide templ icon helper: `content/components/ui/icon.templ`
 
 ## Comprehensive checklist
 
@@ -61,19 +61,18 @@ Important integration points:
   - Current: dense row height, subtle hover, small controls.
 - [x] Folder affordance uses only the chevron.
   - Current: no folder icon is rendered in `FileTree`.
-- [x] File rows use Codicons.
-  - Current: `@Codicon("file", "icon-xs")`.
+- [x] File rows use Lucide icons.
+  - Current: `@Icon("file", "icon-xs")`.
 - [x] File tree avoids custom embedded SVG icons.
-  - Current: `content/components/ui/icon.templ` uses the generated Codicon
-    sprite.
-- [x] Delete affordance uses Codicons.
-  - Current: `@Codicon("kebab-vertical", "icon-xs")` opens a row action menu.
+  - Current: `content/components/ui/icon.templ` uses Lucide templ components.
+- [x] Delete affordance uses Lucide icons.
+  - Current: `@Icon("kebab-vertical", "icon-xs")` opens a row action menu.
 - [x] File type icon customization.
   - Trees supports icon sets and CSS variable/custom sprite customization.
-  - Current: the app builder maps common file extensions to Codicons (`markdown`, `json`, `file-code`, `terminal`, `file-media`, etc.) and optional icon color classes.
+  - Current: the app builder maps common file extensions to Lucide icon keys (`markdown`, `json`, `file-code`, `terminal`, `file-media`, etc.) and optional icon color classes.
 - [x] Explicit icon-set option.
   - Trees supports multiple icon styles/sets.
-  - Current: `ui.FileTreeData.IconSet` defaults to Codicons; Codicons remain the only shipped set.
+  - Current: `ui.FileTreeData.IconSet` defaults to Lucide; Lucide remains the only shipped set.
 
 ### Selection and row interaction
 
@@ -97,7 +96,7 @@ Important integration points:
 - [x] Preserve expanded directories across rerenders.
   - Current: `state.View.ExpandedFileIDs`.
 - [x] Expand all / collapse all.
-  - Current: the sessions file tree renders Codicon expand/collapse-all controls backed by session-scoped commands.
+  - Current: the sessions file tree renders Lucide expand/collapse-all controls backed by session-scoped commands.
 - [x] Auto-expand ancestors for selected/search-matched nodes.
   - Current: server-side search keeps matching ancestors visible and renders matching branches independent of expansion state.
 
@@ -221,6 +220,8 @@ Suggested first implementation slice:
   - Current: `state.View.FileTreeSearch` stores the server-owned query.
 - [x] Search command route.
 - [x] Search input UI.
+  - Current: expanded session details expose a compact search icon that toggles
+    `FileTreeData.SearchVisible` from server-owned panel state.
 - [x] Filter rows by file/folder name.
 - [x] Preserve ancestors for matching descendants.
 - [x] Highlight matching text.
@@ -235,6 +236,7 @@ Potential state:
 type View struct {
 	// existing fields...
 	FileTreeSearch string
+	FileTreeSearchVisible bool
 }
 ```
 
@@ -264,7 +266,7 @@ Suggested first implementation slice:
 
 Suggested first implementation slice:
 
-1. Replace the inline delete button with a Codicon `kebab`/`ellipsis` trigger.
+1. Replace the inline delete button with a Lucide `kebab`/`ellipsis` trigger.
 2. Use the existing `ui.Menu` primitive to render row actions.
 3. Start with `Delete` only.
 4. Add `Rename`, `New File`, and `New Folder` once commands exist.
@@ -340,7 +342,7 @@ trees.
 
 - [x] Use Discobot theme tokens for foreground, hover, destructive, and diff
   colors.
-- [x] Use Codicon sprite with `currentColor`.
+- [x] Use Lucide inline SVG icons with `currentColor`.
 - [x] File-status color tokens.
 - [x] Optional per-filetype icon colors.
   - Current: file-type icon color classes use existing Discobot theme tokens.

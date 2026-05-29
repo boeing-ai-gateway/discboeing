@@ -29,33 +29,43 @@ func Menu(menu MenuData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t@layer components {\n\t\t\t.menu__trigger {\n\t\t\t\tdisplay: inline-grid;\n\t\t\t\twidth: 24px;\n\t\t\t\theight: 24px;\n\t\t\t\tplace-items: center;\n\t\t\t\tborder: 1px solid transparent;\n\t\t\t\tborder-radius: 5px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.menu__trigger:hover,\n\t\t\t.menu__trigger[aria-expanded=\"true\"] {\n\t\t\t\tborder-color: var(--border-subtle);\n\t\t\t\tbackground: var(--surface-control-active);\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.menu__sr-only {\n\t\t\t\tposition: absolute;\n\t\t\t\twidth: 1px;\n\t\t\t\theight: 1px;\n\t\t\t\toverflow: hidden;\n\t\t\t\tclip: rect(0, 0, 0, 0);\n\t\t\t\twhite-space: nowrap;\n\t\t\t}\n\n\t\t\t.menu__panel {\n\t\t\t\tposition: absolute;\n\t\t\t\tz-index: 50;\n\t\t\t\tmin-width: 236px;\n\t\t\t\tborder: 1px solid var(--border);\n\t\t\t\tborder-radius: 10px;\n\t\t\t\tbackground: var(--popover);\n\t\t\t\tbox-shadow: 0 18px 44px rgb(0 0 0 / 0.18);\n\t\t\t\tpadding: 3px;\n\t\t\t\tcolor: var(--popover-foreground);\n\t\t\t\tfont-size: 13px;\n\t\t\t\tline-height: 1.1;\n\t\t\t}\n\n\t\t\t.menu__submenu {\n\t\t\t\tmin-width: 216px;\n\t\t\t}\n\n\t\t\t.menu__panel[hidden] {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.menu__item {\n\t\t\t\tdisplay: grid;\n\t\t\t\twidth: 100%;\n\t\t\t\tgrid-template-columns: 18px minmax(0, 1fr) 14px;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 7px;\n\t\t\t\tborder: 0;\n\t\t\t\tborder-radius: 6px;\n\t\t\t\tbackground: transparent;\n\t\t\t\tpadding: 5px 7px 5px 9px;\n\t\t\t\tcolor: inherit;\n\t\t\t\ttext-align: left;\n\t\t\t}\n\n\t\t\t.menu__item[aria-busy=\"true\"] {\n\t\t\t\tcursor: wait;\n\t\t\t\topacity: 0.7;\n\t\t\t}\n\n\t\t\t.menu__item:hover,\n\t\t\t.menu__item[aria-expanded=\"true\"] {\n\t\t\t\tbackground: var(--accent);\n\t\t\t\tcolor: var(--accent-foreground);\n\t\t\t}\n\n\t\t\t.menu__item-label {\n\t\t\t\toverflow: hidden;\n\t\t\t\ttext-overflow: ellipsis;\n\t\t\t\twhite-space: nowrap;\n\t\t\t}\n\n\t\t\t.menu__check,\n\t\t\t.menu__arrow {\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.menu__item:hover .menu__check,\n\t\t\t.menu__item:hover .menu__arrow,\n\t\t\t.menu__item[aria-expanded=\"true\"] .menu__check,\n\t\t\t.menu__item[aria-expanded=\"true\"] .menu__arrow {\n\t\t\t\tcolor: currentColor;\n\t\t\t}\n\n\t\t\t.menu__check {\n\t\t\t\tfont-size: 13px;\n\t\t\t\tline-height: 1;\n\t\t\t}\n\n\t\t\t.menu__arrow {\n\t\t\t\tjustify-self: end;\n\t\t\t\tfont-size: 15px;\n\t\t\t\tline-height: 0.8;\n\t\t\t}\n\n\t\t\t.menu__separator {\n\t\t\t\theight: 1px;\n\t\t\t\tmargin: 3px -3px;\n\t\t\t\tbackground: var(--border);\n\t\t\t}\n\n\t\t\t.menu__spacer {\n\t\t\t\twidth: 14px;\n\t\t\t}\n\t\t}\n\t</style><div class=\"menu\" data-menu><button class=\"menu__trigger\" type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"menu\" data-menu><button class=\"menu--trigger\" type=\"button\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(menuPanelID(menu.ID, ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu.templ`, Line: 125, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu.templ`, Line: 10, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-menu-trigger><span class=\"menu__sr-only\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-menu-trigger")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if menu.AnchorToClick {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " data-menu-anchor-click")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "><span class=\"menu--sr-only\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(menu.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu.templ`, Line: 128, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu.templ`, Line: 14, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -65,7 +75,7 @@ func Menu(menu MenuData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</button>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</button>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -73,7 +83,7 @@ func Menu(menu MenuData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><script type=\"module\">\n\t\tconst initMenu = (root) => {\n\t\t\tif (root.dataset.menuReady === \"true\") {\n\t\t\t\treturn;\n\t\t\t}\n\t\t\troot.dataset.menuReady = \"true\";\n\n\t\t\tconst trigger = root.querySelector(\"[data-menu-trigger]\");\n\t\t\tconst panel = root.querySelector(\"[data-menu-panel]\");\n\t\t\tconst { autoUpdate, computePosition, flip, offset, shift } = window.discobot.floatingUI;\n\t\t\tconst cleanups = new Map();\n\n\t\t\tconst position = (reference, floating, placement, distance) => {\n\t\t\t\tcomputePosition(reference, floating, {\n\t\t\t\t\tplacement,\n\t\t\t\t\tmiddleware: [offset(distance), flip(), shift({ padding: 8 })],\n\t\t\t\t}).then(({ x, y }) => {\n\t\t\t\t\tObject.assign(floating.style, {\n\t\t\t\t\t\tleft: `${x}px`,\n\t\t\t\t\t\ttop: `${y}px`,\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t};\n\n\t\t\tconst openPanel = (reference, floating, placement, distance) => {\n\t\t\t\tif (!floating.hidden) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tfloating.hidden = false;\n\t\t\t\treference.setAttribute(\"aria-expanded\", \"true\");\n\t\t\t\tconst update = () => position(reference, floating, placement, distance);\n\t\t\t\tcleanups.set(floating, autoUpdate(reference, floating, update));\n\t\t\t\tupdate();\n\t\t\t};\n\n\t\t\tconst closePanel = (floating) => {\n\t\t\t\troot.querySelectorAll(`[data-menu-parent=\"${floating.id}\"]`).forEach(closePanel);\n\t\t\t\tconst cleanup = cleanups.get(floating);\n\t\t\t\tif (cleanup) {\n\t\t\t\t\tcleanup();\n\t\t\t\t\tcleanups.delete(floating);\n\t\t\t\t}\n\t\t\t\tfloating.hidden = true;\n\t\t\t\troot.querySelector(`[aria-controls=\"${floating.id}\"]`)?.setAttribute(\"aria-expanded\", \"false\");\n\t\t\t};\n\n\t\t\tconst closeMenu = () => {\n\t\t\t\tclosePanel(panel);\n\t\t\t};\n\n\t\t\ttrigger.addEventListener(\"click\", () => {\n\t\t\t\tif (panel.hidden) {\n\t\t\t\t\topenPanel(trigger, panel, \"bottom-start\", 4);\n\t\t\t\t} else {\n\t\t\t\t\tcloseMenu();\n\t\t\t\t}\n\t\t\t});\n\n\t\t\troot.querySelectorAll(\"[data-menu-submenu-trigger]\").forEach((submenuTrigger) => {\n\t\t\t\tconst submenu = root.querySelector(`#${submenuTrigger.getAttribute(\"aria-controls\")}`);\n\t\t\t\tconst openSubmenu = () => openPanel(submenuTrigger, submenu, \"right-start\", 6);\n\t\t\t\tsubmenuTrigger.addEventListener(\"mouseenter\", openSubmenu);\n\t\t\t\tsubmenuTrigger.addEventListener(\"focus\", openSubmenu);\n\t\t\t\tsubmenuTrigger.addEventListener(\"click\", openSubmenu);\n\t\t\t});\n\n\t\t\troot.addEventListener(\"discobot-command-complete\", (event) => {\n\t\t\t\tif (root.contains(event.target) && !event.detail?.skipped) {\n\t\t\t\t\tcloseMenu();\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tdocument.addEventListener(\"pointerdown\", (event) => {\n\t\t\t\tif (!root.contains(event.target)) {\n\t\t\t\t\tcloseMenu();\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tdocument.addEventListener(\"keydown\", (event) => {\n\t\t\t\tif (event.key !== \"Escape\" || panel.hidden) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tevent.preventDefault();\n\t\t\t\tcloseMenu();\n\t\t\t\ttrigger.focus();\n\t\t\t});\n\t\t};\n\n\t\tdocument.querySelectorAll(\"[data-menu]\").forEach(initMenu);\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

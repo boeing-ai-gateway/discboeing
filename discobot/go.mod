@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/a-h/templ v0.3.1020
+	github.com/bryanvaz/go-templ-lucide-icons v0.480.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/starfederation/datastar-go v1.0.1
 )

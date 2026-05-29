@@ -4,14 +4,19 @@
   "type": "module",
   "scripts": {
     "dev": "go run github.com/air-verse/air@latest -c .air.toml",
-    "assets:build": "pnpm icons:build",
-    "icons:build": "node ./scripts/build-codicon-sprite.mjs",
+    "assets:build": "pnpm styles:build",
+    "styles:build": "tailwindcss -i ./styles/app.css -o ./static/app.css",
+    "tailwind:check": "rustywind --output-css-file ./static/app.css --check-formatted ./content",
+    "tailwind:format": "rustywind --output-css-file ./static/app.css --write ./content",
     "generate": "go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate",
     "build": "pnpm assets:build && pnpm generate && go build -o ./build/discobot ./cmd/discobot",
-    "check": "pnpm assets:build && pnpm generate && go test ./...",
-    "check:fix": "pnpm assets:build && pnpm generate && gofmt -w ."
+    "check": "pnpm assets:build && pnpm tailwind:check && pnpm generate && go test ./...",
+    "check:fix": "pnpm assets:build && pnpm tailwind:format && pnpm generate && gofmt -w .",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@vscode/codicons": "0.0.45"
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/cli": "4.2.4",
+    "tailwindcss": "^4.3.0"
   }
 }

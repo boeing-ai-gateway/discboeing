@@ -81,4 +81,14 @@ func TreeFile(icon FileIcon, name string) templ.Component {
 	})
 }
 
+type FileIcon string
+
+const (
+	FileIconDocker  FileIcon = "docker"
+	FileIconGear    FileIcon = "gear"
+	FileIconDiamond FileIcon = "diamond"
+	FileIconText    FileIcon = "text"
+	FileIconArrow   FileIcon = "arrow"
+)
+
 var _ = templruntime.GeneratedTemplate

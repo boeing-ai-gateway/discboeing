@@ -3,7 +3,8 @@ package ui
 templ MenuPanel(menuID string, parentPath string, path string, items []MenuItem, submenu bool) {
 	<div
 		id={ menuPanelID(menuID, path) }
-		class={ templ.KV("menu__panel", true), templ.KV("menu__submenu", submenu) }
+		class="menu--panel"
+		data-class:menu--submenu={ boolString(submenu) }
 		role="menu"
 		hidden
 		data-menu-panel?={ !submenu }
@@ -12,7 +13,7 @@ templ MenuPanel(menuID string, parentPath string, path string, items []MenuItem,
 	>
 		for index, item := range items {
 			if item.SeparatorBefore {
-				<div class="menu__separator" role="separator"></div>
+				<div class="menu--separator" role="separator"></div>
 			}
 			@MenuItemView(menuID, path, menuItemPath(path, index), item)
 		}

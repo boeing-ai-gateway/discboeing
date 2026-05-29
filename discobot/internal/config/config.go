@@ -21,9 +21,10 @@ func FromEnv() Config {
 		staticDir = "static"
 	}
 
+	devReload := os.Getenv("DISCOBOT_DEV_RELOAD") == "1"
 	return Config{
 		Port:      port,
 		StaticDir: staticDir,
-		DevReload: os.Getenv("DISCOBOT_DEV_RELOAD") == "1",
+		DevReload: devReload,
 	}
 }

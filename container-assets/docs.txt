@@ -126,11 +126,12 @@ AI HOOKS (engine: ai)
   use the same task/completion tracking as Task and TaskOutput. Discobot also
   writes full context to:
     ~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md
-  The AI can read that file when inline context is truncated. The response is
-  used as hook output. Output starting with SUCCESS passes. Any other output
-  fails, so respond with FEEDBACK: <actionable feedback> when changes need
-  attention. Optional subagent selects a configured session sub-agent. AI
-  pre-commit hooks are not supported.
+  The AI can read that file when inline context is truncated. Discobot adds a
+  standard response instruction to each AI hook prompt: output SUCCESS when the
+  hook passes, or FEEDBACK: <actionable feedback> when changes need attention.
+  Hook authors should write review-specific instructions and do not need to
+  include that success/feedback wording in the hook body. Optional subagent
+  selects a configured session sub-agent. AI pre-commit hooks are not supported.
 
 PRE-COMMIT (type: pre-commit)
   Installed as git pre-commit hook. Blocks commit on failure.
@@ -180,8 +181,6 @@ pattern: "**/*.go"
 subagent: reviewer
 ---
 Review changed Go files for correctness, missing tests, and maintainability.
-Respond with SUCCESS if there is nothing to fix, otherwise respond with
-FEEDBACK: followed by concise actionable feedback.
 ```
 
 ```bash

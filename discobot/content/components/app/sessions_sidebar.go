@@ -9,13 +9,38 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-const sessionFileTreeLargeLimit = 100
+const sessionFileTreeLargeLimit = 240
 
-func sessionsSidebarClass(view state.View) string {
-	if view.SessionsSidebarVisible {
-		return "sessions-sidebar"
-	}
-	return "sessions-sidebar sessions-sidebar--hidden"
+type sessionDiffFile struct {
+	ID       string
+	Path     string
+	Status   state.FileGitStatus
+	Icon     string
+	Approved bool
+}
+
+type sessionApprovalSummary struct {
+	Total    int
+	Approved int
+}
+
+type sessionHooksSummary struct {
+	Total  int
+	Passed int
+	State  state.HookRunStatus
+	Label  string
+}
+
+type sessionSideChatItem struct {
+	Thread   state.Thread
+	Selected bool
+}
+
+type sessionDetailSections struct {
+	Workspace bool
+	SideChats bool
+	Hooks     bool
+	Review    bool
 }
 
 func sessionsForWorkspace(sessions []state.Session, workspaceID string) []state.Session {
@@ -28,17 +53,68 @@ func sessionsForWorkspace(sessions []state.Session, workspaceID string) []state.
 	return workspaceSessions
 }
 
+func sessionViewMode(sessionState state.SessionPanelState, sessionID string) state.SessionViewMode {
+	if sessionState.SessionViewModes == nil {
+		return state.SessionViewModeFiles
+	}
+	return state.NormalizeSessionViewMode(sessionState.SessionViewModes[sessionID])
+}
+
+func sessionDetailSectionsFor(sessionID string, sessionState state.SessionPanelState) sessionDetailSections {
+	return sessionDetailSections{
+		Workspace: sessionDetailSectionVisible(sessionID, state.SessionDetailSectionWorkspace, sessionState),
+		SideChats: sessionDetailSectionVisible(sessionID, state.SessionDetailSectionSideChats, sessionState),
+		Hooks:     sessionDetailSectionVisible(sessionID, state.SessionDetailSectionHooks, sessionState),
+		Review:    sessionDetailSectionVisible(sessionID, state.SessionDetailSectionReview, sessionState),
+	}
+}
+
+func sessionDetailSectionVisible(sessionID string, section state.SessionDetailSection, sessionState state.SessionPanelState) bool {
+	key := state.SessionDetailSectionKey(sessionID, section)
+	return sessionState.VisibleSessionDetailSections[key]
+}
+
+func sessionDetailSectionsAnyVisible(sections sessionDetailSections) bool {
+	return sections.Workspace || sections.SideChats || sections.Hooks || sections.Review
+}
+
+func sessionSideChats(session state.Session, sessionState state.SessionPanelState) []sessionSideChatItem {
+	selectedID := sessionSelectedSideChatID(session, sessionState)
+	items := make([]sessionSideChatItem, 0, len(session.SideChats))
+	for _, thread := range session.SideChats {
+		items = append(items, sessionSideChatItem{
+			Thread:   thread,
+			Selected: thread.ID == selectedID,
+		})
+	}
+	return items
+}
+
+func sessionSelectedSideChatID(session state.Session, sessionState state.SessionPanelState) string {
+	for _, thread := range session.SideChats {
+		if thread.ID == sessionState.SelectedSideChatID {
+			return thread.ID
+		}
+	}
+	if len(session.SideChats) == 0 {
+		return ""
+	}
+	return session.SideChats[0].ID
+}
+
 func sessionFileTree(session state.Session, view state.View) appui.FileTreeData {
+	sessionState := sessionPanelState(view)
 	nodes := sessionFileTreeNodes(session.Files, view, session.ID, "", 0)
 	totalVisible := len(nodes)
 	if totalVisible > sessionFileTreeLargeLimit {
 		nodes = nodes[:sessionFileTreeLargeLimit]
 	}
 	return appui.FileTreeData{
-		Label:          "Files",
-		Search:         view.FileTreeSearch,
+		Label:          "",
+		Search:         sessionState.FileTreeSearch,
+		SearchVisible:  sessionState.FileTreeSearchVisible,
 		Density:        appui.FileTreeDensityCompact,
-		IconSet:        appui.FileTreeIconSetCodicons,
+		IconSet:        appui.FileTreeIconSetLucide,
 		TriggerMode:    appui.FileTreeTriggerBoth,
 		DragEnabled:    true,
 		LargeTreeLimit: sessionFileTreeLargeLimit,
@@ -54,11 +130,33 @@ func sessionFileTree(session state.Session, view state.View) appui.FileTreeData 
 	}
 }
 
+func sessionDiffFiles(session state.Session) []sessionDiffFile {
+	files := make([]sessionDiffFile, 0, len(session.Files))
+	for _, file := range session.Files {
+		if file.Kind != state.FileKindFile {
+			continue
+		}
+		status := sessionFileTreeDerivedStatus(session.Files, file)
+		if status == "" || status == state.FileGitStatusClean {
+			continue
+		}
+		files = append(files, sessionDiffFile{
+			ID:       file.ID,
+			Path:     sessionFileTreePath(session.Files, file),
+			Status:   status,
+			Icon:     sessionFileTreeIcon(file.Name),
+			Approved: file.Approved,
+		})
+	}
+	return files
+}
+
 func sessionFileTreeNodes(files []state.FileNode, view state.View, sessionID string, parentID string, depth int) []appui.FileTreeNode {
 	return sessionFileTreeNodesWithOptions(files, view, sessionID, parentID, depth, true)
 }
 
 func sessionFileTreeNodesWithOptions(files []state.FileNode, view state.View, sessionID string, parentID string, depth int, flattenDirectories bool) []appui.FileTreeNode {
+	sessionState := sessionPanelState(view)
 	var nodes []appui.FileTreeNode
 	for _, file := range files {
 		if file.SessionID != sessionID || file.ParentID != parentID {
@@ -69,12 +167,12 @@ func sessionFileTreeNodesWithOptions(files []state.FileNode, view state.View, se
 		displayFile := chain[len(chain)-1]
 		displayName := sessionFileTreeDisplayName(chain)
 		hasChildren := sessionFileTreeHasChildren(files, sessionID, displayFile.ID)
-		expanded := view.ExpandedFileIDs[displayFile.ID]
-		searchMatched := sessionFileTreeMatchesSearch(files, sessionID, displayFile.ID, displayName, view.FileTreeSearch)
+		expanded := sessionState.ExpandedFileIDs[displayFile.ID]
+		searchMatched := sessionFileTreeMatchesSearch(files, sessionID, displayFile.ID, displayName, sessionState.FileTreeSearch)
 		if !searchMatched {
 			continue
 		}
-		if strings.TrimSpace(view.FileTreeSearch) != "" {
+		if strings.TrimSpace(sessionState.FileTreeSearch) != "" {
 			expanded = true
 		}
 
@@ -84,7 +182,7 @@ func sessionFileTreeNodesWithOptions(files []state.FileNode, view state.View, se
 			Kind:                  sessionFileTreeNodeKind(displayFile.Kind),
 			Depth:                 depth,
 			Expanded:              expanded,
-			Selected:              view.SelectedFileID == displayFile.ID,
+			Selected:              sessionState.SelectedFileID == displayFile.ID,
 			HasChildren:           hasChildren,
 			GitStatus:             sessionFileTreeGitStatus(sessionFileTreeDerivedStatus(files, displayFile)),
 			HasChangedDescendants: displayFile.HasChangedDescendants || sessionFileTreeHasChangedDescendants(files, sessionID, displayFile.ID),
@@ -111,6 +209,7 @@ func sessionFileTreeNodesWithOptions(files []state.FileNode, view state.View, se
 }
 
 func sessionFileTreeFlattenChain(files []state.FileNode, view state.View, sessionID string, file state.FileNode, flattenDirectories bool) []state.FileNode {
+	sessionState := sessionPanelState(view)
 	chain := []state.FileNode{file}
 	if !flattenDirectories || file.Kind != state.FileKindDirectory {
 		return chain
@@ -122,7 +221,7 @@ func sessionFileTreeFlattenChain(files []state.FileNode, view state.View, sessio
 		}
 		// Keep an explicitly selected intermediate directory addressable instead of
 		// hiding the row that currently owns user-visible state.
-		if view.SelectedFileID == children[0].ID {
+		if sessionState.SelectedFileID == children[0].ID {
 			return chain
 		}
 		chain = append(chain, children[0])
@@ -232,17 +331,17 @@ func sessionFileTreeIconColorClass(name string) string {
 	lower := strings.ToLower(name)
 	switch {
 	case strings.HasSuffix(lower, ".go"):
-		return "file-tree__icon--go"
+		return "file-tree--icon--go"
 	case strings.HasSuffix(lower, ".json") || strings.HasSuffix(lower, ".jsonc"):
-		return "file-tree__icon--json"
+		return "file-tree--icon--json"
 	case strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".markdown"):
-		return "file-tree__icon--markdown"
+		return "file-tree--icon--markdown"
 	case strings.HasSuffix(lower, ".sh") || strings.HasSuffix(lower, ".bash") || strings.HasSuffix(lower, ".ps1"):
-		return "file-tree__icon--shell"
+		return "file-tree--icon--shell"
 	case strings.HasSuffix(lower, ".png") || strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") || strings.HasSuffix(lower, ".gif") || strings.HasSuffix(lower, ".svg"):
-		return "file-tree__icon--media"
+		return "file-tree--icon--media"
 	case strings.HasSuffix(lower, ".js") || strings.HasSuffix(lower, ".ts") || strings.HasSuffix(lower, ".tsx") || strings.HasSuffix(lower, ".css") || strings.HasSuffix(lower, ".templ"):
-		return "file-tree__icon--code"
+		return "file-tree--icon--code"
 	default:
 		return ""
 	}
@@ -281,22 +380,8 @@ func sessionFileCommand(commandURL string) appui.FileTreeCommand {
 	}
 }
 
-func sessionsSidebarStatusDotClass(status state.SessionStatus) string {
-	if status == state.SessionStatusRunning {
-		return "sessions-sidebar__status-dot sessions-sidebar__status-dot--running"
-	}
-	return "sessions-sidebar__status-dot"
-}
-
-func sessionsSidebarItemClass(selected bool, expanded bool) string {
-	class := "sessions-sidebar__item"
-	if expanded {
-		class += " sessions-sidebar__item--expanded"
-	}
-	if selected {
-		class += " sessions-sidebar__item--selected"
-	}
-	return class
+func sessionsSidebarCommand(commandURL string) string {
+	return "@discobotCommand(" + strconv.Quote(commandURL) + ", {method: \"POST\"})"
 }
 
 func sessionsSidebarSessionToggleCommand(id string) string {
@@ -307,6 +392,46 @@ func sessionsSidebarSessionSelectCommand(id string) string {
 	return "@post('/ui/commands/sessions/" + url.PathEscape(id) + "/select')"
 }
 
+func sessionsSidebarHideCommand() string {
+	return sessionsSidebarCommand("/ui/commands/sidebar/hide")
+}
+
+func sessionsSidebarSessionViewModeCommand(id string, mode state.SessionViewMode) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(id) + "/view-mode/" + url.PathEscape(string(mode)))
+}
+
+func sessionsSidebarSessionDetailSectionShowCommand(id string, section state.SessionDetailSection) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(id) + "/detail-sections/" + url.PathEscape(string(section)) + "/show")
+}
+
+func sessionsSidebarSessionDetailSectionHideCommand(id string, section state.SessionDetailSection) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(id) + "/detail-sections/" + url.PathEscape(string(section)) + "/hide")
+}
+
+func sessionsSidebarSessionDiffSummaryCommand(id string) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(id) + "/diff-summary")
+}
+
+func sessionsSidebarSideChatSelectCommand(sessionID string, threadID string) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(sessionID) + "/side-chats/" + url.PathEscape(threadID) + "/select")
+}
+
+func sessionsSidebarFileSelectCommand(id string) string {
+	return sessionsSidebarCommand("/ui/commands/files/" + url.PathEscape(id) + "/select")
+}
+
+func sessionsSidebarFileSearchToggleCommand() string {
+	return sessionsSidebarCommand("/ui/commands/files/search/toggle")
+}
+
+func sessionsSidebarFileApprovalToggleCommand(id string) string {
+	return sessionsSidebarCommand("/ui/commands/files/" + url.PathEscape(id) + "/approval/toggle")
+}
+
+func sessionsSidebarCommitCommand(id string) string {
+	return sessionsSidebarCommand("/ui/commands/sessions/" + url.PathEscape(id) + "/commit")
+}
+
 func sessionsSidebarExpanderLabel(session state.Session, expanded bool) string {
 	if expanded {
 		return "Collapse " + session.Title
@@ -314,22 +439,224 @@ func sessionsSidebarExpanderLabel(session state.Session, expanded bool) string {
 	return "Expand " + session.Title
 }
 
-func sessionDiffStat(value int) string {
-	return strconv.Itoa(value)
+func sessionsSidebarViewButtonClass(viewMode state.SessionViewMode, buttonMode state.SessionViewMode) string {
+	class := "sessions-sidebar--view-button"
+	if viewMode == buttonMode {
+		class += " sessions-sidebar--view-button--active"
+	}
+	return class
 }
 
-func boolString(value bool) string {
-	if value {
-		return "true"
+func sessionsSidebarIconButtonClass(active bool) string {
+	class := "sessions-sidebar--icon-button"
+	if active {
+		class += " sessions-sidebar--icon-button--active"
 	}
-	return "false"
+	return class
+}
+
+func sessionsSidebarDetailSectionClass(visible bool) string {
+	class := "sessions-sidebar--detail-section"
+	if visible {
+		class += " sessions-sidebar--detail-section--visible"
+	}
+	return class
+}
+
+func sessionsSidebarDetailLauncherClass(active bool) string {
+	class := "sessions-sidebar--detail-launcher"
+	if active {
+		class += " sessions-sidebar--detail-launcher--active"
+	}
+	return class
+}
+
+func sessionsSidebarDetailLauncherLabel(label string, active bool) string {
+	if active {
+		return label + " panel is open"
+	}
+	return "Open " + label + " panel"
+}
+
+func sessionsSidebarWorkspaceSummary(fileTree appui.FileTreeData, diffFiles []sessionDiffFile, viewMode state.SessionViewMode) string {
+	if viewMode == state.SessionViewModeDiff {
+		return strconv.Itoa(len(diffFiles)) + " changes"
+	}
+	if fileTree.TotalNodeCount == 1 {
+		return "1 file"
+	}
+	return strconv.Itoa(fileTree.TotalNodeCount) + " files"
+}
+
+func sessionHookSectionSummary(hooks []state.SessionHook) string {
+	if len(hooks) == 0 {
+		return "0 hooks"
+	}
+	summary := sessionHookSummary(hooks)
+	return strconv.Itoa(summary.Passed) + "/" + strconv.Itoa(summary.Total) + " " + strings.ToLower(summary.Label)
+}
+
+func sessionSideChatSectionSummary(sideChats []sessionSideChatItem) string {
+	if len(sideChats) == 1 {
+		return "1 chat"
+	}
+	return strconv.Itoa(len(sideChats)) + " chats"
+}
+
+func sessionDiffFileStatusClass(status state.FileGitStatus) string {
+	if status == "" {
+		return ""
+	}
+	return "sessions-sidebar--diff-file-status--" + string(status)
+}
+
+func sessionDiffFileStatusText(status state.FileGitStatus) string {
+	switch status {
+	case state.FileGitStatusModified:
+		return "M"
+	case state.FileGitStatusAdded:
+		return "A"
+	case state.FileGitStatusDeleted:
+		return "D"
+	case state.FileGitStatusRenamed:
+		return "R"
+	case state.FileGitStatusUntracked:
+		return "U"
+	case state.FileGitStatusIgnored:
+		return "I"
+	default:
+		return ""
+	}
+}
+
+func sessionDiffFileStatusTitle(status state.FileGitStatus) string {
+	if status == "" || status == state.FileGitStatusClean {
+		return ""
+	}
+	return "Git status: " + string(status)
+}
+
+func sessionDiffFileApprovalClass(approved bool) string {
+	class := "sessions-sidebar--approval-toggle"
+	if approved {
+		class += " sessions-sidebar--approval-toggle--approved"
+	}
+	return class
+}
+
+func sessionDiffFileApprovalLabel(approved bool) string {
+	if approved {
+		return "Approved"
+	}
+	return "Not approved"
+}
+
+func sessionApprovalSummaryFor(diffFiles []sessionDiffFile) sessionApprovalSummary {
+	summary := sessionApprovalSummary{
+		Total: len(diffFiles),
+	}
+	for _, file := range diffFiles {
+		if file.Approved {
+			summary.Approved++
+		}
+	}
+	return summary
+}
+
+func sessionApprovalStatusLabel(summary sessionApprovalSummary) string {
+	if summary.Total == 0 {
+		return "No changed files"
+	}
+	if summary.Approved == summary.Total {
+		return "All files approved"
+	}
+	return strconv.Itoa(summary.Approved) + "/" + strconv.Itoa(summary.Total) + " approved"
+}
+
+func sessionApprovalStatusClass(summary sessionApprovalSummary) string {
+	class := "sessions-sidebar--approval-status"
+	if summary.Total > 0 && summary.Approved == summary.Total {
+		class += " sessions-sidebar--approval-status--complete"
+	}
+	return class
+}
+
+func sessionApprovalComplete(summary sessionApprovalSummary) bool {
+	return summary.Total > 0 && summary.Approved == summary.Total
+}
+
+func sessionHookSummary(hooks []state.SessionHook) sessionHooksSummary {
+	summary := sessionHooksSummary{
+		Total: len(hooks),
+		State: state.HookRunStatusSuccess,
+		Label: "Passed",
+	}
+	for _, hook := range hooks {
+		switch hook.Status {
+		case state.HookRunStatusSuccess:
+			summary.Passed++
+		case state.HookRunStatusRunning:
+			summary.State = state.HookRunStatusRunning
+			summary.Label = "Running"
+		case state.HookRunStatusFailure:
+			if summary.State != state.HookRunStatusRunning {
+				summary.State = state.HookRunStatusFailure
+				summary.Label = "Failed"
+			}
+		default:
+			if summary.State != state.HookRunStatusRunning && summary.State != state.HookRunStatusFailure {
+				summary.State = state.HookRunStatusPending
+				summary.Label = "Pending"
+			}
+		}
+	}
+	return summary
+}
+
+func sessionHookStatusClass(status state.HookRunStatus) string {
+	if status == "" {
+		status = state.HookRunStatusPending
+	}
+	return "sessions-sidebar--hook-dot--" + string(status)
+}
+
+func sessionHookStatusLabel(status state.HookRunStatus) string {
+	switch status {
+	case state.HookRunStatusRunning:
+		return "Running"
+	case state.HookRunStatusSuccess:
+		return "Passed"
+	case state.HookRunStatusFailure:
+		return "Failed"
+	default:
+		return "Pending"
+	}
+}
+
+func sessionSideChatClass(selected bool, unread bool) string {
+	class := "sessions-sidebar--side-chat"
+	if selected {
+		class += " sessions-sidebar--side-chat--selected"
+	}
+	if unread {
+		class += " sessions-sidebar--side-chat--unread"
+	}
+	return class
+}
+
+func sessionSideChatCountLabel(count int) string {
+	if count == 1 {
+		return "1 msg"
+	}
+	return strconv.Itoa(count) + " msgs"
 }
 
 func sessionsSidebarFilterMenu(view state.View) appui.MenuData {
 	return appui.MenuData{
-		ID:      "sessions-filter-menu",
-		Label:   "Open session filters",
-		Trigger: IconSliders("icon-sm"),
+		ID:            "sessions-filter-menu",
+		Label:         "Open session filters",
+		Trigger:       IconSliders("icon-sm"),
+		AnchorToClick: true,
 		Items: []appui.MenuItem{
 			{
 				Label: "Filter",
@@ -358,8 +685,9 @@ func sessionsSidebarFilterMenu(view state.View) appui.MenuData {
 }
 
 func sessionMenuCheckItem(view state.View, label string, key string, separatorBefore bool) appui.MenuItem {
+	sessionState := sessionPanelState(view)
 	checkState := appui.MenuCheckUnchecked
-	if view.SessionMenuChecks[key] {
+	if sessionState.SessionMenuChecks[key] {
 		checkState = appui.MenuCheckChecked
 	}
 

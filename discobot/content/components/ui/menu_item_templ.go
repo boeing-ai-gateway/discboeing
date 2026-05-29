@@ -30,7 +30,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 		}
 		ctx = templ.ClearChildren(ctx)
 		if len(item.Children) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<button class=\"menu__item\" type=\"button\" role=\"menuitem\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<button class=\"menu--item\" type=\"button\" role=\"menuitem\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -43,7 +43,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-menu-submenu-trigger><span class=\"menu__spacer\"></span> <span class=\"menu__item-label\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-menu-submenu-trigger><span class=\"menu--spacer\"></span> <span class=\"menu--item-label\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -56,7 +56,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> <span class=\"menu__arrow\" aria-hidden=\"true\">›</span></button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> <span class=\"menu--arrow\" aria-hidden=\"true\">›</span></button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -67,7 +67,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 		} else if item.CheckState == MenuCheckChecked {
 			action := menuItemAction(item)
 			if action != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<button class=\"menu__item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"true\" data-on:click=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<button class=\"menu--item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"true\" data-on:click=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -80,7 +80,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><span class=\"menu__check\">✓</span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><span class=\"menu--check\">✓</span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -98,7 +98,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button class=\"menu__item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"true\"><span class=\"menu__check\">✓</span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button class=\"menu--item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"true\"><span class=\"menu--check\">✓</span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -119,7 +119,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 		} else if item.CheckState == MenuCheckUnchecked {
 			action := menuItemAction(item)
 			if action != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<button class=\"menu__item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"false\" data-on:click=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<button class=\"menu--item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"false\" data-on:click=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -132,7 +132,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><span></span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><span></span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -150,7 +150,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<button class=\"menu__item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"false\"><span></span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<button class=\"menu--item\" type=\"button\" role=\"menuitemcheckbox\" aria-checked=\"false\"><span></span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -171,7 +171,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 		} else {
 			action := menuItemAction(item)
 			if action != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<button class=\"menu__item\" type=\"button\" role=\"menuitem\" data-on:click=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<button class=\"menu--item\" type=\"button\" role=\"menuitem\" data-on:click=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -184,7 +184,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"><span></span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"><span></span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -202,7 +202,7 @@ func MenuItemView(menuID string, parentPath string, path string, item MenuItem) 
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<button class=\"menu__item\" type=\"button\" role=\"menuitem\"><span></span> <span class=\"menu__item-label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<button class=\"menu--item\" type=\"button\" role=\"menuitem\"><span></span> <span class=\"menu--item-label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

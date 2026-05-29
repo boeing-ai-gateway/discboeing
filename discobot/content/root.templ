@@ -27,7 +27,7 @@ templ Root(shell state.Shell) {
 			<script type="module">import "@starfederation/datastar";</script>
 			<script type="module" src="/discobot.js"></script>
 		</head>
-		<body data-signals="{streamOpen: false}" data-init="@get('/ui/stream')">
+		<body data-signals="{streamOpen: false}" data-on:load__window="@get('/ui/stream')">
 			@app.AppShell(shell)
 		</body>
 	</html>

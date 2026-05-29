@@ -26,18 +26,25 @@ type fileMovePayload struct {
 // FileSelect marks a file tree node as selected in server-owned view state.
 func (h *Handler) FileSelect(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	generation := h.view.SaveShell(func(data *state.Data, view *state.View) {
-		view.SelectedFileID = id
+	h.view.SaveShell(func(data *state.Data, view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		editorPanel := state.EnsureEditorPanelState(view)
+		sessionPanel.SelectedFileID = id
 		file, ok := dataFileByID(data, id)
 		if !ok || file.Kind != state.FileKindFile {
 			return
 		}
-		view.ActiveFileID = id
-		if !openFileExists(view.OpenFileIDs, id) {
-			view.OpenFileIDs = append(view.OpenFileIDs, id)
+		editorPanel.ActiveFileID = id
+		editorPanel.DiffSummarySessionID = ""
+		editorPanel.ServiceLogID = ""
+		if !openFileExists(editorPanel.OpenFileIDs, id) {
+			editorPanel.OpenFileIDs = append(editorPanel.OpenFileIDs, id)
 		}
+		panel := state.EnsurePanel(view, "editor")
+		panel.Visible = true
+		view.PanelLayout.Panels["editor"] = panel
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileRename renames a file tree node in server-owned prototype data.
@@ -46,7 +53,7 @@ func (h *Handler) FileRename(w http.ResponseWriter, r *http.Request) {
 	var payload fileNamePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 	name := strings.TrimSpace(payload.Name)
-	generation := h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(func(data *state.Data) {
 		if name == "" {
 			return
 		}
@@ -57,7 +64,7 @@ func (h *Handler) FileRename(w http.ResponseWriter, r *http.Request) {
 		data.Sessions[sessionIndex].Files[fileIndex].Name = name
 		data.Sessions[sessionIndex].Files[fileIndex].GitStatus = state.FileGitStatusRenamed
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileCreateFile adds a sample child file under a directory node.
@@ -75,7 +82,7 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 	var payload fileNamePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 	name := strings.TrimSpace(payload.Name)
-	generation := h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(func(data *state.Data, view *state.View) {
 		if name == "" {
 			return
 		}
@@ -104,21 +111,23 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 			GitStatus:             status,
 			HasChangedDescendants: changedDescendants,
 		})
-		if view.ExpandedFileIDs == nil {
-			view.ExpandedFileIDs = map[string]bool{}
+		sessionPanel := state.EnsureSessionPanelState(view)
+		if sessionPanel.ExpandedFileIDs == nil {
+			sessionPanel.ExpandedFileIDs = map[string]bool{}
 		}
-		view.ExpandedFileIDs[parent.ID] = true
-		view.SelectedFileID = id
+		sessionPanel.ExpandedFileIDs[parent.ID] = true
+		sessionPanel.SelectedFileID = id
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileExpandAll expands all directories for a session.
 func (h *Handler) FileExpandAll(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
-	generation := h.view.SaveShell(func(data *state.Data, view *state.View) {
-		if view.ExpandedFileIDs == nil {
-			view.ExpandedFileIDs = map[string]bool{}
+	h.view.SaveShell(func(data *state.Data, view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		if sessionPanel.ExpandedFileIDs == nil {
+			sessionPanel.ExpandedFileIDs = map[string]bool{}
 		}
 		for _, session := range data.Sessions {
 			if session.ID != sessionID {
@@ -126,30 +135,31 @@ func (h *Handler) FileExpandAll(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, file := range session.Files {
 				if file.Kind == state.FileKindDirectory {
-					view.ExpandedFileIDs[file.ID] = true
+					sessionPanel.ExpandedFileIDs[file.ID] = true
 				}
 			}
 		}
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileCollapseAll collapses all directories for a session.
 func (h *Handler) FileCollapseAll(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
-	generation := h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(func(data *state.Data, view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
 		for _, session := range data.Sessions {
 			if session.ID != sessionID {
 				continue
 			}
 			for _, file := range session.Files {
 				if file.Kind == state.FileKindDirectory {
-					delete(view.ExpandedFileIDs, file.ID)
+					delete(sessionPanel.ExpandedFileIDs, file.ID)
 				}
 			}
 		}
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileMove reparents a file tree node under another directory or root.
@@ -157,10 +167,10 @@ func (h *Handler) FileMove(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	generation := h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(func(data *state.Data) {
 		moveFile(data, id, strings.TrimSpace(payload.TargetID))
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileDrop moves the dragged node onto this directory target.
@@ -168,20 +178,20 @@ func (h *Handler) FileDrop(w http.ResponseWriter, r *http.Request) {
 	targetID := chi.URLParam(r, "id")
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	generation := h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(func(data *state.Data) {
 		moveFile(data, strings.TrimSpace(payload.TargetID), targetID)
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 // FileMoveToRoot reparents a file tree node to the session root.
 func (h *Handler) FileMoveToRoot(w http.ResponseWriter, r *http.Request) {
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	generation := h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(func(data *state.Data) {
 		moveFile(data, strings.TrimSpace(payload.TargetID), "")
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }
 
 func moveFile(data *state.Data, id string, targetID string) bool {
@@ -222,10 +232,26 @@ func fileIsDescendant(files []state.FileNode, id string, ancestorID string) bool
 func (h *Handler) FileSearch(w http.ResponseWriter, r *http.Request) {
 	var payload fileSearchPayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	generation := h.view.SaveView(func(view *state.View) {
-		view.FileTreeSearch = strings.TrimSpace(payload.Query)
+	h.view.SaveView(func(view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		sessionPanel.FileTreeSearch = strings.TrimSpace(payload.Query)
+		if sessionPanel.FileTreeSearch != "" {
+			sessionPanel.FileTreeSearchVisible = true
+		}
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
+}
+
+// FileSearchToggle shows or hides the session file-tree search field.
+func (h *Handler) FileSearchToggle(w http.ResponseWriter, r *http.Request) {
+	h.view.SaveView(func(view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		sessionPanel.FileTreeSearchVisible = !sessionPanel.FileTreeSearchVisible
+		if !sessionPanel.FileTreeSearchVisible {
+			sessionPanel.FileTreeSearch = ""
+		}
+	})
+	writeNoContent(w)
 }
 
 func fileByID(files []state.FileNode, id string) (state.FileNode, bool) {

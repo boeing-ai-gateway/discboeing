@@ -1,0 +1,37 @@
+package app
+
+import "github.com/obot-platform/discobot/discobot/internal/state"
+
+templ Conversation(thread state.Thread) {
+	if len(thread.Messages) > 0 {
+		<div class="conversation" aria-label="Conversation" data-thread-id={ thread.ID }>
+			@Messages(thread.Messages)
+		</div>
+	}
+}
+
+templ Messages(messages []state.ThreadMessage) {
+	<div class="messages" aria-label="Messages">
+		for _, message := range messages {
+			<div class={ threadMessageClass(message.Role) }>
+				<span class="messages--avatar">{ threadMessageAvatar(message.Role) }</span>
+				<div class="messages--bubble">{ message.Text }</div>
+			</div>
+		}
+	</div>
+}
+
+func threadMessageClass(role state.ThreadMessageRole) string {
+	class := "messages--message"
+	if role == state.ThreadMessageRoleUser {
+		return class + " messages--message--user"
+	}
+	return class + " messages--message--assistant"
+}
+
+func threadMessageAvatar(role state.ThreadMessageRole) string {
+	if role == state.ThreadMessageRoleUser {
+		return "U"
+	}
+	return "AI"
+}

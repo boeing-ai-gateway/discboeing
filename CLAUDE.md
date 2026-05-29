@@ -192,6 +192,10 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
   - Keep simple code simple. Do not add helpers, layers, interfaces, or
     temporary variables unless they make the code easier to scan or remove a
     real repetition problem.
+  - Avoid one-line or two-line helper functions for simple templ expressions.
+    Inline simple expressions in templ files. For Datastar attributes, prefer
+    object syntax for grouped `data-class` and `data-style` expressions instead
+    of adding trivial Go helpers.
   - Give complex setup code a visible shape. For long constructors,
     lifecycle/orchestration flows, or HTTP server wiring, prefer an explicit
     state struct and named phases such as `initCredentials`, `initRuntime`,

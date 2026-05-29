@@ -1,63 +1,82 @@
 package app
 
-templ TerminalPanel() {
-	<style>
-		@layer components {
-			.terminal-panel {
-				display: flex;
-				min-height: 180px;
-				max-height: 280px;
-				flex: 0 0 220px;
-				flex-direction: column;
-				overflow: hidden;
-				background: color-mix(in srgb, var(--surface-card) 92%, black);
-			}
+import (
+	"strconv"
 
-			.terminal-panel__header {
-				display: flex;
-				height: 34px;
-				align-items: center;
-				justify-content: space-between;
-				border-bottom: 1px solid var(--border-subtle);
-				padding: 0 12px;
-				color: var(--muted-foreground);
-				font-size: 12px;
-			}
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
 
-			.terminal-panel__title {
-				display: flex;
-				align-items: center;
-				gap: 7px;
-				color: var(--foreground);
-				font-weight: 600;
-			}
-
-			.terminal-panel__body {
-				min-height: 0;
-				flex: 1 1 0%;
-				overflow: hidden;
-				padding: 14px;
-				color: var(--muted-foreground);
-				font-family: var(--font-mono);
-				font-size: 12px;
-			}
-
-			.terminal-panel__prompt {
-				color: var(--diff-add-line);
-			}
-		}
-	</style>
-	<section class="ide-panel terminal-panel" aria-label="Terminal">
-		<header class="terminal-panel__header">
-			<div class="terminal-panel__title">
+templ TerminalPanel(shell state.Shell, sessionID string, panel state.Panel) {
+	{{ terminalPanel := panel }}
+	{{ sshCommand := terminalSSHCommand(sessionID) }}
+	{{ pullCommand := terminalPullCommand(sessionID) }}
+	<section class="ide-panel terminal-panel flex min-h-0 max-h-none flex-col overflow-hidden bg-[color-mix(in_srgb,var(--surface-card)_92%,black)]" aria-label="Terminal" data-style:--terminal-panel-height={ strconv.Quote(strconv.Itoa(terminalPanel.Height) + "px") }>
+		<header class="flex h-[34px] items-center justify-between border-b border-[var(--border-subtle)] px-[12px] text-[12px] text-[var(--muted-foreground)]">
+			<div class="flex min-w-0 items-center gap-[7px] font-semibold text-[var(--foreground)]">
 				@IconTerminal("icon-sm")
 				<span>Terminal</span>
+				<span class="truncate font-normal text-[var(--muted-foreground)]">{ terminalSessionLabel(sessionID) }</span>
+				<span class={ terminalStatusDotClass(sessionID) } title={ terminalStatusLabel(sessionID) }></span>
 			</div>
-			<span>Placeholder</span>
+			<div class="flex shrink-0 items-center gap-2">
+				<label class="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+					<span>root</span>
+					<button type="button" class="relative inline-flex h-5 w-9 rounded-full bg-[var(--muted)] opacity-50" disabled?={ sessionID == "" } aria-pressed="false" title="Root terminal toggle">
+						<span class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-[var(--background)] shadow"></span>
+					</button>
+				</label>
+				if sessionID != "" {
+					@terminalCopyButton("ssh", "Copy SSH", "Copy SSH command: " + sshCommand, sshCommand)
+					@terminalCopyButton("pull", "Copy pull cmd", "Copy pull command: " + pullCommand, pullCommand)
+				}
+			</div>
 		</header>
-		<div class="terminal-panel__body">
-			<div><span class="terminal-panel__prompt">discobot $</span> terminal placeholder</div>
+		<div class="min-h-0 flex-1 overflow-hidden p-[14px] font-mono text-[12px] text-[var(--muted-foreground)]">
+			<div><span class="text-[var(--diff-add-line)]">discobot $</span> terminal placeholder</div>
 			<div>Interactive terminal output will appear here.</div>
 		</div>
 	</section>
+}
+
+templ terminalCopyButton(kind string, label string, title string, command string) {
+	<button type="button" class="inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--tree-hover)] hover:text-[var(--foreground)]" title={ title } data-terminal-copy-button data-terminal-copy-kind={ kind } data-terminal-copy-text={ command }>
+		@IconCopy("icon-14")
+		<span class="hidden sm:inline" data-terminal-copy-label>{ label }</span>
+	</button>
+}
+
+func terminalSessionLabel(sessionID string) string {
+	if sessionID == "" {
+		return "No session"
+	}
+	return "Session: " + sessionID
+}
+
+func terminalStatusLabel(sessionID string) string {
+	if sessionID == "" {
+		return "disconnected"
+	}
+	return "connected"
+}
+
+func terminalStatusDotClass(sessionID string) string {
+	class := "h-2 w-2 shrink-0 rounded-full"
+	if sessionID == "" {
+		return class + " bg-[var(--muted-foreground)]/50"
+	}
+	return class + " bg-green-500"
+}
+
+func terminalSSHCommand(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return "ssh -p 3333 " + sessionID + "@localhost"
+}
+
+func terminalPullCommand(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return "git pull \"ssh://" + sessionID + "@localhost:3333/home/discobot/workspace\" HEAD"
 }

@@ -8,12 +8,12 @@ tmp_dir = "build"
   cmd = "pnpm assets:build && pnpm generate && go build -gcflags=\"all=-N -l\" -o ./build/discobot ./cmd/discobot"
   delay = 1000
   exclude_dir = ["build", "vendor", "testdata", "node_modules"]
-  exclude_file = []
+  exclude_file = ["static/app.css"]
   exclude_regex = ["_test.go", "_templ.go"]
   exclude_unchanged = false
   follow_symlink = false
   full_bin = "DISCOBOT_STATIC_DIR=./static DISCOBOT_DEV_RELOAD=1 ./build/discobot"
-  include_dir = ["cmd", "content", "internal", "static"]
+  include_dir = ["cmd", "content", "internal", "static", "styles"]
   include_ext = ["go", "templ", "html", "css", "js", "json"]
   include_file = [".env"]
   kill_delay = "10m"

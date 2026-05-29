@@ -8,9 +8,13 @@ package app
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/obot-platform/discobot/discobot/internal/state"
+import (
+	"strconv"
 
-func SessionsSidebar(data state.Data, view state.View) templ.Component {
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+func SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -31,23 +35,30 @@ func SessionsSidebar(data state.Data, view state.View) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t@layer components {\n\t\t\t.sessions-sidebar__header,\n\t\t\t.sessions-sidebar__actions,\n\t\t\t.sessions-sidebar__row,\n\t\t\t.sessions-sidebar__meta,\n\t\t\t.sessions-sidebar__footer-row {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t}\n\n\t\t\t.sessions-sidebar {\n\t\t\t\t--sessions-sidebar-selected-mix: 68%;\n\t\t\t\t--sessions-sidebar-selected-hover-mix: 82%;\n\n\t\t\t\tdisplay: flex;\n\t\t\t\twidth: var(--workspace-sidebar-width);\n\t\t\t\tmin-height: 0;\n\t\t\t\tflex-shrink: 0;\n\t\t\t\tflex-direction: column;\n\t\t\t\toverflow-y: auto;\n\t\t\t\tbackground: var(--surface-canvas);\n\t\t\t\tpadding: 0px 0px 10px 10px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar--hidden {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__header,\n\t\t\t.sessions-sidebar__footer-row {\n\t\t\t\tjustify-content: space-between;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__title {\n\t\t\t\tpadding-inline: 1px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-size: 13px;\n\t\t\t\tfont-weight: 600;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__actions {\n\t\t\t\tgap: 10px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__new-button {\n\t\t\t\tdisplay: inline-flex;\n\t\t\t\talign-items: center;\n\t\t\t\tjustify-content: center;\n\t\t\t\tgap: 6px;\n\t\t\t\theight: 24px;\n\t\t\t\tborder: 1px solid var(--border-subtle);\n\t\t\t\tborder-radius: 5px;\n\t\t\t\tbackground: var(--surface-control);\n\t\t\t\tpadding-inline: 8px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tbox-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);\n\t\t\t\tfont-size: 12px;\n\t\t\t\tline-height: 1;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__new-button:hover {\n\t\t\t\tbackground-color: color-mix(in srgb, var(--tree-hover) 75%, transparent);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__shortcut {\n\t\t\t\tborder-radius: 3px;\n\t\t\t\tbackground: var(--muted);\n\t\t\t\tpadding: 0 4px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-family: var(--font-mono);\n\t\t\t\tfont-size: 11px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__section-label {\n\t\t\t\tmargin-top: 21px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-size: 11px;\n\t\t\t\tfont-weight: 500;\n\t\t\t\tletter-spacing: 0.02em;\n\t\t\t\ttext-transform: uppercase;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__workspace {\n\t\t\t\tmargin-top: 16px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__workspace:first-of-type {\n\t\t\t\tmargin-top: 16px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__workspace .sessions-sidebar__section-label {\n\t\t\t\tmargin-top: 0;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item {\n\t\t\t\tmargin-top: 2px;\n\t\t\t\tborder: 1px solid transparent;\n\t\t\t\tborder-radius: 8px;\n\t\t\t\tbackground: transparent;\n\t\t\t\tcolor: inherit;\n\t\t\t\ttransition:\n\t\t\t\t\tbackground-color 120ms ease,\n\t\t\t\t\tborder-color 120ms ease;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item:hover {\n\t\t\t\tbackground: var(--tree-hover);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item--selected {\n\t\t\t\tborder-color: var(--ring);\n\t\t\t\tbackground: color-mix(in srgb, var(--accent) var(--sessions-sidebar-selected-mix), transparent);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item--selected:hover {\n\t\t\t\tbackground: color-mix(in srgb, var(--accent) var(--sessions-sidebar-selected-hover-mix), transparent);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item-row {\n\t\t\t\tdisplay: flex;\n\t\t\t\twidth: 100%;\n\t\t\t\tmin-height: 26px;\n\t\t\t\talign-items: center;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__expander {\n\t\t\t\tdisplay: grid;\n\t\t\t\twidth: 20px;\n\t\t\t\theight: 26px;\n\t\t\t\tflex-shrink: 0;\n\t\t\t\tplace-items: center;\n\t\t\t\tborder: 0;\n\t\t\t\tbackground: transparent;\n\t\t\t\tpadding: 0;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__expander:hover {\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__expander-icon {\n\t\t\t\ttransition: transform 120ms ease;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__expander[aria-expanded=\"true\"] .sessions-sidebar__expander-icon {\n\t\t\t\ttransform: rotate(90deg);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item-toggle {\n\t\t\t\tdisplay: flex;\n\t\t\t\tmin-width: 0;\n\t\t\t\tflex: 1 1 0%;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 8px;\n\t\t\t\tborder: 0;\n\t\t\t\tbackground: transparent;\n\t\t\t\tpadding: 4px 8px 4px 0;\n\t\t\t\tcolor: inherit;\n\t\t\t\ttext-align: left;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item--expanded .sessions-sidebar__item-toggle {\n\t\t\t\tpadding-top: 9px;\n\t\t\t\tpadding-right: 10px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__item--expanded .sessions-sidebar__expander {\n\t\t\t\theight: 36px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__status-dot {\n\t\t\t\tflex-shrink: 0;\n\t\t\t\twidth: 3px;\n\t\t\t\theight: 3px;\n\t\t\t\tborder-radius: 9999px;\n\t\t\t\tbackground: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__status-dot--running {\n\t\t\t\tbackground: var(--accent);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__session-title {\n\t\t\t\tmin-width: 0;\n\t\t\t\toverflow: hidden;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-size: 13px;\n\t\t\t\tfont-weight: 600;\n\t\t\t\ttext-overflow: ellipsis;\n\t\t\t\twhite-space: nowrap;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__meta {\n\t\t\t\tdisplay: flex;\n\t\t\t\tmargin-top: 1px;\n\t\t\t\tgap: 7px;\n\t\t\t\tpadding-left: 48px;\n\t\t\t\tpadding-bottom: 10px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-size: 12px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__diff-stat {\n\t\t\t\tfont-family: var(--font-mono);\n\t\t\t\tfont-size: 11px;\n\t\t\t\tfont-weight: 600;\n\t\t\t\tline-height: 1;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__diff-stat--add {\n\t\t\t\tcolor: var(--diff-add-line);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__diff-stat--delete {\n\t\t\t\tcolor: var(--diff-remove-line);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__file-tree {\n\t\t\t\tmargin-top: 4px;\n\t\t\t\tpadding: 0 6px 8px 20px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__more {\n\t\t\t\tmargin-top: 17px;\n\t\t\t\tpadding-left: 80px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-size: 11px;\n\t\t\t\tfont-weight: 500;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__footer {\n\t\t\t\tmargin-top: auto;\n\t\t\t\tborder-top: 1px solid var(--border-subtle);\n\t\t\t\tpadding-top: 12px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__footer-row {\n\t\t\t\theight: 26px;\n\t\t\t\tfont-size: 12px;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__footer-title {\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-weight: 600;\n\t\t\t}\n\n\t\t\t.sessions-sidebar__footer-count {\n\t\t\t\tmargin-left: auto;\n\t\t\t\tmargin-right: 11px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.sessions-sidebar__footer-icon {\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\t\t}\n\t</style>")
+		data := shell.Data
+		view := shell.View
+		sessionPanel := panel
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<aside id=\"sessions-sidebar\" class=\"sessions-sidebar\" data-class:sessions-sidebar--hidden=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 = []any{sessionsSidebarClass(view)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(!sessionPanel.Visible))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 13, Col: 126}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<aside id=\"sessions-sidebar\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-style:width=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var2).String())
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Quote(strconv.Itoa(sessionPanel.Width) + "px"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 13, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -57,6 +68,89 @@ func SessionsSidebar(data state.Data, view state.View) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		templ_7745c5c3_Err = SessionsSidebarContent(data, view).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</aside>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func SessionsSidebarDropdown(shell state.Shell) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var4 == nil {
+			templ_7745c5c3_Var4 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		data := shell.Data
+		view := shell.View
+		sessionPanel := view.PanelLayout.Panels["session"]
+		if !sessionPanel.Visible {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"sessions-sidebar-dropdown\" data-sessions-sidebar-dropdown><button type=\"button\" class=\"sessions-sidebar-dropdown--trigger\" aria-haspopup=\"dialog\" aria-expanded=\"false\" aria-controls=\"sessions-sidebar-dropdown-panel\" data-sessions-sidebar-dropdown-trigger><span>Sessions</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = IconChevronDown("icon-12 sessions-sidebar-dropdown--chevron").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</button><aside id=\"sessions-sidebar-dropdown-panel\" class=\"sessions-sidebar sessions-sidebar--dropdown\" hidden data-sessions-sidebar-dropdown-panel>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = SessionsSidebarContent(data, view).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</aside></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		return nil
+	})
+}
+
+func SessionsSidebarContent(data state.Data, view state.View) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = SessionsSidebarHeader(view).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -66,14 +160,6 @@ func SessionsSidebar(data state.Data, view state.View) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = SessionsSidebarFooter().Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</aside>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
 		}
 		return nil
 	})

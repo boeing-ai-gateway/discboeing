@@ -8,7 +8,13 @@ package app
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-func TerminalPanel() templ.Component {
+import (
+	"strconv"
+
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+func TerminalPanel(shell state.Shell, sessionID string, panel state.Panel) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -29,7 +35,23 @@ func TerminalPanel() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t@layer components {\n\t\t\t.terminal-panel {\n\t\t\t\tdisplay: flex;\n\t\t\t\tmin-height: 180px;\n\t\t\t\tmax-height: 280px;\n\t\t\t\tflex: 0 0 220px;\n\t\t\t\tflex-direction: column;\n\t\t\t\toverflow: hidden;\n\t\t\t\tbackground: color-mix(in srgb, var(--surface-card) 92%, black);\n\t\t\t}\n\n\t\t\t.terminal-panel__header {\n\t\t\t\tdisplay: flex;\n\t\t\t\theight: 34px;\n\t\t\t\talign-items: center;\n\t\t\t\tjustify-content: space-between;\n\t\t\t\tborder-bottom: 1px solid var(--border-subtle);\n\t\t\t\tpadding: 0 12px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-size: 12px;\n\t\t\t}\n\n\t\t\t.terminal-panel__title {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 7px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-weight: 600;\n\t\t\t}\n\n\t\t\t.terminal-panel__body {\n\t\t\t\tmin-height: 0;\n\t\t\t\tflex: 1 1 0%;\n\t\t\t\toverflow: hidden;\n\t\t\t\tpadding: 14px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-family: var(--font-mono);\n\t\t\t\tfont-size: 12px;\n\t\t\t}\n\n\t\t\t.terminal-panel__prompt {\n\t\t\t\tcolor: var(--diff-add-line);\n\t\t\t}\n\t\t}\n\t</style><section class=\"ide-panel terminal-panel\" aria-label=\"Terminal\"><header class=\"terminal-panel__header\"><div class=\"terminal-panel__title\">")
+		terminalPanel := panel
+		sshCommand := terminalSSHCommand(sessionID)
+		pullCommand := terminalPullCommand(sessionID)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"ide-panel terminal-panel flex min-h-0 max-h-none flex-col overflow-hidden bg-[color-mix(in_srgb,var(--surface-card)_92%,black)]\" aria-label=\"Terminal\" data-style:--terminal-panel-height=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Quote(strconv.Itoa(terminalPanel.Height) + "px"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 13, Col: 261}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><header class=\"flex h-[34px] items-center justify-between border-b border-[var(--border-subtle)] px-[12px] text-[12px] text-[var(--muted-foreground)]\"><div class=\"flex min-w-0 items-center gap-[7px] font-semibold text-[var(--foreground)]\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -37,12 +59,213 @@ func TerminalPanel() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<span>Terminal</span></div><span>Placeholder</span></header><div class=\"terminal-panel__body\"><div><span class=\"terminal-panel__prompt\">discobot $</span> terminal placeholder</div><div>Interactive terminal output will appear here.</div></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<span>Terminal</span> <span class=\"truncate font-normal text-[var(--muted-foreground)]\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(terminalSessionLabel(sessionID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 18, Col: 103}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 = []any{terminalStatusDotClass(sessionID)}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var4...)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var4).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 1, Col: 0}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" title=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(terminalStatusLabel(sessionID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 19, Col: 92}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"></span></div><div class=\"flex shrink-0 items-center gap-2\"><label class=\"flex items-center gap-2 text-xs text-[var(--muted-foreground)]\"><span>root</span> <button type=\"button\" class=\"relative inline-flex h-5 w-9 rounded-full bg-[var(--muted)] opacity-50\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if sessionID == "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " disabled")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " aria-pressed=\"false\" title=\"Root terminal toggle\"><span class=\"absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-[var(--background)] shadow\"></span></button></label> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if sessionID != "" {
+			templ_7745c5c3_Err = terminalCopyButton("ssh", "Copy SSH", "Copy SSH command: "+sshCommand, sshCommand).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = terminalCopyButton("pull", "Copy pull cmd", "Copy pull command: "+pullCommand, pullCommand).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></header><div class=\"min-h-0 flex-1 overflow-hidden p-[14px] font-mono text-[12px] text-[var(--muted-foreground)]\"><div><span class=\"text-[var(--diff-add-line)]\">discobot $</span> terminal placeholder</div><div>Interactive terminal output will appear here.</div></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		return nil
 	})
+}
+
+func terminalCopyButton(kind string, label string, title string, command string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var7 == nil {
+			templ_7745c5c3_Var7 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<button type=\"button\" class=\"inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--tree-hover)] hover:text-[var(--foreground)]\" title=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var8 string
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(title)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 42, Col: 194}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" data-terminal-copy-button data-terminal-copy-kind=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var9 string
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(kind)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 42, Col: 253}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" data-terminal-copy-text=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var10 string
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(command)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 42, Col: 289}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = IconCopy("icon-14").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<span class=\"hidden sm:inline\" data-terminal-copy-label>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var11 string
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/terminal_panel.templ`, Line: 44, Col: 65}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span></button>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func terminalSessionLabel(sessionID string) string {
+	if sessionID == "" {
+		return "No session"
+	}
+	return "Session: " + sessionID
+}
+
+func terminalStatusLabel(sessionID string) string {
+	if sessionID == "" {
+		return "disconnected"
+	}
+	return "connected"
+}
+
+func terminalStatusDotClass(sessionID string) string {
+	class := "h-2 w-2 shrink-0 rounded-full"
+	if sessionID == "" {
+		return class + " bg-[var(--muted-foreground)]/50"
+	}
+	return class + " bg-green-500"
+}
+
+func terminalSSHCommand(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return "ssh -p 3333 " + sessionID + "@localhost"
+}
+
+func terminalPullCommand(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return "git pull \"ssh://" + sessionID + "@localhost:3333/home/discobot/workspace\" HEAD"
 }
 
 var _ = templruntime.GeneratedTemplate

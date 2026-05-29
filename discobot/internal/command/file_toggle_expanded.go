@@ -11,11 +11,12 @@ import (
 // FileToggleExpanded toggles a directory node in a server-rendered file tree.
 func (h *Handler) FileToggleExpanded(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	generation := h.view.SaveView(func(view *state.View) {
-		if view.ExpandedFileIDs == nil {
-			view.ExpandedFileIDs = map[string]bool{}
+	h.view.SaveView(func(view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		if sessionPanel.ExpandedFileIDs == nil {
+			sessionPanel.ExpandedFileIDs = map[string]bool{}
 		}
-		view.ExpandedFileIDs[id] = !view.ExpandedFileIDs[id]
+		sessionPanel.ExpandedFileIDs[id] = !sessionPanel.ExpandedFileIDs[id]
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }

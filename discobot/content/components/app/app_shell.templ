@@ -1,67 +1,113 @@
 package app
 
 import (
-	"strconv"
-
+	"github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
 templ AppShell(shell state.Shell) {
-	<main id="app-shell" class="app-shell" data-ui-generation={ strconv.FormatUint(shell.Generation, 10) }>
+	{{ session, _ := selectedSession(shell.Data, shell.View) }}
+	{{ sessionID := session.ID }}
+	{{ sessionPanel := shell.View.PanelLayout.Panels["session"] }}
+	{{ editorPanel := shell.View.PanelLayout.Panels["editor"] }}
+	{{ composerPanel := shell.View.PanelLayout.Panels["composer"] }}
+	{{ terminalPanel := shell.View.PanelLayout.Panels["terminal"] }}
+	<main id="app-shell" class="h-dvh overflow-hidden bg-[var(--surface-canvas)] text-[13px] text-[var(--foreground)] antialiased">
 		<style>
-			@layer components {
-				.app-shell {
-					height: 100dvh;
-					overflow: hidden;
-					background: var(--surface-canvas);
-					color: var(--foreground);
-					font-size: 13px;
-					-webkit-font-smoothing: antialiased;
-					-moz-osx-font-smoothing: grayscale;
-				}
+			.app-workspace-grid {
+				display: grid;
+				grid-template-columns: minmax(0, auto) var(--workspace-gap) minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);
+				grid-template-rows: minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);
+			}
 
-				.app-shell__window {
-					display: flex;
-					flex-direction: column;
-					height: 100%;
-					min-height: 720px;
-					overflow: hidden;
-					background: var(--surface-canvas);
-				}
+			.app-workspace-grid:has(> .panel--maximized) {
+				grid-template-columns: minmax(0, 1fr);
+				grid-template-rows: minmax(0, 1fr);
+			}
 
-				.app-shell__content {
-					display: flex;
-					min-height: 0;
-					flex: 1 1 0%;
-				}
+			.app-workspace-grid:has(> .panel--maximized) > :not(.panel--maximized) {
+				display: none;
+			}
 
-				.app-shell__main {
-					display: flex;
-					min-width: 0;
-					flex: 1 1 0%;
-					flex-direction: column;
-					background: var(--surface-canvas);
-				}
+			.app-workspace-grid:has(> .panel--maximized) [data-discobot-resize] {
+				display: none;
+			}
 
-				.app-shell__body {
-					display: flex;
-					min-height: 0;
-					flex: 1 1 0%;
-					gap: var(--workspace-gap);
-					padding: 0 10px 10px 10px;
-				}
+			.panel--maximized {
+				grid-column: 1 / -1 !important;
+				grid-row: 1 / -1 !important;
+			}
+
+			.panel > :not(.panel--controls) {
+				width: 100%;
+				height: 100%;
 			}
 		</style>
-		<div class="app-shell__window">
-			@WindowChrome(shell.View)
-			<div class="app-shell__content">
-				@SessionsSidebar(shell.Data, shell.View)
-				<section class="app-shell__main">
-					<div class="app-shell__body">
-						@SessionWorkspace(shell.Data, shell.View)
-					</div>
-				</section>
+		<div class="flex h-full min-h-[720px] flex-col overflow-hidden bg-[var(--surface-canvas)]">
+			@WindowChrome(shell)
+			<div class="min-h-0 min-w-0 flex-1 p-[10px] pt-0 app-workspace-grid">
+				@ui.Panel("session", "Session", sessionPanel) {
+					if sessionPanel.Visible {
+						@SessionsSidebar(shell, sessionID, sessionPanel)
+					}
+				}
+				@ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+					Visible: sessionPanel.Visible,
+					GridColumn: "2",
+					GridRow: "1 / -1",
+					Handle: ui.ResizeHandleProps{
+						Axis: ui.ResizeAxisX,
+						Target: "#panel-session",
+						PanelID: sessionPanel.ID,
+						Command: "/ui/commands/layout/resize",
+						Label: "Resize sessions panel",
+						Min: sessionPanel.MinWidth,
+						Max: sessionPanel.MaxWidth,
+						Value: sessionPanel.Width,
+					},
+				})
+				@ui.Panel("editor", "Editor", editorPanel) {
+					@EditorPane(shell, sessionID, editorPanel)
+				}
+				@ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+					Visible: composerPanel.Visible && (editorPanel.Visible || terminalPanel.Visible),
+					GridColumn: "4",
+					GridRow: composerPanel.GridRow,
+					Handle: ui.ResizeHandleProps{
+						Axis: ui.ResizeAxisX,
+						Target: "#panel-composer",
+						PanelID: composerPanel.ID,
+						Command: "/ui/commands/layout/resize",
+						Label: "Resize session workspace panel",
+						Min: composerPanel.MinWidth,
+						Max: composerPanel.MaxWidth,
+						Value: composerPanel.Width,
+					},
+				})
+				@ui.Panel("composer", "Session Workspace", composerPanel) {
+					@SessionWorkspace(shell, sessionID, composerPanel)
+				}
+				@ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
+					Visible: terminalPanel.Visible && editorPanel.Visible,
+					GridColumn: terminalPanel.GridColumn,
+					GridRow: "2",
+					Handle: ui.ResizeHandleProps{
+						Axis: ui.ResizeAxisY,
+						Target: "#panel-terminal",
+						PanelID: terminalPanel.ID,
+						Command: "/ui/commands/layout/resize",
+						Direction: ui.ResizeDirectionReverse,
+						Label: "Resize terminal panel",
+						Min: terminalPanel.MinHeight,
+						Max: terminalPanel.MaxHeight,
+						Value: terminalPanel.Height,
+					},
+				})
+				@ui.Panel("terminal", "Terminal", terminalPanel) {
+					@TerminalPanel(shell, sessionID, terminalPanel)
+				}
 			</div>
 		</div>
+		@SettingsDialog(shell)
 	</main>
 }

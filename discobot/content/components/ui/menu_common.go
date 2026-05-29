@@ -16,10 +16,11 @@ const (
 )
 
 type MenuData struct {
-	ID      string
-	Label   string
-	Trigger templ.Component
-	Items   []MenuItem
+	ID            string
+	Label         string
+	Trigger       templ.Component
+	Items         []MenuItem
+	AnchorToClick bool
 }
 
 type MenuItem struct {

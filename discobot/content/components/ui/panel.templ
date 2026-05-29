@@ -1,0 +1,99 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ Panel(id string, title string, panel state.Panel) {
+	<div id={ panelDOMID(id) } class={ panelClass(id, panel) } style={ panelStyle(panel) }>
+		if panel.Maximizable {
+			<div class="panel--controls absolute right-[8px] top-[8px] z-10 flex items-center gap-[4px] rounded-[5px] bg-[color-mix(in_srgb,var(--surface-card)_82%,transparent)] p-[2px] text-[var(--muted-foreground)]">
+				<button type="button" class="window-chrome--icon-button inline-flex cursor-pointer items-center justify-center gap-[6px] rounded-[5px] border-0 bg-transparent p-0 leading-none text-inherit hover:bg-[color-mix(in_srgb,var(--tree-hover)_75%,transparent)] [-webkit-app-region:no-drag]" aria-label={ panelControlLabel(id, title, panel) } title={ panelControlLabel(id, title, panel) } data-on:click={ "@discobotCommand('" + panelControlCommand(id, panel) + "', {method: 'POST'})" }>
+					@Icon(panelIcon(panel), "icon-xs")
+				</button>
+			</div>
+		}
+		{ children... }
+	</div>
+}
+
+func panelDOMID(id string) string {
+	return "panel-" + panelName(id)
+}
+
+func panelClass(id string, panel state.Panel) string {
+	class := "panel panel-" + panelName(id) + " relative min-h-0 min-w-0"
+	if !panel.Visible {
+		class += " panel--hidden"
+	}
+	if panel.Maximized {
+		class += " panel--maximized"
+	}
+	return class
+}
+
+func panelStyle(panel state.Panel) string {
+	style := fmt.Sprintf(
+		"grid-column: %s; grid-row: %s; overflow: hidden; width: auto; height: auto; max-width: none; max-height: none;",
+		panel.GridColumn,
+		panel.GridRow,
+	)
+	if panel.MinWidth > 0 {
+		style += fmt.Sprintf(" min-width: %dpx;", panel.MinWidth)
+	}
+	if panel.MinHeight > 0 {
+		style += fmt.Sprintf(" min-height: %dpx;", panel.MinHeight)
+	}
+	return style
+}
+
+func panelControlLabel(id string, title string, panel state.Panel) string {
+	label := strings.TrimSpace(title)
+	if label == "" {
+		label = panelName(id)
+	}
+	if panel.Maximized {
+		return "Restore " + label + " panel"
+	}
+	return "Maximize " + label + " panel"
+}
+
+func panelControlCommand(id string, panel state.Panel) string {
+	if panel.Maximized {
+		return "/ui/commands/panels/" + panelName(id) + "/restore"
+	}
+	return "/ui/commands/panels/" + panelName(id) + "/maximize"
+}
+
+func panelIcon(panel state.Panel) string {
+	if panel.Maximized {
+		return "screen-normal"
+	}
+	return "screen-full"
+}
+
+func panelName(id string) string {
+	id = strings.ToLower(strings.TrimSpace(id))
+	var builder strings.Builder
+	lastHyphen := false
+	for _, char := range id {
+		valid := char >= 'a' && char <= 'z' || char >= '0' && char <= '9'
+		if valid {
+			builder.WriteRune(char)
+			lastHyphen = false
+			continue
+		}
+		if !lastHyphen && builder.Len() > 0 {
+			builder.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+	name := strings.TrimSuffix(builder.String(), "-")
+	if name == "" {
+		return "unnamed"
+	}
+	return name
+}

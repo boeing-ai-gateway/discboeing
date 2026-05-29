@@ -1,0 +1,112 @@
+package ui
+
+import (
+	"strconv"
+
+	ahtempl "github.com/a-h/templ"
+)
+
+templ PanelResizeHandler(props PanelResizeHandlerProps) {
+	<div class={ resizeHandlerClass(props) } style={ resizeHandlerStyle(props) }>
+		@ResizeHandle(props.Handle)
+	</div>
+}
+
+templ ResizeHandle(props ResizeHandleProps) {
+	<div
+		class={ resizeHandleClass(props.Axis) }
+		role="separator"
+		aria-label={ resizeHandleLabel(props) }
+		aria-orientation={ resizeHandleOrientation(props.Axis) }
+		tabindex="0"
+		data-discobot-resize
+		data-resize-axis={ string(props.Axis) }
+		data-resize-target={ props.Target }
+		data-resize-key={ props.Key }
+		data-resize-panel-id={ props.PanelID }
+		data-resize-command={ props.Command }
+		data-resize-direction={ string(props.Direction) }
+		data-resize-min={ strconv.Itoa(props.Min) }
+		data-resize-max={ strconv.Itoa(props.Max) }
+		aria-valuemin={ strconv.Itoa(props.Min) }
+		aria-valuemax={ strconv.Itoa(props.Max) }
+		aria-valuenow={ strconv.Itoa(props.Value) }
+	>
+		<span class="app-resize-handle--grip"></span>
+	</div>
+}
+
+type ResizeAxis string
+
+type ResizeDirection string
+
+const (
+	ResizeAxisX ResizeAxis = "x"
+	ResizeAxisY ResizeAxis = "y"
+
+	ResizeDirectionNormal  ResizeDirection = ""
+	ResizeDirectionReverse ResizeDirection = "reverse"
+)
+
+type ResizeHandleProps struct {
+	Axis      ResizeAxis
+	Target    string
+	Key       string
+	PanelID   string
+	Command   string
+	Direction ResizeDirection
+	Label     string
+	Min       int
+	Max       int
+	Value     int
+}
+
+type PanelResizeHandlerProps struct {
+	Visible    bool
+	GridColumn string
+	GridRow    string
+	Handle     ResizeHandleProps
+}
+
+func resizeHandleClass(axis ResizeAxis) string {
+	if axis == ResizeAxisY {
+		return "app-resize-handle app-resize-handle--horizontal"
+	}
+	return "app-resize-handle app-resize-handle--vertical"
+}
+
+func resizeHandlerClass(props PanelResizeHandlerProps) string {
+	class := "min-h-0 min-w-0 [&>.app-resize-handle]:h-full [&>.app-resize-handle]:w-full"
+	if !props.Visible {
+		class += " hidden"
+	}
+	return class
+}
+
+func resizeHandleOrientation(axis ResizeAxis) string {
+	if axis == ResizeAxisY {
+		return "horizontal"
+	}
+	return "vertical"
+}
+
+func resizeHandleLabel(props ResizeHandleProps) string {
+	if props.Label != "" {
+		return props.Label
+	}
+	if props.Axis == ResizeAxisY {
+		return "Resize panel height"
+	}
+	return "Resize panel width"
+}
+
+func resizeHandlerStyle(props PanelResizeHandlerProps) ahtempl.SafeCSS {
+	style := ""
+	if props.GridColumn != "" {
+		style += "grid-column: " + props.GridColumn + ";"
+	}
+	if props.GridRow != "" {
+		style += " grid-row: " + props.GridRow + ";"
+	}
+	return ahtempl.SafeCSS(style)
+}

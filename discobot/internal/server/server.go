@@ -23,7 +23,6 @@ type Server struct {
 	config          config.Config
 	logger          *slog.Logger
 	mu              sync.Mutex
-	generation      uint64
 	data            state.Data
 	view            state.View
 	devReloadNeeded bool
@@ -103,15 +102,13 @@ func (s *Server) handleUIStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) snapshot() state.Shell {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return state.NewShell(s.generation, s.data, s.view)
+	return state.NewShell(s.data, s.view)
 }
 
 // SaveView mutates the server-owned view state and publishes to stream listeners.
-func (s *Server) SaveView(update func(*state.View)) uint64 {
+func (s *Server) SaveView(update func(*state.View)) {
 	s.mu.Lock()
 	update(&s.view)
-	s.generation++
-	generation := s.generation
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -124,15 +121,12 @@ func (s *Server) SaveView(update func(*state.View)) uint64 {
 		default:
 		}
 	}
-	return generation
 }
 
 // SaveData mutates server-owned application data and publishes to stream listeners.
-func (s *Server) SaveData(update func(*state.Data)) uint64 {
+func (s *Server) SaveData(update func(*state.Data)) {
 	s.mu.Lock()
 	update(&s.data)
-	s.generation++
-	generation := s.generation
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -145,15 +139,12 @@ func (s *Server) SaveData(update func(*state.Data)) uint64 {
 		default:
 		}
 	}
-	return generation
 }
 
 // SaveShell mutates server-owned application and view state together.
-func (s *Server) SaveShell(update func(*state.Data, *state.View)) uint64 {
+func (s *Server) SaveShell(update func(*state.Data, *state.View)) {
 	s.mu.Lock()
 	update(&s.data, &s.view)
-	s.generation++
-	generation := s.generation
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -166,7 +157,6 @@ func (s *Server) SaveShell(update func(*state.Data, *state.View)) uint64 {
 		default:
 		}
 	}
-	return generation
 }
 
 func (s *Server) subscribe() (<-chan struct{}, func()) {

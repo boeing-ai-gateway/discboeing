@@ -1,273 +1,40 @@
 package app
 
-import "github.com/obot-platform/discobot/discobot/internal/state"
+import (
+	"strconv"
 
-templ SessionsSidebar(data state.Data, view state.View) {
-	<style>
-		@layer components {
-			.sessions-sidebar__header,
-			.sessions-sidebar__actions,
-			.sessions-sidebar__row,
-			.sessions-sidebar__meta,
-			.sessions-sidebar__footer-row {
-				display: flex;
-				align-items: center;
-			}
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
 
-			.sessions-sidebar {
-				--sessions-sidebar-selected-mix: 68%;
-				--sessions-sidebar-selected-hover-mix: 82%;
+templ SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel) {
+	{{ data := shell.Data }}
+	{{ view := shell.View }}
+	{{ sessionPanel := panel }}
+	<aside id="sessions-sidebar" class="sessions-sidebar" data-class:sessions-sidebar--hidden={ boolString(!sessionPanel.Visible) } data-style:width={ strconv.Quote(strconv.Itoa(sessionPanel.Width) + "px") }>
+		@SessionsSidebarContent(data, view)
+	</aside>
+}
 
-				display: flex;
-				width: var(--workspace-sidebar-width);
-				min-height: 0;
-				flex-shrink: 0;
-				flex-direction: column;
-				overflow-y: auto;
-				background: var(--surface-canvas);
-				padding: 0px 0px 10px 10px;
-			}
+templ SessionsSidebarDropdown(shell state.Shell) {
+	{{ data := shell.Data }}
+	{{ view := shell.View }}
+	{{ sessionPanel := view.PanelLayout.Panels["session"] }}
+	if !sessionPanel.Visible {
+		<div class="sessions-sidebar-dropdown" data-sessions-sidebar-dropdown>
+			<button type="button" class="sessions-sidebar-dropdown--trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="sessions-sidebar-dropdown-panel" data-sessions-sidebar-dropdown-trigger>
+				<span>Sessions</span>
+				@IconChevronDown("icon-12 sessions-sidebar-dropdown--chevron")
+			</button>
+			<aside id="sessions-sidebar-dropdown-panel" class="sessions-sidebar sessions-sidebar--dropdown" hidden data-sessions-sidebar-dropdown-panel>
+				@SessionsSidebarContent(data, view)
+			</aside>
+		</div>
+	}
+}
 
-			.sessions-sidebar--hidden {
-				display: none;
-			}
-
-			.sessions-sidebar__header,
-			.sessions-sidebar__footer-row {
-				justify-content: space-between;
-			}
-
-			.sessions-sidebar__title {
-				padding-inline: 1px;
-				color: var(--foreground);
-				font-size: 13px;
-				font-weight: 600;
-			}
-
-			.sessions-sidebar__actions {
-				gap: 10px;
-				color: var(--muted-foreground);
-			}
-
-			.sessions-sidebar__new-button {
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				gap: 6px;
-				height: 24px;
-				border: 1px solid var(--border-subtle);
-				border-radius: 5px;
-				background: var(--surface-control);
-				padding-inline: 8px;
-				color: var(--foreground);
-				box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
-				font-size: 12px;
-				line-height: 1;
-			}
-
-			.sessions-sidebar__new-button:hover {
-				background-color: color-mix(in srgb, var(--tree-hover) 75%, transparent);
-			}
-
-			.sessions-sidebar__shortcut {
-				border-radius: 3px;
-				background: var(--muted);
-				padding: 0 4px;
-				color: var(--foreground);
-				font-family: var(--font-mono);
-				font-size: 11px;
-			}
-
-			.sessions-sidebar__section-label {
-				margin-top: 21px;
-				color: var(--muted-foreground);
-				font-size: 11px;
-				font-weight: 500;
-				letter-spacing: 0.02em;
-				text-transform: uppercase;
-			}
-
-			.sessions-sidebar__workspace {
-				margin-top: 16px;
-			}
-
-			.sessions-sidebar__workspace:first-of-type {
-				margin-top: 16px;
-			}
-
-			.sessions-sidebar__workspace .sessions-sidebar__section-label {
-				margin-top: 0;
-			}
-
-			.sessions-sidebar__item {
-				margin-top: 2px;
-				border: 1px solid transparent;
-				border-radius: 8px;
-				background: transparent;
-				color: inherit;
-				transition:
-					background-color 120ms ease,
-					border-color 120ms ease;
-			}
-
-			.sessions-sidebar__item:hover {
-				background: var(--tree-hover);
-			}
-
-			.sessions-sidebar__item--selected {
-				border-color: var(--ring);
-				background: color-mix(in srgb, var(--accent) var(--sessions-sidebar-selected-mix), transparent);
-			}
-
-			.sessions-sidebar__item--selected:hover {
-				background: color-mix(in srgb, var(--accent) var(--sessions-sidebar-selected-hover-mix), transparent);
-			}
-
-			.sessions-sidebar__item-row {
-				display: flex;
-				width: 100%;
-				min-height: 26px;
-				align-items: center;
-			}
-
-			.sessions-sidebar__expander {
-				display: grid;
-				width: 20px;
-				height: 26px;
-				flex-shrink: 0;
-				place-items: center;
-				border: 0;
-				background: transparent;
-				padding: 0;
-				color: var(--muted-foreground);
-			}
-
-			.sessions-sidebar__expander:hover {
-				color: var(--foreground);
-			}
-
-			.sessions-sidebar__expander-icon {
-				transition: transform 120ms ease;
-			}
-
-			.sessions-sidebar__expander[aria-expanded="true"] .sessions-sidebar__expander-icon {
-				transform: rotate(90deg);
-			}
-
-			.sessions-sidebar__item-toggle {
-				display: flex;
-				min-width: 0;
-				flex: 1 1 0%;
-				align-items: center;
-				gap: 8px;
-				border: 0;
-				background: transparent;
-				padding: 4px 8px 4px 0;
-				color: inherit;
-				text-align: left;
-			}
-
-			.sessions-sidebar__item--expanded .sessions-sidebar__item-toggle {
-				padding-top: 9px;
-				padding-right: 10px;
-			}
-
-			.sessions-sidebar__item--expanded .sessions-sidebar__expander {
-				height: 36px;
-			}
-
-			.sessions-sidebar__status-dot {
-				flex-shrink: 0;
-				width: 3px;
-				height: 3px;
-				border-radius: 9999px;
-				background: var(--muted-foreground);
-			}
-
-			.sessions-sidebar__status-dot--running {
-				background: var(--accent);
-			}
-
-			.sessions-sidebar__session-title {
-				min-width: 0;
-				overflow: hidden;
-				color: var(--foreground);
-				font-size: 13px;
-				font-weight: 600;
-				text-overflow: ellipsis;
-				white-space: nowrap;
-			}
-
-			.sessions-sidebar__meta {
-				display: flex;
-				margin-top: 1px;
-				gap: 7px;
-				padding-left: 48px;
-				padding-bottom: 10px;
-				color: var(--muted-foreground);
-				font-size: 12px;
-			}
-
-			.sessions-sidebar__diff-stat {
-				font-family: var(--font-mono);
-				font-size: 11px;
-				font-weight: 600;
-				line-height: 1;
-			}
-
-			.sessions-sidebar__diff-stat--add {
-				color: var(--diff-add-line);
-			}
-
-			.sessions-sidebar__diff-stat--delete {
-				color: var(--diff-remove-line);
-			}
-
-			.sessions-sidebar__file-tree {
-				margin-top: 4px;
-				padding: 0 6px 8px 20px;
-			}
-
-			.sessions-sidebar__more {
-				margin-top: 17px;
-				padding-left: 80px;
-				color: var(--muted-foreground);
-				font-size: 11px;
-				font-weight: 500;
-			}
-
-			.sessions-sidebar__footer {
-				margin-top: auto;
-				border-top: 1px solid var(--border-subtle);
-				padding-top: 12px;
-			}
-
-			.sessions-sidebar__footer-row {
-				height: 26px;
-				font-size: 12px;
-			}
-
-			.sessions-sidebar__footer-title {
-				color: var(--foreground);
-				font-weight: 600;
-			}
-
-			.sessions-sidebar__footer-count {
-				margin-left: auto;
-				margin-right: 11px;
-				color: var(--muted-foreground);
-			}
-
-			.sessions-sidebar__footer-icon {
-				color: var(--muted-foreground);
-			}
-		}
-	</style>
-	<aside id="sessions-sidebar" class={ sessionsSidebarClass(view) }>
+templ SessionsSidebarContent(data state.Data, view state.View) {
 		@SessionsSidebarHeader(view)
 		for _, workspace := range data.Workspaces {
 			@SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(data.Sessions, workspace.ID), view)
 		}
-		@SessionsSidebarFooter()
-	</aside>
 }

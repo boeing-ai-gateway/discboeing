@@ -395,11 +395,13 @@ to `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md`
 and includes that path in the prompt so the AI can read the full diff if the
 inline context is truncated.
 
-The AI hook response becomes the hook output. Responses that start with
-`SUCCESS` pass the hook. Any other response fails the hook, so use
-`FEEDBACK: <actionable feedback>` when the change needs attention. `subagent` is
-optional and selects a configured session sub-agent, including its prompt, model
-override, and tool restrictions. AI `pre-commit` hooks are not supported.
+Discobot adds a standard response instruction to each AI hook prompt: output
+`SUCCESS` when the hook passes, or `FEEDBACK: <actionable feedback>` when
+changes need attention. Hook authors should write review-specific instructions
+and do not need to include that success/feedback wording in the hook body.
+`subagent` is optional and selects a configured session sub-agent, including its
+prompt, model override, and tool restrictions. AI `pre-commit` hooks are not
+supported.
 
 ### Pre-commit Hooks
 

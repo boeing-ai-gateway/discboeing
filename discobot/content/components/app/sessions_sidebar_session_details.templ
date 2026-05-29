@@ -1,16 +1,196 @@
 package app
 
 import (
+	"strconv"
+
 	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-templ SessionsSidebarSessionDetails(session state.Session, fileTree appui.FileTreeData) {
-	<div class="sessions-sidebar__meta">
-		<span class="sessions-sidebar__diff-stat sessions-sidebar__diff-stat--add">+{ sessionDiffStat(session.Additions) }</span>
-		<span class="sessions-sidebar__diff-stat sessions-sidebar__diff-stat--delete">-{ sessionDiffStat(session.Deletions) }</span>
+templ SessionsSidebarSessionDetails(session state.Session, fileTree appui.FileTreeData, diffFiles []sessionDiffFile, sideChats []sessionSideChatItem, sections sessionDetailSections, viewMode state.SessionViewMode) {
+	<div class="sessions-sidebar--details" data-on:click__stop="evt.stopPropagation()">
+		@SessionsSidebarSessionDetailPanels(session, fileTree, diffFiles, sideChats, sections, viewMode)
+		<div class="sessions-sidebar--detail-dock">
+			@SessionsSidebarApprovalFooter(session, diffFiles)
+			@SessionsSidebarDetailLaunchers(session.ID, sections)
+		</div>
 	</div>
-	<div class="sessions-sidebar__file-tree">
-		@appui.FileTree(fileTree)
+}
+
+templ SessionsSidebarSessionDetailPanels(session state.Session, fileTree appui.FileTreeData, diffFiles []sessionDiffFile, sideChats []sessionSideChatItem, sections sessionDetailSections, viewMode state.SessionViewMode) {
+	{{ approvalSummary := sessionApprovalSummaryFor(diffFiles) }}
+	if sessionDetailSectionsAnyVisible(sections) {
+		<div class="sessions-sidebar--detail-stack" aria-label="Session detail panels">
+			if sections.Workspace {
+				<div class={ sessionsSidebarDetailSectionClass(true) }>
+					<div class="sessions-sidebar--detail-section-header">
+						@SessionsSidebarDetailSectionHideButton(session.ID, state.SessionDetailSectionWorkspace, "Workspace")
+						<span class="sessions-sidebar--detail-section-title">Workspace</span>
+						<span class="sessions-sidebar--detail-section-summary">{ sessionsSidebarWorkspaceSummary(fileTree, diffFiles, viewMode) }</span>
+						<div class="sessions-sidebar--detail-section-actions">
+							<div class="sessions-sidebar--view-toggle" aria-label="Session file view">
+								<button type="button" class={ sessionsSidebarViewButtonClass(viewMode, state.SessionViewModeFiles) } aria-pressed={ boolString(viewMode == state.SessionViewModeFiles) } data-on:click__stop={ sessionsSidebarSessionViewModeCommand(session.ID, state.SessionViewModeFiles) }>Files</button>
+								<button type="button" class={ sessionsSidebarViewButtonClass(viewMode, state.SessionViewModeDiff) } aria-pressed={ boolString(viewMode == state.SessionViewModeDiff) } data-on:click__stop={ sessionsSidebarSessionViewModeCommand(session.ID, state.SessionViewModeDiff) }>Diff</button>
+							</div>
+							if viewMode == state.SessionViewModeFiles {
+								<button type="button" class={ sessionsSidebarIconButtonClass(fileTree.SearchVisible) } aria-label="Toggle file search" aria-pressed={ boolString(fileTree.SearchVisible) } title="Toggle file search" data-on:click__stop={ sessionsSidebarFileSearchToggleCommand() }>
+									@appui.Icon("search", "icon-xs")
+								</button>
+							}
+						</div>
+					</div>
+					<div class="sessions-sidebar--detail-section-body">
+						if viewMode == state.SessionViewModeDiff {
+							@SessionsSidebarDiffList(diffFiles)
+						} else {
+							<div class="sessions-sidebar--file-tree">
+								@appui.FileTree(fileTree)
+							</div>
+						}
+					</div>
+				</div>
+			}
+			if sections.SideChats {
+				<div class={ sessionsSidebarDetailSectionClass(true) }>
+					<div class="sessions-sidebar--detail-section-header">
+						@SessionsSidebarDetailSectionHideButton(session.ID, state.SessionDetailSectionSideChats, "Side chats")
+						<span class="sessions-sidebar--detail-section-title">Side chats</span>
+						<span class="sessions-sidebar--detail-section-summary">{ sessionSideChatSectionSummary(sideChats) }</span>
+					</div>
+					<div class="sessions-sidebar--detail-section-body">
+						@SessionsSidebarSideChats(session.ID, sideChats)
+					</div>
+				</div>
+			}
+			if sections.Hooks {
+				<div class={ sessionsSidebarDetailSectionClass(true) }>
+					<div class="sessions-sidebar--detail-section-header">
+						@SessionsSidebarDetailSectionHideButton(session.ID, state.SessionDetailSectionHooks, "Hooks")
+						<span class="sessions-sidebar--detail-section-title">Hooks</span>
+						<span class="sessions-sidebar--detail-section-summary">{ sessionHookSectionSummary(session.Hooks) }</span>
+					</div>
+					<div class="sessions-sidebar--detail-section-body">
+						@SessionsSidebarHookStatus(session)
+					</div>
+				</div>
+			}
+			if sections.Review {
+				<div class={ sessionsSidebarDetailSectionClass(true) }>
+					<div class="sessions-sidebar--detail-section-header">
+						@SessionsSidebarDetailSectionHideButton(session.ID, state.SessionDetailSectionReview, "Review")
+						<span class="sessions-sidebar--detail-section-title">Review</span>
+						<span class="sessions-sidebar--detail-section-summary">{ sessionApprovalStatusLabel(approvalSummary) }</span>
+						<div class="sessions-sidebar--detail-section-actions">
+							<button type="button" class="sessions-sidebar--summary-button" disabled?={ len(diffFiles) == 0 } data-on:click__stop={ sessionsSidebarSessionDiffSummaryCommand(session.ID) }>
+								@appui.Icon("file-text", "icon-xs")
+								<span>Summary</span>
+							</button>
+						</div>
+					</div>
+					<div class="sessions-sidebar--detail-section-body">
+						@SessionsSidebarDiffList(diffFiles)
+					</div>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ SessionsSidebarDetailSectionHideButton(sessionID string, section state.SessionDetailSection, title string) {
+	<button type="button" class="sessions-sidebar--detail-section-hide" aria-label={ "Hide " + title + " panel" } title={ "Hide " + title } data-on:click__stop={ sessionsSidebarSessionDetailSectionHideCommand(sessionID, section) }>
+		@IconChevronDown("icon-xs")
+	</button>
+}
+
+templ SessionsSidebarDetailLaunchers(sessionID string, sections sessionDetailSections) {
+	<div class="sessions-sidebar--detail-launchers" aria-label="Open session detail panels">
+		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionWorkspace, "Workspace", "file", sections.Workspace)
+		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionSideChats, "Side chats", "message-square", sections.SideChats)
+		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionHooks, "Hooks", "terminal", sections.Hooks)
+		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionReview, "Review", "file-text", sections.Review)
+	</div>
+}
+
+templ SessionsSidebarDetailLauncher(sessionID string, section state.SessionDetailSection, label string, icon string, active bool) {
+	<button type="button" class={ sessionsSidebarDetailLauncherClass(active) } aria-label={ sessionsSidebarDetailLauncherLabel(label, active) } aria-pressed={ boolString(active) } title={ label } data-on:click__stop={ sessionsSidebarSessionDetailSectionShowCommand(sessionID, section) }>
+		@appui.Icon(icon, "icon-xs")
+	</button>
+}
+
+templ SessionsSidebarHookStatus(session state.Session) {
+	<div class="sessions-sidebar--hooks" aria-label="Hook status">
+		if len(session.Hooks) == 0 {
+			<div class="sessions-sidebar--empty-section">No hooks configured</div>
+		} else {
+			<div class="sessions-sidebar--hooks-list">
+				for _, hook := range session.Hooks {
+					<div class="sessions-sidebar--hook-row">
+						<span class={ "sessions-sidebar--hook-dot " + sessionHookStatusClass(hook.Status) }></span>
+						<div class="sessions-sidebar--hook-copy">
+							<div class="sessions-sidebar--hook-name">{ hook.Name }</div>
+							<div class="sessions-sidebar--hook-meta">{ hook.Type } · { sessionHookStatusLabel(hook.Status) } · runs { strconv.Itoa(hook.RunCount) }</div>
+						</div>
+					</div>
+				}
+			</div>
+		}
+	</div>
+}
+
+templ SessionsSidebarSideChats(sessionID string, sideChats []sessionSideChatItem) {
+	<div class="sessions-sidebar--side-chats" aria-label="Side chats">
+		if len(sideChats) == 0 {
+			<div class="sessions-sidebar--empty-section">No side chats</div>
+		} else {
+			<div class="sessions-sidebar--side-chats-list">
+				for _, item := range sideChats {
+					<button type="button" class={ sessionSideChatClass(item.Selected, item.Thread.Unread) } aria-pressed={ boolString(item.Selected) } data-on:click__stop={ sessionsSidebarSideChatSelectCommand(sessionID, item.Thread.ID) }>
+						<span class="sessions-sidebar--side-chat-title">{ item.Thread.Title }</span>
+						<span class="sessions-sidebar--side-chat-time">{ item.Thread.RelativeTime }</span>
+						<span class="sessions-sidebar--side-chat-preview">{ item.Thread.Preview }</span>
+						<span class="sessions-sidebar--side-chat-count">{ sessionSideChatCountLabel(len(item.Thread.Messages)) }</span>
+					</button>
+				}
+			</div>
+		}
+	</div>
+}
+
+templ SessionsSidebarDiffList(diffFiles []sessionDiffFile) {
+	<div class="sessions-sidebar--diff-list" aria-label="Changed files">
+		if len(diffFiles) == 0 {
+			<div class="sessions-sidebar--empty-diff">No changed files</div>
+		}
+		for _, file := range diffFiles {
+			<div class="sessions-sidebar--diff-file-row">
+				<button type="button" class="sessions-sidebar--diff-file" title={ file.Path } data-on:click__stop={ sessionsSidebarFileSelectCommand(file.ID) }>
+					@appui.Icon(file.Icon, "icon-xs sessions-sidebar--diff-file-icon")
+					<span class="sessions-sidebar--diff-file-path">{ file.Path }</span>
+					<span class={ "sessions-sidebar--diff-file-status " + sessionDiffFileStatusClass(file.Status) } title={ sessionDiffFileStatusTitle(file.Status) }>{ sessionDiffFileStatusText(file.Status) }</span>
+				</button>
+				<button type="button" class={ sessionDiffFileApprovalClass(file.Approved) } aria-pressed={ boolString(file.Approved) } title={ sessionDiffFileApprovalLabel(file.Approved) } data-on:click__stop={ sessionsSidebarFileApprovalToggleCommand(file.ID) }>
+					<span class="sessions-sidebar--approval-dot"></span>
+					<span class="sessions-sidebar--approval-label">{ sessionDiffFileApprovalLabel(file.Approved) }</span>
+				</button>
+			</div>
+		}
+	</div>
+}
+
+templ SessionsSidebarApprovalFooter(session state.Session, diffFiles []sessionDiffFile) {
+	{{ approvalSummary := sessionApprovalSummaryFor(diffFiles) }}
+	<div class="sessions-sidebar--approval-footer">
+		<div class="sessions-sidebar--footer-topline">
+			<div class="sessions-sidebar--diff-stats" aria-label="Diff stats">
+				<span class="sessions-sidebar--diff-stat sessions-sidebar--diff-stat--add">+{ strconv.Itoa(session.Additions) }</span>
+				<span class="sessions-sidebar--diff-stat sessions-sidebar--diff-stat--delete">-{ strconv.Itoa(session.Deletions) }</span>
+				<span class="sessions-sidebar--diff-stat-count">{ strconv.Itoa(len(diffFiles)) } files</span>
+			</div>
+			<div class={ sessionApprovalStatusClass(approvalSummary) }>
+				<span class="sessions-sidebar--approval-status-dot"></span>
+				<span>{ sessionApprovalStatusLabel(approvalSummary) }</span>
+			</div>
+		</div>
+		<button type="button" class="sessions-sidebar--commit-button" disabled?={ !sessionApprovalComplete(approvalSummary) } data-on:click__stop={ sessionsSidebarCommitCommand(session.ID) }>Commit approved</button>
 	</div>
 }

@@ -1,9 +1,72 @@
 package app
 
+import (
+	icons "github.com/bryanvaz/go-templ-lucide-icons"
+)
+
 templ iconUse(symbol string, class string) {
-	<svg class={ "ui-icon " + class } aria-hidden="true" focusable="false">
-		<use href={ "/vendor/codicons.svg#codicon-" + symbol }></use>
-	</svg>
+	switch symbol {
+		case "add":
+			@icons.Plus(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "arrow-down":
+			@icons.ArrowDown(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "arrow-left":
+			@icons.ArrowLeft(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "arrow-right":
+			@icons.ArrowRight(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "arrow-up":
+			@icons.ArrowUp(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "attach":
+			@icons.Paperclip(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "chevron-down":
+			@icons.ChevronDown(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "chevron-right":
+			@icons.ChevronRight(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "chrome-close":
+			@icons.X(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "chrome-maximize":
+			@icons.Square(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "chrome-minimize":
+			@icons.Minus(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "close":
+			@icons.X(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "code":
+			@icons.CodeXml(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "copy":
+			@icons.Copy(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "file-code":
+			@icons.FileCode(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "file-text":
+			@icons.FileText(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "folder":
+			@icons.Folder(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "gear":
+			@icons.Cog(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "git-branch":
+			@icons.GitBranch(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "layout-sidebar-left":
+			@icons.PanelLeft(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "layout-sidebar-right":
+			@icons.PanelRight(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "play":
+			@icons.Play(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "refresh":
+			@icons.RefreshCw(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "robot":
+			@icons.Bot(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "search":
+			@icons.Search(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "settings":
+			@icons.Settings2(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "shield":
+			@icons.Shield(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "symbol-color":
+			@icons.Diamond(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		case "terminal":
+			@icons.Terminal(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+		default:
+			@icons.File(templ.Attributes{"class": "ui-icon " + class, "aria-hidden": "true", "focusable": "false"})
+	}
 }
 
 templ IconPanel(class string) {
@@ -104,6 +167,10 @@ templ IconCode(class string) {
 
 templ IconX(class string) {
 	@iconUse("close", class)
+}
+
+templ IconCopy(class string) {
+	@iconUse("copy", class)
 }
 
 templ IconDocker(class string) {

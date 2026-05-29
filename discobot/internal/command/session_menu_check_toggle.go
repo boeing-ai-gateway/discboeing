@@ -11,11 +11,12 @@ import (
 // SessionMenuCheckToggle toggles a checkable item in the sessions menu.
 func (h *Handler) SessionMenuCheckToggle(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
-	generation := h.view.SaveView(func(view *state.View) {
-		if view.SessionMenuChecks == nil {
-			view.SessionMenuChecks = map[string]bool{}
+	h.view.SaveView(func(view *state.View) {
+		sessionPanel := state.EnsureSessionPanelState(view)
+		if sessionPanel.SessionMenuChecks == nil {
+			sessionPanel.SessionMenuChecks = map[string]bool{}
 		}
-		view.SessionMenuChecks[key] = !view.SessionMenuChecks[key]
+		sessionPanel.SessionMenuChecks[key] = !sessionPanel.SessionMenuChecks[key]
 	})
-	writeGeneration(w, generation)
+	writeNoContent(w)
 }

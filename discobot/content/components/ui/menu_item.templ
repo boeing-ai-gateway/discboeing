@@ -3,7 +3,7 @@ package ui
 templ MenuItemView(menuID string, parentPath string, path string, item MenuItem) {
 	if len(item.Children) > 0 {
 		<button
-			class="menu__item"
+			class="menu--item"
 			type="button"
 			role="menuitem"
 			aria-haspopup="menu"
@@ -11,53 +11,53 @@ templ MenuItemView(menuID string, parentPath string, path string, item MenuItem)
 			aria-controls={ menuPanelID(menuID, path) }
 			data-menu-submenu-trigger
 		>
-			<span class="menu__spacer"></span>
-			<span class="menu__item-label">{ item.Label }</span>
-			<span class="menu__arrow" aria-hidden="true">›</span>
+			<span class="menu--spacer"></span>
+			<span class="menu--item-label">{ item.Label }</span>
+			<span class="menu--arrow" aria-hidden="true">›</span>
 		</button>
 		@MenuPanel(menuID, parentPath, path, item.Children, true)
 	} else if item.CheckState == MenuCheckChecked {
 		{{ action := menuItemAction(item) }}
 		if action != "" {
-			<button class="menu__item" type="button" role="menuitemcheckbox" aria-checked="true" data-on:click={ action }>
-				<span class="menu__check">✓</span>
-				<span class="menu__item-label">{ item.Label }</span>
+			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="true" data-on:click={ action }>
+				<span class="menu--check">✓</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		} else {
-			<button class="menu__item" type="button" role="menuitemcheckbox" aria-checked="true">
-				<span class="menu__check">✓</span>
-				<span class="menu__item-label">{ item.Label }</span>
+			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="true">
+				<span class="menu--check">✓</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		}
 	} else if item.CheckState == MenuCheckUnchecked {
 		{{ action := menuItemAction(item) }}
 		if action != "" {
-			<button class="menu__item" type="button" role="menuitemcheckbox" aria-checked="false" data-on:click={ action }>
+			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="false" data-on:click={ action }>
 				<span></span>
-				<span class="menu__item-label">{ item.Label }</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		} else {
-			<button class="menu__item" type="button" role="menuitemcheckbox" aria-checked="false">
+			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="false">
 				<span></span>
-				<span class="menu__item-label">{ item.Label }</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		}
 	} else {
 		{{ action := menuItemAction(item) }}
 		if action != "" {
-			<button class="menu__item" type="button" role="menuitem" data-on:click={ action }>
+			<button class="menu--item" type="button" role="menuitem" data-on:click={ action }>
 				<span></span>
-				<span class="menu__item-label">{ item.Label }</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		} else {
-			<button class="menu__item" type="button" role="menuitem">
+			<button class="menu--item" type="button" role="menuitem">
 				<span></span>
-				<span class="menu__item-label">{ item.Label }</span>
+				<span class="menu--item-label">{ item.Label }</span>
 				<span></span>
 			</button>
 		}

@@ -8,6 +8,7 @@ allowBuilds:
   "@sentry/cli": true
   electron-winstaller: true
   esbuild: true
+  rustywind: true
 
 onlyBuiltDependencies:
   - "@parcel/watcher"
@@ -16,4 +17,5 @@ onlyBuiltDependencies:
   - electron
   - electron-winstaller
   - esbuild
+  - rustywind
   - sharp

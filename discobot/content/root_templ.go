@@ -55,7 +55,7 @@ func Root(shell state.Shell) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<link rel=\"stylesheet\" href=\"/reset.css\"><link rel=\"stylesheet\" href=\"/themes.css\"><link rel=\"stylesheet\" href=\"/app.css\"><script type=\"importmap\">\n\t\t\t\t{\n\t\t\t\t\t\"imports\": {\n\t\t\t\t\t\t\"@starfederation/datastar\": \"https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.1/bundles/datastar.js\",\n\t\t\t\t\t\t\"@floating-ui/dom\": \"https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t</script><script type=\"module\">import \"@starfederation/datastar\";</script><script type=\"module\" src=\"/discobot.js\"></script></head><body data-signals=\"{streamOpen: false}\" data-init=\"@get('/ui/stream')\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<link rel=\"stylesheet\" href=\"/reset.css\"><link rel=\"stylesheet\" href=\"/themes.css\"><link rel=\"stylesheet\" href=\"/app.css\"><script type=\"importmap\">\n\t\t\t\t{\n\t\t\t\t\t\"imports\": {\n\t\t\t\t\t\t\"@starfederation/datastar\": \"https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.1/bundles/datastar.js\",\n\t\t\t\t\t\t\"@floating-ui/dom\": \"https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.4/+esm\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t</script><script type=\"module\">import \"@starfederation/datastar\";</script><script type=\"module\" src=\"/discobot.js\"></script></head><body data-signals=\"{streamOpen: false}\" data-on:load__window=\"@get('/ui/stream')\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

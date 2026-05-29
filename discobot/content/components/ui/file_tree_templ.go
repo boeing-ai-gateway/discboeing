@@ -8,6 +8,11 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import (
+	"strconv"
+	"strings"
+)
+
 func FileTree(tree FileTreeData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -29,137 +34,153 @@ func FileTree(tree FileTreeData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t@layer components {\n\t\t\t.file-tree {\n\t\t\t\t--file-tree-row-height: 21px;\n\t\t\t\t--file-tree-indent: 12px;\n\t\t\t\tmin-width: 0;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-size: 12px;\n\t\t\t\tline-height: 1.35;\n\t\t\t\tuser-select: none;\n\t\t\t}\n\n\t\t\t.file-tree--default {\n\t\t\t\t--file-tree-row-height: 25px;\n\t\t\t\t--file-tree-indent: 14px;\n\t\t\t}\n\n\t\t\t.file-tree--relaxed {\n\t\t\t\t--file-tree-row-height: 29px;\n\t\t\t\t--file-tree-indent: 16px;\n\t\t\t\tfont-size: 13px;\n\t\t\t}\n\n\t\t\t.file-tree__header {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tjustify-content: space-between;\n\t\t\t\tgap: 6px;\n\t\t\t\tmargin-bottom: 4px;\n\t\t\t}\n\n\t\t\t.file-tree__label {\n\t\t\t\tmin-width: 0;\n\t\t\t\tpadding-inline: 2px;\n\t\t\t\tcolor: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));\n\t\t\t\tfont-size: 11px;\n\t\t\t\tfont-weight: 600;\n\t\t\t\tletter-spacing: 0.025em;\n\t\t\t\ttext-transform: uppercase;\n\t\t\t}\n\n\t\t\t.file-tree__controls {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 1px;\n\t\t\t}\n\n\t\t\t.file-tree__control {\n\t\t\t\tdisplay: grid;\n\t\t\t\twidth: 20px;\n\t\t\t\theight: 20px;\n\t\t\t\tplace-items: center;\n\t\t\t\tborder: 0;\n\t\t\t\tborder-radius: 4px;\n\t\t\t\tbackground: transparent;\n\t\t\t\tpadding: 0;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.file-tree__control:hover,\n\t\t\t.file-tree__control:focus-visible {\n\t\t\t\tbackground: var(--surface-control-active);\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.file-tree__search-wrap {\n\t\t\t\tposition: relative;\n\t\t\t\tmargin-bottom: 5px;\n\t\t\t}\n\n\t\t\t.file-tree__search-icon {\n\t\t\t\tposition: absolute;\n\t\t\t\tleft: 6px;\n\t\t\t\ttop: 50%;\n\t\t\t\ttranslate: 0 -50%;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tpointer-events: none;\n\t\t\t}\n\n\t\t\t.file-tree__search {\n\t\t\t\twidth: 100%;\n\t\t\t\theight: 24px;\n\t\t\t\tborder: 1px solid var(--border-subtle);\n\t\t\t\tborder-radius: 5px;\n\t\t\t\tbackground: var(--surface-control);\n\t\t\t\tpadding: 0 7px 0 23px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t\tfont-size: 12px;\n\t\t\t}\n\n\t\t\t.file-tree__search:focus-visible {\n\t\t\t\toutline: 1px solid var(--ring);\n\t\t\t\toutline-offset: 1px;\n\t\t\t}\n\n\t\t\t.file-tree__node {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: 14px minmax(0, 1fr) auto 20px;\n\t\t\t\tcolumn-gap: 2px;\n\t\t\t\talign-items: center;\n\t\t\t\tmin-height: var(--file-tree-row-height);\n\t\t\t\tborder-radius: 3px;\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.file-tree__node:hover,\n\t\t\t.file-tree__node:focus-visible,\n\t\t\t.file-tree__node--drag-over {\n\t\t\t\tbackground: var(--tree-hover);\n\t\t\t\toutline: none;\n\t\t\t}\n\n\t\t\t.file-tree__node--drag-over {\n\t\t\t\tbox-shadow: inset 0 0 0 1px var(--ring);\n\t\t\t}\n\n\t\t\t.file-tree__root-drop {\n\t\t\t\tmin-height: 8px;\n\t\t\t\tborder-radius: 3px;\n\t\t\t}\n\n\t\t\t.file-tree__root-drop--active {\n\t\t\t\tbackground: color-mix(in srgb, var(--ring) 18%, transparent);\n\t\t\t\tbox-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring) 60%, transparent);\n\t\t\t}\n\n\t\t\t.file-tree__large-notice {\n\t\t\t\tmargin-top: 4px;\n\t\t\t\tpadding: 3px 4px;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t\tfont-size: 11px;\n\t\t\t}\n\n\t\t\t.file-tree__icon--go,\n\t\t\t.file-tree__icon--code { color: var(--diff-modify-line); }\n\t\t\t.file-tree__icon--json { color: var(--diff-add-line); }\n\t\t\t.file-tree__icon--markdown { color: var(--accent); }\n\t\t\t.file-tree__icon--shell { color: var(--terminal-fg); }\n\t\t\t.file-tree__icon--media { color: var(--diff-remove-line); }\n\n\t\t\t.file-tree__node--selected {\n\t\t\t\tbackground: var(--accent);\n\t\t\t\tcolor: var(--accent-foreground);\n\t\t\t}\n\n\t\t\t.file-tree__node--expanded {\n\t\t\t\tcolor: color-mix(in srgb, var(--foreground) 94%, var(--accent));\n\t\t\t}\n\n\t\t\t.file-tree__node--directory {\n\t\t\t\tfont-weight: 500;\n\t\t\t}\n\n\t\t\t.file-tree__node--file {\n\t\t\t\tcolor: color-mix(in srgb, var(--foreground) 86%, var(--muted-foreground));\n\t\t\t}\n\n\t\t\t.file-tree__node--status-ignored {\n\t\t\t\topacity: 0.56;\n\t\t\t}\n\n\t\t\t.file-tree__node--status-deleted .file-tree__name-text {\n\t\t\t\ttext-decoration: line-through;\n\t\t\t}\n\n\t\t\t.file-tree__node--status-renamed .file-tree__name-text {\n\t\t\t\tfont-style: italic;\n\t\t\t}\n\n\t\t\t.file-tree__toggle,\n\t\t\t.file-tree__actions {\n\t\t\t\tdisplay: grid;\n\t\t\t\twidth: 100%;\n\t\t\t\theight: var(--file-tree-row-height);\n\t\t\t\tplace-items: center;\n\t\t\t\tborder: 0;\n\t\t\t\tbackground: transparent;\n\t\t\t\tpadding: 0;\n\t\t\t\tcolor: var(--muted-foreground);\n\t\t\t}\n\n\t\t\t.file-tree__toggle:hover,\n\t\t\t.file-tree__actions:hover {\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.file-tree__chevron {\n\t\t\t\ttransition: transform 120ms ease;\n\t\t\t}\n\n\t\t\t.file-tree__toggle[aria-expanded=\"true\"] .file-tree__chevron {\n\t\t\t\ttransform: rotate(90deg);\n\t\t\t}\n\n\t\t\t.file-tree__spacer {\n\t\t\t\twidth: 14px;\n\t\t\t}\n\n\t\t\t.file-tree__icon {\n\t\t\t\tdisplay: grid;\n\t\t\t\twidth: 16px;\n\t\t\t\theight: var(--file-tree-row-height);\n\t\t\t\tplace-items: center;\n\t\t\t\tcolor: color-mix(in srgb, var(--muted-foreground) 80%, var(--foreground));\n\t\t\t}\n\n\t\t\t.file-tree__name {\n\t\t\t\tdisplay: flex;\n\t\t\t\talign-items: center;\n\t\t\t\tgap: 3px;\n\t\t\t\tmin-width: 0;\n\t\t\t\toverflow: hidden;\n\t\t\t\tpadding-right: 4px;\n\t\t\t\ttext-overflow: ellipsis;\n\t\t\t\twhite-space: nowrap;\n\t\t\t}\n\n\t\t\t.file-tree__name-text {\n\t\t\t\toverflow: hidden;\n\t\t\t\ttext-overflow: ellipsis;\n\t\t\t\twhite-space: nowrap;\n\t\t\t}\n\n\t\t\t.file-tree__highlight {\n\t\t\t\tborder-radius: 2px;\n\t\t\t\tbackground: color-mix(in srgb, var(--accent) 50%, transparent);\n\t\t\t\tcolor: var(--foreground);\n\t\t\t}\n\n\t\t\t.file-tree__descendant-dot {\n\t\t\t\twidth: 5px;\n\t\t\t\theight: 5px;\n\t\t\t\tborder-radius: 999px;\n\t\t\t\tbackground: var(--diff-add-line);\n\t\t\t}\n\n\t\t\t.file-tree__status {\n\t\t\t\tjustify-self: end;\n\t\t\t\tmin-width: 14px;\n\t\t\t\tpadding-inline: 2px;\n\t\t\t\tborder-radius: 3px;\n\t\t\t\tfont-size: 10px;\n\t\t\t\tfont-weight: 700;\n\t\t\t\tline-height: 1.25;\n\t\t\t\ttext-align: center;\n\t\t\t}\n\n\t\t\t.file-tree__node--status-modified .file-tree__status { color: var(--diff-modify-line); }\n\t\t\t.file-tree__node--status-added .file-tree__status,\n\t\t\t.file-tree__node--status-untracked .file-tree__status { color: var(--diff-add-line); }\n\t\t\t.file-tree__node--status-deleted .file-tree__status { color: var(--diff-remove-line); }\n\t\t\t.file-tree__node--status-renamed .file-tree__status { color: var(--accent); }\n\t\t\t.file-tree__node--status-ignored .file-tree__status { color: var(--muted-foreground); }\n\n\t\t\t.file-tree__actions {\n\t\t\t\topacity: 0;\n\t\t\t\ttransition:\n\t\t\t\t\tcolor 120ms ease,\n\t\t\t\t\topacity 120ms ease;\n\t\t\t}\n\n\t\t\t.file-tree__node:hover .file-tree__actions,\n\t\t\t.file-tree__actions:focus-within,\n\t\t\t.file-tree__node:focus-within .file-tree__actions {\n\t\t\t\topacity: 1;\n\t\t\t}\n\n\t\t\t.file-tree__actions .menu__trigger {\n\t\t\t\twidth: 20px;\n\t\t\t\theight: var(--file-tree-row-height);\n\t\t\t\tborder: 0;\n\t\t\t\tborder-radius: 3px;\n\t\t\t}\n\t\t}\n\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"file-tree\" data-class:file-tree--compact=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 = []any{fileTreeClass(tree)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityCompact))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 11, Col: 93}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-class:file-tree--default=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var2).String())
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityDefault))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 12, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" role=\"tree\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-class:file-tree--relaxed=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Label)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityRelaxed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 279, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 13, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-file-tree data-file-tree-trigger-mode=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-class:file-tree--drag-enabled=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeTriggerMode(tree))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDragEnabled(tree)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 279, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 14, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-file-tree-search-active=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-class:file-tree--large=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchActive(tree.Search))
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeLarge(tree)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 279, Col: 211}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 15, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" role=\"tree\" aria-label=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 17, Col: 25}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-file-tree data-file-tree-trigger-mode=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var8 string
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeTriggerMode(tree))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 19, Col: 57}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" data-file-tree-search-active=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var9 string
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchActive(tree.Search))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 20, Col: 66}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if tree.Label != "" || tree.Controls.ExpandAllCommand.URL != "" || tree.Controls.CollapseAllCommand.URL != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"file-tree__header\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"file-tree--header\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if tree.Label != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"file-tree__label\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"file-tree--label\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var7 string
-				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(tree.Label)
+				var templ_7745c5c3_Var10 string
+				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(tree.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 283, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 25, Col: 47}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"file-tree__controls\" data-on:click__stop=\"evt.stopPropagation()\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"file-tree--controls\" data-on:click__stop=\"evt.stopPropagation()\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if tree.Controls.ExpandAllCommand.URL != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<button class=\"file-tree__control\" type=\"button\" aria-label=\"Expand all files\" title=\"Expand all\" data-on:click=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<button class=\"file-tree--control\" type=\"button\" aria-label=\"Expand all files\" title=\"Expand all\" data-on:click=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var8 string
-				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.ExpandAllCommand))
+				var templ_7745c5c3_Var11 string
+				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.ExpandAllCommand))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 287, Col: 173}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 29, Col: 173}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = Codicon("expand-all", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</button> ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if tree.Controls.CollapseAllCommand.URL != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<button class=\"file-tree__control\" type=\"button\" aria-label=\"Collapse all files\" title=\"Collapse all\" data-on:click=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var9 string
-				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.CollapseAllCommand))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 292, Col: 179}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -167,472 +188,733 @@ func FileTree(tree FileTreeData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = Codicon("collapse-all", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = Icon("expand-all", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</button> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div></div>")
+			if tree.Controls.CollapseAllCommand.URL != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<button class=\"file-tree--control\" type=\"button\" aria-label=\"Collapse all files\" title=\"Collapse all\" data-on:click=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var12 string
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.CollapseAllCommand))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 34, Col: 179}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = Icon("collapse-all", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</button>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		if tree.Controls.SearchCommand.URL != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"file-tree__search-wrap\" data-on:click__stop=\"evt.stopPropagation()\"><span class=\"file-tree__search-icon\" aria-hidden=\"true\">")
+		if tree.Controls.SearchCommand.URL != "" && tree.SearchVisible {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"file-tree--search-wrap\" data-on:click__stop=\"evt.stopPropagation()\"><span class=\"file-tree--search-icon\" aria-hidden=\"true\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = Codicon("search", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = Icon("search", "icon-xs").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</span> <input class=\"file-tree__search\" type=\"search\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Search)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 304, Col: 70}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" placeholder=\"Search files\" aria-label=\"Search files\" data-on:input__debounce.200ms=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchAction(tree.Controls.SearchCommand))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 304, Col: 207}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\"></div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		for index, node := range tree.Nodes {
-			var templ_7745c5c3_Var12 = []any{fileTreeNodeClass(node)}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var12...)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<div class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</span> <input class=\"file-tree--search\" type=\"search\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var13 string
-			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var12).String())
+			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Search)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 1, Col: 0}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 46, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" role=\"treeitem\" tabindex=\"0\" aria-selected=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" placeholder=\"Search files\" aria-label=\"Search files\" data-on:input__debounce.200ms=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var14 string
-			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Selected))
+			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchAction(tree.Controls.SearchCommand))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 46, Col: 207}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\"></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if node.Kind == FileTreeNodeDirectory && node.HasChildren {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " aria-expanded")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " draggable=\"")
+		}
+		for index, node := range tree.Nodes {
+			var templ_7745c5c3_Var15 = []any{fileTreeNodeClass(node)}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var15...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var15 string
-			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeCanDrag(tree, node)))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 240}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
-			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fileTreeNodePadding(node.Depth))
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var15).String())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 282}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 1, Col: 0}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" data-file-tree-row data-file-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" role=\"treeitem\" tabindex=\"0\" aria-selected=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var17 string
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ID)
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Selected))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 326}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 54, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" data-file-move-url=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " aria-expanded")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " draggable=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var18 string
-			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.MoveCommand.URL)
+			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeCanDrag(tree, node)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 370}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 56, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" data-file-drop-url=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" data-style:padding-left=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var19 string
-			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.DropCommand.URL)
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeNodePadding(node.Depth))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 414}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 57, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" data-file-can-drop=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" data-file-tree-row data-file-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var20 string
-			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.CanDrop))
+			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 462}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 59, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" data-file-toggle-url=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" data-file-move-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var21 string
-			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ToggleCommand.URL)
+			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.MoveCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 510}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 60, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-file-expanded=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-file-drop-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.DropCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 559}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 61, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" data-file-row-index=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" data-file-can-drop=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeIndexString(index))
+			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.CanDrop))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 610}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 62, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" data-on:click=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" data-file-toggle-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 string
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeNodeClickAction(node))
+			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ToggleCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 308, Col: 658}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 63, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" data-file-expanded=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var25 string
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 64, Col: 50}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" data-file-row-index=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var26 string
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeIndexString(index))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 65, Col: 52}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" data-on:click=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var27 string
+			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeNodeClickAction(node))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 66, Col: 49}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if node.Kind == FileTreeNodeDirectory && node.HasChildren {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<button class=\"file-tree__toggle\" type=\"button\" aria-label=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<button class=\"file-tree--toggle\" type=\"button\" aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var25 string
-				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue("Toggle " + node.Name)
+				var templ_7745c5c3_Var28 string
+				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue("Toggle " + node.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 310, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 87}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" aria-expanded=\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var26 string
-				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 310, Col: 131}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" aria-expanded=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" data-on:click__stop=\"")
+				var templ_7745c5c3_Var29 string
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 131}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var27 string
-				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(node.ToggleCommand))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 310, Col: 197}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" data-on:click__stop=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\">")
+				var templ_7745c5c3_Var30 string
+				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(node.ToggleCommand))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 197}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = Codicon("chevron-right", "icon-12 file-tree__chevron").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</button> ")
+				templ_7745c5c3_Err = Icon("chevron-right", "icon-12 file-tree--chevron").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</button> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span class=\"file-tree__spacer\"></span> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<span class=\"file-tree--spacer\"></span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<span class=\"file-tree__name\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<span class=\"file-tree--name\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if node.Kind == FileTreeNodeFile {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<span class=\"file-tree__icon\" aria-hidden=\"true\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span class=\"file-tree--icon\" aria-hidden=\"true\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = Codicon(fileTreeNodeIcon(node), fileTreeNodeIconClass(node)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = Icon(fileTreeNodeIcon(node), fileTreeNodeIconClass(node)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</span> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<span class=\"file-tree__name-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<span class=\"file-tree--name-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			before, match, after, ok := fileTreeHighlightedName(node.Name, tree.Search)
 			if ok {
-				var templ_7745c5c3_Var28 string
-				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(before)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 325, Col: 15}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<mark class=\"file-tree__highlight\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(match)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 325, Col: 59}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</mark>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(after)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 325, Col: 75}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
 				var templ_7745c5c3_Var31 string
-				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(node.Name)
+				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(before)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 327, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if node.Kind == FileTreeNodeDirectory && node.HasChangedDescendants {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<span class=\"file-tree__descendant-dot\" title=\"Contains changed files\" aria-label=\"Contains changed files\"></span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if fileTreeStatusLabel(node.GitStatus) != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<span class=\"file-tree__status\" title=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<mark class=\"file-tree--highlight\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var32 string
-				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeStatusTitle(node.GitStatus))
+				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(match)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 335, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 59}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</mark>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var33 string
-				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeStatusLabel(node.GitStatus))
+				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(after)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 335, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</span>")
+			} else {
+				var templ_7745c5c3_Var34 string
+				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(node.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 86, Col: 18}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if node.Kind == FileTreeNodeDirectory && node.HasChangedDescendants {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<span class=\"file-tree--descendant-dot\" title=\"Contains changed files\" aria-label=\"Contains changed files\"></span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if fileTreeStatusLabel(node.GitStatus) != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<span class=\"file-tree--status\" title=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var35 string
+				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeStatusTitle(node.GitStatus))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 94, Col: 80}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var36 string
+				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeStatusLabel(node.GitStatus))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 94, Col: 120}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<span></span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<span></span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<div class=\"file-tree__actions\" data-on:click__stop=\"evt.stopPropagation()\" data-file-tree-menu>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = Menu(fileTreeMenu(node)).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"file-tree--actions\" data-on:click__stop=\"evt.stopPropagation()\" data-file-tree-menu></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if fileTreeCanRootDrop(tree) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<div class=\"file-tree__root-drop\" data-file-tree-root-drop data-file-drop-url=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div class=\"file-tree--root-drop\" data-file-tree-root-drop data-file-drop-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var34 string
-			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Controls.RootDropCommand.URL)
+			var templ_7745c5c3_Var37 string
+			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Controls.RootDropCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 345, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 104, Col: 116}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" aria-label=\"Drop files at root\"></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" aria-label=\"Drop files at root\"></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if fileTreeLargeNotice(tree) != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div class=\"file-tree__large-notice\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<div class=\"file-tree--large-notice\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var35 string
-			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeLargeNotice(tree))
+			var templ_7745c5c3_Var38 string
+			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeLargeNotice(tree))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 348, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 107, Col: 67}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div><script type=\"module\">\n\t\tconst initFileTree = (root) => {\n\t\t\tif (root.dataset.fileTreeReady === \"true\") {\n\t\t\t\treturn;\n\t\t\t}\n\t\t\troot.dataset.fileTreeReady = \"true\";\n\t\t\tlet draggedRow = null;\n\t\t\tlet autoOpenTimer = 0;\n\n\t\t\tconst command = window.discobot?.command;\n\t\t\tconst dragAllowed = () => root.dataset.fileTreeSearchActive !== \"true\";\n\t\t\tconst sendMove = async (sourceRow, targetID, dropURL) => {\n\t\t\t\tconst url = sourceRow?.dataset.fileMoveUrl || dropURL;\n\t\t\t\tif (!url || !command) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tawait command.send({\n\t\t\t\t\tmethod: \"POST\",\n\t\t\t\t\turl,\n\t\t\t\t\tpayload: { targetID: targetID || \"\" },\n\t\t\t\t});\n\t\t\t};\n\t\t\tconst clearDragState = () => {\n\t\t\t\twindow.clearTimeout(autoOpenTimer);\n\t\t\t\troot.querySelectorAll(\".file-tree__node--drag-over\").forEach((row) => row.classList.remove(\"file-tree__node--drag-over\"));\n\t\t\t\troot.querySelector(\"[data-file-tree-root-drop]\")?.classList.remove(\"file-tree__root-drop--active\");\n\t\t\t};\n\t\t\tconst openMenuForRow = (row) => {\n\t\t\t\tconst mode = root.dataset.fileTreeTriggerMode || \"both\";\n\t\t\t\tif (mode === \"button\") {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\trow.querySelector(\"[data-file-tree-menu] [data-menu-trigger]\")?.click();\n\t\t\t};\n\n\t\t\troot.addEventListener(\"dragstart\", (event) => {\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tif (!row || !dragAllowed() || row.getAttribute(\"draggable\") !== \"true\") {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tdraggedRow = row;\n\t\t\t\tevent.dataTransfer.effectAllowed = \"move\";\n\t\t\t\tevent.dataTransfer.setData(\"text/plain\", row.dataset.fileId || \"\");\n\t\t\t});\n\t\t\troot.addEventListener(\"dragover\", (event) => {\n\t\t\t\tif (!draggedRow || !dragAllowed()) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tconst rootDrop = event.target.closest?.(\"[data-file-tree-root-drop]\");\n\t\t\t\tif (row?.dataset.fileCanDrop === \"true\" || rootDrop) {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tevent.dataTransfer.dropEffect = \"move\";\n\t\t\t\t}\n\t\t\t});\n\t\t\troot.addEventListener(\"dragenter\", (event) => {\n\t\t\t\tif (!draggedRow || !dragAllowed()) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tif (row?.dataset.fileCanDrop === \"true\") {\n\t\t\t\t\trow.classList.add(\"file-tree__node--drag-over\");\n\t\t\t\t\twindow.clearTimeout(autoOpenTimer);\n\t\t\t\t\tif (row.dataset.fileExpanded !== \"true\" && row.dataset.fileToggleUrl && command) {\n\t\t\t\t\t\tautoOpenTimer = window.setTimeout(() => command.send({ method: \"POST\", url: row.dataset.fileToggleUrl }), 650);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tif (event.target.closest?.(\"[data-file-tree-root-drop]\")) {\n\t\t\t\t\troot.querySelector(\"[data-file-tree-root-drop]\")?.classList.add(\"file-tree__root-drop--active\");\n\t\t\t\t}\n\t\t\t});\n\t\t\troot.addEventListener(\"dragleave\", (event) => {\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tif (row && !row.contains(event.relatedTarget)) {\n\t\t\t\t\trow.classList.remove(\"file-tree__node--drag-over\");\n\t\t\t\t}\n\t\t\t\tconst rootDrop = event.target.closest?.(\"[data-file-tree-root-drop]\");\n\t\t\t\tif (rootDrop && !rootDrop.contains(event.relatedTarget)) {\n\t\t\t\t\trootDrop.classList.remove(\"file-tree__root-drop--active\");\n\t\t\t\t}\n\t\t\t});\n\t\t\troot.addEventListener(\"drop\", async (event) => {\n\t\t\t\tif (!draggedRow || !dragAllowed()) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tconst rootDrop = event.target.closest?.(\"[data-file-tree-root-drop]\");\n\t\t\t\tif (row?.dataset.fileCanDrop === \"true\") {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tawait sendMove(draggedRow, row.dataset.fileId, row.dataset.fileDropUrl);\n\t\t\t\t} else if (rootDrop) {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tawait sendMove(draggedRow, \"\", rootDrop.dataset.fileDropUrl);\n\t\t\t\t}\n\t\t\t\tclearDragState();\n\t\t\t\tdraggedRow = null;\n\t\t\t});\n\t\t\troot.addEventListener(\"dragend\", () => {\n\t\t\t\tclearDragState();\n\t\t\t\tdraggedRow = null;\n\t\t\t});\n\t\t\troot.addEventListener(\"contextmenu\", (event) => {\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tif (!row || !root.contains(row)) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tevent.preventDefault();\n\t\t\t\topenMenuForRow(row);\n\t\t\t});\n\t\t\troot.addEventListener(\"keydown\", (event) => {\n\t\t\t\tconst row = event.target.closest?.(\"[data-file-tree-row]\");\n\t\t\t\tif (!row || !root.contains(row)) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst rows = Array.from(root.querySelectorAll(\"[data-file-tree-row]\"));\n\t\t\t\tconst index = rows.indexOf(row);\n\t\t\t\tif (event.key === \"ArrowDown\") {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\trows[Math.min(index + 1, rows.length - 1)]?.focus();\n\t\t\t\t} else if (event.key === \"ArrowUp\") {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\trows[Math.max(index - 1, 0)]?.focus();\n\t\t\t\t} else if (event.key === \"ArrowRight\") {\n\t\t\t\t\tconst toggle = row.querySelector(\".file-tree__toggle[aria-expanded='false']\");\n\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\t\ttoggle.click();\n\t\t\t\t\t}\n\t\t\t\t} else if (event.key === \"ArrowLeft\") {\n\t\t\t\t\tconst toggle = row.querySelector(\".file-tree__toggle[aria-expanded='true']\");\n\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\t\ttoggle.click();\n\t\t\t\t\t}\n\t\t\t\t} else if (event.key === \"Enter\" || event.key === \" \") {\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\trow.click();\n\t\t\t\t}\n\t\t\t});\n\t\t};\n\t\tdocument.querySelectorAll(\"[data-file-tree]\").forEach(initFileTree);\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		return nil
 	})
+}
+
+func fileTreeDensity(tree FileTreeData) FileTreeDensity {
+	if tree.Density == "" {
+		return FileTreeDensityCompact
+	}
+	return tree.Density
+}
+
+func fileTreeDragEnabled(tree FileTreeData) bool {
+	return tree.DragEnabled && strings.TrimSpace(tree.Search) == ""
+}
+
+func fileTreeLarge(tree FileTreeData) bool {
+	return tree.LargeTreeLimit > 0 && tree.TotalNodeCount > tree.LargeTreeLimit
+}
+
+func fileTreeNodeClass(node FileTreeNode) string {
+	class := "file-tree--node"
+	switch node.Kind {
+	case FileTreeNodeDirectory:
+		class += " file-tree--node--directory"
+	case FileTreeNodeFile:
+		class += " file-tree--node--file"
+	}
+	if node.Kind == FileTreeNodeDirectory && node.Expanded {
+		class += " file-tree--node--expanded"
+	}
+	if node.Selected {
+		class += " file-tree--node--selected"
+	}
+	if node.GitStatus != "" && node.GitStatus != FileTreeGitStatusClean {
+		class += " file-tree--node--status-" + string(node.GitStatus)
+	}
+	if node.HasChangedDescendants {
+		class += " file-tree--node--has-changed-descendants"
+	}
+	if node.CanDrop {
+		class += " file-tree--node--drop-target"
+	}
+	return class
+}
+
+func fileTreeNodePadding(depth int) string {
+	return strconv.Quote("calc(2px + " + fileTreeDepth(depth) + " * var(--file-tree-indent))")
+}
+
+func fileTreeDepth(depth int) string {
+	if depth <= 0 {
+		return "0"
+	}
+	return strconv.Itoa(depth)
+}
+
+func fileTreeCommandMethod(command FileTreeCommand) string {
+	if command.Method == "" {
+		return "POST"
+	}
+	return command.Method
+}
+
+func fileTreeCommandAction(command FileTreeCommand) string {
+	return fileTreeDiscobotCommandAction(command)
+}
+
+func fileTreeNodeClickAction(node FileTreeNode) string {
+	if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+		return fileTreeCommandAction(node.ToggleCommand)
+	}
+	return fileTreeCommandAction(node.SelectCommand)
+}
+
+func fileTreeDiscobotCommandAction(command FileTreeCommand) string {
+	if command.URL == "" {
+		return ""
+	}
+	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + "})"
+}
+
+func fileTreeSearchAction(command FileTreeCommand) string {
+	if command.URL == "" {
+		return ""
+	}
+	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {query: evt.target.value}})"
+}
+
+func fileTreeDeleteAction(command FileTreeCommand) string {
+	if command.URL == "" {
+		return ""
+	}
+	return "if (confirm('Delete this file tree item and its descendants?')) " + fileTreeDiscobotCommandAction(command)
+}
+
+func fileTreeRenameAction(node FileTreeNode) string {
+	if node.RenameCommand.URL == "" {
+		return ""
+	}
+	return "const name = prompt('Rename item', " + strconv.Quote(node.Name) + "); if (name && name.trim()) @discobotCommand(" + strconv.Quote(node.RenameCommand.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(node.RenameCommand)) + ", payload: {name: name.trim()}})"
+}
+
+func fileTreeCreateAction(command FileTreeCommand, kind string) string {
+	if command.URL == "" {
+		return ""
+	}
+	return "const name = prompt('New " + kind + " name'); if (name && name.trim()) @discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {name: name.trim()}})"
+}
+
+func fileTreeStatusLabel(status FileTreeGitStatus) string {
+	switch status {
+	case FileTreeGitStatusModified:
+		return "M"
+	case FileTreeGitStatusAdded:
+		return "A"
+	case FileTreeGitStatusDeleted:
+		return "D"
+	case FileTreeGitStatusRenamed:
+		return "R"
+	case FileTreeGitStatusUntracked:
+		return "U"
+	case FileTreeGitStatusIgnored:
+		return "I"
+	default:
+		return ""
+	}
+}
+
+func fileTreeStatusTitle(status FileTreeGitStatus) string {
+	label := string(status)
+	if label == "" || status == FileTreeGitStatusClean {
+		return ""
+	}
+	return "Git status: " + label
+}
+
+func fileTreeMovePayloadAction(command FileTreeCommand) string {
+	if command.URL == "" {
+		return ""
+	}
+	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {targetID: evt.detail?.targetID || ''}})"
+}
+
+func fileTreeSearchActive(search string) string {
+	if strings.TrimSpace(search) == "" {
+		return "false"
+	}
+	return "true"
+}
+
+func fileTreeTriggerMode(tree FileTreeData) string {
+	if tree.TriggerMode == "" {
+		return string(FileTreeTriggerBoth)
+	}
+	return string(tree.TriggerMode)
+}
+
+func fileTreeShowMenuTrigger(tree FileTreeData) bool {
+	return tree.TriggerMode == "" || tree.TriggerMode == FileTreeTriggerButton || tree.TriggerMode == FileTreeTriggerBoth
+}
+
+func fileTreeNodeIcon(node FileTreeNode) string {
+	if node.Icon != "" {
+		return node.Icon
+	}
+	if node.Kind == FileTreeNodeDirectory {
+		return ""
+	}
+	name := strings.ToLower(node.Name)
+	switch {
+	case strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".markdown"):
+		return "markdown"
+	case strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".jsonc"):
+		return "json"
+	case strings.HasSuffix(name, ".sh") || strings.HasSuffix(name, ".bash") || strings.HasSuffix(name, ".ps1"):
+		return "terminal"
+	case strings.HasSuffix(name, ".png") || strings.HasSuffix(name, ".jpg") || strings.HasSuffix(name, ".jpeg") || strings.HasSuffix(name, ".gif") || strings.HasSuffix(name, ".svg"):
+		return "file-media"
+	case strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, ".sum"):
+		return "symbol-key"
+	case strings.HasSuffix(name, ".go") || strings.HasSuffix(name, ".js") || strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".tsx") || strings.HasSuffix(name, ".css") || strings.HasSuffix(name, ".templ"):
+		return "file-code"
+	default:
+		return "file"
+	}
+}
+
+func fileTreeNodeIconClass(node FileTreeNode) string {
+	class := "icon-xs"
+	if node.IconColorClass != "" {
+		class += " " + node.IconColorClass
+	}
+	return class
+}
+
+func fileTreeCanDrag(tree FileTreeData, node FileTreeNode) bool {
+	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && node.CanDrag && node.MoveCommand.URL != ""
+}
+
+func fileTreeCanRootDrop(tree FileTreeData) bool {
+	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && tree.Controls.RootDropCommand.URL != ""
+}
+
+func fileTreeLargeNotice(tree FileTreeData) string {
+	if tree.LargeTreeLimit <= 0 || tree.TotalNodeCount <= tree.LargeTreeLimit {
+		return ""
+	}
+	return "Showing " + strconv.Itoa(tree.RenderedCount) + " of " + strconv.Itoa(tree.TotalNodeCount) + " visible file rows"
+}
+
+func fileTreeHighlightedName(name string, search string) (string, string, string, bool) {
+	query := strings.TrimSpace(search)
+	if query == "" {
+		return name, "", "", false
+	}
+	index := strings.Index(strings.ToLower(name), strings.ToLower(query))
+	if index < 0 {
+		return name, "", "", false
+	}
+	return name[:index], name[index : index+len(query)], name[index+len(query):], true
+}
+
+func fileTreeMenu(node FileTreeNode) MenuData {
+	items := []MenuItem{}
+	if node.Kind == FileTreeNodeDirectory {
+		items = append(items,
+			MenuItem{Label: "New File", Action: fileTreeCreateAction(node.NewFileCommand, "file")},
+			MenuItem{Label: "New Folder", Action: fileTreeCreateAction(node.NewFolderCommand, "folder")},
+		)
+	}
+	items = append(items,
+		MenuItem{Label: "Rename", SeparatorBefore: len(items) > 0, Action: fileTreeRenameAction(node)},
+		MenuItem{Label: "Delete", SeparatorBefore: true, Action: fileTreeDeleteAction(node.DeleteCommand)},
+	)
+	return MenuData{
+		ID:      "file-tree-menu-" + node.ID,
+		Label:   "Open actions for " + node.Name,
+		Trigger: Icon("kebab-vertical", "icon-xs"),
+		Items:   items,
+	}
+}
+
+func fileTreeIndexString(index int) string {
+	return strconv.Itoa(index)
 }
 
 var _ = templruntime.GeneratedTemplate
