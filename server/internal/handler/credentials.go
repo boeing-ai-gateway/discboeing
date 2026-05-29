@@ -342,7 +342,7 @@ func (h *Handler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 
 type setSessionCredentialAssignmentRequest struct {
 	CredentialID        string                         `json:"credentialId"`
-	SessionCredentialID string                         `json:"sessionCredentialId,omitempty"`
+	SessionCredentialID string                         `json:"sessionCredentialID,omitempty"`
 	EnvVar              string                         `json:"envVar,omitempty"`
 	SourceEnvVar        string                         `json:"sourceEnvVar,omitempty"`
 	AgentVisible        bool                           `json:"agentVisible"`

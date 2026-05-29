@@ -624,7 +624,7 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 	}
 }
 
-func TestChat_UsesExplicitThreadId(t *testing.T) {
+func TestChat_UsesExplicitThreadID(t *testing.T) {
 	s := setupChatTestStore(t)
 	provider := mocksandbox.NewProvider()
 	sessionID := "session-explicit-thread"
