@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,7 +28,7 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 			Hooks:           map[string]api.HookRunStatus{},
 			PendingHooks:    []string{},
 			LastEvaluatedAt: "",
-			ReportingPaused: false,
+			ExecutionPaused: false,
 		}
 	}
 
@@ -35,7 +37,7 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 		Hooks:           make(map[string]api.HookRunStatus, len(status.Hooks)),
 		PendingHooks:    status.PendingHooks,
 		LastEvaluatedAt: status.LastEvaluatedAt,
-		ReportingPaused: status.ReportingPaused,
+		ExecutionPaused: status.ExecutionPaused,
 	}
 	if resp.PendingHooks == nil {
 		resp.PendingHooks = []string{}
@@ -53,26 +55,59 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 			RunCount:            s.RunCount,
 			FailCount:           s.FailCount,
 			ConsecutiveFailures: s.ConsecutiveFailures,
+			ExecutionPaused:     s.ExecutionPaused,
 		}
 	}
 
 	return resp
 }
 
-// UpdateHooksReporting handles PATCH /hooks/reporting — toggles LLM reporting.
-func (h *Handler) UpdateHooksReporting(w http.ResponseWriter, r *http.Request) {
+// UpdateHooksExecution handles PATCH /hooks/execution — toggles hook execution.
+func (h *Handler) UpdateHooksExecution(w http.ResponseWriter, r *http.Request) {
 	if h.hookManager == nil {
 		h.Error(w, http.StatusNotFound, "Hooks not enabled")
 		return
 	}
 
-	var req api.UpdateHooksReportingRequest
+	var req api.UpdateHooksExecutionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if err := h.hookManager.SetReportingPaused(req.Paused); err != nil {
+	if err := h.hookManager.SetExecutionPaused(req.Paused); err != nil {
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, h.hooksStatusResponse())
+}
+
+// UpdateHookExecution handles PATCH /hooks/{hookId}/execution — toggles
+// execution for one hook.
+func (h *Handler) UpdateHookExecution(w http.ResponseWriter, r *http.Request) {
+	if h.hookManager == nil {
+		h.Error(w, http.StatusNotFound, "Hooks not enabled")
+		return
+	}
+
+	hookID := chi.URLParam(r, "hookId")
+	if hookID == "" {
+		h.Error(w, http.StatusBadRequest, "hookId is required")
+		return
+	}
+
+	var req api.UpdateHooksExecutionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := h.hookManager.SetHookExecutionPaused(hookID, req.Paused); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			h.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -168,6 +203,10 @@ func (h *Handler) RerunHook(w http.ResponseWriter, r *http.Request) {
 	h.withManualSessionHookSudo(func() {
 		result, err := h.hookManager.RerunHook(hookID)
 		if err != nil {
+			if errors.Is(err, hooks.ErrHookPaused) {
+				h.Error(w, http.StatusConflict, err.Error())
+				return
+			}
 			h.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}

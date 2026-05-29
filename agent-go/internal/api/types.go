@@ -604,6 +604,7 @@ type HookRunStatus struct {
 	RunCount            int    `json:"runCount"`
 	FailCount           int    `json:"failCount"`
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
+	ExecutionPaused     bool   `json:"executionPaused"`
 }
 
 // HooksStatusResponse is the GET /hooks/status response.
@@ -611,11 +612,11 @@ type HooksStatusResponse struct {
 	Hooks           map[string]HookRunStatus `json:"hooks"`
 	PendingHooks    []string                 `json:"pendingHooks"`
 	LastEvaluatedAt string                   `json:"lastEvaluatedAt"`
-	ReportingPaused bool                     `json:"reportingPaused"`
+	ExecutionPaused bool                     `json:"executionPaused"`
 }
 
-// UpdateHooksReportingRequest is the PATCH /hooks/reporting request body.
-type UpdateHooksReportingRequest struct {
+// UpdateHooksExecutionRequest is the PATCH /hooks/execution request body.
+type UpdateHooksExecutionRequest struct {
 	Paused bool `json:"paused"`
 }
 

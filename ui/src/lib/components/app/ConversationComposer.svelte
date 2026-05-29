@@ -1250,9 +1250,12 @@
 				hooksStatus={sessionHooks.status}
 				outputById={sessionHooks.outputById}
 				onRerunHook={(hookId) => sessionHooks.rerun(hookId)}
-				onSetReportingPaused={(paused) => {
-					void sessionHooks.setReportingPaused(paused);
+				onSetExecutionPaused={(paused) => {
+					void sessionHooks.setExecutionPaused(paused);
 					sessionView.hooksExpanded = false;
+				}}
+				onSetHookExecutionPaused={(hookId, paused) => {
+					void sessionHooks.setHookExecutionPaused(hookId, paused);
 				}}
 			/>
 		{/if}

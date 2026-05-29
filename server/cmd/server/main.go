@@ -1568,12 +1568,22 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
-						Method: "PATCH", Pattern: "/hooks/reporting",
-						Handler: h.UpdateHooksReporting,
+						Method: "PATCH", Pattern: "/hooks/execution",
+						Handler: h.UpdateHooksExecution,
 						Meta: routes.Meta{
 							Group:       "Hooks",
-							Description: "Toggle hook LLM reporting",
+							Description: "Toggle hook execution",
 							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
+						Method: "PATCH", Pattern: "/hooks/{hookId}/execution",
+						Handler: h.UpdateHookExecution,
+						Meta: routes.Meta{
+							Group:       "Hooks",
+							Description: "Toggle execution for one hook",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}, {Name: "hookId", Example: "go-check"}},
 						},
 					})
 

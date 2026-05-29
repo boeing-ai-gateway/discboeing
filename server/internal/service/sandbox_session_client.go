@@ -313,10 +313,17 @@ func (c *SessionClient) GetHooksState(ctx context.Context) (*sandboxapi.HooksSta
 	})
 }
 
-// UpdateHooksReporting toggles whether hook failures report back to the LLM.
-func (c *SessionClient) UpdateHooksReporting(ctx context.Context, paused bool) (*sandboxapi.HooksStatusResponse, error) {
+// UpdateHooksExecution toggles whether hook failures report back to the LLM.
+func (c *SessionClient) UpdateHooksExecution(ctx context.Context, paused bool) (*sandboxapi.HooksStatusResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.HooksStatusResponse, error) {
-		return c.inner.UpdateHooksReporting(ctx, c.sessionID, paused)
+		return c.inner.UpdateHooksExecution(ctx, c.sessionID, paused)
+	})
+}
+
+// UpdateHookExecution toggles whether one hook reports failures back to the LLM.
+func (c *SessionClient) UpdateHookExecution(ctx context.Context, hookID string, paused bool) (*sandboxapi.HooksStatusResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.HooksStatusResponse, error) {
+		return c.inner.UpdateHookExecution(ctx, c.sessionID, hookID, paused)
 	})
 }
 

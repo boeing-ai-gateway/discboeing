@@ -50,6 +50,7 @@ const hooksStatusResponse: HooksStatusResponse = {
 			runCount: 2,
 			failCount: 0,
 			consecutiveFailures: 0,
+			executionPaused: false,
 		},
 		"hook-2": {
 			hookId: "hook-2",
@@ -62,11 +63,12 @@ const hooksStatusResponse: HooksStatusResponse = {
 			runCount: 3,
 			failCount: 2,
 			consecutiveFailures: 1,
+			executionPaused: true,
 		},
 	},
 	pendingHooks: ["hook-2"],
 	lastEvaluatedAt: "2026-03-11T00:00:01.000Z",
-	reportingPaused: false,
+	executionPaused: false,
 };
 
 test("toHooksStatus maps API hook response fields into session hook state", () => {
@@ -78,10 +80,16 @@ test("toHooksStatus maps API hook response fields into session hook state", () =
 			id: hook.hookId,
 			type: hook.type,
 			result: hook.lastResult,
+			executionPaused: hook.executionPaused,
 		})),
 		[
-			{ id: "hook-1", type: "session", result: "success" },
-			{ id: "hook-2", type: "file", result: "failure" },
+			{
+				id: "hook-1",
+				type: "session",
+				result: "success",
+				executionPaused: false,
+			},
+			{ id: "hook-2", type: "file", result: "failure", executionPaused: true },
 		],
 	);
 });

@@ -78,7 +78,7 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 	}
 }
 
-func TestStartHookFailureReprompt_SuppressedWhenReportingPaused(t *testing.T) {
+func TestStartHookFailureReprompt_SuppressedWhenExecutionPaused(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("USERPROFILE", homeDir)
@@ -93,8 +93,8 @@ func TestStartHookFailureReprompt_SuppressedWhenReportingPaused(t *testing.T) {
 	cm := agent.NewConversationManager(ma)
 	hookManager := hooks.NewManager(t.TempDir(), "paused-session")
 	hookManager.SetRepromptRunner(cm, nil)
-	if err := hookManager.SetReportingPaused(true); err != nil {
-		t.Fatalf("SetReportingPaused() failed: %v", err)
+	if err := hookManager.SetExecutionPaused(true); err != nil {
+		t.Fatalf("SetExecutionPaused() failed: %v", err)
 	}
 
 	err := hookManager.StartFailureReprompt("thread-1", hooks.FileHookEvalResult{
@@ -107,7 +107,66 @@ func TestStartHookFailureReprompt_SuppressedWhenReportingPaused(t *testing.T) {
 
 	select {
 	case <-reqCh:
-		t.Fatal("expected paused hook reporting not to send prompt request")
+		t.Fatal("expected paused hooks not to send prompt request")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestStartHookFailureReprompt_SuppressedWhenHookExecutionPaused(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	hooksDir := filepath.Join(workspaceRoot, hooks.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+echo "lint failed"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	reqCh := make(chan agent.PromptRequest, 1)
+	ma := &streamTestAgent{
+		promptFn: func(_ context.Context, _ string, req agent.PromptRequest) iter.Seq2[message.MessageChunk, error] {
+			reqCh <- req
+			return func(_ func(message.MessageChunk, error) bool) {}
+		},
+	}
+	cm := agent.NewConversationManager(ma)
+	hookManager := hooks.NewManager(workspaceRoot, "hook-paused-session")
+	if err := hookManager.Init(); err != nil {
+		t.Fatal(err)
+	}
+	hookManager.SetRepromptRunner(cm, nil)
+	if err := hookManager.SetHookExecutionPaused("go-check", true); err != nil {
+		t.Fatalf("SetHookExecutionPaused() failed: %v", err)
+	}
+
+	err := hookManager.StartFailureReprompt("thread-1", hooks.FileHookEvalResult{
+		ShouldReprompt: true,
+		LLMMessage:     "### Hook failed: Go Check",
+		FailedResult: &hooks.HookResult{
+			Hook: hooks.Hook{ID: "go-check", Name: "Go Check"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("StartFailureReprompt() failed: %v", err)
+	}
+
+	select {
+	case <-reqCh:
+		t.Fatal("expected paused hook not to send prompt request")
 	case <-time.After(200 * time.Millisecond):
 	}
 }
@@ -341,7 +400,7 @@ exit 1
 	t.Fatal("timed out waiting for second hook evaluation to finish")
 }
 
-func TestResumeHookReporting_ReevaluatesPendingHooksOnLastThread(t *testing.T) {
+func TestResumeHookExecution_ReevaluatesPendingHooksOnLastThread(t *testing.T) {
 	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -378,7 +437,7 @@ exit 1
 	if err := hookManager.Init(); err != nil {
 		t.Fatal(err)
 	}
-	if err := hookManager.SetReportingPaused(true); err != nil {
+	if err := hookManager.SetExecutionPaused(true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -393,17 +452,10 @@ exit 1
 	_ = New("", cm, hookManager, nil, nil)
 
 	hookManager.OnTurnComplete("thread-1")
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		status := hookManager.GetStatus()
-		if status.Hooks["go-check"].RunCount > 0 {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
+	time.Sleep(300 * time.Millisecond)
 	status := hookManager.GetStatus()
-	if status.Hooks["go-check"].RunCount == 0 {
-		t.Fatal("timed out waiting for paused hook evaluation")
+	if status.Hooks["go-check"].RunCount != 0 {
+		t.Fatalf("paused hook run count = %d, want 0", status.Hooks["go-check"].RunCount)
 	}
 	select {
 	case got := <-reqThreadCh:
@@ -411,7 +463,7 @@ exit 1
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	if err := hookManager.SetReportingPaused(false); err != nil {
+	if err := hookManager.SetExecutionPaused(false); err != nil {
 		t.Fatal(err)
 	}
 	select {

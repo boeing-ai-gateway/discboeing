@@ -41,6 +41,10 @@
 			(hook) => getHookDisplayState(hook, pendingHookSet()) === "failure",
 		);
 	}
+
+	function hookHasPausedExecution() {
+		return hooks().some((hook) => hook.executionPaused);
+	}
 </script>
 
 {#if hooks().length > 0}
@@ -52,7 +56,7 @@
 			expanded = !expanded;
 		}}
 	>
-		{#if hooksStatus.reportingPaused}
+		{#if hooksStatus.executionPaused || hookHasPausedExecution()}
 			<PauseCircleIcon class="size-3.5 text-amber-500" />
 		{:else if hookHasRunning()}
 			<Loader2Icon class="size-3.5 animate-spin text-blue-500" />

@@ -377,7 +377,7 @@ export function toHooksStatus(
 	response: HooksStatusResponse | null | undefined,
 ): HooksStatus {
 	if (!response) {
-		return { hooks: [], pendingHookIds: [], reportingPaused: false };
+		return { hooks: [], pendingHookIds: [], executionPaused: false };
 	}
 
 	return {
@@ -391,9 +391,10 @@ export function toHooksStatus(
 			runCount: hook.runCount,
 			failCount: hook.failCount,
 			command: undefined,
+			executionPaused: hook.executionPaused ?? false,
 		})),
 		pendingHookIds: response.pendingHooks,
-		reportingPaused: response.reportingPaused ?? false,
+		executionPaused: response.executionPaused ?? false,
 	};
 }
 

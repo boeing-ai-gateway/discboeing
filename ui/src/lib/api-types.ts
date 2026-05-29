@@ -1536,6 +1536,7 @@ export interface HookRunStatus {
 	runCount: number;
 	failCount: number;
 	consecutiveFailures: number;
+	executionPaused: boolean;
 }
 
 /** Hook evaluation status for a session */
@@ -1543,7 +1544,7 @@ export interface HooksStatusResponse {
 	hooks: Record<string, HookRunStatus>;
 	pendingHooks: string[];
 	lastEvaluatedAt: string;
-	reportingPaused: boolean;
+	executionPaused: boolean;
 }
 
 /** Hook output log response */

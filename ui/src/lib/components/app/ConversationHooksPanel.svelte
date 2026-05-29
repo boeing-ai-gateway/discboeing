@@ -21,7 +21,8 @@
 		hooksStatus: HooksStatus;
 		outputById: Record<string, HookOutputState>;
 		onRerunHook: (hookId: string) => void;
-		onSetReportingPaused: (paused: boolean) => void;
+		onSetExecutionPaused: (paused: boolean) => void;
+		onSetHookExecutionPaused: (hookId: string, paused: boolean) => void;
 	};
 
 	let {
@@ -29,7 +30,8 @@
 		hooksStatus,
 		outputById,
 		onRerunHook,
-		onSetReportingPaused,
+		onSetExecutionPaused,
+		onSetHookExecutionPaused,
 	}: Props = $props();
 
 	const session = useSessionContext();
@@ -83,12 +85,31 @@
 		return "Pending";
 	}
 
+	function hookPaused(hook: HooksStatus["hooks"][number]) {
+		return hooksStatus.executionPaused || hook.executionPaused;
+	}
+
+	function hookExecutionLabel(hook: HooksStatus["hooks"][number]) {
+		return hookPaused(hook) ? "paused" : hookStatusLabel(hook);
+	}
+
 	function canRerunHook(hook: HooksStatus["hooks"][number]) {
-		return hookDisplayState(hook) !== "running";
+		return (
+			!hooksStatus.executionPaused &&
+			!hook.executionPaused &&
+			hookDisplayState(hook) !== "running"
+		);
 	}
 
 	function openHookDialog(hookId: string) {
 		sessionView.openHookDialog(hookId);
+	}
+
+	function setExecutionPaused(paused: boolean) {
+		onSetExecutionPaused(paused);
+		if (paused) {
+			sessionView.closeHookDialog();
+		}
 	}
 
 	const selectedHookData = $derived.by(() => {
@@ -169,25 +190,25 @@
 		<div class="flex items-center gap-2 border-b border-border px-3 py-2">
 			<div class="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
 				Hooks ({hookPassedCount()} passed)
-				{#if hooksStatus.reportingPaused}
-					<span class="text-amber-500"> · reporting paused</span>
+				{#if hooksStatus.executionPaused}
+					<span class="text-amber-500"> · paused</span>
 				{/if}
 			</div>
 			<Button
 				variant="ghost"
 				size="xs"
 				class="h-7 gap-1.5 px-2"
-				onclick={() => onSetReportingPaused(!hooksStatus.reportingPaused)}
-				title={hooksStatus.reportingPaused
-					? "Resume reporting hook failures to the LLM"
-					: "Pause reporting hook failures to the LLM"}
+				onclick={() => setExecutionPaused(!hooksStatus.executionPaused)}
+				title={hooksStatus.executionPaused
+					? "Resume hook execution"
+					: "Pause all hook execution"}
 			>
-				{#if hooksStatus.reportingPaused}
+				{#if hooksStatus.executionPaused}
 					<PlayCircleIcon class="size-3.5" />
 					Resume
 				{:else}
 					<PauseCircleIcon class="size-3.5" />
-					Pause
+					Pause all
 				{/if}
 			</Button>
 		</div>
@@ -220,14 +241,28 @@
 					<div class="min-w-0 flex-1">
 						<div class="truncate text-foreground">{hook.hookName}</div>
 						<div class="truncate text-[11px] text-muted-foreground">
-							{hook.type} · {hookStatusLabel(hook)} · runs {hook.runCount}
+							{hook.type} · {hookExecutionLabel(hook)} · runs {hook.runCount}
 						</div>
 					</div>
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						onclick={(event) => {
+							event.stopPropagation();
+							onSetHookExecutionPaused(hook.hookId, !hookPaused(hook));
+						}}
+						title={hookPaused(hook) ? "Resume this hook" : "Pause this hook"}
+					>
+						{#if hookPaused(hook)}
+							<PlayCircleIcon class="size-3 text-amber-500" />
+						{:else}
+							<PauseCircleIcon class="size-3" />
+						{/if}
+					</Button>
 					{#if canRerunHook(hook)}
 						<Button
 							variant="ghost"
 							size="icon-xs"
-							class="ms-auto"
 							onclick={(event) => {
 								event.stopPropagation();
 								onRerunHook(hook.hookId);
@@ -272,6 +307,9 @@
 				<span class="text-muted-foreground"
 					>Status: {hookStatusLabel(hook)}</span
 				>
+				{#if hookPaused(hook)}
+					<span class="text-amber-500/80">Paused</span>
+				{/if}
 				<span class="text-muted-foreground">Runs: {hook.runCount}</span>
 				{#if typeof hook.lastExitCode === "number"}
 					<span class="text-muted-foreground"
@@ -281,11 +319,25 @@
 				{#if hook.failCount > 0}
 					<span class="text-red-500/80">Failures: {hook.failCount}</span>
 				{/if}
+				<Button
+					variant="outline"
+					size="xs"
+					class="ms-auto"
+					onclick={() =>
+						onSetHookExecutionPaused(hook.hookId, !hookPaused(hook))}
+				>
+					{#if hookPaused(hook)}
+						<PlayCircleIcon class="size-3 text-amber-500" />
+						Resume hook
+					{:else}
+						<PauseCircleIcon class="size-3" />
+						Pause hook
+					{/if}
+				</Button>
 				{#if canRerunHook(hook)}
 					<Button
 						variant="outline"
 						size="xs"
-						class="ms-auto"
 						onclick={() => onRerunHook(hook.hookId)}
 					>
 						<RotateCcwIcon class="size-3" />

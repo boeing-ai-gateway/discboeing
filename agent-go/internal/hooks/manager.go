@@ -41,6 +41,9 @@ const (
 	maxHookRetries           = 3
 )
 
+// ErrHookPaused is returned when a caller tries to execute a paused hook.
+var ErrHookPaused = errors.New("hooks are paused")
+
 // Conversation starts and resumes hook failure follow-up turns.
 type Conversation interface {
 	Chat(threadID string, req agent.PromptRequest) (string, error)
@@ -176,17 +179,50 @@ func (m *Manager) SetStartupHookEnv(fn func(Hook) map[string]string) {
 	m.mu.Unlock()
 }
 
-// SetReportingPaused controls whether hook failures are reported back to the
-// LLM. Hooks continue to run and update status while reporting is paused.
-func (m *Manager) SetReportingPaused(paused bool) error {
+// SetExecutionPaused controls whether runtime hooks execute. When paused,
+// hooks do not run or report failures back to the LLM.
+func (m *Manager) SetExecutionPaused(paused bool) error {
 	status := LoadStatus(m.hooksDataDir)
-	if status.ReportingPaused == paused {
+	changed := status.ExecutionPaused != paused
+	status.ExecutionPaused = paused
+	if !changed {
 		return nil
 	}
-	status.ReportingPaused = paused
 	if err := SaveStatus(m.hooksDataDir, status); err != nil {
 		return err
 	}
+	m.emitStatusChunk(m.GetStatus())
+	if !paused && status.LastThreadID != "" {
+		go m.scheduleEvaluation(status.LastThreadID, m.threadModel(status.LastThreadID), true)
+	}
+	return nil
+}
+
+// ExecutionPaused returns whether runtime hook execution is currently paused.
+func (m *Manager) ExecutionPaused() bool {
+	return LoadStatus(m.hooksDataDir).ExecutionPaused
+}
+
+// SetHookExecutionPaused controls whether one hook executes. When paused, that
+// hook does not run or report failures back to the LLM.
+func (m *Manager) SetHookExecutionPaused(hookID string, paused bool) error {
+	hook, ok := m.findHook(hookID)
+	if !ok {
+		return fmt.Errorf("hook %q not found", hookID)
+	}
+	if err := SetHookExecutionPaused(m.hooksDataDir, hook, paused); err != nil {
+		return err
+	}
+	if !paused {
+		status := LoadStatus(m.hooksDataDir)
+		if status.ExecutionPaused {
+			status.ExecutionPaused = false
+			if err := SaveStatus(m.hooksDataDir, status); err != nil {
+				return err
+			}
+		}
+	}
+	status := m.GetStatus()
 	m.emitStatusChunk(status)
 	if !paused && status.LastThreadID != "" {
 		go m.scheduleEvaluation(status.LastThreadID, m.threadModel(status.LastThreadID), true)
@@ -194,9 +230,13 @@ func (m *Manager) SetReportingPaused(paused bool) error {
 	return nil
 }
 
-// ReportingPaused returns whether hook failures are currently suppressed.
-func (m *Manager) ReportingPaused() bool {
-	return LoadStatus(m.hooksDataDir).ReportingPaused
+func (m *Manager) hookExecutionPaused(hookID string) bool {
+	status := LoadStatus(m.hooksDataDir)
+	if status.ExecutionPaused {
+		return true
+	}
+	hookStatus, ok := status.Hooks[hookID]
+	return ok && hookStatus.ExecutionPaused
 }
 
 func (m *Manager) setLastEvaluationThread(threadID string) {
@@ -396,6 +436,10 @@ func (m *Manager) runStartupHookGroup(sessionHooks []startupHookRun, group strin
 
 func (m *Manager) runStartupHook(run startupHookRun) {
 	hook := run.hook
+	if m.hookExecutionPaused(hook.ID) {
+		return
+	}
+
 	outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
 	_ = SetHookRunning(m.hooksDataDir, hook)
 	m.emitCurrentStatusChunk()
@@ -472,8 +516,24 @@ func (m *Manager) HasFileHooks() bool {
 func (m *Manager) GetStatus() StatusFile {
 	m.mu.Lock()
 	m.reloadHooks()
+	knownHooks := append([]Hook{}, m.sessionHooks...)
+	knownHooks = append(knownHooks, m.fileHooks...)
+	knownHooks = append(knownHooks, m.preCommitHooks...)
 	m.mu.Unlock()
-	return LoadStatus(m.hooksDataDir)
+	status := LoadStatus(m.hooksDataDir)
+	for _, hook := range knownHooks {
+		if _, ok := status.Hooks[hook.ID]; ok {
+			continue
+		}
+		status.Hooks[hook.ID] = HookRunStatus{
+			HookID:     hook.ID,
+			HookName:   hook.Name,
+			Type:       string(hook.Type),
+			LastResult: "pending",
+			OutputPath: GetHookOutputPath(m.hooksDataDir, hook.ID),
+		}
+	}
+	return status
 }
 
 // HookOutput contains hook log metadata and inline output when available.
@@ -542,33 +602,42 @@ func readHookOutputTail(outputPath string, fileSize, maxBytes int64) ([]byte, er
 // RerunHook manually reruns a file hook against current dirty files or a
 // session hook against the current workspace.
 func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
-	m.mu.Lock()
-	m.reloadHooks()
-	var fileHook *Hook
-	for i := range m.fileHooks {
-		if m.fileHooks[i].ID == hookID {
-			fileHook = &m.fileHooks[i]
-			break
-		}
+	hook, ok := m.findHook(hookID)
+	if !ok {
+		return nil, nil
 	}
-	var sessionHook *Hook
-	if fileHook == nil {
-		for i := range m.sessionHooks {
-			if m.sessionHooks[i].ID == hookID {
-				sessionHook = &m.sessionHooks[i]
-				break
-			}
-		}
+	if m.hookExecutionPaused(hook.ID) {
+		return nil, ErrHookPaused
 	}
-	m.mu.Unlock()
-
-	if fileHook != nil {
-		return m.rerunFileHook(*fileHook), nil
+	if hook.Type == HookTypeFile {
+		return m.rerunFileHook(hook), nil
 	}
-	if sessionHook != nil {
-		return m.rerunSessionHook(*sessionHook), nil
+	if hook.Type == HookTypeSession {
+		return m.rerunSessionHook(hook), nil
 	}
 	return nil, nil
+}
+
+func (m *Manager) findHook(hookID string) (Hook, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reloadHooks()
+	for i := range m.fileHooks {
+		if m.fileHooks[i].ID == hookID {
+			return m.fileHooks[i], true
+		}
+	}
+	for i := range m.sessionHooks {
+		if m.sessionHooks[i].ID == hookID {
+			return m.sessionHooks[i], true
+		}
+	}
+	for i := range m.preCommitHooks {
+		if m.preCommitHooks[i].ID == hookID {
+			return m.preCommitHooks[i], true
+		}
+	}
+	return Hook{}, false
 }
 
 func (m *Manager) rerunFileHook(hook Hook) *HookRunResult {
@@ -865,6 +934,9 @@ func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
 
 func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHookEvalResult {
 	noAction := FileHookEvalResult{}
+	if m.ExecutionPaused() {
+		return noAction
+	}
 	m.mu.Lock()
 	m.checkAndReloadHooks()
 	fileHooks := make([]Hook, len(m.fileHooks))
@@ -925,6 +997,9 @@ func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHoo
 		if !ok {
 			continue
 		}
+		if m.hookExecutionPaused(hook.ID) {
+			continue
+		}
 
 		matching := matchHookFiles(allDirty, hook)
 		if len(matching) == 0 {
@@ -942,6 +1017,9 @@ func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHoo
 			reportFiles = matching
 		}
 		if len(reportFiles) == 0 {
+			continue
+		}
+		if m.hookExecutionPaused(hook.ID) {
 			continue
 		}
 
@@ -967,6 +1045,9 @@ func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHoo
 		}
 
 		// Hook failed
+		if m.hookExecutionPaused(hook.ID) {
+			continue
+		}
 		return buildHookFailureEvalResult(result, reportFiles, outputPath, m.workspaceRoot)
 	}
 
@@ -980,13 +1061,19 @@ func (m *Manager) OnTurnComplete(threadID string) {
 		return
 	}
 	m.setLastEvaluationThread(threadID)
+	if m.ExecutionPaused() {
+		return
+	}
 	go m.scheduleEvaluation(threadID, m.threadModel(threadID), false)
 }
 
 // StartFailureReprompt sends or queues a hook-failure follow-up message to the
 // LLM.
 func (m *Manager) StartFailureReprompt(threadID string, result FileHookEvalResult) error {
-	if m.ReportingPaused() {
+	if m.ExecutionPaused() {
+		return nil
+	}
+	if result.FailedResult != nil && m.hookExecutionPaused(result.FailedResult.Hook.ID) {
 		return nil
 	}
 	req := hookFailurePromptRequest(result)
@@ -1060,7 +1147,10 @@ func (m *Manager) scheduleEvaluation(threadID, model string, forcePending bool) 
 	if !result.ShouldReprompt {
 		return
 	}
-	if m.ReportingPaused() {
+	if m.ExecutionPaused() {
+		return
+	}
+	if result.FailedResult != nil && m.hookExecutionPaused(result.FailedResult.Hook.ID) {
 		return
 	}
 

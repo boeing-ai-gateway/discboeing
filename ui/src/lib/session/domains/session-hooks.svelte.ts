@@ -154,11 +154,22 @@ export function createSessionHooksDomain(
 				}
 			})();
 		},
-		setReportingPaused: async (paused: boolean) => {
+		setExecutionPaused: async (paused: boolean) => {
 			if (!args.hasSession()) {
 				return;
 			}
-			streamedStatus = await api.updateHooksReporting(args.sessionId, paused);
+			streamedStatus = await api.updateHooksExecution(args.sessionId, paused);
+			resource.invalidate();
+		},
+		setHookExecutionPaused: async (hookId: string, paused: boolean) => {
+			if (!args.hasSession()) {
+				return;
+			}
+			streamedStatus = await api.updateHookExecution(
+				args.sessionId,
+				hookId,
+				paused,
+			);
 			resource.invalidate();
 		},
 		refresh,

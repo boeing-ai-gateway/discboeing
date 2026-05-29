@@ -1221,16 +1221,37 @@ class ApiClient {
 
 	/**
 	 * Toggle whether hook failures report back to the LLM.
-	 * Hooks still run and update status while reporting is paused.
+	 * Hooks still run and update status while execution is paused.
 	 * @param sessionId Session ID
-	 * @param paused Whether reporting should be paused
+	 * @param paused Whether execution should be paused
 	 */
-	async updateHooksReporting(
+	async updateHooksExecution(
 		sessionId: string,
 		paused: boolean,
 	): Promise<HooksStatusResponse> {
 		return this.fetch<HooksStatusResponse>(
-			`/sessions/${sessionId}/hooks/reporting`,
+			`/sessions/${sessionId}/hooks/execution`,
+			{
+				method: "PATCH",
+				body: JSON.stringify({ paused }),
+			},
+		);
+	}
+
+	/**
+	 * Toggle whether one hook reports failures back to the LLM.
+	 * The hook still runs and updates status while execution is paused.
+	 * @param sessionId Session ID
+	 * @param hookId Hook ID
+	 * @param paused Whether execution should be paused
+	 */
+	async updateHookExecution(
+		sessionId: string,
+		hookId: string,
+		paused: boolean,
+	): Promise<HooksStatusResponse> {
+		return this.fetch<HooksStatusResponse>(
+			`/sessions/${sessionId}/hooks/${hookId}/execution`,
 			{
 				method: "PATCH",
 				body: JSON.stringify({ paused }),

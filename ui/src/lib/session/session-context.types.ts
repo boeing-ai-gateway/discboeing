@@ -41,12 +41,13 @@ export type HookRunStatus = Pick<
 	command?: string;
 	lastRunAt?: string;
 	lastExitCode?: number;
+	executionPaused: boolean;
 };
 
 export type HooksStatus = {
 	hooks: HookRunStatus[];
 	pendingHookIds: string[];
-	reportingPaused: boolean;
+	executionPaused: boolean;
 };
 
 export type ServiceItem = {
@@ -73,7 +74,8 @@ export type SessionHooksService = {
 	isStale: boolean;
 	fetchedAt: number | null;
 	rerun: (hookId: string) => void;
-	setReportingPaused: (paused: boolean) => Promise<void>;
+	setExecutionPaused: (paused: boolean) => Promise<void>;
+	setHookExecutionPaused: (hookId: string, paused: boolean) => Promise<void>;
 	refresh: () => Promise<void>;
 	invalidate: () => void;
 	applyStatusUpdate: (status: HooksStatusResponse) => Promise<void>;

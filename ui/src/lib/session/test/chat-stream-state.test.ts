@@ -841,11 +841,12 @@ test("data-hooks-status notifies the caller", async () => {
 				runCount: 3,
 				failCount: 1,
 				consecutiveFailures: 0,
+				executionPaused: false,
 			},
 		},
 		pendingHooks: ["go-check"],
 		lastEvaluatedAt: "2026-03-31T00:00:00Z",
-		reportingPaused: false,
+		executionPaused: false,
 	};
 
 	await harness.state.handleStreamEvent({

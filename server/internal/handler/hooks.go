@@ -62,9 +62,9 @@ func (h *Handler) GetHooksState(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, result)
 }
 
-// UpdateHooksReporting toggles whether hook failures report back to the LLM.
-// PATCH /api/projects/{projectId}/sessions/{sessionId}/hooks/reporting
-func (h *Handler) UpdateHooksReporting(w http.ResponseWriter, r *http.Request) {
+// UpdateHooksExecution toggles whether hook failures report back to the LLM.
+// PATCH /api/projects/{projectId}/sessions/{sessionId}/hooks/execution
+func (h *Handler) UpdateHooksExecution(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	projectID := middleware.GetProjectID(ctx)
 	sessionID := chi.URLParam(r, "sessionId")
@@ -74,13 +74,49 @@ func (h *Handler) UpdateHooksReporting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req sandboxapi.UpdateHooksReportingRequest
+	var req sandboxapi.UpdateHooksExecutionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	result, err := h.chatService.UpdateHooksReporting(ctx, projectID, sessionID, req.Paused)
+	result, err := h.chatService.UpdateHooksExecution(ctx, projectID, sessionID, req.Paused)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	h.JSON(w, http.StatusOK, result)
+}
+
+// UpdateHookExecution toggles whether one hook reports failures back to the LLM.
+// PATCH /api/projects/{projectId}/sessions/{sessionId}/hooks/{hookId}/execution
+func (h *Handler) UpdateHookExecution(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projectID := middleware.GetProjectID(ctx)
+	sessionID := chi.URLParam(r, "sessionId")
+	hookID := chi.URLParam(r, "hookId")
+
+	if sessionID == "" {
+		h.Error(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	if hookID == "" {
+		h.Error(w, http.StatusBadRequest, "hookId is required")
+		return
+	}
+
+	var req sandboxapi.UpdateHooksExecutionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	result, err := h.chatService.UpdateHookExecution(ctx, projectID, sessionID, hookID, req.Paused)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "not found") {

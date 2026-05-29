@@ -50,6 +50,7 @@ type hookRunStatus struct {
 	RunCount            int    `json:"runCount"`
 	FailCount           int    `json:"failCount"`
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
+	ExecutionPaused     bool   `json:"executionPaused"`
 }
 
 // hookStatusFile represents the top-level status file schema.
@@ -58,7 +59,7 @@ type hookStatusFile struct {
 	Hooks           map[string]hookRunStatus `json:"hooks"`
 	PendingHooks    []string                 `json:"pendingHooks"`
 	LastEvaluatedAt string                   `json:"lastEvaluatedAt"`
-	ReportingPaused bool                     `json:"reportingPaused"`
+	ExecutionPaused bool                     `json:"executionPaused"`
 	LastThreadID    string                   `json:"lastThreadId,omitempty"`
 }
 

@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 	"os"
 	"os/exec"
@@ -289,6 +290,160 @@ echo "$DISCOBOT_SESSION_ID:$SESSION_HOOK_RERUN_ENV" > session-hook-ran
 	}
 	if got.Type != string(HookTypeSession) {
 		t.Fatalf("hook type = %q, want %q", got.Type, HookTypeSession)
+	}
+}
+
+func TestRerunHook_ReturnsPausedWithoutRunning(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	runMarker := filepath.Join(workspaceRoot, "hook-ran")
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+touch hook-ran
+exit 0
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	if err := mgr.SetExecutionPaused(true); err != nil {
+		t.Fatalf("SetExecutionPaused() failed: %v", err)
+	}
+
+	runResult, err := mgr.RerunHook("go-check")
+	if !errors.Is(err, ErrHookPaused) {
+		t.Fatalf("RerunHook() error = %v, want %v", err, ErrHookPaused)
+	}
+	if runResult != nil {
+		t.Fatalf("RerunHook() result = %#v, want nil", runResult)
+	}
+	if _, err := os.Stat(runMarker); !os.IsNotExist(err) {
+		t.Fatalf("paused hook wrote marker, stat err = %v", err)
+	}
+	status := mgr.GetStatus()
+	if status.Hooks["go-check"].RunCount != 0 {
+		t.Fatalf("run count = %d, want 0", status.Hooks["go-check"].RunCount)
+	}
+}
+
+func TestSetExecutionPausedFalseKeepsIndividualHooksPaused(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	for name, source := range map[string]string{
+		"go-check.sh": `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+exit 0
+`,
+		"setup.sh": `#!/bin/bash
+#---
+# name: Setup
+# type: session
+#---
+exit 0
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(hooksDir, name), []byte(source), 0o755); err != nil {
+			t.Fatalf("WriteFile(%s) failed: %v", name, err)
+		}
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	if err := mgr.SetHookExecutionPaused("go-check", true); err != nil {
+		t.Fatalf("SetHookExecutionPaused(go-check) failed: %v", err)
+	}
+	if err := mgr.SetHookExecutionPaused("setup", true); err != nil {
+		t.Fatalf("SetHookExecutionPaused(setup) failed: %v", err)
+	}
+	if err := mgr.SetExecutionPaused(true); err != nil {
+		t.Fatalf("SetExecutionPaused(true) failed: %v", err)
+	}
+
+	if err := mgr.SetExecutionPaused(false); err != nil {
+		t.Fatalf("SetExecutionPaused(false) failed: %v", err)
+	}
+
+	status := mgr.GetStatus()
+	if status.ExecutionPaused {
+		t.Fatal("global pause still set after resume")
+	}
+	for _, hookID := range []string{"go-check", "setup"} {
+		if !status.Hooks[hookID].ExecutionPaused {
+			t.Fatalf("hook %q resumed by global resume", hookID)
+		}
+	}
+}
+
+func TestSetHookExecutionPausedFalseClearsGlobalPause(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+exit 0
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	if err := mgr.SetExecutionPaused(true); err != nil {
+		t.Fatalf("SetExecutionPaused(true) failed: %v", err)
+	}
+
+	if err := mgr.SetHookExecutionPaused("go-check", false); err != nil {
+		t.Fatalf("SetHookExecutionPaused(false) failed: %v", err)
+	}
+
+	status := mgr.GetStatus()
+	if status.ExecutionPaused {
+		t.Fatal("global pause still set after resuming one hook")
+	}
+	if status.Hooks["go-check"].ExecutionPaused {
+		t.Fatal("hook pause still set after resuming one hook")
 	}
 }
 
@@ -782,6 +937,49 @@ echo "$CAPTURED_BACKGROUND_ENV:$DISCOBOT_SESSION_ID" > background-env
 	}
 }
 
+func TestRunSessionHooks_SkipsPausedHook(t *testing.T) {
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "setup.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Setup
+# type: session
+#---
+touch session-hook-ran
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	if err := mgr.SetHookExecutionPaused("setup", true); err != nil {
+		t.Fatalf("SetHookExecutionPaused() failed: %v", err)
+	}
+
+	wait := mgr.RunSessionHooks(nil)
+	wait()
+
+	runMarker := filepath.Join(workspaceRoot, "session-hook-ran")
+	if _, err := os.Stat(runMarker); !os.IsNotExist(err) {
+		t.Fatalf("paused session hook wrote marker, stat err = %v", err)
+	}
+	status := mgr.GetStatus()
+	if status.Hooks["setup"].RunCount != 0 {
+		t.Fatalf("run count = %d, want 0", status.Hooks["setup"].RunCount)
+	}
+}
+
 func TestEmitCurrentStatusChunk_EmitsHooksStatusDataChunk(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	mgr := NewManager(t.TempDir(), "session-123")
@@ -909,6 +1107,65 @@ exit 0
 	status := LoadStatus(mgr.hooksDataDir)
 	if strings.Join(status.PendingHooks, ",") != "01-first,02-second" {
 		t.Fatalf("pendingHooks = %v, want [01-first 02-second]", status.PendingHooks)
+	}
+}
+
+func TestEvaluateFileHooks_SkipsPausedHook(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	runMarker := filepath.Join(workspaceRoot, "file-hook-ran")
+	hookPath := filepath.Join(hooksDir, "go-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Go Check
+# type: file
+# pattern: "*.go"
+#---
+touch file-hook-ran
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	if err := mgr.SetHookExecutionPaused("go-check", true); err != nil {
+		t.Fatalf("SetHookExecutionPaused() failed: %v", err)
+	}
+
+	eval := mgr.EvaluateFileHooks()
+	if eval.ShouldReprompt {
+		t.Fatal("paused hook should not request reprompt")
+	}
+	if _, err := os.Stat(runMarker); !os.IsNotExist(err) {
+		t.Fatalf("paused file hook wrote marker, stat err = %v", err)
+	}
+	status := mgr.GetStatus()
+	if status.Hooks["go-check"].RunCount != 0 {
+		t.Fatalf("run count = %d, want 0", status.Hooks["go-check"].RunCount)
+	}
+	if strings.Join(status.PendingHooks, ",") != "go-check" {
+		t.Fatalf("pendingHooks = %v, want [go-check]", status.PendingHooks)
 	}
 }
 

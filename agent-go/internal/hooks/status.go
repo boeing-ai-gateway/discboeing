@@ -21,6 +21,7 @@ type HookRunStatus struct {
 	RunCount            int    `json:"runCount"`
 	FailCount           int    `json:"failCount"`
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
+	ExecutionPaused     bool   `json:"executionPaused"`
 }
 
 // StatusFile is the JSON structure persisted to status.json.
@@ -28,7 +29,7 @@ type StatusFile struct {
 	Hooks           map[string]HookRunStatus `json:"hooks"`
 	PendingHooks    []string                 `json:"pendingHooks"`
 	LastEvaluatedAt string                   `json:"lastEvaluatedAt"`
-	ReportingPaused bool                     `json:"reportingPaused"`
+	ExecutionPaused bool                     `json:"executionPaused"`
 	LastThreadID    string                   `json:"lastThreadId,omitempty"`
 }
 
@@ -84,6 +85,26 @@ func SaveStatus(hooksDataDir string, status StatusFile) error {
 		return err
 	}
 	return os.Rename(tmpPath, statusFilePath(hooksDataDir))
+}
+
+// SetHookExecutionPaused controls whether a single hook executes. When paused,
+// the hook does not run or report failures to the LLM.
+func SetHookExecutionPaused(hooksDataDir string, hook Hook, paused bool) error {
+	status := LoadStatus(hooksDataDir)
+	existing, ok := status.Hooks[hook.ID]
+	if !ok {
+		existing = HookRunStatus{
+			HookID:   hook.ID,
+			HookName: hook.Name,
+			Type:     string(hook.Type),
+		}
+	}
+	if existing.ExecutionPaused == paused {
+		return nil
+	}
+	existing.ExecutionPaused = paused
+	status.Hooks[hook.ID] = existing
+	return SaveStatus(hooksDataDir, status)
 }
 
 // SetHookRunning marks a hook as currently running in the status file.

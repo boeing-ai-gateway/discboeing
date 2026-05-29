@@ -134,7 +134,9 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			typeof value.outputPath === "string" &&
 			typeof value.runCount === "number" &&
 			typeof value.failCount === "number" &&
-			typeof value.consecutiveFailures === "number"
+			typeof value.consecutiveFailures === "number" &&
+			(typeof value.executionPaused === "boolean" ||
+				typeof value.executionPaused === "undefined")
 		);
 	};
 
@@ -157,16 +159,19 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			if (!isHookRunStatus(hookStatus)) {
 				return null;
 			}
-			hooks[hookId] = hookStatus;
+			hooks[hookId] = {
+				...hookStatus,
+				executionPaused: hookStatus.executionPaused ?? false,
+			};
 		}
 
 		return {
 			hooks,
 			pendingHooks: [...value.pendingHooks],
 			lastEvaluatedAt: value.lastEvaluatedAt,
-			reportingPaused:
-				typeof value.reportingPaused === "boolean"
-					? value.reportingPaused
+			executionPaused:
+				typeof value.executionPaused === "boolean"
+					? value.executionPaused
 					: false,
 		};
 	};
