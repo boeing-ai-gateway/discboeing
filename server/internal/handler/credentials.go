@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/keyvalidator"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/oauth"
@@ -22,13 +22,27 @@ func (h *Handler) GetCredentialTypes(w http.ResponseWriter, _ *http.Request) {
 	h.JSON(w, http.StatusOK, map[string]any{"credentialTypes": providers.GetCredentialTypes()})
 }
 
-func credentialVisibilityFromAPI(visibility client.CredentialVisibility) service.CredentialVisibility {
+func credentialVisibilityFromAPI(visibility api.CredentialVisibility) service.CredentialVisibility {
 	return service.CredentialVisibility{
 		Tools:    visibility.Tools,
 		Console:  visibility.Console,
 		Services: visibility.Services,
 		Hooks:    visibility.Hooks,
 	}
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func stringSliceValue(value *[]string) []string {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 // ListCredentials returns all credentials for a project (safe info only)
@@ -48,7 +62,7 @@ func (h *Handler) ListCredentials(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req client.CreateCredentialRequest
+	var req api.CreateCredentialRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -57,13 +71,26 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	if req.Name != "" {
 		req.Name = strings.TrimSpace(req.Name)
 	}
+	credentialID := ""
+	if req.CredentialId != nil {
+		credentialID = *req.CredentialId
+	}
+	provider := ""
+	if req.Provider != nil {
+		provider = *req.Provider
+	}
+	apiKey := ""
+	if req.ApiKey != nil {
+		apiKey = *req.ApiKey
+	}
+	description := stringValue(req.Description)
 
 	visibility := service.CredentialVisibility{}
 	inactive := false
 
 	var existingCredential *service.CredentialInfo
-	if req.CredentialID != "" {
-		info, err := h.credentialService.GetByID(r.Context(), projectID, req.CredentialID)
+	if credentialID != "" {
+		info, err := h.credentialService.GetByID(r.Context(), projectID, credentialID)
 		if err != nil {
 			if errors.Is(err, service.ErrCredentialNotFound) {
 				h.Error(w, http.StatusNotFound, "Credential not found")
@@ -73,11 +100,11 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		existingCredential = info
-		if req.Provider == "custom" && !strings.HasPrefix(existingCredential.Provider, "custom:") {
+		if provider == "custom" && !strings.HasPrefix(existingCredential.Provider, "custom:") {
 			h.Error(w, http.StatusBadRequest, "Credential provider mismatch")
 			return
 		}
-		if req.Provider != "" && req.Provider != "custom" && req.Provider != existingCredential.Provider {
+		if provider != "" && provider != "custom" && provider != existingCredential.Provider {
 			h.Error(w, http.StatusBadRequest, "Credential provider mismatch")
 			return
 		}
@@ -85,8 +112,8 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			h.Error(w, http.StatusBadRequest, "Credential auth type mismatch")
 			return
 		}
-		if req.Provider == "" {
-			req.Provider = existingCredential.Provider
+		if provider == "" {
+			provider = existingCredential.Provider
 		}
 		if req.AuthType == "" {
 			req.AuthType = existingCredential.AuthType
@@ -104,13 +131,16 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		inactive = *req.Inactive
 	}
 
-	envVars := make([]service.SecretEnvVar, 0, len(req.EnvVars))
-	for _, envVar := range req.EnvVars {
-		envVars = append(envVars, service.SecretEnvVar{Key: envVar.Key, Value: envVar.Value, OriginalKey: envVar.OriginalKey})
+	var envVars []service.SecretEnvVar
+	if req.EnvVars != nil {
+		envVars = make([]service.SecretEnvVar, 0, len(*req.EnvVars))
+		for _, envVar := range *req.EnvVars {
+			envVars = append(envVars, service.SecretEnvVar{Key: envVar.Key, Value: envVar.Value, OriginalKey: stringValue(envVar.OriginalKey)})
+		}
 	}
 
-	if len(envVars) > 0 || req.Provider == "custom" || req.Provider == "" {
-		info, err := h.credentialService.SetCustomCredential(r.Context(), projectID, req.CredentialID, req.Name, req.Description, envVars, visibility, inactive)
+	if len(envVars) > 0 || provider == "custom" || provider == "" {
+		info, err := h.credentialService.SetCustomCredential(r.Context(), projectID, credentialID, req.Name, description, envVars, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrCredentialNotFound) {
 				h.Error(w, http.StatusNotFound, "Credential not found")
@@ -123,15 +153,15 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Provider == "" {
+	if provider == "" {
 		h.Error(w, http.StatusBadRequest, "provider is required")
 		return
 	}
 
 	if req.AuthType == "" || req.AuthType == service.AuthTypeAPIKey {
-		if req.APIKey == "" {
-			if req.CredentialID != "" {
-				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
+		if apiKey == "" {
+			if credentialID != "" {
+				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, credentialID, req.Name, description, visibility, inactive)
 				if err != nil {
 					if errors.Is(err, service.ErrCredentialNotFound) {
 						h.Error(w, http.StatusNotFound, "Credential not found")
@@ -147,7 +177,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		info, err := h.credentialService.SetAPIKeyWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, visibility, inactive)
+		info, err := h.credentialService.SetAPIKeyWithMetadata(r.Context(), projectID, provider, req.Name, description, apiKey, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, keyvalidator.ErrValidationFailed) {
 				h.Error(w, http.StatusBadRequest, err.Error())
@@ -166,9 +196,9 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.AuthType == service.AuthTypeID {
-		if req.APIKey == "" {
-			if req.CredentialID != "" {
-				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
+		if apiKey == "" {
+			if credentialID != "" {
+				info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, credentialID, req.Name, description, visibility, inactive)
 				if err != nil {
 					if errors.Is(err, service.ErrCredentialNotFound) {
 						h.Error(w, http.StatusNotFound, "Credential not found")
@@ -184,7 +214,7 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		info, err := h.credentialService.SetIDWithMetadata(r.Context(), projectID, req.Provider, req.Name, req.Description, req.APIKey, visibility, inactive)
+		info, err := h.credentialService.SetIDWithMetadata(r.Context(), projectID, provider, req.Name, description, apiKey, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrInvalidProvider) {
 				h.Error(w, http.StatusBadRequest, "Invalid provider")
@@ -198,8 +228,8 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.AuthType == service.AuthTypeOAuth && req.CredentialID != "" {
-		info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, req.CredentialID, req.Name, req.Description, visibility, inactive)
+	if req.AuthType == service.AuthTypeOAuth && credentialID != "" {
+		info, err := h.credentialService.UpdateMetadata(r.Context(), projectID, credentialID, req.Name, description, visibility, inactive)
 		if err != nil {
 			if errors.Is(err, service.ErrCredentialNotFound) {
 				h.Error(w, http.StatusNotFound, "Credential not found")
@@ -420,7 +450,7 @@ func (h *Handler) AnthropicAuthorize(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req client.AnthropicExchangeRequest
+	var req api.AnthropicExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -446,13 +476,13 @@ func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Regular OAuth flow - exchange authorization code for tokens
-		if req.CodeVerifier == "" {
+		if req.Verifier == "" {
 			h.Error(w, http.StatusBadRequest, "verifier is required for authorization code")
 			return
 		}
 
 		provider := oauth.NewAnthropicProvider(h.cfg.AnthropicClientID)
-		tokenResp, err := provider.Exchange(r.Context(), req.Code, req.CodeVerifier)
+		tokenResp, err := provider.Exchange(r.Context(), req.Code, req.Verifier)
 		if err != nil {
 			// Return as JSON with success: false so frontend can display the error
 			h.JSON(w, http.StatusOK, map[string]any{
@@ -494,17 +524,14 @@ func (h *Handler) AnthropicExchange(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCopilotDeviceCode initiates device flow
 func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req client.GitHubCopilotDeviceCodeRequest
-	if err := h.DecodeJSON(r, &req); err != nil {
-		// Allow empty body, default to github.com
-		req.DeploymentType = "github.com"
-	}
+	var req api.GitHubCopilotDeviceCodeRequest
+	_ = h.DecodeJSON(r, &req)
 
 	// Determine domain based on deployment type
 	domain := oauth.DefaultGitHubDomain
-	if req.DeploymentType == "enterprise" && req.EnterpriseURL != "" {
+	if stringValue(req.DeploymentType) == "enterprise" && stringValue(req.EnterpriseUrl) != "" {
 		// Extract domain from enterprise URL
-		domain = req.EnterpriseURL
+		domain = stringValue(req.EnterpriseUrl)
 		// Strip protocol if present
 		if idx := strings.Index(domain, "://"); idx != -1 {
 			domain = domain[idx+3:]
@@ -523,10 +550,10 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Convert to camelCase for frontend
-	h.JSON(w, http.StatusOK, client.GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
-		VerificationURI: deviceResp.VerificationURI,
+		VerificationUri: deviceResp.VerificationURI,
 		ExpiresIn:       deviceResp.ExpiresIn,
 		Interval:        deviceResp.Interval,
 		Domain:          domain,
@@ -537,7 +564,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 func (h *Handler) GitHubCopilotPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req client.GitHubCopilotPollRequest
+	var req api.GitHubCopilotPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -638,28 +665,28 @@ func normalizeGitHubDomain(raw string) string {
 
 // GitHubDeviceCode initiates device flow for GitHub git operations (repo scope)
 func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
-	var req client.GitHubDeviceCodeRequest
+	var req api.GitHubDeviceCodeRequest
 	// Allow empty body, default to github.com
 	_ = h.DecodeJSON(r, &req)
 
-	domain := normalizeGitHubDomain(req.EnterpriseURL)
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
 
 	if h.cfg.GitHubOAuthClientID == "" {
 		h.Error(w, http.StatusServiceUnavailable, "GitHub OAuth not configured")
 		return
 	}
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, req.Scopes)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, stringSliceValue(req.Scopes))
 	deviceResp, err := provider.RequestDeviceCode(r.Context())
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to request device code: "+err.Error())
 		return
 	}
 
-	h.JSON(w, http.StatusOK, client.GitHubCopilotDeviceCodeResponse{
+	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
-		VerificationURI: deviceResp.VerificationURI,
+		VerificationUri: deviceResp.VerificationURI,
 		ExpiresIn:       deviceResp.ExpiresIn,
 		Interval:        deviceResp.Interval,
 		Domain:          domain,
@@ -674,16 +701,16 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req client.GitHubAuthorizeRequest
+	var req api.GitHubAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
-	domain := normalizeGitHubDomain(req.EnterpriseURL)
-	redirectURI := strings.TrimSpace(req.RedirectURI)
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
+	redirectURI := strings.TrimSpace(stringValue(req.RedirectUri))
 	if redirectURI == "" {
 		redirectURI = "http://127.0.0.1:1455/auth/callback"
 	}
 
-	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, req.Scopes)
+	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, stringSliceValue(req.Scopes))
 	authResp, err := provider.Authorize(redirectURI)
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to generate authorization URL")
@@ -709,20 +736,20 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 				projectID,
 				redirectURI,
 				domain,
-				req.CredentialID,
-				req.Name,
-				req.Description,
+				stringValue(req.CredentialId),
+				stringValue(req.Name),
+				stringValue(req.Description),
 				visibility,
 				inactive,
 			)
 		}
 	}
 
-	h.JSON(w, http.StatusOK, client.GitHubAuthorizeResponse{
-		URL:               authResp.URL,
+	h.JSON(w, http.StatusOK, api.GitHubAuthorizeResponse{
+		Url:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
-		RedirectURI:       redirectURI,
+		RedirectUri:       redirectURI,
 		CallbackListening: callbackListening,
 	})
 }
@@ -731,7 +758,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req client.GitHubPollRequest
+	var req api.GitHubPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -800,10 +827,10 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	info, err := h.credentialService.SetOAuthTokensWithMetadata(
 		r.Context(),
 		projectID,
-		req.CredentialID,
+		stringValue(req.CredentialId),
 		service.ProviderGitHub,
-		req.Name,
-		req.Description,
+		stringValue(req.Name),
+		stringValue(req.Description),
 		visibility,
 		inactive,
 		oauthCred,
@@ -827,30 +854,30 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req client.GitHubExchangeRequest
+	var req api.GitHubExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	req.Code = strings.TrimSpace(req.Code)
-	req.RedirectURI = strings.TrimSpace(req.RedirectURI)
-	req.CodeVerifier = strings.TrimSpace(req.CodeVerifier)
+	redirectURI := strings.TrimSpace(stringValue(req.RedirectUri))
+	req.Verifier = strings.TrimSpace(req.Verifier)
 	if req.Code == "" {
 		h.Error(w, http.StatusBadRequest, "code is required")
 		return
 	}
-	if req.RedirectURI == "" {
-		req.RedirectURI = "http://127.0.0.1:1455/auth/callback"
+	if redirectURI == "" {
+		redirectURI = "http://127.0.0.1:1455/auth/callback"
 	}
-	if req.CodeVerifier == "" {
+	if req.Verifier == "" {
 		h.Error(w, http.StatusBadRequest, "verifier is required")
 		return
 	}
 
-	domain := normalizeGitHubDomain(req.EnterpriseURL)
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
 	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, nil)
-	tokenResp, err := provider.Exchange(r.Context(), req.Code, req.RedirectURI, req.CodeVerifier)
+	tokenResp, err := provider.Exchange(r.Context(), req.Code, redirectURI, req.Verifier)
 	if err != nil {
 		h.Error(w, http.StatusBadRequest, "Token exchange failed: "+err.Error())
 		return
@@ -868,10 +895,10 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 	info, err := h.credentialService.SetOAuthTokensWithMetadata(
 		r.Context(),
 		projectID,
-		req.CredentialID,
+		stringValue(req.CredentialId),
 		service.ProviderGitHub,
-		req.Name,
-		req.Description,
+		stringValue(req.Name),
+		stringValue(req.Description),
 		visibility,
 		inactive,
 		&service.OAuthCredential{
@@ -893,7 +920,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) GitHubCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req client.GitHubCallbackStatusRequest
+	var req api.GitHubCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -966,10 +993,10 @@ func (h *Handler) CodexDeviceCode(w http.ResponseWriter, r *http.Request) {
 		interval = 5
 	}
 
-	h.JSON(w, http.StatusOK, client.CodexDeviceCodeResponse{
-		DeviceAuthID:    deviceResp.DeviceAuthID,
+	h.JSON(w, http.StatusOK, api.CodexDeviceCodeResponse{
+		DeviceAuthId:    deviceResp.DeviceAuthID,
 		UserCode:        deviceResp.UserCode,
-		VerificationURI: oauth.CodexDevicePageURL,
+		VerificationUri: oauth.CodexDevicePageURL,
 		Interval:        interval,
 	})
 }
@@ -982,10 +1009,10 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req client.CodexAuthorizeRequest
+	var req api.CodexAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
-	redirectURI := strings.TrimSpace(req.RedirectURI)
+	redirectURI := strings.TrimSpace(req.RedirectUri)
 	if redirectURI == "" {
 		redirectURI = "http://localhost:1455/auth/callback"
 	}
@@ -1005,11 +1032,11 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.JSON(w, http.StatusOK, client.CodexAuthorizeResponse{
-		URL:               authResp.URL,
+	h.JSON(w, http.StatusOK, api.CodexAuthorizeResponse{
+		Url:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
-		RedirectURI:       redirectURI,
+		RedirectUri:       redirectURI,
 		CallbackListening: callbackListening,
 	})
 }
@@ -1018,13 +1045,13 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(r.Context())
 
-	var req client.CodexPollRequest
+	var req api.CodexPollRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.DeviceAuthID == "" {
+	if req.DeviceAuthId == "" {
 		h.Error(w, http.StatusBadRequest, "deviceAuthId is required")
 		return
 	}
@@ -1034,7 +1061,7 @@ func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provider := oauth.NewCodexProvider(h.cfg.CodexClientID)
-	pollResp, statusCode, err := provider.PollDeviceCode(r.Context(), req.DeviceAuthID, req.UserCode)
+	pollResp, statusCode, err := provider.PollDeviceCode(r.Context(), req.DeviceAuthId, req.UserCode)
 	if err != nil {
 		h.Error(w, http.StatusBadRequest, "Poll request failed: "+err.Error())
 		return
@@ -1094,30 +1121,30 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req client.CodexExchangeRequest
+	var req api.CodexExchangeRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	req.Code = strings.TrimSpace(req.Code)
-	req.RedirectURI = strings.TrimSpace(req.RedirectURI)
-	req.CodeVerifier = strings.TrimSpace(req.CodeVerifier)
+	redirectURI := strings.TrimSpace(req.RedirectUri)
+	req.Verifier = strings.TrimSpace(req.Verifier)
 
 	if req.Code == "" {
 		h.Error(w, http.StatusBadRequest, "code is required")
 		return
 	}
-	if req.RedirectURI == "" {
-		req.RedirectURI = "http://localhost:1455/auth/callback"
+	if redirectURI == "" {
+		redirectURI = "http://localhost:1455/auth/callback"
 	}
-	if req.CodeVerifier == "" {
+	if req.Verifier == "" {
 		h.Error(w, http.StatusBadRequest, "verifier is required")
 		return
 	}
 
 	provider := oauth.NewCodexProvider(h.cfg.CodexClientID)
-	tokenResp, err := provider.Exchange(r.Context(), req.Code, req.RedirectURI, req.CodeVerifier)
+	tokenResp, err := provider.Exchange(r.Context(), req.Code, redirectURI, req.Verifier)
 	if err != nil {
 		h.Error(w, http.StatusBadRequest, "Token exchange failed: "+err.Error())
 		return
@@ -1151,7 +1178,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 
 // CodexCallbackStatus reports whether the localhost:1455 callback completed.
 func (h *Handler) CodexCallbackStatus(w http.ResponseWriter, r *http.Request) {
-	var req client.CodexCallbackStatusRequest
+	var req api.CodexCallbackStatusRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return

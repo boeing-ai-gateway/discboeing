@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/terminal"
@@ -203,12 +203,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 	go func() {
 		defer close(wsWriteDone)
 		for chunk := range sub {
-			data, err := json.Marshal(string(chunk))
-			if err != nil {
-				log.Printf("terminal: JSON marshal error: %v", err)
-				return
-			}
-			msg := client.TerminalMessage{Type: "output", Data: json.RawMessage(data)}
+			msg := api.TerminalMessage{Type: "output", Data: string(chunk)}
 			if err := conn.WriteJSON(msg); err != nil {
 				// WebSocket write failed (client disconnected); stop sending.
 				return
@@ -220,14 +215,14 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 	}()
 
 	// WebSocket → session input.
-	// Reads input and resize messages from the client. Exits when the client
+	// Reads input and resize messages from the api. Exits when the client
 	// closes the WebSocket or a network error occurs (including a read deadline).
 	// Does NOT close the PTY — only the subscriber is cleaned up (via defer).
 	inputDone := make(chan struct{})
 	go func() {
 		defer close(inputDone)
 		for {
-			var msg client.TerminalMessage
+			var msg api.TerminalMessage
 			if err := conn.ReadJSON(&msg); err != nil {
 				if websocket.IsUnexpectedCloseError(err,
 					websocket.CloseNormalClosure,
@@ -241,7 +236,7 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 			switch msg.Type {
 			case "input":
 				var input string
-				if err := json.Unmarshal(msg.Data, &input); err != nil {
+				if err := unmarshalTerminalMessageData(msg.Data, &input); err != nil {
 					log.Printf("terminal: failed to unmarshal input: %v", err)
 					continue
 				}
@@ -251,8 +246,8 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 				}
 
 			case "resize":
-				var resize client.ResizeData
-				if err := json.Unmarshal(msg.Data, &resize); err != nil {
+				var resize api.ResizeData
+				if err := unmarshalTerminalMessageData(msg.Data, &resize); err != nil {
 					log.Printf("terminal: failed to unmarshal resize: %v", err)
 					continue
 				}
@@ -281,6 +276,14 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 		// Client disconnected: wait for the output goroutine to finish.
 		<-wsWriteDone
 	}
+}
+
+func unmarshalTerminalMessageData(data any, target any) error {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, target)
 }
 
 // GetTerminalHistory returns terminal history for a session

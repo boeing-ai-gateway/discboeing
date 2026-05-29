@@ -3,6 +3,8 @@ package handler
 import (
 	"encoding/json"
 	"testing"
+
+	api "github.com/obot-platform/discobot/server/api"
 )
 
 // TestTerminalANSIEncoding verifies that ANSI escape codes are correctly
@@ -50,7 +52,7 @@ func TestTerminalANSIEncoding(t *testing.T) {
 				t.Fatalf("json.Marshal failed: %v", err)
 			}
 
-			msg := TerminalMessage{
+			msg := api.TerminalMessage{
 				Type: "output",
 				Data: json.RawMessage(jsonData),
 			}
@@ -88,7 +90,7 @@ func TestTerminalANSIEncoding(t *testing.T) {
 	}
 }
 
-// TestTerminalMessageJSONEncoding tests that TerminalMessage JSON encoding
+// TestTerminalMessageJSONEncoding tests that api.TerminalMessage JSON encoding
 // produces valid JSON that correctly represents binary data.
 func TestTerminalMessageJSONEncoding(t *testing.T) {
 	t.Run("Escape_character_encoding", func(t *testing.T) {
@@ -135,7 +137,7 @@ func TestTerminalMessageJSONEncoding(t *testing.T) {
 			t.Fatalf("json.Marshal failed: %v", err)
 		}
 
-		msg := TerminalMessage{
+		msg := api.TerminalMessage{
 			Type: "output",
 			Data: json.RawMessage(jsonData),
 		}

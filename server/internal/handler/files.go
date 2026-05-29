@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 )
@@ -21,7 +21,7 @@ import (
 func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	// Only provide suggestions when enabled
 	if !h.cfg.SuggestionsEnabled {
-		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []client.Suggestion{}})
+		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []api.Suggestion{}})
 		return
 	}
 
@@ -34,13 +34,13 @@ func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if query == "" {
-		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []client.Suggestion{}})
+		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []api.Suggestion{}})
 		return
 	}
 
 	// Only handle path suggestions for now
 	if suggestionType != "path" {
-		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []client.Suggestion{}})
+		h.JSON(w, http.StatusOK, map[string]any{"suggestions": []api.Suggestion{}})
 		return
 	}
 
@@ -49,13 +49,13 @@ func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 }
 
 // getDirectorySuggestions returns directory path suggestions with git repositories
-func getDirectorySuggestions(query string) []client.Suggestion {
+func getDirectorySuggestions(query string) []api.Suggestion {
 	// Expand ~ to home directory for searching
 	searchPath := query
 	if strings.HasPrefix(query, "~") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return []client.Suggestion{}
+			return []api.Suggestion{}
 		}
 		// Remove ~ and any leading / or \ after it
 		remainder := strings.TrimPrefix(query, "~")
@@ -84,17 +84,17 @@ func getDirectorySuggestions(query string) []client.Suggestion {
 
 		// Verify the search directory exists
 		if info, err := os.Stat(searchDir); err != nil || !info.IsDir() {
-			return []client.Suggestion{}
+			return []api.Suggestion{}
 		}
 	}
 
 	// Read directory entries
 	entries, err := os.ReadDir(searchDir)
 	if err != nil {
-		return []client.Suggestion{}
+		return []api.Suggestion{}
 	}
 
-	suggestions := []client.Suggestion{}
+	suggestions := []api.Suggestion{}
 	for _, entry := range entries {
 		// Skip non-directories and hidden directories (except if user explicitly typed them)
 		if !entry.IsDir() {
@@ -133,11 +133,11 @@ func getDirectorySuggestions(query string) []client.Suggestion {
 			displayPath = "~" + strings.TrimPrefix(fullPath, homeDir)
 		}
 
-		suggestions = append(suggestions, client.Suggestion{
+		suggestions = append(suggestions, api.Suggestion{
 			Value:          displayPath,
 			Type:           "path",
 			Valid:          valid,
-			Classification: classification,
+			Classification: &classification,
 		})
 	}
 

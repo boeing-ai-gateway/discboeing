@@ -1,0 +1,11 @@
+package: client
+generate:
+  models: true
+  client: true
+output: client.gen.go
+output-options:
+  skip-prune: true
+  name-normalizer: ToCamelCaseWithInitialisms
+  additional-initialisms:
+    - VZ
+  resolve-type-name-collisions: true

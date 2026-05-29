@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/middleware"
@@ -60,7 +61,7 @@ func seedWorkspace(t *testing.T, s *store.Store) {
 	}
 }
 
-// parseMessages unmarshals a JSON array string into []json.RawMessage for use in ChatRequest.Messages.
+// parseMessages unmarshals a JSON array string into []json.RawMessage for use in api.ChatRequest.Messages.
 func parseMessages(t *testing.T, s string) []json.RawMessage {
 	t.Helper()
 	var msgs []json.RawMessage
@@ -134,7 +135,7 @@ func newChatTestHandler(t *testing.T, s *store.Store, provider *mocksandbox.Prov
 }
 
 // makeChatRequest builds an http.Request for the Chat endpoint with the project ID set in context.
-func makeChatRequest(ctx context.Context, t *testing.T, sessionID, threadID string, req ChatRequest) *http.Request {
+func makeChatRequest(ctx context.Context, t *testing.T, sessionID, threadID string, req api.ChatRequest) *http.Request {
 	t.Helper()
 	if threadID == "" {
 		threadID = sessionID
@@ -165,7 +166,7 @@ func TestChat_GetSessionByID_UnexpectedError(t *testing.T) {
 	}
 	sqlDB.Close()
 
-	req := makeChatRequest(context.Background(), t, "session-123", "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, "session-123", "", api.ChatRequest{
 		Messages:    parseMessages(t, `[{"role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 		WorkspaceID: "test-workspace",
 	})
@@ -193,7 +194,7 @@ func TestChat_EmptyMessages_CreatesSessionWithoutSendingToSandbox(t *testing.T) 
 
 	h := newChatTestHandler(t, s, provider)
 
-	req := makeChatRequest(context.Background(), t, "session-empty-create", "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, "session-empty-create", "", api.ChatRequest{
 		Messages:    []json.RawMessage{},
 		WorkspaceID: "test-workspace",
 	})
@@ -204,21 +205,21 @@ func TestChat_EmptyMessages_CreatesSessionWithoutSendingToSandbox(t *testing.T) 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d; body: %s", http.StatusOK, w.Code, w.Body.String())
 	}
-	var response ChatResponse
+	var response api.ChatResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionID != "session-empty-create" {
-		t.Fatalf("expected session ID in response, got %q", response.SessionID)
+	if response.SessionId != "session-empty-create" {
+		t.Fatalf("expected session ID in response, got %q", response.SessionId)
 	}
-	if response.WorkspaceID != "test-workspace" {
-		t.Fatalf("expected workspace ID in response, got %q", response.WorkspaceID)
+	if response.WorkspaceId != "test-workspace" {
+		t.Fatalf("expected workspace ID in response, got %q", response.WorkspaceId)
 	}
-	if response.ThreadID != "session-empty-create" {
-		t.Fatalf("expected default thread ID to match session ID, got %q", response.ThreadID)
+	if response.ThreadId != "session-empty-create" {
+		t.Fatalf("expected default thread ID to match session ID, got %q", response.ThreadId)
 	}
-	if response.MessageID != "" {
-		t.Fatalf("expected empty message ID for empty submission, got %q", response.MessageID)
+	if stringValue(response.MessageId) != "" {
+		t.Fatalf("expected empty message ID for empty submission, got %q", stringValue(response.MessageId))
 	}
 	if getCalled {
 		t.Fatal("sandbox should not be contacted for empty chat submissions")
@@ -294,7 +295,7 @@ func TestChat_ClientDisconnect_DoesNotCancelSandbox(t *testing.T) {
 	h := newChatTestHandler(t, s, provider)
 
 	reqCtx, cancelReq := context.WithCancel(context.Background())
-	req := makeChatRequest(reqCtx, t, sessionID, "", ChatRequest{
+	req := makeChatRequest(reqCtx, t, sessionID, "", api.ChatRequest{
 		Messages: parseMessages(t, `[{"role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -358,7 +359,7 @@ func TestChat_StartsCompletion_StatusBecomesRunning(t *testing.T) {
 
 	h := newChatTestHandler(t, s, provider)
 
-	req := makeChatRequest(context.Background(), t, sessionID, "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, sessionID, "", api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-1","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -369,21 +370,21 @@ func TestChat_StartsCompletion_StatusBecomesRunning(t *testing.T) {
 		t.Fatalf("expected status 200, got %d; body: %s", w.Code, w.Body.String())
 	}
 
-	var response ChatResponse
+	var response api.ChatResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionID != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
+	if response.SessionId != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
 	}
-	if response.ThreadID != sessionID {
-		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadID)
+	if response.ThreadId != sessionID {
+		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadId)
 	}
-	if response.WorkspaceID != "test-workspace" {
-		t.Fatalf("expected workspace ID %q, got %q", "test-workspace", response.WorkspaceID)
+	if response.WorkspaceId != "test-workspace" {
+		t.Fatalf("expected workspace ID %q, got %q", "test-workspace", response.WorkspaceId)
 	}
-	if response.MessageID != "msg-1" {
-		t.Fatalf("expected message ID %q, got %q", "msg-1", response.MessageID)
+	if stringValue(response.MessageId) != "msg-1" {
+		t.Fatalf("expected message ID %q, got %q", "msg-1", stringValue(response.MessageId))
 	}
 
 	session, err := s.GetSessionByID(context.Background(), sessionID)
@@ -432,7 +433,7 @@ func TestChat_PersistsChatStartErrorsOnTheSession(t *testing.T) {
 	})
 
 	h := newChatTestHandler(t, s, provider)
-	req := makeChatRequest(context.Background(), t, sessionID, "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, sessionID, "", api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-error","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -524,7 +525,7 @@ func TestChat_ClearsPersistedChatStartErrorsAfterSuccessfulRetry(t *testing.T) {
 	})
 
 	h := newChatTestHandler(t, s, provider)
-	req := makeChatRequest(context.Background(), t, sessionID, "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, sessionID, "", api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-retry","role":"user","parts":[{"type":"text","text":"retry"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -585,7 +586,7 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 	})
 
 	h := newChatTestHandler(t, s, provider)
-	chatReq := ChatRequest{
+	chatReq := api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-retry-persisted","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	}
 
@@ -601,17 +602,17 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 		t.Fatalf("expected retry status %d, got %d; body: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var response ChatResponse
+	var response api.ChatResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SubmissionID == "" {
+	if stringValue(response.SubmissionId) == "" {
 		t.Fatal("expected submission ID in response")
 	}
-	if response.CompletionID != "completion-1" {
-		t.Fatalf("expected completion ID %q, got %q", "completion-1", response.CompletionID)
+	if stringValue(response.CompletionId) != "completion-1" {
+		t.Fatalf("expected completion ID %q, got %q", "completion-1", stringValue(response.CompletionId))
 	}
-	submission, err := s.GetPromptSubmissionByID(context.Background(), response.SubmissionID)
+	submission, err := s.GetPromptSubmissionByID(context.Background(), stringValue(response.SubmissionId))
 	if err != nil {
 		t.Fatalf("expected prompt submission to exist: %v", err)
 	}
@@ -623,7 +624,7 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 	}
 }
 
-func TestChat_UsesExplicitThreadID(t *testing.T) {
+func TestChat_UsesExplicitThreadId(t *testing.T) {
 	s := setupChatTestStore(t)
 	provider := mocksandbox.NewProvider()
 	sessionID := "session-explicit-thread"
@@ -665,7 +666,7 @@ func TestChat_UsesExplicitThreadID(t *testing.T) {
 	})
 
 	h := newChatTestHandler(t, s, provider)
-	req := makeChatRequest(context.Background(), t, sessionID, threadID, ChatRequest{
+	req := makeChatRequest(context.Background(), t, sessionID, threadID, api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-thread","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -675,15 +676,15 @@ func TestChat_UsesExplicitThreadID(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d; body: %s", w.Code, w.Body.String())
 	}
-	var response ChatResponse
+	var response api.ChatResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionID != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
+	if response.SessionId != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
 	}
-	if response.ThreadID != threadID {
-		t.Fatalf("expected thread ID %q, got %q", threadID, response.ThreadID)
+	if response.ThreadId != threadID {
+		t.Fatalf("expected thread ID %q, got %q", threadID, response.ThreadId)
 	}
 
 	select {
@@ -720,7 +721,7 @@ func TestChat_ReturnsJSONResponse(t *testing.T) {
 
 	h := newChatTestHandler(t, s, provider)
 
-	req := makeChatRequest(context.Background(), t, sessionID, "", ChatRequest{
+	req := makeChatRequest(context.Background(), t, sessionID, "", api.ChatRequest{
 		Messages: parseMessages(t, `[{"id":"msg-json","role":"user","parts":[{"type":"text","text":"hello"}]}]`),
 	})
 	w := httptest.NewRecorder()
@@ -731,18 +732,18 @@ func TestChat_ReturnsJSONResponse(t *testing.T) {
 		t.Fatalf("expected status 200, got %d; body: %s", w.Code, w.Body.String())
 	}
 
-	var response ChatResponse
+	var response api.ChatResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionID != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
+	if response.SessionId != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
 	}
-	if response.ThreadID != sessionID {
-		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadID)
+	if response.ThreadId != sessionID {
+		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadId)
 	}
-	if response.MessageID != "msg-json" {
-		t.Fatalf("expected message ID %q, got %q", "msg-json", response.MessageID)
+	if stringValue(response.MessageId) != "msg-json" {
+		t.Fatalf("expected message ID %q, got %q", "msg-json", stringValue(response.MessageId))
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte("data: [DONE]")) {
 		t.Fatalf("expected JSON response instead of SSE body, got: %s", w.Body.String())

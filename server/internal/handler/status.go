@@ -5,20 +5,25 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/startup"
 	"github.com/obot-platform/discobot/server/internal/version"
 )
 
 // GetServerConfig returns public server configuration
 func (h *Handler) GetServerConfig(w http.ResponseWriter, _ *http.Request) {
-	h.JSON(w, http.StatusOK, client.ServerConfig{
-		SSHPort:       h.cfg.SSHPort,
-		HTTPPort:      h.cfg.Port,
-		HTTPSPort:     h.cfg.HTTPSPort,
-		HTTPSTLSMode:  h.cfg.HTTPSTLSMode,
-		PublicBaseURL: h.cfg.PublicBaseURL(),
-	})
+	response := api.ServerConfig{
+		SshPort:       h.cfg.SSHPort,
+		HttpPort:      h.cfg.Port,
+		PublicBaseUrl: h.cfg.PublicBaseURL(),
+	}
+	if h.cfg.HTTPSPort != 0 {
+		response.HttpsPort = &h.cfg.HTTPSPort
+	}
+	if h.cfg.HTTPSTLSMode != "" {
+		response.HttpsTlsMode = &h.cfg.HTTPSTLSMode
+	}
+	h.JSON(w, http.StatusOK, response)
 }
 
 // GetSystemStatus checks system requirements and returns status (including startup tasks)
@@ -36,43 +41,51 @@ func (h *Handler) GetSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	// Fallback if system manager is not available
-	h.JSON(w, http.StatusOK, client.SystemStatusResponse{
-		OK:       true,
-		Messages: []client.StatusMessage{},
+	h.JSON(w, http.StatusOK, api.SystemStatusResponse{
+		Ok:       true,
+		Messages: []api.StatusMessage{},
 	})
 }
 
-func mapSystemStatus(status startup.SystemStatusResponse) client.SystemStatusResponse {
-	out := client.SystemStatusResponse{
-		OK:       status.OK,
-		Messages: make([]client.StatusMessage, 0, len(status.Messages)),
+func mapSystemStatus(status startup.SystemStatusResponse) api.SystemStatusResponse {
+	out := api.SystemStatusResponse{
+		Ok:       status.OK,
+		Messages: make([]api.StatusMessage, 0, len(status.Messages)),
 	}
 	for _, message := range status.Messages {
-		out.Messages = append(out.Messages, client.StatusMessage{
-			ID:      message.ID,
-			Level:   client.StatusMessageLevel(message.Level),
+		out.Messages = append(out.Messages, api.StatusMessage{
+			Id:      message.ID,
+			Level:   api.StatusMessageLevel(message.Level),
 			Title:   message.Title,
 			Message: message.Message,
 		})
 	}
 	if len(status.StartupTasks) > 0 {
-		out.StartupTasks = make([]*client.StartupTask, 0, len(status.StartupTasks))
+		startupTasks := make([]api.StartupTask, 0, len(status.StartupTasks))
 		for _, task := range status.StartupTasks {
 			if task == nil {
 				continue
 			}
-			out.StartupTasks = append(out.StartupTasks, &client.StartupTask{
-				ID:               task.ID,
-				Name:             task.Name,
-				State:            string(task.State),
-				Progress:         task.Progress,
-				CurrentOperation: task.CurrentOperation,
-				BytesDownloaded:  task.BytesDownloaded,
-				TotalBytes:       task.TotalBytes,
-				Error:            task.Error,
-				StartedAt:        task.StartedAt,
-				CompletedAt:      task.CompletedAt,
-			})
+			startupTask := api.StartupTask{
+				Id:              task.ID,
+				Name:            task.Name,
+				State:           string(task.State),
+				Progress:        task.Progress,
+				BytesDownloaded: task.BytesDownloaded,
+				TotalBytes:      task.TotalBytes,
+				StartedAt:       task.StartedAt,
+				CompletedAt:     task.CompletedAt,
+			}
+			if task.CurrentOperation != "" {
+				startupTask.CurrentOperation = &task.CurrentOperation
+			}
+			if task.Error != "" {
+				startupTask.Error = &task.Error
+			}
+			startupTasks = append(startupTasks, startupTask)
+		}
+		if len(startupTasks) > 0 {
+			out.StartupTasks = &startupTasks
 		}
 	}
 	return out
@@ -81,11 +94,11 @@ func mapSystemStatus(status startup.SystemStatusResponse) client.SystemStatusRes
 // GetSupportInfo returns comprehensive diagnostic information for debugging
 func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 	// Get runtime info
-	runtimeInfo := client.RuntimeInfo{
-		OS:           runtime.GOOS,
+	runtimeInfo := api.RuntimeInfo{
+		Os:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
 		GoVersion:    runtime.Version(),
-		NumCPU:       runtime.NumCPU(),
+		NumCpu:       runtime.NumCPU(),
 		NumGoroutine: runtime.NumGoroutine(),
 	}
 
@@ -95,34 +108,48 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		availableProviders = h.sandboxService.ListProviderNames()
 	}
 
-	configInfo := client.ConfigInfo{
+	configInfo := api.ConfigInfo{
 		Port:               h.cfg.Port,
-		HTTPSPort:          h.cfg.HTTPSPort,
-		HTTPSTLSMode:       h.cfg.HTTPSTLSMode,
 		DatabaseDriver:     h.cfg.DatabaseDriver,
 		AuthEnabled:        h.cfg.AuthEnabled,
 		WorkspaceDir:       h.cfg.WorkspaceDir,
 		SandboxImage:       h.cfg.SandboxImage,
-		SandboxImageRemote: h.cfg.SandboxImageRemote,
 		DesktopMode:        h.cfg.DesktopMode,
-		DesktopRuntime:     h.cfg.DesktopRuntime,
-		SSHEnabled:         h.cfg.SSHEnabled,
-		SSHPort:            h.cfg.SSHPort,
+		SshEnabled:         h.cfg.SSHEnabled,
+		SshPort:            h.cfg.SSHPort,
 		DispatcherEnabled:  h.cfg.DispatcherEnabled,
 		AvailableProviders: availableProviders,
+	}
+	if h.cfg.HTTPSPort != 0 {
+		configInfo.HttpsPort = &h.cfg.HTTPSPort
+	}
+	if h.cfg.HTTPSTLSMode != "" {
+		configInfo.HttpsTlsMode = &h.cfg.HTTPSTLSMode
+	}
+	if h.cfg.SandboxImageRemote != "" {
+		configInfo.SandboxImageRemote = &h.cfg.SandboxImageRemote
+	}
+	if h.cfg.DesktopRuntime != "" {
+		configInfo.DesktopRuntime = &h.cfg.DesktopRuntime
 	}
 
 	// Add VZ info if on macOS
 	if runtime.GOOS == "darwin" {
-		vzInfo := &client.VZInfo{
-			ImageRef:     h.cfg.VZImageRef,
-			DataDir:      h.cfg.VZDataDir,
-			CPUCount:     h.cfg.VZCPUCount,
-			MemoryMB:     h.cfg.VZMemoryMB,
-			DataDiskGB:   h.cfg.VZDataDiskGB,
-			KernelPath:   h.cfg.VZKernelPath,
-			InitrdPath:   h.cfg.VZInitrdPath,
-			BaseDiskPath: h.cfg.VZBaseDiskPath,
+		vzInfo := &api.VZInfo{
+			ImageRef:   h.cfg.VZImageRef,
+			DataDir:    h.cfg.VZDataDir,
+			CpuCount:   h.cfg.VZCPUCount,
+			MemoryMb:   h.cfg.VZMemoryMB,
+			DataDiskGb: h.cfg.VZDataDiskGB,
+		}
+		if h.cfg.VZKernelPath != "" {
+			vzInfo.KernelPath = &h.cfg.VZKernelPath
+		}
+		if h.cfg.VZInitrdPath != "" {
+			vzInfo.InitrdPath = &h.cfg.VZInitrdPath
+		}
+		if h.cfg.VZBaseDiskPath != "" {
+			vzInfo.BaseDiskPath = &h.cfg.VZBaseDiskPath
 		}
 
 		// Get disk usage for VZ data directory
@@ -131,9 +158,11 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		}
 
 		// Scan for data disk files
-		vzInfo.DataDisks = getDataDiskFiles(h.cfg.VZDataDir)
+		if dataDisks := getDataDiskFiles(h.cfg.VZDataDir); len(dataDisks) > 0 {
+			vzInfo.DataDisks = &dataDisks
+		}
 
-		configInfo.VZ = vzInfo
+		configInfo.Vz = vzInfo
 	}
 
 	// Read server log file
@@ -147,7 +176,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	// Get system status from system manager
-	systemStatus := client.SystemStatusResponse{}
+	systemStatus := api.SystemStatusResponse{}
 	if h.sandboxService != nil {
 		h.sandboxService.RefreshProviderStatuses()
 	}
@@ -155,7 +184,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		systemStatus = mapSystemStatus(h.systemManager.GetSystemStatus())
 	}
 
-	response := client.SupportInfoResponse{
+	response := api.SupportInfoResponse{
 		Version:    version.Get(),
 		Runtime:    runtimeInfo,
 		Config:     configInfo,

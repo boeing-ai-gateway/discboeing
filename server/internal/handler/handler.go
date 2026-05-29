@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/conntrack"
 	"github.com/obot-platform/discobot/server/internal/events"
@@ -162,7 +163,7 @@ func (h *Handler) JSON(w http.ResponseWriter, status int, data any) {
 
 // Error helper to write error responses
 func (h *Handler) Error(w http.ResponseWriter, status int, message string) {
-	h.JSON(w, status, map[string]string{"error": message})
+	h.JSON(w, status, api.ErrorResponse{Error: message})
 }
 
 // DecodeJSON helper to decode request body

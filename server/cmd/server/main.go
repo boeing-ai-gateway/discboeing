@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/conntrack"
 	"github.com/obot-platform/discobot/server/internal/database"
@@ -457,7 +458,8 @@ func main() {
 		Method: "GET", Pattern: "/health",
 		Handler: func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			data, _ := json.Marshal(api.HealthResponse{Status: "ok"})
+			_, _ = w.Write(data)
 		},
 		Meta: routes.Meta{Group: "Health", Description: "Health check"},
 	})

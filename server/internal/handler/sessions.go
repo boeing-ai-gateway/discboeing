@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -263,18 +263,18 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	projectID := middleware.GetProjectID(ctx)
 
-	var req client.CreateSessionRequest
+	var req api.CreateSessionRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.ID == "" {
+	if req.Id == "" {
 		h.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
-	req.ProviderID = strings.TrimSpace(req.ProviderID)
-	if err := h.sandboxService.ValidateSandboxProviderID(ctx, projectID, req.ProviderID); err != nil {
+	providerID := strings.TrimSpace(stringValue(req.ProviderId))
+	if err := h.sandboxService.ValidateSandboxProviderID(ctx, projectID, providerID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			h.Error(w, http.StatusBadRequest, "Sandbox provider not found")
 			return
@@ -283,17 +283,17 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID, err := h.resolveWorkspaceIDForNewSession(ctx, projectID, req.WorkspaceID)
+	workspaceID, err := h.resolveWorkspaceIDForNewSession(ctx, projectID, stringValue(req.WorkspaceId))
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	sessionID, err := h.chatService.NewSession(ctx, service.NewSessionRequest{
-		SessionID:   req.ID,
+		SessionID:   req.Id,
 		ProjectID:   projectID,
 		WorkspaceID: workspaceID,
-		ProviderID:  req.ProviderID,
+		ProviderID:  providerID,
 		UserID:      middleware.GetUserID(ctx),
 		Messages:    nil,
 	})

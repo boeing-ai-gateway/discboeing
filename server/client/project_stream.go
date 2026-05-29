@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -317,19 +319,40 @@ type unknownProjectStreamSocketMessage struct {
 
 func (unknownProjectStreamSocketMessage) projectStreamSocketMessageType() string { return "unknown" }
 
+// WebSocketURL resolves a server websocket path against the client's base URL.
+func (c *Client) WebSocketURL(path string) string {
+	u, err := url.Parse(c.Server)
+	if err != nil {
+		return path
+	}
+	switch u.Scheme {
+	case "https":
+		u.Scheme = "wss"
+	default:
+		u.Scheme = "ws"
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.TrimLeft(path, "/")
+	u.RawQuery = ""
+	return u.String()
+}
+
+func projectPath(projectID, suffix string) string {
+	return "/api/projects/" + url.PathEscape(projectID) + suffix
+}
+
 // WatchProjectStream subscribes to project websocket streams and returns typed
 // events until ctx is canceled, the websocket closes, or an unrecoverable error
 // occurs. Transport and server errors are delivered as ProjectStreamErrorEvent.
-func (s *EventsService) WatchProjectStream(ctx context.Context, projectID string, opts ProjectStreamOptions) <-chan ProjectStreamEvent {
+func (c *Client) WatchProjectStream(ctx context.Context, projectID string, opts ProjectStreamOptions) <-chan ProjectStreamEvent {
 	ch := make(chan ProjectStreamEvent)
-	go s.watchProjectStream(ctx, projectID, opts, ch)
+	go c.watchProjectStream(ctx, projectID, opts, ch)
 	return ch
 }
 
-func (s *EventsService) watchProjectStream(ctx context.Context, projectID string, opts ProjectStreamOptions, ch chan<- ProjectStreamEvent) {
+func (c *Client) watchProjectStream(ctx context.Context, projectID string, opts ProjectStreamOptions, ch chan<- ProjectStreamEvent) {
 	defer close(ch)
 
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, s.client.WebSocketURL(projectPath(projectID, "/ws")), nil)
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, c.WebSocketURL(projectPath(projectID, "/ws")), nil)
 	if err != nil {
 		sendProjectStreamEvent(ctx, ch, ProjectStreamErrorEvent{Error: err.Error()})
 		return

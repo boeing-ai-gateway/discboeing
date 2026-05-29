@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	clientpkg "github.com/obot-platform/discobot/server/client"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
@@ -231,7 +232,7 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 	}()
 
 	// Read the output message.
-	var msg TerminalMessage
+	var msg clientpkg.TerminalMessage
 	if err := client.ReadJSON(&msg); err != nil {
 		t.Fatalf("ReadJSON: %v", err)
 	}
@@ -239,7 +240,7 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 		t.Errorf("want type=output, got %s", msg.Type)
 	}
 	var output string
-	if err := json.Unmarshal(msg.Data, &output); err != nil {
+	if err := unmarshalTerminalMessageData(msg.Data, &output); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 	if !strings.Contains(output, "hello from shell") {
@@ -247,7 +248,7 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 	}
 
 	// Send input.
-	inputMsg := TerminalMessage{Type: "input", Data: json.RawMessage(`"ls\n"`)}
+	inputMsg := clientpkg.TerminalMessage{Type: "input", Data: json.RawMessage(`"ls\n"`)}
 	if err := client.WriteJSON(inputMsg); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -365,13 +366,13 @@ func TestHandleTerminalSession_HalfClose_ClientStopsWriting(t *testing.T) {
 	outputReceived := make(chan string, 10)
 	go func() {
 		for {
-			var msg TerminalMessage
+			var msg clientpkg.TerminalMessage
 			if err := client.ReadJSON(&msg); err != nil {
 				return
 			}
 			if msg.Type == "output" {
 				var output string
-				json.Unmarshal(msg.Data, &output)
+				_ = unmarshalTerminalMessageData(msg.Data, &output)
 				outputReceived <- output
 			}
 		}
@@ -453,7 +454,7 @@ func TestTerminalWebSocket_PTYExitsCleanly(t *testing.T) {
 	defer ws.Close()
 
 	// Read output
-	var msg TerminalMessage
+	var msg clientpkg.TerminalMessage
 	if err := ws.ReadJSON(&msg); err != nil {
 		t.Fatalf("Failed to read: %v", err)
 	}
@@ -509,11 +510,11 @@ func TestTerminalWebSocket_PTYWriteError(t *testing.T) {
 	defer ws.Close()
 
 	// Read initial output
-	var msg TerminalMessage
+	var msg clientpkg.TerminalMessage
 	ws.ReadJSON(&msg)
 
 	// Try to send input (should fail to write to PTY)
-	inputMsg := TerminalMessage{
+	inputMsg := clientpkg.TerminalMessage{
 		Type: "input",
 		Data: json.RawMessage(`"test input\n"`),
 	}
@@ -568,7 +569,7 @@ func TestTerminalWebSocket_PTYReadError(t *testing.T) {
 	defer ws.Close()
 
 	// Read initial output
-	var msg TerminalMessage
+	var msg clientpkg.TerminalMessage
 	ws.ReadJSON(&msg)
 
 	// Connection should close due to error
@@ -626,12 +627,12 @@ func TestTerminalWebSocket_ResizeOperations(t *testing.T) {
 	defer ws.Close()
 
 	// Read initial output
-	var msg TerminalMessage
+	var msg clientpkg.TerminalMessage
 	ws.ReadJSON(&msg)
 
 	// Send resize message
-	resizeData, _ := json.Marshal(ResizeData{Rows: 40, Cols: 120})
-	resizeMsg := TerminalMessage{
+	resizeData, _ := json.Marshal(clientpkg.ResizeData{Rows: 40, Cols: 120})
+	resizeMsg := clientpkg.TerminalMessage{
 		Type: "resize",
 		Data: json.RawMessage(resizeData),
 	}
@@ -700,14 +701,14 @@ func TestTerminalWebSocket_OutputDraining(t *testing.T) {
 	ws.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 	for {
-		var msg TerminalMessage
+		var msg clientpkg.TerminalMessage
 		if err := ws.ReadJSON(&msg); err != nil {
 			break
 		}
 
 		if msg.Type == "output" {
 			var output string
-			json.Unmarshal(msg.Data, &output)
+			_ = unmarshalTerminalMessageData(msg.Data, &output)
 			receivedChunks = append(receivedChunks, output)
 		}
 	}
@@ -764,7 +765,7 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 
 	wg.Go(func() {
 		for i := range 10 {
-			inputMsg := TerminalMessage{
+			inputMsg := clientpkg.TerminalMessage{
 				Type: "input",
 				Data: json.RawMessage(fmt.Sprintf(`"input %d\n"`, i)),
 			}
@@ -777,7 +778,7 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 	wg.Go(func() {
 		ws.SetReadDeadline(time.Now().Add(5 * time.Second))
 		for {
-			var msg TerminalMessage
+			var msg clientpkg.TerminalMessage
 			if err := ws.ReadJSON(&msg); err != nil {
 				break
 			}

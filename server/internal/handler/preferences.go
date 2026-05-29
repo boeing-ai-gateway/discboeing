@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/service"
 	"github.com/obot-platform/discobot/server/internal/store"
@@ -25,7 +26,7 @@ func (h *Handler) ListPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]any{"preferences": prefs})
+	h.JSON(w, http.StatusOK, api.PreferencesResponse{Preferences: preferenceResponses(prefs)})
 }
 
 // GetPreference returns a single preference by key
@@ -52,7 +53,7 @@ func (h *Handler) GetPreference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, pref)
+	h.JSON(w, http.StatusOK, preferenceResponse(pref))
 }
 
 // SetPreference creates or updates a preference
@@ -69,9 +70,7 @@ func (h *Handler) SetPreference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Value string `json:"value"`
-	}
+	var req api.SetPreferenceRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -83,7 +82,7 @@ func (h *Handler) SetPreference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, pref)
+	h.JSON(w, http.StatusOK, preferenceResponse(pref))
 }
 
 // SetPreferences sets multiple preferences at once
@@ -94,9 +93,7 @@ func (h *Handler) SetPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Preferences map[string]string `json:"preferences"`
-	}
+	var req api.SetPreferencesRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -112,7 +109,7 @@ func (h *Handler) SetPreferences(w http.ResponseWriter, r *http.Request) {
 		prefs = append(prefs, pref)
 	}
 
-	h.JSON(w, http.StatusOK, map[string]any{"preferences": prefs})
+	h.JSON(w, http.StatusOK, api.PreferencesResponse{Preferences: preferenceResponses(prefs)})
 }
 
 // DeletePreference deletes a preference by key
@@ -138,5 +135,24 @@ func (h *Handler) DeletePreference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	h.JSON(w, http.StatusOK, api.MessageResponse{Success: new(true)})
+}
+
+func preferenceResponse(pref *service.UserPreference) api.PreferenceResponse {
+	resp := api.PreferenceResponse{
+		Key:   pref.Key,
+		Value: pref.Value,
+	}
+	if pref.UpdatedAt != "" {
+		resp.UpdatedAt = &pref.UpdatedAt
+	}
+	return resp
+}
+
+func preferenceResponses(prefs []*service.UserPreference) []api.PreferenceResponse {
+	responses := make([]api.PreferenceResponse, 0, len(prefs))
+	for _, pref := range prefs {
+		responses = append(responses, preferenceResponse(pref))
+	}
+	return responses
 }

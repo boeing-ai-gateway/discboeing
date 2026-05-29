@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
@@ -41,7 +41,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	projectID := middleware.GetProjectID(ctx)
 
 	// Parse request
-	var req client.ChatRequest
+	var req api.ChatRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -119,11 +119,12 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response := client.ChatResponse{
-		WorkspaceID: sessionWorkspaceID,
-		SessionID:   sessionID,
-		ThreadID:    threadID,
-		MessageID:   lastUserMessageID(req.Messages),
+	messageID := lastUserMessageID(req.Messages)
+	response := api.ChatResponse{
+		WorkspaceId: sessionWorkspaceID,
+		SessionId:   sessionID,
+		ThreadId:    threadID,
+		MessageId:   &messageID,
 	}
 
 	if emptySubmission {
@@ -168,11 +169,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Chat] Failed to clear chat start error for session %s: %v", sessionID, err)
 	}
 	if submission != nil {
-		response.SubmissionID = submission.ID
+		response.SubmissionId = &submission.ID
 	}
-	response.CompletionID = started.CompletionID
-	response.Status = started.Status
-	response.QueuedPromptID = started.QueuedPromptID
+	response.CompletionId = &started.CompletionID
+	response.Status = &started.Status
+	response.QueuedPromptId = &started.QueuedPromptID
 
 	h.JSON(w, http.StatusOK, response)
 }

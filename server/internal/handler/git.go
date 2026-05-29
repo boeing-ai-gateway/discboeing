@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/git"
 )
 
@@ -46,7 +47,7 @@ func (h *Handler) FetchWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	h.JSON(w, http.StatusOK, api.MessageResponse{Success: new(true)})
 }
 
 // CheckoutWorkspace checks out a specific ref in a workspace
@@ -58,9 +59,7 @@ func (h *Handler) CheckoutWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	workspaceID := chi.URLParam(r, "workspaceId")
 
-	var req struct {
-		Ref string `json:"ref"`
-	}
+	var req api.GitCheckoutRequest
 	if err := h.DecodeJSON(r, &req); err != nil || req.Ref == "" {
 		h.Error(w, http.StatusBadRequest, "ref is required")
 		return
@@ -71,7 +70,7 @@ func (h *Handler) CheckoutWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	h.JSON(w, http.StatusOK, api.MessageResponse{Success: new(true)})
 }
 
 // GetWorkspaceBranches returns all branches for a workspace
@@ -202,10 +201,7 @@ func (h *Handler) WriteWorkspaceFile(w http.ResponseWriter, r *http.Request) {
 
 	workspaceID := chi.URLParam(r, "workspaceId")
 
-	var req struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
-	}
+	var req api.WriteFileRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -227,7 +223,7 @@ func (h *Handler) WriteWorkspaceFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	h.JSON(w, http.StatusOK, api.MessageResponse{Success: new(true)})
 }
 
 // StageWorkspaceFiles stages files for commit
@@ -239,16 +235,15 @@ func (h *Handler) StageWorkspaceFiles(w http.ResponseWriter, r *http.Request) {
 
 	workspaceID := chi.URLParam(r, "workspaceId")
 
-	var req struct {
-		Paths []string `json:"paths"`
-	}
+	var req api.GitStageRequest
 	if err := h.DecodeJSON(r, &req); err != nil {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if len(req.Paths) == 0 {
-		req.Paths = []string{"."} // Stage all by default
+	paths := []string{"."}
+	if req.Paths != nil && len(*req.Paths) > 0 {
+		paths = *req.Paths
 	}
 
 	// Ensure the workspace repo is set up
@@ -257,12 +252,12 @@ func (h *Handler) StageWorkspaceFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.gitService.Stage(r.Context(), workspaceID, req.Paths); err != nil {
+	if err := h.gitService.Stage(r.Context(), workspaceID, paths); err != nil {
 		h.Error(w, http.StatusInternalServerError, "Failed to stage files: "+err.Error())
 		return
 	}
 
-	h.JSON(w, http.StatusOK, map[string]bool{"success": true})
+	h.JSON(w, http.StatusOK, api.MessageResponse{Success: new(true)})
 }
 
 // CommitWorkspace creates a commit in a workspace

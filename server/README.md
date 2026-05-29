@@ -125,6 +125,22 @@ This builds `ui/build`, copies it into `server/static/ui/dist`, and then compile
 
 If you only run `go build` directly inside `server/`, the binary will not include the freshly built SPA assets.
 
+## API Contract
+
+The server HTTP API is described by `server/api/openapi.json`. Generated Go
+model types live in `server/api/types.gen.go` and are produced with
+oapi-codegen:
+
+```bash
+cd server
+go generate ./api
+```
+
+`server/api/types_validation_test.go` compares the generated model wire shapes
+against the existing public DTOs in `server/client/types.go`. Keep the schema,
+generated models, and validation test in sync when changing request or response
+payloads.
+
 ## API Endpoints
 
 ### Projects

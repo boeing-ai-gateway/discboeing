@@ -3,25 +3,37 @@ package handler
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/server/client"
+	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/providers"
 	"github.com/obot-platform/discobot/server/internal/service"
 )
 
 // toModelInfos converts service models to API response models.
-func toModelInfos(models []service.Model) []client.ModelInfo {
-	modelInfos := make([]client.ModelInfo, len(models))
+func toModelInfos(models []service.Model) []api.ModelInfo {
+	modelInfos := make([]api.ModelInfo, len(models))
 	for i, m := range models {
-		modelInfos[i] = client.ModelInfo{
-			ID:               m.ID,
-			Name:             m.Name,
-			Provider:         m.Provider,
-			Description:      m.Description,
-			Reasoning:        m.Reasoning,
-			ReasoningLevels:  m.ReasoningLevels,
-			DefaultReasoning: m.DefaultReasoning,
-			ServiceTiers:     append([]string(nil), m.ServiceTiers...),
+		modelInfos[i] = api.ModelInfo{
+			Id:       m.ID,
+			Name:     m.Name,
+			Provider: m.Provider,
+		}
+		if m.Description != "" {
+			modelInfos[i].Description = &m.Description
+		}
+		if m.Reasoning {
+			modelInfos[i].Reasoning = &m.Reasoning
+		}
+		if len(m.ReasoningLevels) > 0 {
+			reasoningLevels := append([]string(nil), m.ReasoningLevels...)
+			modelInfos[i].ReasoningLevels = &reasoningLevels
+		}
+		if m.DefaultReasoning != "" {
+			modelInfos[i].DefaultReasoning = &m.DefaultReasoning
+		}
+		if len(m.ServiceTiers) > 0 {
+			serviceTiers := append([]string(nil), m.ServiceTiers...)
+			modelInfos[i].ServiceTiers = &serviceTiers
 		}
 	}
 	return modelInfos
@@ -41,7 +53,7 @@ func (h *Handler) GetProjectModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, client.ModelsResponse{Models: toModelInfos(models)})
+	h.JSON(w, http.StatusOK, api.ModelsResponse{Models: toModelInfos(models)})
 }
 
 // GetAuthProviders returns available auth providers from models.dev data
