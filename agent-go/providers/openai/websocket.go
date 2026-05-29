@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -267,6 +268,10 @@ func messagesAfterAssistantID(msgs []message.Message, assistantRespID string) []
 // from the pool. Parallel sessions are fully independent: each follows its own
 // chain of response IDs and therefore its own connection.
 func (p *Provider) completeViaWebSocket(ctx context.Context, fullBody map[string]any, incrementalBody map[string]any, prevRespID string, yield func(message.ProviderMessageChunk, error) bool) {
+	reqLogPath, respLogPath := transport.LogFilePaths(ctx)
+	resetWebSocketLog(reqLogPath)
+	resetWebSocketLog(respLogPath)
+
 	retriesUsed := 0
 	savedConn := p.ws.checkout(prevRespID)
 
@@ -363,6 +368,13 @@ func (p *Provider) completeViaWebSocket(ctx context.Context, fullBody map[string
 	}
 }
 
+func resetWebSocketLog(path string) {
+	if path == "" {
+		return
+	}
+	_ = os.WriteFile(path, nil, 0o644)
+}
+
 func shouldRetryWebSocketAttempt(ctx context.Context, err error, retriesUsed int) bool {
 	if err == nil || retriesUsed >= wsRetryMaxRetries {
 		return false
@@ -427,6 +439,8 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 	if err != nil {
 		return webSocketAttemptResult{err: fmt.Errorf("openai: websocket marshal: %w", err)}
 	}
+	reqLogPath, _ := transport.LogFilePaths(ctx)
+	appendWebSocketLogMessage(reqLogPath, msgBytes)
 
 	if err := pc.conn.Write(ctx, websocket.MessageText, msgBytes); err != nil {
 		return webSocketAttemptResult{err: fmt.Errorf("openai: websocket write: %w", err)}
@@ -466,6 +480,19 @@ func isWebSocketRetryUnsafeChunk(chunk message.ProviderMessageChunk) bool {
 	}
 }
 
+func appendWebSocketLogMessage(path string, data []byte) {
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(data)
+	_, _ = f.Write([]byte("\n"))
+}
+
 // parseWebSocketStream reads JSON events from conn until a terminal event or
 // an error. It delegates to the shared SSE event handlers because the Responses
 // API emits identical event shapes over both transports; the only difference is
@@ -494,6 +521,8 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 			}
 			return responseID, false, nil
 		}
+		_, respLogPath := transport.LogFilePaths(ctx)
+		appendWebSocketLogMessage(respLogPath, msgBytes)
 
 		var header struct {
 			Type     string `json:"type"`

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -511,6 +512,22 @@ func TestParseWebSocketStream(t *testing.T) {
 
 func TestCompleteViaWebSocket_StreamsText(t *testing.T) {
 	var receivedReqType, receivedAuth string
+	events := []map[string]any{
+		{"type": "response.created", "response": map[string]any{"id": "resp_1", "model": "gpt-4o"}},
+		{"type": "response.content_part.added", "part": map[string]any{"type": "output_text"}, "item_id": "msg_1"},
+		{"type": "response.output_text.delta", "item_id": "msg_1", "delta": "Hello"},
+		{"type": "response.output_text.done", "item_id": "msg_1"},
+		{"type": "response.completed", "response": map[string]any{
+			"status": "completed",
+			"output": []map[string]any{{"type": "message"}},
+			"usage": map[string]any{
+				"input_tokens":          3,
+				"input_tokens_details":  map[string]any{"cached_tokens": 0},
+				"output_tokens":         1,
+				"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+			},
+		}},
+	}
 	ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
 		receivedAuth = r.Header.Get("Authorization")
 		_, data, err := conn.Read(r.Context())
@@ -522,22 +539,6 @@ func TestCompleteViaWebSocket_StreamsText(t *testing.T) {
 		json.Unmarshal(data, &req)
 		receivedReqType, _ = req["type"].(string)
 
-		events := []map[string]any{
-			{"type": "response.created", "response": map[string]any{"id": "resp_1", "model": "gpt-4o"}},
-			{"type": "response.content_part.added", "part": map[string]any{"type": "output_text"}, "item_id": "msg_1"},
-			{"type": "response.output_text.delta", "item_id": "msg_1", "delta": "Hello"},
-			{"type": "response.output_text.done", "item_id": "msg_1"},
-			{"type": "response.completed", "response": map[string]any{
-				"status": "completed",
-				"output": []map[string]any{{"type": "message"}},
-				"usage": map[string]any{
-					"input_tokens":          3,
-					"input_tokens_details":  map[string]any{"cached_tokens": 0},
-					"output_tokens":         1,
-					"output_tokens_details": map[string]any{"reasoning_tokens": 0},
-				},
-			}},
-		}
 		sendWSEvents(r.Context(), t, conn, events)
 	})
 	defer ts.Close()
@@ -553,8 +554,12 @@ func TestCompleteViaWebSocket_StreamsText(t *testing.T) {
 		Model:    providers.ModelRef{ProviderID: "openai", ModelID: "gpt-4o"},
 		Messages: []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "Hi"}}}},
 	}
+	logDir := t.TempDir()
+	reqLogPath := logDir + "/step-000-req.json"
+	respLogPath := logDir + "/step-000-resp.jsonl"
+	ctx := transport.WithLogFiles(context.Background(), reqLogPath, respLogPath)
 	var chunks []message.ProviderMessageChunk
-	for chunk, err := range p.Complete(context.Background(), req) {
+	for chunk, err := range p.Complete(ctx, req) {
 		if err != nil {
 			t.Fatalf("Complete error: %v", err)
 		}
@@ -569,6 +574,28 @@ func TestCompleteViaWebSocket_StreamsText(t *testing.T) {
 	if receivedReqType != "response.create" {
 		t.Errorf("expected request type %q, got %q", "response.create", receivedReqType)
 	}
+	reqLogLines := readJSONLines(t, reqLogPath)
+	if len(reqLogLines) != 1 {
+		t.Fatalf("expected 1 websocket request log line, got %d", len(reqLogLines))
+	}
+	var loggedReq map[string]any
+	if err := json.Unmarshal([]byte(reqLogLines[0]), &loggedReq); err != nil {
+		t.Fatalf("decode logged request: %v", err)
+	}
+	if loggedReq["type"] != "response.create" {
+		t.Fatalf("logged request type = %v, want response.create", loggedReq["type"])
+	}
+	respLogLines := readJSONLines(t, respLogPath)
+	if len(respLogLines) != len(events) {
+		t.Fatalf("expected %d websocket response log lines, got %d", len(events), len(respLogLines))
+	}
+	var loggedFirstResp map[string]any
+	if err := json.Unmarshal([]byte(respLogLines[0]), &loggedFirstResp); err != nil {
+		t.Fatalf("decode logged response: %v", err)
+	}
+	if loggedFirstResp["type"] != "response.created" {
+		t.Fatalf("logged response type = %v, want response.created", loggedFirstResp["type"])
+	}
 	assertChunkTypes(t, chunks,
 		"stream-start", "response-metadata",
 		"text-start", "text-delta", "text-end",
@@ -582,6 +609,19 @@ func TestCompleteViaWebSocket_StreamsText(t *testing.T) {
 	if pc == nil {
 		t.Error("expected connection pooled under resp_1 after successful completion")
 	}
+}
+
+func readJSONLines(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return nil
+	}
+	return strings.Split(text, "\n")
 }
 
 func TestCompleteViaWebSocket_SendsCodexAccountHeader(t *testing.T) {
@@ -1198,7 +1238,11 @@ func TestCompleteViaWebSocket_FallsBackToFullHistoryAfterStalePooledConn(t *test
 			{Role: "user", Parts: []message.Part{message.TextPart{Text: "Again"}}},
 		},
 	}
-	for _, err := range p.Complete(retryCtx, req2) {
+	logDir := t.TempDir()
+	reqLogPath := logDir + "/step-001-req.json"
+	respLogPath := logDir + "/step-001-resp.jsonl"
+	logCtx := transport.WithLogFiles(retryCtx, reqLogPath, respLogPath)
+	for _, err := range p.Complete(logCtx, req2) {
 		if err != nil {
 			secondTurnErr = err
 		}
@@ -1221,6 +1265,27 @@ func TestCompleteViaWebSocket_FallsBackToFullHistoryAfterStalePooledConn(t *test
 	}
 	if freshReqInputLen != 3 {
 		t.Errorf("fallback request should restore full non-system input history (3 items), got %d", freshReqInputLen)
+	}
+	reqLogLines := readJSONLines(t, reqLogPath)
+	if len(reqLogLines) != 2 {
+		t.Fatalf("expected stale continuation and full fallback request logs, got %d lines", len(reqLogLines))
+	}
+	var firstLoggedReq, secondLoggedReq map[string]any
+	if err := json.Unmarshal([]byte(reqLogLines[0]), &firstLoggedReq); err != nil {
+		t.Fatalf("decode first logged request: %v", err)
+	}
+	if err := json.Unmarshal([]byte(reqLogLines[1]), &secondLoggedReq); err != nil {
+		t.Fatalf("decode second logged request: %v", err)
+	}
+	if firstLoggedReq["previous_response_id"] != "resp_1" {
+		t.Fatalf("first logged request previous_response_id = %v, want resp_1", firstLoggedReq["previous_response_id"])
+	}
+	if _, ok := secondLoggedReq["previous_response_id"]; ok {
+		t.Fatalf("fallback logged request should not include previous_response_id: %v", secondLoggedReq["previous_response_id"])
+	}
+	respLogLines := readJSONLines(t, respLogPath)
+	if len(respLogLines) != len(minimalWSCompletion("resp_2")) {
+		t.Fatalf("expected fallback response log lines, got %d", len(respLogLines))
 	}
 }
 

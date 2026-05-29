@@ -52,6 +52,15 @@ func WithLogFiles(ctx context.Context, reqPath, respPath string) context.Context
 	return ctx
 }
 
+// LogFilePaths returns the request and response log paths attached to ctx by
+// WithLogFiles. It is used by non-HTTP transports that cannot rely on
+// Transport.RoundTrip to tee wire bodies.
+func LogFilePaths(ctx context.Context) (reqPath, respPath string) {
+	reqPath, _ = ctx.Value(reqPathKey).(string)
+	respPath, _ = ctx.Value(respPathKey).(string)
+	return reqPath, respPath
+}
+
 // RetryEvent describes an upcoming transport retry attempt.
 type RetryEvent struct {
 	// Attempt is 1-based (1 = first retry after initial failure).
