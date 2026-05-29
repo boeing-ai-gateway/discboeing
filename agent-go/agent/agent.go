@@ -176,6 +176,7 @@ type ThreadInfo struct {
 	ID              string
 	Name            string
 	CWD             string
+	Phase           string
 	LastMessage     string
 	ErrorMessage    string
 	Model           string
@@ -245,6 +246,7 @@ type CreateThreadRequest struct {
 	ID          string
 	Name        string
 	CWD         string
+	Phase       string
 	LastMessage string
 	Metadata    json.RawMessage
 }
@@ -252,6 +254,7 @@ type CreateThreadRequest struct {
 type UpdateThreadRequest struct {
 	Name              *string
 	CWD               *string
+	Phase             *string
 	LastMessage       *string
 	ErrorMessage      *string
 	ClearErrorMessage bool

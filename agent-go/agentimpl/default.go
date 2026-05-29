@@ -133,6 +133,21 @@ func (a *DefaultAgent) newToolContext(threadID string, maxSubagentDepth int, pro
 		toolCtx.CurrentWorkingDirectory = resolved
 		return nil
 	}
+	toolCtx.SetThreadPhase = func(phase string) error {
+		phase = strings.TrimSpace(strings.ToLower(phase))
+		if phase != "" && phase != "review" {
+			return fmt.Errorf("invalid thread phase %q", phase)
+		}
+		cfg, err := a.store.LoadConfig(threadID)
+		if err != nil {
+			return fmt.Errorf("load thread config phase: %w", err)
+		}
+		cfg.Phase = phase
+		if err := a.store.SaveConfig(threadID, cfg); err != nil {
+			return fmt.Errorf("save thread config phase: %w", err)
+		}
+		return nil
+	}
 	return toolCtx
 }
 
@@ -252,6 +267,9 @@ func (a *DefaultAgent) promptStream(
 	toolCtx.CurrentTaskID = req.ParentTaskID
 	toolCtx.ResolveTools = func(ctx context.Context) ([]providers.ToolDefinition, error) {
 		tools := resolvePromptTools(req, env.sessionCfg, env.subAgentCfg, env.currentDepth)
+		if hasReviewPhaseHooks(a.cwd) {
+			tools = appendToolIfMissing(tools, "ReadyForReview")
+		}
 		mcpMgr := a.resolveMCPManager(ctx)
 		if mcpMgr != nil {
 			tools = append(tools, mcpMgr.Tools()...)
@@ -444,6 +462,33 @@ func (a *DefaultAgent) promptStream(
 			return
 		}
 	}
+}
+
+func hasReviewPhaseHooks(cwd string) bool {
+	hooksDir := filepath.Join(cwd, agenthooks.HooksDir)
+	hooks, err := agenthooks.DiscoverHooks(hooksDir)
+	if err != nil {
+		return false
+	}
+	for _, hook := range hooks {
+		if strings.TrimSpace(strings.ToLower(hook.Phase)) == "review" {
+			return true
+		}
+	}
+	return false
+}
+
+func appendToolIfMissing(tools []providers.ToolDefinition, name string) []providers.ToolDefinition {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return tools
+		}
+	}
+	tool, ok := sessionconfig.BuiltinTool(name)
+	if !ok {
+		return tools
+	}
+	return append(tools, tool)
 }
 
 // Resume continues or finalizes an interrupted turn from persisted disk state.
@@ -2178,6 +2223,7 @@ func threadInfoToAgent(info thread.Info) agent.ThreadInfo {
 		ID:           info.ID,
 		Name:         info.Name,
 		CWD:          info.CWD,
+		Phase:        info.Phase,
 		LastMessage:  info.LastMessage,
 		ErrorMessage: info.ErrorMessage,
 		Model:        info.Model,

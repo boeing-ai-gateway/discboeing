@@ -33,6 +33,7 @@ func (h *Handler) threadResponse(info agent.ThreadInfo) api.Thread {
 		ID:           info.ID,
 		Name:         strings.TrimSpace(info.Name),
 		CWD:          strings.TrimSpace(info.CWD),
+		Phase:        strings.TrimSpace(info.Phase),
 		LastMessage:  strings.TrimSpace(info.LastMessage),
 		ErrorMessage: strings.TrimSpace(info.ErrorMessage),
 		Model:        info.Model,
@@ -410,9 +411,10 @@ func (h *Handler) CreateThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info, err := h.threadManager.CreateThread(r.Context(), agent.CreateThreadRequest{
-		ID:   req.ID,
-		Name: req.Name,
-		CWD:  req.CWD,
+		ID:    req.ID,
+		Name:  req.Name,
+		CWD:   req.CWD,
+		Phase: req.Phase,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
@@ -486,18 +488,34 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
+	if strings.TrimSpace(req.Name) == "" && req.Phase == nil {
 		h.Error(w, http.StatusBadRequest, "name is required")
 		return
 	}
 
-	name := strings.TrimSpace(req.Name)
-	info, err := h.threadManager.UpdateThread(r.Context(), threadID, agent.UpdateThreadRequest{Name: &name})
+	var update agent.UpdateThreadRequest
+	if strings.TrimSpace(req.Name) != "" {
+		name := strings.TrimSpace(req.Name)
+		update.Name = &name
+	}
+	if req.Phase != nil {
+		phase := strings.TrimSpace(*req.Phase)
+		update.Phase = &phase
+	}
+	info, err := h.threadManager.UpdateThread(r.Context(), threadID, update)
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid thread phase") {
+			h.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		h.Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
 
+	if req.Phase != nil && h.hookManager != nil {
+		h.hookManager.TriggerEvaluation(threadID)
+	}
+	h.notifyActivityChanged()
 	h.JSON(w, http.StatusOK, h.threadResponse(info))
 }
 

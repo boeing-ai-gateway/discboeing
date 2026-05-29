@@ -3,6 +3,7 @@
 package hooks
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,6 +38,7 @@ type Hook struct {
 	Name        string     `json:"name"`
 	Type        HookType   `json:"type"`
 	Description string     `json:"description,omitempty"`
+	Phase       string     `json:"phase,omitempty"`
 	Engine      HookEngine `json:"engine"`
 	Path        string     `json:"path"`
 	RunAs       string     `json:"runAs"` // "root" or "user"
@@ -53,6 +55,7 @@ type hookConfig struct {
 	Name        string
 	Type        string
 	Description string
+	Phase       string
 	Engine      string
 	AI          bool
 	RunAs       string
@@ -186,6 +189,8 @@ func parseHookFrontMatter(content string) *hookConfig {
 			cfg.Type = value
 		case "description":
 			cfg.Description = value
+		case "phase":
+			cfg.Phase = value
 		case "engine":
 			cfg.Engine = value
 		case "ai":
@@ -285,6 +290,11 @@ func DiscoverHooks(hooksDir string) ([]Hook, error) {
 			}
 		}
 
+		phase := strings.TrimSpace(strings.ToLower(cfg.Phase))
+		if phase != "" && phase != "review" {
+			return nil, fmt.Errorf("invalid hook phase %q in %s", phase, filePath)
+		}
+
 		// Must have a valid type
 		hookType := HookType(cfg.Type)
 		switch hookType {
@@ -325,6 +335,7 @@ func DiscoverHooks(hooksDir string) ([]Hook, error) {
 			Name:        name,
 			Type:        hookType,
 			Description: cfg.Description,
+			Phase:       phase,
 			Engine:      engine,
 			Path:        filePath,
 			RunAs:       runAs,

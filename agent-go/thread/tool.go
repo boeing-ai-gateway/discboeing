@@ -57,6 +57,7 @@ type ToolContext struct {
 	ResolveTools               func(context.Context) ([]providers.ToolDefinition, error)
 	EmitChunk                  func(message.MessageChunk, error) bool
 	SetCurrentWorkingDirectory func(string) error
+	SetThreadPhase             func(string) error
 }
 
 // AsyncContinuationHandle represents in-flight asynchronous tool work.

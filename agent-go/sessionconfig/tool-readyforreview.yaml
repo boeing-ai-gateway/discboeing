@@ -1,0 +1,6 @@
+name: ReadyForReview
+description: "Call this tool when your task is complete and you're ready and it's ready to be reviewed."
+inputSchema:
+  type: object
+  properties: {}
+  additionalProperties: false

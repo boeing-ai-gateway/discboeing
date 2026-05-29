@@ -335,6 +335,7 @@ type ThreadUpdateInfo struct {
 	ID            string                   `json:"id"`
 	Name          string                   `json:"name"`
 	CWD           string                   `json:"cwd,omitempty"`
+	Phase         string                   `json:"phase,omitempty"`
 	LastMessage   string                   `json:"lastMessage,omitempty"`
 	ErrorMessage  string                   `json:"errorMessage,omitempty"`
 	Model         string                   `json:"model,omitempty"`

@@ -777,6 +777,8 @@ type Config struct {
 	ServiceTier string `json:"serviceTier,omitempty"`
 	// CWD is the working directory associated with this thread.
 	CWD string `json:"cwd,omitempty"`
+	// Phase gates phase-specific automation, such as review hooks.
+	Phase string `json:"phase,omitempty"`
 	// LastTurnState stores the last user-visible terminal turn outcome that
 	// should surface in thread chrome. Empty means no special state.
 	LastTurnState State `json:"lastTurnState,omitempty"`

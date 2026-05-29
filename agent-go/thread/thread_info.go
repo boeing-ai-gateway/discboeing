@@ -13,6 +13,7 @@ type Info struct {
 	ID              string
 	Name            string
 	CWD             string
+	Phase           string
 	LastMessage     string
 	ErrorMessage    string
 	Model           string
@@ -30,6 +31,7 @@ type CreateThreadRequest struct {
 	ID          string
 	Name        string
 	CWD         string
+	Phase       string
 	LastMessage string
 	Metadata    json.RawMessage
 }
@@ -38,6 +40,7 @@ type CreateThreadRequest struct {
 type UpdateThreadRequest struct {
 	Name              *string
 	CWD               *string
+	Phase             *string
 	LastMessage       *string
 	ErrorMessage      *string
 	ClearErrorMessage bool
@@ -106,6 +109,11 @@ func (s *Store) CreateThreadInfo(defaultCWD string, req CreateThreadRequest) (In
 	} else if strings.TrimSpace(cfg.CWD) == "" {
 		cfg.CWD = strings.TrimSpace(defaultCWD)
 	}
+	phase, err := normalizeThreadPhase(req.Phase)
+	if err != nil {
+		return Info{}, err
+	}
+	cfg.Phase = phase
 	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
 		cfg.Name = trimmedName
 		cfg.NameSource = ThreadNameSourceUser
@@ -153,6 +161,13 @@ func (s *Store) UpdateThreadInfo(threadID string, req UpdateThreadRequest) (Info
 		if trimmedCWD := strings.TrimSpace(*req.CWD); trimmedCWD != "" {
 			cfg.CWD = trimmedCWD
 		}
+	}
+	if req.Phase != nil {
+		phase, err := normalizeThreadPhase(*req.Phase)
+		if err != nil {
+			return Info{}, err
+		}
+		cfg.Phase = phase
 	}
 	if req.LastMessage != nil {
 		cfg.LastMessage = *req.LastMessage
@@ -206,6 +221,7 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		ID:              threadID,
 		Name:            strings.TrimSpace(cfg.Name),
 		CWD:             strings.TrimSpace(cfg.CWD),
+		Phase:           strings.TrimSpace(cfg.Phase),
 		LastMessage:     strings.TrimSpace(cfg.LastMessage),
 		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
 		Model:           cfg.Model,
@@ -216,6 +232,16 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		PendingQuestion: pendingQuestion,
 		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
 		Metadata:        cfg.Metadata.RawMessage(),
+	}
+}
+
+func normalizeThreadPhase(phase string) (string, error) {
+	phase = strings.TrimSpace(strings.ToLower(phase))
+	switch phase {
+	case "", "review":
+		return phase, nil
+	default:
+		return "", fmt.Errorf("invalid thread phase %q", phase)
 	}
 }
 

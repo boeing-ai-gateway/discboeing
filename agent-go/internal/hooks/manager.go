@@ -115,9 +115,40 @@ type Manager struct {
 	promptQueue     *promptqueue.Manager
 	aiHookAgent     AIHookAgent
 	aiHookEvaluator AIHookEvaluator
+	threadPhase     func(threadID string) string
 
 	hookRetryCount     map[string]int
 	hookNotificationTo map[string]string
+}
+
+// SetThreadPhaseLookup configures how phase-gated hooks read thread phase.
+func (m *Manager) SetThreadPhaseLookup(fn func(threadID string) string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.threadPhase = fn
+}
+
+func (m *Manager) currentThreadPhase(threadID string) string {
+	m.mu.Lock()
+	fn := m.threadPhase
+	m.mu.Unlock()
+	if fn == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.ToLower(fn(threadID)))
+}
+
+// HasPhaseHooks reports whether any hook is gated by a thread phase.
+func (m *Manager) HasPhaseHooks() bool {
+	m.mu.Lock()
+	m.reloadHooks()
+	defer m.mu.Unlock()
+	for _, hook := range append(append([]Hook{}, m.fileHooks...), m.sessionHooks...) {
+		if strings.TrimSpace(hook.Phase) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // NewManager creates a new HookManager.
@@ -924,15 +955,19 @@ func parseAIHookEvaluation(output string) (aiHookEvaluation, bool) {
 }
 
 // EvaluateFileHooks evaluates file hooks after a completion.
-func (m *Manager) EvaluateFileHooks(model ...string) FileHookEvalResult {
-	hookModel := ""
-	if len(model) > 0 {
-		hookModel = strings.TrimSpace(model[0])
+func (m *Manager) EvaluateFileHooks(args ...string) FileHookEvalResult {
+	threadID := ""
+	if len(args) > 0 {
+		threadID = strings.TrimSpace(args[0])
 	}
-	return m.evaluateFileHooks(hookModel, false)
+	hookModel := ""
+	if len(args) > 1 {
+		hookModel = strings.TrimSpace(args[1])
+	}
+	return m.evaluateFileHooks(threadID, hookModel, false)
 }
 
-func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHookEvalResult {
+func (m *Manager) evaluateFileHooks(threadID, hookModel string, forcePending bool) FileHookEvalResult {
 	noAction := FileHookEvalResult{}
 	if m.ExecutionPaused() {
 		return noAction
@@ -979,14 +1014,24 @@ func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHoo
 		return noAction
 	}
 
-	// Skip guard: if no new files and didn't add new pending, don't re-run failed hooks
-	if len(newFiles) == 0 && !addedNewPending && !forcePending {
-		return noAction
-	}
-
 	hooksByID := make(map[string]Hook, len(fileHooks))
 	for _, hook := range fileHooks {
 		hooksByID[hook.ID] = hook
+	}
+
+	threadPhase := m.currentThreadPhase(threadID)
+	hasPhaseEligiblePending := false
+	for _, hookID := range pendingIDs {
+		hook, ok := hooksByID[hookID]
+		if ok && strings.TrimSpace(hook.Phase) != "" && hook.Phase == threadPhase {
+			hasPhaseEligiblePending = true
+			break
+		}
+	}
+
+	// Skip guard: if no new files and didn't add new pending, don't re-run failed hooks
+	if len(newFiles) == 0 && !addedNewPending && !forcePending && !hasPhaseEligiblePending {
+		return noAction
 	}
 
 	// Get all dirty files for pattern matching
@@ -995,6 +1040,11 @@ func (m *Manager) evaluateFileHooks(hookModel string, forcePending bool) FileHoo
 	for _, hookID := range pendingIDs {
 		hook, ok := hooksByID[hookID]
 		if !ok {
+			continue
+		}
+		if strings.TrimSpace(hook.Phase) != "" && hook.Phase != threadPhase {
+			_ = SetHookPending(m.hooksDataDir, hook)
+			m.emitCurrentStatusChunk()
 			continue
 		}
 		if m.hookExecutionPaused(hook.ID) {
@@ -1065,6 +1115,16 @@ func (m *Manager) OnTurnComplete(threadID string) {
 		return
 	}
 	go m.scheduleEvaluation(threadID, m.threadModel(threadID), false)
+}
+
+// TriggerEvaluation starts hook evaluation for a thread after external state,
+// such as the thread phase, changes.
+func (m *Manager) TriggerEvaluation(threadID string) {
+	if m == nil || !m.HasFileHooks() {
+		return
+	}
+	m.setLastEvaluationThread(threadID)
+	go m.scheduleEvaluation(threadID, m.threadModel(threadID), true)
 }
 
 // StartFailureReprompt sends or queues a hook-failure follow-up message to the
@@ -1142,7 +1202,7 @@ func (m *Manager) scheduleEvaluation(threadID, model string, forcePending bool) 
 	// 200ms grace period to let SSE flush.
 	time.Sleep(200 * time.Millisecond)
 
-	result := m.evaluateFileHooks(model, forcePending)
+	result := m.evaluateFileHooks(threadID, model, forcePending)
 	m.reconcileNotificationState()
 	if !result.ShouldReprompt {
 		return

@@ -13,6 +13,7 @@ func UpdateChunkFromConfig(threadID string, cfg Config) message.ThreadUpdateChun
 				ID:           threadID,
 				Name:         cfg.Name,
 				CWD:          cfg.CWD,
+				Phase:        cfg.Phase,
 				LastMessage:  cfg.LastMessage,
 				ErrorMessage: cfg.ErrorMessage,
 				Model:        cfg.Model,

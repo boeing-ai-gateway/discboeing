@@ -179,6 +179,55 @@ Review Go changes.
 	}
 }
 
+func TestDiscoverHooks_ParsesReviewPhase(t *testing.T) {
+	hooksDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(hooksDir, "review.md"), []byte(`---
+name: Review Hook
+type: file
+engine: ai
+pattern: "*.go"
+phase: review
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(review hook) failed: %v", err)
+	}
+
+	hooks, err := DiscoverHooks(hooksDir)
+	if err != nil {
+		t.Fatalf("DiscoverHooks() failed: %v", err)
+	}
+	if len(hooks) != 1 {
+		t.Fatalf("hook count = %d, want 1", len(hooks))
+	}
+	if hooks[0].Phase != "review" {
+		t.Fatalf("phase = %q, want review", hooks[0].Phase)
+	}
+}
+
+func TestDiscoverHooks_RejectsInvalidPhase(t *testing.T) {
+	hooksDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(hooksDir, "invalid.md"), []byte(`---
+name: Invalid Phase
+type: file
+engine: ai
+pattern: "*.go"
+phase: ship
+---
+Review Go changes.
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(invalid hook) failed: %v", err)
+	}
+
+	_, err := DiscoverHooks(hooksDir)
+	if err == nil {
+		t.Fatal("expected invalid phase error")
+	}
+	if !strings.Contains(err.Error(), "invalid hook phase") {
+		t.Fatalf("error = %v, want invalid hook phase", err)
+	}
+}
+
 func TestRerunHook_FailureWithNotifyLLMReturnsReprompt(t *testing.T) {
 	testHomeDir := t.TempDir()
 	t.Setenv("HOME", testHomeDir)        // Unix
@@ -1166,6 +1215,79 @@ exit 1
 	}
 	if strings.Join(status.PendingHooks, ",") != "go-check" {
 		t.Fatalf("pendingHooks = %v, want [go-check]", status.PendingHooks)
+	}
+}
+
+func TestEvaluateFileHooks_PhaseGatedHookWaitsForReview(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = workspaceRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
+	}
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "review-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Review Check
+# type: file
+# pattern: "*.txt"
+# phase: review
+#---
+echo "review hook ran" >> "hook-runs.log"
+exit 1
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile(review hook) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "pending.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(pending.txt) failed: %v", err)
+	}
+
+	phase := ""
+	mgr := NewManager(workspaceRoot, "session-123")
+	mgr.SetThreadPhaseLookup(func(string) string {
+		return phase
+	})
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	first := mgr.EvaluateFileHooks("thread-1")
+	if first.ShouldReprompt {
+		t.Fatal("expected review hook not to run before review phase")
+	}
+	if _, err := os.Stat(filepath.Join(workspaceRoot, "hook-runs.log")); !os.IsNotExist(err) {
+		t.Fatalf("hook-runs.log exists before review phase: %v", err)
+	}
+	status := LoadStatus(mgr.hooksDataDir)
+	if strings.Join(status.PendingHooks, ",") != "review-check" {
+		t.Fatalf("pendingHooks = %v, want [review-check]", status.PendingHooks)
+	}
+	if status.Hooks["review-check"].LastResult != "pending" {
+		t.Fatalf("hook result = %q, want pending", status.Hooks["review-check"].LastResult)
+	}
+
+	phase = "review"
+	second := mgr.EvaluateFileHooks("thread-1")
+	if !second.ShouldReprompt {
+		t.Fatal("expected review hook failure to request reprompt in review phase")
+	}
+	data, err := os.ReadFile(filepath.Join(workspaceRoot, "hook-runs.log"))
+	if err != nil {
+		t.Fatalf("ReadFile(hook-runs.log) failed: %v", err)
+	}
+	if string(data) != "review hook ran\n" {
+		t.Fatalf("hook run log = %q", string(data))
 	}
 }
 

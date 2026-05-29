@@ -8,6 +8,7 @@ import (
 
 	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/thread"
 )
 
 func TestExecuteRequestUserCredential_PausesWithCredentialPayload(t *testing.T) {
@@ -41,6 +42,35 @@ func TestExecuteRequestUserCredential_PausesWithCredentialPayload(t *testing.T) 
 	}
 	if len(credentials[0].ApprovedUses) != 1 || credentials[0].ApprovedUses[0].Description != "create pull requests" {
 		t.Fatalf("unexpected credential approved uses: %#v", credentials[0].ApprovedUses)
+	}
+}
+
+func TestExecuteReadyForReviewSetsThreadPhase(t *testing.T) {
+	e := New(t.TempDir(), t.TempDir(), "thread-1")
+	var phase string
+
+	result, err := e.Execute(context.Background(), &thread.ToolContext{
+		SetThreadPhase: func(next string) error {
+			phase = next
+			return nil
+		},
+	}, message.ToolCallPart{
+		ToolCallID: "tc-ready",
+		ToolName:   "ReadyForReview",
+		Input:      `{}`,
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if phase != "review" {
+		t.Fatalf("phase = %q, want review", phase)
+	}
+	output, ok := result.Result.Output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("output type = %T, want TextOutput", result.Result.Output)
+	}
+	if !strings.Contains(output.Value, "review") {
+		t.Fatalf("output = %q, want review message", output.Value)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 )
@@ -14,6 +15,7 @@ type HookRunStatus struct {
 	HookID              string `json:"hookId"`
 	HookName            string `json:"hookName"`
 	Type                string `json:"type"`
+	Phase               string `json:"phase,omitempty"`
 	LastRunAt           string `json:"lastRunAt"`
 	LastResult          string `json:"lastResult"` // "success", "failure", "running", or "pending"
 	LastExitCode        int    `json:"lastExitCode"`
@@ -22,6 +24,33 @@ type HookRunStatus struct {
 	FailCount           int    `json:"failCount"`
 	ConsecutiveFailures int    `json:"consecutiveFailures"`
 	ExecutionPaused     bool   `json:"executionPaused"`
+}
+
+// SetHookPending records that a hook is queued for a future eligible run.
+func SetHookPending(hooksDataDir string, hook Hook) error {
+	status := LoadStatus(hooksDataDir)
+
+	existing, ok := status.Hooks[hook.ID]
+	if !ok {
+		existing = HookRunStatus{
+			HookID:   hook.ID,
+			HookName: hook.Name,
+			Type:     string(hook.Type),
+		}
+	}
+	existing.HookName = hook.Name
+	existing.Type = string(hook.Type)
+	existing.Phase = hook.Phase
+	existing.LastResult = "pending"
+	existing.OutputPath = GetHookOutputPath(hooksDataDir, hook.ID)
+	status.Hooks[hook.ID] = existing
+
+	found := slices.Contains(status.PendingHooks, hook.ID)
+	if !found {
+		status.PendingHooks = append(status.PendingHooks, hook.ID)
+	}
+
+	return SaveStatus(hooksDataDir, status)
 }
 
 // StatusFile is the JSON structure persisted to status.json.
@@ -122,6 +151,7 @@ func SetHookRunning(hooksDataDir string, hook Hook) error {
 
 	existing.LastRunAt = time.Now().UTC().Format(time.RFC3339)
 	existing.LastResult = "running"
+	existing.Phase = hook.Phase
 	existing.OutputPath = GetHookOutputPath(hooksDataDir, hook.ID)
 
 	status.Hooks[hook.ID] = existing
@@ -184,6 +214,7 @@ func UpdateHookStatus(hooksDataDir string, result HookResult, outputPath string,
 
 	existing.RunCount++
 	existing.LastExitCode = result.ExitCode
+	existing.Phase = result.Hook.Phase
 	existing.OutputPath = outputPath
 
 	if result.Success {

@@ -57,6 +57,15 @@ func BuiltinTools(_ string) []providers.ToolDefinition {
 	return tools
 }
 
+// BuiltinTool returns one embedded tool definition by name.
+func BuiltinTool(name string) (providers.ToolDefinition, bool) {
+	tools, err := toolsForNames([]string{name})
+	if err != nil || len(tools) != 1 {
+		return providers.ToolDefinition{}, false
+	}
+	return tools[0], true
+}
+
 // AdaptToolsForRuntime renames or rewrites tool definitions for the current
 // runtime while keeping configuration names stable on disk.
 func AdaptToolsForRuntime(goos string, tools []providers.ToolDefinition) []providers.ToolDefinition {

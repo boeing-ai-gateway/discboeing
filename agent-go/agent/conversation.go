@@ -302,6 +302,7 @@ func threadUpdateChunkFromInfo(info ThreadInfo) message.ThreadUpdateChunk {
 				ID:            info.ID,
 				Name:          info.Name,
 				CWD:           info.CWD,
+				Phase:         info.Phase,
 				LastMessage:   info.LastMessage,
 				ErrorMessage:  info.ErrorMessage,
 				Model:         info.Model,

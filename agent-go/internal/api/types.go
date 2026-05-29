@@ -108,6 +108,7 @@ type Thread struct {
 	ID              string          `json:"id"`
 	Name            string          `json:"name"`
 	CWD             string          `json:"cwd,omitempty"`
+	Phase           string          `json:"phase,omitempty"`
 	LastMessage     string          `json:"lastMessage,omitempty"`
 	ErrorMessage    string          `json:"errorMessage,omitempty"`
 	Model           string          `json:"model,omitempty"`       // full "providerId/modelId" ref
@@ -229,14 +230,16 @@ type ListMessagesResponse struct {
 
 // CreateThreadRequest is the POST /threads request body.
 type CreateThreadRequest struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-	CWD  string `json:"cwd,omitempty"`
+	ID    string `json:"id"`
+	Name  string `json:"name,omitempty"`
+	CWD   string `json:"cwd,omitempty"`
+	Phase string `json:"phase,omitempty"`
 }
 
 // UpdateThreadRequest is the PUT /threads/{id} request body.
 type UpdateThreadRequest struct {
-	Name string `json:"name,omitempty"`
+	Name  string  `json:"name,omitempty"`
+	Phase *string `json:"phase,omitempty"`
 }
 
 // DeleteThreadResponse is the DELETE /threads/{id} response body.

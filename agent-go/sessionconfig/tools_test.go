@@ -33,6 +33,8 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		"AskUserQuestion", "RequestUserCredential", "RequestCommitPull",
 		// Skills
 		"Skill",
+		// Phase transitions
+		"ReadyForReview",
 	}
 
 	if len(toolMap) != len(expectedNames) {
@@ -43,6 +45,16 @@ func TestBuiltinTools_AllDefined(t *testing.T) {
 		if _, ok := toolMap[name]; !ok {
 			t.Errorf("missing tool: %s", name)
 		}
+	}
+}
+
+func TestBuiltinTool_LoadsReadyForReview(t *testing.T) {
+	tool, ok := BuiltinTool("ReadyForReview")
+	if !ok {
+		t.Fatal("expected ReadyForReview builtin tool")
+	}
+	if tool.Name != "ReadyForReview" {
+		t.Fatalf("tool name = %q, want ReadyForReview", tool.Name)
 	}
 }
 

@@ -278,9 +278,21 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 		return e.executeTaskStop(call)
 	case "Skill":
 		return e.executeSkill(ctx, call)
+	case "ReadyForReview":
+		return e.executeReadyForReview(toolCtx, call)
 	default:
 		return textResult(call, fmt.Sprintf("unknown tool: %s", call.ToolName)), nil
 	}
+}
+
+func (e *Executor) executeReadyForReview(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
+	if toolCtx == nil || toolCtx.SetThreadPhase == nil {
+		return errResult(call, "thread phase updates are unavailable"), nil
+	}
+	if err := toolCtx.SetThreadPhase("review"); err != nil {
+		return errResult(call, err.Error()), nil
+	}
+	return textResult(call, "Thread phase set to review."), nil
 }
 
 // limitOutput checks whether a successful TextOutput exceeds the model-facing

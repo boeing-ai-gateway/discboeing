@@ -110,6 +110,13 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 	}
 	if hookManager != nil && defaultAgent != nil {
 		hookManager.SetAIHookAgent(defaultAgent)
+		hookManager.SetThreadPhaseLookup(func(threadID string) string {
+			info, err := defaultAgent.GetThreadInfo(threadID)
+			if err != nil {
+				return ""
+			}
+			return info.Phase
+		})
 	}
 	if conversations != nil {
 		conversations.AddCompletionListener(h)

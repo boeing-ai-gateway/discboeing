@@ -60,6 +60,7 @@ Update service layer to match new route structure.
 ### `lib/api-types.ts`
 
 - Update thread summary types to include `cwd` for the thread-specific tool working directory
+- Update thread summary types to include `phase`; `phase: "review"` marks a thread ready for review and unlocks hooks with `phase: review`
 - Update thread summary types to include `pendingQuestion`
 - Update create/update thread request types to accept optional `cwd`
 - Update chat request types to accept optional `freshContext`, `subagentType`, and `maxTurns`
