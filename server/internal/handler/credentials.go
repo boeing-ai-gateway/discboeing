@@ -72,16 +72,16 @@ func (h *Handler) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		req.Name = strings.TrimSpace(req.Name)
 	}
 	credentialID := ""
-	if req.CredentialId != nil {
-		credentialID = *req.CredentialId
+	if req.CredentialID != nil {
+		credentialID = *req.CredentialID
 	}
 	provider := ""
 	if req.Provider != nil {
 		provider = *req.Provider
 	}
 	apiKey := ""
-	if req.ApiKey != nil {
-		apiKey = *req.ApiKey
+	if req.APIKey != nil {
+		apiKey = *req.APIKey
 	}
 	description := stringValue(req.Description)
 
@@ -529,9 +529,9 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 
 	// Determine domain based on deployment type
 	domain := oauth.DefaultGitHubDomain
-	if stringValue(req.DeploymentType) == "enterprise" && stringValue(req.EnterpriseUrl) != "" {
+	if stringValue(req.DeploymentType) == "enterprise" && stringValue(req.EnterpriseURL) != "" {
 		// Extract domain from enterprise URL
-		domain = stringValue(req.EnterpriseUrl)
+		domain = stringValue(req.EnterpriseURL)
 		// Strip protocol if present
 		if idx := strings.Index(domain, "://"); idx != -1 {
 			domain = domain[idx+3:]
@@ -553,7 +553,7 @@ func (h *Handler) GitHubCopilotDeviceCode(w http.ResponseWriter, r *http.Request
 	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
-		VerificationUri: deviceResp.VerificationURI,
+		VerificationURI: deviceResp.VerificationURI,
 		ExpiresIn:       deviceResp.ExpiresIn,
 		Interval:        deviceResp.Interval,
 		Domain:          domain,
@@ -669,7 +669,7 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 	// Allow empty body, default to github.com
 	_ = h.DecodeJSON(r, &req)
 
-	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseURL))
 
 	if h.cfg.GitHubOAuthClientID == "" {
 		h.Error(w, http.StatusServiceUnavailable, "GitHub OAuth not configured")
@@ -686,7 +686,7 @@ func (h *Handler) GitHubDeviceCode(w http.ResponseWriter, r *http.Request) {
 	h.JSON(w, http.StatusOK, api.GitHubCopilotDeviceCodeResponse{
 		DeviceCode:      deviceResp.DeviceCode,
 		UserCode:        deviceResp.UserCode,
-		VerificationUri: deviceResp.VerificationURI,
+		VerificationURI: deviceResp.VerificationURI,
 		ExpiresIn:       deviceResp.ExpiresIn,
 		Interval:        deviceResp.Interval,
 		Domain:          domain,
@@ -704,8 +704,8 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 	var req api.GitHubAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
-	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
-	redirectURI := strings.TrimSpace(stringValue(req.RedirectUri))
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseURL))
+	redirectURI := strings.TrimSpace(stringValue(req.RedirectURI))
 	if redirectURI == "" {
 		redirectURI = "http://127.0.0.1:1455/auth/callback"
 	}
@@ -736,7 +736,7 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 				projectID,
 				redirectURI,
 				domain,
-				stringValue(req.CredentialId),
+				stringValue(req.CredentialID),
 				stringValue(req.Name),
 				stringValue(req.Description),
 				visibility,
@@ -746,10 +746,10 @@ func (h *Handler) GitHubAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, api.GitHubAuthorizeResponse{
-		Url:               authResp.URL,
+		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
-		RedirectUri:       redirectURI,
+		RedirectURI:       redirectURI,
 		CallbackListening: callbackListening,
 	})
 }
@@ -827,7 +827,7 @@ func (h *Handler) GitHubPoll(w http.ResponseWriter, r *http.Request) {
 	info, err := h.credentialService.SetOAuthTokensWithMetadata(
 		r.Context(),
 		projectID,
-		stringValue(req.CredentialId),
+		stringValue(req.CredentialID),
 		service.ProviderGitHub,
 		stringValue(req.Name),
 		stringValue(req.Description),
@@ -861,7 +861,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Code = strings.TrimSpace(req.Code)
-	redirectURI := strings.TrimSpace(stringValue(req.RedirectUri))
+	redirectURI := strings.TrimSpace(stringValue(req.RedirectURI))
 	req.Verifier = strings.TrimSpace(req.Verifier)
 	if req.Code == "" {
 		h.Error(w, http.StatusBadRequest, "code is required")
@@ -875,7 +875,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domain := normalizeGitHubDomain(stringValue(req.EnterpriseUrl))
+	domain := normalizeGitHubDomain(stringValue(req.EnterpriseURL))
 	provider := oauth.NewGitHubProvider(h.cfg.GitHubOAuthClientID, h.cfg.GitHubOAuthClientSecret, domain, nil)
 	tokenResp, err := provider.Exchange(r.Context(), req.Code, redirectURI, req.Verifier)
 	if err != nil {
@@ -895,7 +895,7 @@ func (h *Handler) GitHubExchange(w http.ResponseWriter, r *http.Request) {
 	info, err := h.credentialService.SetOAuthTokensWithMetadata(
 		r.Context(),
 		projectID,
-		stringValue(req.CredentialId),
+		stringValue(req.CredentialID),
 		service.ProviderGitHub,
 		stringValue(req.Name),
 		stringValue(req.Description),
@@ -994,9 +994,9 @@ func (h *Handler) CodexDeviceCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, api.CodexDeviceCodeResponse{
-		DeviceAuthId:    deviceResp.DeviceAuthID,
+		DeviceAuthID:    deviceResp.DeviceAuthID,
 		UserCode:        deviceResp.UserCode,
-		VerificationUri: oauth.CodexDevicePageURL,
+		VerificationURI: oauth.CodexDevicePageURL,
 		Interval:        interval,
 	})
 }
@@ -1012,7 +1012,7 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 	var req api.CodexAuthorizeRequest
 	_ = h.DecodeJSON(r, &req)
 
-	redirectURI := strings.TrimSpace(req.RedirectUri)
+	redirectURI := strings.TrimSpace(req.RedirectURI)
 	if redirectURI == "" {
 		redirectURI = "http://localhost:1455/auth/callback"
 	}
@@ -1033,10 +1033,10 @@ func (h *Handler) CodexAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.JSON(w, http.StatusOK, api.CodexAuthorizeResponse{
-		Url:               authResp.URL,
+		URL:               authResp.URL,
 		Verifier:          authResp.Verifier,
 		State:             authResp.State,
-		RedirectUri:       redirectURI,
+		RedirectURI:       redirectURI,
 		CallbackListening: callbackListening,
 	})
 }
@@ -1051,7 +1051,7 @@ func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.DeviceAuthId == "" {
+	if req.DeviceAuthID == "" {
 		h.Error(w, http.StatusBadRequest, "deviceAuthId is required")
 		return
 	}
@@ -1061,7 +1061,7 @@ func (h *Handler) CodexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provider := oauth.NewCodexProvider(h.cfg.CodexClientID)
-	pollResp, statusCode, err := provider.PollDeviceCode(r.Context(), req.DeviceAuthId, req.UserCode)
+	pollResp, statusCode, err := provider.PollDeviceCode(r.Context(), req.DeviceAuthID, req.UserCode)
 	if err != nil {
 		h.Error(w, http.StatusBadRequest, "Poll request failed: "+err.Error())
 		return
@@ -1128,7 +1128,7 @@ func (h *Handler) CodexExchange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Code = strings.TrimSpace(req.Code)
-	redirectURI := strings.TrimSpace(req.RedirectUri)
+	redirectURI := strings.TrimSpace(req.RedirectURI)
 	req.Verifier = strings.TrimSpace(req.Verifier)
 
 	if req.Code == "" {

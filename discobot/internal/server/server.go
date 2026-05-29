@@ -3,7 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
-	"path/filepath"
+	"path"
 	"strings"
 	"sync"
 
@@ -51,7 +51,7 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/", s.handleRoot)
 	r.Get("/ui/stream", s.handleUIStream)
 	r.Mount("/ui/commands", s.commands.Routes())
-	r.Handle("/*", staticFileServer(s.config.StaticDir))
+	r.Handle("/*", staticFileServer(s.config))
 	return r
 }
 
@@ -198,10 +198,14 @@ func noStoreDynamicUI(next http.Handler) http.Handler {
 	})
 }
 
-func staticFileServer(dir string) http.Handler {
-	files := http.FileServer(http.Dir(dir))
+func staticFileServer(cfg config.Config) http.Handler {
+	staticFS := cfg.StaticFS
+	if staticFS == nil {
+		staticFS = http.Dir(cfg.StaticDir)
+	}
+	files := http.FileServer(staticFS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if filepath.Ext(r.URL.Path) == ".js" {
+		if path.Ext(r.URL.Path) == ".js" {
 			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 			w.Header().Set("Pragma", "no-cache")
 			w.Header().Set("Expires", "0")

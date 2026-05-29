@@ -9,7 +9,8 @@
 
 set -euo pipefail
 
-SQL_DUMP="${WORKSPACE_ORIGIN_PATH}/test.db.sql"
+WORKSPACE_SOURCE="${WORKSPACE_ORIGIN_PATH:-$PWD}"
+SQL_DUMP="${WORKSPACE_SOURCE}/test.db.sql"
 DB="${HOME}/.local/share/discobot/discobot.db"
 ENV_FILE="./server/.env"
 

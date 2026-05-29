@@ -9,10 +9,11 @@ FROM golang:1.26 AS root-go-deps
 WORKDIR /build
 
 # Copy module files first for better caching
-# modelsdev/go.mod and controlsocket module files are needed by replace
-# directives in the root go.mod
+# modelsdev/go.mod, controlsocket, and discobot module files are needed by
+# replace directives in the root go.mod
 COPY controlsocket/go.mod controlsocket/go.sum ./controlsocket/
 COPY modelsdev/go.mod ./modelsdev/
+COPY discobot/go.mod discobot/go.sum ./discobot/
 COPY go.mod go.sum ./
 
 # Download dependencies

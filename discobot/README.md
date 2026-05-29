@@ -14,6 +14,9 @@ pnpm check
 The server listens on port `3300` by default. Override it with
 `DISCOBOT_PORT` and override static assets with `DISCOBOT_STATIC_DIR`.
 
+The main Discobot backend also vendors this UI and mounts it at `/ui-next`
+for side-by-side migration from the Svelte UI.
+
 ## Structure
 
 - `cmd/discobot` — executable entry point

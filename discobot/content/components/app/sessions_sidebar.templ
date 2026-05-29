@@ -33,8 +33,9 @@ templ SessionsSidebarDropdown(shell state.Shell) {
 }
 
 templ SessionsSidebarContent(data state.Data, view state.View) {
-		@SessionsSidebarHeader(view)
-		for _, workspace := range data.Workspaces {
-			@SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(data.Sessions, workspace.ID), view)
-		}
+	@SessionsSidebarHeader(view)
+	for _, workspace := range data.Workspaces {
+		@SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(data.Sessions, workspace.ID), view)
+	}
+	@SessionsSidebarFooter()
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 
+	discobotweb "github.com/obot-platform/discobot/discobot/web"
 	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/conntrack"
@@ -441,6 +442,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize embedded UI handler: %v", err)
 	}
+	nextUIHandler := discobotweb.NewHandler(discobotweb.Config{
+		Logger: slog.Default(),
+	})
 
 	// Wire up job queue notification to dispatcher for immediate execution
 	if disp != nil {
@@ -495,6 +499,18 @@ func main() {
 
 	// API Routes endpoint (returns route metadata for API UI)
 	r.Get("/api/routes", h.GetRoutes)
+
+	// New Datastar + templ UI. The first pass mounts the prototype UI at a
+	// distinct entry path while keeping its current asset and command URLs.
+	r.Handle("/ui-next", http.StripPrefix("/ui-next", nextUIHandler))
+	r.Handle("/ui-next/*", http.StripPrefix("/ui-next", nextUIHandler))
+	r.Handle("/ui/stream", nextUIHandler)
+	r.Handle("/ui/commands/*", nextUIHandler)
+	r.Handle("/reset.css", nextUIHandler)
+	r.Handle("/themes.css", nextUIHandler)
+	r.Handle("/app.css", nextUIHandler)
+	r.Handle("/discobot.js", nextUIHandler)
+	r.Handle("/vendor/*", nextUIHandler)
 	r.NotFound(spaHandler.ServeHTTP)
 
 	// ===== Auth routes (no auth required) =====

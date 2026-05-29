@@ -209,17 +209,17 @@ func TestChat_EmptyMessages_CreatesSessionWithoutSendingToSandbox(t *testing.T) 
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionId != "session-empty-create" {
-		t.Fatalf("expected session ID in response, got %q", response.SessionId)
+	if response.SessionID != "session-empty-create" {
+		t.Fatalf("expected session ID in response, got %q", response.SessionID)
 	}
-	if response.WorkspaceId != "test-workspace" {
-		t.Fatalf("expected workspace ID in response, got %q", response.WorkspaceId)
+	if response.WorkspaceID != "test-workspace" {
+		t.Fatalf("expected workspace ID in response, got %q", response.WorkspaceID)
 	}
-	if response.ThreadId != "session-empty-create" {
-		t.Fatalf("expected default thread ID to match session ID, got %q", response.ThreadId)
+	if response.ThreadID != "session-empty-create" {
+		t.Fatalf("expected default thread ID to match session ID, got %q", response.ThreadID)
 	}
-	if stringValue(response.MessageId) != "" {
-		t.Fatalf("expected empty message ID for empty submission, got %q", stringValue(response.MessageId))
+	if stringValue(response.MessageID) != "" {
+		t.Fatalf("expected empty message ID for empty submission, got %q", stringValue(response.MessageID))
 	}
 	if getCalled {
 		t.Fatal("sandbox should not be contacted for empty chat submissions")
@@ -374,17 +374,17 @@ func TestChat_StartsCompletion_StatusBecomesRunning(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionId != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
+	if response.SessionID != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
 	}
-	if response.ThreadId != sessionID {
-		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadId)
+	if response.ThreadID != sessionID {
+		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadID)
 	}
-	if response.WorkspaceId != "test-workspace" {
-		t.Fatalf("expected workspace ID %q, got %q", "test-workspace", response.WorkspaceId)
+	if response.WorkspaceID != "test-workspace" {
+		t.Fatalf("expected workspace ID %q, got %q", "test-workspace", response.WorkspaceID)
 	}
-	if stringValue(response.MessageId) != "msg-1" {
-		t.Fatalf("expected message ID %q, got %q", "msg-1", stringValue(response.MessageId))
+	if stringValue(response.MessageID) != "msg-1" {
+		t.Fatalf("expected message ID %q, got %q", "msg-1", stringValue(response.MessageID))
 	}
 
 	session, err := s.GetSessionByID(context.Background(), sessionID)
@@ -606,13 +606,13 @@ func TestChat_RetryUsesPersistedPromptSubmission(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if stringValue(response.SubmissionId) == "" {
+	if stringValue(response.SubmissionID) == "" {
 		t.Fatal("expected submission ID in response")
 	}
-	if stringValue(response.CompletionId) != "completion-1" {
-		t.Fatalf("expected completion ID %q, got %q", "completion-1", stringValue(response.CompletionId))
+	if stringValue(response.CompletionID) != "completion-1" {
+		t.Fatalf("expected completion ID %q, got %q", "completion-1", stringValue(response.CompletionID))
 	}
-	submission, err := s.GetPromptSubmissionByID(context.Background(), stringValue(response.SubmissionId))
+	submission, err := s.GetPromptSubmissionByID(context.Background(), stringValue(response.SubmissionID))
 	if err != nil {
 		t.Fatalf("expected prompt submission to exist: %v", err)
 	}
@@ -680,11 +680,11 @@ func TestChat_UsesExplicitThreadId(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionId != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
+	if response.SessionID != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
 	}
-	if response.ThreadId != threadID {
-		t.Fatalf("expected thread ID %q, got %q", threadID, response.ThreadId)
+	if response.ThreadID != threadID {
+		t.Fatalf("expected thread ID %q, got %q", threadID, response.ThreadID)
 	}
 
 	select {
@@ -736,14 +736,14 @@ func TestChat_ReturnsJSONResponse(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response, got error: %v; body: %s", err, w.Body.String())
 	}
-	if response.SessionId != sessionID {
-		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionId)
+	if response.SessionID != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, response.SessionID)
 	}
-	if response.ThreadId != sessionID {
-		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadId)
+	if response.ThreadID != sessionID {
+		t.Fatalf("expected default thread ID %q, got %q", sessionID, response.ThreadID)
 	}
-	if stringValue(response.MessageId) != "msg-json" {
-		t.Fatalf("expected message ID %q, got %q", "msg-json", stringValue(response.MessageId))
+	if stringValue(response.MessageID) != "msg-json" {
+		t.Fatalf("expected message ID %q, got %q", "msg-json", stringValue(response.MessageID))
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte("data: [DONE]")) {
 		t.Fatalf("expected JSON response instead of SSE body, got: %s", w.Body.String())

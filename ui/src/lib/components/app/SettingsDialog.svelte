@@ -48,6 +48,7 @@
 	import SandboxProvidersManager from "$lib/components/app/SandboxProvidersManager.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
 	import { api } from "$lib/api-client";
+	import { appendAuthToken, getApiRootBase } from "$lib/api-config";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
@@ -205,6 +206,11 @@
 
 	function handleSettingsEscapeKeydown(event: KeyboardEvent) {
 		event.preventDefault();
+	}
+
+	function openNextUI() {
+		const backendOrigin = getApiRootBase().replace(/\/api\/?$/, "");
+		window.location.href = appendAuthToken(`${backendOrigin}/ui-next`);
 	}
 
 	async function handleClearCache() {
@@ -714,15 +720,20 @@
 
 		<Dialog.Footer class="mt-3">
 			<div class="flex w-full items-center justify-between gap-2">
-				<Button
-					variant="outline"
-					size="icon-sm"
-					onclick={ui.openSupportInfo}
-					title="Support information"
-					aria-label="Support information"
-				>
-					<InfoIcon class="size-4" />
-				</Button>
+				<div class="flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="icon-sm"
+						onclick={ui.openSupportInfo}
+						title="Support information"
+						aria-label="Support information"
+					>
+						<InfoIcon class="size-4" />
+					</Button>
+					<Button variant="outline" size="sm" onclick={openNextUI}
+						>New UI</Button
+					>
+				</div>
 				<Button variant="default" size="sm" onclick={ui.closeSettings}
 					>Done</Button
 				>

@@ -78,6 +78,16 @@ func DesktopShellAuth(cfg *config.Config) func(http.Handler) http.Handler {
 				http.Error(w, `{"error":"Invalid desktop shell secret"}`, http.StatusUnauthorized)
 				return
 			}
+			if r.URL.Query().Get("token") != "" {
+				http.SetCookie(w, &http.Cookie{
+					Name:     desktopSecretCookieName,
+					Value:    secret,
+					Path:     "/",
+					HttpOnly: true,
+					Secure:   cfg.CookiesSecure(),
+					SameSite: cfg.CookieSameSite(),
+				})
+			}
 
 			next.ServeHTTP(w, r)
 		})

@@ -121,10 +121,10 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	messageID := lastUserMessageID(req.Messages)
 	response := api.ChatResponse{
-		WorkspaceId: sessionWorkspaceID,
-		SessionId:   sessionID,
-		ThreadId:    threadID,
-		MessageId:   &messageID,
+		WorkspaceID: sessionWorkspaceID,
+		SessionID:   sessionID,
+		ThreadID:    threadID,
+		MessageID:   &messageID,
 	}
 
 	if emptySubmission {
@@ -169,11 +169,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Chat] Failed to clear chat start error for session %s: %v", sessionID, err)
 	}
 	if submission != nil {
-		response.SubmissionId = &submission.ID
+		response.SubmissionID = &submission.ID
 	}
-	response.CompletionId = &started.CompletionID
+	response.CompletionID = &started.CompletionID
 	response.Status = &started.Status
-	response.QueuedPromptId = &started.QueuedPromptID
+	response.QueuedPromptID = &started.QueuedPromptID
 
 	h.JSON(w, http.StatusOK, response)
 }

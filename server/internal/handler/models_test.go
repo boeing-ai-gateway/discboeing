@@ -28,7 +28,7 @@ func TestModelConversion(t *testing.T) {
 				ServiceTiers:     []string{"priority"},
 			},
 			expectedInfo: api.ModelInfo{
-				Id:               "anthropic/claude-opus-4",
+				ID:               "anthropic/claude-opus-4",
 				Name:             "Claude Opus 4",
 				Provider:         "Anthropic",
 				Description:      new("Most capable model"),
@@ -46,7 +46,7 @@ func TestModelConversion(t *testing.T) {
 				Provider: "Provider",
 			},
 			expectedInfo: api.ModelInfo{
-				Id:       "provider/model-id",
+				ID:       "provider/model-id",
 				Name:     "Model Name",
 				Provider: "Provider",
 			},

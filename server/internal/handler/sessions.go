@@ -269,11 +269,11 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Id == "" {
+	if req.ID == "" {
 		h.Error(w, http.StatusBadRequest, "id is required")
 		return
 	}
-	providerID := strings.TrimSpace(stringValue(req.ProviderId))
+	providerID := strings.TrimSpace(stringValue(req.ProviderID))
 	if err := h.sandboxService.ValidateSandboxProviderID(ctx, projectID, providerID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			h.Error(w, http.StatusBadRequest, "Sandbox provider not found")
@@ -283,14 +283,14 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID, err := h.resolveWorkspaceIDForNewSession(ctx, projectID, stringValue(req.WorkspaceId))
+	workspaceID, err := h.resolveWorkspaceIDForNewSession(ctx, projectID, stringValue(req.WorkspaceID))
 	if err != nil {
 		h.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	sessionID, err := h.chatService.NewSession(ctx, service.NewSessionRequest{
-		SessionID:   req.Id,
+		SessionID:   req.ID,
 		ProjectID:   projectID,
 		WorkspaceID: workspaceID,
 		ProviderID:  providerID,

@@ -13,15 +13,15 @@ import (
 // GetServerConfig returns public server configuration
 func (h *Handler) GetServerConfig(w http.ResponseWriter, _ *http.Request) {
 	response := api.ServerConfig{
-		SshPort:       h.cfg.SSHPort,
-		HttpPort:      h.cfg.Port,
-		PublicBaseUrl: h.cfg.PublicBaseURL(),
+		SSHPort:       h.cfg.SSHPort,
+		HTTPPort:      h.cfg.Port,
+		PublicBaseURL: h.cfg.PublicBaseURL(),
 	}
 	if h.cfg.HTTPSPort != 0 {
-		response.HttpsPort = &h.cfg.HTTPSPort
+		response.HTTPSPort = &h.cfg.HTTPSPort
 	}
 	if h.cfg.HTTPSTLSMode != "" {
-		response.HttpsTlsMode = &h.cfg.HTTPSTLSMode
+		response.HTTPSTLSMode = &h.cfg.HTTPSTLSMode
 	}
 	h.JSON(w, http.StatusOK, response)
 }
@@ -54,7 +54,7 @@ func mapSystemStatus(status startup.SystemStatusResponse) api.SystemStatusRespon
 	}
 	for _, message := range status.Messages {
 		out.Messages = append(out.Messages, api.StatusMessage{
-			Id:      message.ID,
+			ID:      message.ID,
 			Level:   api.StatusMessageLevel(message.Level),
 			Title:   message.Title,
 			Message: message.Message,
@@ -67,7 +67,7 @@ func mapSystemStatus(status startup.SystemStatusResponse) api.SystemStatusRespon
 				continue
 			}
 			startupTask := api.StartupTask{
-				Id:              task.ID,
+				ID:              task.ID,
 				Name:            task.Name,
 				State:           string(task.State),
 				Progress:        task.Progress,
@@ -98,7 +98,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		Os:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
 		GoVersion:    runtime.Version(),
-		NumCpu:       runtime.NumCPU(),
+		NumCPU:       runtime.NumCPU(),
 		NumGoroutine: runtime.NumGoroutine(),
 	}
 
@@ -115,16 +115,16 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		WorkspaceDir:       h.cfg.WorkspaceDir,
 		SandboxImage:       h.cfg.SandboxImage,
 		DesktopMode:        h.cfg.DesktopMode,
-		SshEnabled:         h.cfg.SSHEnabled,
-		SshPort:            h.cfg.SSHPort,
+		SSHEnabled:         h.cfg.SSHEnabled,
+		SSHPort:            h.cfg.SSHPort,
 		DispatcherEnabled:  h.cfg.DispatcherEnabled,
 		AvailableProviders: availableProviders,
 	}
 	if h.cfg.HTTPSPort != 0 {
-		configInfo.HttpsPort = &h.cfg.HTTPSPort
+		configInfo.HTTPSPort = &h.cfg.HTTPSPort
 	}
 	if h.cfg.HTTPSTLSMode != "" {
-		configInfo.HttpsTlsMode = &h.cfg.HTTPSTLSMode
+		configInfo.HTTPSTLSMode = &h.cfg.HTTPSTLSMode
 	}
 	if h.cfg.SandboxImageRemote != "" {
 		configInfo.SandboxImageRemote = &h.cfg.SandboxImageRemote
@@ -138,7 +138,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 		vzInfo := &api.VZInfo{
 			ImageRef:   h.cfg.VZImageRef,
 			DataDir:    h.cfg.VZDataDir,
-			CpuCount:   h.cfg.VZCPUCount,
+			CPUCount:   h.cfg.VZCPUCount,
 			MemoryMb:   h.cfg.VZMemoryMB,
 			DataDiskGb: h.cfg.VZDataDiskGB,
 		}
@@ -162,7 +162,7 @@ func (h *Handler) GetSupportInfo(w http.ResponseWriter, _ *http.Request) {
 			vzInfo.DataDisks = &dataDisks
 		}
 
-		configInfo.Vz = vzInfo
+		configInfo.VZ = vzInfo
 	}
 
 	// Read server log file

@@ -1,11 +1,15 @@
 package config
 
-import "os"
+import (
+	"net/http"
+	"os"
+)
 
 // Config contains runtime settings for the Discobot server.
 type Config struct {
 	Port      string
 	StaticDir string
+	StaticFS  http.FileSystem
 	DevReload bool
 }
 

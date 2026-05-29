@@ -14,7 +14,7 @@ func toModelInfos(models []service.Model) []api.ModelInfo {
 	modelInfos := make([]api.ModelInfo, len(models))
 	for i, m := range models {
 		modelInfos[i] = api.ModelInfo{
-			Id:       m.ID,
+			ID:       m.ID,
 			Name:     m.Name,
 			Provider: m.Provider,
 		}
