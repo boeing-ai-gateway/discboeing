@@ -511,6 +511,97 @@ func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 	}
 }
 
+func TestReadThreadScript_PrintsToolResultOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix script test")
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+	agent.ensureHelperScripts()
+
+	threadID := "thread-1"
+	if err := store.CreateThread(threadID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig(threadID, thread.Config{
+		Name:         "Tool Thread",
+		ActiveLeafID: "msg-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	messagesDir := filepath.Join(store.ThreadDir(threadID), "messages")
+	if err := os.MkdirAll(messagesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, msg := range []map[string]any{
+		{
+			"id":       "msg-1",
+			"parentId": "",
+			"message": map[string]any{
+				"role": "assistant",
+				"parts": []map[string]any{{
+					"type":       "tool-call",
+					"toolCallId": "call-1",
+					"toolName":   "read_file",
+					"input":      map[string]any{"path": "README.md"},
+				}},
+			},
+		},
+		{
+			"id":       "msg-2",
+			"parentId": "msg-1",
+			"message": map[string]any{
+				"role": "tool",
+				"parts": []map[string]any{{
+					"type":       "tool-result",
+					"toolCallId": "call-1",
+					"toolName":   "read_file",
+					"output": map[string]any{
+						"type":  "text",
+						"value": "file contents from tool",
+					},
+				}},
+			},
+		},
+	} {
+		data, err := json.Marshal(msg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(messagesDir, msg["id"].(string)+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmd, err := helperScriptCommand(readThreadScriptPath(), threadID)
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("read-thread failed: %v\n%s", err, string(out))
+	}
+
+	got := string(out)
+	for _, want := range []string{
+		"[tool call] read_file",
+		"[tool result] read_file",
+		"file contents from tool",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in output, got %q", want, got)
+		}
+	}
+}
+
 func TestListThreadsPowerShellScript_Windows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("windows-only test")
@@ -644,13 +735,13 @@ func TestReadThreadPowerShellScript_Windows(t *testing.T) {
 	}
 }
 
-func helperScriptCommand(path string) (*exec.Cmd, error) {
+func helperScriptCommand(path string, args ...string) (*exec.Cmd, error) {
 	if runtime.GOOS != "windows" {
 		bashPath, err := exec.LookPath("bash")
 		if err != nil {
 			return nil, err
 		}
-		return exec.Command(bashPath, path), nil
+		return exec.Command(bashPath, append([]string{path}, args...)...), nil
 	}
 
 	for _, name := range []string{"powershell.exe", "powershell", "pwsh.exe", "pwsh"} {
@@ -658,7 +749,8 @@ func helperScriptCommand(path string) (*exec.Cmd, error) {
 		if err != nil {
 			continue
 		}
-		return exec.Command(shellPath, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path), nil
+		commandArgs := append([]string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path}, args...)
+		return exec.Command(shellPath, commandArgs...), nil
 	}
 
 	return nil, os.ErrNotExist

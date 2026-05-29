@@ -109,7 +109,12 @@ function Format-Part {
             if ([string]::IsNullOrWhiteSpace($toolName)) {
                 $toolName = "tool"
             }
-            return "[tool result] $toolName"
+            $result = "[tool result] $toolName"
+            $output = Format-ToolOutput (Get-JsonPropertyValue $Part "output")
+            if ([string]::IsNullOrWhiteSpace($output)) {
+                return $result
+            }
+            return $result + [Environment]::NewLine + $output
         }
         "tool-approval-request" {
             $approvalID = [string](Get-JsonPropertyValue $Part "approvalId")
@@ -130,6 +135,55 @@ function Format-Part {
                 return "[part]"
             }
             return "[$partType]"
+        }
+    }
+}
+
+function Format-ToolOutput {
+    param($Output)
+
+    if ($null -eq $Output) {
+        return ""
+    }
+
+    $outputType = [string](Get-JsonPropertyValue $Output "type")
+    switch ($outputType) {
+        "text" {
+            return [string](Get-JsonPropertyValue $Output "value").Trim()
+        }
+        "error-text" {
+            return [string](Get-JsonPropertyValue $Output "value").Trim()
+        }
+        "json" {
+            return (Format-JsonValue (Get-JsonPropertyValue $Output "value")).Trim()
+        }
+        "error-json" {
+            return (Format-JsonValue (Get-JsonPropertyValue $Output "value")).Trim()
+        }
+        "execution-denied" {
+            $reason = [string](Get-JsonPropertyValue $Output "reason")
+            if ([string]::IsNullOrWhiteSpace($reason)) {
+                return "execution denied"
+            }
+            return "execution denied: $reason"
+        }
+        "content" {
+            $rendered = New-Object System.Collections.Generic.List[string]
+            foreach ($item in @(Get-JsonPropertyValue $Output "value")) {
+                $itemType = [string](Get-JsonPropertyValue $item "type")
+                if ($itemType -eq "text") {
+                    $text = [string](Get-JsonPropertyValue $item "text")
+                    if (-not [string]::IsNullOrWhiteSpace($text)) {
+                        [void]$rendered.Add($text.Trim())
+                    }
+                    continue
+                }
+                [void]$rendered.Add((Format-JsonValue $item))
+            }
+            return [string]::Join([Environment]::NewLine, $rendered)
+        }
+        default {
+            return Format-JsonValue $Output
         }
     }
 }

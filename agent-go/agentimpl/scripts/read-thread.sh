@@ -125,12 +125,50 @@ def format_part(part):
             return f"[tool call] {tool_name} {tool_input}"
         return f"[tool call] {tool_name}"
     if part_type == "tool-result":
-        return f"[tool result] {part.get('toolName', 'tool')}"
+        result = f"[tool result] {part.get('toolName', 'tool')}"
+        output = format_tool_output(part.get("output"))
+        if output:
+            return result + "\n" + output
+        return result
     if part_type == "tool-approval-request":
         return f"[approval request] {part.get('approvalId', '')}".strip()
     if part_type == "tool-approval-response":
         return f"[approval response] {part.get('approvalId', '')}".strip()
     return f"[{part_type or 'part'}]"
+
+
+def format_tool_output(output):
+    if not isinstance(output, dict):
+        return ""
+    output_type = output.get("type", "")
+    if output_type in ("text", "error-text"):
+        return str(output.get("value", "")).strip()
+    if output_type in ("json", "error-json"):
+        value = output.get("value")
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        return json.dumps(value, ensure_ascii=False)
+    if output_type == "execution-denied":
+        reason = str(output.get("reason", "")).strip()
+        if reason:
+            return f"execution denied: {reason}"
+        return "execution denied"
+    if output_type == "content":
+        rendered = []
+        for item in output.get("value", []):
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type", "")
+            if item_type == "text":
+                text = str(item.get("text", "")).strip()
+                if text:
+                    rendered.append(text)
+                continue
+            rendered.append(json.dumps(item, ensure_ascii=False))
+        return "\n".join(rendered)
+    return json.dumps(output, ensure_ascii=False)
 
 
 def format_message(entry):
