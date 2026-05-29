@@ -2,6 +2,7 @@
 name: Discobot templ guidelines reviewer
 type: file
 engine: ai
+phase: review
 pattern: "discobot/**/*.templ"
 ---
 

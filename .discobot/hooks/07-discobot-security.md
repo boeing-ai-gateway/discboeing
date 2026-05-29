@@ -2,6 +2,7 @@
 name: Security reviewer
 type: file
 engine: ai
+phase: review
 pattern: "{discobot,server,agent-go}/**"
 ---
 
