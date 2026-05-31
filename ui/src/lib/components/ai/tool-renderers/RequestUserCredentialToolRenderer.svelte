@@ -86,9 +86,7 @@
 		{},
 	);
 	let validityValueByEnvVar = $state<Record<string, string>>({});
-	let validityUnitByEnvVar = $state<
-		Record<string, "hours" | "days" | "weeks" | "never">
-	>({});
+	let validityUnitByEnvVar = $state<Record<string, CredentialValidityUnit>>({});
 	let localGrantedCredentials = $state<GrantedCredential[]>([]);
 	let rejectionReason = $state("");
 	let showRejectionForm = $state(false);
@@ -144,6 +142,12 @@
 		return name.length > 0 ? name : "Sudo approval";
 	}
 
+	function defaultValidityPreset(
+		credential: RequestedCredential,
+	): CredentialValidityPreset {
+		return isSudoCredentialRequest(credential) ? "15_minutes" : "1_hour";
+	}
+
 	function initializeDrafts(credentials: RequestedCredential[]) {
 		selectedOptionByEnvVar = Object.fromEntries(
 			credentials.map((credential) => [
@@ -157,7 +161,10 @@
 		);
 		createCredentialSecretsByEnvVar = {};
 		validityPresetByEnvVar = Object.fromEntries(
-			credentials.map((credential) => [credential.envVar, "1_hour"]),
+			credentials.map((credential) => [
+				credential.envVar,
+				defaultValidityPreset(credential),
+			]),
 		) as Record<string, CredentialValidityPreset>;
 		localGrantedCredentials = [];
 		rejectionReason = "";
@@ -173,7 +180,7 @@
 		);
 		validityUnitByEnvVar = Object.fromEntries(
 			credentials.map((credential) => [credential.envVar, "hours"]),
-		) as Record<string, "hours" | "days" | "weeks" | "never">;
+		) as Record<string, CredentialValidityUnit>;
 		isSubmittingApproval = false;
 		isSubmittingRejection = false;
 	}
@@ -628,12 +635,13 @@
 		try {
 			const resolvedCredentialIds: Record<string, string> = {};
 			for (const request of pendingCredentialRequest.credentials) {
+				const expiresAt = buildCredentialUseExpiryFromPreset(
+					validityPresetByEnvVar[request.envVar] ??
+						defaultValidityPreset(request),
+					validityValueByEnvVar[request.envVar] ?? "1",
+					validityUnitByEnvVar[request.envVar] ?? "hours",
+				);
 				if (isSudoCredentialRequest(request)) {
-					const expiresAt = buildCredentialUseExpiryFromPreset(
-						"15_minutes",
-						"1",
-						"hours",
-					);
 					const credential = await createSudoApprovalCredential(
 						request,
 						expiresAt,
@@ -641,11 +649,6 @@
 					resolvedCredentialIds[request.envVar] = credential.id;
 					continue;
 				}
-				const expiresAt = buildCredentialUseExpiryFromPreset(
-					validityPresetByEnvVar[request.envVar] ?? "1_hour",
-					validityValueByEnvVar[request.envVar] ?? "1",
-					validityUnitByEnvVar[request.envVar] ?? "hours",
-				);
 				const selectedOption =
 					selectedOptionByEnvVar[request.envVar]?.trim() ?? "";
 				if (!selectedOption) {
@@ -976,112 +979,6 @@
 									{/if}
 								</div>
 
-								<div class="space-y-2">
-									<p
-										class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-									>
-										How long it is valid
-									</p>
-									<Select
-										type="single"
-										value={validityPresetByEnvVar[request.envVar] ?? "1_hour"}
-										onValueChange={(value) => {
-											validityPresetByEnvVar = {
-												...validityPresetByEnvVar,
-												[request.envVar]: value as CredentialValidityPreset,
-											};
-											if (value === "custom") {
-												validityValueByEnvVar = {
-													...validityValueByEnvVar,
-													[request.envVar]:
-														validityValueByEnvVar[request.envVar] ?? "1",
-												};
-												validityUnitByEnvVar = {
-													...validityUnitByEnvVar,
-													[request.envVar]:
-														validityUnitByEnvVar[request.envVar] ?? "hours",
-												};
-											}
-										}}
-									>
-										<SelectTrigger class="w-full">
-											{validityPresets.find(
-												(preset) =>
-													preset.value ===
-													(validityPresetByEnvVar[request.envVar] ?? "1_hour"),
-											)?.label ?? "1 hour"}
-										</SelectTrigger>
-										<SelectContent>
-											{#each validityPresets as preset (preset.value)}
-												<SelectItem value={preset.value}
-													>{preset.label}</SelectItem
-												>
-											{/each}
-										</SelectContent>
-									</Select>
-								</div>
-
-								{#if (validityPresetByEnvVar[request.envVar] ?? "1_hour") === "custom"}
-									<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-										<div class="space-y-2">
-											<label
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-												for={`validity-${request.envVar}`}
-											>
-												Custom duration
-											</label>
-											<Input
-												id={`validity-${request.envVar}`}
-												type="number"
-												min="1"
-												disabled={(validityUnitByEnvVar[request.envVar] ??
-													"hours") === "never"}
-												value={validityValueByEnvVar[request.envVar] ?? "1"}
-												oninput={(event) => {
-													validityValueByEnvVar = {
-														...validityValueByEnvVar,
-														[request.envVar]: (
-															event.currentTarget as HTMLInputElement
-														).value,
-													};
-												}}
-											/>
-										</div>
-										<div class="space-y-2">
-											<p
-												class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
-											>
-												Unit
-											</p>
-											<Select
-												type="single"
-												value={validityUnitByEnvVar[request.envVar] ?? "hours"}
-												onValueChange={(value) => {
-													validityUnitByEnvVar = {
-														...validityUnitByEnvVar,
-														[request.envVar]: value as CredentialValidityUnit,
-													};
-												}}
-											>
-												<SelectTrigger class="w-full">
-													{validityUnits.find(
-														(unit) =>
-															unit.value ===
-															(validityUnitByEnvVar[request.envVar] ?? "hours"),
-													)?.label ?? "Hours"}
-												</SelectTrigger>
-												<SelectContent>
-													{#each validityUnits as unit (unit.value)}
-														<SelectItem value={unit.value}
-															>{unit.label}</SelectItem
-														>
-													{/each}
-												</SelectContent>
-											</Select>
-										</div>
-									</div>
-								{/if}
-
 								{#if selectedOption === CUSTOM_CREDENTIAL_OPTION}
 									<div
 										class="space-y-3 rounded-md border border-dashed border-border p-3"
@@ -1121,6 +1018,114 @@
 										/>
 									</div>
 								{/if}
+							{/if}
+
+							<div class="space-y-2">
+								<p
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+								>
+									How long it is valid
+								</p>
+								<Select
+									type="single"
+									value={validityPresetByEnvVar[request.envVar] ??
+										defaultValidityPreset(request)}
+									onValueChange={(value) => {
+										validityPresetByEnvVar = {
+											...validityPresetByEnvVar,
+											[request.envVar]: value as CredentialValidityPreset,
+										};
+										if (value === "custom") {
+											validityValueByEnvVar = {
+												...validityValueByEnvVar,
+												[request.envVar]:
+													validityValueByEnvVar[request.envVar] ?? "1",
+											};
+											validityUnitByEnvVar = {
+												...validityUnitByEnvVar,
+												[request.envVar]:
+													validityUnitByEnvVar[request.envVar] ?? "hours",
+											};
+										}
+									}}
+								>
+									<SelectTrigger class="w-full">
+										{validityPresets.find(
+											(preset) =>
+												preset.value ===
+												(validityPresetByEnvVar[request.envVar] ??
+													defaultValidityPreset(request)),
+										)?.label ?? "1 hour"}
+									</SelectTrigger>
+									<SelectContent>
+										{#each validityPresets as preset (preset.value)}
+											<SelectItem value={preset.value}
+												>{preset.label}</SelectItem
+											>
+										{/each}
+									</SelectContent>
+								</Select>
+							</div>
+
+							{#if (validityPresetByEnvVar[request.envVar] ?? defaultValidityPreset(request)) === "custom"}
+								<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+									<div class="space-y-2">
+										<label
+											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+											for={`validity-${request.envVar}`}
+										>
+											Custom duration
+										</label>
+										<Input
+											id={`validity-${request.envVar}`}
+											type="number"
+											min="1"
+											disabled={(validityUnitByEnvVar[request.envVar] ??
+												"hours") === "never"}
+											value={validityValueByEnvVar[request.envVar] ?? "1"}
+											oninput={(event) => {
+												validityValueByEnvVar = {
+													...validityValueByEnvVar,
+													[request.envVar]: (
+														event.currentTarget as HTMLInputElement
+													).value,
+												};
+											}}
+										/>
+									</div>
+									<div class="space-y-2">
+										<p
+											class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+										>
+											Unit
+										</p>
+										<Select
+											type="single"
+											value={validityUnitByEnvVar[request.envVar] ?? "hours"}
+											onValueChange={(value) => {
+												validityUnitByEnvVar = {
+													...validityUnitByEnvVar,
+													[request.envVar]: value as CredentialValidityUnit,
+												};
+											}}
+										>
+											<SelectTrigger class="w-full">
+												{validityUnits.find(
+													(unit) =>
+														unit.value ===
+														(validityUnitByEnvVar[request.envVar] ?? "hours"),
+												)?.label ?? "Hours"}
+											</SelectTrigger>
+											<SelectContent>
+												{#each validityUnits as unit (unit.value)}
+													<SelectItem value={unit.value}
+														>{unit.label}</SelectItem
+													>
+												{/each}
+											</SelectContent>
+										</Select>
+									</div>
+								</div>
 							{/if}
 						</div>
 					{/each}

@@ -200,10 +200,13 @@ sudo grants do not remain valid after the terminal session closes.
 Agent Bash tool invocations must first obtain an approved `DISCOBOT_SUDO_TOKEN`
 credential through the normal request-credential flow; the Bash tool injects
 the returned credential/use metadata so the gate can validate the sudo request
-against the approved use before privilege escalation. Exec API requests that
-ask to run as a different OS user are also started through `/usr/bin/sudo`
-instead of direct process credential switching, so root and non-root user
-acquisition follow the same gate and sudoers policy.
+against the approved use before privilege escalation. Sudo approvals carry the
+same per-use expiration metadata as other credential-use grants, and the local
+agent rejects expired approved uses even if it has not yet received a refreshed
+credential header. Exec API requests that ask to run as a different OS user are
+also started through `/usr/bin/sudo` instead of direct process credential
+switching, so root and non-root user acquisition follow the same gate and
+sudoers policy.
 
 ## Data Model
 

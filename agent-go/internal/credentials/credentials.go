@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // EnvVar represents a credential mapped to an environment variable.
@@ -30,9 +31,11 @@ type EnvVar struct {
 }
 
 type AuthorizedUse struct {
-	ID                 string `json:"id"`
-	Description        string `json:"description"`
-	LastUsedToolCallID string `json:"lastUsedToolCallId,omitempty"`
+	ID                 string     `json:"id"`
+	Description        string     `json:"description"`
+	CreatedAt          *time.Time `json:"createdAt,omitempty"`
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
+	LastUsedToolCallID string     `json:"lastUsedToolCallId,omitempty"`
 }
 
 type ReportableUse struct {

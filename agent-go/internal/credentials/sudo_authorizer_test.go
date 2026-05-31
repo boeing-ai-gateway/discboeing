@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 )
@@ -131,5 +132,46 @@ func TestSudoAuthorizer_AllowsApprovedAgentSudo(t *testing.T) {
 	}
 	if len(resolver.requests) != 0 {
 		t.Fatalf("expected sudo authorization to skip model validation, got %d requests", len(resolver.requests))
+	}
+}
+
+func TestSudoAuthorizer_RejectsExpiredAgentSudoUse(t *testing.T) {
+	mgr := NewManager()
+	expiredAt := time.Now().Add(-time.Minute)
+	headerValue, err := json.Marshal([]map[string]any{{
+		"sessionCredentialId": "session-sudo-1",
+		"credentialId":        "cred-sudo-1",
+		"uses": []AuthorizedUse{{
+			ID:          "use-sudo-1",
+			Description: "install apt packages needed for the build",
+			ExpiresAt:   &expiredAt,
+		}},
+		"category":     sudoauth.TokenCategory,
+		"envVar":       SudoTokenEnvVar,
+		"value":        "sudo-token",
+		"provider":     "discobot",
+		"authType":     "approval",
+		"agentVisible": true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr.Apply(string(headerValue), "", "")
+	authorizer := NewSudoAuthorizer(nil, mgr)
+
+	resp, err := authorizer.AuthorizeSudo(context.Background(), sudoauth.AuthorizeRequest{
+		Runtime:      "agent",
+		Token:        "sudo-token",
+		CredentialID: "session-sudo-1",
+		UseID:        "use-sudo-1",
+		ToolCallID:   "tool-1",
+		Args:         []string{"apt-get", "update"},
+		Cwd:          "/workspace",
+	})
+	if err != nil {
+		t.Fatalf("AuthorizeSudo() error = %v", err)
+	}
+	if resp.Allow || !strings.Contains(resp.Reason, "expired") {
+		t.Fatalf("expected expired sudo use rejection, got %#v", resp)
 	}
 }

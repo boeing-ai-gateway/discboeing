@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 )
@@ -129,17 +130,21 @@ func (a *SudoAuthorizer) authorizeAgentSudo(_ context.Context, req sudoauth.Auth
 	if !cred.AgentVisible || cred.EnvVar != SudoTokenEnvVar || cred.Category != sudoauth.TokenCategory {
 		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo token is not authorized for sudo"}, nil
 	}
-	if !credentialHasApprovedUse(cred, req.UseID) {
+	approvedUse := credentialApprovedUse(cred, req.UseID)
+	if approvedUse == nil {
 		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo use is not authorized for this token"}, nil
+	}
+	if approvedUseExpired(*approvedUse, time.Now()) {
+		return sudoauth.AuthorizeResponse{Allow: false, Reason: "sudo approval has expired"}, nil
 	}
 	return sudoauth.AuthorizeResponse{Allow: true, Reason: "sudo token and approved use are valid"}, nil
 }
 
-func credentialHasApprovedUse(cred *EnvVar, useID string) bool {
+func credentialApprovedUse(cred *EnvVar, useID string) *AuthorizedUse {
 	for _, use := range cred.Uses {
 		if use.ID == useID {
-			return true
+			return &use
 		}
 	}
-	return false
+	return nil
 }

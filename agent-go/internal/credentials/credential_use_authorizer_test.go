@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -108,6 +109,38 @@ func TestCredentialUseAuthorizer_AllowsValidatedCommand(t *testing.T) {
 	}
 	if !strings.Contains(payload, `"command":"gh pr create --fill"`) {
 		t.Fatalf("validation payload missing command: %s", payload)
+	}
+}
+
+func TestCredentialUseAuthorizer_RejectsExpiredApprovedUse(t *testing.T) {
+	mgr := NewManager()
+	expiredAt := time.Now().Add(-time.Minute)
+	applyCredentialHeader(t, mgr, []AuthorizedUse{{
+		ID:          "use-1",
+		Description: "create pull requests with gh",
+		ExpiresAt:   &expiredAt,
+	}})
+
+	resolver := &credentialValidationMockResolver{
+		models: map[string]AuthorizationModelRef{
+			"mock\x00chat": {ProviderID: "mock", ModelID: "validator-model"},
+		},
+	}
+
+	authorizer := NewCredentialUseAuthorizer(resolver, mgr, "validator prompt")
+	err := authorizer.Authorize(context.Background(), "mock", "tool-call-1", "gh pr create --fill", "open a pull request", []CredentialUseBinding{{
+		CredentialID: "session-cred-1",
+		UseID:        "use-1",
+		EnvVar:       "GITHUB_TOKEN",
+	}})
+	if err == nil {
+		t.Fatal("expected expired use rejection")
+	}
+	if !strings.Contains(err.Error(), "has expired") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolver.requests) != 0 {
+		t.Fatalf("expected expired use to skip model validation, got %d requests", len(resolver.requests))
 	}
 }
 

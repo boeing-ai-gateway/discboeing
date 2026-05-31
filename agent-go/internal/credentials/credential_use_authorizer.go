@@ -94,6 +94,9 @@ func (a *CredentialUseAuthorizer) Authorize(ctx context.Context, currentProvider
 		if approvedUse == nil {
 			return fmt.Errorf("credential use %s is not authorized for credential id %s", use.UseID, use.CredentialID)
 		}
+		if approvedUseExpired(*approvedUse, time.Now()) {
+			return fmt.Errorf("credential use %s for credential id %s has expired", use.UseID, use.CredentialID)
+		}
 		if cred.Category == sudoauth.TokenCategory && cred.EnvVar == sudoauth.TokenEnvVar {
 			continue
 		}
@@ -130,6 +133,10 @@ func (a *CredentialUseAuthorizer) Authorize(ctx context.Context, currentProvider
 		}
 	}
 	return nil
+}
+
+func approvedUseExpired(use AuthorizedUse, now time.Time) bool {
+	return use.ExpiresAt != nil && !use.ExpiresAt.After(now)
 }
 
 func (a *CredentialUseAuthorizer) validateCommandAgainstApprovedUses(ctx context.Context, currentProviderID, toolCallID, command, description string, cred EnvVar, entries []credentialUseValidationEntry) (credentialUseValidationResult, error) {
