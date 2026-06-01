@@ -104,6 +104,10 @@ test("conversation pane renders expandable top-level error banners with thread r
 	assert.match(source, /if \(key !== "thread" \|\| !thread\) \{/);
 	assert.match(source, /label: "Retry"/);
 	assert.match(source, /void thread\.refresh\(\)/);
+	assert.match(source, /function isDroppedModelConnectionError/);
+	assert.match(source, /The model connection dropped unexpectedly/);
+	assert.match(source, /Show details/);
+	assert.match(source, /Hide details/);
 	assert.match(source, /line-clamp-3/);
 	assert.match(source, /max-h-64 overflow-auto pr-2/);
 	assert.match(source, /Show full error/);

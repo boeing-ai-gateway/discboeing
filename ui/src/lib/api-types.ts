@@ -561,6 +561,8 @@ export type ChatMessage = UIMessage<
 	ChatMessageDataTypes
 > & {
 	provisional?: boolean;
+	replacesMessageId?: string;
+	replacedByMessageId?: string;
 	status?: "streaming";
 };
 

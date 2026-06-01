@@ -667,9 +667,28 @@ func (lc *loopContext) runCompletionWithMaybeCompaction(
 	stepIndex int,
 	idOverride string,
 ) (message.Usage, bool) {
-	_, _, stepUsage, ok, completionErr := runCompletion(lc.ctx, lc.provider, lc.store, lc.threadID, lc.turnID, stepIndex, cfg, history, idOverride, lc.yield)
+	assistantMsg, _, stepUsage, ok, completionErr := runCompletion(lc.ctx, lc.provider, lc.store, lc.threadID, lc.turnID, stepIndex, cfg, history, lc.turnState.LeafMsgID, idOverride, "", lc.yield)
 	if ok {
 		return stepUsage, true
+	}
+	if providers.IsRecoverablePartialResponseError(completionErr) {
+		retryMessageID := generateID()
+		if !lc.yield(message.StartChunk{
+			MessageID:       retryMessageID,
+			MessageMetadata: buildMessageMetadata(*cfg, lc.turnState.ID, lc.turnState.StartedAt, nil),
+		}, nil) {
+			return message.Usage{}, false
+		}
+		_, _, stepUsage, ok, completionErr = runCompletion(lc.ctx, lc.provider, lc.store, lc.threadID, lc.turnID, stepIndex, cfg, history, lc.turnState.LeafMsgID, retryMessageID, assistantMsg.ID, lc.yield)
+		if ok {
+			return stepUsage, true
+		}
+		if completionErr != nil && (providers.IsRecoverablePartialResponseError(completionErr) || isContextLengthExceeded(completionErr)) {
+			if !lc.yield(nil, completionErr) {
+				return message.Usage{}, false
+			}
+		}
+		return message.Usage{}, false
 	}
 	if !isContextLengthExceeded(completionErr) {
 		// Non-context errors are already surfaced by runCompletion, so just stop.
@@ -688,7 +707,7 @@ func (lc *loopContext) runCompletionWithMaybeCompaction(
 		return message.Usage{}, false
 	}
 
-	_, _, stepUsage, ok, completionErr = runCompletion(lc.ctx, lc.provider, lc.store, lc.threadID, lc.turnID, stepIndex, cfg, forceCompacted, idOverride, lc.yield)
+	_, _, stepUsage, ok, completionErr = runCompletion(lc.ctx, lc.provider, lc.store, lc.threadID, lc.turnID, stepIndex, cfg, forceCompacted, lc.turnState.LeafMsgID, idOverride, "", lc.yield)
 	if ok {
 		return stepUsage, true
 	}
@@ -1323,6 +1342,22 @@ func recordCommunicatedCredentialResult(store *Store, threadID string, result me
 	return nil
 }
 
+func savePartialAssistantMessage(store *Store, threadID string, parentMsgID string, cfg *TurnConfig, assistantMsg message.Message) (string, error) {
+	assistantMsg.Metadata = buildMessageMetadata(*cfg, "", nil, nil)
+	assistantMsgID := resolveMessageID(assistantMsg)
+	if err := store.SaveMessage(threadID, StoredMessage{
+		ID:       assistantMsgID,
+		ParentID: parentMsgID,
+		Message:  assistantMsg,
+	}); err != nil {
+		if errors.Is(err, ErrMessageExists) {
+			return assistantMsgID, nil
+		}
+		return "", fmt.Errorf("save partial assistant message: %w", err)
+	}
+	return assistantMsgID, nil
+}
+
 func saveAssistantStepMessage(
 	store *Store,
 	threadID, turnID string,
@@ -1347,9 +1382,10 @@ func saveAssistantStepMessage(
 	assistantMsg.Metadata = buildMessageMetadata(cfg, turnState.ID, turnState.StartedAt, nil)
 	assistantMsgID := resolveMessageID(assistantMsg)
 	stored := StoredMessage{
-		ID:       assistantMsgID,
-		ParentID: turnState.LeafMsgID,
-		Message:  assistantMsg,
+		ID:         assistantMsgID,
+		ParentID:   turnState.LeafMsgID,
+		ReplacesID: stepResult.ReplacesMessageID,
+		Message:    assistantMsg,
 	}
 	if err := store.SaveMessage(threadID, stored); err != nil {
 		if !errors.Is(err, ErrMessageExists) {
@@ -1668,7 +1704,9 @@ func runCompletion(
 	stepIndex int,
 	cfg *TurnConfig,
 	history []message.Message,
+	parentMsgID string,
 	msgIDOverride string,
+	replacesMsgID string,
 	yield func(message.MessageChunk, error) bool,
 ) (message.Message, []message.ToolCallPart, message.Usage, bool, error) {
 	req := providers.CompleteRequest{
@@ -1700,6 +1738,7 @@ func runCompletion(
 
 	acc := message.NewChunkAccumulator()
 	exp := message.NewChunkExpander(stepIndex == 0)
+	closer := newStreamCloseTracker()
 	var streamErr error
 
 	emitRetryChunk := func(event transport.RetryEvent) {
@@ -1721,7 +1760,7 @@ func runCompletion(
 	for chunk, chunkErr := range provider.Complete(ctx, req) {
 		if chunkErr != nil {
 			streamErr = chunkErr
-			if ctx.Err() == nil && !isContextLengthExceeded(chunkErr) {
+			if ctx.Err() == nil && !isContextLengthExceeded(chunkErr) && !providers.IsRecoverablePartialResponseError(chunkErr) {
 				// Non-cancellation, non-retryable error — yield to consumer.
 				if !yield(nil, chunkErr) {
 					stepFile.Close()
@@ -1741,6 +1780,7 @@ func runCompletion(
 		}
 
 		acc.Push(chunk)
+		closer.Observe(chunk)
 
 		for _, mc := range exp.Expand(chunk) {
 			if !yield(mc, nil) {
@@ -1763,6 +1803,29 @@ func runCompletion(
 			return partialMsg, nil, message.Usage{}, true, nil
 		}
 		return message.Message{}, nil, message.Usage{}, false, nil
+	}
+
+	if streamErr != nil && providers.IsRecoverablePartialResponseError(streamErr) {
+		acc.Close()
+		partialMsg := acc.Message()
+		partialMsg.Parts = filterContentParts(partialMsg.Parts)
+		if msgIDOverride != "" {
+			partialMsg.ID = msgIDOverride
+		}
+		if len(partialMsg.Parts) > 0 {
+			partialMsgID, err := savePartialAssistantMessage(store, threadID, parentMsgID, cfg, partialMsg)
+			if err != nil {
+				yield(nil, err)
+				return message.Message{}, nil, message.Usage{}, false, nil
+			}
+			partialMsg.ID = partialMsgID
+		}
+		for _, chunk := range closer.FinishChunks("error", buildMessageMetadata(*cfg, "", nil, nil)) {
+			if !yield(chunk, nil) {
+				return message.Message{}, nil, message.Usage{}, false, nil
+			}
+		}
+		return partialMsg, extractToolCalls(partialMsg), message.Usage{}, false, streamErr
 	}
 
 	if streamErr != nil {
@@ -1792,8 +1855,9 @@ func runCompletion(
 
 	// Persist step result (assistant message + tool call list).
 	stepResult := StepResult{
-		AssistantMessage: assistantMsg,
-		Usage:            usage,
+		AssistantMessage:  assistantMsg,
+		ReplacesMessageID: replacesMsgID,
+		Usage:             usage,
 	}
 	for _, tc := range toolCalls {
 		stepResult.ToolCalls = append(stepResult.ToolCalls, ToolCallInfo{
@@ -1808,6 +1872,75 @@ func runCompletion(
 	}
 
 	return assistantMsg, toolCalls, usage, true, nil
+}
+
+type streamCloseTracker struct {
+	textIDs      []string
+	reasoningIDs []string
+	toolInputIDs []string
+	activeText   map[string]bool
+	activeReason map[string]bool
+	activeTools  map[string]bool
+}
+
+func newStreamCloseTracker() *streamCloseTracker {
+	return &streamCloseTracker{
+		activeText:   map[string]bool{},
+		activeReason: map[string]bool{},
+		activeTools:  map[string]bool{},
+	}
+}
+
+func (t *streamCloseTracker) Observe(chunk message.ProviderMessageChunk) {
+	switch c := chunk.(type) {
+	case message.TextStartChunk:
+		if !t.activeText[c.ID] {
+			t.textIDs = append(t.textIDs, c.ID)
+		}
+		t.activeText[c.ID] = true
+	case message.TextEndChunk:
+		t.activeText[c.ID] = false
+	case message.ReasoningStartChunk:
+		if !t.activeReason[c.ID] {
+			t.reasoningIDs = append(t.reasoningIDs, c.ID)
+		}
+		t.activeReason[c.ID] = true
+	case message.ReasoningEndChunk:
+		t.activeReason[c.ID] = false
+	case message.ToolInputStartChunk:
+		if !t.activeTools[c.ToolCallID] {
+			t.toolInputIDs = append(t.toolInputIDs, c.ToolCallID)
+		}
+		t.activeTools[c.ToolCallID] = true
+	case message.ToolInputEndChunk:
+		t.activeTools[c.ToolCallID] = false
+	case message.ToolCallChunk:
+		// Non-streamed tool calls expand to already-complete UI chunks.
+	}
+}
+
+func (t *streamCloseTracker) FinishChunks(reason string, metadata json.RawMessage) []message.MessageChunk {
+	var chunks []message.MessageChunk
+	for _, id := range t.textIDs {
+		if t.activeText[id] {
+			chunks = append(chunks, message.TextEndChunk{ID: id})
+			t.activeText[id] = false
+		}
+	}
+	for _, id := range t.reasoningIDs {
+		if t.activeReason[id] {
+			chunks = append(chunks, message.ReasoningEndChunk{ID: id})
+			t.activeReason[id] = false
+		}
+	}
+	for _, id := range t.toolInputIDs {
+		if t.activeTools[id] {
+			chunks = append(chunks, message.ToolInputEndChunk{ToolCallID: id})
+			t.activeTools[id] = false
+		}
+	}
+	chunks = append(chunks, message.ResponseFinishChunk{FinishReason: reason, MessageMetadata: metadata})
+	return chunks
 }
 
 func makeRetryStatusChunk(event transport.RetryEvent) (message.DataChunk, error) {
@@ -2239,7 +2372,7 @@ func findToolName(toolCalls []ToolCallInfo, toolCallID string) string {
 
 // filterContentParts returns only text and reasoning parts from a message,
 // dropping incomplete tool calls. Used when saving a partial assistant message
-// after context cancellation.
+// after context cancellation or a recoverable partial stream interruption.
 func filterContentParts(parts []message.Part) []message.Part {
 	var filtered []message.Part
 	for _, p := range parts {

@@ -1596,7 +1596,19 @@ func (a *DefaultAgent) Messages(threadID, leafID string) ([]message.UIMessage, e
 	}
 	history := make([]message.Message, 0, len(historyEntries))
 	for _, entry := range historyEntries {
+		if replacedID := strings.TrimSpace(entry.ReplacesID); replacedID != "" {
+			replaced, err := a.store.LoadMessage(threadID, replacedID)
+			if err != nil {
+				return nil, err
+			}
+			replacedMsg := replaced.Message
+			replacedMsg.ID = replaced.ID
+			replacedMsg.ReplacedByMessageID = entry.ID
+			history = append(history, replacedMsg)
+		}
 		msg := entry.Message
+		msg.ID = entry.ID
+		msg.ReplacesMessageID = entry.ReplacesID
 		if turnID := strings.TrimSpace(turnIDsByMessageID[entry.ID]); turnID != "" {
 			msg.Metadata = mergeTurnIDIntoMessageMetadata(msg.Metadata, turnID)
 		}

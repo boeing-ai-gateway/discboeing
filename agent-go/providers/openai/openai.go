@@ -946,6 +946,14 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var eventType string
+	completed := false
+	retryUnsafe := false
+	streamYield := func(chunk message.ProviderMessageChunk, err error) bool {
+		if chunk != nil && isWebSocketRetryUnsafeChunk(chunk) {
+			retryUnsafe = true
+		}
+		return yield(chunk, err)
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if event, ok := strings.CutPrefix(line, "event: "); ok {
@@ -954,7 +962,10 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 		}
 		if data, ok := strings.CutPrefix(line, "data: "); ok {
 			if eventType != "" {
-				if !state.handleSSEEvent(eventType, []byte(data), yield) {
+				if eventType == "response.completed" || eventType == "response.incomplete" {
+					completed = true
+				}
+				if !state.handleSSEEvent(eventType, []byte(data), streamYield) {
 					return
 				}
 				eventType = ""
@@ -966,8 +977,19 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		yield(nil, fmt.Errorf("openai: read SSE stream: %w", err))
+		yieldOpenAISSEStreamError(yield, retryUnsafe, fmt.Errorf("openai: read SSE stream: %w", err))
+		return
 	}
+	if !completed {
+		yieldOpenAISSEStreamError(yield, retryUnsafe, fmt.Errorf("openai: SSE stream ended before response.completed"))
+	}
+}
+
+func yieldOpenAISSEStreamError(yield func(message.ProviderMessageChunk, error) bool, retryUnsafe bool, err error) {
+	if retryUnsafe {
+		err = providers.MarkRecoverablePartialResponse(err)
+	}
+	yield(nil, err) //nolint:errcheck
 }
 
 func (s *streamState) handleSSEEvent(eventType string, data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {

@@ -139,6 +139,7 @@ type AsyncContinuationInfo struct {
 // list of tool calls that need execution.
 type StepResult struct {
 	AssistantMessageID string          `json:"assistantMessageId,omitempty"`
+	ReplacesMessageID  string          `json:"replacesMessageId,omitempty"`
 	AssistantMessage   message.Message `json:"assistantMessage"`
 	ToolCalls          []ToolCallInfo  `json:"toolCalls,omitempty"`
 	Usage              message.Usage   `json:"usage,omitzero"`

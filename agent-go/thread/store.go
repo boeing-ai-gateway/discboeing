@@ -49,9 +49,10 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 // Walking the ParentID chain from leaf to root (then reversing)
 // gives the chronological conversation history.
 type StoredMessage struct {
-	ID       string          `json:"id"`
-	ParentID string          `json:"parentId,omitempty"`
-	Message  message.Message `json:"message"`
+	ID         string          `json:"id"`
+	ParentID   string          `json:"parentId,omitempty"`
+	ReplacesID string          `json:"replacesId,omitempty"`
+	Message    message.Message `json:"message"`
 }
 
 // Store handles file I/O for thread persistence.
@@ -214,9 +215,10 @@ func (s *Store) HistoryTurnIDs(threadID string) (map[string]string, error) {
 
 // HistoryEntry pairs a message with its stored ID and parent ID.
 type HistoryEntry struct {
-	ID       string
-	ParentID string
-	Message  message.Message
+	ID         string
+	ParentID   string
+	ReplacesID string
+	Message    message.Message
 }
 
 // BuildHistoryWithIDs is like BuildHistory but also returns message IDs.

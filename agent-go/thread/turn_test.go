@@ -21,6 +21,7 @@ import (
 // Each call to Complete pops the next response from the responses slice.
 type mockProvider struct {
 	responses [][]message.ProviderMessageChunk // one per Complete() call
+	errors    []error
 	callIndex int
 	requests  []providers.CompleteRequest // captured requests
 }
@@ -41,12 +42,31 @@ func (m *mockProvider) Complete(_ context.Context, req providers.CompleteRequest
 				return
 			}
 		}
+		if idx < len(m.errors) && m.errors[idx] != nil {
+			yield(nil, m.errors[idx]) //nolint:errcheck
+		}
 	}
 }
 
 func (m *mockProvider) DefaultModels() map[string]providers.ModelRef { return nil }
 func (m *mockProvider) ListModels(_ context.Context) ([]providers.ModelInfo, error) {
 	return nil, nil
+}
+
+type mockRecoverablePartialError struct {
+	err error
+}
+
+func (e mockRecoverablePartialError) Error() string {
+	return e.err.Error()
+}
+
+func (e mockRecoverablePartialError) Unwrap() error {
+	return e.err
+}
+
+func (e mockRecoverablePartialError) RecoverablePartialResponse() bool {
+	return true
 }
 
 // --- Mock executor ---
@@ -100,6 +120,25 @@ func collectChunks(t *testing.T, seq iter.Seq2[message.MessageChunk, error]) []m
 		}
 	}
 	return chunks
+}
+
+func findChunkIndexAfter(chunks []message.MessageChunk, after int, match func(message.MessageChunk) bool) int {
+	for i := after + 1; i < len(chunks); i++ {
+		if match(chunks[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func messageText(msg message.Message) string {
+	var parts []string
+	for _, part := range msg.Parts {
+		if textPart, ok := part.(message.TextPart); ok {
+			parts = append(parts, textPart.Text)
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 func toolResultParts(msgs []message.Message) []message.ToolResultPart {
@@ -182,6 +221,214 @@ func TestRunTurn_SimpleTextResponse(t *testing.T) {
 	}
 	if state != nil {
 		t.Error("expected turn.json to be deleted after turn completes")
+	}
+}
+
+func TestRunTurn_RetriesRecoverablePartialStreamError(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-recoverable-partial"
+
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "partial answer"},
+			},
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t2"},
+				message.TextDeltaChunk{ID: "t2", Delta: "complete answer"},
+				message.TextEndChunk{ID: "t2"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
+		},
+		errors: []error{
+			mockRecoverablePartialError{err: fmt.Errorf("openai: websocket read: EOF")},
+		},
+	}
+
+	chunks := collectChunks(t, RunTurn(
+		context.Background(), prov, &mockExecutor{}, store,
+		threadID, "", TurnConfig{
+			Model:     "test-model",
+			UserParts: []message.Part{message.TextPart{Text: "hi"}},
+		},
+	))
+
+	if prov.callIndex != 2 {
+		t.Fatalf("expected recoverable partial stream to be retried once, got %d calls", prov.callIndex)
+	}
+	for _, chunk := range chunks {
+		if errChunk, ok := chunk.(message.ErrorChunk); ok {
+			t.Fatalf("recoverable partial stream error should not emit ErrorChunk: %q", errChunk.ErrorText)
+		}
+	}
+	initialStart := findChunkIndexAfter(chunks, -1, func(chunk message.MessageChunk) bool {
+		_, ok := chunk.(message.StartChunk)
+		return ok
+	})
+	partialTextStart := findChunkIndexAfter(chunks, initialStart, func(chunk message.MessageChunk) bool {
+		textStart, ok := chunk.(message.TextStartChunk)
+		return ok && textStart.ID == "t1"
+	})
+	partialTextDelta := findChunkIndexAfter(chunks, partialTextStart, func(chunk message.MessageChunk) bool {
+		textDelta, ok := chunk.(message.TextDeltaChunk)
+		return ok && textDelta.ID == "t1" && textDelta.Delta == "partial answer"
+	})
+	partialTextEnd := findChunkIndexAfter(chunks, partialTextDelta, func(chunk message.MessageChunk) bool {
+		textEnd, ok := chunk.(message.TextEndChunk)
+		return ok && textEnd.ID == "t1"
+	})
+	partialFinish := findChunkIndexAfter(chunks, partialTextEnd, func(chunk message.MessageChunk) bool {
+		finish, ok := chunk.(message.ResponseFinishChunk)
+		return ok && finish.FinishReason == "error"
+	})
+	retryStart := findChunkIndexAfter(chunks, partialFinish, func(chunk message.MessageChunk) bool {
+		_, ok := chunk.(message.StartChunk)
+		return ok
+	})
+	retryTextStart := findChunkIndexAfter(chunks, retryStart, func(chunk message.MessageChunk) bool {
+		textStart, ok := chunk.(message.TextStartChunk)
+		return ok && textStart.ID == "t2"
+	})
+	retryTextDelta := findChunkIndexAfter(chunks, retryTextStart, func(chunk message.MessageChunk) bool {
+		textDelta, ok := chunk.(message.TextDeltaChunk)
+		return ok && textDelta.ID == "t2" && textDelta.Delta == "complete answer"
+	})
+	retryTextEnd := findChunkIndexAfter(chunks, retryTextDelta, func(chunk message.MessageChunk) bool {
+		textEnd, ok := chunk.(message.TextEndChunk)
+		return ok && textEnd.ID == "t2"
+	})
+	finalFinish := findChunkIndexAfter(chunks, retryTextEnd, func(chunk message.MessageChunk) bool {
+		finish, ok := chunk.(message.ResponseFinishChunk)
+		return ok && finish.FinishReason == "stop"
+	})
+	if initialStart < 0 || partialTextStart < 0 || partialTextDelta < 0 || partialTextEnd < 0 || partialFinish < 0 || retryStart < 0 || retryTextStart < 0 || retryTextDelta < 0 || retryTextEnd < 0 || finalFinish < 0 {
+		t.Fatalf("expected ordered partial-failure retry stream, got %#v", chunks)
+	}
+
+	state, err := store.LoadTurnState(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != nil {
+		t.Fatal("expected successful retry to complete the turn")
+	}
+
+	leafID, err := store.FindLeaf(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.BuildHistory(threadID, leafID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("expected user and replacement assistant messages, got %d", len(history))
+	}
+	if got := messageText(history[1]); got != "complete answer" {
+		t.Fatalf("expected replacement assistant text in active history, got %q", got)
+	}
+
+	turnIDs, err := store.ListTurnIDs(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turnIDs) != 1 {
+		t.Fatalf("expected one turn record, got %d", len(turnIDs))
+	}
+	stepResult, err := store.LoadStepResult(threadID, turnIDs[0], 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stepResult == nil || stepResult.ReplacesMessageID == "" {
+		t.Fatalf("expected replacement step result, got %#v", stepResult)
+	}
+	partial, err := store.LoadMessage(threadID, stepResult.ReplacesMessageID)
+	if err != nil {
+		t.Fatalf("load partial message: %v", err)
+	}
+	if got := messageText(partial.Message); got != "partial answer" {
+		t.Fatalf("expected partial assistant text to remain on disk, got %q", got)
+	}
+	nextProv := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t3"},
+				message.TextDeltaChunk{ID: "t3", Delta: "next answer"},
+				message.TextEndChunk{ID: "t3"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
+		},
+	}
+	collectChunks(t, RunTurn(
+		context.Background(), nextProv, &mockExecutor{}, store,
+		threadID, leafID, TurnConfig{
+			Model:     "test-model",
+			UserParts: []message.Part{message.TextPart{Text: "next question"}},
+		},
+	))
+	if len(nextProv.requests) != 1 {
+		t.Fatalf("expected one follow-up provider request, got %d", len(nextProv.requests))
+	}
+	for _, msg := range nextProv.requests[0].Messages {
+		if got := messageText(msg); got == "partial answer" {
+			t.Fatalf("follow-up provider request included replaced partial message: %#v", nextProv.requests[0].Messages)
+		}
+	}
+	if got := messageText(nextProv.requests[0].Messages[len(nextProv.requests[0].Messages)-2]); got != "complete answer" {
+		t.Fatalf("expected follow-up provider request to include replacement assistant, got %q", got)
+	}
+}
+
+func TestRunTurn_PropagatesRecoverablePartialRetryError(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-recoverable-partial-retry-error"
+
+	finalErr := mockRecoverablePartialError{err: fmt.Errorf("openai: websocket read: second EOF")}
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "partial answer"},
+			},
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t2"},
+				message.TextDeltaChunk{ID: "t2", Delta: "second partial"},
+			},
+		},
+		errors: []error{
+			mockRecoverablePartialError{err: fmt.Errorf("openai: websocket read: EOF")},
+			finalErr,
+		},
+	}
+
+	var gotErr error
+	for _, err := range RunTurn(
+		context.Background(), prov, &mockExecutor{}, store,
+		threadID, "", TurnConfig{
+			Model:     "test-model",
+			UserParts: []message.Part{message.TextPart{Text: "hi"}},
+		},
+	) {
+		if err != nil {
+			gotErr = err
+			break
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected retry error to propagate")
+	}
+	if gotErr.Error() != finalErr.Error() {
+		t.Fatalf("expected final retry error %q, got %q", finalErr.Error(), gotErr.Error())
+	}
+	if prov.callIndex != 2 {
+		t.Fatalf("expected exactly one retry, got %d calls", prov.callIndex)
 	}
 }
 

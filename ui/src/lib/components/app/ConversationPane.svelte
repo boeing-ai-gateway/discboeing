@@ -725,6 +725,26 @@
 		return `${stepCount} ${stepCount === 1 ? "step" : "steps"}`;
 	}
 
+	function isReplacedAssistantMessage(message: ChatMessage): boolean {
+		return message.role === "assistant" && Boolean(message.replacedByMessageId);
+	}
+
+	function getCollapsedAssistantHeaderLabel(
+		turn: ConversationTurn,
+		partGroups: ReturnType<typeof getAssistantMessagePartGroups> | null,
+	): string {
+		const groupedAssistantMessages = getTurnGroupedAssistantMessages(turn);
+		if (
+			groupedAssistantMessages.length === 1 &&
+			partGroups?.collapsedParts.length === 0 &&
+			isReplacedAssistantMessage(groupedAssistantMessages[0])
+		) {
+			return "Failed message";
+		}
+
+		return getCollapsedStepLabel(getTurnGroupedStepCount(turn, partGroups));
+	}
+
 	function getBrowserActivityStepLabel(stepCount: number): string {
 		return `${stepCount} browser ${stepCount === 1 ? "step" : "steps"}`;
 	}
@@ -836,6 +856,31 @@
 		return errorText.split(/\r?\n/).length > 3 || errorText.length > 240;
 	}
 
+	function isDroppedModelConnectionError(errorText: string): boolean {
+		const normalized = errorText.toLowerCase();
+		return normalized.includes("websocket read") && normalized.includes("eof");
+	}
+
+	function getErrorBannerDisplayText(
+		key: ConversationPaneErrorBannerKey,
+		errorText: string,
+	): string {
+		if (key === "thread" && isDroppedModelConnectionError(errorText)) {
+			return "The model connection dropped unexpectedly. Your work is saved. Retry to reconnect and continue.";
+		}
+		return errorText;
+	}
+
+	function getErrorBannerDetailsText(
+		key: ConversationPaneErrorBannerKey,
+		errorText: string,
+	): string | null {
+		if (key === "thread" && isDroppedModelConnectionError(errorText)) {
+			return errorText;
+		}
+		return null;
+	}
+
 	function isErrorBannerExpanded(key: ConversationPaneErrorBannerKey): boolean {
 		return expandedErrorBanners[key] ?? false;
 	}
@@ -864,7 +909,11 @@
 
 	function getErrorBannerToggleLabel(
 		key: ConversationPaneErrorBannerKey,
+		hasDetails = false,
 	): string {
+		if (hasDetails) {
+			return isErrorBannerExpanded(key) ? "Hide details" : "Show details";
+		}
 		return isErrorBannerExpanded(key) ? "Show less" : "Show full error";
 	}
 
@@ -1702,7 +1751,9 @@
 	key: ConversationPaneErrorBannerKey,
 	errorText: string,
 )}
-	{@const shouldCollapse = shouldCollapseErrorBanner(errorText)}
+	{@const displayText = getErrorBannerDisplayText(key, errorText)}
+	{@const detailsText = getErrorBannerDetailsText(key, errorText)}
+	{@const shouldCollapse = shouldCollapseErrorBanner(displayText)}
 	{@const isExpanded = isErrorBannerExpanded(key)}
 	{@const action = getErrorBannerAction(key)}
 	<Alert variant="destructive">
@@ -1714,8 +1765,15 @@
 					<p
 						class={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${shouldCollapse && !isExpanded ? "line-clamp-3" : ""}`}
 					>
-						{errorText}
+						{displayText}
 					</p>
+					{#if detailsText && isExpanded}
+						<p
+							class="mt-2 min-w-0 whitespace-pre-wrap break-words rounded-md border border-destructive/20 bg-destructive/5 p-2 font-mono text-[11px] [overflow-wrap:anywhere]"
+						>
+							{detailsText}
+						</p>
+					{/if}
 				</div>
 				<div class="flex flex-wrap items-center gap-3">
 					{#if action}
@@ -1728,7 +1786,7 @@
 							{action.label}
 						</Button>
 					{/if}
-					{#if shouldCollapse}
+					{#if shouldCollapse || detailsText}
 						<Button
 							aria-expanded={isExpanded}
 							class="h-auto px-0 text-xs text-destructive hover:text-destructive"
@@ -1736,7 +1794,7 @@
 							size="sm"
 							variant="link"
 						>
-							{getErrorBannerToggleLabel(key)}
+							{getErrorBannerToggleLabel(key, Boolean(detailsText))}
 						</Button>
 					{/if}
 				</div>
@@ -1814,6 +1872,8 @@
 										turn,
 										partGroups,
 									)}
+									{@const collapsedAssistantHeaderLabel =
+										getCollapsedAssistantHeaderLabel(turn, partGroups)}
 									{#if assistantMessage}
 										{@const isCollapsedStepSectionExpanded =
 											isAssistantStepMessageExpanded(turn.id)}
@@ -1824,7 +1884,7 @@
 													setAssistantStepMessageExpanded(turn.id, open)}
 											>
 												<CollapsibleTrigger
-													aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${getCollapsedStepLabel(groupedStepCount)}`}
+													aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${collapsedAssistantHeaderLabel}`}
 													class="flex w-full items-center gap-3 py-1 text-left"
 													type="button"
 												>
@@ -1832,7 +1892,7 @@
 													<span
 														class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
 													>
-														{getCollapsedStepLabel(groupedStepCount)}
+														{collapsedAssistantHeaderLabel}
 													</span>
 													<span class="h-px flex-1 bg-border"></span>
 												</CollapsibleTrigger>

@@ -795,6 +795,32 @@ func TestParseSSEStream(t *testing.T) {
 			"finish",
 		)
 	})
+
+	t.Run("premature EOF after visible output is recoverable", func(t *testing.T) {
+		sse := buildSSE(
+			"message_start", `{"type":"message_start","message":{"id":"msg_partial","model":"claude-sonnet-4-6","usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}`,
+			"content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}`,
+		)
+
+		var gotErr error
+		parseSSEStream(strings.NewReader(sse), func(_ message.ProviderMessageChunk, err error) bool {
+			if err != nil {
+				gotErr = err
+			}
+			return true
+		})
+
+		if gotErr == nil {
+			t.Fatal("expected premature EOF error")
+		}
+		if !providers.IsRecoverablePartialResponseError(gotErr) {
+			t.Fatalf("expected recoverable partial response error, got %T %[1]v", gotErr)
+		}
+		if gotErr.Error() != "anthropic: SSE stream ended before message_delta" {
+			t.Fatalf("unexpected error text: %q", gotErr.Error())
+		}
+	})
 }
 
 func TestComplete(t *testing.T) {

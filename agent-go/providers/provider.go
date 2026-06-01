@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 
 	"github.com/obot-platform/discobot/agent-go/message"
@@ -62,6 +63,46 @@ type Provider interface {
 	// DefaultModels returns the provider's recommended models keyed by task type.
 	// Returns nil if the provider has no defaults.
 	DefaultModels() map[string]ModelRef
+}
+
+// RecoverablePartialResponseError marks a stream error that happened after
+// provider output may already have reached the user, but whose partial response
+// can be safely finalized from the chunks persisted so far.
+type RecoverablePartialResponseError interface {
+	RecoverablePartialResponse() bool
+}
+
+type recoverablePartialResponseError struct {
+	err error
+}
+
+func (e *recoverablePartialResponseError) Error() string {
+	return e.err.Error()
+}
+
+func (e *recoverablePartialResponseError) Unwrap() error {
+	return e.err
+}
+
+func (e *recoverablePartialResponseError) RecoverablePartialResponse() bool {
+	return true
+}
+
+// IsRecoverablePartialResponseError reports whether err allows the caller to
+// finalize the already-streamed partial response instead of surfacing the error.
+func IsRecoverablePartialResponseError(err error) bool {
+	var recoverable RecoverablePartialResponseError
+	return errors.As(err, &recoverable) && recoverable.RecoverablePartialResponse()
+}
+
+// MarkRecoverablePartialResponse wraps err so callers can finalize the
+// already-streamed partial response instead of surfacing a transient stream
+// interruption. It preserves the original error text and unwrap chain.
+func MarkRecoverablePartialResponse(err error) error {
+	if err == nil || IsRecoverablePartialResponseError(err) {
+		return err
+	}
+	return &recoverablePartialResponseError{err: err}
 }
 
 // Config holds provider configuration, typically API keys and endpoint URLs.

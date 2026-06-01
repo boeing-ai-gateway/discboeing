@@ -1360,6 +1360,33 @@ func TestParseSSEStream(t *testing.T) {
 			"finish",
 		)
 	})
+
+	t.Run("premature EOF after visible output is recoverable", func(t *testing.T) {
+		sse := buildSSE(
+			"response.created", `{"response":{"id":"resp_partial","model":"gpt-4o"}}`,
+			"response.output_item.added", `{"item":{"id":"msg_1","type":"message","role":"assistant"}}`,
+			"response.content_part.added", `{"part":{"type":"output_text"},"item_id":"msg_1"}`,
+			"response.output_text.delta", `{"item_id":"msg_1","delta":"partial"}`,
+		)
+
+		var gotErr error
+		parseSSEStream(strings.NewReader(sse), func(_ message.ProviderMessageChunk, err error) bool {
+			if err != nil {
+				gotErr = err
+			}
+			return true
+		})
+
+		if gotErr == nil {
+			t.Fatal("expected premature EOF error")
+		}
+		if !providers.IsRecoverablePartialResponseError(gotErr) {
+			t.Fatalf("expected recoverable partial response error, got %T %[1]v", gotErr)
+		}
+		if gotErr.Error() != "openai: SSE stream ended before response.completed" {
+			t.Fatalf("unexpected error text: %q", gotErr.Error())
+		}
+	})
 }
 
 func TestComplete(t *testing.T) {

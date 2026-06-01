@@ -629,6 +629,14 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var eventType string
+	completed := false
+	retryUnsafe := false
+	streamYield := func(chunk message.ProviderMessageChunk, err error) bool {
+		if chunk != nil && isAnthropicRetryUnsafeChunk(chunk) {
+			retryUnsafe = true
+		}
+		return yield(chunk, err)
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if event, ok := strings.CutPrefix(line, "event: "); ok {
@@ -637,7 +645,10 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 		}
 		if data, ok := strings.CutPrefix(line, "data: "); ok {
 			if eventType != "" {
-				if !handleSSEEvent(eventType, []byte(data), state, yield) {
+				if eventType == "message_delta" {
+					completed = true
+				}
+				if !handleSSEEvent(eventType, []byte(data), state, streamYield) {
 					return
 				}
 				eventType = ""
@@ -649,8 +660,28 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		yield(nil, fmt.Errorf("anthropic: read SSE stream: %w", err))
+		yieldAnthropicSSEStreamError(yield, retryUnsafe, fmt.Errorf("anthropic: read SSE stream: %w", err))
+		return
 	}
+	if !completed {
+		yieldAnthropicSSEStreamError(yield, retryUnsafe, fmt.Errorf("anthropic: SSE stream ended before message_delta"))
+	}
+}
+
+func isAnthropicRetryUnsafeChunk(chunk message.ProviderMessageChunk) bool {
+	switch chunk.(type) {
+	case message.StreamStartChunk, message.ResponseMetadataChunk:
+		return false
+	default:
+		return chunk != nil
+	}
+}
+
+func yieldAnthropicSSEStreamError(yield func(message.ProviderMessageChunk, error) bool, retryUnsafe bool, err error) {
+	if retryUnsafe {
+		err = providers.MarkRecoverablePartialResponse(err)
+	}
+	yield(nil, err) //nolint:errcheck
 }
 
 func handleSSEEvent(eventType string, data []byte, state *streamState, yield func(message.ProviderMessageChunk, error) bool) bool {

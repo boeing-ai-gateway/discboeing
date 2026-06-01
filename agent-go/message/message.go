@@ -21,6 +21,16 @@ type Message struct {
 	// preserving provider-native IDs for follow-up turns.
 	ProviderResponseID string `json:"providerResponseId,omitempty"`
 
+	// ReplacesMessageID identifies an earlier assistant message superseded by this
+	// message. It is preserved for UI history display but omitted from provider
+	// requests.
+	ReplacesMessageID string `json:"replacesMessageId,omitempty"`
+
+	// ReplacedByMessageID identifies the assistant message that superseded this
+	// message. It is preserved for UI history display but omitted from provider
+	// requests.
+	ReplacedByMessageID string `json:"replacedByMessageId,omitempty"`
+
 	// Role is "system", "user", "assistant", or "tool".
 	Role string `json:"role"`
 
@@ -56,23 +66,27 @@ func (m Message) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		ID                 string            `json:"id,omitempty"`
-		ProviderResponseID string            `json:"providerResponseId,omitempty"`
-		Role               string            `json:"role"`
-		Parts              []json.RawMessage `json:"parts"`
-		ProviderOptions    json.RawMessage   `json:"providerOptions,omitempty"`
-		Metadata           json.RawMessage   `json:"metadata,omitempty"`
-		CreatedAt          *time.Time        `json:"createdAt,omitempty"`
-		Synthetic          bool              `json:"synthetic,omitempty"`
+		ID                  string            `json:"id,omitempty"`
+		ProviderResponseID  string            `json:"providerResponseId,omitempty"`
+		ReplacesMessageID   string            `json:"replacesMessageId,omitempty"`
+		ReplacedByMessageID string            `json:"replacedByMessageId,omitempty"`
+		Role                string            `json:"role"`
+		Parts               []json.RawMessage `json:"parts"`
+		ProviderOptions     json.RawMessage   `json:"providerOptions,omitempty"`
+		Metadata            json.RawMessage   `json:"metadata,omitempty"`
+		CreatedAt           *time.Time        `json:"createdAt,omitempty"`
+		Synthetic           bool              `json:"synthetic,omitempty"`
 	}{
-		ID:                 m.ID,
-		ProviderResponseID: m.ProviderResponseID,
-		Role:               m.Role,
-		Parts:              parts,
-		ProviderOptions:    m.ProviderOptions,
-		Metadata:           m.Metadata,
-		CreatedAt:          m.CreatedAt,
-		Synthetic:          m.Synthetic,
+		ID:                  m.ID,
+		ProviderResponseID:  m.ProviderResponseID,
+		ReplacesMessageID:   m.ReplacesMessageID,
+		ReplacedByMessageID: m.ReplacedByMessageID,
+		Role:                m.Role,
+		Parts:               parts,
+		ProviderOptions:     m.ProviderOptions,
+		Metadata:            m.Metadata,
+		CreatedAt:           m.CreatedAt,
+		Synthetic:           m.Synthetic,
 	})
 }
 
@@ -81,15 +95,17 @@ func (m Message) MarshalJSON() ([]byte, error) {
 // Also handles the provider format where system content is a plain string.
 func (m *Message) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		ID                 string          `json:"id,omitempty"`
-		ProviderResponseID string          `json:"providerResponseId,omitempty"`
-		Role               string          `json:"role"`
-		Parts              json.RawMessage `json:"parts"`
-		Content            json.RawMessage `json:"content"`
-		ProviderOptions    json.RawMessage `json:"providerOptions,omitempty"`
-		Metadata           json.RawMessage `json:"metadata,omitempty"`
-		CreatedAt          *time.Time      `json:"createdAt,omitempty"`
-		Synthetic          bool            `json:"synthetic,omitempty"`
+		ID                  string          `json:"id,omitempty"`
+		ProviderResponseID  string          `json:"providerResponseId,omitempty"`
+		ReplacesMessageID   string          `json:"replacesMessageId,omitempty"`
+		ReplacedByMessageID string          `json:"replacedByMessageId,omitempty"`
+		Role                string          `json:"role"`
+		Parts               json.RawMessage `json:"parts"`
+		Content             json.RawMessage `json:"content"`
+		ProviderOptions     json.RawMessage `json:"providerOptions,omitempty"`
+		Metadata            json.RawMessage `json:"metadata,omitempty"`
+		CreatedAt           *time.Time      `json:"createdAt,omitempty"`
+		Synthetic           bool            `json:"synthetic,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("unmarshal Message: %w", err)
@@ -97,6 +113,8 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 
 	m.ID = raw.ID
 	m.ProviderResponseID = raw.ProviderResponseID
+	m.ReplacesMessageID = raw.ReplacesMessageID
+	m.ReplacedByMessageID = raw.ReplacedByMessageID
 	m.Role = raw.Role
 	m.ProviderOptions = raw.ProviderOptions
 	m.Metadata = raw.Metadata

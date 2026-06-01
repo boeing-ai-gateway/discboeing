@@ -1540,6 +1540,54 @@ func TestCompleteViaWebSocket_RetriesAfterResponseCreatedWithoutVisibleOutput(t 
 	}
 }
 
+func TestCompleteViaWebSocket_MarksVisibleOutputCloseRecoverable(t *testing.T) {
+	ts := wsTestServer(t, func(conn *websocket.Conn, r *http.Request) {
+		if _, _, err := conn.Read(r.Context()); err != nil {
+			t.Errorf("read request: %v", err)
+			return
+		}
+		sendWSEvents(r.Context(), t, conn, []map[string]any{
+			{"type": "response.created", "response": map[string]any{"id": "resp_partial", "model": "gpt-4o"}},
+			{"type": "response.output_item.added", "item": map[string]any{"id": "msg_1", "type": "message"}},
+			{"type": "response.content_part.added", "part": map[string]any{"type": "output_text"}, "item_id": "msg_1"},
+			{"type": "response.output_text.delta", "item_id": "msg_1", "delta": "partial"},
+		})
+		if err := conn.Close(websocket.StatusNormalClosure, ""); err != nil {
+			t.Errorf("close websocket: %v", err)
+		}
+	})
+	defer ts.Close()
+
+	p := &Provider{
+		apiKey:  "test-key",
+		baseURL: ts.URL,
+		client:  ts.Client(),
+		ws:      newWSPool("test-key", ts.URL),
+	}
+
+	req := providers.CompleteRequest{
+		Model:    providers.ModelRef{ProviderID: "openai", ModelID: "gpt-4o"},
+		Messages: []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "Hello"}}}},
+	}
+
+	var gotErr error
+	for _, err := range p.Complete(context.Background(), req) {
+		if err != nil {
+			gotErr = err
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected websocket close after visible output to return an error")
+	}
+	if !providers.IsRecoverablePartialResponseError(gotErr) {
+		t.Fatalf("expected recoverable partial response error, got %T %[1]v", gotErr)
+	}
+	if gotErr.Error() != "openai: websocket closed normally before response.completed" {
+		t.Fatalf("expected peer close error text to be preserved, got %q", gotErr.Error())
+	}
+}
+
 func TestCompleteViaWebSocket_RetriesFreshInitialRequestFailure(t *testing.T) {
 	var (
 		mu                sync.Mutex

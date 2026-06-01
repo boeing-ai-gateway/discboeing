@@ -8408,6 +8408,14 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "replacesMessageId": {
+            "type": "string",
+            "description": "ID of the prior message this message replaces."
+          },
+          "replacedByMessageId": {
+            "type": "string",
+            "description": "ID of the replacement message that supersedes this message."
           }
         },
         "x-go-type": "message.UIMessage",

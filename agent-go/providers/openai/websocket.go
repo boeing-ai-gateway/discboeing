@@ -16,6 +16,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/obot-platform/discobot/agent-go/providers"
 	"github.com/obot-platform/discobot/agent-go/providers/transport"
 )
 
@@ -97,6 +98,10 @@ type webSocketPeerClosedError struct {
 	status websocket.StatusCode
 }
 
+type webSocketReadError struct {
+	err error
+}
+
 func (e *webSocketPeerClosedError) Error() string {
 	switch e.status {
 	case websocket.StatusNormalClosure:
@@ -108,6 +113,29 @@ func (e *webSocketPeerClosedError) Error() string {
 	default:
 		return fmt.Sprintf("openai: websocket closed before response.completed (status %d)", e.status)
 	}
+}
+
+func (e *webSocketReadError) Error() string {
+	return fmt.Sprintf("openai: websocket read: %v", e.err)
+}
+
+func (e *webSocketReadError) Unwrap() error {
+	return e.err
+}
+
+func recoverablePartialWebSocketError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var peerClosed *webSocketPeerClosedError
+	if errors.As(err, &peerClosed) {
+		return providers.MarkRecoverablePartialResponse(err)
+	}
+	var readErr *webSocketReadError
+	if errors.As(err, &readErr) {
+		return providers.MarkRecoverablePartialResponse(err)
+	}
+	return err
 }
 
 // newWSPool derives a wss:// WebSocket URL from the HTTP base URL and returns
@@ -451,7 +479,7 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 		if err != nil {
 			result.err = err
 			if result.retryUnsafe {
-				return yield(nil, err)
+				return yield(nil, recoverablePartialWebSocketError(err))
 			}
 			return false
 		}
@@ -463,7 +491,7 @@ func (p *Provider) completeViaWebSocketAttempt(ctx context.Context, body map[str
 	if err != nil {
 		result.err = err
 		if result.retryUnsafe {
-			yield(nil, err)
+			yield(nil, recoverablePartialWebSocketError(err))
 		}
 	}
 	result.responseID = respID
@@ -517,7 +545,7 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 			case websocket.StatusNormalClosure, websocket.StatusGoingAway, websocket.StatusNoStatusRcvd:
 				return responseID, false, &webSocketPeerClosedError{status: status}
 			}
-			if !yield(nil, fmt.Errorf("openai: websocket read: %w", err)) {
+			if !yield(nil, &webSocketReadError{err: err}) {
 				return responseID, false, nil
 			}
 			return responseID, false, nil

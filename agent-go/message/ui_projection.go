@@ -36,10 +36,12 @@ type ToolApproval struct {
 // UIMessage is the JSON wire format Discobot exposes to the UI.
 // Parts are marshaled via the UIPart interface.
 type UIMessage struct {
-	ID       string          `json:"id"`
-	Role     string          `json:"role"`
-	Parts    []UIPart        `json:"-"`
-	Metadata json.RawMessage `json:"metadata,omitempty"`
+	ID                  string          `json:"id"`
+	Role                string          `json:"role"`
+	Parts               []UIPart        `json:"-"`
+	Metadata            json.RawMessage `json:"metadata,omitempty"`
+	ReplacesMessageID   string          `json:"replacesMessageId,omitempty"`
+	ReplacedByMessageID string          `json:"replacedByMessageId,omitempty"`
 }
 
 func (m UIMessage) MarshalJSON() ([]byte, error) {
@@ -52,19 +54,23 @@ func (m UIMessage) MarshalJSON() ([]byte, error) {
 		parts[i] = data
 	}
 	return json.Marshal(struct {
-		ID       string            `json:"id"`
-		Role     string            `json:"role"`
-		Parts    []json.RawMessage `json:"parts"`
-		Metadata json.RawMessage   `json:"metadata,omitempty"`
-	}{m.ID, m.Role, parts, m.Metadata})
+		ID                  string            `json:"id"`
+		Role                string            `json:"role"`
+		Parts               []json.RawMessage `json:"parts"`
+		Metadata            json.RawMessage   `json:"metadata,omitempty"`
+		ReplacesMessageID   string            `json:"replacesMessageId,omitempty"`
+		ReplacedByMessageID string            `json:"replacedByMessageId,omitempty"`
+	}{m.ID, m.Role, parts, m.Metadata, m.ReplacesMessageID, m.ReplacedByMessageID})
 }
 
 func (m *UIMessage) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		ID       string            `json:"id"`
-		Role     string            `json:"role"`
-		Parts    []json.RawMessage `json:"parts"`
-		Metadata json.RawMessage   `json:"metadata,omitempty"`
+		ID                  string            `json:"id"`
+		Role                string            `json:"role"`
+		Parts               []json.RawMessage `json:"parts"`
+		Metadata            json.RawMessage   `json:"metadata,omitempty"`
+		ReplacesMessageID   string            `json:"replacesMessageId,omitempty"`
+		ReplacedByMessageID string            `json:"replacedByMessageId,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -72,6 +78,8 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 	m.ID = raw.ID
 	m.Role = raw.Role
 	m.Metadata = raw.Metadata
+	m.ReplacesMessageID = raw.ReplacesMessageID
+	m.ReplacedByMessageID = raw.ReplacedByMessageID
 	m.Parts = make([]UIPart, 0, len(raw.Parts))
 	for _, partData := range raw.Parts {
 		p, err := UnmarshalUIPart(partData)
@@ -104,11 +112,16 @@ func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 			i++
 		case "assistant":
 			ui := UIMessage{
-				ID:       msg.ID,
-				Role:     "assistant",
-				Metadata: msg.Metadata,
+				ID:                  msg.ID,
+				Role:                "assistant",
+				Metadata:            msg.Metadata,
+				ReplacesMessageID:   msg.ReplacesMessageID,
+				ReplacedByMessageID: msg.ReplacedByMessageID,
 			}
 			for i < len(messages) && (messages[i].Role == "assistant" || messages[i].Role == "tool") {
+				if messages[i].Role == "assistant" && len(ui.Parts) > 0 && isReplacementBoundary(ui, messages[i]) {
+					break
+				}
 				if messages[i].Role != "assistant" {
 					i++
 					continue
@@ -142,6 +155,13 @@ func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 	return result, nil
 }
 
+func isReplacementBoundary(current UIMessage, next Message) bool {
+	return current.ReplacedByMessageID != "" ||
+		current.ReplacesMessageID != "" ||
+		next.ReplacedByMessageID != "" ||
+		next.ReplacesMessageID != ""
+}
+
 func buildUISystemMessage(msg Message) UIMessage {
 	var text strings.Builder
 	for _, p := range msg.Parts {
@@ -150,18 +170,22 @@ func buildUISystemMessage(msg Message) UIMessage {
 		}
 	}
 	return UIMessage{
-		ID:       msg.ID,
-		Role:     "system",
-		Parts:    []UIPart{UITextPart{Type: "text", Text: text.String(), State: "done"}},
-		Metadata: msg.Metadata,
+		ID:                  msg.ID,
+		Role:                "system",
+		Parts:               []UIPart{UITextPart{Type: "text", Text: text.String(), State: "done"}},
+		Metadata:            msg.Metadata,
+		ReplacesMessageID:   msg.ReplacesMessageID,
+		ReplacedByMessageID: msg.ReplacedByMessageID,
 	}
 }
 
 func buildUIUserMessage(msg Message) UIMessage {
 	ui := UIMessage{
-		ID:       msg.ID,
-		Role:     "user",
-		Metadata: msg.Metadata,
+		ID:                  msg.ID,
+		Role:                "user",
+		Metadata:            msg.Metadata,
+		ReplacesMessageID:   msg.ReplacesMessageID,
+		ReplacedByMessageID: msg.ReplacedByMessageID,
 	}
 	for _, p := range msg.Parts {
 		switch v := p.(type) {
