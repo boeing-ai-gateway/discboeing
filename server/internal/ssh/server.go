@@ -716,6 +716,7 @@ func (h *sessionHandler) runSFTP(channel ssh.Channel) {
 
 	// Done channel to signal when server output is fully drained
 	outputDone := make(chan struct{})
+	stderrDone := make(chan struct{})
 
 	// Channel -> SFTP server stdin - will be terminated when channel closes
 	go func() {
@@ -728,12 +729,19 @@ func (h *sessionHandler) runSFTP(channel ssh.Channel) {
 		_, _ = io.Copy(channel, stream)
 		close(outputDone)
 	}()
+	go func() {
+		if stderr := stream.Stderr(); stderr != nil {
+			_, _ = io.Copy(io.Discard, stderr)
+		}
+		close(stderrDone)
+	}()
 
 	// Wait for sftp-server process to exit
 	_, _ = stream.Wait(ctx)
 
 	// Wait for output to drain
 	<-outputDone
+	<-stderrDone
 }
 
 func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
@@ -772,6 +780,7 @@ func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
 
 	// Done channel to signal when forwarding completes
 	outputDone := make(chan struct{})
+	stderrDone := make(chan struct{})
 
 	// Channel -> socat stdin (to remote TCP)
 	go func() {
@@ -784,12 +793,19 @@ func (h *sessionHandler) handleDirectTCPIP(newChannel ssh.NewChannel) {
 		_, _ = io.Copy(channel, stream)
 		close(outputDone)
 	}()
+	go func() {
+		if stderr := stream.Stderr(); stderr != nil {
+			_, _ = io.Copy(io.Discard, stderr)
+		}
+		close(stderrDone)
+	}()
 
 	// Wait for socat to exit (connection closed from either end)
 	_, _ = stream.Wait(ctx)
 
 	// Wait for output to drain
 	<-outputDone
+	<-stderrDone
 }
 
 func directTCPIPCommand(host string, port uint32) []string {

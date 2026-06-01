@@ -53,6 +53,12 @@ type ResizeRequest struct {
 	Cols int `json:"cols"`
 }
 
+const (
+	streamFrameStdout = byte(1)
+	streamFrameStderr = byte(2)
+	streamBufferSize  = 512
+)
+
 func Create(ctx context.Context, client *http.Client, payload CreateRequest) (*Session, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -192,14 +198,17 @@ func Kill(ctx context.Context, client *http.Client, id string) error {
 }
 
 func Attach(ctx context.Context, lease *sandbox.HTTPClientLease, id string) (*Stream, error) {
-	conn, _, err := websocket.Dial(ctx, clientWebSocketURL(lease.Client, "ws://sandbox/exec/"+url.PathEscape(id)+"/attach"), &websocket.DialOptions{
+	attachURL := "ws://sandbox/exec/" + url.PathEscape(id) + "/attach"
+	conn, _, err := websocket.Dial(ctx, clientWebSocketURL(lease.Client, attachURL), &websocket.DialOptions{
 		HTTPClient: lease.Client,
 		HTTPHeader: clientHeaders(lease.Client),
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &Stream{execID: id, lease: lease, conn: conn}, nil
+	stream := newStream(id, lease, conn)
+	go stream.readLoop()
+	return stream, nil
 }
 
 func CreateAndAttach(ctx context.Context, lease *sandbox.HTTPClientLease, payload CreateRequest) (*Stream, error) {
@@ -235,35 +244,92 @@ type Stream struct {
 	execID    string
 	lease     *sandbox.HTTPClientLease
 	conn      *websocket.Conn
-	readBuf   []byte
-	readMu    sync.Mutex
+	stdout    *streamReader
+	stderr    *streamReader
+	stdoutCh  chan streamChunk
+	stderrCh  chan streamChunk
 	writeMu   sync.Mutex
 	closeOnce sync.Once
 }
 
-func (s *Stream) Read(buf []byte) (int, error) {
-	s.readMu.Lock()
-	defer s.readMu.Unlock()
-	if len(s.readBuf) > 0 {
-		n := copy(buf, s.readBuf)
-		s.readBuf = s.readBuf[n:]
-		return n, nil
+type streamChunk struct {
+	data []byte
+}
+
+type streamReader struct {
+	ch  <-chan streamChunk
+	buf []byte
+}
+
+func newStream(execID string, lease *sandbox.HTTPClientLease, conn *websocket.Conn) *Stream {
+	stdoutCh := make(chan streamChunk, streamBufferSize)
+	stderrCh := make(chan streamChunk, streamBufferSize)
+	return &Stream{
+		execID:   execID,
+		lease:    lease,
+		conn:     conn,
+		stdout:   &streamReader{ch: stdoutCh},
+		stderr:   &streamReader{ch: stderrCh},
+		stdoutCh: stdoutCh,
+		stderrCh: stderrCh,
 	}
+}
+
+func (s *Stream) Read(buf []byte) (int, error) {
+	return s.stdout.Read(buf)
+}
+
+func (s *Stream) Stderr() io.Reader { return s.stderr }
+
+func (s *Stream) readLoop() {
+	defer close(s.stdoutCh)
+	defer close(s.stderrCh)
 	for {
 		msgType, payload, err := s.conn.Read(context.Background())
 		if err != nil {
-			return 0, err
+			return
 		}
 		if msgType != websocket.MessageBinary && msgType != websocket.MessageText {
 			continue
 		}
-		n := copy(buf, payload)
-		s.readBuf = append(s.readBuf[:0], payload[n:]...)
-		return n, nil
+		s.dispatchOutput(payload)
 	}
 }
 
-func (s *Stream) Stderr() io.Reader { return nil }
+func (s *Stream) dispatchOutput(payload []byte) {
+	if len(payload) == 0 {
+		return
+	}
+	streamType := payload[0]
+	data := payload[1:]
+	chunk := streamChunk{data: append([]byte(nil), data...)}
+	switch streamType {
+	case streamFrameStdout:
+		s.stdoutCh <- chunk
+	case streamFrameStderr:
+		s.stderrCh <- chunk
+	}
+}
+
+func (r *streamReader) Read(buf []byte) (int, error) {
+	if len(r.buf) > 0 {
+		n := copy(buf, r.buf)
+		r.buf = r.buf[n:]
+		return n, nil
+	}
+	for {
+		chunk, ok := <-r.ch
+		if !ok {
+			return 0, io.EOF
+		}
+		if len(chunk.data) == 0 {
+			continue
+		}
+		n := copy(buf, chunk.data)
+		r.buf = append(r.buf[:0], chunk.data[n:]...)
+		return n, nil
+	}
+}
 
 func (s *Stream) Write(data []byte) (int, error) {
 	s.writeMu.Lock()

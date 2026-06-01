@@ -136,10 +136,16 @@ ExecStream(ctx context.Context, sessionID string, cmd []string, opts ExecStreamO
 
 The `Stream` interface provides:
 - `Read(p []byte) (int, error)` - Read from command output
+- `Stderr() io.Reader` - Read stderr separately for non-TTY commands
 - `Write(p []byte) (int, error)` - Write to command stdin
 - `CloseWrite() error` - Signal EOF to stdin
 - `Close() error` - Terminate the stream
 - `Wait(ctx) (int, error)` - Wait for exit code
+
+When SSH exec uses the agent-side process supervisor, Discobot attaches to an
+always-framed WebSocket output stream so stdout and stderr stay separate. This
+keeps binary protocols such as Zed's remote server proxy on stdout from being
+corrupted by stderr log lines.
 
 ## Authentication
 

@@ -32,6 +32,11 @@ type execOutputResponse struct {
 	Events []processes.OutputEvent `json:"events"`
 }
 
+const (
+	execFrameStdout = byte(1)
+	execFrameStderr = byte(2)
+)
+
 // ExecCapabilities handles GET /exec/capabilities.
 func (h *Handler) ExecCapabilities(w http.ResponseWriter, _ *http.Request) {
 	h.JSON(w, http.StatusOK, h.processManager.Capabilities())
@@ -300,7 +305,17 @@ func (h *Handler) execWebSocketOutput(ctx context.Context, conn *websocket.Conn,
 			if event.Data == "" {
 				continue
 			}
-			if err := conn.Write(ctx, websocket.MessageBinary, []byte(event.Data)); err != nil {
+			var frame byte
+			switch event.Type {
+			case "stdout", "output":
+				frame = execFrameStdout
+			case "stderr":
+				frame = execFrameStderr
+			default:
+				continue
+			}
+			payload := append([]byte{frame}, []byte(event.Data)...)
+			if err := conn.Write(ctx, websocket.MessageBinary, payload); err != nil {
 				errCh <- err
 				return
 			}

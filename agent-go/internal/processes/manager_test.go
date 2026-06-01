@@ -109,6 +109,38 @@ func TestManagerEventsSupportSequenceAndFilters(t *testing.T) {
 	}
 }
 
+func TestManagerAttachReplaysStdoutAndStderrSeparately(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	mgr := NewManager(workDir)
+	session, err := mgr.Start(context.Background(), CreateRequest{
+		Cmd: []string{"/bin/sh", "-c", "printf stdout; printf stderr >&2"},
+	})
+	if err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	waitForProcessStatus(t, mgr, session.ID, StatusExited)
+
+	_, events, unsubscribe, err := mgr.Attach(session.ID)
+	if err != nil {
+		t.Fatalf("Attach() failed: %v", err)
+	}
+	defer unsubscribe()
+
+	seen := map[string]string{}
+	for event := range events {
+		seen[event.Type] += event.Data
+	}
+	if seen["stdout"] != "stdout" {
+		t.Fatalf("stdout replay = %q, want %q; events=%#v", seen["stdout"], "stdout", seen)
+	}
+	if seen["stderr"] != "stderr" {
+		t.Fatalf("stderr replay = %q, want %q; events=%#v", seen["stderr"], "stderr", seen)
+	}
+}
+
 func TestDefaultShellIgnoresMissingShellEnv(t *testing.T) {
 	t.Setenv("SHELL", "/usr/bin/definitely-missing-discobot-shell")
 

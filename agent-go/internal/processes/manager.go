@@ -25,6 +25,8 @@ type managedSession struct {
 	stream    Stream
 	log       *outputLog
 	buf       *ringBuffer
+	stdoutBuf *ringBuffer
+	stderrBuf *ringBuffer
 	subs      map[chan OutputEvent]struct{}
 	done      chan struct{}
 	nextSeq   int64
@@ -125,12 +127,14 @@ func (m *Manager) Start(ctx context.Context, req CreateRequest) (*Session, error
 		Metadata:  req.Metadata,
 	}
 	managed := &managedSession{
-		session: sess,
-		stream:  stream,
-		log:     log,
-		buf:     newRingBuffer(ringBufferSize),
-		subs:    map[chan OutputEvent]struct{}{},
-		done:    make(chan struct{}),
+		session:   sess,
+		stream:    stream,
+		log:       log,
+		buf:       newRingBuffer(ringBufferSize),
+		stdoutBuf: newRingBuffer(ringBufferSize),
+		stderrBuf: newRingBuffer(ringBufferSize),
+		subs:      map[chan OutputEvent]struct{}{},
+		done:      make(chan struct{}),
 	}
 	m.mu.Lock()
 	m.sessions[id] = managed
@@ -179,8 +183,13 @@ func (m *Manager) Attach(id string) (Stream, <-chan OutputEvent, func(), error) 
 	}
 	ch := make(chan OutputEvent, 512)
 	managed.mu.Lock()
-	if snapshot := managed.buf.snapshot(); len(snapshot) > 0 {
+	if snapshot := managed.stdoutBuf.snapshot(); len(snapshot) > 0 {
 		ch <- nowEvent(outputType(managed.session.TTY, "stdout"), string(snapshot))
+	}
+	if !managed.session.TTY {
+		if snapshot := managed.stderrBuf.snapshot(); len(snapshot) > 0 {
+			ch <- nowEvent("stderr", string(snapshot))
+		}
 	}
 	if managed.subs == nil {
 		close(ch)
@@ -372,8 +381,16 @@ func (s *managedSession) emit(event OutputEvent) {
 		event.Seq = s.nextSeq
 	}
 	s.log.WriteEvent(event)
-	if event.Type == "stdout" || event.Type == "stderr" || event.Type == "output" {
+	switch event.Type {
+	case "stdout":
 		s.buf.write([]byte(event.Data))
+		s.stdoutBuf.write([]byte(event.Data))
+	case "stderr":
+		s.buf.write([]byte(event.Data))
+		s.stderrBuf.write([]byte(event.Data))
+	case "output":
+		s.buf.write([]byte(event.Data))
+		s.stdoutBuf.write([]byte(event.Data))
 	}
 	for ch := range s.subs {
 		select {
