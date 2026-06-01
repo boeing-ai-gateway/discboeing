@@ -13,8 +13,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/websocket"
 
 	api "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
@@ -29,17 +30,6 @@ const (
 
 	terminalWorkspaceDir = "/home/discobot/workspace"
 )
-
-// upgrader configures the WebSocket upgrader.
-// Origin checking is handled by the CORS middleware in the router,
-// so we allow all origins here to avoid duplicate validation.
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(_ *http.Request) bool {
-		return true // CORS middleware handles origin validation
-	},
-}
 
 // TerminalWebSocket handles WebSocket terminal connections.
 //
@@ -143,12 +133,14 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upgrade to WebSocket (after all validation so we don't upgrade then fail)
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 	if err != nil {
 		log.Printf("failed to upgrade websocket: %v", err)
 		return
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
 	// Subscribe to the session. This returns a channel pre-loaded with the
 	// output buffer (recent history) followed by live PTY output.
@@ -204,14 +196,13 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 		defer close(wsWriteDone)
 		for chunk := range sub {
 			msg := api.TerminalMessage{Type: "output", Data: string(chunk)}
-			if err := conn.WriteJSON(msg); err != nil {
+			if err := wsjson.Write(ctx, conn, msg); err != nil {
 				// WebSocket write failed (client disconnected); stop sending.
 				return
 			}
 		}
 		// sub channel closed → PTY exited; send a clean close frame.
-		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "shell exited")
-		_ = conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
+		_ = conn.Close(websocket.StatusNormalClosure, "shell exited")
 	}()
 
 	// WebSocket → session input.
@@ -223,11 +214,12 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 		defer close(inputDone)
 		for {
 			var msg api.TerminalMessage
-			if err := conn.ReadJSON(&msg); err != nil {
-				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseNormalClosure,
-					websocket.CloseGoingAway,
-					websocket.CloseAbnormalClosure) {
+			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+				status := websocket.CloseStatus(err)
+				if status != websocket.StatusNormalClosure &&
+					status != websocket.StatusGoingAway &&
+					status != websocket.StatusAbnormalClosure &&
+					ctx.Err() == nil {
 					log.Printf("terminal: WebSocket read error: %v", err)
 				}
 				return
@@ -267,10 +259,8 @@ func handlePersistentTerminalSession(ctx context.Context, sess *terminal.Session
 	// Wait for either side to finish.
 	select {
 	case <-wsWriteDone:
-		// PTY exited: the close frame has been sent. Set a short read deadline so
-		// the input goroutine unblocks (either after the client sends a close ack
-		// or after the deadline expires) and then wait for it to finish.
-		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		// PTY exited: the close frame has been sent, so wait for the input
+		// goroutine to observe the closed websocket and stop.
 		<-inputDone
 	case <-inputDone:
 		// Client disconnected: wait for the output goroutine to finish.

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
@@ -550,11 +551,13 @@ func (h *Handler) SandboxProviderInspectionTerminalWebSocket(w http.ResponseWrit
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 	if err != nil {
 		return
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
 	sub := termSession.Subscribe()
 	defer termSession.Unsubscribe(sub)

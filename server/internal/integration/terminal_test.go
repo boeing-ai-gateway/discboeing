@@ -121,7 +121,7 @@ func TestTerminalWebSocket_ServiceUnavailable(t *testing.T) {
 
 	// Should fail because it's not a proper WebSocket upgrade
 	// The exact status depends on the WebSocket library behavior
-	// gorilla/websocket typically returns 400 Bad Request for non-WebSocket requests
+	// coder/websocket typically returns 400 Bad Request for non-WebSocket requests
 	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("Expected status 400 or 500 for non-WebSocket request, got %d", resp.StatusCode)
 	}

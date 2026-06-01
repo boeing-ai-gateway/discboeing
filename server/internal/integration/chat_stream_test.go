@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 )
 
 type chatSSEFrame struct {
@@ -438,10 +440,9 @@ func dialChatWebSocket(t *testing.T, ts *TestServer, user *TestUser, projectID s
 	if user != nil {
 		headers.Add("Cookie", fmt.Sprintf("discobot_session=%s", user.Token))
 	}
-	conn, resp, err := websocket.DefaultDialer.Dial(
-		chatWebSocketURL(ts, nil, projectID),
-		headers,
-	)
+	conn, resp, err := websocket.Dial(context.Background(), chatWebSocketURL(ts, nil, projectID), &websocket.DialOptions{
+		HTTPHeader: headers,
+	})
 	if err != nil {
 		statusCode := 0
 		body := ""
@@ -463,9 +464,10 @@ func dialChatWebSocket(t *testing.T, ts *TestServer, user *TestUser, projectID s
 
 func readChatWebSocketFrame(t *testing.T, conn *websocket.Conn) chatWebSocketFrame {
 	t.Helper()
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	var frame chatWebSocketFrame
-	if err := conn.ReadJSON(&frame); err != nil {
+	if err := wsjson.Read(ctx, conn, &frame); err != nil {
 		t.Fatalf("Failed to read websocket frame: %v", err)
 	}
 	return frame
@@ -476,7 +478,7 @@ func TestChatWebSocket_RequiresAuthentication(t *testing.T) {
 	user := ts.CreateTestUser("test@example.com")
 	project := ts.CreateTestProject(user, "Test Project")
 
-	_, resp, err := websocket.DefaultDialer.Dial(chatWebSocketURL(ts, nil, project.ID), nil)
+	_, resp, err := websocket.Dial(context.Background(), chatWebSocketURL(ts, nil, project.ID), nil)
 	if err == nil {
 		t.Fatal("expected websocket dial to fail without authentication")
 	}
@@ -532,9 +534,9 @@ func TestChatWebSocket_SubscribeForwardsEvents(t *testing.T) {
 	})
 
 	conn := dialChatWebSocket(t, ts, user, project.ID)
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
-	if err := conn.WriteJSON(map[string]any{
+	if err := wsjson.Write(context.Background(), conn, map[string]any{
 		"type":      "subscribe",
 		"stream":    "chat",
 		"sessionId": session.ID,
@@ -582,9 +584,9 @@ func TestChatWebSocket_InvalidSessionReturnsError(t *testing.T) {
 	project := ts.CreateTestProject(user, "Test Project")
 
 	conn := dialChatWebSocket(t, ts, user, project.ID)
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
-	if err := conn.WriteJSON(map[string]any{
+	if err := wsjson.Write(context.Background(), conn, map[string]any{
 		"type":      "subscribe",
 		"stream":    "chat",
 		"sessionId": "missing-session",

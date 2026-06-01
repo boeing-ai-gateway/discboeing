@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"slices"
 
+	serverapi "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/encryption"
 	"github.com/obot-platform/discobot/server/internal/events"
@@ -61,8 +61,8 @@ type NewSessionRequest struct {
 	WorkspaceID string
 	ProviderID  string
 	UserID      string
-	// Messages is the UIMessage array from the client — each element is a raw JSON object.
-	Messages []json.RawMessage
+	// Messages is the structured UIMessage array from the client.
+	Messages []serverapi.Message
 }
 
 // CancelCompletionResponse represents the response from cancelling a completion.
@@ -174,7 +174,7 @@ func (c *ChatService) prepareChatRequest(ctx context.Context, projectID, session
 }
 
 // StartChat sends messages to the sandbox and returns the message ID and completion metadata.
-func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel string, reasoning string, serviceTier string) (string, *sandboxapi.ChatStartedResponse, error) {
+func (c *ChatService) StartChat(ctx context.Context, projectID, sessionID, threadID string, messages []serverapi.Message, requestModel string, reasoning string, serviceTier string) (string, *sandboxapi.ChatStartedResponse, error) {
 	messageID := lastUserMessageID(messages)
 
 	rawMessages, err := json.Marshal(messages)
@@ -813,14 +813,10 @@ func (c *ChatService) GetServiceOutput(ctx context.Context, projectID, sessionID
 }
 
 // lastUserMessageID returns the ID of the last user message in the slice, or "".
-func lastUserMessageID(messages []json.RawMessage) string {
-	for _, v := range slices.Backward(messages) {
-		var m struct {
-			ID   string `json:"id"`
-			Role string `json:"role"`
-		}
-		if json.Unmarshal(v, &m) == nil && m.Role == "user" && m.ID != "" {
-			return m.ID
+func lastUserMessageID(messages []serverapi.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].ID != "" {
+			return messages[i].ID
 		}
 	}
 	return ""

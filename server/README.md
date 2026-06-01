@@ -131,19 +131,19 @@ If you only run `go build` directly inside `server/`, the binary will not includ
 
 ## API Contract
 
-The server HTTP API is described by `server/api/openapi.json`. Generated Go
-model types live in `server/api/types.gen.go` and are produced with
-oapi-codegen:
+The server HTTP API is described by `server/api/openapi.json`. At runtime,
+the server serves the embedded schema at `/api/openapi.json` and an embedded
+Scalar API Reference at `/api/reference` for browsing the API in a running
+server. Generated Go model types live in `server/api/types.gen.go` and are
+produced with oapi-codegen:
 
 ```bash
 cd server
 go generate ./api
 ```
 
-`server/api/types_validation_test.go` compares the generated model wire shapes
-against the existing public DTOs in `server/client/types.go`. Keep the schema,
-generated models, and validation test in sync when changing request or response
-payloads.
+Keep the schema, generated models, and generated client in sync when changing
+request or response payloads.
 
 ## API Endpoints
 
@@ -271,7 +271,7 @@ server/
 | `gorm.io/gorm` | ORM |
 | `docker/docker` | Docker SDK |
 | `google/uuid` | UUID generation |
-| `gorilla/websocket` | WebSocket support |
+| `coder/websocket` | WebSocket support |
 
 ## Testing
 

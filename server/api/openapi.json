@@ -676,7 +676,86 @@
           }
         },
         "description": "Multiplexed project WebSocket. Upgrades the HTTP request to a WebSocket connection for real-time communication.",
-        "operationId": "connectProjectsByProjectId"
+        "operationId": "connectProjectsByProjectId",
+        "x-discobot-websocket": {
+          "requests": [
+            {
+              "$ref": "#/components/schemas/ProjectStreamRequest"
+            }
+          ],
+          "messages": [
+            {
+              "x-discobot-discriminator": {
+                "type": "subscribed"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectStreamSubscribedEvent"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "unsubscribed"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectStreamUnsubscribedEvent"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "complete"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectStreamCompleteEvent"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "error"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectStreamErrorEvent"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "event"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectEventsStreamMessage"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "event"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ChatStreamMessage"
+                }
+              ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "event"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ServiceOutputEvent"
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     "/api/projects/{projectId}/models": {
@@ -5100,8 +5179,12 @@
             "description": "sandbox Status Message value for the session object."
           },
           "threadStatus": {
-            "$ref": "#/components/schemas/SessionThreadStatus",
-            "description": "Collection of thread statu values."
+            "description": "Collection of thread statu values.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionThreadStatus"
+              }
+            ]
           },
           "commitStatus": {
             "type": "string",
@@ -5375,8 +5458,12 @@
             "description": "Collection of prompt queue values."
           },
           "activityStatus": {
-            "$ref": "#/components/schemas/ThreadActivity",
-            "description": "Collection of activity statu values."
+            "description": "Collection of activity statu values.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ThreadActivity"
+              }
+            ]
           },
           "metadata": {
             "description": "metadata value for the thread object."
@@ -5497,10 +5584,9 @@
           "messages": {
             "type": "array",
             "items": {
-              "description": "Opaque AI SDK UIMessage JSON object.",
-              "x-go-type": "json.RawMessage"
+              "$ref": "#/components/schemas/Message"
             },
-            "description": "AI SDK UIMessage values. The server treats each message as opaque JSON and forwards it to the sandbox agent API.",
+            "description": "AI SDK UIMessage values accepted by the sandbox agent API.",
             "x-go-type-skip-optional-pointer": true
           },
           "trigger": {
@@ -5766,12 +5852,20 @@
             "description": "version value for the support Info Response object."
           },
           "runtime": {
-            "$ref": "#/components/schemas/RuntimeInfo",
-            "description": "runtime value for the support Info Response object."
+            "description": "runtime value for the support Info Response object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeInfo"
+              }
+            ]
           },
           "config": {
-            "$ref": "#/components/schemas/ConfigInfo",
-            "description": "config value for the support Info Response object."
+            "description": "config value for the support Info Response object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigInfo"
+              }
+            ]
           },
           "server_log": {
             "type": "string",
@@ -5786,8 +5880,12 @@
             "description": "Collection of log exist values."
           },
           "system_info": {
-            "$ref": "#/components/schemas/SystemStatusResponse",
-            "description": "system info value for the support Info Response object."
+            "description": "system info value for the support Info Response object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemStatusResponse"
+              }
+            ]
           }
         },
         "description": "support Info Response payload returned by the API."
@@ -5901,8 +5999,12 @@
             "description": "Collection of available provider values."
           },
           "vz": {
-            "$ref": "#/components/schemas/VZInfo",
-            "description": "vz value for the config Info object."
+            "description": "vz value for the config Info object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VZInfo"
+              }
+            ]
           }
         },
         "description": "config Info metadata returned by diagnostic endpoints."
@@ -5938,8 +6040,12 @@
             "description": "data disk gb value for the vZInfo object."
           },
           "disk_usage": {
-            "$ref": "#/components/schemas/DiskUsageInfo",
-            "description": "disk usage value for the vZInfo object."
+            "description": "disk usage value for the vZInfo object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DiskUsageInfo"
+              }
+            ]
           },
           "data_disks": {
             "type": "array",
@@ -6060,28 +6166,7 @@
       },
       "RouteParam": {
         "type": "object",
-        "required": [
-          "name",
-          "in"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Human-readable name."
-          },
-          "in": {
-            "type": "string",
-            "description": "in value for the route Param object."
-          },
-          "required": {
-            "type": "boolean",
-            "description": "required value for the route Param object."
-          },
-          "example": {
-            "type": "string",
-            "description": "example value for the route Param object."
-          }
-        },
+        "additionalProperties": true,
         "description": "route Param API object."
       },
       "CredentialVisibility": {
@@ -6178,8 +6263,12 @@
             "description": "agent Visible value for the create Credential Request object."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the create Credential Request object."
+            "description": "visibility value for the create Credential Request object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           },
           "inactive": {
             "type": "boolean",
@@ -6222,8 +6311,12 @@
             "description": "agent Visible value for the credential object."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the credential object."
+            "description": "visibility value for the credential object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           },
           "inactive": {
             "type": "boolean",
@@ -6511,8 +6604,12 @@
             "description": "Optional human-readable description."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the git Hub Authorize Request object."
+            "description": "visibility value for the git Hub Authorize Request object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           },
           "inactive": {
             "type": "boolean",
@@ -6583,8 +6680,12 @@
             "description": "Optional human-readable description."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the git Hub Poll Request object."
+            "description": "visibility value for the git Hub Poll Request object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           },
           "inactive": {
             "type": "boolean",
@@ -6630,8 +6731,12 @@
             "description": "Optional human-readable description."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the git Hub Exchange Request object."
+            "description": "visibility value for the git Hub Exchange Request object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           },
           "inactive": {
             "type": "boolean",
@@ -6920,8 +7025,12 @@
             "description": "authenticated value for the auth Me Response object."
           },
           "user": {
-            "$ref": "#/components/schemas/User",
-            "description": "user value for the auth Me Response object."
+            "description": "user value for the auth Me Response object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              }
+            ]
           }
         },
         "description": "auth Me Response payload returned by the API."
@@ -7448,8 +7557,12 @@
             "description": "agent Visible value for the session Credential Assignment object."
           },
           "visibility": {
-            "$ref": "#/components/schemas/CredentialVisibility",
-            "description": "visibility value for the session Credential Assignment object."
+            "description": "visibility value for the session Credential Assignment object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CredentialVisibility"
+              }
+            ]
           }
         },
         "description": "session Credential Assignment API object."
@@ -7614,6 +7727,996 @@
           }
         },
         "description": "localhost Binding API object."
+      },
+      "ProjectStreamType": {
+        "type": "string",
+        "description": "Multiplexed project websocket sub-stream identifier.",
+        "enum": [
+          "chat",
+          "service",
+          "project-events"
+        ]
+      },
+      "ChatStreamEventName": {
+        "type": "string",
+        "description": "Chat stream event name.",
+        "enum": [
+          "history-start",
+          "history-message",
+          "history-end",
+          "chunk",
+          "ping"
+        ]
+      },
+      "ProjectEventName": {
+        "type": "string",
+        "description": "Persisted project event name.",
+        "enum": [
+          "connected",
+          "session_updated",
+          "thread_updated",
+          "workspace_updated",
+          "startup_task_updated"
+        ]
+      },
+      "ProjectEventsSubscriptionOptions": {
+        "description": "Project-events stream subscription options.",
+        "type": "object",
+        "properties": {
+          "afterId": {
+            "type": "string",
+            "description": "Resume project events after this event id.",
+            "x-go-type-skip-optional-pointer": true
+          }
+        }
+      },
+      "ChatStreamSubscriptionOptions": {
+        "description": "Chat stream subscription options.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "replay": {
+            "type": "boolean",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "lastEventId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "sessionId",
+          "threadId"
+        ]
+      },
+      "ServiceStreamSubscriptionOptions": {
+        "description": "Service output stream subscription options.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "serviceId"
+        ]
+      },
+      "ProjectStreamOptions": {
+        "description": "Set of project websocket streams to subscribe or unsubscribe.",
+        "type": "object",
+        "properties": {
+          "projectEvents": {
+            "$ref": "#/components/schemas/ProjectEventsSubscriptionOptions"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/ChatStreamSubscriptionOptions"
+          },
+          "service": {
+            "$ref": "#/components/schemas/ServiceStreamSubscriptionOptions"
+          }
+        }
+      },
+      "ProjectStreamRequest": {
+        "description": "Client-to-server project websocket control message.",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscribe",
+              "unsubscribe"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "stream": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "replay": {
+            "type": "boolean",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "lastEventId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "afterId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "type",
+          "stream"
+        ]
+      },
+      "ProjectStreamSubscribedEvent": {
+        "description": "Server acknowledgement that a sub-stream was subscribed.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "replay": {
+            "type": "boolean",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream"
+        ],
+        "x-discobot-discriminator": {
+          "type": "subscribed"
+        }
+      },
+      "ProjectStreamUnsubscribedEvent": {
+        "description": "Server acknowledgement that a sub-stream was unsubscribed.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream"
+        ],
+        "x-discobot-discriminator": {
+          "type": "unsubscribed"
+        }
+      },
+      "ProjectStreamCompleteEvent": {
+        "description": "Server notification that a sub-stream completed.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream"
+        ],
+        "x-discobot-discriminator": {
+          "type": "complete"
+        }
+      },
+      "ProjectStreamErrorEvent": {
+        "description": "Project websocket error event.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "error": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "x-discobot-discriminator": {
+          "type": "error"
+        }
+      },
+      "ProjectEventsStreamMessage": {
+        "description": "Project-events websocket stream message envelope.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ],
+            "enum": [
+              "project-events"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "event": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectEventName"
+              }
+            ]
+          },
+          "data": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "id": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream",
+          "event"
+        ],
+        "x-discobot-discriminator": {
+          "type": "event"
+        }
+      },
+      "ChatStreamMessage": {
+        "description": "Chat websocket stream message envelope.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ],
+            "enum": [
+              "chat"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "event": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChatStreamEventName"
+              }
+            ]
+          },
+          "data": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "id": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream",
+          "sessionId",
+          "threadId",
+          "event"
+        ],
+        "x-discobot-discriminator": {
+          "type": "event"
+        }
+      },
+      "ChatStreamEvent": {
+        "description": "Decoded chat stream event delivered by the client package.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "event": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChatStreamEventName"
+              }
+            ]
+          },
+          "data": {
+            "description": "history-message carries Message; chunk carries MessageChunk; history-start/history-end/ping omit data.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Message"
+              },
+              {
+                "$ref": "#/components/schemas/MessageChunk"
+              }
+            ],
+            "x-go-type": "any",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "id": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "sessionId",
+          "threadId",
+          "event"
+        ]
+      },
+      "ServiceOutputEvent": {
+        "description": "Service output stream event.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStreamType"
+              }
+            ],
+            "enum": [
+              "service"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "serviceId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "data": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "id": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "stream",
+          "sessionId",
+          "serviceId"
+        ],
+        "x-discobot-discriminator": {
+          "type": "event"
+        }
+      },
+      "ProjectStreamMessage": {
+        "description": "Server-to-client project websocket message. See x-discobot-websocket on the websocket operation for the concrete message schemas.",
+        "type": "object",
+        "additionalProperties": true
+      },
+      "ProjectEventBase": {
+        "description": "Metadata shared by persisted project events.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProjectEventName"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rawData": {
+            "x-go-type": "json.RawMessage"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "type",
+          "timestamp",
+          "rawData"
+        ]
+      },
+      "ProjectConnectedEvent": {
+        "description": "Synthetic event emitted immediately after project-events subscription.",
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
+        ]
+      },
+      "SessionUpdatedData": {
+        "description": "Payload for session_updated project events.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "sandboxStatus": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "sandboxStatusMessage": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "commitStatus": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "sessionId",
+          "sandboxStatus"
+        ]
+      },
+      "SessionUpdatedEvent": {
+        "description": "Decoded session_updated project event.",
+        "type": "object",
+        "properties": {
+          "projectEventBase": {
+            "$ref": "#/components/schemas/ProjectEventBase"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SessionUpdatedData"
+          }
+        },
+        "required": [
+          "projectEventBase",
+          "data"
+        ]
+      },
+      "ThreadUpdatedData": {
+        "description": "Payload for thread_updated project events.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "threadId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "name": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "ThreadUpdatedEvent": {
+        "description": "Decoded thread_updated project event.",
+        "type": "object",
+        "properties": {
+          "projectEventBase": {
+            "$ref": "#/components/schemas/ProjectEventBase"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ThreadUpdatedData"
+          }
+        },
+        "required": [
+          "projectEventBase",
+          "data"
+        ]
+      },
+      "WorkspaceUpdatedData": {
+        "description": "Payload for workspace_updated project events.",
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "status"
+        ]
+      },
+      "WorkspaceUpdatedEvent": {
+        "description": "Decoded workspace_updated project event.",
+        "type": "object",
+        "properties": {
+          "projectEventBase": {
+            "$ref": "#/components/schemas/ProjectEventBase"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkspaceUpdatedData"
+          }
+        },
+        "required": [
+          "projectEventBase",
+          "data"
+        ]
+      },
+      "StartupTaskUpdatedEvent": {
+        "description": "Decoded startup_task_updated project event.",
+        "type": "object",
+        "properties": {
+          "projectEventBase": {
+            "$ref": "#/components/schemas/ProjectEventBase"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StartupTask"
+          }
+        },
+        "required": [
+          "projectEventBase",
+          "data"
+        ]
+      },
+      "UnknownProjectEvent": {
+        "description": "Decoded project event unknown to this client version.",
+        "type": "object",
+        "properties": {
+          "projectEventBase": {
+            "$ref": "#/components/schemas/ProjectEventBase"
+          },
+          "data": {
+            "x-go-type": "json.RawMessage"
+          }
+        },
+        "required": [
+          "projectEventBase",
+          "data"
+        ]
+      },
+      "Message": {
+        "description": "AI SDK v6 UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.",
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "parts"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant",
+              "tool"
+            ]
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessagePart"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "x-go-type": "message.UIMessage",
+        "x-go-type-import": {
+          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "name": "message"
+        }
+      },
+      "MessagePart": {
+        "description": "Discriminated UIMessage part. Authoritative variants live in agent-go/message.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TextMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/ReasoningMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/FileMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/SourceURLMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/SourceDocumentMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/StepStartMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/DynamicToolMessagePart"
+          },
+          {
+            "$ref": "#/components/schemas/DataMessagePart"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        },
+        "x-go-type": "message.UIPart",
+        "x-go-type-import": {
+          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "name": "message"
+        }
+      },
+      "TextMessagePart": {
+        "type": "object",
+        "description": "Text UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "text"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "providerMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ]
+      },
+      "ReasoningMessagePart": {
+        "type": "object",
+        "description": "Reasoning UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "reasoning"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "providerMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ]
+      },
+      "FileMessagePart": {
+        "type": "object",
+        "description": "File UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "providerMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "url",
+          "mediaType"
+        ]
+      },
+      "SourceURLMessagePart": {
+        "type": "object",
+        "description": "URL source UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "source-url"
+            ]
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "providerMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "sourceId",
+          "url"
+        ]
+      },
+      "SourceDocumentMessagePart": {
+        "type": "object",
+        "description": "Document source UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "source-document"
+            ]
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "providerMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "sourceId",
+          "mediaType",
+          "title"
+        ]
+      },
+      "StepStartMessagePart": {
+        "type": "object",
+        "description": "Step boundary UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "step-start"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "DataMessagePart": {
+        "type": "object",
+        "description": "Custom data UIMessage part with type data-*.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "pattern": "^data-"
+          },
+          "id": {
+            "type": "string"
+          },
+          "data": {}
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "DynamicToolMessagePart": {
+        "type": "object",
+        "description": "Dynamic tool UIMessage part.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "dynamic-tool"
+            ]
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "toolCallId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "providerExecuted": {
+            "type": "boolean"
+          },
+          "input": {},
+          "output": {},
+          "errorText": {
+            "type": "string"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ToolApproval"
+          },
+          "preliminary": {
+            "type": "boolean"
+          },
+          "callProviderMetadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "toolName",
+          "toolCallId",
+          "state"
+        ]
+      },
+      "ToolApproval": {
+        "type": "object",
+        "description": "Tool approval request/response metadata.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "MessageChunk": {
+        "description": "AI SDK UIMessageChunk / Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          }
+        },
+        "discriminator": {
+          "propertyName": "type"
+        },
+        "additionalProperties": true,
+        "x-go-type": "message.MessageChunk",
+        "x-go-type-import": {
+          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "name": "message"
+        }
       }
     }
   }

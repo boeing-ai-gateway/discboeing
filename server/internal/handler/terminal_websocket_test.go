@@ -14,12 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/glebarez/sqlite"
-	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	clientpkg "github.com/obot-platform/discobot/server/client"
+	serverapi "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
@@ -69,6 +70,22 @@ func TestTerminalReuseKeyIncludesWorkDir(t *testing.T) {
 	if !strings.Contains(workspaceKey, terminalWorkspaceDir) {
 		t.Fatalf("workspace terminal reuse key %q does not include workdir", workspaceKey)
 	}
+}
+
+func closeWebSocket(conn *websocket.Conn) {
+	_ = conn.Close(websocket.StatusNormalClosure, "done")
+}
+
+func readTestWebSocketJSON(conn *websocket.Conn, v any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return wsjson.Read(ctx, conn, v)
+}
+
+func writeTestWebSocketJSON(conn *websocket.Conn, v any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return wsjson.Write(ctx, conn, v)
 }
 
 func newMockPTY() *mockPTY {
@@ -196,6 +213,64 @@ func (p *blockingPTY) Wait(_ context.Context) (int, error) {
 	return 0, nil
 }
 
+type outputBlockingPTY struct {
+	output  *bytes.Buffer
+	writes  *bytes.Buffer
+	closeCh chan struct{}
+	mu      sync.Mutex
+}
+
+func newOutputBlockingPTY(output string) *outputBlockingPTY {
+	return &outputBlockingPTY{
+		output:  bytes.NewBufferString(output),
+		writes:  bytes.NewBuffer(nil),
+		closeCh: make(chan struct{}),
+	}
+}
+
+func (p *outputBlockingPTY) Read(data []byte) (int, error) {
+	p.mu.Lock()
+	if p.output.Len() > 0 {
+		n, err := p.output.Read(data)
+		p.mu.Unlock()
+		return n, err
+	}
+	p.mu.Unlock()
+
+	<-p.closeCh
+	return 0, io.EOF
+}
+
+func (p *outputBlockingPTY) Write(data []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.writes.Write(data)
+}
+
+func (p *outputBlockingPTY) Resize(_ context.Context, _, _ int) error {
+	return nil
+}
+
+func (p *outputBlockingPTY) Close() error {
+	select {
+	case <-p.closeCh:
+	default:
+		close(p.closeCh)
+	}
+	return nil
+}
+
+func (p *outputBlockingPTY) Wait(_ context.Context) (int, error) {
+	<-p.closeCh
+	return 0, nil
+}
+
+func (p *outputBlockingPTY) writtenData() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.writes.String()
+}
+
 // TestHandleTerminalSession_NormalFlow tests that PTY output reaches the WebSocket
 // client and WebSocket input is forwarded to the PTY.
 //
@@ -203,10 +278,7 @@ func (p *blockingPTY) Wait(_ context.Context) (int, error) {
 // WebSocket handler.  The handler only subscribes/unsubscribes; PTY lifecycle
 // is separate.
 func TestHandleTerminalSession_NormalFlow(t *testing.T) {
-	// Pre-seed output so the read loop can drain it and exit cleanly.
-	pty := newMockPTY()
-	pty.feedOutput("hello from shell\n")
-	pty.feedOutput("$ ")
+	pty := newOutputBlockingPTY("hello from shell\n$ ")
 
 	// Create a Manager and wrap the mock PTY in a persistent Session.
 	mgr := terminal.NewManager()
@@ -221,8 +293,8 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 
 	// Create mock WebSocket pair.
 	server, client := createMockWebSocketPair(t)
-	defer server.Close()
-	defer client.Close()
+	defer closeWebSocket(server)
+	defer closeWebSocket(client)
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -232,9 +304,9 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 	}()
 
 	// Read the output message.
-	var msg clientpkg.TerminalMessage
-	if err := client.ReadJSON(&msg); err != nil {
-		t.Fatalf("ReadJSON: %v", err)
+	var msg serverapi.TerminalMessage
+	if err := readTestWebSocketJSON(client, &msg); err != nil {
+		t.Fatalf("read websocket JSON: %v", err)
 	}
 	if msg.Type != "output" {
 		t.Errorf("want type=output, got %s", msg.Type)
@@ -248,36 +320,48 @@ func TestHandleTerminalSession_NormalFlow(t *testing.T) {
 	}
 
 	// Send input.
-	inputMsg := clientpkg.TerminalMessage{Type: "input", Data: json.RawMessage(`"ls\n"`)}
-	if err := client.WriteJSON(inputMsg); err != nil {
-		t.Fatalf("WriteJSON: %v", err)
+	inputMsg := serverapi.TerminalMessage{Type: "input", Data: json.RawMessage(`"ls\n"`)}
+	if err := writeTestWebSocketJSON(client, inputMsg); err != nil {
+		t.Fatalf("write websocket JSON: %v", err)
 	}
 
-	// Drain the client side so that gorilla's default close handler fires when
+	deadline := time.After(5 * time.Second)
+	for pty.writtenData() != "ls\n" {
+		select {
+		case <-deadline:
+			t.Fatalf("PTY input: want %q, got %q", "ls\n", pty.writtenData())
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	if err := pty.Close(); err != nil {
+		t.Fatalf("Close PTY: %v", err)
+	}
+
+	// Drain the client side so that coder/websocket's close handling runs when
 	// the server sends the close frame.  This sends the close ack back to the
-	// server, which unblocks ReadJSON in the input goroutine and lets the
+	// server, which unblocks the websocket read in the input goroutine and lets the
 	// handler return cleanly.
 	go func() {
-		_ = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 		for {
-			if _, _, err := client.ReadMessage(); err != nil {
+			if _, _, err := client.Read(ctx); err != nil {
 				return
 			}
 		}
 	}()
 
 	// Wait for the handler to return (PTY exits → sub closes → close frame sent
-	// → client acks → server ReadJSON fails or deadline fires → handler returns).
+	// → client acks → server websocket read fails or deadline fires → handler returns).
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("handler didn't finish in time")
 	}
 
-	// Verify input was forwarded to the PTY.
-	if got := pty.getWrittenData(); got != "ls\n" {
-		t.Errorf("PTY input: want %q, got %q", "ls\n", got)
-	}
+	// Input was verified before closing the PTY.
 }
 
 func TestHandleTerminalSession_ShutdownClosesWebSocket(t *testing.T) {
@@ -297,8 +381,8 @@ func TestHandleTerminalSession_ShutdownClosesWebSocket(t *testing.T) {
 
 	sub := sess.Subscribe()
 	server, client := createMockWebSocketPair(t)
-	defer server.Close()
-	defer client.Close()
+	defer closeWebSocket(server)
+	defer closeWebSocket(client)
 	defer sess.Unsubscribe(sub)
 
 	done := make(chan struct{})
@@ -309,8 +393,9 @@ func TestHandleTerminalSession_ShutdownClosesWebSocket(t *testing.T) {
 
 	h.BeginShutdown()
 
-	client.SetReadDeadline(time.Now().Add(2 * time.Second))
-	if _, _, err := client.ReadMessage(); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, _, err := client.Read(ctx); err == nil {
 		t.Fatal("expected websocket to close on shutdown")
 	}
 
@@ -353,8 +438,8 @@ func TestHandleTerminalSession_HalfClose_ClientStopsWriting(t *testing.T) {
 	sub := sess.Subscribe()
 
 	server, client := createMockWebSocketPair(t)
-	defer server.Close()
-	defer client.Close()
+	defer closeWebSocket(server)
+	defer closeWebSocket(client)
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -366,8 +451,8 @@ func TestHandleTerminalSession_HalfClose_ClientStopsWriting(t *testing.T) {
 	outputReceived := make(chan string, 10)
 	go func() {
 		for {
-			var msg clientpkg.TerminalMessage
-			if err := client.ReadJSON(&msg); err != nil {
+			var msg serverapi.TerminalMessage
+			if err := readTestWebSocketJSON(client, &msg); err != nil {
 				return
 			}
 			if msg.Type == "output" {
@@ -393,9 +478,7 @@ collectLoop:
 		}
 	}
 
-	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "test done")
-	client.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
-	client.Close()
+	_ = client.Close(websocket.StatusNormalClosure, "test done")
 
 	select {
 	case <-done:
@@ -447,26 +530,28 @@ func TestTerminalWebSocket_PTYExitsCleanly(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	// Read output
-	var msg clientpkg.TerminalMessage
-	if err := ws.ReadJSON(&msg); err != nil {
+	var msg serverapi.TerminalMessage
+	if err := readTestWebSocketJSON(ws, &msg); err != nil {
 		t.Fatalf("Failed to read: %v", err)
 	}
 
 	// Wait for close message
-	_, _, err = ws.ReadMessage()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, err = ws.Read(ctx)
 	if err == nil {
 		t.Error("Expected connection to close")
 	}
 
-	if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-		t.Errorf("Expected CloseNormalClosure, got: %v", err)
+	if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
+		t.Errorf("Expected StatusNormalClosure, got: %v", err)
 	}
 }
 
@@ -503,27 +588,26 @@ func TestTerminalWebSocket_PTYWriteError(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	// Read initial output
-	var msg clientpkg.TerminalMessage
-	ws.ReadJSON(&msg)
+	var msg serverapi.TerminalMessage
+	readTestWebSocketJSON(ws, &msg)
 
 	// Try to send input (should fail to write to PTY)
-	inputMsg := clientpkg.TerminalMessage{
+	inputMsg := serverapi.TerminalMessage{
 		Type: "input",
 		Data: json.RawMessage(`"test input\n"`),
 	}
-	ws.WriteJSON(inputMsg)
+	writeTestWebSocketJSON(ws, inputMsg)
 
 	// Output should still continue
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
-		if err := ws.ReadJSON(&msg); err != nil {
+		if err := readTestWebSocketJSON(ws, &msg); err != nil {
 			break
 		}
 	}
@@ -562,20 +646,19 @@ func TestTerminalWebSocket_PTYReadError(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	// Read initial output
-	var msg clientpkg.TerminalMessage
-	ws.ReadJSON(&msg)
+	var msg serverapi.TerminalMessage
+	readTestWebSocketJSON(ws, &msg)
 
 	// Connection should close due to error
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
-		if err := ws.ReadJSON(&msg); err != nil {
+		if err := readTestWebSocketJSON(ws, &msg); err != nil {
 			break
 		}
 	}
@@ -620,23 +703,23 @@ func TestTerminalWebSocket_ResizeOperations(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	// Read initial output
-	var msg clientpkg.TerminalMessage
-	ws.ReadJSON(&msg)
+	var msg serverapi.TerminalMessage
+	readTestWebSocketJSON(ws, &msg)
 
 	// Send resize message
-	resizeData, _ := json.Marshal(clientpkg.ResizeData{Rows: 40, Cols: 120})
-	resizeMsg := clientpkg.TerminalMessage{
+	resizeData, _ := json.Marshal(serverapi.ResizeData{Rows: 40, Cols: 120})
+	resizeMsg := serverapi.TerminalMessage{
 		Type: "resize",
 		Data: json.RawMessage(resizeData),
 	}
-	if err := ws.WriteJSON(resizeMsg); err != nil {
+	if err := writeTestWebSocketJSON(ws, resizeMsg); err != nil {
 		t.Fatalf("Failed to send resize: %v", err)
 	}
 
@@ -648,7 +731,7 @@ func TestTerminalWebSocket_ResizeOperations(t *testing.T) {
 		t.Error("Resize was not processed")
 	}
 
-	ws.Close()
+	closeWebSocket(ws)
 }
 
 // TestTerminalWebSocket_OutputDraining tests that all output is sent before closing
@@ -691,18 +774,17 @@ func TestTerminalWebSocket_OutputDraining(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	receivedChunks := []string{}
-	ws.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 	for {
-		var msg clientpkg.TerminalMessage
-		if err := ws.ReadJSON(&msg); err != nil {
+		var msg serverapi.TerminalMessage
+		if err := readTestWebSocketJSON(ws, &msg); err != nil {
 			break
 		}
 
@@ -755,31 +837,30 @@ func TestTerminalWebSocket_ConcurrentInputOutput(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer closeWebSocket(ws)
 
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
 		for i := range 10 {
-			inputMsg := clientpkg.TerminalMessage{
+			inputMsg := serverapi.TerminalMessage{
 				Type: "input",
 				Data: json.RawMessage(fmt.Sprintf(`"input %d\n"`, i)),
 			}
-			ws.WriteJSON(inputMsg)
+			writeTestWebSocketJSON(ws, inputMsg)
 			time.Sleep(15 * time.Millisecond)
 		}
 	})
 
 	outputCount := 0
 	wg.Go(func() {
-		ws.SetReadDeadline(time.Now().Add(5 * time.Second))
 		for {
-			var msg clientpkg.TerminalMessage
-			if err := ws.ReadJSON(&msg); err != nil {
+			var msg serverapi.TerminalMessage
+			if err := readTestWebSocketJSON(ws, &msg); err != nil {
 				break
 			}
 			if msg.Type == "output" {
@@ -808,10 +889,7 @@ func createMockWebSocketPair(t *testing.T) (*websocket.Conn, *websocket.Conn) {
 	serverConn := make(chan *websocket.Conn, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(_ *http.Request) bool { return true },
-		}
-		conn, err := upgrader.Upgrade(w, r, nil)
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
 		if err != nil {
 			t.Fatalf("Failed to upgrade: %v", err)
 		}
@@ -820,7 +898,7 @@ func createMockWebSocketPair(t *testing.T) (*websocket.Conn, *websocket.Conn) {
 	t.Cleanup(func() { server.Close() })
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	client, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	client, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}

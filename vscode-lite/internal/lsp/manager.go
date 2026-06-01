@@ -3,13 +3,14 @@ package lsp
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os/exec"
 	"sync"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 )
 
 type Manager struct {
@@ -23,7 +24,7 @@ func (m *Manager) Attach(ctx context.Context, language string, conn *websocket.C
 		server, ok = m.Servers["typescript"]
 	}
 	if !ok {
-		return &websocket.CloseError{Code: websocket.CloseUnsupportedData, Text: "unsupported language"}
+		return fmt.Errorf("unsupported language")
 	}
 
 	cmd := exec.CommandContext(ctx, server.Command, server.Args...)
@@ -53,7 +54,13 @@ func (m *Manager) Attach(ctx context.Context, language string, conn *websocket.C
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var once sync.Once
-	closeAll := func() { once.Do(func() { cancel(); _ = stdin.Close(); _ = conn.Close() }) }
+	closeAll := func() {
+		once.Do(func() {
+			cancel()
+			_ = stdin.Close()
+			_ = conn.Close(websocket.StatusNormalClosure, "done")
+		})
+	}
 
 	go func() {
 		defer closeAll()
@@ -63,17 +70,20 @@ func (m *Manager) Attach(ctx context.Context, language string, conn *websocket.C
 			if err != nil {
 				return
 			}
-			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+			if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
 				return
 			}
 		}
 	}()
 
 	for {
-		_, payload, err := conn.ReadMessage()
+		messageType, payload, err := conn.Read(ctx)
 		if err != nil {
 			closeAll()
 			return nil
+		}
+		if messageType != websocket.MessageText {
+			continue
 		}
 		if err := WriteFrame(stdin, payload); err != nil {
 			closeAll()
@@ -89,10 +99,8 @@ func logPipe(language string, r io.Reader) {
 	}
 }
 
-var Upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(_ *http.Request) bool {
-		return true
-	},
+func Accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+	return websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 }

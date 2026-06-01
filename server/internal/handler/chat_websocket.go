@@ -4,19 +4,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
 	"github.com/obot-platform/discobot/server/internal/realtime"
 )
-
-var chatWebSocketUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(_ *http.Request) bool {
-		return true
-	},
-}
 
 // ChatWebSocket multiplexes project-scoped realtime streams over a single WebSocket.
 //
@@ -41,12 +33,14 @@ func (h *Handler) ChatWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := chatWebSocketUpgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 	if err != nil {
 		log.Printf("failed to upgrade chat websocket: %v", err)
 		return
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "done") }()
 
 	ctx, cancel := h.withShutdownContext(r.Context())
 	defer cancel()

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/vscode-lite/internal/lsp"
@@ -47,7 +48,7 @@ func (s *Server) routes() http.Handler {
 	return r
 }
 
-func (s *Server) handleWorkspace(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleWorkspace(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"root": s.vfs.Root(), "languages": s.lspManager.Servers})
 }
 
@@ -135,14 +136,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLSP(w http.ResponseWriter, r *http.Request) {
-	conn, err := lsp.Upgrader.Upgrade(w, r, nil)
+	conn, err := lsp.Accept(w, r)
 	if err != nil {
 		return
 	}
 	language := chi.URLParam(r, "language")
 	if err := s.lspManager.Attach(r.Context(), language, conn); err != nil {
 		log.Printf("lsp attach failed: %v", err)
-		_ = conn.Close()
+		_ = conn.Close(websocket.StatusInternalError, err.Error())
 	}
 }
 

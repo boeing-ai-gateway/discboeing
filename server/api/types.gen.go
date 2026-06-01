@@ -7,12 +7,182 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	message "github.com/obot-platform/discobot/agent-go/message"
 )
 
 const (
 	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
 	CookieAuthScopes cookieAuthContextKey = "cookieAuth.Scopes"
 )
+
+// Defines values for ChatStreamEventName.
+const (
+	Chunk          ChatStreamEventName = "chunk"
+	HistoryEnd     ChatStreamEventName = "history-end"
+	HistoryMessage ChatStreamEventName = "history-message"
+	HistoryStart   ChatStreamEventName = "history-start"
+	Ping           ChatStreamEventName = "ping"
+)
+
+// Valid indicates whether the value is a known member of the ChatStreamEventName enum.
+func (e ChatStreamEventName) Valid() bool {
+	switch e {
+	case Chunk:
+		return true
+	case HistoryEnd:
+		return true
+	case HistoryMessage:
+		return true
+	case HistoryStart:
+		return true
+	case Ping:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DynamicToolMessagePartType.
+const (
+	DynamicTool DynamicToolMessagePartType = "dynamic-tool"
+)
+
+// Valid indicates whether the value is a known member of the DynamicToolMessagePartType enum.
+func (e DynamicToolMessagePartType) Valid() bool {
+	switch e {
+	case DynamicTool:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileMessagePartType.
+const (
+	File FileMessagePartType = "file"
+)
+
+// Valid indicates whether the value is a known member of the FileMessagePartType enum.
+func (e FileMessagePartType) Valid() bool {
+	switch e {
+	case File:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectEventName.
+const (
+	Connected          ProjectEventName = "connected"
+	SessionUpdated     ProjectEventName = "session_updated"
+	StartupTaskUpdated ProjectEventName = "startup_task_updated"
+	ThreadUpdated      ProjectEventName = "thread_updated"
+	WorkspaceUpdated   ProjectEventName = "workspace_updated"
+)
+
+// Valid indicates whether the value is a known member of the ProjectEventName enum.
+func (e ProjectEventName) Valid() bool {
+	switch e {
+	case Connected:
+		return true
+	case SessionUpdated:
+		return true
+	case StartupTaskUpdated:
+		return true
+	case ThreadUpdated:
+		return true
+	case WorkspaceUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectStreamRequestType.
+const (
+	Subscribe   ProjectStreamRequestType = "subscribe"
+	Unsubscribe ProjectStreamRequestType = "unsubscribe"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamRequestType enum.
+func (e ProjectStreamRequestType) Valid() bool {
+	switch e {
+	case Subscribe:
+		return true
+	case Unsubscribe:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectStreamType.
+const (
+	ProjectStreamTypeChat          ProjectStreamType = "chat"
+	ProjectStreamTypeProjectEvents ProjectStreamType = "project-events"
+	ProjectStreamTypeService       ProjectStreamType = "service"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamType enum.
+func (e ProjectStreamType) Valid() bool {
+	switch e {
+	case ProjectStreamTypeChat:
+		return true
+	case ProjectStreamTypeProjectEvents:
+		return true
+	case ProjectStreamTypeService:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReasoningMessagePartType.
+const (
+	Reasoning ReasoningMessagePartType = "reasoning"
+)
+
+// Valid indicates whether the value is a known member of the ReasoningMessagePartType enum.
+func (e ReasoningMessagePartType) Valid() bool {
+	switch e {
+	case Reasoning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SourceDocumentMessagePartType.
+const (
+	SourceDocument SourceDocumentMessagePartType = "source-document"
+)
+
+// Valid indicates whether the value is a known member of the SourceDocumentMessagePartType enum.
+func (e SourceDocumentMessagePartType) Valid() bool {
+	switch e {
+	case SourceDocument:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SourceURLMessagePartType.
+const (
+	SourceURL SourceURLMessagePartType = "source-url"
+)
+
+// Valid indicates whether the value is a known member of the SourceURLMessagePartType enum.
+func (e SourceURLMessagePartType) Valid() bool {
+	switch e {
+	case SourceURL:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for StatusMessageLevel.
 const (
@@ -26,6 +196,36 @@ func (e StatusMessageLevel) Valid() bool {
 	case StatusMessageLevelError:
 		return true
 	case StatusMessageLevelWarn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepStartMessagePartType.
+const (
+	StepStart StepStartMessagePartType = "step-start"
+)
+
+// Valid indicates whether the value is a known member of the StepStartMessagePartType enum.
+func (e StepStartMessagePartType) Valid() bool {
+	switch e {
+	case StepStart:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextMessagePartType.
+const (
+	Text TextMessagePartType = "text"
+)
+
+// Valid indicates whether the value is a known member of the TextMessagePartType enum.
+func (e TextMessagePartType) Valid() bool {
+	switch e {
+	case Text:
 		return true
 	default:
 		return false
@@ -59,7 +259,7 @@ type AuthMeResponse struct {
 	// Authenticated authenticated value for the auth Me Response object.
 	Authenticated *bool `json:"authenticated,omitempty"`
 
-	// User user API object.
+	// User user value for the auth Me Response object.
 	User                 *User                  `json:"user,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
@@ -72,8 +272,8 @@ type CacheVolumesResponse map[string]interface{}
 
 // ChatRequest Request to submit or queue chat messages for a session thread.
 type ChatRequest struct {
-	// Messages AI SDK UIMessage values. The server treats each message as opaque JSON and forwards it to the sandbox agent API.
-	Messages []json.RawMessage `json:"messages,omitempty"`
+	// Messages AI SDK UIMessage values accepted by the sandbox agent API.
+	Messages []Message `json:"messages,omitempty"`
 
 	// Model model value for the chat Request object.
 	Model string `json:"model,omitempty"`
@@ -122,6 +322,37 @@ type ChatResponse struct {
 
 	// WorkspaceID Workspace identifier associated with this object.
 	WorkspaceID string `json:"workspaceId"`
+}
+
+// ChatStreamEvent Decoded chat stream event delivered by the client package.
+type ChatStreamEvent struct {
+	// Data history-message carries Message; chunk carries MessageChunk; history-start/history-end/ping omit data.
+	Data      any                 `json:"data,omitempty"`
+	Event     ChatStreamEventName `json:"event"`
+	ID        string              `json:"id,omitempty"`
+	SessionID string              `json:"sessionId"`
+	ThreadID  string              `json:"threadId"`
+}
+
+// ChatStreamEventName Chat stream event name.
+type ChatStreamEventName string
+
+// ChatStreamMessage Chat websocket stream message envelope.
+type ChatStreamMessage struct {
+	Data      string              `json:"data,omitempty"`
+	Event     ChatStreamEventName `json:"event"`
+	ID        string              `json:"id,omitempty"`
+	SessionID string              `json:"sessionId"`
+	Stream    ProjectStreamType   `json:"stream"`
+	ThreadID  string              `json:"threadId"`
+}
+
+// ChatStreamSubscriptionOptions Chat stream subscription options.
+type ChatStreamSubscriptionOptions struct {
+	LastEventID string `json:"lastEventId,omitempty"`
+	Replay      bool   `json:"replay,omitempty"`
+	SessionID   string `json:"sessionId"`
+	ThreadID    string `json:"threadId"`
 }
 
 // CodexAuthorizeRequest codex Authorize Request payload accepted by the API.
@@ -246,7 +477,7 @@ type ConfigInfo struct {
 	// SSHPort ssh port value for the config Info object.
 	SSHPort int `json:"ssh_port"`
 
-	// VZ vZInfo metadata returned by diagnostic endpoints.
+	// VZ vz value for the config Info object.
 	VZ *VZInfo `json:"vz,omitempty"`
 
 	// WorkspaceDir workspace dir value for the config Info object.
@@ -282,7 +513,7 @@ type CreateCredentialRequest struct {
 	// Provider Provider name or key.
 	Provider *string `json:"provider,omitempty"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the create Credential Request object.
 	Visibility *CredentialVisibility `json:"visibility,omitempty"`
 }
 
@@ -372,7 +603,7 @@ type Credential struct {
 	// Provider Provider name or key.
 	Provider *string `json:"provider,omitempty"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the credential object.
 	Visibility           *CredentialVisibility  `json:"visibility,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
@@ -461,6 +692,13 @@ type DataDiskFileInfo struct {
 	Path string `json:"path"`
 }
 
+// DataMessagePart Custom data UIMessage part with type data-*.
+type DataMessagePart struct {
+	Data interface{} `json:"data,omitempty"`
+	ID   *string     `json:"id,omitempty"`
+	Type string      `json:"type"`
+}
+
 // DeleteFileRequest delete File Request payload accepted by the API.
 type DeleteFileRequest struct {
 	// Path File system path or repository-relative path.
@@ -485,6 +723,26 @@ type DiskUsageInfo struct {
 	UsedPercent float64 `json:"used_percent"`
 }
 
+// DynamicToolMessagePart Dynamic tool UIMessage part.
+type DynamicToolMessagePart struct {
+	// Approval Tool approval request/response metadata.
+	Approval             *ToolApproval              `json:"approval,omitempty"`
+	CallProviderMetadata *map[string]interface{}    `json:"callProviderMetadata,omitempty"`
+	ErrorText            *string                    `json:"errorText,omitempty"`
+	Input                interface{}                `json:"input,omitempty"`
+	Output               interface{}                `json:"output,omitempty"`
+	Preliminary          *bool                      `json:"preliminary,omitempty"`
+	ProviderExecuted     *bool                      `json:"providerExecuted,omitempty"`
+	State                string                     `json:"state"`
+	Title                *string                    `json:"title,omitempty"`
+	ToolCallID           string                     `json:"toolCallId"`
+	ToolName             string                     `json:"toolName"`
+	Type                 DynamicToolMessagePartType `json:"type"`
+}
+
+// DynamicToolMessagePartType defines model for DynamicToolMessagePart.Type.
+type DynamicToolMessagePartType string
+
 // ErrorResponse Standard JSON error envelope returned by failed API operations.
 type ErrorResponse struct {
 	// Error Error message when the operation failed.
@@ -506,6 +764,18 @@ type FileContentResponse struct {
 
 // FileListResponse file List Response payload returned by the API.
 type FileListResponse map[string]interface{}
+
+// FileMessagePart File UIMessage part.
+type FileMessagePart struct {
+	Filename         *string                 `json:"filename,omitempty"`
+	MediaType        string                  `json:"mediaType"`
+	ProviderMetadata *map[string]interface{} `json:"providerMetadata,omitempty"`
+	Type             FileMessagePartType     `json:"type"`
+	URL              string                  `json:"url"`
+}
+
+// FileMessagePartType defines model for FileMessagePart.Type.
+type FileMessagePartType string
 
 // FileSearchResponse file Search Response payload returned by the API.
 type FileSearchResponse struct {
@@ -569,7 +839,7 @@ type GitHubAuthorizeRequest struct {
 	// Scopes Collection of scope values.
 	Scopes *[]string `json:"scopes,omitempty"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the git Hub Authorize Request object.
 	Visibility *CredentialVisibility `json:"visibility,omitempty"`
 }
 
@@ -680,7 +950,7 @@ type GitHubExchangeRequest struct {
 	// Verifier PKCE verifier used by OAuth code exchange.
 	Verifier string `json:"verifier"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the git Hub Exchange Request object.
 	Visibility *CredentialVisibility `json:"visibility,omitempty"`
 }
 
@@ -713,7 +983,7 @@ type GitHubPollRequest struct {
 	// Name Human-readable name.
 	Name *string `json:"name,omitempty"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the git Hub Poll Request object.
 	Visibility *CredentialVisibility `json:"visibility,omitempty"`
 }
 
@@ -781,6 +1051,15 @@ type MCPTokenRequest struct {
 	// URL URL for a browser or API client to use.
 	URL string `json:"url"`
 }
+
+// Message AI SDK v6 UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.
+type Message = message.UIMessage
+
+// MessageChunk AI SDK UIMessageChunk / Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.
+type MessageChunk = message.MessageChunk
+
+// MessagePart Discriminated UIMessage part. Authoritative variants live in agent-go/message.
+type MessagePart = message.UIPart
 
 // MessageResponse Generic action result message used by endpoints that do not return a dedicated resource.
 type MessageResponse struct {
@@ -895,6 +1174,39 @@ type Project struct {
 	VZMemoryMb *int `json:"vz_memory_mb,omitempty"`
 }
 
+// ProjectConnectedEvent Synthetic event emitted immediately after project-events subscription.
+type ProjectConnectedEvent struct {
+	ProjectID string `json:"projectId"`
+}
+
+// ProjectEventBase Metadata shared by persisted project events.
+type ProjectEventBase struct {
+	ID        string          `json:"id"`
+	RawData   json.RawMessage `json:"rawData"`
+	Seq       int64           `json:"seq"`
+	Timestamp time.Time       `json:"timestamp"`
+
+	// Type Persisted project event name.
+	Type ProjectEventName `json:"type"`
+}
+
+// ProjectEventName Persisted project event name.
+type ProjectEventName string
+
+// ProjectEventsStreamMessage Project-events websocket stream message envelope.
+type ProjectEventsStreamMessage struct {
+	Data   string            `json:"data,omitempty"`
+	Event  ProjectEventName  `json:"event"`
+	ID     string            `json:"id,omitempty"`
+	Stream ProjectStreamType `json:"stream"`
+}
+
+// ProjectEventsSubscriptionOptions Project-events stream subscription options.
+type ProjectEventsSubscriptionOptions struct {
+	// AfterID Resume project events after this event id.
+	AfterID string `json:"afterId,omitempty"`
+}
+
 // ProjectMember project Member API object.
 type ProjectMember struct {
 	// Email Email address associated with a user or invitation.
@@ -915,6 +1227,73 @@ type ProjectMember struct {
 type ProjectMembersResponse struct {
 	// Members Collection of member values.
 	Members []ProjectMember `json:"members"`
+}
+
+// ProjectStreamCompleteEvent Server notification that a sub-stream completed.
+type ProjectStreamCompleteEvent struct {
+	ServiceID string            `json:"serviceId,omitempty"`
+	SessionID string            `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType `json:"stream"`
+	ThreadID  string            `json:"threadId,omitempty"`
+}
+
+// ProjectStreamErrorEvent Project websocket error event.
+type ProjectStreamErrorEvent struct {
+	Error     string            `json:"error"`
+	ServiceID string            `json:"serviceId,omitempty"`
+	SessionID string            `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType `json:"stream,omitempty"`
+	ThreadID  string            `json:"threadId,omitempty"`
+}
+
+// ProjectStreamMessage Server-to-client project websocket message. See x-discobot-websocket on the websocket operation for the concrete message schemas.
+type ProjectStreamMessage map[string]interface{}
+
+// ProjectStreamOptions Set of project websocket streams to subscribe or unsubscribe.
+type ProjectStreamOptions struct {
+	// Chat Chat stream subscription options.
+	Chat *ChatStreamSubscriptionOptions `json:"chat,omitempty"`
+
+	// ProjectEvents Project-events stream subscription options.
+	ProjectEvents *ProjectEventsSubscriptionOptions `json:"projectEvents,omitempty"`
+
+	// Service Service output stream subscription options.
+	Service *ServiceStreamSubscriptionOptions `json:"service,omitempty"`
+}
+
+// ProjectStreamRequest Client-to-server project websocket control message.
+type ProjectStreamRequest struct {
+	AfterID     string                   `json:"afterId,omitempty"`
+	LastEventID string                   `json:"lastEventId,omitempty"`
+	Replay      bool                     `json:"replay,omitempty"`
+	ServiceID   string                   `json:"serviceId,omitempty"`
+	SessionID   string                   `json:"sessionId,omitempty"`
+	Stream      ProjectStreamType        `json:"stream"`
+	ThreadID    string                   `json:"threadId,omitempty"`
+	Type        ProjectStreamRequestType `json:"type"`
+}
+
+// ProjectStreamRequestType defines model for ProjectStreamRequest.Type.
+type ProjectStreamRequestType string
+
+// ProjectStreamSubscribedEvent Server acknowledgement that a sub-stream was subscribed.
+type ProjectStreamSubscribedEvent struct {
+	Replay    bool              `json:"replay,omitempty"`
+	ServiceID string            `json:"serviceId,omitempty"`
+	SessionID string            `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType `json:"stream"`
+	ThreadID  string            `json:"threadId,omitempty"`
+}
+
+// ProjectStreamType Multiplexed project websocket sub-stream identifier.
+type ProjectStreamType string
+
+// ProjectStreamUnsubscribedEvent Server acknowledgement that a sub-stream was unsubscribed.
+type ProjectStreamUnsubscribedEvent struct {
+	ServiceID string            `json:"serviceId,omitempty"`
+	SessionID string            `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType `json:"stream"`
+	ThreadID  string            `json:"threadId,omitempty"`
 }
 
 // ProviderResources Sandbox provider CPU-independent resource limits used for VM-backed providers.
@@ -941,6 +1320,17 @@ type QueuedPrompt struct {
 	// RunAfter run After value for the queued Prompt object.
 	RunAfter *time.Time `json:"runAfter,omitempty"`
 }
+
+// ReasoningMessagePart Reasoning UIMessage part.
+type ReasoningMessagePart struct {
+	ProviderMetadata *map[string]interface{}  `json:"providerMetadata,omitempty"`
+	State            *string                  `json:"state,omitempty"`
+	Text             string                   `json:"text"`
+	Type             ReasoningMessagePartType `json:"type"`
+}
+
+// ReasoningMessagePartType defines model for ReasoningMessagePart.Type.
+type ReasoningMessagePartType string
 
 // RenameFileRequest rename File Request payload accepted by the API.
 type RenameFileRequest struct {
@@ -982,19 +1372,7 @@ type RouteInfo struct {
 }
 
 // RouteParam route Param API object.
-type RouteParam struct {
-	// Example example value for the route Param object.
-	Example *string `json:"example,omitempty"`
-
-	// In in value for the route Param object.
-	In string `json:"in"`
-
-	// Name Human-readable name.
-	Name string `json:"name"`
-
-	// Required required value for the route Param object.
-	Required *bool `json:"required,omitempty"`
-}
+type RouteParam map[string]interface{}
 
 // RuntimeInfo runtime Info metadata returned by diagnostic endpoints.
 type RuntimeInfo struct {
@@ -1114,6 +1492,21 @@ type Service struct {
 // ServiceActionResponse service Action Response payload returned by the API.
 type ServiceActionResponse map[string]interface{}
 
+// ServiceOutputEvent Service output stream event.
+type ServiceOutputEvent struct {
+	Data      string            `json:"data,omitempty"`
+	ID        string            `json:"id,omitempty"`
+	ServiceID string            `json:"serviceId"`
+	SessionID string            `json:"sessionId"`
+	Stream    ProjectStreamType `json:"stream"`
+}
+
+// ServiceStreamSubscriptionOptions Service output stream subscription options.
+type ServiceStreamSubscriptionOptions struct {
+	ServiceID string `json:"serviceId"`
+	SessionID string `json:"sessionId"`
+}
+
 // ServicesResponse services Response payload returned by the API.
 type ServicesResponse struct {
 	// Services Collection of service values.
@@ -1167,7 +1560,7 @@ type Session struct {
 	// TargetRef target Ref value for the session object.
 	TargetRef *string `json:"targetRef,omitempty"`
 
-	// ThreadStatus session Thread Status API object.
+	// ThreadStatus Collection of thread statu values.
 	ThreadStatus *SessionThreadStatus `json:"threadStatus,omitempty"`
 
 	// UpdatedAt Time when the object was last updated.
@@ -1188,7 +1581,7 @@ type SessionCredentialAssignment struct {
 	// CredentialID Credential identifier.
 	CredentialID string `json:"credentialId"`
 
-	// Visibility credential Visibility API object.
+	// Visibility visibility value for the session Credential Assignment object.
 	Visibility *CredentialVisibility `json:"visibility,omitempty"`
 }
 
@@ -1225,6 +1618,23 @@ type SessionThreadStatus struct {
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 }
 
+// SessionUpdatedData Payload for session_updated project events.
+type SessionUpdatedData struct {
+	CommitStatus         string `json:"commitStatus,omitempty"`
+	SandboxStatus        string `json:"sandboxStatus"`
+	SandboxStatusMessage string `json:"sandboxStatusMessage,omitempty"`
+	SessionID            string `json:"sessionId"`
+}
+
+// SessionUpdatedEvent Decoded session_updated project event.
+type SessionUpdatedEvent struct {
+	// Data Payload for session_updated project events.
+	Data SessionUpdatedData `json:"data"`
+
+	// ProjectEventBase Metadata shared by persisted project events.
+	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+}
+
 // SessionsResponse sessions Response payload returned by the API.
 type SessionsResponse struct {
 	// Sessions Collection of session values.
@@ -1248,6 +1658,31 @@ type SetSessionCredentialAssignmentsRequest struct {
 	// Credentials Collection of credential values.
 	Credentials []SessionCredentialAssignment `json:"credentials"`
 }
+
+// SourceDocumentMessagePart Document source UIMessage part.
+type SourceDocumentMessagePart struct {
+	Filename         *string                       `json:"filename,omitempty"`
+	MediaType        string                        `json:"mediaType"`
+	ProviderMetadata *map[string]interface{}       `json:"providerMetadata,omitempty"`
+	SourceID         string                        `json:"sourceId"`
+	Title            string                        `json:"title"`
+	Type             SourceDocumentMessagePartType `json:"type"`
+}
+
+// SourceDocumentMessagePartType defines model for SourceDocumentMessagePart.Type.
+type SourceDocumentMessagePartType string
+
+// SourceURLMessagePart URL source UIMessage part.
+type SourceURLMessagePart struct {
+	ProviderMetadata *map[string]interface{}  `json:"providerMetadata,omitempty"`
+	SourceID         string                   `json:"sourceId"`
+	Title            *string                  `json:"title,omitempty"`
+	Type             SourceURLMessagePartType `json:"type"`
+	URL              string                   `json:"url"`
+}
+
+// SourceURLMessagePartType defines model for SourceURLMessagePart.Type.
+type SourceURLMessagePartType string
 
 // StartupTask startup Task API object.
 type StartupTask struct {
@@ -1282,6 +1717,15 @@ type StartupTask struct {
 	TotalBytes *int64 `json:"totalBytes,omitempty"`
 }
 
+// StartupTaskUpdatedEvent Decoded startup_task_updated project event.
+type StartupTaskUpdatedEvent struct {
+	// Data startup Task API object.
+	Data StartupTask `json:"data"`
+
+	// ProjectEventBase Metadata shared by persisted project events.
+	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+}
+
 // StatusMessage status Message API object.
 type StatusMessage struct {
 	// ID Stable identifier for the object.
@@ -1299,6 +1743,14 @@ type StatusMessage struct {
 
 // StatusMessageLevel level value for the status Message object.
 type StatusMessageLevel string
+
+// StepStartMessagePart Step boundary UIMessage part.
+type StepStartMessagePart struct {
+	Type StepStartMessagePartType `json:"type"`
+}
+
+// StepStartMessagePartType defines model for StepStartMessagePart.Type.
+type StepStartMessagePartType string
 
 // Suggestion suggestion API object.
 type Suggestion struct {
@@ -1323,7 +1775,7 @@ type SuggestionsResponse struct {
 
 // SupportInfoResponse support Info Response payload returned by the API.
 type SupportInfoResponse struct {
-	// Config config Info metadata returned by diagnostic endpoints.
+	// Config config value for the support Info Response object.
 	Config ConfigInfo `json:"config"`
 
 	// LogExists Collection of log exist values.
@@ -1332,13 +1784,13 @@ type SupportInfoResponse struct {
 	// LogPath log path value for the support Info Response object.
 	LogPath string `json:"log_path"`
 
-	// Runtime runtime Info metadata returned by diagnostic endpoints.
+	// Runtime runtime value for the support Info Response object.
 	Runtime RuntimeInfo `json:"runtime"`
 
 	// ServerLog server log value for the support Info Response object.
 	ServerLog string `json:"server_log"`
 
-	// SystemInfo system Status Response payload returned by the API.
+	// SystemInfo system info value for the support Info Response object.
 	SystemInfo SystemStatusResponse `json:"system_info"`
 
 	// Version version value for the support Info Response object.
@@ -1380,12 +1832,23 @@ type TerminalStatusResponse struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
+// TextMessagePart Text UIMessage part.
+type TextMessagePart struct {
+	ProviderMetadata *map[string]interface{} `json:"providerMetadata,omitempty"`
+	State            *string                 `json:"state,omitempty"`
+	Text             string                  `json:"text"`
+	Type             TextMessagePartType     `json:"type"`
+}
+
+// TextMessagePartType defines model for TextMessagePart.Type.
+type TextMessagePartType string
+
 // Thread Conversation thread metadata and current execution state.
 type Thread struct {
 	// ActiveCommand active Command value for the thread object.
 	ActiveCommand *string `json:"activeCommand,omitempty"`
 
-	// ActivityStatus thread Activity API object.
+	// ActivityStatus Collection of activity statu values.
 	ActivityStatus *ThreadActivity `json:"activityStatus,omitempty"`
 
 	// ErrorMessage Detailed error message, when present.
@@ -1446,6 +1909,22 @@ type ThreadActivity struct {
 	Status string `json:"status"`
 }
 
+// ThreadUpdatedData Payload for thread_updated project events.
+type ThreadUpdatedData struct {
+	Name      string `json:"name,omitempty"`
+	SessionID string `json:"sessionId"`
+	ThreadID  string `json:"threadId,omitempty"`
+}
+
+// ThreadUpdatedEvent Decoded thread_updated project event.
+type ThreadUpdatedEvent struct {
+	// Data Payload for thread_updated project events.
+	Data ThreadUpdatedData `json:"data"`
+
+	// ProjectEventBase Metadata shared by persisted project events.
+	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+}
+
 // ThreadsResponse threads Response payload returned by the API.
 type ThreadsResponse struct {
 	// Threads Collection of thread values.
@@ -1454,6 +1933,21 @@ type ThreadsResponse struct {
 
 // TokenUsageResponse token Usage Response payload returned by the API.
 type TokenUsageResponse map[string]interface{}
+
+// ToolApproval Tool approval request/response metadata.
+type ToolApproval struct {
+	Approved *bool   `json:"approved,omitempty"`
+	ID       string  `json:"id"`
+	Reason   *string `json:"reason,omitempty"`
+}
+
+// UnknownProjectEvent Decoded project event unknown to this client version.
+type UnknownProjectEvent struct {
+	Data json.RawMessage `json:"data"`
+
+	// ProjectEventBase Metadata shared by persisted project events.
+	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+}
 
 // UpdateDefaultSandboxProviderRequest update Default Sandbox Provider Request payload accepted by the API.
 type UpdateDefaultSandboxProviderRequest struct {
@@ -1539,7 +2033,7 @@ type VZInfo struct {
 	// DataDisks Collection of data disk values.
 	DataDisks *[]DataDiskFileInfo `json:"data_disks,omitempty"`
 
-	// DiskUsage disk Usage Info metadata returned by diagnostic endpoints.
+	// DiskUsage disk usage value for the vZInfo object.
 	DiskUsage *DiskUsageInfo `json:"disk_usage,omitempty"`
 
 	// ImageRef image ref value for the vZInfo object.
@@ -1625,6 +2119,21 @@ type Workspace struct {
 
 	// UpdatedAt Time when the object was last updated.
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// WorkspaceUpdatedData Payload for workspace_updated project events.
+type WorkspaceUpdatedData struct {
+	Status      string `json:"status"`
+	WorkspaceID string `json:"workspaceId"`
+}
+
+// WorkspaceUpdatedEvent Decoded workspace_updated project event.
+type WorkspaceUpdatedEvent struct {
+	// Data Payload for workspace_updated project events.
+	Data WorkspaceUpdatedData `json:"data"`
+
+	// ProjectEventBase Metadata shared by persisted project events.
+	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
 }
 
 // WorkspacesResponse workspaces Response payload returned by the API.

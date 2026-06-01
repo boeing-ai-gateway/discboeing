@@ -10,21 +10,21 @@ import (
 	"fmt"
 	"log"
 
+	serverapi "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
-func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []json.RawMessage, requestModel, reasoning, serviceTier, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
+func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []serverapi.Message, requestModel, reasoning, serviceTier, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {
 	messageID := lastUserMessageID(messages)
-	if messageID == "" {
-		messageID = promptSubmissionFallbackKey(messages, requestModel, reasoning, serviceTier, runAfter)
-	}
-
 	rawMessages, err := json.Marshal(messages)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal messages: %w", err)
+	}
+	if messageID == "" {
+		messageID = promptSubmissionFallbackKey(rawMessages, requestModel, reasoning, serviceTier, runAfter)
 	}
 	encryptedMessages, err := c.encryptPromptPayload(rawMessages)
 	if err != nil {
@@ -336,11 +336,9 @@ func promptSubmissionStartedResponse(submission *model.PromptSubmission) *sandbo
 	return response
 }
 
-func promptSubmissionFallbackKey(messages []json.RawMessage, requestModel, reasoning, serviceTier, runAfter string) string {
+func promptSubmissionFallbackKey(messages []byte, requestModel, reasoning, serviceTier, runAfter string) string {
 	hash := sha256.New()
-	for _, msg := range messages {
-		_, _ = hash.Write(msg)
-	}
+	_, _ = hash.Write(messages)
 	_, _ = hash.Write([]byte("\x00" + requestModel + "\x00" + reasoning + "\x00" + serviceTier + "\x00" + runAfter))
 	return "generated-" + hex.EncodeToString(hash.Sum(nil))
 }

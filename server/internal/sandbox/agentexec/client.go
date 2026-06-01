@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
@@ -193,7 +192,10 @@ func Kill(ctx context.Context, client *http.Client, id string) error {
 }
 
 func Attach(ctx context.Context, lease *sandbox.HTTPClientLease, id string) (*Stream, error) {
-	conn, _, err := dialer(lease.Client).DialContext(ctx, clientWebSocketURL(lease.Client, "ws://sandbox/exec/"+url.PathEscape(id)+"/attach"), clientHeaders(lease.Client))
+	conn, _, err := websocket.Dial(ctx, clientWebSocketURL(lease.Client, "ws://sandbox/exec/"+url.PathEscape(id)+"/attach"), &websocket.DialOptions{
+		HTTPClient: lease.Client,
+		HTTPHeader: clientHeaders(lease.Client),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -213,24 +215,6 @@ func CreateAndAttach(ctx context.Context, lease *sandbox.HTTPClientLease, payloa
 		return nil, err
 	}
 	return stream, nil
-}
-
-func dialer(client *http.Client) *websocket.Dialer {
-	dialer := *websocket.DefaultDialer
-	if transport, ok := client.Transport.(interface {
-		DialContext(context.Context, string, string) (net.Conn, error)
-	}); ok {
-		dialer.Proxy = nil
-		dialer.NetDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return transport.DialContext(ctx, network, addr)
-		}
-	} else if transport, ok := client.Transport.(*http.Transport); ok && transport.DialContext != nil {
-		dialer.Proxy = nil
-		dialer.NetDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return transport.DialContext(ctx, network, addr)
-		}
-	}
-	return &dialer
 }
 
 func clientHeaders(client *http.Client) http.Header {
@@ -266,11 +250,11 @@ func (s *Stream) Read(buf []byte) (int, error) {
 		return n, nil
 	}
 	for {
-		msgType, payload, err := s.conn.ReadMessage()
+		msgType, payload, err := s.conn.Read(context.Background())
 		if err != nil {
 			return 0, err
 		}
-		if msgType != websocket.BinaryMessage && msgType != websocket.TextMessage {
+		if msgType != websocket.MessageBinary && msgType != websocket.MessageText {
 			continue
 		}
 		n := copy(buf, payload)
@@ -284,7 +268,7 @@ func (s *Stream) Stderr() io.Reader { return nil }
 func (s *Stream) Write(data []byte) (int, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	if err := s.conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+	if err := s.conn.Write(context.Background(), websocket.MessageBinary, data); err != nil {
 		return 0, err
 	}
 	return len(data), nil
@@ -301,7 +285,7 @@ func (s *Stream) CloseWrite() error {
 func (s *Stream) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
-		err = s.conn.Close()
+		err = s.conn.Close(websocket.StatusNormalClosure, "done")
 		_ = Kill(context.Background(), s.lease.Client, s.execID)
 		s.lease.Release()
 	})

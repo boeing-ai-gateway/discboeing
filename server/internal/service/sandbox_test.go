@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/glebarez/sqlite"
-	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -1268,17 +1268,16 @@ func TestSandboxService_Attach(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"id":"test-exec","status":"running"}`))
 		case strings.HasPrefix(r.URL.Path, "/exec/") && strings.HasSuffix(r.URL.Path, "/attach"):
-			upgrader := websocket.Upgrader{}
-			conn, err := upgrader.Upgrade(w, r, nil)
+			conn, err := websocket.Accept(w, r, nil)
 			if err != nil {
 				return
 			}
-			defer conn.Close()
-			if err := conn.WriteMessage(websocket.BinaryMessage, []byte("$ ")); err != nil {
+			defer conn.Close(websocket.StatusNormalClosure, "done")
+			if err := conn.Write(r.Context(), websocket.MessageBinary, []byte("$ ")); err != nil {
 				return
 			}
 			for {
-				if _, _, err := conn.ReadMessage(); err != nil {
+				if _, _, err := conn.Read(r.Context()); err != nil {
 					return
 				}
 			}

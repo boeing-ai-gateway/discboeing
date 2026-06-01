@@ -3,12 +3,15 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 
 	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/service"
@@ -109,7 +112,7 @@ func (s *ProjectStreamSocket) runWriter(done chan<- struct{}) {
 			if !ok {
 				return
 			}
-			if err := s.conn.WriteJSON(message); err != nil {
+			if err := wsjson.Write(s.ctx, s.conn, message); err != nil {
 				s.cancel()
 				return
 			}
@@ -120,11 +123,13 @@ func (s *ProjectStreamSocket) runWriter(done chan<- struct{}) {
 func (s *ProjectStreamSocket) runReader() {
 	for {
 		var req projectStreamSubscriptionRequest
-		if err := s.conn.ReadJSON(&req); err != nil {
-			if websocket.IsUnexpectedCloseError(err,
-				websocket.CloseNormalClosure,
-				websocket.CloseGoingAway,
-				websocket.CloseAbnormalClosure) {
+		if err := wsjson.Read(s.ctx, s.conn, &req); err != nil {
+			status := websocket.CloseStatus(err)
+			if status != websocket.StatusNormalClosure &&
+				status != websocket.StatusGoingAway &&
+				status != websocket.StatusAbnormalClosure &&
+				!errors.Is(err, net.ErrClosed) &&
+				s.ctx.Err() == nil {
 				log.Printf("chat websocket read error: %v", err)
 			}
 			return

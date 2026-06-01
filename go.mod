@@ -15,7 +15,6 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
 	github.com/obot-platform/discobot/modelsdev v0.0.0
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	github.com/things-go/go-socks5 v0.0.5
@@ -36,7 +35,6 @@ require (
 	github.com/google/go-containerregistry v0.19.0
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.18.6
-	github.com/oapi-codegen/runtime v1.4.1
 	github.com/obot-platform/discobot/discobot v0.0.0-00010101000000-000000000000
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.48.0
@@ -49,7 +47,6 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/a-h/templ v0.3.1020 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bryanvaz/go-templ-lucide-icons v0.480.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/getkin/kin-openapi v0.137.0 // indirect
@@ -65,8 +62,10 @@ require (
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/starfederation/datastar-go v1.0.1 // indirect
+	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
+	golang.org/x/time v0.14.0 // indirect
 )
 
 require (

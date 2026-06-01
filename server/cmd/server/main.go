@@ -497,6 +497,26 @@ func main() {
 		_, _ = w.Write(content)
 	})
 
+	// Scalar API Reference - serve the embedded OpenAPI browser.
+	r.Get("/api/reference", func(w http.ResponseWriter, _ *http.Request) {
+		content, err := static.Files.ReadFile("scalar-ui.html")
+		if err != nil {
+			http.Error(w, "API reference not found", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(content)
+	})
+	r.Get("/api/swagger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/reference", http.StatusFound)
+	})
+
+	// OpenAPI schema endpoint used by the API reference.
+	r.Get("/api/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(api.OpenAPISpec)
+	})
+
 	// API Routes endpoint (returns route metadata for API UI)
 	r.Get("/api/routes", h.GetRoutes)
 

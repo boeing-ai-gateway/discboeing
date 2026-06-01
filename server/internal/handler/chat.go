@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"slices"
 	"strings"
 
 	api "github.com/obot-platform/discobot/server/api"
@@ -502,14 +501,10 @@ func (h *Handler) resolveSessionAndThread(w http.ResponseWriter, r *http.Request
 }
 
 // lastUserMessageID returns the ID of the last user message in the slice, or "".
-func lastUserMessageID(messages []json.RawMessage) string {
-	for _, v := range slices.Backward(messages) {
-		var m struct {
-			ID   string `json:"id"`
-			Role string `json:"role"`
-		}
-		if json.Unmarshal(v, &m) == nil && m.Role == "user" && m.ID != "" {
-			return m.ID
+func lastUserMessageID(messages []api.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].ID != "" {
+			return messages[i].ID
 		}
 	}
 	return ""

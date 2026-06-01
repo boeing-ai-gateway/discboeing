@@ -1,0 +1,1053 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"go/format"
+	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"unicode"
+)
+
+type spec struct {
+	Paths      map[string]pathItem `json:"paths"`
+	Components components          `json:"components"`
+}
+
+type components struct {
+	Schemas    map[string]json.RawMessage `json:"schemas"`
+	Parameters map[string]parameter       `json:"parameters"`
+}
+
+type pathItem map[string]json.RawMessage
+
+type operation struct {
+	Tags              []string            `json:"tags"`
+	Summary           string              `json:"summary"`
+	OperationID       string              `json:"operationId"`
+	Parameters        []parameterOrRef    `json:"parameters"`
+	RequestBody       *requestBodyOrRef   `json:"requestBody"`
+	Responses         map[string]response `json:"responses"`
+	DiscobotWebSocket *discobotWebSocket  `json:"x-discobot-websocket"`
+}
+
+type parameterOrRef struct {
+	Ref         string `json:"$ref"`
+	Name        string `json:"name"`
+	In          string `json:"in"`
+	Required    bool   `json:"required"`
+	Description string `json:"description"`
+}
+
+type parameter = parameterOrRef
+
+type requestBodyOrRef struct {
+	Ref     string               `json:"$ref"`
+	Content map[string]mediaType `json:"content"`
+}
+
+type response struct {
+	Description string               `json:"description"`
+	Content     map[string]mediaType `json:"content"`
+}
+
+type mediaType struct {
+	Schema schemaOrRef `json:"schema"`
+}
+
+type schemaOrRef struct {
+	Ref                   string                 `json:"$ref"`
+	Type                  string                 `json:"type"`
+	Items                 *schemaOrRef           `json:"items"`
+	AllOf                 []schemaOrRef          `json:"allOf"`
+	DiscobotDiscriminator *discobotDiscriminator `json:"x-discobot-discriminator"`
+}
+
+type discobotWebSocket struct {
+	Requests []schemaOrRef `json:"requests"`
+	Messages []schemaOrRef `json:"messages"`
+}
+
+type componentSchema struct {
+	Properties            map[string]schemaProperty `json:"properties"`
+	Required              []string                  `json:"required"`
+	DiscobotDiscriminator *discobotDiscriminator    `json:"x-discobot-discriminator"`
+}
+
+type discobotDiscriminator struct {
+	Type string `json:"type"`
+}
+
+type schemaProperty struct {
+	Ref   string        `json:"$ref"`
+	AllOf []schemaOrRef `json:"allOf"`
+	Enum  []string      `json:"enum"`
+	Type  string        `json:"type"`
+	Items *schemaOrRef  `json:"items"`
+}
+
+type endpoint struct {
+	Method      string
+	Path        string
+	Tag         string
+	Summary     string
+	OperationID string
+	PathParams  []string
+	QueryParams bool
+	RequestType string
+	Response    goType
+	Collection  *collectionType
+}
+
+type collectionType struct {
+	Item         string
+	Zero         string
+	Field        string
+	FieldPointer bool
+}
+
+type goType struct {
+	Expr      string
+	Zero      string
+	NeedsOut  bool
+	Pointer   bool
+	NoContent bool
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		log.Fatalf("usage: clientgen <openapi.json> <output.go>")
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	var doc spec
+	if err := json.Unmarshal(data, &doc); err != nil {
+		log.Fatal(err)
+	}
+
+	endpoints := collectEndpoints(doc)
+	out := generate(doc, endpoints)
+	formatted, err := format.Source(out)
+	if err != nil {
+		_ = os.WriteFile(os.Args[2]+".unformatted", out, 0o644)
+		log.Fatalf("format generated source: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(os.Args[2]), 0o755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(os.Args[2], formatted, 0o644); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func collectEndpoints(doc spec) []endpoint {
+	var paths []string
+	for path := range doc.Paths {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	var endpoints []endpoint
+	for _, path := range paths {
+		item := doc.Paths[path]
+		var methods []string
+		for method := range item {
+			methods = append(methods, method)
+		}
+		sort.Strings(methods)
+		for _, method := range methods {
+			if method == "parameters" {
+				continue
+			}
+			var op operation
+			if err := json.Unmarshal(item[method], &op); err != nil {
+				log.Fatalf("unmarshal %s %s: %v", method, path, err)
+			}
+			tag := "Default"
+			if len(op.Tags) > 0 {
+				tag = op.Tags[0]
+			}
+			response := responseType(op)
+			endpoints = append(endpoints, endpoint{
+				Method:      strings.ToUpper(method),
+				Path:        path,
+				Tag:         exportName(tag),
+				Summary:     op.Summary,
+				OperationID: exportName(op.OperationID),
+				PathParams:  pathParams(path),
+				QueryParams: hasQueryParams(doc, op),
+				RequestType: requestType(op),
+				Response:    response,
+				Collection:  collectionTypeForOperation(doc, op),
+			})
+		}
+	}
+	return endpoints
+}
+
+func generate(doc spec, endpoints []endpoint) []byte {
+	var b bytes.Buffer
+	b.WriteString("// Code generated by server/client/internal/cmd/clientgen; DO NOT EDIT.\n")
+	b.WriteString("package client\n\n")
+	b.WriteString(`import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"iter"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strconv"
+	"strings"
+
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
+
+`)
+	writeWebSocketUnions(&b, doc, endpoints)
+	writeCore(&b, serviceNames(endpoints))
+	writeServices(&b, endpoints)
+	writeMethods(&b, endpoints, "", nil)
+	writeScoped(&b, endpoints, "Project", []string{"projectId"})
+	writeScoped(&b, endpoints, "Session", []string{"projectId", "sessionId"})
+	return b.Bytes()
+}
+
+type websocketMessageCase struct {
+	SchemaName  string
+	TypeValue   string
+	StreamType  string
+	StreamValue string
+}
+
+func writeWebSocketUnions(b *bytes.Buffer, doc spec, endpoints []endpoint) {
+	for _, ep := range endpoints {
+		op := operationForEndpoint(doc, ep)
+		if op.DiscobotWebSocket == nil || len(op.DiscobotWebSocket.Messages) == 0 {
+			continue
+		}
+		cases := websocketMessageCases(doc, op.DiscobotWebSocket.Messages)
+		if len(cases) == 0 {
+			continue
+		}
+		unionName := websocketUnionName(cases)
+		unknownName := "Unknown" + strings.TrimSuffix(unionName, "JSON")
+		streamType := websocketStreamType(cases)
+		if streamType == "" {
+			streamType = "string"
+		} else {
+			streamType = "serverapi." + streamType
+		}
+
+		fmt.Fprintf(b, "type %s struct {\n\tMessage any\n}\n\n", unionName)
+		fmt.Fprintf(b, "type %s struct {\n\tType string `json:\"type\"`\n\tStream %s `json:\"stream,omitempty\"`\n\tRaw json.RawMessage `json:\"-\"`\n}\n\n", unknownName, streamType)
+		writeWebSocketMarshalJSON(b, unionName, unknownName, streamType, cases)
+		writeWebSocketUnmarshalJSON(b, unionName, unknownName, streamType, cases)
+	}
+}
+
+func writeWebSocketMarshalJSON(b *bytes.Buffer, unionName, unknownName, streamType string, cases []websocketMessageCase) {
+	fmt.Fprintf(b, "func (m %s) MarshalJSON() ([]byte, error) {\n", unionName)
+	b.WriteString("\tif m.Message == nil {\n\t\treturn []byte(\"null\"), nil\n\t}\n")
+	b.WriteString("\tswitch msg := m.Message.(type) {\n")
+	for _, c := range cases {
+		fmt.Fprintf(b, "\tcase serverapi.%s:\n", c.SchemaName)
+		fmt.Fprintf(b, "\t\treturn json.Marshal(struct {\n\t\t\tType string `json:\"type\"`\n\t\t\tserverapi.%s\n\t\t}{Type: %q, %s: msg})\n", c.SchemaName, c.TypeValue, c.SchemaName)
+	}
+	fmt.Fprintf(b, "\tcase %s:\n", unknownName)
+	b.WriteString("\t\tif len(msg.Raw) > 0 {\n\t\t\treturn msg.Raw, nil\n\t\t}\n")
+	fmt.Fprintf(b, "\t\treturn json.Marshal(struct {\n\t\t\tType string `json:\"type\"`\n\t\t\tStream %s `json:\"stream,omitempty\"`\n\t\t}{msg.Type, msg.Stream})\n", streamType)
+	b.WriteString("\tdefault:\n\t\treturn nil, fmt.Errorf(\"unknown websocket message type: %T\", m.Message)\n\t}\n}\n\n")
+}
+
+func writeWebSocketUnmarshalJSON(b *bytes.Buffer, unionName, unknownName, streamType string, cases []websocketMessageCase) {
+	fmt.Fprintf(b, "func (m *%s) UnmarshalJSON(data []byte) error {\n", unionName)
+	fmt.Fprintf(b, "\tvar disc struct {\n\t\tType string `json:\"type\"`\n\t\tStream %s `json:\"stream,omitempty\"`\n\t}\n", streamType)
+	b.WriteString("\tif err := json.Unmarshal(data, &disc); err != nil {\n\t\treturn fmt.Errorf(\"unmarshal websocket message discriminator: %w\", err)\n\t}\n\n")
+	b.WriteString("\tswitch disc.Type {\n")
+	streamCases := map[string][]websocketMessageCase{}
+	for _, c := range cases {
+		if c.StreamValue != "" {
+			streamCases[c.TypeValue] = append(streamCases[c.TypeValue], c)
+			continue
+		}
+		fmt.Fprintf(b, "\tcase %q:\n", c.TypeValue)
+		writeWebSocketUnmarshalCase(b, c.SchemaName)
+	}
+	var typeValues []string
+	for typeValue := range streamCases {
+		typeValues = append(typeValues, typeValue)
+	}
+	sort.Strings(typeValues)
+	for _, typeValue := range typeValues {
+		fmt.Fprintf(b, "\tcase %q:\n\t\tswitch disc.Stream {\n", typeValue)
+		for _, c := range streamCases[typeValue] {
+			fmt.Fprintf(b, "\t\tcase %s:\n", streamValueExpr(c))
+			writeWebSocketUnmarshalCase(b, c.SchemaName)
+		}
+		fmt.Fprintf(b, "\t\tdefault:\n\t\t\tm.Message = %s{Type: disc.Type, Stream: disc.Stream, Raw: append(json.RawMessage(nil), data...)}\n\t\t}\n", unknownName)
+	}
+	fmt.Fprintf(b, "\tdefault:\n\t\tm.Message = %s{Type: disc.Type, Stream: disc.Stream, Raw: append(json.RawMessage(nil), data...)}\n\t}\n\treturn nil\n}\n\n", unknownName)
+}
+
+func writeWebSocketUnmarshalCase(b *bytes.Buffer, schemaName string) {
+	fmt.Fprintf(b, "\t\tvar msg serverapi.%s\n", schemaName)
+	b.WriteString("\t\tif err := json.Unmarshal(data, &msg); err != nil {\n\t\t\treturn err\n\t\t}\n\t\tm.Message = msg\n")
+}
+
+func websocketMessageCases(doc spec, refs []schemaOrRef) []websocketMessageCase {
+	var cases []websocketMessageCase
+	for _, ref := range refs {
+		name := schemaRefName(ref)
+		schema, ok := componentSchemaFor(doc, name)
+		if !ok {
+			continue
+		}
+		typeValue := ""
+		if ref.DiscobotDiscriminator != nil {
+			typeValue = ref.DiscobotDiscriminator.Type
+		}
+		if typeValue == "" && schema.DiscobotDiscriminator != nil {
+			typeValue = schema.DiscobotDiscriminator.Type
+		}
+		if typeValue == "" {
+			typeValue = enumValue(schema.Properties["type"])
+		}
+		if typeValue == "" {
+			continue
+		}
+		streamProperty := schema.Properties["stream"]
+		cases = append(cases, websocketMessageCase{
+			SchemaName:  exportName(name),
+			TypeValue:   typeValue,
+			StreamType:  streamRefName(streamProperty),
+			StreamValue: enumValue(streamProperty),
+		})
+	}
+	return cases
+}
+
+func websocketUnionName(cases []websocketMessageCase) string {
+	for _, c := range cases {
+		if c.StreamType != "" {
+			return strings.TrimSuffix(c.StreamType, "Type") + "SocketMessageJSON"
+		}
+	}
+	return "WebSocketMessageJSON"
+}
+
+func websocketStreamType(cases []websocketMessageCase) string {
+	for _, c := range cases {
+		if c.StreamType != "" {
+			return c.StreamType
+		}
+	}
+	return ""
+}
+
+func streamValueExpr(c websocketMessageCase) string {
+	if c.StreamType == "" {
+		return fmt.Sprintf("%q", c.StreamValue)
+	}
+	return fmt.Sprintf("serverapi.%s(%q)", c.StreamType, c.StreamValue)
+}
+
+func componentSchemaFor(doc spec, name string) (componentSchema, bool) {
+	raw, ok := doc.Components.Schemas[name]
+	if !ok {
+		return componentSchema{}, false
+	}
+	var schema componentSchema
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return componentSchema{}, false
+	}
+	return schema, true
+}
+
+func enumValue(prop schemaProperty) string {
+	if len(prop.Enum) == 1 {
+		return prop.Enum[0]
+	}
+	return ""
+}
+
+func streamRefName(prop schemaProperty) string {
+	if prop.Ref != "" {
+		return exportName(refName(prop.Ref))
+	}
+	for _, item := range prop.AllOf {
+		if item.Ref != "" {
+			return exportName(refName(item.Ref))
+		}
+	}
+	return ""
+}
+
+func operationForEndpoint(doc spec, ep endpoint) operation {
+	item := doc.Paths[ep.Path]
+	raw := item[strings.ToLower(ep.Method)]
+	var op operation
+	if err := json.Unmarshal(raw, &op); err != nil {
+		log.Fatalf("unmarshal %s %s: %v", ep.Method, ep.Path, err)
+	}
+	return op
+}
+
+func writeCore(b *bytes.Buffer, services []string) {
+	b.WriteString(`// Client is a typed HTTP client for the Discobot server API.
+type Client struct {
+	Server string
+
+	baseURL    *url.URL
+	httpClient *http.Client
+
+`)
+	for _, svc := range services {
+		fmt.Fprintf(b, "\t%s *%sService\n", svc, svc)
+	}
+	b.WriteString(`}
+
+// Option customizes a Client.
+type Option func(*Client)
+
+// WithHTTPClient sets the HTTP client used for API requests.
+func WithHTTPClient(httpClient *http.Client) Option {
+	return func(c *Client) {
+		if httpClient != nil {
+			c.httpClient = httpClient
+		}
+	}
+}
+
+// NewClient creates a Discobot API client rooted at baseURL.
+func NewClient(baseURL string, opts ...Option) (*Client, error) {
+	if strings.TrimSpace(baseURL) == "" {
+		return nil, fmt.Errorf("base URL is required")
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse base URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, fmt.Errorf("base URL must include scheme and host")
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	c := &Client{Server: parsed.String(), baseURL: parsed, httpClient: http.DefaultClient}
+	for _, opt := range opts {
+		opt(c)
+	}
+`)
+	for _, svc := range services {
+		fmt.Fprintf(b, "\tc.%s = &%sService{client: c}\n", svc, svc)
+	}
+	b.WriteString(`	return c, nil
+}
+
+// Project returns a client rooted at /api/projects/{projectId}.
+func (c *Client) Project(projectID serverapi.ProjectID) *ProjectClient {
+	return newProjectClient(c, projectID)
+}
+
+func (c *Client) do(ctx context.Context, method, path string, query any, body any, out any) error {
+	var reqBody io.Reader
+	if body != nil {
+		buf := new(bytes.Buffer)
+		if err := json.NewEncoder(buf).Encode(body); err != nil {
+			return fmt.Errorf("encode request body: %w", err)
+		}
+		reqBody = buf
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.resolve(path, query), reqBody)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return decodeError(resp)
+	}
+	if out == nil || resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) resolve(path string, query any) string {
+	u := *c.baseURL
+	u.Path = strings.TrimRight(c.baseURL.Path, "/") + "/" + strings.TrimLeft(path, "/")
+	u.RawQuery = encodeQuery(query)
+	return u.String()
+}
+
+func decodeError(resp *http.Response) error {
+	var apiErr serverapi.ErrorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
+		return fmt.Errorf("discobot API %s: %s", resp.Status, apiErr.Error)
+	}
+	return fmt.Errorf("discobot API %s", resp.Status)
+}
+
+func encodeQuery(query any) string {
+	if query == nil {
+		return ""
+	}
+	values := url.Values{}
+	v := reflect.ValueOf(query)
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return ""
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		name := strings.Split(field.Tag.Get("form"), ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		value := v.Field(i)
+		if value.Kind() == reflect.Pointer {
+			if value.IsNil() {
+				continue
+			}
+			value = value.Elem()
+		}
+		switch value.Kind() {
+		case reflect.String:
+			values.Set(name, value.String())
+		case reflect.Bool:
+			values.Set(name, strconv.FormatBool(value.Bool()))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			values.Set(name, strconv.FormatInt(value.Int(), 10))
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			values.Set(name, strconv.FormatUint(value.Uint(), 10))
+		case reflect.Slice:
+			for j := 0; j < value.Len(); j++ {
+				values.Add(name, fmt.Sprint(value.Index(j).Interface()))
+			}
+		}
+	}
+	return values.Encode()
+}
+
+func escapePath(value string) string {
+	return url.PathEscape(value)
+}
+
+`)
+}
+
+func writeServices(b *bytes.Buffer, endpoints []endpoint) {
+	services := serviceNames(endpoints)
+	for _, svc := range services {
+		fmt.Fprintf(b, "type %sService struct { client *Client }\n\n", svc)
+	}
+}
+
+func serviceNames(endpoints []endpoint) []string {
+	seen := map[string]bool{}
+	for _, ep := range endpoints {
+		seen[ep.Tag] = true
+	}
+	var names []string
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func writeScoped(b *bytes.Buffer, endpoints []endpoint, scope string, captured []string) {
+	eligible := filterScoped(endpoints, captured)
+	if len(eligible) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "type %sClient struct {\n\tclient *Client\n", scope)
+	for _, p := range captured {
+		fmt.Fprintf(b, "\t%s %s\n", lowerExport(paramGoName(p)), paramType(p))
+	}
+	for _, svc := range serviceNames(eligible) {
+		fmt.Fprintf(b, "\t%s *%s%sService\n", svc, scope, svc)
+	}
+	b.WriteString("}\n\n")
+	if scope == "Project" {
+		b.WriteString("func newProjectClient(client *Client, projectID serverapi.ProjectID) *ProjectClient {\n\tc := &ProjectClient{client: client, projectID: projectID}\n")
+	} else {
+		b.WriteString("func newSessionClient(client *Client, projectID serverapi.ProjectID, sessionID serverapi.SessionID) *SessionClient {\n\tc := &SessionClient{client: client, projectID: projectID, sessionID: sessionID}\n")
+	}
+	for _, svc := range serviceNames(eligible) {
+		fmt.Fprintf(b, "\tc.%s = &%s%sService{client: client", svc, scope, svc)
+		for _, p := range captured {
+			fmt.Fprintf(b, ", %s: %s", lowerExport(paramGoName(p)), lowerExport(paramGoName(p)))
+		}
+		b.WriteString("}\n")
+	}
+	b.WriteString("\treturn c\n}\n\n")
+	if scope == "Project" {
+		b.WriteString("// Session returns a client rooted at this project's session.\nfunc (c *ProjectClient) Session(sessionID serverapi.SessionID) *SessionClient {\n\treturn newSessionClient(c.client, c.projectID, sessionID)\n}\n\n")
+	}
+	for _, svc := range serviceNames(eligible) {
+		fmt.Fprintf(b, "type %s%sService struct {\n\tclient *Client\n", scope, svc)
+		for _, p := range captured {
+			fmt.Fprintf(b, "\t%s %s\n", lowerExport(paramGoName(p)), paramType(p))
+		}
+		b.WriteString("}\n\n")
+	}
+	writeMethods(b, eligible, scope, captured)
+}
+
+func writeMethods(b *bytes.Buffer, endpoints []endpoint, scope string, captured []string) {
+	used := map[string]int{}
+	for _, ep := range endpoints {
+		receiverType := ep.Tag + "Service"
+		if scope != "" {
+			receiverType = scope + ep.Tag + "Service"
+		}
+		nameBase := methodName(ep, scope)
+		key := receiverType + "." + nameBase
+		used[key]++
+		name := nameBase
+		if used[key] > 1 {
+			name = nameBase + ep.OperationID
+		}
+		writeMethod(b, ep, receiverType, name, captured)
+	}
+}
+
+func writeMethod(b *bytes.Buffer, ep endpoint, receiverType, name string, captured []string) {
+	capturedSet := map[string]bool{}
+	for _, p := range captured {
+		capturedSet[p] = true
+	}
+	params := []string{"ctx context.Context"}
+	for _, p := range ep.PathParams {
+		if !capturedSet[p] {
+			params = append(params, lowerExport(paramGoName(p))+" "+paramType(p))
+		}
+	}
+	if ep.QueryParams {
+		params = append(params, "params *serverapi."+ep.OperationID+"Params")
+	}
+	if ep.RequestType != "" {
+		params = append(params, "body "+ep.RequestType)
+	}
+	ret := "error"
+	if !ep.Response.NoContent {
+		if ep.Collection != nil {
+			ret = "iter.Seq2[" + ep.Collection.Item + ", error]"
+		} else {
+			ret = "(" + ep.Response.Expr + ", error)"
+		}
+	}
+	fmt.Fprintf(b, "func (s *%s) %s(%s) %s {\n", receiverType, name, strings.Join(params, ", "), ret)
+	for _, p := range captured {
+		if contains(ep.PathParams, p) {
+			fmt.Fprintf(b, "\t%s := s.%s\n", lowerExport(paramGoName(p)), lowerExport(paramGoName(p)))
+		}
+	}
+	pathExpr := pathExpr(ep.Path)
+	if !ep.Response.NoContent && ep.Collection == nil {
+		if ep.Response.Pointer {
+			fmt.Fprintf(b, "\tvar out %s\n", strings.TrimPrefix(ep.Response.Expr, "*"))
+		} else {
+			fmt.Fprintf(b, "\tvar out %s\n", ep.Response.Expr)
+		}
+	}
+	query := "nil"
+	if ep.QueryParams {
+		query = "params"
+	}
+	body := "nil"
+	if ep.RequestType != "" {
+		body = "body"
+	}
+	methodConst := strings.ToUpper(ep.Method[:1]) + strings.ToLower(ep.Method[1:])
+	if ep.Collection != nil {
+		fmt.Fprintf(b, "\treturn func(yield func(%s, error) bool) {\n", ep.Collection.Item)
+		if ep.Response.Pointer {
+			fmt.Fprintf(b, "\t\tvar out %s\n", strings.TrimPrefix(ep.Response.Expr, "*"))
+		} else {
+			fmt.Fprintf(b, "\t\tvar out %s\n", ep.Response.Expr)
+		}
+		fmt.Fprintf(b, "\t\tif err := s.client.do(ctx, http.Method%s, %s, %s, %s, &out); err != nil {\n", methodConst, pathExpr, query, body)
+		fmt.Fprintf(b, "\t\t\tyield(%s, err)\n\t\t\treturn\n\t\t}\n", ep.Collection.Zero)
+		source := "out"
+		if ep.Collection.Field != "" {
+			source += "." + ep.Collection.Field
+			if ep.Collection.FieldPointer {
+				fmt.Fprintf(b, "\t\tif %s == nil {\n\t\t\treturn\n\t\t}\n", source)
+				source = "*" + source
+			}
+		}
+		fmt.Fprintf(b, "\t\tfor _, item := range %s {\n\t\t\tif !yield(item, nil) {\n\t\t\t\treturn\n\t\t\t}\n\t\t}\n\t}\n}\n\n", source)
+		return
+	}
+	outArg := "nil"
+	if !ep.Response.NoContent {
+		outArg = "&out"
+	}
+	fmt.Fprintf(b, "\tif err := s.client.do(ctx, http.Method%s, %s, %s, %s, %s); err != nil {\n", methodConst, pathExpr, query, body, outArg)
+	if ep.Response.NoContent {
+		b.WriteString("\t\treturn err\n\t}\n\treturn nil\n}\n\n")
+	} else {
+		fmt.Fprintf(b, "\t\treturn %s, err\n\t}\n", ep.Response.Zero)
+		if ep.Response.Pointer {
+			b.WriteString("\treturn &out, nil\n}\n\n")
+		} else {
+			b.WriteString("\treturn out, nil\n}\n\n")
+		}
+	}
+}
+
+func filterScoped(endpoints []endpoint, captured []string) []endpoint {
+	var out []endpoint
+	for _, ep := range endpoints {
+		ok := true
+		for _, p := range captured {
+			if !contains(ep.PathParams, p) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, ep)
+		}
+	}
+	return out
+}
+
+func methodName(ep endpoint, scope string) string {
+	if ep.Summary == "" {
+		return ep.OperationID
+	}
+	words := summaryWords(ep.Summary)
+	if len(words) == 0 {
+		return ep.OperationID
+	}
+	action := strings.ToLower(words[0])
+	knownActions := map[string]string{
+		"list": "List", "get": "Get", "create": "Create", "update": "Update",
+		"delete": "Delete", "patch": "Patch", "put": "Update", "post": "Post",
+		"start": "Start", "stop": "Stop", "cancel": "Cancel", "read": "Read", "write": "Write",
+		"connect": "Connect", "watch": "Watch", "validate": "Validate",
+	}
+	exportedAction, ok := knownActions[action]
+	if !ok {
+		return exportName(ep.Summary)
+	}
+	rest := trimMethodNouns(words[1:], ep.Tag, scope)
+	if len(rest) == 0 {
+		return exportedAction
+	}
+	return exportedAction + exportName(strings.Join(rest, " "))
+}
+
+func summaryWords(summary string) []string {
+	parts := nonAlnum.Split(summary, -1)
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		lower := strings.ToLower(part)
+		if lower == "a" || lower == "an" || lower == "the" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+func trimMethodNouns(words []string, tag, scope string) []string {
+	serviceWords := []string{strings.ToLower(tag), strings.TrimSuffix(strings.ToLower(tag), "s")}
+	if scope != "" {
+		serviceWords = append(serviceWords, strings.ToLower(scope), strings.ToLower(scope)+"s")
+	}
+	for len(words) > 0 {
+		first := strings.ToLower(words[0])
+		matched := false
+		if slices.Contains(serviceWords, first) {
+			words = words[1:]
+			matched = true
+		}
+		if !matched {
+			break
+		}
+	}
+	for len(words) > 0 {
+		last := strings.ToLower(words[len(words)-1])
+		matched := false
+		if slices.Contains(serviceWords, last) {
+			words = words[:len(words)-1]
+			matched = true
+		}
+		if !matched {
+			break
+		}
+	}
+	return words
+}
+
+func pathExpr(path string) string {
+	parts := splitPath(path)
+	var expr []string
+	expr = append(expr, "\"\"")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+			name := strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}")
+			expr = append(expr, "\"/\"", "escapePath(string("+lowerExport(paramGoName(name))+"))")
+		} else if part != "" {
+			expr = append(expr, "\"/"+part+"\"")
+		}
+	}
+	if strings.HasSuffix(path, "/") {
+		expr = append(expr, "\"/\"")
+	}
+	return strings.Join(expr, " + ")
+}
+
+func splitPath(path string) []string { return strings.Split(strings.Trim(path, "/"), "/") }
+func pathParams(path string) []string {
+	var out []string
+	for _, p := range splitPath(path) {
+		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
+			out = append(out, strings.TrimSuffix(strings.TrimPrefix(p, "{"), "}"))
+		}
+	}
+	return out
+}
+func contains(xs []string, x string) bool {
+	return slices.Contains(xs, x)
+}
+
+func hasQueryParams(doc spec, op operation) bool {
+	for _, p := range op.Parameters {
+		pp := resolveParam(doc, p)
+		if pp.In == "query" {
+			return true
+		}
+	}
+	return false
+}
+func resolveParam(doc spec, p parameterOrRef) parameterOrRef {
+	if p.Ref == "" {
+		return p
+	}
+	name := p.Ref[strings.LastIndex(p.Ref, "/")+1:]
+	if pp, ok := doc.Components.Parameters[name]; ok {
+		return pp
+	}
+	return p
+}
+
+func requestType(op operation) string {
+	if op.RequestBody == nil {
+		return ""
+	}
+	if mt, ok := op.RequestBody.Content["application/json"]; ok {
+		return strings.TrimPrefix(typeFromSchema(mt.Schema).Expr, "*")
+	}
+	return ""
+}
+func responseType(op operation) goType {
+	for _, code := range []string{"200", "201", "202"} {
+		if r, ok := op.Responses[code]; ok {
+			if mt, ok := r.Content["application/json"]; ok {
+				gt := typeFromSchema(mt.Schema)
+				gt.NoContent = false
+				return gt
+			}
+		}
+	}
+	return goType{NoContent: true}
+}
+
+func collectionTypeForOperation(doc spec, op operation) *collectionType {
+	for _, code := range []string{"200", "201", "202"} {
+		r, ok := op.Responses[code]
+		if !ok {
+			continue
+		}
+		mt, ok := r.Content["application/json"]
+		if !ok {
+			continue
+		}
+		if item := collectionFromSchema(doc, mt.Schema); item != nil {
+			return item
+		}
+	}
+	return nil
+}
+
+func collectionFromSchema(doc spec, schema schemaOrRef) *collectionType {
+	if schema.Type == "array" && schema.Items != nil {
+		item := strings.TrimPrefix(typeFromSchema(*schema.Items).Expr, "*")
+		return &collectionType{Item: item, Zero: zeroValue(item)}
+	}
+	if schema.Ref == "" {
+		return nil
+	}
+	name := refName(schema.Ref)
+	var component componentSchema
+	if err := json.Unmarshal(doc.Components.Schemas[name], &component); err != nil {
+		return nil
+	}
+	if len(component.Properties) != 1 {
+		return nil
+	}
+	var fields []string
+	for field := range component.Properties {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	for _, field := range fields {
+		prop := component.Properties[field]
+		propSchema, ok := propertySchema(prop)
+		if !ok || propSchema.Type != "array" || propSchema.Items == nil {
+			continue
+		}
+		item := strings.TrimPrefix(typeFromSchema(*propSchema.Items).Expr, "*")
+		return &collectionType{
+			Item:         item,
+			Zero:         zeroValue(item),
+			Field:        exportName(field),
+			FieldPointer: !slices.Contains(component.Required, field),
+		}
+	}
+	return nil
+}
+
+func propertySchema(prop schemaProperty) (schemaOrRef, bool) {
+	if prop.Ref != "" {
+		return schemaOrRef{Ref: prop.Ref}, true
+	}
+	if len(prop.AllOf) > 0 {
+		return prop.AllOf[0], true
+	}
+	return schemaOrRef{Type: prop.Type, Items: prop.Items}, prop.Type != ""
+}
+
+func zeroValue(goType string) string {
+	switch goType {
+	case "string":
+		return "\"\""
+	}
+	if strings.HasPrefix(goType, "[]") || strings.HasPrefix(goType, "map[") || strings.HasPrefix(goType, "*") {
+		return "nil"
+	}
+	return goType + "{}"
+}
+
+func typeFromSchema(s schemaOrRef) goType {
+	if len(s.AllOf) == 1 {
+		return typeFromSchema(s.AllOf[0])
+	}
+	if s.Ref != "" {
+		name := exportName(refName(s.Ref))
+		return goType{Expr: "*serverapi." + name, Zero: "nil", Pointer: true, NeedsOut: true}
+	}
+	if s.Type == "array" && s.Items != nil {
+		item := typeFromSchema(*s.Items)
+		expr := "[]" + strings.TrimPrefix(item.Expr, "*")
+		return goType{Expr: expr, Zero: "nil", NeedsOut: true}
+	}
+	if s.Type == "string" {
+		return goType{Expr: "string", Zero: "\"\"", NeedsOut: true}
+	}
+	return goType{Expr: "map[string]any", Zero: "nil", NeedsOut: true}
+}
+
+func schemaRefName(s schemaOrRef) string {
+	if s.Ref != "" {
+		return refName(s.Ref)
+	}
+	if len(s.AllOf) == 1 {
+		return schemaRefName(s.AllOf[0])
+	}
+	return ""
+}
+
+func refName(ref string) string {
+	if ref == "" {
+		return ""
+	}
+	return ref[strings.LastIndex(ref, "/")+1:]
+}
+
+func paramGoName(name string) string { return exportName(name) }
+func paramType(name string) string {
+	switch name {
+	case "projectId":
+		return "serverapi.ProjectID"
+	case "sessionId":
+		return "serverapi.SessionID"
+	case "workspaceId":
+		return "serverapi.WorkspaceID"
+	case "threadId":
+		return "serverapi.ThreadID"
+	case "serviceId":
+		return "serverapi.ServiceID"
+	default:
+		return "string"
+	}
+}
+
+var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+func exportName(s string) string {
+	s = strings.ReplaceAll(s, "ID", "Id")
+	parts := nonAlnum.Split(s, -1)
+	var out strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		r := []rune(part)
+		out.WriteRune(unicode.ToUpper(r[0]))
+		if len(r) > 1 {
+			out.WriteString(string(r[1:]))
+		}
+	}
+	res := out.String()
+	res = strings.ReplaceAll(res, "Id", "ID")
+	res = strings.ReplaceAll(res, "Url", "URL")
+	res = strings.ReplaceAll(res, "Api", "API")
+	res = strings.ReplaceAll(res, "Http", "HTTP")
+	res = strings.ReplaceAll(res, "Oauth", "OAuth")
+	res = strings.ReplaceAll(res, "Mcp", "MCP")
+	res = strings.ReplaceAll(res, "Vz", "VZ")
+	if res == "" {
+		return "Value"
+	}
+	return res
+}
+func lowerExport(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
+}

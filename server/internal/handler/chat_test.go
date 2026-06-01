@@ -61,10 +61,10 @@ func seedWorkspace(t *testing.T, s *store.Store) {
 	}
 }
 
-// parseMessages unmarshals a JSON array string into []json.RawMessage for use in api.ChatRequest.Messages.
-func parseMessages(t *testing.T, s string) []json.RawMessage {
+// parseMessages unmarshals a JSON array string for use in api.ChatRequest.Messages.
+func parseMessages(t *testing.T, s string) []api.Message {
 	t.Helper()
-	var msgs []json.RawMessage
+	var msgs []api.Message
 	if err := json.Unmarshal([]byte(s), &msgs); err != nil {
 		t.Fatalf("parseMessages: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestChat_EmptyMessages_CreatesSessionWithoutSendingToSandbox(t *testing.T) 
 	h := newChatTestHandler(t, s, provider)
 
 	req := makeChatRequest(context.Background(), t, "session-empty-create", "", api.ChatRequest{
-		Messages:    []json.RawMessage{},
+		Messages:    []api.Message{},
 		WorkspaceID: "test-workspace",
 	})
 	w := httptest.NewRecorder()

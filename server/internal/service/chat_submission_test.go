@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	agentmessage "github.com/obot-platform/discobot/agent-go/message"
+	serverapi "github.com/obot-platform/discobot/server/api"
 	"github.com/obot-platform/discobot/server/internal/config"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
@@ -25,9 +27,7 @@ func TestSubmitPromptReturnsQueuedWhileDispatchContinues(t *testing.T) {
 		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
 	}, nil, nil, nil, nil, nil)
 
-	messages := []json.RawMessage{
-		json.RawMessage(`{"id":"msg-user-1","role":"user","parts":[{"type":"text","text":"hello"}]}`),
-	}
+	messages := testPromptMessages()
 	rawMessages, err := json.Marshal(messages)
 	if err != nil {
 		t.Fatalf("failed to marshal messages: %v", err)
@@ -107,9 +107,7 @@ func TestSubmitPromptQueuesWhileSessionInitializes(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	messages := []json.RawMessage{
-		json.RawMessage(`{"id":"msg-user-1","role":"user","parts":[{"type":"text","text":"hello"}]}`),
-	}
+	messages := testPromptMessages()
 	latest, started, err := chatService.SubmitPrompt(
 		ctx,
 		session.ProjectID,
@@ -138,6 +136,18 @@ func TestSubmitPromptQueuesWhileSessionInitializes(t *testing.T) {
 	}
 	if enqueuer.count != 1 {
 		t.Fatalf("expected one queued dispatch job, got %d", enqueuer.count)
+	}
+}
+
+func testPromptMessages() []serverapi.Message {
+	return []serverapi.Message{
+		{
+			ID:   "msg-user-1",
+			Role: "user",
+			Parts: []agentmessage.UIPart{
+				agentmessage.UITextPart{Type: "text", Text: "hello", State: "done"},
+			},
+		},
 	}
 }
 
