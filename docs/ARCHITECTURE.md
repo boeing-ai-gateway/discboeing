@@ -149,9 +149,11 @@ Credentials are encrypted with AES-256-GCM before storage.
          │    │   Agent Container    │     │   MITM Proxy         │
          │    │   (per session)      │     │   (per container)    │
          │    │   ┌──────────────┐   │     │   ┌──────────────┐   │
-         │    │   │ discobot-sandbox-init   │   │     │   │ HTTP/SOCKS5  │   │
-         │    │   │ (PID 1 init) │   │     │   │ + TLS MITM   │   │
+         │    │   │ systemd PID 1 │   │     │   │ + TLS MITM   │   │
          │    │   │      ↓       │   │     │   └──────────────┘   │
+         │    │   │ sandbox setup│   │     │                      │
+         │    │   │ script       │   │     │                      │
+         │    │   │      ↓       │   │     │                      │
          │    │   │ discobot-agent-api      │   │ ──▶ │                      │
          │    │   │ + AI CLI     │   │     │                      │
          │    │   └──────────────┘   │     │                      │
@@ -361,7 +363,7 @@ The MITM proxy runs inside each agent container to:
 - **Domain filtering**: Glob-pattern allowlists (e.g., `*.anthropic.com`)
 - **TLS interception**: Dynamic certificate generation signed by container CA
 - **Runtime configuration**: REST API for updating rules without restart
-- **Safe defaults**: Sandbox init writes an embedded proxy config instead of reading untrusted workspace files
+- **Safe defaults**: Sandbox init writes a built-in proxy config instead of reading untrusted workspace files
 
 ### Data Flow
 
@@ -380,7 +382,7 @@ The proxy caches Docker registry responses:
 - **Manifests by digest**: Also immutable when referenced by `sha256:*`
 - **LRU eviction**: 20GB cache limit with least-recently-used eviction
 - **Persistent storage**: Cache survives container restarts at `/.data/cache/proxy`
-- **Safe config source**: Startup uses the embedded proxy config written by sandbox-init
+- **Safe config source**: Startup uses the built-in proxy config written by sandbox-init
 
 See [sandbox-init/docs/design/proxy-integration.md](../sandbox-init/docs/design/proxy-integration.md) for implementation details.
 

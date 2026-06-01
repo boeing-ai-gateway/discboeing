@@ -1,142 +1,62 @@
-# Discobot Sandbox Init - Container Init Process
+# Discobot Sandbox Init
 
-The `discobot-sandbox-init` binary is a minimal PID 1 init process for container environments. It handles workspace initialization, AgentFS setup, and process management for Discobot containers.
+`discobot-sandbox-init` is a small Bash setup script that runs as a systemd
+oneshot-style service inside Discobot sandbox containers. Systemd is PID 1; the
+script prepares the filesystem and runtime environment, sends `READY=1`, and
+exits.
 
-## Features
+## Responsibilities
 
-- **Home Directory Setup**: Copies `/home/discobot` to persistent storage on first run, syncs in new image-provided files on later starts without overwriting existing files, and removes migrated legacy bundled commands
-- **Workspace Cloning**: Clones git repositories to persistent storage with atomic staging
-- **AgentFS Integration**: Initializes and mounts copy-on-write filesystem directly over `/home/discobot`
-- **Systemd Integration**: Runs after early systemd mounts, including the persistent `/tmp` bind mount from `/.data/tmp`
-- **PID 1 Process Reaping**: Collects zombie processes to prevent resource leaks
-- **User Switching**: Drops privileges from root to the `discobot` user
-- **Signal Forwarding**: Forwards SIGTERM, SIGINT, SIGQUIT, and SIGHUP to child processes
-- **Pdeathsig Support**: Ensures child processes die when the init process terminates
-- **Graceful Shutdown**: 10-second timeout for clean shutdown before force-killing children
-
-## Startup Sequence
-
-```
-1. Copy /home/discobot to /.data/discobot (if not exists)
-2. Clone workspace to /.data/discobot/workspace (if WORKSPACE_ORIGIN_PATH set)
-3. Initialize AgentFS database (if not exists)
-4. Mount AgentFS over /home/discobot with -a --allow-root
-5. Run discobot-agent-api as discobot user
-```
+- Copy `/home/discobot` into persistent storage at `/.data/discobot` on first
+  start, then sync only new image-provided files on later starts.
+- Mount an OverlayFS view of `/.data/discobot` at `/home/discobot` using the
+  current `DISCOBOT_SESSION_ID` as the writable layer key.
+- Ensure `/home/discobot/workspace` exists and is owned by the sandbox user.
+- Mount configured cache directories from `/.data/cache` when a cache volume is
+  present.
+- Write the built-in proxy configuration to `/.data/proxy/config.yaml`, run
+  proxy certificate setup, and generate environment files for dependent systemd
+  services.
+- Write Docker daemon configuration with an MTU derived from `eth0`.
+- Configure Git safe directories and localhost/proxy shell defaults.
 
 ## Usage
 
-The agent is typically invoked as the container's CMD:
+The systemd unit invokes the script as:
 
 ```bash
-# Container starts with required environment variables
-docker run -e DISCOBOT_SESSION_ID=abc123 discobot
+/opt/discobot/bin/discobot-sandbox-init setup
 ```
 
-### Environment Variables
+Required environment:
 
 | Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DISCOBOT_SESSION_ID` | Yes | - | Unique session identifier for filesystem isolation |
-| `WORKSPACE_ORIGIN_PATH` | No | - | Git URL or local path to clone |
-| `WORKSPACE_COMMIT` | No | - | Specific commit SHA to checkout |
-| `AGENT_BINARY` | No | `/opt/discobot/bin/discobot-agent-api` | Path to the agent API binary |
-| `AGENT_USER` | No | `discobot` | Username to run the agent API as |
+| --- | --- | --- | --- |
+| `DISCOBOT_SESSION_ID` | Yes | - | Session identifier used for the OverlayFS writable layer. |
+| `AGENT_USER` | No | `discobot` | User that owns the sandbox home and agent runtime. |
+| `CACHE_ENABLED` | No | `true` | Set to `false` to skip cache bind mounts. |
 
 ## Filesystem Layout
 
-### Persistent Storage (/.data volume)
-
-```
+```text
 /.data/
-├── discobot/                     # Base home directory (copied from /home/discobot)
-│   ├── .bashrc                  # User shell config
-│   ├── .profile                 # User profile
-│   └── workspace/               # Cloned repository
-├── tmp/                          # Backing storage for /tmp
-└── .agentfs/
-    └── {sessionID}.db          # AgentFS SQLite database
+├── discobot/                 # Persistent lower home copied from image
+├── .overlayfs/{sessionID}/   # OverlayFS upper/work dirs per session
+├── cache/                    # Optional project cache volume
+├── docker/                   # Docker daemon data root
+└── proxy/                    # Proxy config, certs, and recordings
 ```
 
-### System Paths
-
-After setup, the filesystem is configured as:
-
-| System Path | Source | Description |
-|-------------|--------|-------------|
-| `/home/discobot` | AgentFS mount | COW overlay of `/.data/discobot` |
-| `/tmp` | Bind mount from `/.data/tmp` | Session-persistent temporary data |
-| `/nix` | Image directory | Writable Nix store root owned by `discobot` |
-
-The AgentFS mount provides copy-on-write semantics - reads come from the base layer (`/.data/discobot`), writes are captured in the SQLite database.
-The `/tmp` mount is managed by systemd's `tmp.mount` unit before sandbox init
-and other application services start.
+`/tmp` is handled separately by `tmp.mount` and
+`discobot-persistent-tmp-prepare.service` before this setup service runs.
 
 ## Building
 
-The agent is built as part of the Docker multi-stage build:
+The Docker build copies the script directly into the runtime overlay:
 
-```bash
-# Build just the agent binary
-go build -o discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
-
-# Or via Docker (as part of full build)
-docker build -t discobot .
+```dockerfile
+COPY --chmod=755 sandbox-init/discobot-sandbox-init.sh \
+  /opt/discobot/bin/discobot-sandbox-init
 ```
 
-## Architecture
-
-```
-Container Start (root)
-        │
-        ▼
-┌───────────────────┐
-│   discobot-sandbox-init      │  ← PID 1 (runs as root)
-│   (init process)  │
-│                   │
-│   1. Copy home    │
-│   2. Clone repo   │
-│   3. Init AgentFS │
-│   4. Mount AgentFS│
-└─────────┬─────────┘
-          │
-          │  fork + setuid(discobot)
-          ▼
-┌───────────────────┐
-│ discobot-agent-api    │  ← Child process (runs as discobot)
-│ (agent API)       │
-│                   │
-│ Sees:             │
-│ /home/discobot(COW)│
-└───────────────────┘
-```
-
-### Signal Flow
-
-```
-SIGTERM/SIGINT → discobot-sandbox-init → forwards to child process group
-                      │
-                      └→ Waits up to 10s for graceful shutdown
-                      └→ Force-kills child if timeout exceeded
-```
-
-### Process Reaping
-
-As PID 1, `discobot-sandbox-init` is responsible for calling `wait()` on orphaned processes. This prevents zombie process accumulation when child processes fork and their parents exit.
-
-## AgentFS Mount Flags
-
-The AgentFS mount uses special flags:
-
-- `-a`: Auto-unmount when the process exits
-- `--allow-root`: Allow root to access the FUSE mount (required for `docker exec` as root)
-
-## Documentation
-
-- [Architecture](./docs/ARCHITECTURE.md) - Technical architecture overview
-- [Init Design](./docs/design/init.md) - Detailed design of the init process
-
-## Related Components
-
-- [Agent API](../agent-api/README.md) - The TypeScript/Bun API service that runs as the child process
-- [Proxy](../proxy/README.md) - HTTP/SOCKS5 proxy for credential injection
+There is no separate Go binary for sandbox init.

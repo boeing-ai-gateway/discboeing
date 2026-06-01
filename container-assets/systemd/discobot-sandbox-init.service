@@ -7,7 +7,7 @@ Before=discobot-proxy.service docker.service discobot-agent-api.service
 
 [Service]
 Type=notify
-NotifyAccess=main
+NotifyAccess=all
 RemainAfterExit=yes
 
 # Forward Docker container environment variables to this service.

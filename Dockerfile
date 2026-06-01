@@ -32,18 +32,6 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
-# Stage 1b: Build the sandbox init process from source
-FROM root-go-deps AS sandbox-init-builder
-
-# Copy sandbox-init source (including embedded proxy config)
-COPY sandbox-init/ ./sandbox-init/
-
-# Build the sandbox init binary (static for portability)
-# The go:embed directive will include sandbox-init/cmd/sandbox-init/default-proxy-config.yaml
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
-
 # Stage 1c: Build the VSOCK port proxy used by VZ VMs
 FROM root-go-deps AS vsock-port-proxy-builder
 
@@ -385,7 +373,7 @@ FROM scratch AS runtime-overlay
 # Copy binaries to /opt/discobot/bin
 COPY --from=agent-go-builder --chmod=755 /discobot-agent-api /opt/discobot/bin/discobot-agent-api
 COPY --from=proxy-builder --chmod=755 /proxy /opt/discobot/bin/proxy
-COPY --from=sandbox-init-builder --chmod=755 /discobot-sandbox-init /opt/discobot/bin/discobot-sandbox-init
+COPY --chmod=755 sandbox-init/discobot-sandbox-init.sh /opt/discobot/bin/discobot-sandbox-init
 COPY --from=vsock-port-proxy-builder --chmod=755 /discobot-vsock-port-proxy /opt/discobot/bin/discobot-vsock-port-proxy
 
 # Copy browser-harness runtime and expose it at /usr/local/bin/browser-harness

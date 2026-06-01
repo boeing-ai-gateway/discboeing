@@ -79,7 +79,7 @@ pnpm ci                 # Full CI pipeline: check → test:unit → build
 |-----------|----------|------|---------|
 | Frontend | TypeScript (Svelte + Vite) | 3100 | Active web UI |
 | Server | Go (Chi + GORM) | 3001 | REST API, session orchestration, container management |
-| Agent | Go | — | Container PID 1 init process (workspace setup, AgentFS mount) |
+| Sandbox setup | Bash | — | Container setup service (home overlay, proxy/env, cache mounts) |
 | Agent API | Go | 3002 | Per-container API that drives the AI CLI, SSE streaming |
 | Proxy | Go | 17080/17081 | Per-container MITM proxy (auth header injection, Docker registry caching) |
 
@@ -89,7 +89,8 @@ pnpm ci                 # Full CI pipeline: check → test:unit → build
 Frontend → REST API (/api/projects/{projectId}/...) → Go Server
                                                         ↓
                                               Docker/VM Container
-                                              ├── Agent (PID 1 init)
+                                              ├── systemd (PID 1)
+                                              ├── Sandbox setup service
                                               ├── Agent API (chat/SSE)
                                               └── Proxy (MITM + cache)
 ```
