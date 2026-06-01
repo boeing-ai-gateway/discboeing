@@ -29,7 +29,7 @@ func SessionsSidebarFooter() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"sessions-sidebar--footer\"><div class=\"sessions-sidebar--footer-row\"><span class=\"sessions-sidebar--footer-title\">Customizations</span></div><a class=\"sessions-sidebar--footer-link\" href=\"/\">Old UI</a></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"sessions-sidebar--footer\"><div class=\"sessions-sidebar--footer-row\"><span class=\"sessions-sidebar--footer-title\">Customizations</span></div><a class=\"sessions-sidebar--footer-link\" href=\"http://localhost:3100/\">Old UI</a></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
