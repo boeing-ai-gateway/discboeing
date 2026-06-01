@@ -29,6 +29,7 @@ type ProjectData struct {
 	Project    serverapi.Project
 	Workspaces []serverapi.Workspace
 	Workspace  map[string]serverapi.Workspace
+	Models     []serverapi.ModelInfo
 	Sessions   []serverapi.Session
 	Session    map[string]SessionData
 }
@@ -851,6 +852,9 @@ func CloneProjectData(project ProjectData) ProjectData {
 	if project.Workspaces != nil {
 		project.Workspaces = append([]serverapi.Workspace(nil), project.Workspaces...)
 	}
+	if project.Models != nil {
+		project.Models = cloneModels(project.Models)
+	}
 	if project.Workspace != nil {
 		workspaces := make(map[string]serverapi.Workspace, len(project.Workspace))
 		for workspaceID, workspace := range project.Workspace {
@@ -869,6 +873,22 @@ func CloneProjectData(project ProjectData) ProjectData {
 		project.Session = sessions
 	}
 	return project
+}
+
+func cloneModels(models []serverapi.ModelInfo) []serverapi.ModelInfo {
+	clone := make([]serverapi.ModelInfo, len(models))
+	for index, model := range models {
+		clone[index] = model
+		if model.ReasoningLevels != nil {
+			levels := append([]string(nil), (*model.ReasoningLevels)...)
+			clone[index].ReasoningLevels = &levels
+		}
+		if model.ServiceTiers != nil {
+			tiers := append([]string(nil), (*model.ServiceTiers)...)
+			clone[index].ServiceTiers = &tiers
+		}
+	}
+	return clone
 }
 
 func cloneServiceData(service ServiceData) ServiceData {

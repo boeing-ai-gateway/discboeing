@@ -1,18 +1,19 @@
 package ui
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 	"strings"
 )
 
-templ FileTree(tree FileTreeData) {
+templ FileTree(tree helpers.FileTreeData) {
 	<div
 		class="file-tree"
-		data-class:file-tree--compact={ boolString(fileTreeDensity(tree) == FileTreeDensityCompact) }
-		data-class:file-tree--default={ boolString(fileTreeDensity(tree) == FileTreeDensityDefault) }
-		data-class:file-tree--relaxed={ boolString(fileTreeDensity(tree) == FileTreeDensityRelaxed) }
-		data-class:file-tree--drag-enabled={ boolString(fileTreeDragEnabled(tree)) }
-		data-class:file-tree--large={ boolString(fileTreeLarge(tree)) }
+		data-class:file-tree--compact={ helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityCompact) }
+		data-class:file-tree--default={ helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityDefault) }
+		data-class:file-tree--relaxed={ helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityRelaxed) }
+		data-class:file-tree--drag-enabled={ helpers.BoolString(fileTreeDragEnabled(tree)) }
+		data-class:file-tree--large={ helpers.BoolString(fileTreeLarge(tree)) }
 		role="tree"
 		aria-label={ tree.Label }
 		data-file-tree
@@ -51,29 +52,29 @@ templ FileTree(tree FileTreeData) {
 				class={ fileTreeNodeClass(node) }
 				role="treeitem"
 				tabindex="0"
-				aria-selected={ boolString(node.Selected) }
-				aria-expanded?={ node.Kind == FileTreeNodeDirectory && node.HasChildren }
-				draggable={ boolString(fileTreeCanDrag(tree, node)) }
+				aria-selected={ helpers.BoolString(node.Selected) }
+				aria-expanded?={ node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren }
+				draggable={ helpers.BoolString(fileTreeCanDrag(tree, node)) }
 				data-style:padding-left={ fileTreeNodePadding(node.Depth) }
 				data-file-tree-row
 				data-file-id={ node.ID }
 				data-file-move-url={ node.MoveCommand.URL }
 				data-file-drop-url={ node.DropCommand.URL }
-				data-file-can-drop={ boolString(node.CanDrop) }
+				data-file-can-drop={ helpers.BoolString(node.CanDrop) }
 				data-file-toggle-url={ node.ToggleCommand.URL }
-				data-file-expanded={ boolString(node.Expanded) }
+				data-file-expanded={ helpers.BoolString(node.Expanded) }
 				data-file-row-index={ fileTreeIndexString(index) }
 				data-on:click={ fileTreeNodeClickAction(node) }
 			>
-				if node.Kind == FileTreeNodeDirectory && node.HasChildren {
-					<button class="file-tree--toggle" type="button" aria-label={ "Toggle " + node.Name } aria-expanded={ boolString(node.Expanded) } data-on:click__stop={ fileTreeCommandAction(node.ToggleCommand) }>
+				if node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren {
+					<button class="file-tree--toggle" type="button" aria-label={ "Toggle " + node.Name } aria-expanded={ helpers.BoolString(node.Expanded) } data-on:click__stop={ fileTreeCommandAction(node.ToggleCommand) }>
 						@Icon("chevron-right", "icon-12 file-tree--chevron")
 					</button>
 				} else {
 					<span class="file-tree--spacer"></span>
 				}
 				<span class="file-tree--name">
-					if node.Kind == FileTreeNodeFile {
+					if node.Kind == helpers.FileTreeNodeFile {
 						<span class="file-tree--icon" aria-hidden="true">
 							@Icon(fileTreeNodeIcon(node), fileTreeNodeIconClass(node))
 						</span>
@@ -86,7 +87,7 @@ templ FileTree(tree FileTreeData) {
 							{ node.Name }
 						}
 					</span>
-					if node.Kind == FileTreeNodeDirectory && node.HasChangedDescendants {
+					if node.Kind == helpers.FileTreeNodeDirectory && node.HasChangedDescendants {
 						<span class="file-tree--descendant-dot" title="Contains changed files" aria-label="Contains changed files"></span>
 					}
 				</span>
@@ -109,36 +110,36 @@ templ FileTree(tree FileTreeData) {
 	</div>
 }
 
-func fileTreeDensity(tree FileTreeData) FileTreeDensity {
+func fileTreeDensity(tree helpers.FileTreeData) helpers.FileTreeDensity {
 	if tree.Density == "" {
-		return FileTreeDensityCompact
+		return helpers.FileTreeDensityCompact
 	}
 	return tree.Density
 }
 
-func fileTreeDragEnabled(tree FileTreeData) bool {
+func fileTreeDragEnabled(tree helpers.FileTreeData) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == ""
 }
 
-func fileTreeLarge(tree FileTreeData) bool {
+func fileTreeLarge(tree helpers.FileTreeData) bool {
 	return tree.LargeTreeLimit > 0 && tree.TotalNodeCount > tree.LargeTreeLimit
 }
 
-func fileTreeNodeClass(node FileTreeNode) string {
+func fileTreeNodeClass(node helpers.FileTreeNode) string {
 	class := "file-tree--node"
 	switch node.Kind {
-	case FileTreeNodeDirectory:
+	case helpers.FileTreeNodeDirectory:
 		class += " file-tree--node--directory"
-	case FileTreeNodeFile:
+	case helpers.FileTreeNodeFile:
 		class += " file-tree--node--file"
 	}
-	if node.Kind == FileTreeNodeDirectory && node.Expanded {
+	if node.Kind == helpers.FileTreeNodeDirectory && node.Expanded {
 		class += " file-tree--node--expanded"
 	}
 	if node.Selected {
 		class += " file-tree--node--selected"
 	}
-	if node.GitStatus != "" && node.GitStatus != FileTreeGitStatusClean {
+	if node.GitStatus != "" && node.GitStatus != helpers.FileTreeGitStatusClean {
 		class += " file-tree--node--status-" + string(node.GitStatus)
 	}
 	if node.HasChangedDescendants {
@@ -161,87 +162,87 @@ func fileTreeDepth(depth int) string {
 	return strconv.Itoa(depth)
 }
 
-func fileTreeCommandMethod(command FileTreeCommand) string {
+func fileTreeCommandMethod(command helpers.FileTreeCommand) string {
 	if command.Method == "" {
 		return "POST"
 	}
 	return command.Method
 }
 
-func fileTreeCommandAction(command FileTreeCommand) string {
+func fileTreeCommandAction(command helpers.FileTreeCommand) string {
 	return fileTreeDiscobotCommandAction(command)
 }
 
-func fileTreeNodeClickAction(node FileTreeNode) string {
-	if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+func fileTreeNodeClickAction(node helpers.FileTreeNode) string {
+	if node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren {
 		return fileTreeCommandAction(node.ToggleCommand)
 	}
 	return fileTreeCommandAction(node.SelectCommand)
 }
 
-func fileTreeDiscobotCommandAction(command FileTreeCommand) string {
+func fileTreeDiscobotCommandAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + "})"
 }
 
-func fileTreeSearchAction(command FileTreeCommand) string {
+func fileTreeSearchAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {query: evt.target.value}})"
 }
 
-func fileTreeDeleteAction(command FileTreeCommand) string {
+func fileTreeDeleteAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "if (confirm('Delete this file tree item and its descendants?')) " + fileTreeDiscobotCommandAction(command)
 }
 
-func fileTreeRenameAction(node FileTreeNode) string {
+func fileTreeRenameAction(node helpers.FileTreeNode) string {
 	if node.RenameCommand.URL == "" {
 		return ""
 	}
 	return "const name = prompt('Rename item', " + strconv.Quote(node.Name) + "); if (name && name.trim()) @discobotCommand(" + strconv.Quote(node.RenameCommand.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(node.RenameCommand)) + ", payload: {name: name.trim()}})"
 }
 
-func fileTreeCreateAction(command FileTreeCommand, kind string) string {
+func fileTreeCreateAction(command helpers.FileTreeCommand, kind string) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "const name = prompt('New " + kind + " name'); if (name && name.trim()) @discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {name: name.trim()}})"
 }
 
-func fileTreeStatusLabel(status FileTreeGitStatus) string {
+func fileTreeStatusLabel(status helpers.FileTreeGitStatus) string {
 	switch status {
-	case FileTreeGitStatusModified:
+	case helpers.FileTreeGitStatusModified:
 		return "M"
-	case FileTreeGitStatusAdded:
+	case helpers.FileTreeGitStatusAdded:
 		return "A"
-	case FileTreeGitStatusDeleted:
+	case helpers.FileTreeGitStatusDeleted:
 		return "D"
-	case FileTreeGitStatusRenamed:
+	case helpers.FileTreeGitStatusRenamed:
 		return "R"
-	case FileTreeGitStatusUntracked:
+	case helpers.FileTreeGitStatusUntracked:
 		return "U"
-	case FileTreeGitStatusIgnored:
+	case helpers.FileTreeGitStatusIgnored:
 		return "I"
 	default:
 		return ""
 	}
 }
 
-func fileTreeStatusTitle(status FileTreeGitStatus) string {
+func fileTreeStatusTitle(status helpers.FileTreeGitStatus) string {
 	label := string(status)
-	if label == "" || status == FileTreeGitStatusClean {
+	if label == "" || status == helpers.FileTreeGitStatusClean {
 		return ""
 	}
 	return "Git status: " + label
 }
 
-func fileTreeMovePayloadAction(command FileTreeCommand) string {
+func fileTreeMovePayloadAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
@@ -255,22 +256,22 @@ func fileTreeSearchActive(search string) string {
 	return "true"
 }
 
-func fileTreeTriggerMode(tree FileTreeData) string {
+func fileTreeTriggerMode(tree helpers.FileTreeData) string {
 	if tree.TriggerMode == "" {
-		return string(FileTreeTriggerBoth)
+		return string(helpers.FileTreeTriggerBoth)
 	}
 	return string(tree.TriggerMode)
 }
 
-func fileTreeShowMenuTrigger(tree FileTreeData) bool {
-	return tree.TriggerMode == "" || tree.TriggerMode == FileTreeTriggerButton || tree.TriggerMode == FileTreeTriggerBoth
+func fileTreeShowMenuTrigger(tree helpers.FileTreeData) bool {
+	return tree.TriggerMode == "" || tree.TriggerMode == helpers.FileTreeTriggerButton || tree.TriggerMode == helpers.FileTreeTriggerBoth
 }
 
-func fileTreeNodeIcon(node FileTreeNode) string {
+func fileTreeNodeIcon(node helpers.FileTreeNode) string {
 	if node.Icon != "" {
 		return node.Icon
 	}
-	if node.Kind == FileTreeNodeDirectory {
+	if node.Kind == helpers.FileTreeNodeDirectory {
 		return ""
 	}
 	name := strings.ToLower(node.Name)
@@ -292,7 +293,7 @@ func fileTreeNodeIcon(node FileTreeNode) string {
 	}
 }
 
-func fileTreeNodeIconClass(node FileTreeNode) string {
+func fileTreeNodeIconClass(node helpers.FileTreeNode) string {
 	class := "icon-xs"
 	if node.IconColorClass != "" {
 		class += " " + node.IconColorClass
@@ -300,15 +301,15 @@ func fileTreeNodeIconClass(node FileTreeNode) string {
 	return class
 }
 
-func fileTreeCanDrag(tree FileTreeData, node FileTreeNode) bool {
+func fileTreeCanDrag(tree helpers.FileTreeData, node helpers.FileTreeNode) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && node.CanDrag && node.MoveCommand.URL != ""
 }
 
-func fileTreeCanRootDrop(tree FileTreeData) bool {
+func fileTreeCanRootDrop(tree helpers.FileTreeData) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && tree.Controls.RootDropCommand.URL != ""
 }
 
-func fileTreeLargeNotice(tree FileTreeData) string {
+func fileTreeLargeNotice(tree helpers.FileTreeData) string {
 	if tree.LargeTreeLimit <= 0 || tree.TotalNodeCount <= tree.LargeTreeLimit {
 		return ""
 	}
@@ -327,19 +328,19 @@ func fileTreeHighlightedName(name string, search string) (string, string, string
 	return name[:index], name[index : index+len(query)], name[index+len(query):], true
 }
 
-func fileTreeMenu(node FileTreeNode) MenuData {
-	items := []MenuItem{}
-	if node.Kind == FileTreeNodeDirectory {
+func fileTreeMenu(node helpers.FileTreeNode) helpers.MenuData {
+	items := []helpers.MenuItem{}
+	if node.Kind == helpers.FileTreeNodeDirectory {
 		items = append(items,
-			MenuItem{Label: "New File", Action: fileTreeCreateAction(node.NewFileCommand, "file")},
-			MenuItem{Label: "New Folder", Action: fileTreeCreateAction(node.NewFolderCommand, "folder")},
+			helpers.MenuItem{Label: "New File", Action: fileTreeCreateAction(node.NewFileCommand, "file")},
+			helpers.MenuItem{Label: "New Folder", Action: fileTreeCreateAction(node.NewFolderCommand, "folder")},
 		)
 	}
 	items = append(items,
-		MenuItem{Label: "Rename", SeparatorBefore: len(items) > 0, Action: fileTreeRenameAction(node)},
-		MenuItem{Label: "Delete", SeparatorBefore: true, Action: fileTreeDeleteAction(node.DeleteCommand)},
+		helpers.MenuItem{Label: "Rename", SeparatorBefore: len(items) > 0, Action: fileTreeRenameAction(node)},
+		helpers.MenuItem{Label: "Delete", SeparatorBefore: true, Action: fileTreeDeleteAction(node.DeleteCommand)},
 	)
-	return MenuData{
+	return helpers.MenuData{
 		ID:      "file-tree-menu-" + node.ID,
 		Label:   "Open actions for " + node.Name,
 		Trigger: Icon("kebab-vertical", "icon-xs"),

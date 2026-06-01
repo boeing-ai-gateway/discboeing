@@ -1,38 +1,40 @@
 package app
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 
-	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
 templ SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel[state.ComposerPanelState]) {
 	{{ view := shell.View }}
-	{{ session, hasSession := sessionByID(state.Sessions(shell.Data), sessionID) }}
-	{{ sessionState := sessionPanelState(view) }}
-	{{ diffFiles := sessionDiffFiles(session) }}
-	{{ sideChats := sessionSideChats(session, sessionState) }}
-	{{ sections := sessionDetailSectionsFor(session.ID, sessionState) }}
-	{{ viewMode := sessionViewMode(sessionState, session.ID) }}
-	{{ editorPanel := view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor }}
-	{{ editorState := editorPanelState(view) }}
+	{{ session, hasSession := helpers.SessionByID(state.Sessions(shell.Data), sessionID) }}
+	{{ sessionState := helpers.SessionPanelState(view) }}
+	{{ diffFiles := helpers.SessionDiffFiles(session) }}
+	{{ sideChats := helpers.SessionSideChats(session, sessionState) }}
+	{{ sections := helpers.SessionDetailSectionsFor(session.ID, sessionState) }}
+	{{ viewMode := helpers.SessionViewMode(sessionState, session.ID) }}
+	{{ editorPanel := view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Editor }}
+	{{ editorState := helpers.EditorPanelState(view) }}
 	{{ sidePane := editorPanel.Visible && hasSession && (len(editorState.OpenFileIDs) > 0 || editorState.DiffSummarySessionID != "") }}
-	{{ composerState := composerPanelStateFor(panel) }}
+	{{ composerState := helpers.ComposerPanelStateFor(panel) }}
 	{{ bottomAligned := hasSession && len(session.MainThread.Messages) > 1 }}
-	<section class="relative min-w-0 overflow-hidden session-workspace ide-panel" aria-label="Session workspace" data-class:session-workspace--side-pane={ boolString(sidePane) }>
-		<div class="session-workspace--center absolute left-1/2 top-[44.2%] w-full max-w-[754px] -translate-x-1/2 -translate-y-1/2 px-[20px]" data-class:session-workspace--center--side-pane={ boolString(sidePane) } data-class:session-workspace--center--bottom-aligned={ boolString(bottomAligned) }>
+	{{ workspaces := state.Workspaces(shell.Data) }}
+	{{ models := helpers.ComposerModelsForWorkspace(shell.Data, composerState.SelectedWorkspaceID) }}
+	<section class="relative min-w-0 overflow-hidden session-workspace ide-panel" aria-label="Session workspace" data-class:session-workspace--side-pane={ helpers.BoolString(sidePane) }>
+		<div class="session-workspace--center absolute left-1/2 top-[44.2%] w-full max-w-[754px] -translate-x-1/2 -translate-y-1/2 px-[20px]" data-class:session-workspace--center--side-pane={ helpers.BoolString(sidePane) } data-class:session-workspace--center--bottom-aligned={ helpers.BoolString(bottomAligned) }>
 			@Conversation(session.MainThread)
 			if hasSession {
-				@SessionPanel(session, sessionFileTree(session, view), diffFiles, sideChats, sections, viewMode)
+				@SessionPanel(session, helpers.SessionFileTree(session, view), diffFiles, sideChats, sections, viewMode)
 			}
-			@Composer(session, hasSession, diffFiles, sections, composerState)
+			@Composer(session, hasSession, diffFiles, sections, composerState, workspaces, models)
 		</div>
 	</section>
 }
 
-templ SessionPanel(session state.Session, fileTree appui.FileTreeData, diffFiles []sessionDiffFile, sideChats []sessionSideChatItem, sections sessionDetailSections, viewMode state.SessionViewMode) {
-	if sessionDetailSectionsAnyVisible(sections) {
+templ SessionPanel(session state.Session, fileTree helpers.FileTreeData, diffFiles []helpers.SessionDiffFile, sideChats []helpers.SessionSideChatItem, sections helpers.SessionDetailSections, viewMode state.SessionViewMode) {
+	if helpers.SessionDetailSectionsAnyVisible(sections) {
 		<div class="session-panel sessions-sidebar--item sessions-sidebar--item--selected sessions-sidebar--item--expanded" aria-label="Session panel">
 			@SessionsSidebarSessionItemHeader(session, true, true)
 			<div class="session-panel--details">
@@ -42,93 +44,22 @@ templ SessionPanel(session state.Session, fileTree appui.FileTreeData, diffFiles
 	}
 }
 
-templ Composer(session state.Session, hasSession bool, diffFiles []sessionDiffFile, sections sessionDetailSections, composerState state.ComposerPanelState) {
-	<div class="mb-[16px] flex items-center gap-[5px] text-[18px] font-normal tracking-[-0.01em] text-[var(--text-subtle)]">
-		<span>New session in</span>
-		@IconFolder("icon-lg")
-		<span class="text-[var(--foreground)]">discobot</span>
-		@IconChevronDown("icon-14")
-		<span class="mx-[3px]">with</span>
-		@IconBot("icon-lg")
-		<span class="text-[var(--foreground)]">Copilot CLI</span>
-		@IconChevronDown("icon-14")
-	</div>
-	<div class="composer rounded-[var(--workspace-panel-radius)] border border-[var(--focus-accent)] bg-[var(--surface-card)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--focus-accent)_18%,transparent)]">
-		<div
-			class="app-resize-handle app-resize-handle--horizontal app-resize-handle--composer"
-			role="separator"
-			aria-label="Resize composer"
-			aria-orientation="horizontal"
-			tabindex="0"
-			data-discobot-resize
-			data-resize-axis="y"
-			data-resize-target=".composer--prompt"
-			data-resize-key="composer-prompt-height"
-			data-resize-command="/ui/commands/layout/resize"
-			data-resize-min="58"
-			data-resize-max="240"
-			aria-valuemin="58"
-			aria-valuemax="240"
-			aria-valuenow={ strconv.Itoa(composerState.PromptHeight) }
-		>
-			<span class="app-resize-handle--grip"></span>
-		</div>
-		<div class="h-[var(--composer-prompt-height,58px)] px-[10px] pt-[12px] text-[13px] font-semibold text-[var(--text-muted)] composer--prompt" data-style:--composer-prompt-height={ strconv.Quote(strconv.Itoa(composerState.PromptHeight) + "px") }>What feature are you dreaming up?</div>
-		<div class="flex h-[27px] items-center justify-between px-[10px] pb-[9px] text-[11px] text-[var(--muted-foreground)]">
-			<div class="flex min-w-0 items-center gap-[14px]">
-				@IconPlus("icon-sm icon-action")
-				<div class="flex items-center gap-[6px]">
-					@IconPaperclip("icon-xs")
-					<span>Agent</span>
-				</div>
-				<span>Claude Sonnet 4.6 · Medium</span>
-			</div>
-			<div class="flex shrink-0 items-center gap-[8px]">
-				if hasSession {
-					@SessionApprovalComposerSummary(session, diffFiles)
-					@SessionButtons(session.ID, sections)
-				}
-				@IconArrowUp("icon-sm icon-send-disabled")
-			</div>
-		</div>
-	</div>
-	<div class="mt-[10px] flex items-center justify-between px-[10px] text-[11px] text-[var(--muted-foreground)]">
-		<div class="flex items-center gap-[6px]">
-			@IconShield("icon-xs")
-			<span>Default Approvals</span>
-			@IconChevronDown("icon-2xs")
-		</div>
-		<div class="flex items-center gap-[17px]">
-			<div class="flex items-center gap-[5px]">
-				@IconFolder("icon-xs")
-				<span>Folder</span>
-				@IconChevronDown("icon-2xs")
-			</div>
-			<div class="flex items-center gap-[5px] text-[color-mix(in_oklab,var(--muted-foreground)_70%,var(--background))]">
-				@IconBranch("icon-xs")
-				<span>main</span>
-				@IconChevronDown("icon-2xs")
-			</div>
-		</div>
-	</div>
-}
-
-templ SessionApprovalComposerSummary(session state.Session, diffFiles []sessionDiffFile) {
-	{{ approvalSummary := sessionApprovalSummaryFor(diffFiles) }}
+templ SessionApprovalComposerSummary(session state.Session, diffFiles []helpers.SessionDiffFile) {
+	{{ approvalSummary := helpers.SessionApprovalSummaryFor(diffFiles) }}
 	<div class="session-approval-composer-summary" aria-label="Session approval summary">
 		<div class="sessions-sidebar--diff-stats" aria-label="Diff stats">
 			<span class="sessions-sidebar--diff-stat sessions-sidebar--diff-stat--add">+{ strconv.Itoa(session.Additions) }</span>
 			<span class="sessions-sidebar--diff-stat sessions-sidebar--diff-stat--delete">-{ strconv.Itoa(session.Deletions) }</span>
 			<span class="sessions-sidebar--diff-stat-count">{ strconv.Itoa(len(diffFiles)) } files</span>
 		</div>
-		<div class={ sessionApprovalStatusClass(approvalSummary) }>
+		<div class={ helpers.SessionApprovalStatusClass(approvalSummary) }>
 			<span class="sessions-sidebar--approval-status-dot"></span>
-			<span>{ sessionApprovalStatusLabel(approvalSummary) }</span>
+			<span>{ helpers.SessionApprovalStatusLabel(approvalSummary) }</span>
 		</div>
 	</div>
 }
 
-templ SessionButtons(sessionID string, sections sessionDetailSections) {
+templ SessionButtons(sessionID string, sections helpers.SessionDetailSections) {
 	<div class="session-buttons sessions-sidebar--detail-launchers" aria-label="Open session panels">
 		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionWorkspace, "Workspace", "file", sections.Workspace)
 		@SessionsSidebarDetailLauncher(sessionID, state.SessionDetailSectionSideChats, "Side chats", "message-square", sections.SideChats)

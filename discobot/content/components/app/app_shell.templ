@@ -1,23 +1,26 @@
 package app
 
 import (
+	"fmt"
+
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
 templ AppShell(shell state.Shell) {
-	{{ session, _ := selectedSession(shell.Data, shell.View) }}
+	{{ session, _ := helpers.SelectedSession(shell.Data, shell.View) }}
 	{{ sessionID := session.ID }}
 	{{ sessionPanel := shell.View.GlobalPanelLayout.SessionSidebar }}
-	{{ editorPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Editor }}
-	{{ composerPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Conversation }}
-	{{ terminalPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Terminal }}
+	{{ editorPanel := shell.View.SessionPanelLayouts[helpers.SessionPanelState(shell.View).SelectedSessionID].Editor }}
+	{{ composerPanel := shell.View.SessionPanelLayouts[helpers.SessionPanelState(shell.View).SelectedSessionID].Conversation }}
+	{{ terminalPanel := shell.View.SessionPanelLayouts[helpers.SessionPanelState(shell.View).SelectedSessionID].Terminal }}
 	<main id="app-shell" class="h-dvh overflow-hidden bg-[var(--surface-canvas)] text-[13px] text-[var(--foreground)] antialiased">
 		<style>
 			.app-workspace-grid {
 				display: grid;
-				grid-template-columns: minmax(0, auto) var(--workspace-gap) minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);
-				grid-template-rows: minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);
+				grid-template-columns: minmax(0, auto) var(--workspace-gap) minmax(0, var(--composer-side-pane-width)) var(--workspace-gap) minmax(0, 1fr);
+				grid-template-rows: minmax(0, 1fr) var(--workspace-gap) minmax(0, var(--terminal-panel-height));
 			}
 
 			.app-workspace-grid:has(> .panel--maximized) {
@@ -45,7 +48,7 @@ templ AppShell(shell state.Shell) {
 		</style>
 		<div class="flex h-full min-h-[720px] flex-col overflow-hidden bg-[var(--surface-canvas)]">
 			@WindowChrome(shell)
-			<div class="min-h-0 min-w-0 flex-1 p-[10px] pt-0 app-workspace-grid">
+			<div class="min-h-0 min-w-0 flex-1 p-[10px] pt-0 app-workspace-grid" style={ workspaceGridStyle(composerPanel.Width, terminalPanel.Height) }>
 				@ui.Panel("session", "Session", state.PanelFrameOf(sessionPanel)) {
 					if sessionPanel.Visible {
 						@SessionsSidebar(shell, sessionID, sessionPanel)
@@ -110,4 +113,12 @@ templ AppShell(shell state.Shell) {
 		</div>
 		@SettingsDialog(shell)
 	</main>
+}
+
+func workspaceGridStyle(composerWidth int, terminalHeight int) string {
+	return fmt.Sprintf(
+		"--composer-side-pane-width: %dpx; --terminal-panel-height: %dpx;",
+		composerWidth,
+		terminalHeight,
+	)
 }

@@ -1,6 +1,10 @@
 package ui
 
-templ MenuItemView(menuID string, parentPath string, path string, item MenuItem) {
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+)
+
+templ MenuItemView(menuID string, parentPath string, path string, item helpers.MenuItem) {
 	if len(item.Children) > 0 {
 		<button
 			class="menu--item"
@@ -8,16 +12,18 @@ templ MenuItemView(menuID string, parentPath string, path string, item MenuItem)
 			role="menuitem"
 			aria-haspopup="menu"
 			aria-expanded="false"
-			aria-controls={ menuPanelID(menuID, path) }
+			aria-controls={ helpers.MenuPanelID(menuID, path) }
 			data-menu-submenu-trigger
+			data-on:pointerenter="window.discobot.menus.scheduleSubmenuOpen(el)"
+			data-on:pointerleave="window.discobot.menus.cancelSubmenuOpen(el)"
 		>
 			<span class="menu--spacer"></span>
 			<span class="menu--item-label">{ item.Label }</span>
 			<span class="menu--arrow" aria-hidden="true">›</span>
 		</button>
 		@MenuPanel(menuID, parentPath, path, item.Children, true)
-	} else if item.CheckState == MenuCheckChecked {
-		{{ action := menuItemAction(item) }}
+	} else if item.CheckState == helpers.MenuCheckChecked {
+		{{ action := helpers.MenuItemAction(item) }}
 		if action != "" {
 			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="true" data-on:click={ action }>
 				<span class="menu--check">✓</span>
@@ -31,8 +37,8 @@ templ MenuItemView(menuID string, parentPath string, path string, item MenuItem)
 				<span></span>
 			</button>
 		}
-	} else if item.CheckState == MenuCheckUnchecked {
-		{{ action := menuItemAction(item) }}
+	} else if item.CheckState == helpers.MenuCheckUnchecked {
+		{{ action := helpers.MenuItemAction(item) }}
 		if action != "" {
 			<button class="menu--item" type="button" role="menuitemcheckbox" aria-checked="false" data-on:click={ action }>
 				<span></span>
@@ -47,7 +53,7 @@ templ MenuItemView(menuID string, parentPath string, path string, item MenuItem)
 			</button>
 		}
 	} else {
-		{{ action := menuItemAction(item) }}
+		{{ action := helpers.MenuItemAction(item) }}
 		if action != "" {
 			<button class="menu--item" type="button" role="menuitem" data-on:click={ action }>
 				<span></span>

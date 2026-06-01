@@ -94,8 +94,17 @@ that folder only.
 ## JavaScript islands
 
 - Use JS only when templ + Datastar attributes are not enough.
+- Prefer element-level `data-on:*` handlers in templ for events that belong to
+  specific rendered elements, such as click, change, drag/drop, hover, and
+  pointer interactions.
+- For those handlers, expose small functions on `window.discobot.<island>` from
+  the island module and call them from `data-on:*` with `el` and `evt`.
 - Initialize islands by scanning explicit `data-*` hooks.
 - Make initialization idempotent with a `data-*-ready` guard.
+- Avoid document-level delegated listeners when the template owns the element
+  that needs the behavior. Keep document-level listeners only for truly global
+  behavior such as outside-click handling, Escape-to-close, or shared keyboard
+  shortcuts.
 - Avoid duplicate document-level listeners after Datastar patches.
 - Keep persistent data out of JS. JS may manage transient behavior only.
 
@@ -112,6 +121,17 @@ that folder only.
   `assets:build`.
 - Prefer Tailwind utility classes in `.templ` markup for straightforward layout,
   spacing, typography, color, and borders.
+- Prefer inline arbitrary values, such as `bg-[var(--tree-hover)]` or
+  `grid-cols-[18px_minmax(0,1fr)_auto]`, when they keep styling close to the
+  markup and remain readable.
+- Add custom CSS classes only when they define reusable primitives, encode
+  shared component state, require ancestor/attribute/child selectors, use
+  animations/keyframes, or need CSS that is awkward to express with Tailwind.
+- Keep shared primitive classes, such as `menu--item`, `menu--panel`, and
+  `ui-icon`, but avoid creating BEM-style element classes for every one-off
+  child node.
+- Before adding a custom class, ask whether it should become part of the
+  component/design API. If not, inline the Tailwind utilities instead.
 - Keep templates free of inline `<style>` blocks. Shared or complex selector
   CSS belongs in `styles/app.css` under the appropriate layer, usually
   `@layer components`.

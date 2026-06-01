@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
@@ -59,7 +60,7 @@ templ SettingsDialog(shell state.Shell) {
 }
 
 templ settingsTabButton(active state.SettingsTab, tab state.SettingsTab, label string) {
-	<button type="button" class={ settingsTabButtonClass(active, tab) } aria-selected={ boolString(active == tab) } data-on:click={ settingsTabCommand(tab) }>{ label }</button>
+	<button type="button" class={ settingsTabButtonClass(active, tab) } aria-selected={ helpers.BoolString(active == tab) } data-on:click={ settingsTabCommand(tab) }>{ label }</button>
 }
 
 templ settingsAppearanceTab() {
@@ -245,7 +246,7 @@ templ settingsSwitchItem(title string, description string, checked bool) {
 }
 
 templ settingsSwitch(checked bool) {
-	<button type="button" class={ settingsSwitchClass(checked) } aria-pressed={ boolString(checked) }>
+	<button type="button" class={ settingsSwitchClass(checked) } aria-pressed={ helpers.BoolString(checked) }>
 		<span class={ settingsSwitchThumbClass(checked) }></span>
 	</button>
 }

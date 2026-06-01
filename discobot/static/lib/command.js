@@ -37,21 +37,53 @@ export const send = async ({ method = "POST", url, payload } = {}) => {
 	}
 };
 
+export const sendFormData = async ({ method = "POST", url, formData } = {}) => {
+	if (!url) {
+		throw new Error("Command URL is required");
+	}
+
+	const options = {
+		method,
+		headers: {
+			Accept: "application/json",
+			"X-Requested-With": "discobot-command",
+		},
+		body: formData,
+	};
+
+	setGlobalCommandPending(true);
+	try {
+		const response = await fetch(url, options);
+		if (!response.ok) {
+			throw new Error(`Command failed with status ${response.status}`);
+		}
+	} catch (error) {
+		showCommandError(error);
+		throw error;
+	} finally {
+		setGlobalCommandPending(false);
+	}
+};
+
 const commandMethod = (options = {}) => {
 	return options.method || "POST";
+};
+
+const disablesWhilePending = (el) => {
+	return el instanceof HTMLButtonElement;
 };
 
 const setCommandPending = (el, pending) => {
 	if (pending) {
 		el.setAttribute("aria-busy", "true");
-		if ("disabled" in el) {
+		if (disablesWhilePending(el)) {
 			el.disabled = true;
 		}
 		return;
 	}
 
 	el.removeAttribute("aria-busy");
-	if ("disabled" in el) {
+	if (disablesWhilePending(el)) {
 		el.disabled = false;
 	}
 };
@@ -61,7 +93,7 @@ export const sendFromElement = async (el, url, options = {}) => {
 		return;
 	}
 
-	if (el.getAttribute("aria-busy") === "true") {
+	if (disablesWhilePending(el) && el.getAttribute("aria-busy") === "true") {
 		return;
 	}
 
@@ -102,6 +134,7 @@ export const setupCommands = () => {
 	window.discobot = window.discobot ?? {};
 	window.discobot.command = {
 		send,
+		sendFormData,
 		sendFromElement,
 	};
 

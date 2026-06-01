@@ -1,13 +1,14 @@
 package app
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
 templ SessionsSidebarWorkspaceGroup(workspace serverapi.Workspace, sessions []state.Session, view state.View) {
-	{{ sessionState := sessionPanelState(view) }}
-	{{ name := sessionsSidebarWorkspaceName(workspace) }}
+	{{ sessionState := helpers.SessionPanelState(view) }}
+	{{ name := helpers.SessionsSidebarWorkspaceName(workspace) }}
 	<section class="sessions-sidebar--workspace" aria-label={ name }>
 		<div class="sessions-sidebar--section-label">{ name }</div>
 		for _, session := range sessions {

@@ -9,7 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
@@ -39,9 +39,9 @@ func SessionsSidebarSessionListItem(session state.Session, selected bool) templ.
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(selected))
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 164}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -52,9 +52,9 @@ func SessionsSidebarSessionListItem(session state.Session, selected bool) templ.
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(selected))
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 204}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 220}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -65,9 +65,9 @@ func SessionsSidebarSessionListItem(session state.Session, selected bool) templ.
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarSessionSelectCommand(session.ID))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarSessionSelectCommand(session.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 270}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 9, Col: 294}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -78,9 +78,9 @@ func SessionsSidebarSessionListItem(session state.Session, selected bool) templ.
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(session.Status == state.SessionStatusRunning))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(session.Status == state.SessionStatusRunning))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 10, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 10, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -107,7 +107,7 @@ func SessionsSidebarSessionListItem(session state.Session, selected bool) templ.
 	})
 }
 
-func SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeData, diffFiles []sessionDiffFile, sideChats []sessionSideChatItem, sections sessionDetailSections, viewMode state.SessionViewMode, selected bool, expanded bool) templ.Component {
+func SessionsSidebarSessionItem(session state.Session, fileTree helpers.FileTreeData, diffFiles []helpers.SessionDiffFile, sideChats []helpers.SessionSideChatItem, sections helpers.SessionDetailSections, viewMode state.SessionViewMode, selected bool, expanded bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -133,9 +133,9 @@ func SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeDa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(expanded))
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(expanded))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -146,9 +146,9 @@ func SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeDa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(selected))
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 188}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -159,9 +159,9 @@ func SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeDa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarSessionSelectCommand(session.ID))
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarSessionSelectCommand(session.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 238}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 16, Col: 262}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -215,9 +215,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 string
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarExpanderLabel(session, expanded))
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarExpanderLabel(session, expanded))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 127}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 		if templ_7745c5c3_Err != nil {
@@ -228,9 +228,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(expanded))
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(expanded))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 174}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 		if templ_7745c5c3_Err != nil {
@@ -241,9 +241,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarSessionToggleCommand(session.ID))
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarSessionToggleCommand(session.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 230}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 26, Col: 254}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -262,9 +262,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 string
-		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(selected))
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 29, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 29, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 		if templ_7745c5c3_Err != nil {
@@ -275,9 +275,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(session.Status == state.SessionStatusRunning))
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(session.Status == state.SessionStatusRunning))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 30, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 30, Col: 161}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 		if templ_7745c5c3_Err != nil {
@@ -301,9 +301,9 @@ func SessionsSidebarSessionItemHeader(session state.Session, selected bool, expa
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarHideCommand())
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarHideCommand())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 33, Col: 173}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_session_item.templ`, Line: 33, Col: 181}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {

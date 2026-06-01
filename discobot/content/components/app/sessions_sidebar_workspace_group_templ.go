@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 	serverapi "github.com/obot-platform/discobot/server/api"
 )
@@ -34,8 +35,8 @@ func SessionsSidebarWorkspaceGroup(workspace serverapi.Workspace, sessions []sta
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		sessionState := sessionPanelState(view)
-		name := sessionsSidebarWorkspaceName(workspace)
+		sessionState := helpers.SessionPanelState(view)
+		name := helpers.SessionsSidebarWorkspaceName(workspace)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"sessions-sidebar--workspace\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -43,7 +44,7 @@ func SessionsSidebarWorkspaceGroup(workspace serverapi.Workspace, sessions []sta
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_workspace_group.templ`, Line: 11, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_workspace_group.templ`, Line: 12, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -56,7 +57,7 @@ func SessionsSidebarWorkspaceGroup(workspace serverapi.Workspace, sessions []sta
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_workspace_group.templ`, Line: 12, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar_workspace_group.templ`, Line: 13, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {

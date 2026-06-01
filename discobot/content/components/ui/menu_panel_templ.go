@@ -8,7 +8,11 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-func MenuPanel(menuID string, parentPath string, path string, items []MenuItem, submenu bool) templ.Component {
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+)
+
+func MenuPanel(menuID string, parentPath string, path string, items []helpers.MenuItem, submenu bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -34,9 +38,9 @@ func MenuPanel(menuID string, parentPath string, path string, items []MenuItem, 
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(menuPanelID(menuID, path))
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.MenuPanelID(menuID, path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 5, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 9, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -47,9 +51,9 @@ func MenuPanel(menuID string, parentPath string, path string, items []MenuItem, 
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(submenu))
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(submenu))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 7, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 11, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -76,9 +80,9 @@ func MenuPanel(menuID string, parentPath string, path string, items []MenuItem, 
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(menuPanelParentID(menuID, parentPath, submenu))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.MenuPanelParentID(menuID, parentPath, submenu))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 12, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/menu_panel.templ`, Line: 16, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -99,7 +103,7 @@ func MenuPanel(menuID string, parentPath string, path string, items []MenuItem, 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = MenuItemView(menuID, path, menuItemPath(path, index), item).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = MenuItemView(menuID, path, helpers.MenuItemPath(path, index), item).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

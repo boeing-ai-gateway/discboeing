@@ -1,0 +1,23 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
+
+templ ComposerControlBar(session state.Session, hasSession bool, diffFiles []helpers.SessionDiffFile, sections helpers.SessionDetailSections, composerState state.ComposerPanelState, models []serverapi.ModelInfo) {
+	<div class="flex h-[27px] items-center justify-between px-[10px] pb-[9px] text-[11px] text-[var(--muted-foreground)]">
+		<div class="flex min-w-0 items-center gap-[14px]">
+			@ComposerAttachmentButton()
+			@ComposerModelControl(models, composerState)
+		</div>
+		<div class="flex shrink-0 items-center gap-[8px]">
+			if hasSession {
+				@SessionApprovalComposerSummary(session, diffFiles)
+				@SessionButtons(session.ID, sections)
+			}
+			@IconArrowUp("icon-sm icon-send-disabled")
+		</div>
+	</div>
+}

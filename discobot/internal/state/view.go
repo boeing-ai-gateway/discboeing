@@ -1,5 +1,7 @@
 package state
 
+import serverapi "github.com/obot-platform/discobot/server/api"
+
 // View is server-owned UI view state.
 type View struct {
 	GlobalPanelLayout   GlobalPanelLayout
@@ -146,9 +148,26 @@ type EditorPanelState struct {
 	ServiceLogID         string
 }
 
+// ComposerAttachment stores a pending composer file attachment.
+type ComposerAttachment struct {
+	ID        string
+	Filename  string
+	MediaType string
+	URL       string
+}
+
 // ConversationPanelState owns state for a session conversation/composer panel instance.
 type ConversationPanelState struct {
-	PromptHeight int
+	SelectedWorkspaceID    string
+	SelectedModelID        string
+	SelectedReasoning      string
+	SelectedServiceTier    string
+	Attachments            []ComposerAttachment
+	WorkspaceSourceType    string
+	WorkspaceSourceInput   string
+	WorkspaceValidation    serverapi.ValidateWorkspaceResponse
+	WorkspaceValidationSet bool
+	WorkspaceSetupMessage  string
 }
 
 // ComposerPanelState is kept as an alias for conversation panel state.
@@ -365,9 +384,7 @@ func DefaultSessionPanelLayout() SessionPanelLayout {
 			Width:       360,
 			MinWidth:    280,
 			MaxWidth:    560,
-			State: ConversationPanelState{
-				PromptHeight: 58,
-			},
+			State:       ConversationPanelState{},
 		},
 		Terminal: Panel[ConversationTerminalState]{
 			ID:          "terminal",
@@ -653,6 +670,9 @@ func cloneComposerPanelState(state *ComposerPanelState) *ComposerPanelState {
 		return nil
 	}
 	clone := *state
+	if state.Attachments != nil {
+		clone.Attachments = append([]ComposerAttachment(nil), state.Attachments...)
+	}
 	return &clone
 }
 

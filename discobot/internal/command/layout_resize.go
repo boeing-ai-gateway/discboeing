@@ -59,8 +59,6 @@ func layoutResizeSize(payload layoutResizePayload, size int) (int, bool) {
 		return clampInt(size, 240, 520), true
 	case "composer-side-pane-width":
 		return clampInt(size, 320, 620), true
-	case "composer-prompt-height":
-		return clampInt(size, 58, 240), true
 	case "terminal-height":
 		return clampInt(size, 180, 480), true
 	default:
@@ -89,9 +87,6 @@ func saveLegacyLayoutSize(view *state.View, key string, size int) {
 		panel := state.EnsurePanel(view, "composer")
 		panel.Width = size
 		state.SavePanel(view, "composer", panel)
-	case "composer-prompt-height":
-		composer := state.EnsureComposerPanelState(view)
-		composer.PromptHeight = size
 	case "terminal-height":
 		panel := state.EnsurePanel(view, "terminal")
 		panel.Height = size

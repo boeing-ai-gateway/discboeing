@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serviceclient "github.com/obot-platform/discobot/server/client"
 )
 
 // ViewStore persists server-owned view state and publishes updates to streams.
@@ -19,14 +20,30 @@ type ViewStore interface {
 
 // Handler owns server-side command routes triggered by Datastar data hooks.
 type Handler struct {
-	view ViewStore
+	view   ViewStore
+	client *serviceclient.Client
+}
+
+// Option customizes a command handler.
+type Option func(*Handler)
+
+// WithClient configures the generated Discobot API client used by commands that
+// need backend workspace/model operations.
+func WithClient(client *serviceclient.Client) Option {
+	return func(h *Handler) {
+		h.client = client
+	}
 }
 
 // New returns a command handler bound to view state.
-func New(view ViewStore) *Handler {
-	return &Handler{
+func New(view ViewStore, opts ...Option) *Handler {
+	h := &Handler{
 		view: view,
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Routes returns the command route tree.
@@ -47,6 +64,13 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/panels/{id}/maximize", h.PanelMaximize)
 	r.Post("/panels/{id}/restore", h.PanelRestore)
 	r.Post("/layout/resize", h.LayoutResize)
+	r.Post("/composer/workspaces/{workspaceID}/select", h.ComposerWorkspaceSelect)
+	r.Post("/composer/workspaces/source/{sourceType}/start", h.ComposerWorkspaceSourceStart)
+	r.Post("/composer/workspaces/source/cancel", h.ComposerWorkspaceSourceCancel)
+	r.Post("/composer/workspaces/source/input", h.ComposerWorkspaceSourceInput)
+	r.Post("/composer/attachments", h.ComposerAttachmentAdd)
+	r.Post("/composer/attachments/{attachmentID}/remove", h.ComposerAttachmentRemove)
+	r.Post("/composer/model-settings/select", h.ComposerModelSettingsSelect)
 	r.Post("/sessions/{id}/select", h.SessionSelect)
 	r.Post("/sessions/{id}/toggle-expanded", h.SessionToggleExpanded)
 	r.Post("/sessions/{id}/detail-sections/{section}/show", h.SessionDetailSectionShow)

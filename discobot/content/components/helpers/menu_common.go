@@ -1,4 +1,4 @@
-package ui
+package helpers
 
 import (
 	"fmt"
@@ -37,14 +37,14 @@ type MenuCommand struct {
 	URL    string
 }
 
-func menuItemAction(item MenuItem) string {
+func MenuItemAction(item MenuItem) string {
 	if item.Action != "" {
 		return item.Action
 	}
-	return menuCommandAction(item.Command)
+	return MenuCommandAction(item.Command)
 }
 
-func menuCommandAction(command MenuCommand) string {
+func MenuCommandAction(command MenuCommand) string {
 	if command.URL == "" {
 		return ""
 	}
@@ -56,14 +56,14 @@ func menuCommandAction(command MenuCommand) string {
 	return fmt.Sprintf("@discobotCommand(%s, {method: %s})", strconv.Quote(command.URL), strconv.Quote(method))
 }
 
-func menuPanelID(menuID string, path string) string {
+func MenuPanelID(menuID string, path string) string {
 	if path == "" {
 		return menuID + "-panel"
 	}
 	return menuID + "-submenu-" + path
 }
 
-func menuItemPath(path string, index int) string {
+func MenuItemPath(path string, index int) string {
 	segment := strconv.Itoa(index)
 	if path == "" {
 		return segment
@@ -71,9 +71,9 @@ func menuItemPath(path string, index int) string {
 	return path + "-" + segment
 }
 
-func menuPanelParentID(menuID string, parentPath string, submenu bool) string {
+func MenuPanelParentID(menuID string, parentPath string, submenu bool) string {
 	if !submenu {
 		return ""
 	}
-	return menuPanelID(menuID, parentPath)
+	return MenuPanelID(menuID, parentPath)
 }

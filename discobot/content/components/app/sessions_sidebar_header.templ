@@ -1,6 +1,9 @@
 package app
 
-import "github.com/obot-platform/discobot/discobot/internal/state"
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
 
 templ SessionsSidebarHeader(view state.View) {
 	<div class="sessions-sidebar--header">
@@ -11,7 +14,7 @@ templ SessionsSidebarHeader(view state.View) {
 				<kbd class="sessions-sidebar--shortcut">Ctrl+N</kbd>
 			</button>
 			@SessionsSidebarFilterMenu(view)
-			<button type="button" class={ sessionsSidebarIconButtonClass(sessionPanelState(view).FileTreeSearchVisible) } aria-label="Toggle file search" aria-pressed={ boolString(sessionPanelState(view).FileTreeSearchVisible) } title="Toggle file search" data-on:click={ sessionsSidebarFileSearchToggleCommand() }>
+			<button type="button" class={ helpers.SessionsSidebarIconButtonClass(helpers.SessionPanelState(view).FileTreeSearchVisible) } aria-label="Toggle file search" aria-pressed={ helpers.BoolString(helpers.SessionPanelState(view).FileTreeSearchVisible) } title="Toggle file search" data-on:click={ helpers.SessionsSidebarFileSearchToggleCommand() }>
 				@IconSearch("icon-sm")
 			</button>
 		</div>

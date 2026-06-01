@@ -22,12 +22,6 @@
 		cursor: row-resize;
 	}
 
-	.app-resize-handle--composer {
-		width: 100%;
-		margin: 0;
-		border-bottom: 1px solid transparent;
-	}
-
 	.app-resize-handle:hover,
 	.app-resize-handle:focus-visible {
 		color: var(--foreground);

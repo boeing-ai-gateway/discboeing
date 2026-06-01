@@ -1,0 +1,30 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ ComposerAttachmentButton() {
+	<div class="inline-flex">
+		<input class="hidden" type="file" multiple aria-label="Add photos or files" data-composer-attachment-input data-on:change="window.discobot.composerAttachments.uploadSelectedFiles(el)" />
+		<button class="inline-flex items-center justify-center rounded-[5px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]" type="button" aria-label="Add photos or files" title="Add photos or files" data-composer-attachment-trigger data-on:click="window.discobot.composerAttachments.openFilePicker(el, evt)">
+			@IconPlus("icon-sm icon-action")
+		</button>
+	</div>
+}
+
+templ ComposerAttachments(attachments []state.ComposerAttachment) {
+	if len(attachments) > 0 {
+		<div class="flex flex-wrap gap-[4px] border-t border-[var(--border-subtle)] px-[10px] pt-[6px] pb-[4px]" aria-label="Pending attachments">
+			for _, attachment := range attachments {
+				<div class="inline-flex max-w-[220px] items-center gap-[4px] rounded-[6px] border border-[var(--border-subtle)] bg-[var(--background)] py-[3px] pr-[5px] pl-[7px] text-[11px] text-[var(--foreground)]">
+					<span class="truncate">{ attachment.Filename }</span>
+					<button class="inline-flex items-center justify-center rounded-[4px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]" type="button" aria-label={ "Remove " + attachment.Filename } title={ "Remove " + attachment.Filename } data-on:click={ helpers.ComposerAttachmentRemoveCommand(attachment.ID) }>
+						@IconX("icon-xs")
+					</button>
+				</div>
+			}
+		</div>
+	}
+}

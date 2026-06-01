@@ -1,0 +1,50 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+)
+
+templ ComposerWorkspaceSourceInput(composerState state.ComposerPanelState) {
+	{{ message := helpers.ComposerWorkspaceSourceMessage(composerState) }}
+	<div class="relative inline-flex min-w-[min(390px,calc(100vw-260px))] items-center gap-[6px] text-[var(--foreground)]" data-signals:composer-workspace-source-input__ifmissing="''">
+		<button class="inline-grid size-[24px] flex-none place-items-center rounded-[6px] text-[var(--muted-foreground)] hover:bg-[var(--tree-hover)] hover:text-[var(--foreground)]" type="button" aria-label="Return to workspace dropdown" title="Return to workspace dropdown" data-on:click={ helpers.ComposerWorkspaceSourceCancelCommand() }>
+			if composerState.WorkspaceSourceType == "git" {
+				@IconBranch("icon-lg")
+			} else {
+				@IconFolder("icon-lg")
+			}
+		</button>
+		<div class="relative grid min-w-0 flex-1">
+			<label class="sr-only" for="composer-workspace-source-input">{ helpers.ComposerWorkspaceSourceLabel(composerState.WorkspaceSourceType) }</label>
+			<input
+				id="composer-workspace-source-input"
+				class="w-full min-w-0 rounded-[8px] border border-[var(--border)] bg-[var(--surface-control)] px-[8px] py-[5px] text-[13px] leading-[1.2] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--focus-accent)] focus:outline-none"
+				type="text"
+				data-bind:composer-workspace-source-input
+				placeholder={ helpers.ComposerWorkspaceSourcePlaceholder(composerState.WorkspaceSourceType) }
+				aria-label={ helpers.ComposerWorkspaceSourceLabel(composerState.WorkspaceSourceType) }
+				data-on:input__debounce.250ms={ helpers.ComposerWorkspaceSourceInputCommand() }
+			/>
+			if len(composerState.WorkspaceValidation.Suggestions) > 0 {
+				<div class="absolute left-0 top-[calc(100%+5px)] z-[60] grid max-h-[220px] w-full overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--popover)] p-[4px] shadow-[0_16px_40px_rgb(0_0_0/0.28)]" role="listbox" aria-label="Workspace suggestions">
+					for _, suggestion := range composerState.WorkspaceValidation.Suggestions {
+						<button class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-[8px] rounded-[7px] px-[8px] py-[6px] text-left font-mono text-[12px] text-[var(--popover-foreground)] hover:bg-[var(--tree-hover)]" type="button" role="option" data-on:mousedown__prevent={ helpers.ComposerWorkspaceSuggestionCommand(suggestion.Value) }>
+							<span class="truncate">{ suggestion.Value }</span>
+							if suggestion.Valid {
+								<span class="font-sans text-[var(--focus-accent)]">✓</span>
+							}
+						</button>
+					}
+				</div>
+			}
+			if message != "" {
+				if helpers.ComposerWorkspaceSourceValid(composerState) && composerState.WorkspaceSetupMessage == "" {
+					<div class="absolute bottom-[calc(100%+4px)] left-0 z-40 max-w-full truncate text-[11px] leading-[1.25] text-[var(--diff-add-line)]">{ message }</div>
+				} else {
+					<div class="absolute bottom-[calc(100%+4px)] left-0 z-40 max-w-full truncate text-[11px] leading-[1.25] text-[var(--destructive)]">{ message }</div>
+				}
+			}
+		</div>
+	</div>
+}

@@ -1,11 +1,10 @@
-package app
+package helpers
 
 import (
 	"strconv"
 	"strings"
 	"testing"
 
-	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
@@ -15,12 +14,12 @@ func TestSessionFileTreeNodesExpansion(t *testing.T) {
 		{ID: "child", SessionID: "s", ParentID: "root", Name: "child.go", Kind: state.FileKindFile},
 	}
 
-	collapsed := sessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}), "s", "", 0, false)
+	collapsed := SessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}), "s", "", 0, false)
 	if len(collapsed) != 1 || collapsed[0].ID != "root" {
 		t.Fatalf("collapsed tree = %#v, want only root", collapsed)
 	}
 
-	expanded := sessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{"root": true}}), "s", "", 0, false)
+	expanded := SessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{"root": true}}), "s", "", 0, false)
 	if len(expanded) != 2 || expanded[1].ID != "child" || expanded[1].Depth != 1 {
 		t.Fatalf("expanded tree = %#v, want root and child at depth 1", expanded)
 	}
@@ -34,7 +33,7 @@ func TestSessionFileTreeNodesFlattenDirectories(t *testing.T) {
 		{ID: "tree", SessionID: "s", ParentID: "ui", Name: "file_tree.templ", Kind: state.FileKindFile},
 	}
 
-	nodes := sessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}), "s", "", 0, true)
+	nodes := SessionFileTreeNodesWithOptions(files, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}), "s", "", 0, true)
 	if len(nodes) != 1 {
 		t.Fatalf("nodes length = %d, want 1", len(nodes))
 	}
@@ -52,7 +51,7 @@ func TestSessionFileTreeSearchKeepsAncestors(t *testing.T) {
 	}
 	view := testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}, FileTreeSearch: "main"})
 
-	nodes := sessionFileTreeNodesWithOptions(files, view, "s", "", 0, false)
+	nodes := SessionFileTreeNodesWithOptions(files, view, "s", "", 0, false)
 	if len(nodes) != 3 {
 		t.Fatalf("nodes length = %d, want root/src/main", len(nodes))
 	}
@@ -70,7 +69,7 @@ func TestSessionFileTreeGitStatusAndDescendantIndicators(t *testing.T) {
 	}
 	view := testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{"root": true}})
 
-	nodes := sessionFileTreeNodesWithOptions(files, view, "s", "", 0, false)
+	nodes := SessionFileTreeNodesWithOptions(files, view, "s", "", 0, false)
 	if !nodes[0].HasChangedDescendants {
 		t.Fatalf("root HasChangedDescendants = false, want true")
 	}
@@ -91,7 +90,7 @@ func TestSessionFileTreeAppliesLargeTreeLimit(t *testing.T) {
 		})
 	}
 
-	tree := sessionFileTree(state.Session{ID: "s", Files: files}, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}))
+	tree := SessionFileTree(state.Session{ID: "s", Files: files}, testViewWithSessionPanel(state.SessionPanelState{ExpandedFileIDs: map[string]bool{}}))
 	if len(tree.Nodes) != sessionFileTreeLargeLimit {
 		t.Fatalf("rendered nodes = %d, want %d", len(tree.Nodes), sessionFileTreeLargeLimit)
 	}
@@ -101,10 +100,10 @@ func TestSessionFileTreeAppliesLargeTreeLimit(t *testing.T) {
 }
 
 func TestSessionFileTreeIconMapping(t *testing.T) {
-	if icon := sessionFileTreeIcon("README.md"); icon != "markdown" {
+	if icon := SessionFileTreeIcon("README.md"); icon != "markdown" {
 		t.Fatalf("markdown icon = %q", icon)
 	}
-	if class := sessionFileTreeIconColorClass("main.go"); class == "" {
+	if class := SessionFileTreeIconColorClass("main.go"); class == "" {
 		t.Fatalf("go icon color class empty")
 	}
 }
@@ -121,7 +120,7 @@ func TestSessionDiffFilesReturnsChangedFiles(t *testing.T) {
 		},
 	}
 
-	files := sessionDiffFiles(session)
+	files := SessionDiffFiles(session)
 	if len(files) != 2 {
 		t.Fatalf("diff files length = %d, want 2: %#v", len(files), files)
 	}
@@ -137,7 +136,7 @@ func TestSessionDiffFilesReturnsChangedFiles(t *testing.T) {
 }
 
 func TestSessionApprovalSummaryCountsApprovedFiles(t *testing.T) {
-	summary := sessionApprovalSummaryFor([]sessionDiffFile{
+	summary := SessionApprovalSummaryFor([]SessionDiffFile{
 		{Approved: true},
 		{},
 		{Approved: true},
@@ -145,25 +144,25 @@ func TestSessionApprovalSummaryCountsApprovedFiles(t *testing.T) {
 	if summary.Total != 3 || summary.Approved != 2 {
 		t.Fatalf("summary = %#v, want 2 of 3 approved", summary)
 	}
-	if sessionApprovalComplete(summary) {
+	if SessionApprovalComplete(summary) {
 		t.Fatalf("approval summary should not be complete")
 	}
 }
 
 func TestSessionViewModeDefaultsToFiles(t *testing.T) {
 	sessionState := state.SessionPanelState{}
-	if mode := sessionViewMode(sessionState, "s"); mode != state.SessionViewModeFiles {
+	if mode := SessionViewMode(sessionState, "s"); mode != state.SessionViewModeFiles {
 		t.Fatalf("default mode = %q, want files", mode)
 	}
 
 	sessionState.SessionViewModes = map[string]state.SessionViewMode{"s": state.SessionViewModeDiff}
-	if mode := sessionViewMode(sessionState, "s"); mode != state.SessionViewModeDiff {
+	if mode := SessionViewMode(sessionState, "s"); mode != state.SessionViewModeDiff {
 		t.Fatalf("stored mode = %q, want diff", mode)
 	}
 }
 
 func TestSessionDetailSectionsDefaultToHidden(t *testing.T) {
-	sections := sessionDetailSectionsFor("s", state.SessionPanelState{})
+	sections := SessionDetailSectionsFor("s", state.SessionPanelState{})
 	if sections.Workspace || sections.SideChats || sections.Hooks || sections.Review {
 		t.Fatalf("sections = %#v, want all hidden by default", sections)
 	}
@@ -174,29 +173,29 @@ func TestSessionDetailSectionsDefaultToHidden(t *testing.T) {
 			state.SessionDetailSectionKey("s", state.SessionDetailSectionReview): true,
 		},
 	}
-	sections = sessionDetailSectionsFor("s", sessionState)
+	sections = SessionDetailSectionsFor("s", sessionState)
 	if sections.Workspace || sections.SideChats || !sections.Hooks || !sections.Review {
 		t.Fatalf("sections = %#v, want hooks and review visible only", sections)
 	}
-	if !sessionDetailSectionsAnyVisible(sections) {
+	if !SessionDetailSectionsAnyVisible(sections) {
 		t.Fatalf("sections should report visible panels")
 	}
 }
 
 func TestSessionDetailSectionLabels(t *testing.T) {
-	if summary := sessionsSidebarWorkspaceSummary(appui.FileTreeData{TotalNodeCount: 1}, nil, state.SessionViewModeFiles); summary != "1 file" {
+	if summary := SessionsSidebarWorkspaceSummary(FileTreeData{TotalNodeCount: 1}, nil, state.SessionViewModeFiles); summary != "1 file" {
 		t.Fatalf("workspace summary = %q, want 1 file", summary)
 	}
-	if summary := sessionSideChatSectionSummary([]sessionSideChatItem{{}}); summary != "1 chat" {
+	if summary := SessionSideChatSectionSummary([]SessionSideChatItem{{}}); summary != "1 chat" {
 		t.Fatalf("side chat summary = %q, want 1 chat", summary)
 	}
-	if class := sessionsSidebarDetailSectionClass(true); !strings.Contains(class, "sessions-sidebar--detail-section--visible") {
+	if class := SessionsSidebarDetailSectionClass(true); !strings.Contains(class, "sessions-sidebar--detail-section--visible") {
 		t.Fatalf("section class = %q, want visible modifier", class)
 	}
-	if class := sessionsSidebarDetailLauncherClass(true); !strings.Contains(class, "sessions-sidebar--detail-launcher--active") {
+	if class := SessionsSidebarDetailLauncherClass(true); !strings.Contains(class, "sessions-sidebar--detail-launcher--active") {
 		t.Fatalf("launcher class = %q, want active modifier", class)
 	}
-	if label := sessionsSidebarDetailLauncherLabel("Hooks", false); label != "Open Hooks panel" {
+	if label := SessionsSidebarDetailLauncherLabel("Hooks", false); label != "Open Hooks panel" {
 		t.Fatalf("launcher label = %q, want open label", label)
 	}
 }
@@ -210,31 +209,31 @@ func TestSessionSideChatsSelectStoredOrFirst(t *testing.T) {
 		},
 	}
 
-	items := sessionSideChats(session, state.SessionPanelState{SelectedSideChatID: "thread-b"})
+	items := SessionSideChats(session, state.SessionPanelState{SelectedSideChatID: "thread-b"})
 	if len(items) != 2 || items[0].Selected || !items[1].Selected {
 		t.Fatalf("items = %#v, want thread-b selected", items)
 	}
 
-	items = sessionSideChats(session, state.SessionPanelState{SelectedSideChatID: "missing"})
+	items = SessionSideChats(session, state.SessionPanelState{SelectedSideChatID: "missing"})
 	if len(items) != 2 || !items[0].Selected || items[1].Selected {
 		t.Fatalf("items = %#v, want first chat selected", items)
 	}
 }
 
 func TestSessionSideChatLabels(t *testing.T) {
-	if label := sessionSideChatCountLabel(1); label != "1 msg" {
+	if label := SessionSideChatCountLabel(1); label != "1 msg" {
 		t.Fatalf("single message label = %q", label)
 	}
-	if label := sessionSideChatCountLabel(3); label != "3 msgs" {
+	if label := SessionSideChatCountLabel(3); label != "3 msgs" {
 		t.Fatalf("message label = %q", label)
 	}
-	if class := sessionSideChatClass(true, true); !strings.Contains(class, "sessions-sidebar--side-chat--selected") || !strings.Contains(class, "sessions-sidebar--side-chat--unread") {
+	if class := SessionSideChatClass(true, true); !strings.Contains(class, "sessions-sidebar--side-chat--selected") || !strings.Contains(class, "sessions-sidebar--side-chat--unread") {
 		t.Fatalf("class = %q, want selected and unread modifiers", class)
 	}
 }
 
 func TestSessionHookSummaryPrioritizesRunning(t *testing.T) {
-	summary := sessionHookSummary([]state.SessionHook{
+	summary := SessionHookSummary([]state.SessionHook{
 		{Status: state.HookRunStatusSuccess},
 		{Status: state.HookRunStatusFailure},
 		{Status: state.HookRunStatusRunning},

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"net/url"
 	"strconv"
 
@@ -23,15 +24,15 @@ templ WindowChrome(shell state.Shell) {
 		<div class="absolute top-1/2 right-[14px] flex -translate-y-1/2 items-center gap-[22px] [-webkit-app-region:no-drag]">
 			@WindowChromeCommandSpinner()
 			<div class="flex items-center gap-[8px] text-[var(--muted-foreground)]">
-				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "editor") } data-class:window-chrome--icon-button--active={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible) } aria-label={ editorToggleLabel(view) } title={ editorToggleLabel(view) } aria-pressed={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible) } data-on:click="@discobotCommand('/ui/commands/panels/editor/toggle', {method: 'POST'})">
+				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "editor") } data-class:window-chrome--icon-button--active={ helpers.BoolString(view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Editor.Visible) } aria-label={ editorToggleLabel(view) } title={ editorToggleLabel(view) } aria-pressed={ helpers.BoolString(view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Editor.Visible) } data-on:click="@discobotCommand('/ui/commands/panels/editor/toggle', {method: 'POST'})">
 					@IconCode("icon-md")
 				</button>
 				<div class="h-[15px] w-px bg-[var(--border)]"></div>
 				@WindowChromeServicesMenu(shell.Data.Services)
-				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "terminal") } data-class:window-chrome--icon-button--active={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible) } aria-label={ terminalToggleLabel(view) } title={ terminalToggleLabel(view) } aria-pressed={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible) } data-on:click="@discobotCommand('/ui/commands/terminal/toggle', {method: 'POST'})">
+				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "terminal") } data-class:window-chrome--icon-button--active={ helpers.BoolString(view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Terminal.Visible) } aria-label={ terminalToggleLabel(view) } title={ terminalToggleLabel(view) } aria-pressed={ helpers.BoolString(view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Terminal.Visible) } data-on:click="@discobotCommand('/ui/commands/terminal/toggle', {method: 'POST'})">
 					@IconTerminal("icon-sm")
 				</button>
-				<button type="button" class={ windowChromeIconButtonClass() } aria-label="Open settings" title="Open settings" data-class:window-chrome--icon-button--active={ boolString(view.Settings.Open) } data-on:click="@discobotCommand('/ui/commands/settings/open', {method: 'POST'})">
+				<button type="button" class={ windowChromeIconButtonClass() } aria-label="Open settings" title="Open settings" data-class:window-chrome--icon-button--active={ helpers.BoolString(view.Settings.Open) } data-on:click="@discobotCommand('/ui/commands/settings/open', {method: 'POST'})">
 					@IconSliders("icon-sm")
 				</button>
 			</div>
@@ -123,21 +124,21 @@ func sessionsSidebarToggleLabel(view state.View) string {
 }
 
 func terminalToggleLabel(view state.View) string {
-	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible {
+	if view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Terminal.Visible {
 		return "Hide terminal"
 	}
 	return "Show terminal"
 }
 
 func editorToggleLabel(view state.View) string {
-	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible {
+	if view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Editor.Visible {
 		return "Hide editor"
 	}
 	return "Show editor"
 }
 
 func composerToggleLabel(view state.View) string {
-	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Conversation.Visible {
+	if view.SessionPanelLayouts[helpers.SessionPanelState(view).SelectedSessionID].Conversation.Visible {
 		return "Hide composer"
 	}
 	return "Show composer"

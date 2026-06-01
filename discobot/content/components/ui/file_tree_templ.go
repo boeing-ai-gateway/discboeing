@@ -9,11 +9,12 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 	"strings"
 )
 
-func FileTree(tree FileTreeData) templ.Component {
+func FileTree(tree helpers.FileTreeData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -39,9 +40,9 @@ func FileTree(tree FileTreeData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityCompact))
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityCompact))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 11, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 12, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -52,9 +53,9 @@ func FileTree(tree FileTreeData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityDefault))
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityDefault))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 12, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 13, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -65,9 +66,9 @@ func FileTree(tree FileTreeData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDensity(tree) == FileTreeDensityRelaxed))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeDensity(tree) == helpers.FileTreeDensityRelaxed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 13, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 14, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -78,9 +79,9 @@ func FileTree(tree FileTreeData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeDragEnabled(tree)))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeDragEnabled(tree)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 14, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 15, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -91,9 +92,9 @@ func FileTree(tree FileTreeData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeLarge(tree)))
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeLarge(tree)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 15, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 16, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -106,7 +107,7 @@ func FileTree(tree FileTreeData) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 17, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 18, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -119,7 +120,7 @@ func FileTree(tree FileTreeData) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeTriggerMode(tree))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 19, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 20, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -132,7 +133,7 @@ func FileTree(tree FileTreeData) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchActive(tree.Search))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 20, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 21, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -155,7 +156,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(tree.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 25, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 26, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -178,7 +179,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.ExpandAllCommand))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 29, Col: 173}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 30, Col: 173}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
@@ -205,7 +206,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(tree.Controls.CollapseAllCommand))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 34, Col: 179}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 35, Col: 179}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 				if templ_7745c5c3_Err != nil {
@@ -245,7 +246,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Search)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 46, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 47, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -258,7 +259,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeSearchAction(tree.Controls.SearchCommand))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 46, Col: 207}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 47, Col: 207}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -293,9 +294,9 @@ func FileTree(tree FileTreeData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var17 string
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Selected))
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(node.Selected))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 54, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 55, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -305,7 +306,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+			if node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " aria-expanded")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -316,9 +317,9 @@ func FileTree(tree FileTreeData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var18 string
-			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(fileTreeCanDrag(tree, node)))
+			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(fileTreeCanDrag(tree, node)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 56, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 57, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -331,7 +332,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeNodePadding(node.Depth))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 57, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 58, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
@@ -344,7 +345,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 59, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 60, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
@@ -357,7 +358,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.MoveCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 60, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 61, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
@@ -370,7 +371,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.DropCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 61, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 62, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
@@ -381,9 +382,9 @@ func FileTree(tree FileTreeData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.CanDrop))
+			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(node.CanDrop))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 62, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 63, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -396,7 +397,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(node.ToggleCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 63, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 64, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
@@ -407,9 +408,9 @@ func FileTree(tree FileTreeData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(node.Expanded))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 64, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 65, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -422,7 +423,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeIndexString(index))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 65, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 66, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -435,7 +436,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeNodeClickAction(node))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 66, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 67, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
@@ -445,7 +446,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+			if node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<button class=\"file-tree--toggle\" type=\"button\" aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -453,7 +454,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue("Toggle " + node.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 70, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 				if templ_7745c5c3_Err != nil {
@@ -464,9 +465,9 @@ func FileTree(tree FileTreeData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(node.Expanded))
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(node.Expanded))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 131}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 70, Col: 139}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 				if templ_7745c5c3_Err != nil {
@@ -479,7 +480,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeCommandAction(node.ToggleCommand))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 69, Col: 197}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 70, Col: 205}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 				if templ_7745c5c3_Err != nil {
@@ -507,7 +508,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if node.Kind == FileTreeNodeFile {
+			if node.Kind == helpers.FileTreeNodeFile {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span class=\"file-tree--icon\" aria-hidden=\"true\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -530,7 +531,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(before)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 85, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -543,7 +544,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(match)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 85, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -556,7 +557,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var33 string
 				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(after)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 84, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 85, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {
@@ -566,7 +567,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(node.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 86, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 87, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
@@ -577,7 +578,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if node.Kind == FileTreeNodeDirectory && node.HasChangedDescendants {
+			if node.Kind == helpers.FileTreeNodeDirectory && node.HasChangedDescendants {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<span class=\"file-tree--descendant-dot\" title=\"Contains changed files\" aria-label=\"Contains changed files\"></span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -595,7 +596,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(fileTreeStatusTitle(node.GitStatus))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 94, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 95, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 				if templ_7745c5c3_Err != nil {
@@ -608,7 +609,7 @@ func FileTree(tree FileTreeData) templ.Component {
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeStatusLabel(node.GitStatus))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 94, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 95, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -637,7 +638,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(tree.Controls.RootDropCommand.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 104, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 105, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -656,7 +657,7 @@ func FileTree(tree FileTreeData) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(fileTreeLargeNotice(tree))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 107, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/ui/file_tree.templ`, Line: 108, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -675,36 +676,36 @@ func FileTree(tree FileTreeData) templ.Component {
 	})
 }
 
-func fileTreeDensity(tree FileTreeData) FileTreeDensity {
+func fileTreeDensity(tree helpers.FileTreeData) helpers.FileTreeDensity {
 	if tree.Density == "" {
-		return FileTreeDensityCompact
+		return helpers.FileTreeDensityCompact
 	}
 	return tree.Density
 }
 
-func fileTreeDragEnabled(tree FileTreeData) bool {
+func fileTreeDragEnabled(tree helpers.FileTreeData) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == ""
 }
 
-func fileTreeLarge(tree FileTreeData) bool {
+func fileTreeLarge(tree helpers.FileTreeData) bool {
 	return tree.LargeTreeLimit > 0 && tree.TotalNodeCount > tree.LargeTreeLimit
 }
 
-func fileTreeNodeClass(node FileTreeNode) string {
+func fileTreeNodeClass(node helpers.FileTreeNode) string {
 	class := "file-tree--node"
 	switch node.Kind {
-	case FileTreeNodeDirectory:
+	case helpers.FileTreeNodeDirectory:
 		class += " file-tree--node--directory"
-	case FileTreeNodeFile:
+	case helpers.FileTreeNodeFile:
 		class += " file-tree--node--file"
 	}
-	if node.Kind == FileTreeNodeDirectory && node.Expanded {
+	if node.Kind == helpers.FileTreeNodeDirectory && node.Expanded {
 		class += " file-tree--node--expanded"
 	}
 	if node.Selected {
 		class += " file-tree--node--selected"
 	}
-	if node.GitStatus != "" && node.GitStatus != FileTreeGitStatusClean {
+	if node.GitStatus != "" && node.GitStatus != helpers.FileTreeGitStatusClean {
 		class += " file-tree--node--status-" + string(node.GitStatus)
 	}
 	if node.HasChangedDescendants {
@@ -727,87 +728,87 @@ func fileTreeDepth(depth int) string {
 	return strconv.Itoa(depth)
 }
 
-func fileTreeCommandMethod(command FileTreeCommand) string {
+func fileTreeCommandMethod(command helpers.FileTreeCommand) string {
 	if command.Method == "" {
 		return "POST"
 	}
 	return command.Method
 }
 
-func fileTreeCommandAction(command FileTreeCommand) string {
+func fileTreeCommandAction(command helpers.FileTreeCommand) string {
 	return fileTreeDiscobotCommandAction(command)
 }
 
-func fileTreeNodeClickAction(node FileTreeNode) string {
-	if node.Kind == FileTreeNodeDirectory && node.HasChildren {
+func fileTreeNodeClickAction(node helpers.FileTreeNode) string {
+	if node.Kind == helpers.FileTreeNodeDirectory && node.HasChildren {
 		return fileTreeCommandAction(node.ToggleCommand)
 	}
 	return fileTreeCommandAction(node.SelectCommand)
 }
 
-func fileTreeDiscobotCommandAction(command FileTreeCommand) string {
+func fileTreeDiscobotCommandAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + "})"
 }
 
-func fileTreeSearchAction(command FileTreeCommand) string {
+func fileTreeSearchAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "@discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {query: evt.target.value}})"
 }
 
-func fileTreeDeleteAction(command FileTreeCommand) string {
+func fileTreeDeleteAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "if (confirm('Delete this file tree item and its descendants?')) " + fileTreeDiscobotCommandAction(command)
 }
 
-func fileTreeRenameAction(node FileTreeNode) string {
+func fileTreeRenameAction(node helpers.FileTreeNode) string {
 	if node.RenameCommand.URL == "" {
 		return ""
 	}
 	return "const name = prompt('Rename item', " + strconv.Quote(node.Name) + "); if (name && name.trim()) @discobotCommand(" + strconv.Quote(node.RenameCommand.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(node.RenameCommand)) + ", payload: {name: name.trim()}})"
 }
 
-func fileTreeCreateAction(command FileTreeCommand, kind string) string {
+func fileTreeCreateAction(command helpers.FileTreeCommand, kind string) string {
 	if command.URL == "" {
 		return ""
 	}
 	return "const name = prompt('New " + kind + " name'); if (name && name.trim()) @discobotCommand(" + strconv.Quote(command.URL) + ", {method: " + strconv.Quote(fileTreeCommandMethod(command)) + ", payload: {name: name.trim()}})"
 }
 
-func fileTreeStatusLabel(status FileTreeGitStatus) string {
+func fileTreeStatusLabel(status helpers.FileTreeGitStatus) string {
 	switch status {
-	case FileTreeGitStatusModified:
+	case helpers.FileTreeGitStatusModified:
 		return "M"
-	case FileTreeGitStatusAdded:
+	case helpers.FileTreeGitStatusAdded:
 		return "A"
-	case FileTreeGitStatusDeleted:
+	case helpers.FileTreeGitStatusDeleted:
 		return "D"
-	case FileTreeGitStatusRenamed:
+	case helpers.FileTreeGitStatusRenamed:
 		return "R"
-	case FileTreeGitStatusUntracked:
+	case helpers.FileTreeGitStatusUntracked:
 		return "U"
-	case FileTreeGitStatusIgnored:
+	case helpers.FileTreeGitStatusIgnored:
 		return "I"
 	default:
 		return ""
 	}
 }
 
-func fileTreeStatusTitle(status FileTreeGitStatus) string {
+func fileTreeStatusTitle(status helpers.FileTreeGitStatus) string {
 	label := string(status)
-	if label == "" || status == FileTreeGitStatusClean {
+	if label == "" || status == helpers.FileTreeGitStatusClean {
 		return ""
 	}
 	return "Git status: " + label
 }
 
-func fileTreeMovePayloadAction(command FileTreeCommand) string {
+func fileTreeMovePayloadAction(command helpers.FileTreeCommand) string {
 	if command.URL == "" {
 		return ""
 	}
@@ -821,22 +822,22 @@ func fileTreeSearchActive(search string) string {
 	return "true"
 }
 
-func fileTreeTriggerMode(tree FileTreeData) string {
+func fileTreeTriggerMode(tree helpers.FileTreeData) string {
 	if tree.TriggerMode == "" {
-		return string(FileTreeTriggerBoth)
+		return string(helpers.FileTreeTriggerBoth)
 	}
 	return string(tree.TriggerMode)
 }
 
-func fileTreeShowMenuTrigger(tree FileTreeData) bool {
-	return tree.TriggerMode == "" || tree.TriggerMode == FileTreeTriggerButton || tree.TriggerMode == FileTreeTriggerBoth
+func fileTreeShowMenuTrigger(tree helpers.FileTreeData) bool {
+	return tree.TriggerMode == "" || tree.TriggerMode == helpers.FileTreeTriggerButton || tree.TriggerMode == helpers.FileTreeTriggerBoth
 }
 
-func fileTreeNodeIcon(node FileTreeNode) string {
+func fileTreeNodeIcon(node helpers.FileTreeNode) string {
 	if node.Icon != "" {
 		return node.Icon
 	}
-	if node.Kind == FileTreeNodeDirectory {
+	if node.Kind == helpers.FileTreeNodeDirectory {
 		return ""
 	}
 	name := strings.ToLower(node.Name)
@@ -858,7 +859,7 @@ func fileTreeNodeIcon(node FileTreeNode) string {
 	}
 }
 
-func fileTreeNodeIconClass(node FileTreeNode) string {
+func fileTreeNodeIconClass(node helpers.FileTreeNode) string {
 	class := "icon-xs"
 	if node.IconColorClass != "" {
 		class += " " + node.IconColorClass
@@ -866,15 +867,15 @@ func fileTreeNodeIconClass(node FileTreeNode) string {
 	return class
 }
 
-func fileTreeCanDrag(tree FileTreeData, node FileTreeNode) bool {
+func fileTreeCanDrag(tree helpers.FileTreeData, node helpers.FileTreeNode) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && node.CanDrag && node.MoveCommand.URL != ""
 }
 
-func fileTreeCanRootDrop(tree FileTreeData) bool {
+func fileTreeCanRootDrop(tree helpers.FileTreeData) bool {
 	return tree.DragEnabled && strings.TrimSpace(tree.Search) == "" && tree.Controls.RootDropCommand.URL != ""
 }
 
-func fileTreeLargeNotice(tree FileTreeData) string {
+func fileTreeLargeNotice(tree helpers.FileTreeData) string {
 	if tree.LargeTreeLimit <= 0 || tree.TotalNodeCount <= tree.LargeTreeLimit {
 		return ""
 	}
@@ -893,19 +894,19 @@ func fileTreeHighlightedName(name string, search string) (string, string, string
 	return name[:index], name[index : index+len(query)], name[index+len(query):], true
 }
 
-func fileTreeMenu(node FileTreeNode) MenuData {
-	items := []MenuItem{}
-	if node.Kind == FileTreeNodeDirectory {
+func fileTreeMenu(node helpers.FileTreeNode) helpers.MenuData {
+	items := []helpers.MenuItem{}
+	if node.Kind == helpers.FileTreeNodeDirectory {
 		items = append(items,
-			MenuItem{Label: "New File", Action: fileTreeCreateAction(node.NewFileCommand, "file")},
-			MenuItem{Label: "New Folder", Action: fileTreeCreateAction(node.NewFolderCommand, "folder")},
+			helpers.MenuItem{Label: "New File", Action: fileTreeCreateAction(node.NewFileCommand, "file")},
+			helpers.MenuItem{Label: "New Folder", Action: fileTreeCreateAction(node.NewFolderCommand, "folder")},
 		)
 	}
 	items = append(items,
-		MenuItem{Label: "Rename", SeparatorBefore: len(items) > 0, Action: fileTreeRenameAction(node)},
-		MenuItem{Label: "Delete", SeparatorBefore: true, Action: fileTreeDeleteAction(node.DeleteCommand)},
+		helpers.MenuItem{Label: "Rename", SeparatorBefore: len(items) > 0, Action: fileTreeRenameAction(node)},
+		helpers.MenuItem{Label: "Delete", SeparatorBefore: true, Action: fileTreeDeleteAction(node.DeleteCommand)},
 	)
-	return MenuData{
+	return helpers.MenuData{
 		ID:      "file-tree-menu-" + node.ID,
 		Label:   "Open actions for " + node.Name,
 		Trigger: Icon("kebab-vertical", "icon-xs"),

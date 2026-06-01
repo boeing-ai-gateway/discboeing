@@ -1,19 +1,19 @@
 package app
 
 import (
-	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
 templ SessionsSidebarSessionListItem(session state.Session, selected bool) {
-	<button type="button" class="sessions-sidebar--item sessions-sidebar--session-list-item" data-class:sessions-sidebar--item--selected={ boolString(selected) } data-attr:aria-current={ boolString(selected) } data-on:click={ sessionsSidebarSessionSelectCommand(session.ID) }>
-		<span class="sessions-sidebar--status-dot" data-class:sessions-sidebar--status-dot--running={ boolString(session.Status == state.SessionStatusRunning) }></span>
+	<button type="button" class="sessions-sidebar--item sessions-sidebar--session-list-item" data-class:sessions-sidebar--item--selected={ helpers.BoolString(selected) } data-attr:aria-current={ helpers.BoolString(selected) } data-on:click={ helpers.SessionsSidebarSessionSelectCommand(session.ID) }>
+		<span class="sessions-sidebar--status-dot" data-class:sessions-sidebar--status-dot--running={ helpers.BoolString(session.Status == state.SessionStatusRunning) }></span>
 		<span class="sessions-sidebar--session-title">{ session.Title }</span>
 	</button>
 }
 
-templ SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeData, diffFiles []sessionDiffFile, sideChats []sessionSideChatItem, sections sessionDetailSections, viewMode state.SessionViewMode, selected bool, expanded bool) {
-	<div class="sessions-sidebar--item" data-class:sessions-sidebar--item--expanded={ boolString(expanded) } data-class:sessions-sidebar--item--selected={ boolString(selected) } data-on:click={ sessionsSidebarSessionSelectCommand(session.ID) }>
+templ SessionsSidebarSessionItem(session state.Session, fileTree helpers.FileTreeData, diffFiles []helpers.SessionDiffFile, sideChats []helpers.SessionSideChatItem, sections helpers.SessionDetailSections, viewMode state.SessionViewMode, selected bool, expanded bool) {
+	<div class="sessions-sidebar--item" data-class:sessions-sidebar--item--expanded={ helpers.BoolString(expanded) } data-class:sessions-sidebar--item--selected={ helpers.BoolString(selected) } data-on:click={ helpers.SessionsSidebarSessionSelectCommand(session.ID) }>
 		@SessionsSidebarSessionItemHeader(session, selected, expanded)
 		if expanded {
 			@SessionsSidebarSessionDetails(session, fileTree, diffFiles, sideChats, sections, viewMode)
@@ -23,14 +23,14 @@ templ SessionsSidebarSessionItem(session state.Session, fileTree appui.FileTreeD
 
 templ SessionsSidebarSessionItemHeader(session state.Session, selected bool, expanded bool) {
 	<div class="sessions-sidebar--item-row">
-		<button type="button" class="sessions-sidebar--expander" aria-label={ sessionsSidebarExpanderLabel(session, expanded) } aria-expanded={ boolString(expanded) } data-on:click__stop={ sessionsSidebarSessionToggleCommand(session.ID) }>
+		<button type="button" class="sessions-sidebar--expander" aria-label={ helpers.SessionsSidebarExpanderLabel(session, expanded) } aria-expanded={ helpers.BoolString(expanded) } data-on:click__stop={ helpers.SessionsSidebarSessionToggleCommand(session.ID) }>
 			@IconChevronRight("icon-sm sessions-sidebar--expander-icon")
 		</button>
-		<button type="button" class="sessions-sidebar--item-toggle" data-attr:aria-current={ boolString(selected) }>
-			<span class="sessions-sidebar--status-dot" data-class:sessions-sidebar--status-dot--running={ boolString(session.Status == state.SessionStatusRunning) }></span>
+		<button type="button" class="sessions-sidebar--item-toggle" data-attr:aria-current={ helpers.BoolString(selected) }>
+			<span class="sessions-sidebar--status-dot" data-class:sessions-sidebar--status-dot--running={ helpers.BoolString(session.Status == state.SessionStatusRunning) }></span>
 			<span class="sessions-sidebar--session-title">{ session.Title }</span>
 		</button>
-		<button type="button" class="sessions-sidebar--panel-close" aria-label="Hide sessions panel" title="Hide sessions panel" data-on:click__stop={ sessionsSidebarHideCommand() }>
+		<button type="button" class="sessions-sidebar--panel-close" aria-label="Hide sessions panel" title="Hide sessions panel" data-on:click__stop={ helpers.SessionsSidebarHideCommand() }>
 			@IconX("icon-xs")
 		</button>
 	</div>

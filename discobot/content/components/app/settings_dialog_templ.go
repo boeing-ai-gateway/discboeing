@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
@@ -175,9 +176,9 @@ func settingsTabButton(active state.SettingsTab, tab state.SettingsTab, label st
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(active == tab))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(active == tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 62, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 63, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -190,7 +191,7 @@ func settingsTabButton(active state.SettingsTab, tab state.SettingsTab, label st
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(settingsTabCommand(tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 62, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 63, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -203,7 +204,7 @@ func settingsTabButton(active state.SettingsTab, tab state.SettingsTab, label st
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 62, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 63, Col: 170}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -760,7 +761,7 @@ func settingsCard(title string, description string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 217, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 218, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -773,7 +774,7 @@ func settingsCard(title string, description string) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 218, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 219, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -823,7 +824,7 @@ func settingsItem(title string, description string) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 232, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 233, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -836,7 +837,7 @@ func settingsItem(title string, description string) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 233, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 234, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -949,9 +950,9 @@ func settingsSwitch(checked bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(checked))
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(checked))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 248, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 249, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -1044,7 +1045,7 @@ func settingsProviderRow(name string, description string, status string) templ.C
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 260, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 261, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
@@ -1057,7 +1058,7 @@ func settingsProviderRow(name string, description string, status string) templ.C
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 261, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 262, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
@@ -1070,7 +1071,7 @@ func settingsProviderRow(name string, description string, status string) templ.C
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 263, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 264, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -1112,7 +1113,7 @@ func settingsCredentialRow(provider string, key string, configured bool) templ.C
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(provider)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 270, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 271, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -1125,7 +1126,7 @@ func settingsCredentialRow(provider string, key string, configured bool) templ.C
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 271, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 272, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -1160,7 +1161,7 @@ func settingsCredentialRow(provider string, key string, configured bool) templ.C
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(settingsCredentialStatus(configured))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 274, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 275, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1173,7 +1174,7 @@ func settingsCredentialRow(provider string, key string, configured bool) templ.C
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(settingsCredentialAction(configured))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 275, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/settings_dialog.templ`, Line: 276, Col: 161}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {

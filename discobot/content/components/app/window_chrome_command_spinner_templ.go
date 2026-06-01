@@ -29,7 +29,7 @@ func WindowChromeCommandSpinner() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"window-chrome-command-spinner\" role=\"status\" aria-label=\"Command in progress\"><span class=\"window-chrome-command-spinner--dot\"></span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"window-chrome-command-spinner window-chrome-command-spinner--disconnected\" role=\"status\" aria-label=\"Command in progress\" data-class:window-chrome-command-spinner--disconnected=\"!$streamOpen\" data-attr:aria-label=\"$streamOpen ? 'Command in progress' : 'Datastar disconnected'\" title=\"Datastar disconnected\" data-attr:title=\"$streamOpen ? 'Command in progress' : 'Datastar disconnected'\"><span class=\"window-chrome-command-spinner--dot\"></span> <span class=\"window-chrome-command-spinner--disconnected-icon\" aria-hidden=\"true\">!</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

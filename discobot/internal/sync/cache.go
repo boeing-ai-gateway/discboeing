@@ -26,6 +26,12 @@ func (m *Manager) buildProjectCache(ctx context.Context, project serverapi.Proje
 		cache.Workspace[workspace.ID] = workspace
 	}
 
+	models, err := m.listModels(ctx, project.ID)
+	if err != nil {
+		return cache, err
+	}
+	cache.Models = models
+
 	sessions, err := m.listSessions(ctx, project.ID)
 	if err != nil {
 		return cache, err

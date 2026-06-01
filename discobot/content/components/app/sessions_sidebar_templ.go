@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
@@ -43,9 +44,9 @@ func SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel[stat
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(!sessionPanel.Visible))
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(!sessionPanel.Visible))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 13, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 14, Col: 134}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -58,7 +59,7 @@ func SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel[stat
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Quote(strconv.Itoa(sessionPanel.Width) + "px"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 13, Col: 202}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/sessions_sidebar.templ`, Line: 14, Col: 210}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -157,7 +158,7 @@ func SessionsSidebarContent(data state.Data, view state.View) templ.Component {
 		}
 		sessions := state.Sessions(data)
 		for _, workspace := range state.Workspaces(data) {
-			templ_7745c5c3_Err = SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(sessions, workspace.ID), view).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = SessionsSidebarWorkspaceGroup(workspace, helpers.SessionsForWorkspace(sessions, workspace.ID), view).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

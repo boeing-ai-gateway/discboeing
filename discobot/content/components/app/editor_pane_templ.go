@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	"strconv"
 	"strings"
 
@@ -38,10 +39,10 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		editorState := editorPanelStateFor(panel)
+		editorState := helpers.EditorPanelStateFor(panel)
 		session, _ := editorPaneSession(shell.Data, sessionID, panel)
 		service, serviceData, showServiceLog := serviceLogByID(shell.Data.Services, shell.Data.Service, editorState.ServiceLogID)
-		diffFiles := sessionDiffFiles(session)
+		diffFiles := helpers.SessionDiffFiles(session)
 		showDiffSummary := editorState.DiffSummarySessionID != "" && !showServiceLog
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"ide-panel editor-pane\" aria-label=\"Editor\"><div class=\"editor-pane--tabs\" role=\"tablist\" aria-label=\"Open files\">")
 		if templ_7745c5c3_Err != nil {
@@ -63,7 +64,7 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(serviceName(service))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 23, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 24, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -93,9 +94,9 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var3 string
-				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(file.ID == editorState.ActiveFileID))
+				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(file.ID == editorState.ActiveFileID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 32, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 33, Col: 128}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 				if templ_7745c5c3_Err != nil {
@@ -106,9 +107,9 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
-				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(file.ID == editorState.ActiveFileID))
+				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(file.ID == editorState.ActiveFileID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 32, Col: 197}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 33, Col: 213}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 				if templ_7745c5c3_Err != nil {
@@ -129,7 +130,7 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(file.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 34, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 35, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -146,9 +147,9 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(showDiffSummary || showServiceLog))
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(showDiffSummary || showServiceLog))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 39, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 40, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -178,7 +179,7 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(activeFile.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 49, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 50, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -191,7 +192,7 @@ func EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.Edi
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(editorFilePath(session.Files, activeFile))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 50, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 51, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -244,7 +245,7 @@ func EditorServiceLog(service serverapi.Service, logs []string) templ.Component 
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceName(service) + " logs")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 65, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 66, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -257,7 +258,7 @@ func EditorServiceLog(service serverapi.Service, logs []string) templ.Component 
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(serviceName(service))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 69, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 70, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -292,7 +293,7 @@ func EditorServiceLog(service serverapi.Service, logs []string) templ.Component 
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(serviceStatus(service))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 73, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 74, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -316,7 +317,7 @@ func EditorServiceLog(service serverapi.Service, logs []string) templ.Component 
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(line)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 81, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 82, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -335,7 +336,7 @@ func EditorServiceLog(service serverapi.Service, logs []string) templ.Component 
 	})
 }
 
-func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ.Component {
+func EditorDiffSummary(session state.Session, diffFiles []helpers.SessionDiffFile) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -356,7 +357,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			templ_7745c5c3_Var16 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		approvalSummary := sessionApprovalSummaryFor(diffFiles)
+		approvalSummary := helpers.SessionApprovalSummaryFor(diffFiles)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<section class=\"editor-pane--diff-summary\" aria-label=\"Diff summary\"><div class=\"editor-pane--diff-header\"><div><div class=\"editor-pane--eyebrow\">Diff summary</div><h2 class=\"editor-pane--diff-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -364,7 +365,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(session.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 93, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 94, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -377,7 +378,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(len(diffFiles)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 96, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 97, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -390,7 +391,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(session.Additions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 97, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 98, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -403,7 +404,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(session.Deletions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 98, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 99, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -413,7 +414,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var21 = []any{sessionApprovalStatusClass(approvalSummary)}
+		var templ_7745c5c3_Var21 = []any{helpers.SessionApprovalStatusClass(approvalSummary)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var21...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -436,9 +437,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(sessionApprovalStatusLabel(approvalSummary))
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(helpers.SessionApprovalStatusLabel(approvalSummary))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 104, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 105, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -451,7 +452,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(editorDiffBarStyle(session.Additions, session.Additions+session.Deletions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 107, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 108, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -464,7 +465,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(editorDiffBarStyle(session.Deletions, session.Additions+session.Deletions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 108, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 109, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -497,7 +498,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(file.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 120, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 121, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -507,7 +508,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var27 = []any{"sessions-sidebar--diff-file-status " + sessionDiffFileStatusClass(file.Status)}
+			var templ_7745c5c3_Var27 = []any{"sessions-sidebar--diff-file-status " + helpers.SessionDiffFileStatusClass(file.Status)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var27...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -530,9 +531,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var29 string
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionDiffFileStatusTitle(file.Status))
+			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionDiffFileStatusTitle(file.Status))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 121, Col: 149}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 122, Col: 165}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 			if templ_7745c5c3_Err != nil {
@@ -543,9 +544,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var30 string
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(sessionDiffFileStatusText(file.Status))
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(helpers.SessionDiffFileStatusText(file.Status))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 121, Col: 192}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 122, Col: 216}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -558,7 +559,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(metrics.Additions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 123, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 124, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -571,7 +572,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(metrics.Deletions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 124, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 125, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -581,7 +582,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var33 = []any{sessionDiffFileApprovalClass(file.Approved)}
+			var templ_7745c5c3_Var33 = []any{helpers.SessionDiffFileApprovalClass(file.Approved)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var33...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -604,9 +605,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var35 string
-			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(file.Approved))
+			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.BoolString(file.Approved))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 126, Col: 122}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 127, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
@@ -617,9 +618,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var36 string
-			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionDiffFileApprovalLabel(file.Approved))
+			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionDiffFileApprovalLabel(file.Approved))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 126, Col: 176}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 127, Col: 200}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 			if templ_7745c5c3_Err != nil {
@@ -630,9 +631,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var37 string
-			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarFileApprovalToggleCommand(file.ID))
+			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(helpers.SessionsSidebarFileApprovalToggleCommand(file.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 126, Col: 250}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 127, Col: 282}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -643,9 +644,9 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(sessionDiffFileApprovalLabel(file.Approved))
+			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(helpers.SessionDiffFileApprovalLabel(file.Approved))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 128, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 129, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -658,7 +659,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs("@@")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 132, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 133, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -671,7 +672,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(editorDiffContextLabel(file))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 132, Col: 131}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 133, Col: 131}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -689,7 +690,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(editorDiffRemovedLine(file))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 134, Col: 123}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 135, Col: 123}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -708,7 +709,7 @@ func EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) templ
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(editorDiffAddedLine(file))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 137, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/editor_pane.templ`, Line: 138, Col: 118}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -750,17 +751,17 @@ func serviceLogStatusClass(service serverapi.Service) string {
 }
 
 func editorPaneSession(data state.Data, sessionID string, panel state.Panel[state.EditorPanelState]) (state.Session, bool) {
-	editorState := editorPanelStateFor(panel)
+	editorState := helpers.EditorPanelStateFor(panel)
 	if editorState.DiffSummarySessionID != "" {
-		if session, ok := sessionByID(state.Sessions(data), editorState.DiffSummarySessionID); ok {
+		if session, ok := helpers.SessionByID(state.Sessions(data), editorState.DiffSummarySessionID); ok {
 			return session, true
 		}
 	}
-	return sessionByID(state.Sessions(data), sessionID)
+	return helpers.SessionByID(state.Sessions(data), sessionID)
 }
 
 func editorOpenFiles(session state.Session, panel state.Panel[state.EditorPanelState]) []state.FileNode {
-	editorState := editorPanelStateFor(panel)
+	editorState := helpers.EditorPanelStateFor(panel)
 	openFiles := make([]state.FileNode, 0, len(editorState.OpenFileIDs))
 	for _, id := range editorState.OpenFileIDs {
 		if file, ok := editorFileByID(session.Files, id); ok && file.Kind == state.FileKindFile {
@@ -771,7 +772,7 @@ func editorOpenFiles(session state.Session, panel state.Panel[state.EditorPanelS
 }
 
 func editorActiveFile(session state.Session, panel state.Panel[state.EditorPanelState]) (state.FileNode, bool) {
-	editorState := editorPanelStateFor(panel)
+	editorState := helpers.EditorPanelStateFor(panel)
 	if editorState.ActiveFileID != "" {
 		if file, ok := editorFileByID(session.Files, editorState.ActiveFileID); ok && file.Kind == state.FileKindFile {
 			return file, true
@@ -844,15 +845,15 @@ func editorDiffBarStyle(value int, total int) string {
 	return "width: " + strconv.Itoa(percent) + "%;"
 }
 
-func editorDiffContextLabel(file sessionDiffFile) string {
+func editorDiffContextLabel(file helpers.SessionDiffFile) string {
 	return file.Path
 }
 
-func editorDiffRemovedLine(file sessionDiffFile) string {
+func editorDiffRemovedLine(file helpers.SessionDiffFile) string {
 	return "previous " + file.Path
 }
 
-func editorDiffAddedLine(file sessionDiffFile) string {
+func editorDiffAddedLine(file helpers.SessionDiffFile) string {
 	return "updated " + file.Path
 }
 

@@ -1,0 +1,13 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
+
+templ ComposerHeader(workspaces []serverapi.Workspace, composerState state.ComposerPanelState) {
+	<div class="mb-[16px] flex items-center gap-[5px] text-[18px] font-normal tracking-[-0.01em] text-[var(--text-subtle)]">
+		<span>New session in</span>
+		@ComposerWorkspaceSelector(workspaces, composerState)
+	</div>
+}

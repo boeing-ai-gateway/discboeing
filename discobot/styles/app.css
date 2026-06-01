@@ -97,7 +97,7 @@
 		max-height: calc(100% - 32px);
 		min-height: 0;
 		flex-direction: column;
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.session-workspace--center--side-pane {
@@ -164,6 +164,54 @@
 		min-height: 0;
 		flex-direction: column;
 		overflow: hidden;
+	}
+
+	.composer-header--selector {
+		display: inline-flex;
+		min-width: 0;
+		align-items: center;
+		gap: 5px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		padding: 2px 4px;
+		color: var(--foreground);
+		font: inherit;
+		letter-spacing: inherit;
+	}
+
+	.composer-header--selector:hover,
+	.composer-header--selector[aria-expanded="true"] {
+		background: var(--tree-hover);
+	}
+
+
+	.composer-control {
+		display: inline-flex;
+		min-width: 0;
+	}
+
+	.composer-control--trigger {
+		display: inline-flex;
+		max-width: 260px;
+		min-width: 0;
+		align-items: center;
+		gap: 5px;
+		border-radius: 6px;
+		padding: 2px 6px;
+		color: var(--muted-foreground);
+		line-height: 1.2;
+	}
+
+	.composer-control--trigger:hover,
+	.composer-control--trigger[aria-expanded="true"] {
+		background: var(--tree-hover);
+		color: var(--foreground);
+	}
+
+	.composer[data-composer-attachment-dragging] {
+		outline: 2px dashed var(--focus-accent);
+		outline-offset: 3px;
 	}
 
 	.session-approval-composer-summary {
@@ -242,7 +290,8 @@
 		transition: opacity 120ms ease-in;
 	}
 
-	body[data-discobot-command-pending] .window-chrome-command-spinner {
+	body[data-discobot-command-pending] .window-chrome-command-spinner,
+	.window-chrome-command-spinner--disconnected {
 		opacity: 1;
 		visibility: visible;
 	}
@@ -254,6 +303,27 @@
 		border-top-color: var(--foreground);
 		border-radius: 9999px;
 		animation: window-chrome-command-spinner 720ms linear infinite;
+	}
+
+	.window-chrome-command-spinner--disconnected-icon {
+		display: none;
+		width: 14px;
+		height: 14px;
+		place-items: center;
+		border-radius: 9999px;
+		background: var(--destructive);
+		color: var(--destructive-foreground);
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	.window-chrome-command-spinner--disconnected .window-chrome-command-spinner--dot {
+		display: none;
+	}
+
+	.window-chrome-command-spinner--disconnected .window-chrome-command-spinner--disconnected-icon {
+		display: grid;
 	}
 
 	.window-chrome-services-menu--panel {
@@ -407,7 +477,6 @@
 	.panel--hidden {
 		display: none;
 	}
-
 
 	.panel-toolbar,
 	.panel-tabs,
@@ -2104,6 +2173,11 @@
 		.menu--item[aria-busy="true"] {
 			cursor: wait;
 			opacity: 0.7;
+		}
+
+		.menu--item--selected {
+			background: var(--surface-control-active);
+			color: var(--foreground);
 		}
 
 		.menu--item:hover,

@@ -21,41 +21,60 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/config"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 	datasync "github.com/obot-platform/discobot/discobot/internal/sync"
+	serviceclient "github.com/obot-platform/discobot/server/client"
 )
 
 // Server owns Discobot HTTP routing and Datastar command handlers.
 type Server struct {
-	config          config.Config
-	logger          *slog.Logger
-	mu              sync.Mutex
-	data            state.Data
-	sessions        *sessionStore
-	devReloadNeeded bool
-	subscribers     map[chan struct{}]struct{}
-	commands        *command.Handler
-	syncManager     *datasync.Manager
+	config      config.Config
+	logger      *slog.Logger
+	mu          sync.Mutex
+	data        state.Data
+	sessions    *sessionStore
+	devReloadID string
+	subscribers map[chan struct{}]struct{}
+	commands    *command.Handler
+	syncManager dataSyncManager
 }
 
 type sessionContextKey struct{}
 
+type dataSyncManager interface {
+	Run(context.Context)
+}
+
 // New wires the Discobot server dependencies and route table.
 func New(cfg config.Config, logger *slog.Logger) *Server {
 	server := &Server{
-		config:          cfg,
-		logger:          logger,
-		data:            state.DefaultData(),
-		sessions:        newSessionStore(cfg.SessionDir, logger),
-		devReloadNeeded: cfg.DevReload,
-		subscribers:     map[chan struct{}]struct{}{},
+		config:      cfg,
+		logger:      logger,
+		data:        state.DefaultData(),
+		sessions:    newSessionStore(cfg.SessionDir, logger),
+		devReloadID: time.Now().UTC().Format(time.RFC3339Nano),
+		subscribers: map[chan struct{}]struct{}{},
 	}
-	server.commands = command.New(server)
+	var client *serviceclient.Client
 	if cfg.ServerBaseURL != "" {
-		if syncManager, err := datasync.NewManager(cfg.ServerBaseURL, server, logger); err != nil {
-			logger.Warn("failed to create discobot data sync manager", "error", err)
+		if strings.HasPrefix(cfg.ServerBaseURL, "file://") {
+			if syncManager, err := datasync.NewFileManager(cfg.ServerBaseURL, server, logger); err != nil {
+				logger.Warn("failed to create discobot file data sync manager", "error", err)
+			} else {
+				server.syncManager = syncManager
+			}
 		} else {
-			server.syncManager = syncManager
+			if commandClient, err := serviceclient.NewClient(cfg.ServerBaseURL); err != nil {
+				logger.Warn("failed to create discobot command API client", "error", err)
+			} else {
+				client = commandClient
+			}
+			if syncManager, err := datasync.NewManager(cfg.ServerBaseURL, server, logger); err != nil {
+				logger.Warn("failed to create discobot data sync manager", "error", err)
+			} else {
+				server.syncManager = syncManager
+			}
 		}
 	}
+	server.commands = command.New(server, command.WithClient(client))
 	return server
 }
 
@@ -100,12 +119,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	s.setDevReloadCookie(w)
 	templ.Handler(content.Root(s.snapshot(r.Context()))).ServeHTTP(w, r)
 }
 
 func (s *Server) handleUIStream(w http.ResponseWriter, r *http.Request) {
 	sse := datastar.NewSSE(w, r)
-	if s.consumeDevReload() {
+	if s.shouldDevReload(r) {
 		if err := sse.ExecuteScript(`window.location.reload()`); err != nil {
 			s.logger.Warn("failed to send dev reload script", "error", err)
 		}
@@ -234,15 +254,29 @@ func (s *Server) subscribe() (<-chan struct{}, func()) {
 	return ch, cancel
 }
 
-func (s *Server) consumeDevReload() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+const devReloadCookie = "discobot_dev_reload_id"
 
-	if !s.devReloadNeeded {
+func (s *Server) setDevReloadCookie(w http.ResponseWriter) {
+	if !s.config.DevReload {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     devReloadCookie,
+		Value:    s.devReloadID,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *Server) shouldDevReload(r *http.Request) bool {
+	if !s.config.DevReload {
 		return false
 	}
-	s.devReloadNeeded = false
-	return true
+	cookie, err := r.Cookie(devReloadCookie)
+	if err != nil {
+		return true
+	}
+	return cookie.Value != s.devReloadID
 }
 
 func noStoreDynamicUI(next http.Handler) http.Handler {

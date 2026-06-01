@@ -1,0 +1,22 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
+
+templ ComposerWorkspaceMenu(workspaces []serverapi.Workspace, selectedWorkspaceID string) {
+	<div id="composer-workspace-menu-panel" class="max-w-[min(420px,calc(100vw-32px))] min-w-[340px] p-[6px] menu--panel" role="menu" hidden data-menu-panel>
+		if len(workspaces) > 0 {
+			<div class="px-[8px] pt-[6px] pb-[5px] text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">Existing workspaces</div>
+			<div class="grid gap-px">
+				for _, option := range helpers.ComposerWorkspaceOptions(workspaces, selectedWorkspaceID) {
+					@ComposerWorkspaceMenuItem(option)
+				}
+			</div>
+		} else {
+			<div class="px-[8px] py-[10px] text-[12px] text-[var(--muted-foreground)]">No workspaces yet.</div>
+		}
+		@ComposerWorkspaceCreateActions()
+	</div>
+}

@@ -1,13 +1,17 @@
 package ui
 
-templ Menu(menu MenuData) {
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+)
+
+templ Menu(menu helpers.MenuData) {
 	<div class="menu" data-menu>
 		<button
 			class="menu--trigger"
 			type="button"
 			aria-haspopup="menu"
 			aria-expanded="false"
-			aria-controls={ menuPanelID(menu.ID, "") }
+			aria-controls={ helpers.MenuPanelID(menu.ID, "") }
 			data-menu-trigger
 			data-menu-anchor-click?={ menu.AnchorToClick }
 		>

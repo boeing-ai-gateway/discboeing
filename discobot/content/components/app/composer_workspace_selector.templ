@@ -1,0 +1,32 @@
+package app
+
+import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
+	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
+
+templ ComposerWorkspaceSelector(workspaces []serverapi.Workspace, composerState state.ComposerPanelState) {
+	if composerState.WorkspaceSourceType != "" {
+		@ComposerWorkspaceSourceInput(composerState)
+	} else {
+		{{ selectedWorkspace := helpers.ComposerSelectedWorkspace(workspaces, composerState.SelectedWorkspaceID) }}
+		{{ selectedLabel := helpers.ComposerWorkspaceLabel(selectedWorkspace) }}
+		<div class="inline-flex min-w-0 menu" data-menu>
+			<button
+				class="composer-header--selector"
+				type="button"
+				aria-label="Select workspace"
+				aria-haspopup="menu"
+				aria-expanded="false"
+				aria-controls="composer-workspace-menu-panel"
+				data-menu-trigger
+			>
+				@IconFolder("icon-lg")
+				<span class="truncate">{ selectedLabel }</span>
+				@IconChevronDown("icon-14")
+			</button>
+			@ComposerWorkspaceMenu(workspaces, selectedWorkspace.ID)
+		</div>
+	}
+}

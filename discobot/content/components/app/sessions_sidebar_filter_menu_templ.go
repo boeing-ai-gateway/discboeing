@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"github.com/obot-platform/discobot/discobot/content/components/helpers"
 	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
@@ -34,7 +35,7 @@ func SessionsSidebarFilterMenu(view state.View) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = appui.Menu(sessionsSidebarFilterMenu(view)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = appui.Menu(helpers.SessionsSidebarFilterMenu(view, IconSliders("icon-sm"))).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

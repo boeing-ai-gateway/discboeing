@@ -28,6 +28,17 @@ func (m *Manager) listWorkspaces(ctx context.Context, projectID string) ([]serve
 	return workspaces, nil
 }
 
+func (m *Manager) listModels(ctx context.Context, projectID string) ([]serverapi.ModelInfo, error) {
+	var models []serverapi.ModelInfo
+	for model, err := range m.client.Project(projectID).Models.ListAvailableTo(ctx) {
+		if err != nil {
+			return nil, err
+		}
+		models = append(models, model)
+	}
+	return models, nil
+}
+
 func (m *Manager) listSessions(ctx context.Context, projectID string) ([]serverapi.Session, error) {
 	var sessions []serverapi.Session
 	for session, err := range m.client.Project(projectID).Sessions.List(ctx) {

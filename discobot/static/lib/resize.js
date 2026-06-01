@@ -31,6 +31,7 @@ const applyResizeSize = (handle, target, size) => {
 	const { min, max } = resizeBounds(handle);
 	const nextSize = clamp(size, min, max);
 	const value = `${nextSize}px`;
+	const workspaceGrid = target.closest?.(".app-workspace-grid");
 	const sessionWorkspace = target.matches?.(".session-workspace")
 		? target
 		: target.closest?.(".session-workspace") || target.querySelector?.(".session-workspace");
@@ -39,9 +40,11 @@ const applyResizeSize = (handle, target, size) => {
 		target.style.height = value;
 		target.style.flexBasis = value;
 		target.style.setProperty("--terminal-panel-height", value);
-		target.style.setProperty("--composer-prompt-height", value);
 		if (target.matches(".terminal-panel")) {
 			sessionWorkspace?.style.setProperty("--terminal-panel-height", value);
+		}
+		if (target.matches(".panel-terminal")) {
+			workspaceGrid?.style.setProperty("--terminal-panel-height", value);
 		}
 	} else {
 		target.style.width = value;
@@ -49,6 +52,9 @@ const applyResizeSize = (handle, target, size) => {
 		target.style.setProperty("--composer-side-pane-width", value);
 		if (target.matches(".session-workspace, .panel-composer")) {
 			sessionWorkspace?.style.setProperty("--composer-side-pane-width", value);
+		}
+		if (target.matches(".panel-composer")) {
+			workspaceGrid?.style.setProperty("--composer-side-pane-width", value);
 		}
 	}
 
