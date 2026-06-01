@@ -616,7 +616,7 @@ func TestConvertTools(t *testing.T) {
 				InputSchema: json.RawMessage(`{"type":"object","properties":{"location":{"type":"string"}}}`),
 			},
 		}
-		result := convertTools(tools, nil)
+		result := convertTools(tools, nil, openAIWebSearchType)
 		if len(result) != 1 {
 			t.Fatalf("expected 1 tool, got %d", len(result))
 		}
@@ -636,7 +636,7 @@ func TestConvertTools(t *testing.T) {
 		tools := []providers.ToolDefinition{
 			{Name: "fn", InputSchema: json.RawMessage(`{}`)},
 		}
-		result := convertTools(tools, nil)
+		result := convertTools(tools, nil, openAIWebSearchType)
 		if _, ok := result[0]["description"]; ok {
 			t.Error("expected description to be omitted when empty")
 		}
@@ -655,7 +655,7 @@ func TestConvertTools(t *testing.T) {
 				},
 			},
 		}
-		result := convertTools(tools, map[string]struct{}{"apply_patch": {}})
+		result := convertTools(tools, map[string]struct{}{"apply_patch": {}}, openAIWebSearchType)
 		if got := result[0]["type"]; got != "custom" {
 			t.Fatalf("expected custom tool type, got %v", got)
 		}
@@ -685,7 +685,7 @@ func TestConvertTools(t *testing.T) {
 				},
 			},
 		}
-		result := convertTools(tools, nil)
+		result := convertTools(tools, nil, openAIWebSearchType)
 		if got := result[0]["type"]; got != "function" {
 			t.Fatalf("expected function tool type, got %v", got)
 		}
@@ -694,8 +694,130 @@ func TestConvertTools(t *testing.T) {
 		}
 	})
 
+	t.Run("maps discobot web search to server-side tool", func(t *testing.T) {
+		tools := []providers.ToolDefinition{
+			{
+				Name: webSearchToolName,
+				InputSchema: json.RawMessage(`{
+					"type":"object",
+					"additionalProperties":false,
+					"properties":{
+						"query":{"type":"string","minLength":2},
+						"allowed_domains":{"type":"array","items":{"type":"string"}},
+						"blocked_domains":{"type":"array","items":{"type":"string"}}
+					},
+					"required":["query"]
+				}`),
+			},
+		}
+
+		result := convertTools(tools, nil, openAIWebSearchType)
+		if got := result[0]["type"]; got != openAIWebSearchType {
+			t.Fatalf("expected OpenAI web search tool type, got %v", got)
+		}
+		if got := result[0]["external_web_access"]; got != true {
+			t.Fatalf("expected live web search access, got %v", got)
+		}
+		if _, ok := result[0]["name"]; ok {
+			t.Fatal("expected server-side web search tool to omit function name")
+		}
+		if _, ok := result[0]["parameters"]; ok {
+			t.Fatal("expected server-side web search tool to omit function parameters")
+		}
+	})
+
+	t.Run("maps discobot web fetch to server-side web search tool", func(t *testing.T) {
+		tools := []providers.ToolDefinition{
+			{
+				Name: "WebFetch",
+				InputSchema: json.RawMessage(`{
+					"type":"object",
+					"additionalProperties":false,
+					"properties":{
+						"url":{"type":"string","format":"uri"},
+						"prompt":{"type":"string"}
+					},
+					"required":["url"]
+				}`),
+			},
+		}
+
+		result := convertTools(tools, nil, openAIWebSearchType)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 tool, got %d", len(result))
+		}
+		if got := result[0]["type"]; got != openAIWebSearchType {
+			t.Fatalf("expected OpenAI web search tool type, got %v", got)
+		}
+	})
+
+	t.Run("deduplicates discobot web search and fetch native tool", func(t *testing.T) {
+		tools := []providers.ToolDefinition{
+			{
+				Name: webSearchToolName,
+				InputSchema: json.RawMessage(`{
+					"type":"object",
+					"properties":{
+						"query":{"type":"string"},
+						"allowed_domains":{"type":"array","items":{"type":"string"}},
+						"blocked_domains":{"type":"array","items":{"type":"string"}}
+					},
+					"required":["query"]
+				}`),
+			},
+			{
+				Name: "WebFetch",
+				InputSchema: json.RawMessage(`{
+					"type":"object",
+					"properties":{
+						"url":{"type":"string","format":"uri"},
+						"prompt":{"type":"string"}
+					},
+					"required":["url"]
+				}`),
+			},
+		}
+
+		result := convertTools(tools, nil, openAIWebSearchType)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 native web tool, got %d", len(result))
+		}
+		if got := result[0]["type"]; got != openAIWebSearchType {
+			t.Fatalf("expected OpenAI web search tool type, got %v", got)
+		}
+	})
+
+	t.Run("maps discobot web search to function when server-side search disabled", func(t *testing.T) {
+		tools := []providers.ToolDefinition{
+			{
+				Name:        webSearchToolName,
+				Description: "Search the public web",
+				InputSchema: json.RawMessage(`{
+					"type":"object",
+					"properties":{
+						"query":{"type":"string"},
+						"allowed_domains":{"type":"array","items":{"type":"string"}},
+						"blocked_domains":{"type":"array","items":{"type":"string"}}
+					},
+					"required":["query"]
+				}`),
+			},
+		}
+
+		result := convertTools(tools, nil, "")
+		if got := result[0]["type"]; got != "function" {
+			t.Fatalf("expected function tool type, got %v", got)
+		}
+		if got := result[0]["name"]; got != webSearchToolName {
+			t.Fatalf("expected function name %q, got %v", webSearchToolName, got)
+		}
+		if _, ok := result[0]["parameters"]; !ok {
+			t.Fatal("expected function parameters")
+		}
+	})
+
 	t.Run("nil tools returns nil", func(t *testing.T) {
-		result := convertTools(nil, nil)
+		result := convertTools(nil, nil, openAIWebSearchType)
 		if result != nil {
 			t.Errorf("expected nil, got %v", result)
 		}
@@ -1005,6 +1127,87 @@ func TestParseSSEStream(t *testing.T) {
 		finish := chunks[3].(message.FinishChunk)
 		if finish.FinishReason.Unified != "tool-calls" {
 			t.Fatalf("expected finish reason tool-calls, got %q", finish.FinishReason.Unified)
+		}
+	})
+
+	t.Run("server-side web search call and citations", func(t *testing.T) {
+		sse := buildSSE(
+			"response.created", `{"response":{"id":"resp_search","model":"gpt-5.5"}}`,
+			"response.output_item.added", `{"item":{"id":"ws_1","type":"web_search_call","status":"in_progress"}}`,
+			"response.output_item.done", `{"item":{"id":"ws_1","type":"web_search_call","status":"completed","action":{"type":"search","query":"latest Go version"}}}`,
+			"response.output_item.added", `{"item":{"id":"msg_1","type":"message","role":"assistant"}}`,
+			"response.content_part.added", `{"part":{"type":"output_text"},"item_id":"msg_1"}`,
+			"response.output_text.delta", `{"item_id":"msg_1","delta":"Go 1.26 is current."}`,
+			"response.output_text.done", `{"item_id":"msg_1","text":"Go 1.26 is current.","annotations":[{"type":"url_citation","url":"https://go.dev/doc/","title":"Go Documentation"}]}`,
+			"response.output_item.done", `{"item":{"id":"msg_1","type":"message"}}`,
+			"response.completed", `{"response":{"status":"completed","output":[{"type":"web_search_call"},{"type":"message"}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+		)
+
+		chunks := collectChunks(t, sse)
+		assertChunkTypes(t, chunks,
+			"stream-start",
+			"response-metadata",
+			"tool-call",
+			"tool-result",
+			"text-start",
+			"text-delta",
+			"text-end",
+			"source",
+			"finish",
+		)
+
+		call := chunks[2].(message.ToolCallChunk)
+		if call.ToolCallID != "ws_1" || call.ToolName != webSearchToolName {
+			t.Fatalf("unexpected web search call: %#v", call)
+		}
+		if call.Input != `{"type":"search","query":"latest Go version"}` {
+			t.Fatalf("unexpected web search input: %q", call.Input)
+		}
+		if call.ProviderExecuted == nil || !*call.ProviderExecuted {
+			t.Fatal("expected web search call to be marked provider-executed")
+		}
+
+		result := chunks[3].(message.ToolResultChunk)
+		if result.ToolCallID != "ws_1" || result.ToolName != webSearchToolName {
+			t.Fatalf("unexpected web search result: %#v", result)
+		}
+
+		source := chunks[7].(message.SourceChunk)
+		if source.URL != "https://go.dev/doc/" || source.Title != "Go Documentation" {
+			t.Fatalf("unexpected source chunk: %#v", source)
+		}
+
+		finish := chunks[8].(message.FinishChunk)
+		if finish.FinishReason.Unified != "stop" {
+			t.Fatalf("expected finish reason stop, got %q", finish.FinishReason.Unified)
+		}
+	})
+
+	t.Run("emits citations from completed response output", func(t *testing.T) {
+		sse := buildSSE(
+			"response.created", `{"response":{"id":"resp_completed_citation","model":"gpt-5.5"}}`,
+			"response.output_item.added", `{"item":{"id":"msg_1","type":"message","role":"assistant"}}`,
+			"response.content_part.added", `{"part":{"type":"output_text"},"item_id":"msg_1"}`,
+			"response.output_text.delta", `{"item_id":"msg_1","delta":"Discobot lives on GitHub."}`,
+			"response.output_text.done", `{"item_id":"msg_1","text":"Discobot lives on GitHub."}`,
+			"response.output_item.done", `{"item":{"id":"msg_1","type":"message"}}`,
+			"response.completed", `{"response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Discobot lives on GitHub.","annotations":[{"type":"url_citation","url":"https://github.com/obot-platform/discobot","title":"Discobot"}]}]}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+		)
+
+		chunks := collectChunks(t, sse)
+		assertChunkTypes(t, chunks,
+			"stream-start",
+			"response-metadata",
+			"text-start",
+			"text-delta",
+			"text-end",
+			"source",
+			"finish",
+		)
+
+		source := chunks[5].(message.SourceChunk)
+		if source.URL != "https://github.com/obot-platform/discobot" || source.Title != "Discobot" {
+			t.Fatalf("unexpected source chunk: %#v", source)
 		}
 	})
 
@@ -1588,9 +1791,11 @@ func assertChunkTypes(t *testing.T, chunks []message.ProviderMessageChunk, expec
 		"tool-input-delta":  "message.ToolInputDeltaChunk",
 		"tool-input-end":    "message.ToolInputEndChunk",
 		"tool-call":         "message.ToolCallChunk",
+		"tool-result":       "message.ToolResultChunk",
 		"reasoning-start":   "message.ReasoningStartChunk",
 		"reasoning-delta":   "message.ReasoningDeltaChunk",
 		"reasoning-end":     "message.ReasoningEndChunk",
+		"source":            "message.SourceChunk",
 		"finish":            "message.FinishChunk",
 	}
 

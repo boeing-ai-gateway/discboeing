@@ -32,6 +32,8 @@ const (
 	codexDefaultBaseURL   = "wss://chatgpt.com/backend-api/codex"
 	codexProviderID       = "codex"
 	missingToolOutputText = "interrupted by transient system failure"
+	webSearchToolName     = "WebSearch"
+	openAIWebSearchType   = "web_search"
 )
 
 func init() {
@@ -138,7 +140,7 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 		if !p.isCodex {
 			body["truncation"] = "disabled"
 		}
-		if tools := convertTools(req.Tools, customToolNameSet); len(tools) > 0 {
+		if tools := convertTools(req.Tools, customToolNameSet, openAIWebSearchType); len(tools) > 0 {
 			body["tools"] = tools
 		}
 		if req.MaxTokens != nil {
@@ -507,6 +509,9 @@ func convertAssistantMessage(msg message.Message, customToolNames map[string]str
 				messageItemID = p.ID
 			}
 		case message.ToolCallPart:
+			if isProviderExecutedWebSearchCall(p) {
+				continue
+			}
 			callType := "function_call"
 			payload := map[string]any{
 				"type":    callType,
@@ -526,6 +531,9 @@ func convertAssistantMessage(msg message.Message, customToolNames map[string]str
 			}
 			toolCallItems = append(toolCallItems, data)
 		case message.ToolResultPart:
+			if p.ToolName == webSearchToolName {
+				continue
+			}
 			outputType := toolOutputType(p.ToolName, customToolNames)
 			data, err := json.Marshal(map[string]any{
 				"type":    outputType,
@@ -614,6 +622,9 @@ func convertToolMessage(msg message.Message, customToolNames map[string]struct{}
 	for _, part := range msg.Parts {
 		tr, ok := part.(message.ToolResultPart)
 		if !ok {
+			continue
+		}
+		if tr.ToolName == webSearchToolName {
 			continue
 		}
 		outputType := toolOutputType(tr.ToolName, customToolNames)
@@ -809,12 +820,23 @@ func contentOutputToOpenAIItems(contentOutput message.ContentOutput) ([]any, boo
 // --- Tool conversion ---
 
 // convertTools maps our ToolDefinition to Responses API function/custom tools.
-func convertTools(tools []providers.ToolDefinition, customToolNames map[string]struct{}) []map[string]any {
+func convertTools(tools []providers.ToolDefinition, customToolNames map[string]struct{}, serverSideWebSearchType string) []map[string]any {
 	if len(tools) == 0 {
 		return nil
 	}
-	result := make([]map[string]any, len(tools))
-	for i, t := range tools {
+	result := make([]map[string]any, 0, len(tools))
+	includedNativeWebSearch := false
+	for _, t := range tools {
+		if serverSideWebSearchType != "" && isDiscobotWebTool(t) {
+			if !includedNativeWebSearch {
+				result = append(result, map[string]any{
+					"type":                serverSideWebSearchType,
+					"external_web_access": true,
+				})
+				includedNativeWebSearch = true
+			}
+			continue
+		}
 		if isCustomTool(t.Name, customToolNames) && t.Format != nil {
 			tool := map[string]any{
 				"type": "custom",
@@ -828,7 +850,7 @@ func convertTools(tools []providers.ToolDefinition, customToolNames map[string]s
 			if t.Description != "" {
 				tool["description"] = t.Description
 			}
-			result[i] = tool
+			result = append(result, tool)
 			continue
 		}
 
@@ -840,9 +862,61 @@ func convertTools(tools []providers.ToolDefinition, customToolNames map[string]s
 		if t.Description != "" {
 			tool["description"] = t.Description
 		}
-		result[i] = tool
+		result = append(result, tool)
 	}
 	return result
+}
+
+func isProviderExecutedWebSearchCall(call message.ToolCallPart) bool {
+	return call.ToolName == webSearchToolName && call.ProviderExecuted != nil && *call.ProviderExecuted
+}
+
+func isDiscobotWebSearchTool(tool providers.ToolDefinition) bool {
+	if tool.Type != "" || tool.Name != webSearchToolName || tool.Format != nil {
+		return false
+	}
+	var schema struct {
+		Type       string `json:"type"`
+		Properties struct {
+			Query         json.RawMessage `json:"query"`
+			AllowedDomain json.RawMessage `json:"allowed_domains"`
+			BlockedDomain json.RawMessage `json:"blocked_domains"`
+		} `json:"properties"`
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+		return false
+	}
+	if schema.Type != "object" || len(schema.Properties.Query) == 0 ||
+		len(schema.Properties.AllowedDomain) == 0 || len(schema.Properties.BlockedDomain) == 0 {
+		return false
+	}
+	return len(schema.Required) == 1 && schema.Required[0] == "query"
+}
+
+func isDiscobotWebFetchTool(tool providers.ToolDefinition) bool {
+	if tool.Type != "" || tool.Name != "WebFetch" || tool.Format != nil {
+		return false
+	}
+	var schema struct {
+		Type       string `json:"type"`
+		Properties struct {
+			URL    json.RawMessage `json:"url"`
+			Prompt json.RawMessage `json:"prompt"`
+		} `json:"properties"`
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+		return false
+	}
+	if schema.Type != "object" || len(schema.Properties.URL) == 0 || len(schema.Properties.Prompt) == 0 {
+		return false
+	}
+	return len(schema.Required) == 1 && schema.Required[0] == "url"
+}
+
+func isDiscobotWebTool(tool providers.ToolDefinition) bool {
+	return isDiscobotWebSearchTool(tool) || isDiscobotWebFetchTool(tool)
 }
 
 // --- SSE stream parsing ---
@@ -856,6 +930,7 @@ func convertTools(tools []providers.ToolDefinition, customToolNames map[string]s
 type streamState struct {
 	itemCallIDs            map[string]string // item_id → call_id for function_call items
 	functionCallArgsStream map[string]bool   // call_id → whether any argument delta was emitted
+	emittedSourceIDs       map[string]bool
 	sawToolCall            bool
 }
 
@@ -865,6 +940,7 @@ func parseSSEStream(body io.Reader, yield func(message.ProviderMessageChunk, err
 	state := &streamState{
 		itemCallIDs:            make(map[string]string),
 		functionCallArgsStream: make(map[string]bool),
+		emittedSourceIDs:       make(map[string]bool),
 	}
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -907,7 +983,7 @@ func (s *streamState) handleSSEEvent(eventType string, data []byte, yield func(m
 	case "response.output_text.delta":
 		return handleTextDelta(data, yield)
 	case "response.output_text.done":
-		return handleTextDone(data, yield)
+		return s.handleTextDone(data, yield)
 	case "response.function_call_arguments.delta":
 		return s.handleFunctionCallDelta(data, yield)
 	case "response.function_call_arguments.done":
@@ -976,6 +1052,8 @@ func (s *streamState) handleOutputItemAdded(data []byte, yield func(message.Prov
 	case "custom_tool_call":
 		s.sawToolCall = true
 		return true
+	case "web_search_call":
+		return true
 	case "reasoning":
 		return yield(message.ReasoningStartChunk{ID: event.Item.ID}, nil)
 	}
@@ -1027,9 +1105,36 @@ func (s *streamState) handleOutputItemDone(data []byte, yield func(message.Provi
 			ToolName:   item.Name,
 			Input:      item.Input,
 		}, nil)
+	case "web_search_call":
+		input := webSearchCallInput(event.Item)
+		if !yield(message.ToolCallChunk{
+			ToolCallID:       itemHeader.ID,
+			ToolName:         webSearchToolName,
+			Input:            input,
+			ProviderExecuted: new(true),
+		}, nil) {
+			return false
+		}
+		return yield(message.ToolResultChunk{
+			ToolCallID:       itemHeader.ID,
+			ToolName:         webSearchToolName,
+			Result:           event.Item,
+			IsError:          new(false),
+			ProviderMetadata: event.Item,
+		}, nil)
 	default:
 		return true
 	}
+}
+
+func webSearchCallInput(item json.RawMessage) string {
+	var parsed struct {
+		Action json.RawMessage `json:"action"`
+	}
+	if err := json.Unmarshal(item, &parsed); err != nil || len(parsed.Action) == 0 {
+		return `{}`
+	}
+	return string(parsed.Action)
 }
 
 func handleContentPartAdded(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
@@ -1059,14 +1164,43 @@ func handleTextDelta(data []byte, yield func(message.ProviderMessageChunk, error
 	return yield(message.TextDeltaChunk{ID: event.ItemID, Delta: event.Delta}, nil)
 }
 
-func handleTextDone(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
+type urlCitationAnnotation struct {
+	Type  string `json:"type"`
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
+func (s *streamState) handleTextDone(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
 	var event struct {
-		ItemID string `json:"item_id"`
+		ItemID      string                  `json:"item_id"`
+		Annotations []urlCitationAnnotation `json:"annotations"`
 	}
 	if err := json.Unmarshal(data, &event); err != nil {
 		return yield(nil, fmt.Errorf("openai: parse output_text.done: %w", err))
 	}
-	return yield(message.TextEndChunk{ID: event.ItemID}, nil)
+	if !yield(message.TextEndChunk{ID: event.ItemID}, nil) {
+		return false
+	}
+	return s.yieldSourceAnnotations(event.Annotations, yield)
+}
+
+func (s *streamState) yieldSourceAnnotations(annotations []urlCitationAnnotation, yield func(message.ProviderMessageChunk, error) bool) bool {
+	for _, annotation := range annotations {
+		url := strings.TrimSpace(annotation.URL)
+		if annotation.Type != "url_citation" || url == "" || s.emittedSourceIDs[url] {
+			continue
+		}
+		s.emittedSourceIDs[url] = true
+		if !yield(message.SourceChunk{
+			SourceType: "url",
+			SourceID:   url,
+			URL:        url,
+			Title:      annotation.Title,
+		}, nil) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *streamState) handleFunctionCallDelta(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {
@@ -1128,7 +1262,11 @@ func (s *streamState) handleResponseCompleted(data []byte, yield func(message.Pr
 		Response struct {
 			Status string `json:"status"`
 			Output []struct {
-				Type string `json:"type"`
+				Type    string `json:"type"`
+				Content []struct {
+					Type        string                  `json:"type"`
+					Annotations []urlCitationAnnotation `json:"annotations"`
+				} `json:"content"`
 			} `json:"output"`
 			Usage responseUsage `json:"usage"`
 		} `json:"response"`
@@ -1143,6 +1281,17 @@ func (s *streamState) handleResponseCompleted(data []byte, yield func(message.Pr
 			if item.Type == "function_call" || item.Type == "custom_tool_call" {
 				hasToolCalls = true
 				break
+			}
+		}
+	}
+
+	for _, item := range event.Response.Output {
+		if item.Type != "message" {
+			continue
+		}
+		for _, content := range item.Content {
+			if content.Type == "output_text" && !s.yieldSourceAnnotations(content.Annotations, yield) {
+				return false
 			}
 		}
 	}

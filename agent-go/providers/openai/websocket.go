@@ -506,6 +506,7 @@ func parseWebSocketStream(ctx context.Context, conn *websocket.Conn, yield func(
 	state := &streamState{
 		itemCallIDs:            make(map[string]string),
 		functionCallArgsStream: make(map[string]bool),
+		emittedSourceIDs:       make(map[string]bool),
 	}
 
 	for {
