@@ -15,6 +15,7 @@ type HookRunStatus struct {
 	HookID              string `json:"hookId"`
 	HookName            string `json:"hookName"`
 	Type                string `json:"type"`
+	Engine              string `json:"engine,omitempty"`
 	Phase               string `json:"phase,omitempty"`
 	LastRunAt           string `json:"lastRunAt"`
 	LastResult          string `json:"lastResult"` // "success", "failure", "running", or "pending"
@@ -36,10 +37,12 @@ func SetHookPending(hooksDataDir string, hook Hook) error {
 			HookID:   hook.ID,
 			HookName: hook.Name,
 			Type:     string(hook.Type),
+			Engine:   string(hook.Engine),
 		}
 	}
 	existing.HookName = hook.Name
 	existing.Type = string(hook.Type)
+	existing.Engine = string(hook.Engine)
 	existing.Phase = hook.Phase
 	existing.LastResult = "pending"
 	existing.OutputPath = GetHookOutputPath(hooksDataDir, hook.ID)
@@ -126,8 +129,12 @@ func SetHookExecutionPaused(hooksDataDir string, hook Hook, paused bool) error {
 			HookID:   hook.ID,
 			HookName: hook.Name,
 			Type:     string(hook.Type),
+			Engine:   string(hook.Engine),
 		}
 	}
+	existing.HookName = hook.Name
+	existing.Type = string(hook.Type)
+	existing.Engine = string(hook.Engine)
 	if existing.ExecutionPaused == paused {
 		return nil
 	}
@@ -146,11 +153,13 @@ func SetHookRunning(hooksDataDir string, hook Hook) error {
 			HookID:   hook.ID,
 			HookName: hook.Name,
 			Type:     string(hook.Type),
+			Engine:   string(hook.Engine),
 		}
 	}
 
 	existing.LastRunAt = time.Now().UTC().Format(time.RFC3339)
 	existing.LastResult = "running"
+	existing.Engine = string(hook.Engine)
 	existing.Phase = hook.Phase
 	existing.OutputPath = GetHookOutputPath(hooksDataDir, hook.ID)
 
@@ -209,11 +218,13 @@ func UpdateHookStatus(hooksDataDir string, result HookResult, outputPath string,
 			HookID:   result.Hook.ID,
 			HookName: result.Hook.Name,
 			Type:     string(result.Hook.Type),
+			Engine:   string(result.Hook.Engine),
 		}
 	}
 
 	existing.RunCount++
 	existing.LastExitCode = result.ExitCode
+	existing.Engine = string(result.Hook.Engine)
 	existing.Phase = result.Hook.Phase
 	existing.OutputPath = outputPath
 

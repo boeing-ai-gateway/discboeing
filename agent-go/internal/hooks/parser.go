@@ -28,8 +28,9 @@ const (
 type HookEngine string
 
 const (
-	HookEngineScript HookEngine = "script"
-	HookEngineAI     HookEngine = "ai"
+	HookEngineScript  HookEngine = "script"
+	HookEngineAI      HookEngine = "ai"
+	HookEngineBuiltin HookEngine = "builtin"
 )
 
 // Hook represents a discovered hook definition.

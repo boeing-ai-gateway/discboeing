@@ -713,6 +713,60 @@ Review Go changes.
 	}
 }
 
+func TestEvaluateFileHooks_BuiltinShadowSnapshotCreatesRefAndStatus(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	runGit(t, workspaceRoot, "init")
+	runGit(t, workspaceRoot, "config", "user.name", "Test User")
+	runGit(t, workspaceRoot, "config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "README.md"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(README.md) failed: %v", err)
+	}
+	runGit(t, workspaceRoot, "add", "README.md")
+	runGit(t, workspaceRoot, "commit", "-m", "initial")
+
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	result := mgr.EvaluateFileHooks()
+	if result.ShouldReprompt {
+		t.Fatal("expected hidden snapshot hook not to request reprompt")
+	}
+
+	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/snapshots/session-123")
+	commit := runGit(t, workspaceRoot, "rev-parse", ref)
+	files := runGit(t, workspaceRoot, "diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+	if !strings.Contains(files, "main.go") {
+		t.Fatalf("snapshot commit files = %q, want main.go", files)
+	}
+
+	status := mgr.GetStatus()
+	snapshotStatus, ok := status.Hooks[builtinShadowSnapshotHookID]
+	if !ok {
+		t.Fatalf("expected built-in snapshot hook in status: %#v", status.Hooks)
+	}
+	if snapshotStatus.Engine != string(HookEngineBuiltin) {
+		t.Fatalf("snapshot hook engine = %q, want %q", snapshotStatus.Engine, HookEngineBuiltin)
+	}
+	if snapshotStatus.LastResult != "success" {
+		t.Fatalf("snapshot hook result = %q, want success", snapshotStatus.LastResult)
+	}
+	for _, hookID := range status.PendingHooks {
+		if hookID == builtinShadowSnapshotHookID {
+			t.Fatalf("built-in snapshot hook should not be pending: %#v", status.PendingHooks)
+		}
+	}
+}
+
 func TestEvaluateFileHooks_DoesNotMissFilesChangedDuringHookRun(t *testing.T) {
 	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
@@ -1568,4 +1622,15 @@ func (a *testAIHookAgent) FinalResponse(threadID string) (string, error) {
 		return "", nil
 	}
 	return a.finalResponses[threadID], nil
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(string(out))
 }

@@ -384,7 +384,7 @@ func (m *Manager) loadHooks() error {
 		return fmt.Errorf("discover hooks: %w", err)
 	}
 
-	m.fileHooks = nil
+	m.fileHooks = []Hook{builtinShadowSnapshotHook()}
 	m.sessionHooks = nil
 	m.preCommitHooks = nil
 
@@ -553,16 +553,24 @@ func (m *Manager) GetStatus() StatusFile {
 	m.mu.Unlock()
 	status := LoadStatus(m.hooksDataDir)
 	for _, hook := range knownHooks {
-		if _, ok := status.Hooks[hook.ID]; ok {
-			continue
+		hookStatus, ok := status.Hooks[hook.ID]
+		if !ok {
+			hookStatus = HookRunStatus{
+				HookID:     hook.ID,
+				HookName:   hook.Name,
+				Type:       string(hook.Type),
+				Engine:     string(hook.Engine),
+				LastResult: "pending",
+				OutputPath: GetHookOutputPath(m.hooksDataDir, hook.ID),
+			}
+		} else {
+			hookStatus.HookName = hook.Name
+			hookStatus.Type = string(hook.Type)
+			hookStatus.Engine = string(hook.Engine)
+			hookStatus.Phase = hook.Phase
+			hookStatus.OutputPath = GetHookOutputPath(m.hooksDataDir, hook.ID)
 		}
-		status.Hooks[hook.ID] = HookRunStatus{
-			HookID:     hook.ID,
-			HookName:   hook.Name,
-			Type:       string(hook.Type),
-			LastResult: "pending",
-			OutputPath: GetHookOutputPath(m.hooksDataDir, hook.ID),
-		}
+		status.Hooks[hook.ID] = hookStatus
 	}
 	return status
 }
@@ -736,6 +744,15 @@ type runHookOptions struct {
 }
 
 func (m *Manager) runHook(hook Hook, opts runHookOptions) HookResult {
+	if hook.Engine == HookEngineBuiltin {
+		return runBuiltinHook(hook, ExecuteOptions{
+			Cwd:          m.workspaceRoot,
+			Env:          opts.env,
+			ChangedFiles: opts.changedFiles,
+			SessionID:    m.sessionID,
+			OutputPath:   opts.outputPath,
+		})
+	}
 	if hook.Engine == HookEngineAI {
 		return m.runAIHook(hook, opts)
 	}
@@ -974,17 +991,30 @@ func (m *Manager) evaluateFileHooks(threadID, hookModel string, forcePending boo
 	}
 	m.mu.Lock()
 	m.checkAndReloadHooks()
-	fileHooks := make([]Hook, len(m.fileHooks))
-	copy(fileHooks, m.fileHooks)
+	allFileHooks := make([]Hook, len(m.fileHooks))
+	copy(allFileHooks, m.fileHooks)
 	m.mu.Unlock()
 
-	if len(fileHooks) == 0 {
+	if len(allFileHooks) == 0 {
 		return noAction
+	}
+	var builtinFileHooks, fileHooks []Hook
+	for _, hook := range allFileHooks {
+		if hook.Engine == HookEngineBuiltin {
+			builtinFileHooks = append(builtinFileHooks, hook)
+		} else {
+			fileHooks = append(fileHooks, hook)
+		}
 	}
 
 	// Find files changed since marker
 	globalIgnorePatterns := m.globalIgnorePatterns()
 	newFiles := filterIgnoredFiles(m.findChangedFilesSinceMarker(), globalIgnorePatterns)
+	allDirty := filterIgnoredFiles(DirtyFiles(m.workspaceRoot), globalIgnorePatterns)
+
+	if len(newFiles) > 0 {
+		m.runBuiltinFileHooks(builtinFileHooks, newFiles, allDirty)
+	}
 
 	addedNewPending := false
 	if len(newFiles) > 0 {
@@ -1033,9 +1063,6 @@ func (m *Manager) evaluateFileHooks(threadID, hookModel string, forcePending boo
 	if len(newFiles) == 0 && !addedNewPending && !forcePending && !hasPhaseEligiblePending {
 		return noAction
 	}
-
-	// Get all dirty files for pattern matching
-	allDirty := filterIgnoredFiles(DirtyFiles(m.workspaceRoot), globalIgnorePatterns)
 
 	for _, hookID := range pendingIDs {
 		hook, ok := hooksByID[hookID]
@@ -1103,6 +1130,35 @@ func (m *Manager) evaluateFileHooks(threadID, hookModel string, forcePending boo
 
 	// All pending hooks cleared
 	return FileHookEvalResult{Evaluated: true}
+}
+
+func (m *Manager) runBuiltinFileHooks(hooks []Hook, newFiles, allDirty []string) {
+	for _, hook := range hooks {
+		if hook.Pattern == "" || len(matchHookFiles(newFiles, hook)) == 0 {
+			continue
+		}
+		matching := matchHookFiles(allDirty, hook)
+		if len(matching) == 0 {
+			continue
+		}
+		outputPath := GetHookOutputPath(m.hooksDataDir, hook.ID)
+		_ = SetHookRunning(m.hooksDataDir, hook)
+		m.emitCurrentStatusChunk()
+
+		runCutoff := time.Now()
+		result := m.runHook(hook, runHookOptions{
+			env:          m.visibleEnvSnapshot(),
+			changedFiles: matching,
+			outputPath:   outputPath,
+		})
+		_ = UpdateHookStatus(m.hooksDataDir, result, outputPath, runCutoff)
+		_ = UpdateLastEvaluatedAt(m.hooksDataDir)
+		m.emitCurrentStatusChunk()
+
+		if !result.Success {
+			log.Printf("hooks: built-in hook %q failed: %s", hook.ID, strings.TrimSpace(result.Output))
+		}
+	}
 }
 
 // OnTurnComplete schedules post-turn hook evaluation and any needed re-prompt.

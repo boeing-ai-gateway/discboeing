@@ -48,6 +48,7 @@ func (h *Handler) hooksStatusResponse() api.HooksStatusResponse {
 			HookID:              s.HookID,
 			HookName:            s.HookName,
 			Type:                s.Type,
+			Engine:              s.Engine,
 			LastRunAt:           s.LastRunAt,
 			LastResult:          s.LastResult,
 			LastExitCode:        s.LastExitCode,
