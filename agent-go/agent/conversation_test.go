@@ -1002,12 +1002,14 @@ func TestConversationManager_SubscribeEphemeral_ReceivesMultipleLiveChunks(t *te
 
 func TestConversationManager_ResumeInterruptedTurns(t *testing.T) {
 	resumeCh := make(chan string, 2)
+	reqCh := make(chan PromptRequest, 2)
 	agent := &mockAgent{
 		threads:            []string{"thread-a", "thread-b"},
 		interruptedThreads: []string{"thread-b"},
-		resumeFn: func(_ context.Context, threadID string, _ PromptRequest) (ResumeResult, error) {
+		resumeFn: func(_ context.Context, threadID string, req PromptRequest) (ResumeResult, error) {
 			if threadID == "thread-b" {
 				resumeCh <- threadID
+				reqCh <- req
 			}
 			return ResumeResult{Stream: func(_ func(message.MessageChunk, error) bool) {}}, nil
 		},
@@ -1023,6 +1025,25 @@ func TestConversationManager_ResumeInterruptedTurns(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for resume call")
+	}
+	select {
+	case req := <-reqCh:
+		if len(req.UserParts) != 1 {
+			t.Fatalf("expected one recovery user part, got %d", len(req.UserParts))
+		}
+		textPart, ok := req.UserParts[0].(message.UITextPart)
+		if !ok {
+			t.Fatalf("expected UITextPart, got %T", req.UserParts[0])
+		}
+		if !strings.Contains(textPart.Text, "transient system issue") || !strings.Contains(textPart.Text, "Continue the process if needed") {
+			t.Fatalf("unexpected recovery message: %q", textPart.Text)
+		}
+		meta, ok := message.UnmarshalProviderMetadata(textPart.ProviderMetadata)
+		if !ok || meta.ReminderKind != "startup-interruption" {
+			t.Fatalf("expected startup-interruption metadata, got %#v (ok=%t)", meta, ok)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for recovery request")
 	}
 }
 

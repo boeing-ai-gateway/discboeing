@@ -29,7 +29,7 @@ func Run(cfg *config.Config) {
 		return
 	}
 
-	runtimeHandler, cleanup, runStartupHooks, err := buildRuntimeHandler(cfg, runtimeInitialCredentials{})
+	runtimeHandler, cleanup, runStartup, err := buildRuntimeHandler(cfg, runtimeInitialCredentials{})
 	if err != nil {
 		log.Fatalf("agent-api: initialize runtime: %v", err)
 	}
@@ -79,7 +79,7 @@ func Run(cfg *config.Config) {
 		}
 	}()
 
-	runStartupHooks(nil)
+	runStartup(nil)
 
 	// ── Graceful shutdown ────────────────────────────────────────────────────
 	quit := make(chan os.Signal, 1)

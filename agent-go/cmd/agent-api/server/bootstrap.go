@@ -147,7 +147,7 @@ func (s *bootstrapState) configure(base *config.Config, w http.ResponseWriter, r
 		return
 	}
 	emit(configureEvent{Status: "configuring", Message: "starting agent runtime"})
-	h, cleanup, runStartupHooks, err := buildRuntimeHandler(cfg, initialCreds)
+	h, cleanup, runStartup, err := buildRuntimeHandler(cfg, initialCreds)
 	if err != nil {
 		emit(configureEvent{Status: "error", Error: err.Error()})
 		return
@@ -157,7 +157,7 @@ func (s *bootstrapState) configure(base *config.Config, w http.ResponseWriter, r
 		emit(configureEvent{Status: "error", Error: "agent is already configured"})
 		return
 	}
-	runStartupHooks(func(message string) {
+	runStartup(func(message string) {
 		emit(configureEvent{Status: "configuring", Message: message})
 	})
 	emit(configureEvent{Status: "ready", Message: "agent API is ready"})

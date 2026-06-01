@@ -703,8 +703,25 @@ func (cm *ConversationManager) AddCompletionListener(listener CompletionListener
 	cm.listeners = append(cm.listeners, listener)
 }
 
-// ResumeInterruptedTurns starts resume conversations for any interrupted threads
-// that are not already running.
+const interruptedTurnStartupNotification = `<system-reminder>
+The previous agent response was interrupted because of a transient system issue. Continue the process if needed, using the persisted conversation history and current workspace state.
+</system-reminder>`
+
+func interruptedTurnStartupRequest() PromptRequest {
+	return PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{
+			Type:  "text",
+			Text:  interruptedTurnStartupNotification,
+			State: "done",
+			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ReminderKind: "startup-interruption",
+			}),
+		}},
+	}
+}
+
+// ResumeInterruptedTurns closes interrupted turns and starts fresh conversations
+// that tell the agent startup recovery happened.
 func (cm *ConversationManager) ResumeInterruptedTurns() error {
 	threads, err := cm.ListThreads()
 	if err != nil {
@@ -721,7 +738,8 @@ func (cm *ConversationManager) ResumeInterruptedTurns() error {
 		if !interrupted {
 			continue
 		}
-		if _, err := cm.Resume(threadID, PromptRequest{}); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
+		req := interruptedTurnStartupRequest()
+		if _, err := cm.Resume(threadID, req); err != nil && !strings.Contains(err.Error(), "completion_in_progress") {
 			return err
 		}
 	}

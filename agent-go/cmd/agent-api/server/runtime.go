@@ -74,7 +74,7 @@ func buildRuntimeHandler(cfg *config.Config, initialCreds runtimeInitialCredenti
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return runtime.routes(), runtime.close, runtime.runStartupHooks, nil
+	return runtime.routes(), runtime.close, runtime.runStartupTasks, nil
 }
 
 // newAgentRuntime wires the runtime in dependency order. The small init methods
@@ -238,6 +238,28 @@ func (r *agentRuntime) initHooks() {
 	r.hookManager.SetAIHookAgent(r.defaultAgent)
 	r.hookManager.SetAIHookEvaluator(hookEvaluationResolver{registry: r.providerRegistry})
 	r.hookManager.SetRepromptRunner(r.conversations, r.promptQueue)
+}
+
+func (r *agentRuntime) runStartupTasks(progress func(string)) {
+	r.resumeInterruptedTurns(progress)
+	r.runStartupHooks(progress)
+}
+
+func (r *agentRuntime) resumeInterruptedTurns(progress func(string)) {
+	if r.conversations == nil {
+		return
+	}
+	if progress != nil {
+		progress("scheduling interrupted agent work recovery")
+	}
+	go func() {
+		if err := r.conversations.ResumeInterruptedTurns(); err != nil {
+			log.Printf("warn: resume interrupted turns: %v", err)
+			if progress != nil {
+				progress("failed to resume interrupted agent work")
+			}
+		}
+	}()
 }
 
 func (r *agentRuntime) runStartupHooks(progress func(string)) {
