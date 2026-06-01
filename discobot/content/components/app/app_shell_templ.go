@@ -36,10 +36,10 @@ func AppShell(shell state.Shell) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		session, _ := selectedSession(shell.Data, shell.View)
 		sessionID := session.ID
-		sessionPanel := shell.View.PanelLayout.Panels["session"]
-		editorPanel := shell.View.PanelLayout.Panels["editor"]
-		composerPanel := shell.View.PanelLayout.Panels["composer"]
-		terminalPanel := shell.View.PanelLayout.Panels["terminal"]
+		sessionPanel := shell.View.GlobalPanelLayout.SessionSidebar
+		editorPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Editor
+		composerPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Conversation
+		terminalPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Terminal
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<main id=\"app-shell\" class=\"h-dvh overflow-hidden bg-[var(--surface-canvas)] text-[13px] text-[var(--foreground)] antialiased\"><style>\n\t\t\t.app-workspace-grid {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: minmax(0, auto) var(--workspace-gap) minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);\n\t\t\t\tgrid-template-rows: minmax(0, 1fr) var(--workspace-gap) minmax(0, 1fr);\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) {\n\t\t\t\tgrid-template-columns: minmax(0, 1fr);\n\t\t\t\tgrid-template-rows: minmax(0, 1fr);\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) > :not(.panel--maximized) {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.app-workspace-grid:has(> .panel--maximized) [data-discobot-resize] {\n\t\t\t\tdisplay: none;\n\t\t\t}\n\n\t\t\t.panel--maximized {\n\t\t\t\tgrid-column: 1 / -1 !important;\n\t\t\t\tgrid-row: 1 / -1 !important;\n\t\t\t}\n\n\t\t\t.panel > :not(.panel--controls) {\n\t\t\t\twidth: 100%;\n\t\t\t\theight: 100%;\n\t\t\t}\n\t\t</style><div class=\"flex h-full min-h-[720px] flex-col overflow-hidden bg-[var(--surface-canvas)]\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -72,7 +72,7 @@ func AppShell(shell state.Shell) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Panel("session", "Session", sessionPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Panel("session", "Session", state.PanelFrameOf(sessionPanel)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -112,7 +112,7 @@ func AppShell(shell state.Shell) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Panel("editor", "Editor", editorPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Panel("editor", "Editor", state.PanelFrameOf(editorPanel)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -152,7 +152,7 @@ func AppShell(shell state.Shell) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Panel("composer", "Session Workspace", composerPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Panel("composer", "Session Workspace", state.PanelFrameOf(composerPanel)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -193,7 +193,7 @@ func AppShell(shell state.Shell) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Panel("terminal", "Terminal", terminalPanel).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Panel("terminal", "Terminal", state.PanelFrameOf(terminalPanel)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

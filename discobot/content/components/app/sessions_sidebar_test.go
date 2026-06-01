@@ -249,8 +249,6 @@ func TestSessionHookSummaryPrioritizesRunning(t *testing.T) {
 
 func testViewWithSessionPanel(sessionState state.SessionPanelState) state.View {
 	view := state.DefaultView()
-	panel := state.EnsurePanel(&view, "session")
-	panel.Session = &sessionState
-	view.PanelLayout.Panels["session"] = panel
+	view.GlobalPanelLayout.SessionSidebar.State = sessionState
 	return view
 }

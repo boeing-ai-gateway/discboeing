@@ -7,10 +7,11 @@ import (
 
 // Config contains runtime settings for the Discobot server.
 type Config struct {
-	Port      string
-	StaticDir string
-	StaticFS  http.FileSystem
-	DevReload bool
+	Port          string
+	StaticDir     string
+	StaticFS      http.FileSystem
+	DevReload     bool
+	ServerBaseURL string
 }
 
 // FromEnv reads Discobot configuration from the process environment.
@@ -25,10 +26,16 @@ func FromEnv() Config {
 		staticDir = "static"
 	}
 
+	serverBaseURL := os.Getenv("DISCOBOT_SERVER_URL")
+	if serverBaseURL == "" {
+		serverBaseURL = "http://localhost:3001"
+	}
+
 	devReload := os.Getenv("DISCOBOT_DEV_RELOAD") == "1"
 	return Config{
-		Port:      port,
-		StaticDir: staticDir,
-		DevReload: devReload,
+		Port:          port,
+		StaticDir:     staticDir,
+		DevReload:     devReload,
+		ServerBaseURL: serverBaseURL,
 	}
 }

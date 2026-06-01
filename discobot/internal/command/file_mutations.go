@@ -42,7 +42,7 @@ func (h *Handler) FileSelect(w http.ResponseWriter, r *http.Request) {
 		}
 		panel := state.EnsurePanel(view, "editor")
 		panel.Visible = true
-		view.PanelLayout.Panels["editor"] = panel
+		state.SavePanel(view, "editor", panel)
 	})
 	writeNoContent(w)
 }
@@ -57,12 +57,16 @@ func (h *Handler) FileRename(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			return
 		}
-		sessionIndex, fileIndex, ok := fileLocation(data, id)
+		location, ok := fileLocation(data, id)
 		if !ok {
 			return
 		}
-		data.Sessions[sessionIndex].Files[fileIndex].Name = name
-		data.Sessions[sessionIndex].Files[fileIndex].GitStatus = state.FileGitStatusRenamed
+		projectData := data.Project[location.projectID]
+		sessionData := projectData.Session[location.sessionID]
+		sessionData.Files[location.fileIndex].Name = name
+		sessionData.Files[location.fileIndex].GitStatus = state.FileGitStatusRenamed
+		projectData.Session[location.sessionID] = sessionData
+		data.Project[location.projectID] = projectData
 	})
 	writeNoContent(w)
 }
@@ -86,12 +90,14 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 		if name == "" {
 			return
 		}
-		sessionIndex, parentIndex, ok := fileLocation(data, parentID)
+		location, ok := fileLocation(data, parentID)
 		if !ok {
 			return
 		}
-		files := &data.Sessions[sessionIndex].Files
-		parent := (*files)[parentIndex]
+		projectData := data.Project[location.projectID]
+		sessionData := projectData.Session[location.sessionID]
+		files := &sessionData.Files
+		parent := (*files)[location.fileIndex]
 		if !ok || parent.Kind != state.FileKindDirectory {
 			return
 		}
@@ -117,6 +123,8 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 		}
 		sessionPanel.ExpandedFileIDs[parent.ID] = true
 		sessionPanel.SelectedFileID = id
+		projectData.Session[location.sessionID] = sessionData
+		data.Project[location.projectID] = projectData
 	})
 	writeNoContent(w)
 }
@@ -129,7 +137,7 @@ func (h *Handler) FileExpandAll(w http.ResponseWriter, r *http.Request) {
 		if sessionPanel.ExpandedFileIDs == nil {
 			sessionPanel.ExpandedFileIDs = map[string]bool{}
 		}
-		for _, session := range data.Sessions {
+		for _, session := range state.Sessions(*data) {
 			if session.ID != sessionID {
 				continue
 			}
@@ -148,7 +156,7 @@ func (h *Handler) FileCollapseAll(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
 	h.view.SaveShell(func(data *state.Data, view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
-		for _, session := range data.Sessions {
+		for _, session := range state.Sessions(*data) {
 			if session.ID != sessionID {
 				continue
 			}
@@ -195,11 +203,13 @@ func (h *Handler) FileMoveToRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func moveFile(data *state.Data, id string, targetID string) bool {
-	sessionIndex, sourceIndex, ok := fileLocation(data, id)
+	location, ok := fileLocation(data, id)
 	if id == "" || id == targetID || !ok {
 		return false
 	}
-	files := data.Sessions[sessionIndex].Files
+	projectData := data.Project[location.projectID]
+	sessionData := projectData.Session[location.sessionID]
+	files := sessionData.Files
 	if fileIsDescendant(files, targetID, id) {
 		return false
 	}
@@ -209,8 +219,10 @@ func moveFile(data *state.Data, id string, targetID string) bool {
 			return false
 		}
 	}
-	data.Sessions[sessionIndex].Files[sourceIndex].ParentID = targetID
-	data.Sessions[sessionIndex].Files[sourceIndex].GitStatus = state.FileGitStatusRenamed
+	sessionData.Files[location.fileIndex].ParentID = targetID
+	sessionData.Files[location.fileIndex].GitStatus = state.FileGitStatusRenamed
+	projectData.Session[location.sessionID] = sessionData
+	data.Project[location.projectID] = projectData
 	return true
 }
 
@@ -264,22 +276,30 @@ func fileByID(files []state.FileNode, id string) (state.FileNode, bool) {
 }
 
 func dataFileByID(data *state.Data, id string) (state.FileNode, bool) {
-	sessionIndex, fileIndex, ok := fileLocation(data, id)
+	location, ok := fileLocation(data, id)
 	if !ok {
 		return state.FileNode{}, false
 	}
-	return data.Sessions[sessionIndex].Files[fileIndex], true
+	return data.Project[location.projectID].Session[location.sessionID].Files[location.fileIndex], true
 }
 
-func fileLocation(data *state.Data, id string) (int, int, bool) {
-	for sessionIndex := range data.Sessions {
-		for fileIndex := range data.Sessions[sessionIndex].Files {
-			if data.Sessions[sessionIndex].Files[fileIndex].ID == id {
-				return sessionIndex, fileIndex, true
+type fileLocationResult struct {
+	projectID string
+	sessionID string
+	fileIndex int
+}
+
+func fileLocation(data *state.Data, id string) (fileLocationResult, bool) {
+	for projectID, projectData := range data.Project {
+		for sessionID, sessionData := range projectData.Session {
+			for fileIndex := range sessionData.Files {
+				if sessionData.Files[fileIndex].ID == id {
+					return fileLocationResult{projectID: projectID, sessionID: sessionID, fileIndex: fileIndex}, true
+				}
 			}
 		}
 	}
-	return 0, 0, false
+	return fileLocationResult{}, false
 }
 
 func nextFileID(files []state.FileNode, parentID string, name string) string {

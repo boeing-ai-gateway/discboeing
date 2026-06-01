@@ -8,10 +8,10 @@ import (
 templ AppShell(shell state.Shell) {
 	{{ session, _ := selectedSession(shell.Data, shell.View) }}
 	{{ sessionID := session.ID }}
-	{{ sessionPanel := shell.View.PanelLayout.Panels["session"] }}
-	{{ editorPanel := shell.View.PanelLayout.Panels["editor"] }}
-	{{ composerPanel := shell.View.PanelLayout.Panels["composer"] }}
-	{{ terminalPanel := shell.View.PanelLayout.Panels["terminal"] }}
+	{{ sessionPanel := shell.View.GlobalPanelLayout.SessionSidebar }}
+	{{ editorPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Editor }}
+	{{ composerPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Conversation }}
+	{{ terminalPanel := shell.View.SessionPanelLayouts[sessionPanelState(shell.View).SelectedSessionID].Terminal }}
 	<main id="app-shell" class="h-dvh overflow-hidden bg-[var(--surface-canvas)] text-[13px] text-[var(--foreground)] antialiased">
 		<style>
 			.app-workspace-grid {
@@ -46,7 +46,7 @@ templ AppShell(shell state.Shell) {
 		<div class="flex h-full min-h-[720px] flex-col overflow-hidden bg-[var(--surface-canvas)]">
 			@WindowChrome(shell)
 			<div class="min-h-0 min-w-0 flex-1 p-[10px] pt-0 app-workspace-grid">
-				@ui.Panel("session", "Session", sessionPanel) {
+				@ui.Panel("session", "Session", state.PanelFrameOf(sessionPanel)) {
 					if sessionPanel.Visible {
 						@SessionsSidebar(shell, sessionID, sessionPanel)
 					}
@@ -66,7 +66,7 @@ templ AppShell(shell state.Shell) {
 						Value: sessionPanel.Width,
 					},
 				})
-				@ui.Panel("editor", "Editor", editorPanel) {
+				@ui.Panel("editor", "Editor", state.PanelFrameOf(editorPanel)) {
 					@EditorPane(shell, sessionID, editorPanel)
 				}
 				@ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
@@ -84,7 +84,7 @@ templ AppShell(shell state.Shell) {
 						Value: composerPanel.Width,
 					},
 				})
-				@ui.Panel("composer", "Session Workspace", composerPanel) {
+				@ui.Panel("composer", "Session Workspace", state.PanelFrameOf(composerPanel)) {
 					@SessionWorkspace(shell, sessionID, composerPanel)
 				}
 				@ui.PanelResizeHandler(ui.PanelResizeHandlerProps{
@@ -103,7 +103,7 @@ templ AppShell(shell state.Shell) {
 						Value: terminalPanel.Height,
 					},
 				})
-				@ui.Panel("terminal", "Terminal", terminalPanel) {
+				@ui.Panel("terminal", "Terminal", state.PanelFrameOf(terminalPanel)) {
 					@TerminalPanel(shell, sessionID, terminalPanel)
 				}
 			</div>

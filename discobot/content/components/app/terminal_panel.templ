@@ -6,7 +6,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-templ TerminalPanel(shell state.Shell, sessionID string, panel state.Panel) {
+templ TerminalPanel(shell state.Shell, sessionID string, panel state.Panel[state.TerminalPanelState]) {
 	{{ terminalPanel := panel }}
 	{{ sshCommand := terminalSSHCommand(sessionID) }}
 	{{ pullCommand := terminalPullCommand(sessionID) }}

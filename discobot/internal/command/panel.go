@@ -11,7 +11,7 @@ import (
 // PanelToggle toggles a server-owned workspace panel's visibility.
 func (h *Handler) PanelToggle(w http.ResponseWriter, r *http.Request) {
 	panelID := chi.URLParam(r, "id")
-	if _, ok := state.DefaultPanelLayout().Panels[panelID]; !ok {
+	if _, ok := state.DefaultPanelFrames()[panelID]; !ok {
 		http.Error(w, "invalid panel", http.StatusBadRequest)
 		return
 	}
@@ -25,7 +25,7 @@ func (h *Handler) PanelToggle(w http.ResponseWriter, r *http.Request) {
 		if !panel.Visible {
 			panel.Maximized = false
 		}
-		view.PanelLayout.Panels[panelID] = panel
+		state.SavePanel(view, panelID, panel)
 	})
 	writeNoContent(w)
 }
@@ -33,7 +33,7 @@ func (h *Handler) PanelToggle(w http.ResponseWriter, r *http.Request) {
 // PanelMaximize makes one visible workspace panel occupy the layout.
 func (h *Handler) PanelMaximize(w http.ResponseWriter, r *http.Request) {
 	panelID := chi.URLParam(r, "id")
-	defaultPanel, ok := state.DefaultPanelLayout().Panels[panelID]
+	defaultPanel, ok := state.DefaultPanelFrames()[panelID]
 	if !ok {
 		http.Error(w, "invalid panel", http.StatusBadRequest)
 		return
@@ -44,13 +44,13 @@ func (h *Handler) PanelMaximize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.view.SaveView(func(view *state.View) {
-		for id := range state.DefaultPanelLayout().Panels {
+		for id := range state.DefaultPanelFrames() {
 			panel := state.EnsurePanel(view, id)
 			panel.Maximized = id == panelID
 			if id == panelID {
 				panel.Visible = true
 			}
-			view.PanelLayout.Panels[id] = panel
+			state.SavePanel(view, id, panel)
 		}
 	})
 	writeNoContent(w)
@@ -59,16 +59,16 @@ func (h *Handler) PanelMaximize(w http.ResponseWriter, r *http.Request) {
 // PanelRestore clears the maximized panel state.
 func (h *Handler) PanelRestore(w http.ResponseWriter, r *http.Request) {
 	panelID := chi.URLParam(r, "id")
-	if _, ok := state.DefaultPanelLayout().Panels[panelID]; !ok {
+	if _, ok := state.DefaultPanelFrames()[panelID]; !ok {
 		http.Error(w, "invalid panel", http.StatusBadRequest)
 		return
 	}
 
 	h.view.SaveView(func(view *state.View) {
-		for id := range state.DefaultPanelLayout().Panels {
+		for id := range state.DefaultPanelFrames() {
 			panel := state.EnsurePanel(view, id)
 			panel.Maximized = false
-			view.PanelLayout.Panels[id] = panel
+			state.SavePanel(view, id, panel)
 		}
 	})
 	writeNoContent(w)

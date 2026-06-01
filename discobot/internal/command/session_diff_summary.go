@@ -35,7 +35,7 @@ func (h *Handler) SessionDiffSummary(w http.ResponseWriter, r *http.Request) {
 
 		editorPanel := state.EnsurePanel(view, "editor")
 		editorPanel.Visible = true
-		view.PanelLayout.Panels["editor"] = editorPanel
+		state.SavePanel(view, "editor", editorPanel)
 	})
 	writeNoContent(w)
 }

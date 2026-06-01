@@ -15,7 +15,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-func SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel) templ.Component {
+func SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel[state.ComposerPanelState]) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -37,13 +37,13 @@ func SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel) te
 		}
 		ctx = templ.ClearChildren(ctx)
 		view := shell.View
-		session, hasSession := sessionByID(shell.Data.Sessions, sessionID)
+		session, hasSession := sessionByID(state.Sessions(shell.Data), sessionID)
 		sessionState := sessionPanelState(view)
 		diffFiles := sessionDiffFiles(session)
 		sideChats := sessionSideChats(session, sessionState)
 		sections := sessionDetailSectionsFor(session.ID, sessionState)
 		viewMode := sessionViewMode(sessionState, session.ID)
-		editorPanel := view.PanelLayout.Panels["editor"]
+		editorPanel := view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor
 		editorState := editorPanelState(view)
 		sidePane := editorPanel.Visible && hasSession && (len(editorState.OpenFileIDs) > 0 || editorState.DiffSummarySessionID != "")
 		composerState := composerPanelStateFor(panel)

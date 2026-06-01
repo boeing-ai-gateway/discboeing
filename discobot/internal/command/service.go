@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
 // ServiceStart marks a prototype service as running.
@@ -17,8 +18,8 @@ func (h *Handler) ServiceStart(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			return
 		}
-		service.Status = state.ServiceStatusRunning
-		service.Logs = append(service.Logs, serviceLogLine(service, "started"))
+		service.Status = new(string(state.ServiceStatusRunning))
+		appendServiceLog(data, id, serviceLogLine(service, "started"))
 	})
 	writeNoContent(w)
 }
@@ -31,8 +32,8 @@ func (h *Handler) ServiceStop(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			return
 		}
-		service.Status = state.ServiceStatusStopped
-		service.Logs = append(service.Logs, serviceLogLine(service, "stopped"))
+		service.Status = new(string(state.ServiceStatusStopped))
+		appendServiceLog(data, id, serviceLogLine(service, "stopped"))
 	})
 	writeNoContent(w)
 }
@@ -51,20 +52,36 @@ func (h *Handler) ServiceLogs(w http.ResponseWriter, r *http.Request) {
 
 		editorPanel := state.EnsurePanel(view, "editor")
 		editorPanel.Visible = true
-		view.PanelLayout.Panels["editor"] = editorPanel
+		state.SavePanel(view, "editor", editorPanel)
 	})
 	writeNoContent(w)
 }
 
-func serviceByID(services []state.Service, id string) *state.Service {
+func serviceByID(services []serverapi.Service, id string) *serverapi.Service {
 	for index := range services {
-		if services[index].ID == id {
+		if serviceID(services[index]) == id {
 			return &services[index]
 		}
 	}
 	return nil
 }
 
-func serviceLogLine(service *state.Service, event string) string {
-	return time.Now().Format("15:04:05") + " [" + service.ID + "] " + event
+func appendServiceLog(data *state.Data, serviceID string, line string) {
+	if data.Service == nil {
+		data.Service = map[string]state.ServiceData{}
+	}
+	serviceData := data.Service[serviceID]
+	serviceData.Logs = append(serviceData.Logs, line)
+	data.Service[serviceID] = serviceData
+}
+
+func serviceLogLine(service *serverapi.Service, event string) string {
+	return time.Now().Format("15:04:05") + " [" + serviceID(*service) + "] " + event
+}
+
+func serviceID(service serverapi.Service) string {
+	if service.ID == nil {
+		return ""
+	}
+	return *service.ID
 }

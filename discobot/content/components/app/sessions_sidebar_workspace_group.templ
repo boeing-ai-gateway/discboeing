@@ -1,11 +1,15 @@
 package app
 
-import "github.com/obot-platform/discobot/discobot/internal/state"
+import (
+	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
 
-templ SessionsSidebarWorkspaceGroup(workspace state.Workspace, sessions []state.Session, view state.View) {
+templ SessionsSidebarWorkspaceGroup(workspace serverapi.Workspace, sessions []state.Session, view state.View) {
 	{{ sessionState := sessionPanelState(view) }}
-	<section class="sessions-sidebar--workspace" aria-label={ workspace.Name }>
-		<div class="sessions-sidebar--section-label">{ workspace.Name }</div>
+	{{ name := sessionsSidebarWorkspaceName(workspace) }}
+	<section class="sessions-sidebar--workspace" aria-label={ name }>
+		<div class="sessions-sidebar--section-label">{ name }</div>
 		for _, session := range sessions {
 			@SessionsSidebarSessionListItem(session, session.ID == sessionState.SelectedSessionID)
 		}

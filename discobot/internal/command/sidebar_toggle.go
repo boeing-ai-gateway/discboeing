@@ -14,7 +14,7 @@ func (h *Handler) SidebarToggle(w http.ResponseWriter, r *http.Request) {
 		if !panel.Visible {
 			panel.Maximized = false
 		}
-		view.PanelLayout.Panels["session"] = panel
+		state.SavePanel(view, "session", panel)
 	})
 	writeNoContent(w)
 }
@@ -25,7 +25,7 @@ func (h *Handler) SidebarHide(w http.ResponseWriter, r *http.Request) {
 		panel := state.EnsurePanel(view, "session")
 		panel.Visible = false
 		panel.Maximized = false
-		view.PanelLayout.Panels["session"] = panel
+		state.SavePanel(view, "session", panel)
 	})
 	writeNoContent(w)
 }

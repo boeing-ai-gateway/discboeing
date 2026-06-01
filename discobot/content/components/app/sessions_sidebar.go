@@ -7,6 +7,7 @@ import (
 
 	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
 const sessionFileTreeLargeLimit = 240
@@ -51,6 +52,16 @@ func sessionsForWorkspace(sessions []state.Session, workspaceID string) []state.
 		}
 	}
 	return workspaceSessions
+}
+
+func sessionsSidebarWorkspaceName(workspace serverapi.Workspace) string {
+	if workspace.DisplayName != nil && *workspace.DisplayName != "" {
+		return *workspace.DisplayName
+	}
+	if workspace.Path != "" {
+		return workspace.Path
+	}
+	return workspace.ID
 }
 
 func sessionViewMode(sessionState state.SessionPanelState, sessionID string) state.SessionViewMode {

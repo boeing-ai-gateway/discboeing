@@ -40,7 +40,7 @@ func (h *Handler) LayoutResize(w http.ResponseWriter, r *http.Request) {
 
 func layoutResizeSize(payload layoutResizePayload, size int) (int, bool) {
 	if payload.PanelID != "" {
-		panel, ok := state.DefaultPanelLayout().Panels[payload.PanelID]
+		panel, ok := state.DefaultPanelFrames()[payload.PanelID]
 		if !ok {
 			return 0, false
 		}
@@ -76,7 +76,7 @@ func savePanelSize(view *state.View, panelID string, axis string, size int) {
 	case "y":
 		panel.Height = size
 	}
-	view.PanelLayout.Panels[panelID] = panel
+	state.SavePanel(view, panelID, panel)
 }
 
 func saveLegacyLayoutSize(view *state.View, key string, size int) {
@@ -84,18 +84,18 @@ func saveLegacyLayoutSize(view *state.View, key string, size int) {
 	case "sessions-sidebar-width":
 		panel := state.EnsurePanel(view, "session")
 		panel.Width = size
-		view.PanelLayout.Panels["session"] = panel
+		state.SavePanel(view, "session", panel)
 	case "composer-side-pane-width":
 		panel := state.EnsurePanel(view, "composer")
 		panel.Width = size
-		view.PanelLayout.Panels["composer"] = panel
+		state.SavePanel(view, "composer", panel)
 	case "composer-prompt-height":
 		composer := state.EnsureComposerPanelState(view)
 		composer.PromptHeight = size
 	case "terminal-height":
 		panel := state.EnsurePanel(view, "terminal")
 		panel.Height = size
-		view.PanelLayout.Panels["terminal"] = panel
+		state.SavePanel(view, "terminal", panel)
 	}
 }
 

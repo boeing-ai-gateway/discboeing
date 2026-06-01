@@ -7,15 +7,15 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-templ SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel) {
+templ SessionWorkspace(shell state.Shell, sessionID string, panel state.Panel[state.ComposerPanelState]) {
 	{{ view := shell.View }}
-	{{ session, hasSession := sessionByID(shell.Data.Sessions, sessionID) }}
+	{{ session, hasSession := sessionByID(state.Sessions(shell.Data), sessionID) }}
 	{{ sessionState := sessionPanelState(view) }}
 	{{ diffFiles := sessionDiffFiles(session) }}
 	{{ sideChats := sessionSideChats(session, sessionState) }}
 	{{ sections := sessionDetailSectionsFor(session.ID, sessionState) }}
 	{{ viewMode := sessionViewMode(sessionState, session.ID) }}
-	{{ editorPanel := view.PanelLayout.Panels["editor"] }}
+	{{ editorPanel := view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor }}
 	{{ editorState := editorPanelState(view) }}
 	{{ sidePane := editorPanel.Visible && hasSession && (len(editorState.OpenFileIDs) > 0 || editorState.DiffSummarySessionID != "") }}
 	{{ composerState := composerPanelStateFor(panel) }}

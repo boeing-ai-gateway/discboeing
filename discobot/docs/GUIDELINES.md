@@ -21,6 +21,10 @@ that folder only.
 - `content/components/ui/` contains reusable primitives. Keep these
   app-agnostic; pass data and command URLs in through explicit structs.
 - `internal/state` owns server-side app and view state.
+- `internal/sync` mirrors the running Discobot API server into `state.Data`.
+  It subscribes before loading REST snapshots, queues project events while the
+  replacement cache is built, swaps the consistent cache through `SaveData`, and
+  notifies on every later cache mutation so `/ui/stream` can patch the shell.
 - `internal/command` owns command handlers.
 - `internal/server` owns routes, `/ui/stream`, and static serving.
 

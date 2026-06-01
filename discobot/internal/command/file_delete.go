@@ -39,11 +39,13 @@ func (h *Handler) FileDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteFiles(data *state.Data, id string) map[string]bool {
-	sessionIndex, _, ok := fileLocation(data, id)
+	location, ok := fileLocation(data, id)
 	if !ok {
 		return map[string]bool{}
 	}
-	sessionFiles := &data.Sessions[sessionIndex].Files
+	projectData := data.Project[location.projectID]
+	sessionData := projectData.Session[location.sessionID]
+	sessionFiles := &sessionData.Files
 	deleted := map[string]bool{id: true}
 	for changed := true; changed; {
 		changed = false
@@ -63,5 +65,7 @@ func deleteFiles(data *state.Data, id string) map[string]bool {
 		}
 	}
 	*sessionFiles = files
+	projectData.Session[location.sessionID] = sessionData
+	data.Project[location.projectID] = projectData
 	return deleted
 }

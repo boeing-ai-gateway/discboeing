@@ -17,7 +17,7 @@ func (h *Handler) TerminalToggle(w http.ResponseWriter, r *http.Request) {
 		if !panel.Visible {
 			panel.Maximized = false
 		}
-		view.PanelLayout.Panels["terminal"] = panel
+		state.SavePanel(view, "terminal", panel)
 	})
 	writeNoContent(w)
 }

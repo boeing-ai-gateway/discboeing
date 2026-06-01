@@ -14,7 +14,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-func TerminalPanel(shell state.Shell, sessionID string, panel state.Panel) templ.Component {
+func TerminalPanel(shell state.Shell, sessionID string, panel state.Panel[state.TerminalPanelState]) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {

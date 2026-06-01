@@ -6,12 +6,13 @@ import (
 
 	appui "github.com/obot-platform/discobot/discobot/content/components/ui"
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
-templ EditorPane(shell state.Shell, sessionID string, panel state.Panel) {
+templ EditorPane(shell state.Shell, sessionID string, panel state.Panel[state.EditorPanelState]) {
 	{{ editorState := editorPanelStateFor(panel) }}
 	{{ session, _ := editorPaneSession(shell.Data, sessionID, panel) }}
-	{{ service, showServiceLog := serviceLogByID(shell.Data.Services, editorState.ServiceLogID) }}
+	{{ service, serviceData, showServiceLog := serviceLogByID(shell.Data.Services, shell.Data.Service, editorState.ServiceLogID) }}
 	{{ diffFiles := sessionDiffFiles(session) }}
 	{{ showDiffSummary := editorState.DiffSummarySessionID != "" && !showServiceLog }}
 	<section class="ide-panel editor-pane" aria-label="Editor">
@@ -19,7 +20,7 @@ templ EditorPane(shell state.Shell, sessionID string, panel state.Panel) {
 			if showServiceLog {
 				<div class="editor-pane--tab editor-pane--tab--active" role="tab" aria-selected="true">
 					@IconText("icon-xs")
-					<span class="editor-pane--tab-name">{ service.Name } logs</span>
+					<span class="editor-pane--tab-name">{ serviceName(service) } logs</span>
 				</div>
 			} else if showDiffSummary {
 				<div class="editor-pane--tab editor-pane--tab--active" role="tab" aria-selected="true">
@@ -37,7 +38,7 @@ templ EditorPane(shell state.Shell, sessionID string, panel state.Panel) {
 		</div>
 		<div class="editor-pane--body" data-class:editor-pane--body--summary={ boolString(showDiffSummary || showServiceLog) }>
 			if showServiceLog {
-				@EditorServiceLog(service)
+				@EditorServiceLog(service, serviceData.Logs)
 			} else if showDiffSummary {
 				@EditorDiffSummary(session, diffFiles)
 			} else {
@@ -60,23 +61,23 @@ templ EditorPane(shell state.Shell, sessionID string, panel state.Panel) {
 	</section>
 }
 
-templ EditorServiceLog(service state.Service) {
-	<section class="editor-pane--service-log" aria-label={ service.Name + " logs" }>
+templ EditorServiceLog(service serverapi.Service, logs []string) {
+	<section class="editor-pane--service-log" aria-label={ serviceName(service) + " logs" }>
 		<header class="editor-pane--diff-header">
 			<div>
 				<div class="editor-pane--eyebrow">Live tail</div>
-				<h2 class="editor-pane--diff-title">{ service.Name }</h2>
+				<h2 class="editor-pane--diff-title">{ serviceName(service) }</h2>
 			</div>
 			<div class={ serviceLogStatusClass(service) }>
 				<span class="window-chrome-services-menu--status-dot"></span>
-				<span>{ string(service.Status) }</span>
+				<span>{ serviceStatus(service) }</span>
 			</div>
 		</header>
 		<div class="editor-pane--service-log-lines" role="log" aria-live="polite">
-			if len(service.Logs) == 0 {
+			if len(logs) == 0 {
 				<div class="editor-pane--service-log-empty">No logs yet.</div>
 			}
-			for _, line := range service.Logs {
+			for _, line := range logs {
 				<div class="editor-pane--service-log-line">{ line }</div>
 			}
 		</div>
@@ -142,34 +143,34 @@ templ EditorDiffSummary(session state.Session, diffFiles []sessionDiffFile) {
 	</section>
 }
 
-func serviceLogByID(services []state.Service, id string) (state.Service, bool) {
+func serviceLogByID(services []serverapi.Service, serviceData map[string]state.ServiceData, id string) (serverapi.Service, state.ServiceData, bool) {
 	for _, service := range services {
-		if service.ID == id {
-			return service, true
+		if serviceID(service) == id {
+			return service, serviceData[id], true
 		}
 	}
-	return state.Service{}, false
+	return serverapi.Service{}, state.ServiceData{}, false
 }
 
-func serviceLogStatusClass(service state.Service) string {
+func serviceLogStatusClass(service serverapi.Service) string {
 	class := "editor-pane--service-log-status"
-	if service.Status == state.ServiceStatusRunning {
+	if serviceStatus(service) == string(state.ServiceStatusRunning) {
 		class += " editor-pane--service-log-status--running"
 	}
 	return class
 }
 
-func editorPaneSession(data state.Data, sessionID string, panel state.Panel) (state.Session, bool) {
+func editorPaneSession(data state.Data, sessionID string, panel state.Panel[state.EditorPanelState]) (state.Session, bool) {
 	editorState := editorPanelStateFor(panel)
 	if editorState.DiffSummarySessionID != "" {
-		if session, ok := sessionByID(data.Sessions, editorState.DiffSummarySessionID); ok {
+		if session, ok := sessionByID(state.Sessions(data), editorState.DiffSummarySessionID); ok {
 			return session, true
 		}
 	}
-	return sessionByID(data.Sessions, sessionID)
+	return sessionByID(state.Sessions(data), sessionID)
 }
 
-func editorOpenFiles(session state.Session, panel state.Panel) []state.FileNode {
+func editorOpenFiles(session state.Session, panel state.Panel[state.EditorPanelState]) []state.FileNode {
 	editorState := editorPanelStateFor(panel)
 	openFiles := make([]state.FileNode, 0, len(editorState.OpenFileIDs))
 	for _, id := range editorState.OpenFileIDs {
@@ -180,7 +181,7 @@ func editorOpenFiles(session state.Session, panel state.Panel) []state.FileNode 
 	return openFiles
 }
 
-func editorActiveFile(session state.Session, panel state.Panel) (state.FileNode, bool) {
+func editorActiveFile(session state.Session, panel state.Panel[state.EditorPanelState]) (state.FileNode, bool) {
 	editorState := editorPanelStateFor(panel)
 	if editorState.ActiveFileID != "" {
 		if file, ok := editorFileByID(session.Files, editorState.ActiveFileID); ok && file.Kind == state.FileKindFile {

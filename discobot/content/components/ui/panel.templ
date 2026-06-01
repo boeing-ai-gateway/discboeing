@@ -7,7 +7,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-templ Panel(id string, title string, panel state.Panel) {
+templ Panel(id string, title string, panel state.PanelFrame) {
 	<div id={ panelDOMID(id) } class={ panelClass(id, panel) } style={ panelStyle(panel) }>
 		if panel.Maximizable {
 			<div class="panel--controls absolute right-[8px] top-[8px] z-10 flex items-center gap-[4px] rounded-[5px] bg-[color-mix(in_srgb,var(--surface-card)_82%,transparent)] p-[2px] text-[var(--muted-foreground)]">
@@ -24,7 +24,7 @@ func panelDOMID(id string) string {
 	return "panel-" + panelName(id)
 }
 
-func panelClass(id string, panel state.Panel) string {
+func panelClass(id string, panel state.PanelFrame) string {
 	class := "panel panel-" + panelName(id) + " relative min-h-0 min-w-0"
 	if !panel.Visible {
 		class += " panel--hidden"
@@ -35,7 +35,7 @@ func panelClass(id string, panel state.Panel) string {
 	return class
 }
 
-func panelStyle(panel state.Panel) string {
+func panelStyle(panel state.PanelFrame) string {
 	style := fmt.Sprintf(
 		"grid-column: %s; grid-row: %s; overflow: hidden; width: auto; height: auto; max-width: none; max-height: none;",
 		panel.GridColumn,
@@ -50,7 +50,7 @@ func panelStyle(panel state.Panel) string {
 	return style
 }
 
-func panelControlLabel(id string, title string, panel state.Panel) string {
+func panelControlLabel(id string, title string, panel state.PanelFrame) string {
 	label := strings.TrimSpace(title)
 	if label == "" {
 		label = panelName(id)
@@ -61,14 +61,14 @@ func panelControlLabel(id string, title string, panel state.Panel) string {
 	return "Maximize " + label + " panel"
 }
 
-func panelControlCommand(id string, panel state.Panel) string {
+func panelControlCommand(id string, panel state.PanelFrame) string {
 	if panel.Maximized {
 		return "/ui/commands/panels/" + panelName(id) + "/restore"
 	}
 	return "/ui/commands/panels/" + panelName(id) + "/maximize"
 }
 
-func panelIcon(panel state.Panel) string {
+func panelIcon(panel state.PanelFrame) string {
 	if panel.Maximized {
 		return "screen-normal"
 	}

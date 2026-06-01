@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"path"
@@ -16,6 +17,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/command"
 	"github.com/obot-platform/discobot/discobot/internal/config"
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	datasync "github.com/obot-platform/discobot/discobot/internal/sync"
 )
 
 // Server owns Discobot HTTP routing and Datastar command handlers.
@@ -28,6 +30,7 @@ type Server struct {
 	devReloadNeeded bool
 	subscribers     map[chan struct{}]struct{}
 	commands        *command.Handler
+	syncManager     *datasync.Manager
 }
 
 // New wires the Discobot server dependencies and route table.
@@ -41,6 +44,13 @@ func New(cfg config.Config, logger *slog.Logger) *Server {
 		subscribers:     map[chan struct{}]struct{}{},
 	}
 	server.commands = command.New(server)
+	if cfg.ServerBaseURL != "" {
+		if syncManager, err := datasync.NewManager(cfg.ServerBaseURL, server, logger); err != nil {
+			logger.Warn("failed to create discobot data sync manager", "error", err)
+		} else {
+			server.syncManager = syncManager
+		}
+	}
 	return server
 }
 
@@ -58,7 +68,10 @@ func (s *Server) Handler() http.Handler {
 // ListenAndServe starts the Discobot HTTP server.
 func (s *Server) ListenAndServe() error {
 	addr := ":" + s.config.Port
-	s.logger.Info("starting discobot", "addr", addr, "staticDir", s.config.StaticDir)
+	if s.syncManager != nil {
+		go s.syncManager.Run(context.Background())
+	}
+	s.logger.Info("starting discobot", "addr", addr, "staticDir", s.config.StaticDir, "serverBaseURL", s.config.ServerBaseURL)
 	return http.ListenAndServe(addr, s.Handler())
 }
 
@@ -105,10 +118,12 @@ func (s *Server) snapshot() state.Shell {
 	return state.NewShell(s.data, s.view)
 }
 
-// SaveView mutates the server-owned view state and publishes to stream listeners.
+// SaveView publishes an updated copy of the server-owned view state.
 func (s *Server) SaveView(update func(*state.View)) {
 	s.mu.Lock()
-	update(&s.view)
+	shell := state.NewShell(s.data, s.view)
+	update(&shell.View)
+	s.view = shell.View
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -123,10 +138,14 @@ func (s *Server) SaveView(update func(*state.View)) {
 	}
 }
 
-// SaveData mutates server-owned application data and publishes to stream listeners.
+// SaveData publishes an updated copy of the server-owned application data.
+// Always preserve the clone/mutate/assign pattern here so callers cannot mutate
+// snapshots that may still be read concurrently by renderers or stream handlers.
 func (s *Server) SaveData(update func(*state.Data)) {
 	s.mu.Lock()
-	update(&s.data)
+	shell := state.NewShell(s.data, s.view)
+	update(&shell.Data)
+	s.data = shell.Data
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -141,10 +160,13 @@ func (s *Server) SaveData(update func(*state.Data)) {
 	}
 }
 
-// SaveShell mutates server-owned application and view state together.
+// SaveShell publishes updated copies of server-owned application and view state.
 func (s *Server) SaveShell(update func(*state.Data, *state.View)) {
 	s.mu.Lock()
-	update(&s.data, &s.view)
+	shell := state.NewShell(s.data, s.view)
+	update(&shell.Data, &shell.View)
+	s.data = shell.Data
+	s.view = shell.View
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)

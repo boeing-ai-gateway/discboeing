@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
 templ WindowChrome(shell state.Shell) {
@@ -22,12 +23,12 @@ templ WindowChrome(shell state.Shell) {
 		<div class="absolute top-1/2 right-[14px] flex -translate-y-1/2 items-center gap-[22px] [-webkit-app-region:no-drag]">
 			@WindowChromeCommandSpinner()
 			<div class="flex items-center gap-[8px] text-[var(--muted-foreground)]">
-				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "editor") } data-class:window-chrome--icon-button--active={ boolString(view.PanelLayout.Panels["editor"].Visible) } aria-label={ editorToggleLabel(view) } title={ editorToggleLabel(view) } aria-pressed={ boolString(view.PanelLayout.Panels["editor"].Visible) } data-on:click="@discobotCommand('/ui/commands/panels/editor/toggle', {method: 'POST'})">
+				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "editor") } data-class:window-chrome--icon-button--active={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible) } aria-label={ editorToggleLabel(view) } title={ editorToggleLabel(view) } aria-pressed={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible) } data-on:click="@discobotCommand('/ui/commands/panels/editor/toggle', {method: 'POST'})">
 					@IconCode("icon-md")
 				</button>
 				<div class="h-[15px] w-px bg-[var(--border)]"></div>
 				@WindowChromeServicesMenu(shell.Data.Services)
-				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "terminal") } data-class:window-chrome--icon-button--active={ boolString(view.PanelLayout.Panels["terminal"].Visible) } aria-label={ terminalToggleLabel(view) } title={ terminalToggleLabel(view) } aria-pressed={ boolString(view.PanelLayout.Panels["terminal"].Visible) } data-on:click="@discobotCommand('/ui/commands/terminal/toggle', {method: 'POST'})">
+				<button type="button" class={ windowChromeIconButtonClass() } disabled?={ panelToggleDisabled(view, "terminal") } data-class:window-chrome--icon-button--active={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible) } aria-label={ terminalToggleLabel(view) } title={ terminalToggleLabel(view) } aria-pressed={ boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible) } data-on:click="@discobotCommand('/ui/commands/terminal/toggle', {method: 'POST'})">
 					@IconTerminal("icon-sm")
 				</button>
 				<button type="button" class={ windowChromeIconButtonClass() } aria-label="Open settings" title="Open settings" data-class:window-chrome--icon-button--active={ boolString(view.Settings.Open) } data-on:click="@discobotCommand('/ui/commands/settings/open', {method: 'POST'})">
@@ -68,7 +69,7 @@ templ WindowChromeBrand() {
 	</div>
 }
 
-templ WindowChromeServicesMenu(services []state.Service) {
+templ WindowChromeServicesMenu(services []serverapi.Service) {
 	<div class="menu window-chrome-services-menu" data-menu>
 		<button class={ windowChromeIconButtonClass() } type="button" aria-label="Services" title="Services" aria-haspopup="menu" aria-expanded="false" aria-controls="window-chrome-services-menu-panel" data-menu-trigger>
 			@IconPlay("icon-14")
@@ -79,30 +80,32 @@ templ WindowChromeServicesMenu(services []state.Service) {
 				<div class="window-chrome-services-menu--empty">No services configured</div>
 			}
 			for _, service := range services {
-				<div class="window-chrome-services-menu--service" role="group" aria-label={ service.Name }>
+				{{ serviceID := serviceID(service) }}
+				{{ serviceName := serviceName(service) }}
+				<div class="window-chrome-services-menu--service" role="group" aria-label={ serviceName }>
 					<div class="window-chrome-services-menu--service-main">
 						<span class={ serviceStatusDotClass(service) }></span>
 						<div class="window-chrome-services-menu--service-copy">
-							<span class="window-chrome-services-menu--service-name">{ service.Name }</span>
+							<span class="window-chrome-services-menu--service-name">{ serviceName }</span>
 							<span class="window-chrome-services-menu--service-description">{ serviceDescription(service) }</span>
 						</div>
 					</div>
 					<div class="window-chrome-services-menu--service-actions">
-						if service.Status == state.ServiceStatusRunning {
-							<button type="button" class="window-chrome-services-menu--action" title="Stop service" data-on:click={ serviceCommand(service.ID, "stop") }>
+						if serviceStatus(service) == string(state.ServiceStatusRunning) {
+							<button type="button" class="window-chrome-services-menu--action" title="Stop service" data-on:click={ serviceCommand(serviceID, "stop") }>
 								@IconSquare("icon-xs")
 							</button>
 						} else {
-							<button type="button" class="window-chrome-services-menu--action" title="Start service" data-on:click={ serviceCommand(service.ID, "start") }>
+							<button type="button" class="window-chrome-services-menu--action" title="Start service" data-on:click={ serviceCommand(serviceID, "start") }>
 								@IconPlay("icon-xs")
 							</button>
 						}
-						if service.URL != "" {
-							<a class="window-chrome-services-menu--action" href={ service.URL } target="_blank" rel="noreferrer" title="Open service">
+						if serviceURL(service) != "" {
+							<a class="window-chrome-services-menu--action" href={ serviceURL(service) } target="_blank" rel="noreferrer" title="Open service">
 								@IconArrowRight("icon-xs")
 							</a>
 						}
-						<button type="button" class="window-chrome-services-menu--action" title="Show logs" data-on:click={ serviceCommand(service.ID, "logs") }>
+						<button type="button" class="window-chrome-services-menu--action" title="Show logs" data-on:click={ serviceCommand(serviceID, "logs") }>
 							@IconText("icon-xs")
 						</button>
 					</div>
@@ -113,28 +116,28 @@ templ WindowChromeServicesMenu(services []state.Service) {
 }
 
 func sessionsSidebarToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["session"].Visible {
+	if view.GlobalPanelLayout.SessionSidebar.Visible {
 		return "Hide sessions panel"
 	}
 	return "Show sessions panel"
 }
 
 func terminalToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["terminal"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible {
 		return "Hide terminal"
 	}
 	return "Show terminal"
 }
 
 func editorToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["editor"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible {
 		return "Hide editor"
 	}
 	return "Show editor"
 }
 
 func composerToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["composer"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Conversation.Visible {
 		return "Hide composer"
 	}
 	return "Show composer"
@@ -144,19 +147,47 @@ func serviceCommand(serviceID string, action string) string {
 	return "@discobotCommand(" + strconv.Quote("/ui/commands/services/"+url.PathEscape(serviceID)+"/"+action) + ", {method: 'POST'})"
 }
 
-func serviceStatusDotClass(service state.Service) string {
+func serviceStatusDotClass(service serverapi.Service) string {
 	class := "window-chrome-services-menu--status-dot"
-	if service.Status == state.ServiceStatusRunning {
+	if serviceStatus(service) == string(state.ServiceStatusRunning) {
 		class += " window-chrome-services-menu--status-dot--running"
 	}
 	return class
 }
 
-func serviceDescription(service state.Service) string {
-	if service.Description != "" {
-		return service.Description
+func serviceDescription(service serverapi.Service) string {
+	if serviceStatus(service) != "" {
+		return serviceStatus(service)
 	}
-	return string(service.Status)
+	return "unknown"
+}
+
+func serviceID(service serverapi.Service) string {
+	if service.ID == nil {
+		return ""
+	}
+	return *service.ID
+}
+
+func serviceName(service serverapi.Service) string {
+	if service.Name == nil {
+		return serviceID(service)
+	}
+	return *service.Name
+}
+
+func serviceStatus(service serverapi.Service) string {
+	if service.Status == nil {
+		return ""
+	}
+	return *service.Status
+}
+
+func serviceURL(service serverapi.Service) string {
+	if service.URL == nil {
+		return ""
+	}
+	return *service.URL
 }
 
 func panelToggleDisabled(view state.View, panelID string) bool {

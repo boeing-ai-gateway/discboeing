@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
+	serverapi "github.com/obot-platform/discobot/server/api"
 )
 
 func WindowChrome(shell state.Shell) templ.Component {
@@ -66,7 +67,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 14, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 15, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -79,7 +80,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(sessionsSidebarToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 14, Col: 182}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 15, Col: 182}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -158,9 +159,9 @@ func WindowChrome(shell state.Shell) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.PanelLayout.Panels["editor"].Visible))
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 25, Col: 217}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 26, Col: 258}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -173,7 +174,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(editorToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 25, Col: 256}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 26, Col: 297}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -186,7 +187,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(editorToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 25, Col: 290}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 26, Col: 331}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -197,9 +198,9 @@ func WindowChrome(shell state.Shell) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.PanelLayout.Panels["editor"].Visible))
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 25, Col: 361}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 26, Col: 443}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -254,9 +255,9 @@ func WindowChrome(shell state.Shell) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.PanelLayout.Panels["terminal"].Visible))
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 30, Col: 221}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 31, Col: 262}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -269,7 +270,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(terminalToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 30, Col: 262}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 31, Col: 303}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 		if templ_7745c5c3_Err != nil {
@@ -282,7 +283,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(terminalToggleLabel(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 30, Col: 298}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 31, Col: 339}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 		if templ_7745c5c3_Err != nil {
@@ -293,9 +294,9 @@ func WindowChrome(shell state.Shell) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.PanelLayout.Panels["terminal"].Visible))
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 30, Col: 371}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 31, Col: 453}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 		if templ_7745c5c3_Err != nil {
@@ -338,7 +339,7 @@ func WindowChrome(shell state.Shell) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolString(view.Settings.Open))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 33, Col: 193}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 34, Col: 193}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -405,7 +406,7 @@ func WindowChromeBrand() templ.Component {
 	})
 }
 
-func WindowChromeServicesMenu(services []state.Service) templ.Component {
+func WindowChromeServicesMenu(services []serverapi.Service) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -471,14 +472,16 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 			}
 		}
 		for _, service := range services {
+			serviceID := serviceID(service)
+			serviceName := serviceName(service)
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div class=\"window-chrome-services-menu--service\" role=\"group\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(service.Name)
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 82, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 85, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -511,9 +514,9 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var28 string
-			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(service.Name)
+			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(serviceName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 86, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 89, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -526,7 +529,7 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(serviceDescription(service))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 87, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 90, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -536,15 +539,15 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if service.Status == state.ServiceStatusRunning {
+			if serviceStatus(service) == string(state.ServiceStatusRunning) {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<button type=\"button\" class=\"window-chrome-services-menu--action\" title=\"Stop service\" data-on:click=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(service.ID, "stop"))
+				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(serviceID, "stop"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 92, Col: 144}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 95, Col: 143}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 				if templ_7745c5c3_Err != nil {
@@ -568,9 +571,9 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var31 string
-				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(service.ID, "start"))
+				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(serviceID, "start"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 96, Col: 146}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 99, Col: 145}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 				if templ_7745c5c3_Err != nil {
@@ -589,15 +592,15 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			if service.URL != "" {
+			if serviceURL(service) != "" {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<a class=\"window-chrome-services-menu--action\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var32 templ.SafeURL
-				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs(service.URL)
+				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs(serviceURL(service))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 101, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 104, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -621,9 +624,9 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var33 string
-			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(service.ID, "logs"))
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(serviceCommand(serviceID, "logs"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 105, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `content/components/app/window_chrome.templ`, Line: 108, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -651,28 +654,28 @@ func WindowChromeServicesMenu(services []state.Service) templ.Component {
 }
 
 func sessionsSidebarToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["session"].Visible {
+	if view.GlobalPanelLayout.SessionSidebar.Visible {
 		return "Hide sessions panel"
 	}
 	return "Show sessions panel"
 }
 
 func terminalToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["terminal"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Terminal.Visible {
 		return "Hide terminal"
 	}
 	return "Show terminal"
 }
 
 func editorToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["editor"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Editor.Visible {
 		return "Hide editor"
 	}
 	return "Show editor"
 }
 
 func composerToggleLabel(view state.View) string {
-	if view.PanelLayout.Panels["composer"].Visible {
+	if view.SessionPanelLayouts[sessionPanelState(view).SelectedSessionID].Conversation.Visible {
 		return "Hide composer"
 	}
 	return "Show composer"
@@ -682,19 +685,47 @@ func serviceCommand(serviceID string, action string) string {
 	return "@discobotCommand(" + strconv.Quote("/ui/commands/services/"+url.PathEscape(serviceID)+"/"+action) + ", {method: 'POST'})"
 }
 
-func serviceStatusDotClass(service state.Service) string {
+func serviceStatusDotClass(service serverapi.Service) string {
 	class := "window-chrome-services-menu--status-dot"
-	if service.Status == state.ServiceStatusRunning {
+	if serviceStatus(service) == string(state.ServiceStatusRunning) {
 		class += " window-chrome-services-menu--status-dot--running"
 	}
 	return class
 }
 
-func serviceDescription(service state.Service) string {
-	if service.Description != "" {
-		return service.Description
+func serviceDescription(service serverapi.Service) string {
+	if serviceStatus(service) != "" {
+		return serviceStatus(service)
 	}
-	return string(service.Status)
+	return "unknown"
+}
+
+func serviceID(service serverapi.Service) string {
+	if service.ID == nil {
+		return ""
+	}
+	return *service.ID
+}
+
+func serviceName(service serverapi.Service) string {
+	if service.Name == nil {
+		return serviceID(service)
+	}
+	return *service.Name
+}
+
+func serviceStatus(service serverapi.Service) string {
+	if service.Status == nil {
+		return ""
+	}
+	return *service.Status
+}
+
+func serviceURL(service serverapi.Service) string {
+	if service.URL == nil {
+		return ""
+	}
+	return *service.URL
 }
 
 func panelToggleDisabled(view state.View, panelID string) bool {

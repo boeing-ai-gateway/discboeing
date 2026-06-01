@@ -1,6 +1,11 @@
 package state
 
-import "testing"
+import (
+	"testing"
+
+	agentmessage "github.com/obot-platform/discobot/agent-go/message"
+	serverapi "github.com/obot-platform/discobot/server/api"
+)
 
 func TestDeriveFileGitStatusFromPath(t *testing.T) {
 	status := DeriveFileGitStatusFromPath("content/file_tree.templ", map[string]FileGitStatus{
@@ -17,7 +22,7 @@ func TestDeriveFileGitStatusFromPath(t *testing.T) {
 func TestDefaultSessionsHaveThreadMessages(t *testing.T) {
 	data := DefaultData()
 
-	for _, session := range data.Sessions {
+	for _, session := range Sessions(data) {
 		assertThreadHasMessages(t, session.ID+" main thread", session.MainThread)
 		for _, thread := range session.SideChats {
 			assertThreadHasMessages(t, session.ID+" side-chat thread", thread)
@@ -29,22 +34,35 @@ func TestNewShellClonesThreadMessages(t *testing.T) {
 	data := DefaultData()
 	shell := NewShell(data, DefaultView())
 
-	shell.Data.Sessions[0].MainThread.Messages[0].Text = "changed main"
-	if data.Sessions[0].MainThread.Messages[0].Text == "changed main" {
+	project := shell.Data.Project["prototype"]
+	sessionData := project.Session["session-cobra"]
+	threadData := sessionData.Thread["session-cobra"]
+	threadData.Messages[0].Parts[0] = agentmessage.UITextPart{Type: "text", Text: "changed main", State: "done"}
+	sessionData.Thread["session-cobra"] = threadData
+	project.Session["session-cobra"] = sessionData
+	shell.Data.Project["prototype"] = project
+	if messageText(data.Project["prototype"].Session["session-cobra"].Thread["session-cobra"].Messages[0]) == "changed main" {
 		t.Fatalf("main thread messages were not cloned")
 	}
 
-	shell.Data.Sessions[0].SideChats[0].Messages[0].Text = "changed side chat"
-	if data.Sessions[0].SideChats[0].Messages[0].Text == "changed side chat" {
+	project = shell.Data.Project["prototype"]
+	sessionData = project.Session["session-cobra"]
+	threadData = sessionData.Thread["thread-cobra-review"]
+	threadData.Messages[0].Parts[0] = agentmessage.UITextPart{Type: "text", Text: "changed side chat", State: "done"}
+	sessionData.Thread["thread-cobra-review"] = threadData
+	project.Session["session-cobra"] = sessionData
+	shell.Data.Project["prototype"] = project
+	if messageText(data.Project["prototype"].Session["session-cobra"].Thread["thread-cobra-review"].Messages[0]) == "changed side chat" {
 		t.Fatalf("side-chat thread messages were not cloned")
 	}
 }
 
 func TestNewShellNormalizesPanelLayout(t *testing.T) {
 	shell := NewShell(DefaultData(), View{
-		PanelLayout: PanelLayout{
-			Panels: map[string]Panel{
-				"composer": {
+		GlobalPanelLayout: DefaultGlobalPanelLayout(),
+		SessionPanelLayouts: map[string]*SessionPanelLayout{
+			"session-cobra": {
+				Conversation: Panel[ConversationPanelState]{
 					ID:      "composer",
 					Visible: true,
 					Width:   420,
@@ -53,7 +71,7 @@ func TestNewShellNormalizesPanelLayout(t *testing.T) {
 		},
 	})
 
-	composer := shell.View.PanelLayout.Panels["composer"]
+	composer := shell.View.SessionPanelLayouts["session-cobra"].Conversation
 	if composer.GridColumn == "" || composer.GridRow == "" {
 		t.Fatalf("composer grid placement was not normalized: %#v", composer)
 	}
@@ -66,15 +84,11 @@ func TestNewShellNormalizesPanelLayout(t *testing.T) {
 	if !composer.Maximizable {
 		t.Fatalf("composer maximizable = false, want true")
 	}
-	if composer.Composer == nil {
-		t.Fatalf("composer panel state is nil")
-	}
-
-	session := shell.View.PanelLayout.Panels["session"]
+	session := shell.View.GlobalPanelLayout.SessionSidebar
 	if session.Maximizable {
 		t.Fatalf("session maximizable = true, want false")
 	}
-	if session.Session == nil {
+	if session.State.SelectedSessionID == "" {
 		t.Fatalf("missing session panel was not added from defaults")
 	}
 }
@@ -82,28 +96,28 @@ func TestNewShellNormalizesPanelLayout(t *testing.T) {
 func TestNewShellNormalizesEmptyView(t *testing.T) {
 	shell := NewShell(DefaultData(), View{})
 
-	composer := shell.View.PanelLayout.Panels["composer"]
+	composer := shell.View.SessionPanelLayouts["session-cobra"].Conversation
 	if composer.GridColumn != "3 / 4" || composer.GridRow != "1 / -1" {
 		t.Fatalf("composer placement = %q %q, want 3 / 4 and 1 / -1", composer.GridColumn, composer.GridRow)
 	}
-	editor := shell.View.PanelLayout.Panels["editor"]
+	editor := shell.View.SessionPanelLayouts["session-cobra"].Editor
 	if !editor.Visible || editor.GridColumn != "5 / 6" || editor.GridRow != "1" {
 		t.Fatalf("editor placement = visible %t %q %q, want visible 5 / 6 and 1", editor.Visible, editor.GridColumn, editor.GridRow)
 	}
-	terminal := shell.View.PanelLayout.Panels["terminal"]
+	terminal := shell.View.SessionPanelLayouts["session-cobra"].Terminal
 	if !terminal.Visible || terminal.GridColumn != "5 / 6" || terminal.GridRow != "3" {
 		t.Fatalf("terminal placement = visible %t %q %q, want visible 5 / 6 and 3", terminal.Visible, terminal.GridColumn, terminal.GridRow)
 	}
-	if shell.View.PanelLayout.Panels["session"].Session == nil {
+	if shell.View.GlobalPanelLayout.SessionSidebar.State.SelectedSessionID == "" {
 		t.Fatalf("missing session panel state")
 	}
 }
 
 func TestNewShellPlacesComposerBeforeEditor(t *testing.T) {
 	shell := NewShell(DefaultData(), DefaultView())
-	composer := shell.View.PanelLayout.Panels["composer"]
-	editor := shell.View.PanelLayout.Panels["editor"]
-	terminal := shell.View.PanelLayout.Panels["terminal"]
+	composer := shell.View.SessionPanelLayouts["session-cobra"].Conversation
+	editor := shell.View.SessionPanelLayouts["session-cobra"].Editor
+	terminal := shell.View.SessionPanelLayouts["session-cobra"].Terminal
 
 	if composer.GridColumn != "3 / 4" || composer.GridRow != "1 / -1" {
 		t.Fatalf("composer placement = %q %q, want middle column", composer.GridColumn, composer.GridRow)
@@ -118,13 +132,13 @@ func TestNewShellPlacesComposerBeforeEditor(t *testing.T) {
 
 func TestNewShellKeepsTerminalInRightColumnWhenEditorHidden(t *testing.T) {
 	view := DefaultView()
-	editor := view.PanelLayout.Panels["editor"]
+	editor := view.SessionPanelLayouts["session-cobra"].Editor
 	editor.Visible = false
-	view.PanelLayout.Panels["editor"] = editor
+	view.SessionPanelLayouts["session-cobra"].Editor = editor
 
 	shell := NewShell(DefaultData(), view)
-	composer := shell.View.PanelLayout.Panels["composer"]
-	terminal := shell.View.PanelLayout.Panels["terminal"]
+	composer := shell.View.SessionPanelLayouts["session-cobra"].Conversation
+	terminal := shell.View.SessionPanelLayouts["session-cobra"].Terminal
 
 	if composer.GridColumn != "3 / 4" || composer.GridRow != "1 / -1" {
 		t.Fatalf("composer placement = %q %q, want middle column", composer.GridColumn, composer.GridRow)
@@ -139,13 +153,13 @@ func TestNewShellHidesSessionPanelWithoutSessions(t *testing.T) {
 	view := DefaultView()
 
 	withSessions := NewShell(data, view)
-	if !withSessions.View.PanelLayout.Panels["session"].Visible {
+	if !withSessions.View.GlobalPanelLayout.SessionSidebar.Visible {
 		t.Fatalf("session panel visible = false, want true when sessions exist")
 	}
 
-	data.Sessions = nil
+	data.Project = nil
 	withoutSessions := NewShell(data, view)
-	if withoutSessions.View.PanelLayout.Panels["session"].Visible {
+	if withoutSessions.View.GlobalPanelLayout.SessionSidebar.Visible {
 		t.Fatalf("session panel visible = true, want false without sessions")
 	}
 }
@@ -166,8 +180,17 @@ func assertThreadHasMessages(t *testing.T, label string, thread Thread) {
 		if message.Role == "" {
 			t.Fatalf("%s message %q missing role", label, message.ID)
 		}
-		if message.Text == "" {
+		if messageText(message) == "" {
 			t.Fatalf("%s message %q missing text", label, message.ID)
 		}
 	}
+}
+
+func messageText(message serverapi.Message) string {
+	for _, part := range message.Parts {
+		if part, ok := part.(agentmessage.UITextPart); ok {
+			return part.Text
+		}
+	}
+	return ""
 }

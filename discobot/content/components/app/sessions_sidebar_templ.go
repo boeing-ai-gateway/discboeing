@@ -14,7 +14,7 @@ import (
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-func SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel) templ.Component {
+func SessionsSidebar(shell state.Shell, sessionID string, panel state.Panel[state.SessionSidebarState]) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -103,7 +103,7 @@ func SessionsSidebarDropdown(shell state.Shell) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		data := shell.Data
 		view := shell.View
-		sessionPanel := view.PanelLayout.Panels["session"]
+		sessionPanel := view.GlobalPanelLayout.SessionSidebar
 		if !sessionPanel.Visible {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"sessions-sidebar-dropdown\" data-sessions-sidebar-dropdown><button type=\"button\" class=\"sessions-sidebar-dropdown--trigger\" aria-haspopup=\"dialog\" aria-expanded=\"false\" aria-controls=\"sessions-sidebar-dropdown-panel\" data-sessions-sidebar-dropdown-trigger><span>Sessions</span>")
 			if templ_7745c5c3_Err != nil {
@@ -155,8 +155,9 @@ func SessionsSidebarContent(data state.Data, view state.View) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, workspace := range data.Workspaces {
-			templ_7745c5c3_Err = SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(data.Sessions, workspace.ID), view).Render(ctx, templ_7745c5c3_Buffer)
+		sessions := state.Sessions(data)
+		for _, workspace := range state.Workspaces(data) {
+			templ_7745c5c3_Err = SessionsSidebarWorkspaceGroup(workspace, sessionsForWorkspace(sessions, workspace.ID), view).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
