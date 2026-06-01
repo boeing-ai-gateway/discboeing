@@ -1175,6 +1175,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Reasoning                    providers.Reasoning             `json:"reasoning"`
 		ServiceTier                  string                          `json:"serviceTier"`
 		CWD                          string                          `json:"cwd"`
+		Phase                        string                          `json:"phase"`
 		LastTurnState                State                           `json:"lastTurnState"`
 		TokenUsage                   TokenUsageInfo                  `json:"tokenUsage"`
 		ActiveLeafID                 string                          `json:"activeLeafId"`
@@ -1201,6 +1202,7 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Reasoning:                    raw.Reasoning,
 		ServiceTier:                  raw.ServiceTier,
 		CWD:                          raw.CWD,
+		Phase:                        raw.Phase,
 		LastTurnState:                raw.LastTurnState,
 		TokenUsage:                   raw.TokenUsage,
 		ActiveLeafID:                 raw.ActiveLeafID,

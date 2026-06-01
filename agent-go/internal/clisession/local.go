@@ -41,6 +41,7 @@ func (s *Local) ListThreads(_ context.Context) ([]api.Thread, error) {
 			ID:              info.ID,
 			Name:            strings.TrimSpace(info.Name),
 			CWD:             strings.TrimSpace(info.CWD),
+			Phase:           strings.TrimSpace(info.Phase),
 			LastMessage:     strings.TrimSpace(info.LastMessage),
 			ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
 			Model:           info.Model,
@@ -67,6 +68,7 @@ func (s *Local) GetThread(_ context.Context, threadID string) (api.Thread, error
 		ID:              info.ID,
 		Name:            strings.TrimSpace(info.Name),
 		CWD:             strings.TrimSpace(info.CWD),
+		Phase:           strings.TrimSpace(info.Phase),
 		LastMessage:     strings.TrimSpace(info.LastMessage),
 		ErrorMessage:    strings.TrimSpace(info.ErrorMessage),
 		Model:           info.Model,
@@ -81,7 +83,12 @@ func (s *Local) GetThread(_ context.Context, threadID string) (api.Thread, error
 
 func (s *Local) UpdateThread(_ context.Context, threadID string, req api.UpdateThreadRequest) (api.Thread, error) {
 	name := strings.TrimSpace(req.Name)
-	if _, err := s.agent.UpdateThread(context.Background(), threadID, agent.UpdateThreadRequest{Name: &name}); err != nil {
+	update := agent.UpdateThreadRequest{Name: &name}
+	if req.Phase != nil {
+		phase := strings.TrimSpace(*req.Phase)
+		update.Phase = &phase
+	}
+	if _, err := s.agent.UpdateThread(context.Background(), threadID, update); err != nil {
 		return api.Thread{}, err
 	}
 	return s.GetThread(context.Background(), threadID)

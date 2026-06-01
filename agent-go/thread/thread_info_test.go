@@ -18,6 +18,20 @@ func TestThreadInfoPhaseCreateAndUpdate(t *testing.T) {
 	if info.Phase != "review" {
 		t.Fatalf("created phase = %q, want review", info.Phase)
 	}
+	info, err = store.GetThreadInfo("thread-1")
+	if err != nil {
+		t.Fatalf("GetThreadInfo() failed: %v", err)
+	}
+	if info.Phase != "review" {
+		t.Fatalf("reloaded phase = %q, want review", info.Phase)
+	}
+	infos, err := store.ListThreadInfos()
+	if err != nil {
+		t.Fatalf("ListThreadInfos() failed: %v", err)
+	}
+	if len(infos) != 1 || infos[0].Phase != "review" {
+		t.Fatalf("listed infos = %#v, want phase review", infos)
+	}
 
 	emptyPhase := ""
 	info, err = store.UpdateThreadInfo("thread-1", UpdateThreadRequest{
