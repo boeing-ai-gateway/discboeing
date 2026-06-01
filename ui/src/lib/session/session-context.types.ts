@@ -261,6 +261,7 @@ export type ConversationComment = {
 };
 
 export type ThreadContextValue = {
+	disposed: boolean;
 	threadId: string;
 	thread: Thread | null;
 	modelId: string | null;

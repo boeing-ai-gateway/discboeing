@@ -27,10 +27,10 @@
 	});
 
 	onDestroy(() => {
+		thread.dispose();
 		if (session.threadContexts.get(thread.threadId) === thread) {
 			session.threadContexts.delete(thread.threadId);
 		}
-		thread.dispose();
 	});
 
 	const showDock = $derived(

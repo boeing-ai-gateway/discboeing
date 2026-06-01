@@ -59,10 +59,16 @@ export function resolveSessionDisplayStatus(
 
 export function resolveThreadContextDisplayStatus(
 	threadContext:
-		| Pick<ThreadContextValue, "status" | "isStreaming" | "hasPendingQuestion">
+		| Pick<
+				ThreadContextValue,
+				"disposed" | "status" | "isStreaming" | "hasPendingQuestion"
+		  >
 		| null
 		| undefined,
 ): ThreadActivityStatus | null {
+	if (threadContext?.disposed) {
+		return null;
+	}
 	if (threadContext?.isStreaming) {
 		return { status: "running" };
 	}

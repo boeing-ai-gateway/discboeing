@@ -337,6 +337,7 @@ export function createThreadContext(
 	let lastStoredPendingComments = $state("");
 	let composerDraftPersistTimer: ReturnType<typeof setTimeout> | null = null;
 	let pendingCommentsPersistTimer: ReturnType<typeof setTimeout> | null = null;
+	let disposed = false;
 
 	$effect(() => {
 		const nextSourceComposerValues = sourceComposerValues;
@@ -525,6 +526,9 @@ export function createThreadContext(
 	};
 
 	return {
+		get disposed() {
+			return disposed;
+		},
 		get threadId() {
 			return threadId;
 		},
@@ -639,6 +643,7 @@ export function createThreadContext(
 			await session.threads.refreshThread(threadId);
 		},
 		dispose: () => {
+			disposed = true;
 			retryScheduler.dispose();
 			if (composerDraftPersistTimer !== null) {
 				clearTimeout(composerDraftPersistTimer);
