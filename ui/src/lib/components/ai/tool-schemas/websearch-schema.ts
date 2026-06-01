@@ -7,6 +7,10 @@ import { createValidator, type ToolSchema } from "./index";
 export const WebSearchToolInputSchema = z.object({
 	/** Search query string */
 	query: z.string().optional(),
+	/** Provider-native action type, such as open_page for direct URL fetches */
+	type: z.string().optional(),
+	/** Direct URL opened by provider-native web tools */
+	url: z.string().optional(),
 	/** Only include results from these domains */
 	allowed_domains: z.array(z.string()).optional(),
 	/** Exclude results from these domains */
@@ -22,6 +26,19 @@ export type WebSearchToolInput = z.infer<typeof WebSearchToolInputSchema>;
  * WebSearch tool output schema (Zod)
  */
 export const WebSearchToolOutputSchema = z.object({
+	/** Provider-native tool output type */
+	type: z.string().optional(),
+	/** Provider-native tool status */
+	status: z.string().optional(),
+	/** Provider-native action details */
+	action: z
+		.object({
+			type: z.string().optional(),
+			query: z.string().optional(),
+			url: z.string().optional(),
+		})
+		.passthrough()
+		.optional(),
 	/** Search results */
 	results: z
 		.array(

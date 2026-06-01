@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { resolve } from "$app/paths";
 	import GlobeIcon from "@lucide/svelte/icons/globe";
+	import {
+		LinkSafetyModal,
+		LinkSafetyState,
+	} from "$lib/components/ai/link-safety-modal";
 	import { MessageResponse } from "$lib/components/ai/message";
 	import {
 		ToolContent,
@@ -23,9 +26,12 @@
 			toolPart.state === "input-streaming" ||
 			toolPart.state === "input-available",
 	);
-	const headerQuery = $derived.by(() =>
-		getToolInputString(toolPart.input, "query"),
-	);
+	const headerText = $derived.by(() => {
+		return (
+			getToolInputString(toolPart.input, "query") ||
+			getToolInputString(toolPart.input, "url")
+		);
+	});
 	const inputValidation = $derived.by(() =>
 		validateWebSearchInput(toolPart.input),
 	);
@@ -42,6 +48,16 @@
 	);
 	const searchError = $derived.by(() => toolPart.errorText);
 	const rawOutputText = $derived.by(() => renderToolValue(toolPart.output));
+	const inputActionType = $derived.by(() => validInput?.type);
+	const inputURL = $derived.by(() => validInput?.url);
+	const outputActionType = $derived.by(() => validOutput?.action?.type);
+	const outputURL = $derived.by(() => validOutput?.action?.url);
+
+	const linkSafety = new LinkSafetyState();
+
+	function openResultURL(url: string) {
+		linkSafety.requestOpen(url);
+	}
 </script>
 
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
@@ -50,7 +66,7 @@
 	>
 		<GlobeIcon class="size-4 shrink-0 text-muted-foreground" />
 		<span class="truncate font-medium text-sm">
-			{headerQuery || (isStreaming ? "Loading web search..." : "Web search")}
+			{headerText || (isStreaming ? "Loading web search..." : "Web search")}
 		</span>
 		<ToolHeaderStatus state={toolPart.state} />
 	</CollapsibleTrigger>
@@ -64,7 +80,7 @@
 				? "Loading web search..."
 				: "Search details are unavailable."}
 		</div>
-	{:else if !inputValidation.success || !validInput?.query}
+	{:else if !inputValidation.success || (!validInput?.query && !validInput?.url)}
 		<div class="space-y-3 p-4 pt-3">
 			<p class="text-muted-foreground text-sm">
 				{isStreaming
@@ -83,10 +99,30 @@
 	{:else}
 		<div class="space-y-4 p-4 pt-3">
 			<div class="rounded-md border bg-muted/30 p-3 text-xs">
-				<p>
-					<span class="text-muted-foreground">query:</span>
-					{validInput.query}
-				</p>
+				{#if validInput.query}
+					<p>
+						<span class="text-muted-foreground">query:</span>
+						{validInput.query}
+					</p>
+				{/if}
+				{#if inputURL}
+					<p>
+						<span class="text-muted-foreground">url:</span>
+						<button
+							type="button"
+							onclick={() => openResultURL(inputURL)}
+							class="break-all text-left font-mono text-primary underline"
+						>
+							{inputURL}
+						</button>
+					</p>
+				{/if}
+				{#if inputActionType}
+					<p class="mt-1">
+						<span class="text-muted-foreground">action:</span>
+						{inputActionType}
+					</p>
+				{/if}
 				{#if validInput.allowed_domains?.length}
 					<p class="mt-1">
 						<span class="text-muted-foreground">allowed:</span>
@@ -104,11 +140,10 @@
 			{#if validOutput?.results?.length}
 				<div class="rounded-md border bg-muted/20 p-2">
 					{#each validOutput.results as result, __key0 (__key0)}
-						<a
-							href={resolve(result.url as Parameters<typeof resolve>[0])}
-							target="_blank"
-							rel="noreferrer"
-							class="block rounded-sm border-b px-2 py-2 last:border-b-0 hover:bg-muted/40"
+						<button
+							type="button"
+							onclick={() => openResultURL(result.url)}
+							class="block w-full rounded-sm border-b px-2 py-2 text-left last:border-b-0 hover:bg-muted/40"
 						>
 							<div class="font-medium text-sm">{result.title}</div>
 							<div class="break-all font-mono text-muted-foreground text-xs">
@@ -119,12 +154,39 @@
 									{result.snippet}
 								</div>
 							{/if}
-						</a>
+						</button>
 					{/each}
 				</div>
 			{:else if validOutput?.content}
 				<div class="rounded-md border bg-muted/20 p-3 text-sm">
 					<MessageResponse text={validOutput.content} />
+				</div>
+			{:else if outputURL || outputActionType || validOutput?.status}
+				<div class="rounded-md border bg-muted/20 p-3 text-xs">
+					{#if outputURL}
+						<p>
+							<span class="text-muted-foreground">url:</span>
+							<button
+								type="button"
+								onclick={() => openResultURL(outputURL)}
+								class="break-all text-left font-mono text-primary underline"
+							>
+								{outputURL}
+							</button>
+						</p>
+					{/if}
+					{#if outputActionType}
+						<p class="mt-1">
+							<span class="text-muted-foreground">action:</span>
+							{outputActionType}
+						</p>
+					{/if}
+					{#if validOutput?.status}
+						<p class="mt-1">
+							<span class="text-muted-foreground">status:</span>
+							{validOutput.status}
+						</p>
+					{/if}
 				</div>
 			{:else if outputValidation?.success && !searchError}
 				<div
@@ -158,3 +220,9 @@
 		</div>
 	{/if}
 </ToolContent>
+
+<LinkSafetyModal
+	isOpen={linkSafety.isOpen}
+	onClose={() => linkSafety.close()}
+	url={linkSafety.url}
+/>

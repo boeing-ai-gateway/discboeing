@@ -3,7 +3,10 @@ import test from "node:test";
 
 import type { ChatMessage } from "$lib/api-types";
 import { createChatStreamState } from "./conversation-stream";
-import { parseChatStreamMessageValue } from "./conversation-stream.events";
+import {
+	parseChatStreamChunk,
+	parseChatStreamMessageValue,
+} from "./conversation-stream.events";
 
 test("parseChatStreamMessageValue accepts current AI SDK assistant parts", async () => {
 	const parsed = await parseChatStreamMessageValue({
@@ -189,6 +192,109 @@ test("parseChatStreamMessageValue accepts denied dynamic tools with rejection ap
 			: undefined,
 		false,
 	);
+});
+
+test("parseChatStreamMessageValue attaches source URLs to WebSearch output", async () => {
+	const parsed = await parseChatStreamMessageValue({
+		id: "assistant-websearch",
+		role: "assistant",
+		parts: [
+			{
+				type: "dynamic-tool",
+				toolCallId: "search-1",
+				toolName: "WebSearch",
+				state: "output-available",
+				input: { query: "Discobot GitHub" },
+				output: {
+					type: "web_search_call",
+					status: "completed",
+				},
+			},
+			{
+				type: "source-url",
+				sourceId: "https://github.com/obot-platform/discobot",
+				url: "https://github.com/obot-platform/discobot",
+				title: "Discobot",
+			},
+		],
+	});
+
+	const toolPart = parsed.parts[0];
+	assert.equal(toolPart?.type, "dynamic-tool");
+	assert.deepEqual(
+		toolPart?.type === "dynamic-tool" ? toolPart.output : undefined,
+		{
+			type: "web_search_call",
+			status: "completed",
+			results: [
+				{
+					title: "Discobot",
+					url: "https://github.com/obot-platform/discobot",
+				},
+			],
+		},
+	);
+});
+
+test("parseChatStreamMessageValue attaches text URLs to WebSearch output", async () => {
+	const parsed = await parseChatStreamMessageValue({
+		id: "assistant-websearch-text-url",
+		role: "assistant",
+		parts: [
+			{
+				type: "dynamic-tool",
+				toolCallId: "search-1",
+				toolName: "WebSearch",
+				state: "output-available",
+				input: { query: "Discobot GitHub" },
+				output: {
+					type: "web_search_call",
+					status: "completed",
+				},
+			},
+			{
+				type: "text",
+				text: "https://github.com/obot-platform/discobot",
+				state: "done",
+			},
+		],
+	});
+
+	const toolPart = parsed.parts[0];
+	assert.equal(toolPart?.type, "dynamic-tool");
+	assert.deepEqual(
+		toolPart?.type === "dynamic-tool" ? toolPart.output : undefined,
+		{
+			type: "web_search_call",
+			status: "completed",
+			results: [
+				{
+					title: "https://github.com/obot-platform/discobot",
+					url: "https://github.com/obot-platform/discobot",
+				},
+			],
+		},
+	);
+});
+
+test("parseChatStreamChunk accepts source-url chunks", async () => {
+	const parsed = await parseChatStreamChunk(
+		JSON.stringify({
+			type: "source-url",
+			sourceType: "url",
+			sourceId: "https://github.com/obot-platform/discobot",
+			url: "https://github.com/obot-platform/discobot",
+			title: "Discobot",
+		}),
+	);
+
+	assert.deepEqual(parsed, {
+		type: "source-url",
+		sourceType: "url",
+		sourceId: "https://github.com/obot-platform/discobot",
+		url: "https://github.com/obot-platform/discobot",
+		title: "Discobot",
+	});
 });
 
 test("parseChatStreamMessageValue rejects unsupported part types", async () => {

@@ -746,6 +746,83 @@
 		return [...partGroups.collapsedParts, ...partGroups.visibleParts];
 	}
 
+	function getAssistantMessagesAllRenderableParts(messages: ChatMessage[]) {
+		return messages.flatMap((message) =>
+			getAssistantMessageAllRenderableParts(message),
+		);
+	}
+
+	function extractURLsFromText(text: string) {
+		const urls: string[] = [];
+		for (const match of text.matchAll(/https?:\/\/[^\s<>)\]]+/g)) {
+			const url = match[0]?.replace(/[.,;:!?]+$/, "");
+			if (url && !urls.includes(url)) {
+				urls.push(url);
+			}
+		}
+		return urls.map((url) => ({ title: url, url }));
+	}
+
+	function getWebSearchFallbackResults(
+		parts: AssistantConversationPaneRenderablePart[],
+		index: number,
+	) {
+		const results: { title: string; url: string }[] = [];
+		for (const part of parts.slice(index + 1)) {
+			if (part.type === "dynamic-tool" && part.toolName === "WebSearch") {
+				break;
+			}
+			if (part.type === "text") {
+				results.push(...extractURLsFromText(part.text));
+			}
+		}
+		return results.filter(
+			(result, resultIndex) =>
+				results.findIndex((current) => current.url === result.url) ===
+				resultIndex,
+		);
+	}
+
+	function getRenderableToolPart(
+		parts: AssistantConversationPaneRenderablePart[],
+		toolPart: DynamicToolPart,
+	): DynamicToolPart {
+		const index = parts.findIndex(
+			(part) =>
+				part.type === "dynamic-tool" && part.toolCallId === toolPart.toolCallId,
+		);
+		const part = toolPart;
+		if (part.toolName !== "WebSearch") {
+			return part;
+		}
+		if (index < 0) {
+			return part;
+		}
+
+		const output =
+			part.output &&
+			typeof part.output === "object" &&
+			!Array.isArray(part.output)
+				? (part.output as Record<string, unknown>)
+				: {};
+		if (Array.isArray(output.results) && output.results.length > 0) {
+			return part;
+		}
+
+		const results = getWebSearchFallbackResults(parts, index);
+		if (results.length === 0) {
+			return part;
+		}
+
+		return {
+			...part,
+			output: {
+				...output,
+				results,
+			},
+		};
+	}
+
 	function getTurnGroupedStepCount(
 		turn: ConversationTurn,
 		partGroups: ReturnType<typeof getAssistantMessagePartGroups> | null,
@@ -1324,6 +1401,7 @@
 {#snippet renderAssistantMessageParts(
 	message: ChatMessage,
 	parts: AssistantConversationPaneRenderablePart[],
+	fallbackParts = parts,
 )}
 	{#each parts as part, index (`${message.id}-${part.type}-${index}`)}
 		{#if part.type === "reasoning"}
@@ -1338,7 +1416,7 @@
 			/>
 		{:else if part.type === "dynamic-tool"}
 			<OptimizedToolRenderer
-				toolPart={part as DynamicToolPart}
+				toolPart={getRenderableToolPart(fallbackParts, part as DynamicToolPart)}
 				queued={isAssistantToolPartQueued(parts, index)}
 				sessionId={activeSessionId}
 				threadId={activeThreadId}
@@ -1722,6 +1800,10 @@
 									{@const browserEvents = browserEventsByTurnId[turn.id] ?? []}
 									{@const groupedAssistantMessages =
 										getTurnGroupedAssistantMessages(turn)}
+									{@const turnAssistantRenderableParts =
+										getAssistantMessagesAllRenderableParts(
+											turn.assistantMessages,
+										)}
 									{@const partGroups = assistantMessage
 										? getAssistantMessagePartGroups(assistantMessage, {
 												isMessageComplete:
@@ -1770,6 +1852,7 @@
 																			getAssistantMessageAllRenderableParts(
 																				groupedAssistantMessage,
 																			),
+																			turnAssistantRenderableParts,
 																		)}
 																	</MessageContent>
 																	<AssistantMessageCopyActions
@@ -1786,6 +1869,7 @@
 																		{@render renderAssistantMessageParts(
 																			assistantMessage,
 																			partGroups.collapsedParts,
+																			turnAssistantRenderableParts,
 																		)}
 																	</MessageContent>
 																	<AssistantMessageCopyActions
@@ -1813,6 +1897,7 @@
 														: getAssistantMessageAllRenderableParts(
 																assistantMessage,
 															),
+													turnAssistantRenderableParts,
 												)}
 											</MessageContent>
 											<AssistantMessageCopyActions message={assistantMessage} />

@@ -196,6 +196,121 @@ test("history replay accepts Discobot assistant parts", async () => {
 	);
 });
 
+test("live stream preserves WebSearch source results when output arrives later", async () => {
+	const harness = createHarness();
+
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "start", messageId: "assistant-web-search" }),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "tool-input-available",
+			toolCallId: "ws-1",
+			toolName: "WebSearch",
+			input: { query: "Discobot GitHub repository" },
+		}),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "source-url",
+			sourceId: "https://github.com/obot-platform/discobot",
+			url: "https://github.com/obot-platform/discobot",
+			title: "Discobot",
+		}),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "tool-output-available",
+			toolCallId: "ws-1",
+			output: {
+				type: "web_search_call",
+				status: "completed",
+			},
+		}),
+	});
+
+	const toolPart = harness.messages[0]?.parts[0];
+	assert.equal(toolPart?.type, "dynamic-tool");
+	assert.deepEqual(
+		toolPart?.type === "dynamic-tool" ? toolPart.output : undefined,
+		{
+			type: "web_search_call",
+			status: "completed",
+			results: [
+				{
+					title: "Discobot",
+					url: "https://github.com/obot-platform/discobot",
+				},
+			],
+		},
+	);
+});
+
+test("live stream attaches text URLs to WebSearch output", async () => {
+	const harness = createHarness();
+
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "start", messageId: "assistant-web-search" }),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "tool-input-available",
+			toolCallId: "ws-1",
+			toolName: "WebSearch",
+			input: { query: "Discobot GitHub repository" },
+		}),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "tool-output-available",
+			toolCallId: "ws-1",
+			output: {
+				type: "web_search_call",
+				status: "completed",
+			},
+		}),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "text-start", id: "text-1" }),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({
+			type: "text-delta",
+			id: "text-1",
+			delta: "https://github.com/obot-platform/discobot",
+		}),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "text-end", id: "text-1" }),
+	});
+
+	const toolPart = harness.messages[0]?.parts[0];
+	assert.equal(toolPart?.type, "dynamic-tool");
+	assert.deepEqual(
+		toolPart?.type === "dynamic-tool" ? toolPart.output : undefined,
+		{
+			type: "web_search_call",
+			status: "completed",
+			results: [
+				{
+					title: "https://github.com/obot-platform/discobot",
+					url: "https://github.com/obot-platform/discobot",
+				},
+			],
+		},
+	);
+});
+
 test("history replay accepts denied dynamic tool parts", async () => {
 	const harness = createHarness();
 

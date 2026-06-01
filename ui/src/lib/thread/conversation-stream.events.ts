@@ -46,10 +46,17 @@ export type ChatStreamEventSourceOptions = {
 	onError?: (error: unknown) => void;
 };
 
-export type ChatStreamChunk = UIMessageChunk<
-	ChatMessageMetadata,
-	ChatMessageDataTypes
->;
+export type SourceURLChunk = {
+	type: "source-url";
+	sourceType?: string;
+	sourceId?: string;
+	url: string;
+	title?: string;
+};
+
+export type ChatStreamChunk =
+	| UIMessageChunk<ChatMessageMetadata, ChatMessageDataTypes>
+	| SourceURLChunk;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -124,18 +131,77 @@ function normalizeDynamicToolPart(
 	return normalized;
 }
 
+function appendWebSearchResult(
+	toolPart: Record<string, unknown>,
+	source: Record<string, unknown>,
+) {
+	if (toolPart.type !== "dynamic-tool" || toolPart.toolName !== "WebSearch") {
+		return;
+	}
+	if (typeof source.url !== "string" || source.url.trim() === "") {
+		return;
+	}
+
+	const output = isObjectRecord(toolPart.output) ? { ...toolPart.output } : {};
+	const results = Array.isArray(output.results) ? [...output.results] : [];
+	if (
+		results.some(
+			(result) => isObjectRecord(result) && result.url === source.url,
+		)
+	) {
+		return;
+	}
+
+	results.push({
+		title: typeof source.title === "string" ? source.title : source.url,
+		url: source.url,
+	});
+	toolPart.output = { ...output, results };
+}
+
+function extractURLResults(text: string) {
+	const urls = new Set<string>();
+	for (const match of text.matchAll(/https?:\/\/[^\s<>)\]]+/g)) {
+		const url = match[0]?.replace(/[.,;:!?]+$/, "");
+		if (url) {
+			urls.add(url);
+		}
+	}
+	return [...urls].map((url) => ({ title: url, url }));
+}
+
 function normalizeChatStreamMessageValue(message: unknown): unknown {
 	if (!isObjectRecord(message) || !Array.isArray(message.parts)) {
 		return message;
 	}
 
+	let latestWebSearchTool: Record<string, unknown> | null = null;
 	return {
 		...message,
 		parts: message.parts.map((part) => {
-			if (!isObjectRecord(part) || part.type !== "dynamic-tool") {
+			if (!isObjectRecord(part)) {
 				return part;
 			}
-			return normalizeDynamicToolPart(part);
+			if (part.type === "dynamic-tool") {
+				const normalized = normalizeDynamicToolPart(part);
+				if (normalized.toolName === "WebSearch") {
+					latestWebSearchTool = normalized;
+				}
+				return normalized;
+			}
+			if (part.type === "source-url" && latestWebSearchTool) {
+				appendWebSearchResult(latestWebSearchTool, part);
+			}
+			if (
+				part.type === "text" &&
+				latestWebSearchTool &&
+				typeof part.text === "string"
+			) {
+				for (const result of extractURLResults(part.text)) {
+					appendWebSearchResult(latestWebSearchTool, result);
+				}
+			}
+			return part;
 		}),
 	};
 }
@@ -163,6 +229,22 @@ export async function parseChatStreamMessage(
 export async function parseChatStreamChunk(
 	data: string,
 ): Promise<ChatStreamChunk> {
+	const value = JSON.parse(data);
+	if (
+		isObjectRecord(value) &&
+		value.type === "source-url" &&
+		typeof value.url === "string"
+	) {
+		return {
+			type: "source-url",
+			sourceType:
+				typeof value.sourceType === "string" ? value.sourceType : undefined,
+			sourceId: typeof value.sourceId === "string" ? value.sourceId : undefined,
+			url: value.url,
+			title: typeof value.title === "string" ? value.title : undefined,
+		};
+	}
+
 	const schema = uiMessageChunkSchema();
 	if (!schema.validate) {
 		throw new Error(
@@ -170,7 +252,7 @@ export async function parseChatStreamChunk(
 		);
 	}
 
-	const validation = await schema.validate(JSON.parse(data));
+	const validation = await schema.validate(value);
 	if (!validation.success) {
 		throw validation.error;
 	}

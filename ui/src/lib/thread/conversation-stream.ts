@@ -392,6 +392,116 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 		return toolPart;
 	};
 
+	const appendWebSearchResult = (
+		message: ChatMessage,
+		source: { url: string; title?: string },
+	) => {
+		for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+			const part = message.parts[index];
+			if (part?.type !== "dynamic-tool" || part.toolName !== "WebSearch") {
+				continue;
+			}
+
+			const output =
+				part.output &&
+				typeof part.output === "object" &&
+				!Array.isArray(part.output)
+					? { ...part.output }
+					: {};
+			const currentResults = Array.isArray(
+				(output as { results?: unknown }).results,
+			)
+				? ([...(output as { results: unknown[] }).results] as unknown[])
+				: [];
+			if (
+				currentResults.some(
+					(result) =>
+						result &&
+						typeof result === "object" &&
+						(result as { url?: unknown }).url === source.url,
+				)
+			) {
+				return;
+			}
+
+			part.output = {
+				...output,
+				results: [
+					...currentResults,
+					{
+						title: source.title ?? source.url,
+						url: source.url,
+					},
+				],
+			};
+			return;
+		}
+	};
+
+	const appendWebSearchResultToLatest = (source: {
+		url: string;
+		title?: string;
+	}) => {
+		for (const message of [...getTargetMessages()].reverse()) {
+			if (message.role !== "assistant") {
+				continue;
+			}
+			const previousParts = JSON.stringify(message.parts);
+			appendWebSearchResult(message, source);
+			if (JSON.stringify(message.parts) !== previousParts) {
+				return;
+			}
+		}
+	};
+
+	const extractURLResults = (text: string) => {
+		const urls = new Set<string>();
+		for (const match of text.matchAll(/https?:\/\/[^\s<>)\]]+/g)) {
+			const url = match[0]?.replace(/[.,;:!?]+$/, "");
+			if (url) {
+				urls.add(url);
+			}
+		}
+		return [...urls].map((url) => ({ title: url, url }));
+	};
+
+	const appendWebSearchResultsFromText = (
+		message: ChatMessage,
+		text: string,
+	) => {
+		for (const result of extractURLResults(text)) {
+			appendWebSearchResult(message, result);
+			appendWebSearchResultToLatest(result);
+		}
+	};
+
+	const mergeWebSearchResults = (output: unknown, previousOutput: unknown) => {
+		if (
+			!isObjectRecord(previousOutput) ||
+			!Array.isArray(previousOutput.results)
+		) {
+			return output;
+		}
+
+		const nextOutput = isObjectRecord(output) ? { ...output } : {};
+		const currentResults = Array.isArray(nextOutput.results)
+			? [...nextOutput.results]
+			: [];
+		for (const result of previousOutput.results) {
+			if (
+				!isObjectRecord(result) ||
+				typeof result.url !== "string" ||
+				currentResults.some(
+					(current) => isObjectRecord(current) && current.url === result.url,
+				)
+			) {
+				continue;
+			}
+			currentResults.push(result);
+		}
+		return { ...nextOutput, results: currentResults };
+	};
+
 	const startAssistantStream = (
 		messageId: string | undefined,
 		options: { resume?: boolean } = {},
@@ -547,6 +657,10 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			}
 
 			case "text-end": {
+				const textPart = getLastStreamingPart(activeMessage, "text");
+				if (textPart) {
+					appendWebSearchResultsFromText(activeMessage, textPart.text);
+				}
 				finishStreamingPart(activeMessage, "text");
 				return;
 			}
@@ -643,10 +757,14 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 
 			case "tool-output-available": {
 				const toolPart = getToolPart(activeMessage, chunk.toolCallId);
+				const output =
+					toolPart?.toolName === "WebSearch"
+						? mergeWebSearchResults(chunk.output, toolPart.output)
+						: chunk.output;
 				updateToolPart(
 					activeMessage,
 					chunk.toolCallId,
-					{ state: "output-available", output: chunk.output },
+					{ state: "output-available", output },
 					toolPart?.toolName,
 					toolPart?.title,
 				);
@@ -685,9 +803,17 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			}
 
 			case "source-url":
+				appendWebSearchResult(activeMessage, {
+					url: chunk.url,
+					...(chunk.title ? { title: chunk.title } : {}),
+				});
+				appendWebSearchResultToLatest({
+					url: chunk.url,
+					...(chunk.title ? { title: chunk.title } : {}),
+				});
 				activeMessage.parts.push({
 					type: "source-url",
-					sourceId: chunk.sourceId,
+					sourceId: chunk.sourceId ?? chunk.url,
 					url: chunk.url,
 					...(chunk.title ? { title: chunk.title } : {}),
 				});
