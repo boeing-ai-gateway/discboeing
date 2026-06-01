@@ -16,7 +16,7 @@ func (h *Handler) PanelToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		panel := state.EnsurePanel(view, panelID)
 		if panel.Visible && !state.CanHideWorkspacePanel(*view, panelID) {
 			return
@@ -43,7 +43,7 @@ func (h *Handler) PanelMaximize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		for id := range state.DefaultPanelFrames() {
 			panel := state.EnsurePanel(view, id)
 			panel.Maximized = id == panelID
@@ -64,7 +64,7 @@ func (h *Handler) PanelRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		for id := range state.DefaultPanelFrames() {
 			panel := state.EnsurePanel(view, id)
 			panel.Maximized = false

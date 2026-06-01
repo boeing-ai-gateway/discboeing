@@ -18,7 +18,7 @@ const retryDelay = time.Second
 
 // Store receives consistent cache swaps and incremental cache updates.
 type Store interface {
-	SaveData(func(*state.Data))
+	SaveData(context.Context, func(*state.Data))
 }
 
 // Manager keeps state.Data synchronized with the running Discobot API server.
@@ -68,7 +68,7 @@ func (m *Manager) syncOnce(ctx context.Context) error {
 	cycleCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	m.publishProjectList(projects)
+	m.publishProjectList(cycleCtx, projects)
 
 	errs := make(chan error, len(projects))
 	for _, project := range projects {

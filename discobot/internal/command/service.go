@@ -13,7 +13,7 @@ import (
 // ServiceStart marks a prototype service as running.
 func (h *Handler) ServiceStart(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		service := serviceByID(data.Services, id)
 		if service == nil {
 			return
@@ -27,7 +27,7 @@ func (h *Handler) ServiceStart(w http.ResponseWriter, r *http.Request) {
 // ServiceStop marks a prototype service as stopped.
 func (h *Handler) ServiceStop(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		service := serviceByID(data.Services, id)
 		if service == nil {
 			return
@@ -41,7 +41,7 @@ func (h *Handler) ServiceStop(w http.ResponseWriter, r *http.Request) {
 // ServiceLogs opens the selected service logs in the editor panel.
 func (h *Handler) ServiceLogs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		if serviceByID(data.Services, id) == nil {
 			return
 		}

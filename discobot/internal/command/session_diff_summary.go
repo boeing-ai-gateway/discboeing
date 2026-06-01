@@ -16,7 +16,7 @@ func (h *Handler) SessionDiffSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		sessionPanel.SelectedSessionID = id
 		if sessionPanel.ExpandedSessionIDs == nil {

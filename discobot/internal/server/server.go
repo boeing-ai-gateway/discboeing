@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -26,12 +29,14 @@ type Server struct {
 	logger          *slog.Logger
 	mu              sync.Mutex
 	data            state.Data
-	view            state.View
+	sessions        *sessionStore
 	devReloadNeeded bool
 	subscribers     map[chan struct{}]struct{}
 	commands        *command.Handler
 	syncManager     *datasync.Manager
 }
+
+type sessionContextKey struct{}
 
 // New wires the Discobot server dependencies and route table.
 func New(cfg config.Config, logger *slog.Logger) *Server {
@@ -39,7 +44,7 @@ func New(cfg config.Config, logger *slog.Logger) *Server {
 		config:          cfg,
 		logger:          logger,
 		data:            state.DefaultData(),
-		view:            state.DefaultView(),
+		sessions:        newSessionStore(cfg.SessionDir, logger),
 		devReloadNeeded: cfg.DevReload,
 		subscribers:     map[chan struct{}]struct{}{},
 	}
@@ -58,6 +63,7 @@ func New(cfg config.Config, logger *slog.Logger) *Server {
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(noStoreDynamicUI)
+	r.Use(s.withSession)
 	r.Get("/", s.handleRoot)
 	r.Get("/ui/stream", s.handleUIStream)
 	r.Mount("/ui/commands", s.commands.Routes())
@@ -66,17 +72,35 @@ func (s *Server) Handler() http.Handler {
 }
 
 // ListenAndServe starts the Discobot HTTP server.
-func (s *Server) ListenAndServe() error {
+func (s *Server) ListenAndServe(ctx context.Context) error {
 	addr := ":" + s.config.Port
 	if s.syncManager != nil {
-		go s.syncManager.Run(context.Background())
+		go s.syncManager.Run(ctx)
 	}
 	s.logger.Info("starting discobot", "addr", addr, "staticDir", s.config.StaticDir, "serverBaseURL", s.config.ServerBaseURL)
-	return http.ListenAndServe(addr, s.Handler())
+	server := &http.Server{
+		Addr:    addr,
+		Handler: s.Handler(),
+		BaseContext: func(_ net.Listener) context.Context {
+			return ctx
+		},
+	}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			s.logger.Warn("failed to shut down discobot server", "error", err)
+		}
+	}()
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
-	templ.Handler(content.Root(s.snapshot())).ServeHTTP(w, r)
+	templ.Handler(content.Root(s.snapshot(r.Context()))).ServeHTTP(w, r)
 }
 
 func (s *Server) handleUIStream(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +128,7 @@ func (s *Server) handleUIStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if err := sse.PatchElementTempl(app.AppShell(s.snapshot())); err != nil {
+			if err := sse.PatchElementTempl(app.AppShell(s.snapshot(r.Context()))); err != nil {
 				s.logger.Warn("failed to patch app shell after view update", "error", err)
 				return
 			}
@@ -112,61 +136,73 @@ func (s *Server) handleUIStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) snapshot() state.Shell {
+func (s *Server) snapshot(ctx context.Context) state.Shell {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return state.NewShell(s.data, s.view)
+	data := s.data
+	s.mu.Unlock()
+	return state.NewShell(data, s.sessions.view(sessionIDFromContext(ctx)))
 }
 
-// SaveView publishes an updated copy of the server-owned view state.
-func (s *Server) SaveView(update func(*state.View)) {
+// SaveView publishes an updated copy of the request session's view state.
+func (s *Server) SaveView(ctx context.Context, update func(*state.View)) {
+	sessionID := sessionIDFromContext(ctx)
 	s.mu.Lock()
-	shell := state.NewShell(s.data, s.view)
-	update(&shell.View)
-	s.view = shell.View
-	subscribers := make([]chan struct{}, 0, len(s.subscribers))
-	for subscriber := range s.subscribers {
-		subscribers = append(subscribers, subscriber)
-	}
+	data := s.data
 	s.mu.Unlock()
-
-	for _, subscriber := range subscribers {
-		select {
-		case subscriber <- struct{}{}:
-		default:
-		}
-	}
+	s.sessions.save(sessionID, func(view *state.View) {
+		shell := state.NewShell(data, *view)
+		update(&shell.View)
+		*view = shell.View
+	})
+	s.publish()
 }
 
 // SaveData publishes an updated copy of the server-owned application data.
 // Always preserve the clone/mutate/assign pattern here so callers cannot mutate
 // snapshots that may still be read concurrently by renderers or stream handlers.
-func (s *Server) SaveData(update func(*state.Data)) {
+func (s *Server) SaveData(_ context.Context, update func(*state.Data)) {
 	s.mu.Lock()
-	shell := state.NewShell(s.data, s.view)
+	shell := state.NewShell(s.data, state.DefaultView())
 	update(&shell.Data)
 	s.data = shell.Data
-	subscribers := make([]chan struct{}, 0, len(s.subscribers))
-	for subscriber := range s.subscribers {
-		subscribers = append(subscribers, subscriber)
-	}
 	s.mu.Unlock()
-
-	for _, subscriber := range subscribers {
-		select {
-		case subscriber <- struct{}{}:
-		default:
-		}
-	}
+	s.publish()
 }
 
 // SaveShell publishes updated copies of server-owned application and view state.
-func (s *Server) SaveShell(update func(*state.Data, *state.View)) {
+func (s *Server) SaveShell(ctx context.Context, update func(*state.Data, *state.View)) {
+	sessionID := sessionIDFromContext(ctx)
 	s.mu.Lock()
-	shell := state.NewShell(s.data, s.view)
-	update(&shell.Data, &shell.View)
-	s.data = shell.Data
-	s.view = shell.View
+	s.sessions.save(sessionID, func(view *state.View) {
+		shell := state.NewShell(s.data, *view)
+		update(&shell.Data, &shell.View)
+		s.data = shell.Data
+		*view = shell.View
+	})
+	s.mu.Unlock()
+	s.publish()
+}
+
+func (s *Server) withSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/ui/") {
+			sessionID := s.sessions.sessionID(w, r)
+			r = r.WithContext(context.WithValue(r.Context(), sessionContextKey{}, sessionID))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func sessionIDFromContext(ctx context.Context) string {
+	sessionID, ok := ctx.Value(sessionContextKey{}).(string)
+	if !ok || sessionID == "" {
+		panic("discobot session missing from request context")
+	}
+	return sessionID
+}
+
+func (s *Server) publish() {
+	s.mu.Lock()
 	subscribers := make([]chan struct{}, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)

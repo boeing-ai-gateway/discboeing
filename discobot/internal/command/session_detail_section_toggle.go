@@ -26,7 +26,7 @@ func (h *Handler) setSessionDetailSectionVisible(w http.ResponseWriter, r *http.
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		key := state.SessionDetailSectionKey(sessionID, section)
 		if visible {

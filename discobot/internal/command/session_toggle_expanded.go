@@ -11,7 +11,7 @@ import (
 // SessionToggleExpanded toggles a session row between compact and expanded mode.
 func (h *Handler) SessionToggleExpanded(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		if sessionPanel.ExpandedSessionIDs == nil {
 			sessionPanel.ExpandedSessionIDs = map[string]bool{}

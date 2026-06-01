@@ -28,7 +28,7 @@ func (h *Handler) LayoutResize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		if payload.PanelID != "" {
 			savePanelSize(view, payload.PanelID, payload.Axis, size)
 			return

@@ -12,7 +12,7 @@ import (
 func (h *Handler) SessionSideChatSelect(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 	threadID := chi.URLParam(r, "threadID")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		if !sessionSideChatExists(state.Sessions(*data), sessionID, threadID) {
 			return
 		}

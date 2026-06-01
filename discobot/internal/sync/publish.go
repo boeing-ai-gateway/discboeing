@@ -1,13 +1,15 @@
 package sync
 
 import (
+	"context"
+
 	serverapi "github.com/obot-platform/discobot/server/api"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-func (m *Manager) publishProjectList(projects []serverapi.Project) {
-	m.store.SaveData(func(current *state.Data) {
+func (m *Manager) publishProjectList(ctx context.Context, projects []serverapi.Project) {
+	m.store.SaveData(ctx, func(current *state.Data) {
 		current.Projects = append([]serverapi.Project(nil), projects...)
 
 		projectData := make(map[string]state.ProjectData, len(current.Project))
@@ -28,8 +30,8 @@ func (m *Manager) publishProjectList(projects []serverapi.Project) {
 	})
 }
 
-func (m *Manager) publishProject(project serverapi.Project, cache state.ProjectData) {
-	m.store.SaveData(func(data *state.Data) {
+func (m *Manager) publishProject(ctx context.Context, project serverapi.Project, cache state.ProjectData) {
+	m.store.SaveData(ctx, func(data *state.Data) {
 		projects := make(map[string]state.ProjectData, len(data.Project)+1)
 		for projectID, projectData := range data.Project {
 			projects[projectID] = state.CloneProjectData(projectData)
@@ -39,8 +41,8 @@ func (m *Manager) publishProject(project serverapi.Project, cache state.ProjectD
 	})
 }
 
-func (m *Manager) publishProjectThread(project serverapi.Project, cache state.ProjectData, sessionID string, threadID string) {
-	m.store.SaveData(func(data *state.Data) {
+func (m *Manager) publishProjectThread(ctx context.Context, project serverapi.Project, cache state.ProjectData, sessionID string, threadID string) {
+	m.store.SaveData(ctx, func(data *state.Data) {
 		projects := make(map[string]state.ProjectData, len(data.Project)+1)
 		for projectID, projectData := range data.Project {
 			projects[projectID] = projectData

@@ -13,6 +13,8 @@ pnpm check
 
 The server listens on port `3300` by default. Override it with
 `DISCOBOT_PORT` and override static assets with `DISCOBOT_STATIC_DIR`.
+Cookie-scoped view sessions are persisted under the user's config directory by
+default; override that location with `DISCOBOT_SESSION_DIR`.
 
 The main Discobot backend also vendors this UI and mounts it at `/ui-next`
 for side-by-side migration from the Svelte UI.

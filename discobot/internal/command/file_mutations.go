@@ -26,7 +26,7 @@ type fileMovePayload struct {
 // FileSelect marks a file tree node as selected in server-owned view state.
 func (h *Handler) FileSelect(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		editorPanel := state.EnsureEditorPanelState(view)
 		sessionPanel.SelectedFileID = id
@@ -53,7 +53,7 @@ func (h *Handler) FileRename(w http.ResponseWriter, r *http.Request) {
 	var payload fileNamePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 	name := strings.TrimSpace(payload.Name)
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		if name == "" {
 			return
 		}
@@ -86,7 +86,7 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 	var payload fileNamePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 	name := strings.TrimSpace(payload.Name)
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		if name == "" {
 			return
 		}
@@ -132,7 +132,7 @@ func (h *Handler) fileCreate(w http.ResponseWriter, r *http.Request, kind state.
 // FileExpandAll expands all directories for a session.
 func (h *Handler) FileExpandAll(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		if sessionPanel.ExpandedFileIDs == nil {
 			sessionPanel.ExpandedFileIDs = map[string]bool{}
@@ -154,7 +154,7 @@ func (h *Handler) FileExpandAll(w http.ResponseWriter, r *http.Request) {
 // FileCollapseAll collapses all directories for a session.
 func (h *Handler) FileCollapseAll(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		for _, session := range state.Sessions(*data) {
 			if session.ID != sessionID {
@@ -175,7 +175,7 @@ func (h *Handler) FileMove(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		moveFile(data, id, strings.TrimSpace(payload.TargetID))
 	})
 	writeNoContent(w)
@@ -186,7 +186,7 @@ func (h *Handler) FileDrop(w http.ResponseWriter, r *http.Request) {
 	targetID := chi.URLParam(r, "id")
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		moveFile(data, strings.TrimSpace(payload.TargetID), targetID)
 	})
 	writeNoContent(w)
@@ -196,7 +196,7 @@ func (h *Handler) FileDrop(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) FileMoveToRoot(w http.ResponseWriter, r *http.Request) {
 	var payload fileMovePayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		moveFile(data, strings.TrimSpace(payload.TargetID), "")
 	})
 	writeNoContent(w)
@@ -244,7 +244,7 @@ func fileIsDescendant(files []state.FileNode, id string, ancestorID string) bool
 func (h *Handler) FileSearch(w http.ResponseWriter, r *http.Request) {
 	var payload fileSearchPayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		sessionPanel.FileTreeSearch = strings.TrimSpace(payload.Query)
 		if sessionPanel.FileTreeSearch != "" {
@@ -256,7 +256,7 @@ func (h *Handler) FileSearch(w http.ResponseWriter, r *http.Request) {
 
 // FileSearchToggle shows or hides the session file-tree search field.
 func (h *Handler) FileSearchToggle(w http.ResponseWriter, r *http.Request) {
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		sessionPanel.FileTreeSearchVisible = !sessionPanel.FileTreeSearchVisible
 		if !sessionPanel.FileTreeSearchVisible {

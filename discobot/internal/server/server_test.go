@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"log/slog"
 	"testing"
 
 	agentmessage "github.com/obot-platform/discobot/agent-go/message"
@@ -12,12 +14,11 @@ import (
 func TestSaveDataUsesCopyMutateAssign(t *testing.T) {
 	server := &Server{
 		data:        testImmutableData(),
-		view:        state.DefaultView(),
 		subscribers: map[chan struct{}]struct{}{},
 	}
 	previous := server.data
 
-	server.SaveData(func(data *state.Data) {
+	server.SaveData(t.Context(), func(data *state.Data) {
 		project := data.Project["project-1"]
 		session := project.Session["session-1"]
 		thread := session.Thread["thread-1"]
@@ -45,15 +46,19 @@ func TestSaveDataUsesCopyMutateAssign(t *testing.T) {
 func TestSaveShellUsesCopyMutateAssign(t *testing.T) {
 	view := state.DefaultView()
 	state.EnsureSessionPanelState(&view).ExpandedSessionIDs = map[string]bool{"session-1": true}
+	const sessionID = "0123456789abcdef0123456789abcdef"
+	store := newSessionStore("", slog.Default())
+	store.sessions[sessionID] = &storedSession{View: view}
 	server := &Server{
 		data:        testImmutableData(),
-		view:        view,
+		sessions:    store,
 		subscribers: map[chan struct{}]struct{}{},
 	}
 	previousData := server.data
-	previousView := server.view
+	previousView := server.sessions.view(sessionID)
+	ctx := context.WithValue(t.Context(), sessionContextKey{}, sessionID)
 
-	server.SaveShell(func(data *state.Data, view *state.View) {
+	server.SaveShell(ctx, func(data *state.Data, view *state.View) {
 		data.Service["service-1"].Logs[0] = "updated log"
 		state.EnsureSessionPanelState(view).ExpandedSessionIDs["session-1"] = false
 	})
@@ -67,7 +72,8 @@ func TestSaveShellUsesCopyMutateAssign(t *testing.T) {
 	if got := server.data.Service["service-1"].Logs[0]; got != "updated log" {
 		t.Fatalf("current service log = %q, want updated log", got)
 	}
-	if server.view.GlobalPanelLayout.SessionSidebar.State.ExpandedSessionIDs["session-1"] {
+	currentView := server.sessions.view(sessionID)
+	if currentView.GlobalPanelLayout.SessionSidebar.State.ExpandedSessionIDs["session-1"] {
 		t.Fatalf("current view expanded state = true, want false")
 	}
 }

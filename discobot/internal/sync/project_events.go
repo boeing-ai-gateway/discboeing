@@ -17,7 +17,7 @@ func (p projectEventProcessor) processProjectEvent(ctx context.Context, event se
 		return err
 	}
 	p.runtime.cache = cache
-	p.manager.publishProject(p.runtime.project, p.runtime.cache)
+	p.manager.publishProject(ctx, p.runtime.project, p.runtime.cache)
 	return p.manager.subscribeProjectThreads(ctx, p.runtime)
 }
 

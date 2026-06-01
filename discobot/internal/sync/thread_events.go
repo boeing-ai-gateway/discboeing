@@ -1,12 +1,14 @@
 package sync
 
 import (
+	"context"
+
 	serviceclient "github.com/obot-platform/discobot/server/client"
 
 	"github.com/obot-platform/discobot/discobot/internal/state"
 )
 
-func (p projectEventProcessor) processThreadEvent(event serviceclient.ProjectStreamEvent) bool {
+func (p projectEventProcessor) processThreadEvent(ctx context.Context, event serviceclient.ProjectStreamEvent) bool {
 	message, ok := threadMessageFromEvent(event)
 	if !ok {
 		return false
@@ -17,7 +19,7 @@ func (p projectEventProcessor) processThreadEvent(event serviceclient.ProjectStr
 	}
 	if applyThreadMessage(&cache, message) {
 		p.runtime.cache = cache
-		p.manager.publishProjectThread(p.runtime.project, p.runtime.cache, message.sessionID, message.threadID)
+		p.manager.publishProjectThread(ctx, p.runtime.project, p.runtime.cache, message.sessionID, message.threadID)
 		return true
 	}
 	p.runtime.cache = cache

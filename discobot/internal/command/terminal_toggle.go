@@ -8,7 +8,7 @@ import (
 
 // TerminalToggle toggles the session workspace terminal panel.
 func (h *Handler) TerminalToggle(w http.ResponseWriter, r *http.Request) {
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		panel := state.EnsurePanel(view, "terminal")
 		if panel.Visible && !state.CanHideWorkspacePanel(*view, "terminal") {
 			return

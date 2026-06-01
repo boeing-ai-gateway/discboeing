@@ -11,7 +11,7 @@ import (
 // FileDelete removes a file tree node and all descendants from server data.
 func (h *Handler) FileDelete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveShell(func(data *state.Data, view *state.View) {
+	h.view.SaveShell(r.Context(), func(data *state.Data, view *state.View) {
 		deleted := deleteFiles(data, id)
 		sessionPanel := state.EnsureSessionPanelState(view)
 		editorPanel := state.EnsureEditorPanelState(view)

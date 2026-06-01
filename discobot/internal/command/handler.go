@@ -2,6 +2,7 @@
 package command
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -11,9 +12,9 @@ import (
 
 // ViewStore persists server-owned view state and publishes updates to streams.
 type ViewStore interface {
-	SaveView(func(*state.View))
-	SaveData(func(*state.Data))
-	SaveShell(func(*state.Data, *state.View))
+	SaveView(context.Context, func(*state.View))
+	SaveData(context.Context, func(*state.Data))
+	SaveShell(context.Context, func(*state.Data, *state.View))
 }
 
 // Handler owns server-side command routes triggered by Datastar data hooks.

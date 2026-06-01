@@ -21,7 +21,7 @@ func (p projectEventProcessor) Process(ctx context.Context, event serviceclient.
 	if handled || err != nil {
 		return err
 	}
-	if p.processThreadEvent(event) {
+	if p.processThreadEvent(ctx, event) {
 		return nil
 	}
 	return p.processProjectEvent(ctx, event)
@@ -44,6 +44,6 @@ func (p projectEventProcessor) rebuildProjectCache(ctx context.Context) error {
 		return fmt.Errorf("build project %s cache: %w", p.runtime.project.ID, err)
 	}
 	p.runtime.cache = cache
-	p.manager.publishProject(p.runtime.project, p.runtime.cache)
+	p.manager.publishProject(ctx, p.runtime.project, p.runtime.cache)
 	return p.manager.subscribeProjectThreads(ctx, p.runtime)
 }

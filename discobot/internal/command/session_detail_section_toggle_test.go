@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,15 +15,15 @@ type testCommandViewStore struct {
 	view state.View
 }
 
-func (store *testCommandViewStore) SaveView(update func(*state.View)) {
+func (store *testCommandViewStore) SaveView(_ context.Context, update func(*state.View)) {
 	update(&store.view)
 }
 
-func (store *testCommandViewStore) SaveData(update func(*state.Data)) {
+func (store *testCommandViewStore) SaveData(_ context.Context, update func(*state.Data)) {
 	update(&store.data)
 }
 
-func (store *testCommandViewStore) SaveShell(update func(*state.Data, *state.View)) {
+func (store *testCommandViewStore) SaveShell(_ context.Context, update func(*state.Data, *state.View)) {
 	update(&store.data, &store.view)
 }
 

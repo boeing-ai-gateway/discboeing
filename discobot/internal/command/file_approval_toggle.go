@@ -11,7 +11,7 @@ import (
 // FileApprovalToggle toggles whether a changed file is approved for commit.
 func (h *Handler) FileApprovalToggle(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveData(func(data *state.Data) {
+	h.view.SaveData(r.Context(), func(data *state.Data) {
 		location, ok := fileLocation(data, id)
 		if !ok {
 			return

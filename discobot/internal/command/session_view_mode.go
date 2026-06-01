@@ -17,7 +17,7 @@ func (h *Handler) SessionSetViewMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		if sessionPanel.SessionViewModes == nil {
 			sessionPanel.SessionViewModes = map[string]state.SessionViewMode{}

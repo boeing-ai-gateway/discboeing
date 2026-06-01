@@ -11,7 +11,7 @@ import (
 // SessionSelect selects a session row and ensures its details are expanded.
 func (h *Handler) SessionSelect(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.view.SaveView(func(view *state.View) {
+	h.view.SaveView(r.Context(), func(view *state.View) {
 		sessionPanel := state.EnsureSessionPanelState(view)
 		sessionPanel.SelectedSessionID = id
 		if sessionPanel.ExpandedSessionIDs == nil {
