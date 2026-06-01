@@ -20,7 +20,7 @@ Container Start (PID 1: agent init)
 2. Workspace cloning
 3. Filesystem setup (OverlayFS/AgentFS)
 4. >>> Setup proxy config <<<
-5. >>> Generate CA certificate & install in system trust <<<
+5. >>> Run proxy init-certs for CA/trust setup <<<
 6. >>> Start proxy daemon (NEW) <<<
 7. Start Docker daemon (with proxy env vars)
 8. Start agent-api (with proxy env vars)
@@ -72,27 +72,24 @@ The agent clones the workspace from git (if specified) or copies from the mount 
 
 ### 2. Configuration Setup
 
-**After workspace is available**, the agent sets up the proxy configuration:
+Sandbox-init writes the proxy configuration before the proxy service starts:
 
-1. Checks for workspace-specific config at `/home/discobot/workspace/.discobot/proxy/config.yaml`
-2. If found: Copies workspace config to `/.data/proxy/config.yaml`
-3. If not found: Writes built-in default config (with Docker caching enabled) to `/.data/proxy/config.yaml`
+1. Uses the embedded default config only. It does not read workspace config
+   during init because workspace files are untrusted at this point.
+2. Writes the built-in default config (with Docker caching enabled) to
+   `/.data/proxy/config.yaml`.
 
 This happens **before** the proxy starts, ensuring configuration is always available.
 
 ### 3. CA Certificate Generation & System Trust
 
-**Before starting the proxy**, the agent generates a CA certificate for HTTPS interception:
+**Before starting the proxy**, sandbox-init invokes the proxy binary to initialize HTTPS interception certificates:
 
-1. **Check for existing certificate** at `/.data/proxy/certs/ca.crt`
-2. **Generate new certificate** if not found:
-   - Uses Go's crypto/x509 library to create a 2048-bit RSA key pair
-   - Creates a self-signed X.509 certificate valid for 10 years
-   - Subject: `O=Discobot Proxy, CN=Discobot Proxy CA`
-   - **SANs (Subject Alternative Names)**: `localhost`, `127.0.0.1`, `::1`
-   - Stored at `/.data/proxy/certs/ca.crt` (public) and `ca.key` (private, mode 0600)
-
-3. **Install in system trust store**:
+1. Runs `/opt/discobot/bin/proxy init-certs -config /.data/proxy/config.yaml -user discobot`
+2. The proxy checks for a usable `/.data/proxy/certs/ca.{crt,key}` pair
+3. The proxy generates a new 2048-bit RSA CA with Go `crypto/x509` when needed
+4. The proxy imports the CA into the runtime user's NSS DB for Chromium
+5. The proxy installs the CA in the system trust store:
    - **Debian/Ubuntu/Alpine**: Copies to `/usr/local/share/ca-certificates/` and runs `update-ca-certificates`
    - **Fedora/RHEL/CentOS**: Copies to `/etc/pki/ca-trust/source/anchors/` and runs `update-ca-trust extract`
    - **Other systems**: Warns if no update tool found but continues
@@ -166,46 +163,16 @@ The proxy is shut down **before** the Docker daemon to ensure any pending Docker
 
 The agent includes a built-in default configuration with Docker registry caching enabled:
 - ✅ **Docker caching enabled** - Caches blob layers and manifests
-- ✅ **20GB cache size** - Adjustable via workspace config
+- ✅ **20GB cache size**
 - ❌ **No filtering** - All domains allowed
 - ❌ **No header injection** - Pass-through mode
 - ✅ **Request logging** - Basic request/response logs
 
 ### Configuration Priority
 
-The agent looks for proxy configuration in this order:
-
-1. **Workspace config** (highest priority): `.discobot/proxy/config.yaml` in your workspace
-2. **Built-in default** (fallback): Embedded config with Docker caching enabled
-
-### Workspace-Specific Configuration
-
-To customize proxy settings for a specific workspace, create `.discobot/proxy/config.yaml` in your repository:
-
-```yaml
-# .discobot/proxy/config.yaml
-proxy:
-  port: 17080
-  api_port: 17081
-
-tls:
-  cert_dir: /.data/proxy/certs
-
-cache:
-  enabled: true
-  dir: /.data/proxy/cache
-  max_size: 53687091200  # 50GB (increase for team usage)
-  patterns:
-    - "^/v2/.*/blobs/sha256:.*"                           # Docker blob layers
-    - "^/v2/.*/manifests/sha256:.*"                       # Docker manifests by digest
-    - "^/registry-v2/docker/registry/v2/blobs/sha256/"    # Local registry storage
-
-logging:
-  level: info
-  format: text
-```
-
-The agent will automatically detect and use this file when the container starts.
+Sandbox-init always writes the embedded default config to
+`/.data/proxy/config.yaml`. It does not read workspace proxy config during init
+because workspace files are untrusted before the sandbox is fully established.
 
 ### Advanced Configuration
 
@@ -327,7 +294,7 @@ Cached responses include:
 
 ### CA Certificate Generation
 
-The agent **automatically generates** a CA certificate during container startup (Step 6 of startup flow):
+The proxy **automatically generates** a CA certificate when sandbox-init runs `proxy init-certs` during container startup:
 
 **Generation process:**
 - Uses Go's `crypto/x509` and `crypto/rsa` packages to generate a 2048-bit RSA key pair
@@ -337,12 +304,12 @@ The agent **automatically generates** a CA certificate during container startup 
 - Location: `/.data/proxy/certs/ca.crt` (public) and `ca.key` (private, mode 0600)
 
 **Certificate reuse:**
-- If `/.data/proxy/certs/ca.crt` already exists, it's reused
+- If `/.data/proxy/certs/ca.crt` and `ca.key` already form a usable pair, they are reused
 - This allows certificate persistence across container restarts when `/.data` is mounted as a volume
 
 ### Automatic System Trust Installation
 
-The agent **automatically installs** the CA certificate in the system trust store during startup:
+The `proxy init-certs` command **automatically installs** the CA certificate in trust stores during startup:
 
 **Supported distributions:**
 

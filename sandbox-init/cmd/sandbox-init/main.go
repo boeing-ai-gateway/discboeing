@@ -5,19 +5,12 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -155,12 +148,12 @@ func runSetup() error {
 	}
 	fmt.Printf("discobot-sandbox-init: [%.3fs] proxy config setup completed\n", time.Since(stepStart).Seconds())
 
-	// Step 6: Generate CA certificate
+	// Step 6: Initialize proxy CA certificate and trust stores
 	stepStart = time.Now()
 	if err := setupProxyCertificate(userInfo); err != nil {
 		fmt.Printf("discobot-sandbox-init: Proxy certificate setup failed: %v\n", err)
 	}
-	fmt.Printf("discobot-sandbox-init: [%.3fs] CA certificate setup completed\n", time.Since(stepStart).Seconds())
+	fmt.Printf("discobot-sandbox-init: [%.3fs] proxy certificate setup completed\n", time.Since(stepStart).Seconds())
 
 	// Step 7: Write Docker daemon configuration
 	stepStart = time.Now()
@@ -1097,355 +1090,22 @@ export UV_SYSTEM_CERTS=1
 	return nil
 }
 
-// setupProxyCertificate generates a CA certificate for the proxy and installs it in the system trust store.
-// The certificate is stored in /.data/proxy/certs/ (session-scoped) and will be used by the proxy for HTTPS MITM.
+// setupProxyCertificate delegates proxy CA initialization and trust-store setup
+// to the proxy binary so certificate behavior stays with the proxy component.
 func setupProxyCertificate(u *userInfo) error {
-	certDir := filepath.Join(dataDir, "proxy", "certs")
-	certPath := filepath.Join(certDir, "ca.crt")
-	keyPath := filepath.Join(certDir, "ca.key")
-
-	// Ensure cert directory exists
-	if err := os.MkdirAll(certDir, 0755); err != nil {
-		return fmt.Errorf("failed to create cert dir: %w", err)
+	configPath := filepath.Join(dataDir, "proxy", "config.yaml")
+	args := []string{"init-certs", "-config", configPath}
+	if u != nil && u.username != "" {
+		args = append(args, "-user", u.username)
 	}
 
-	usable, err := hasUsableProxyCertificate(certPath, keyPath)
-	if err != nil {
-		return err
-	}
-	if usable {
-		fmt.Printf("discobot-sandbox-init: proxy CA certificate already exists at %s\n", certPath)
-		// Certificate exists, ensure it's installed in browser and system trust stores
-		return installCertificateTrust(certPath, u)
-	}
-
-	fmt.Printf("discobot-sandbox-init: generating proxy CA certificate...\n")
-	if err := generateCACertificate(certPath, keyPath); err != nil {
-		return fmt.Errorf("failed to generate CA certificate: %w", err)
-	}
-
-	fmt.Printf("discobot-sandbox-init: proxy CA certificate generated at %s\n", certPath)
-
-	// Install certificate in browser and system trust stores
-	return installCertificateTrust(certPath, u)
-}
-
-func hasUsableProxyCertificate(certPath, keyPath string) (bool, error) {
-	if _, err := os.Stat(certPath); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to stat proxy CA certificate: %w", err)
-	}
-
-	if _, err := os.Stat(keyPath); err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("discobot-sandbox-init: proxy CA key missing at %s; regenerating certificate\n", keyPath)
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to stat proxy CA key: %w", err)
-	}
-
-	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
-		fmt.Printf("discobot-sandbox-init: proxy CA certificate/key are unusable; regenerating certificate: %v\n", err)
-		return false, nil
-	}
-
-	return true, nil
-}
-
-// generateCACertificate creates a CA certificate and private key using Go crypto libraries.
-// Includes localhost in SANs for proper HTTPS interception.
-func generateCACertificate(certPath, keyPath string) error {
-	// Generate RSA private key (2048-bit)
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return fmt.Errorf("generate RSA key: %w", err)
-	}
-
-	// Generate serial number
-	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return fmt.Errorf("generate serial number: %w", err)
-	}
-
-	// Create certificate template
-	// Include localhost in SANs for proper HTTPS interception
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			Organization: []string{"Discobot Proxy"},
-			CommonName:   "Discobot Proxy CA",
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour), // 10 years
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		MaxPathLen:            0,
-		MaxPathLenZero:        true,
-		// Add SANs for localhost (both IPv4 and IPv6)
-		DNSNames:    []string{"localhost"},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
-	}
-
-	// Create self-signed certificate
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		return fmt.Errorf("create certificate: %w", err)
-	}
-
-	// Save certificate (PEM format)
-	certFile, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("create cert file: %w", err)
-	}
-	defer func() { _ = certFile.Close() }()
-
-	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		return fmt.Errorf("encode certificate: %w", err)
-	}
-
-	// Save private key (PEM format)
-	keyFile, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("create key file: %w", err)
-	}
-	defer func() { _ = keyFile.Close() }()
-
-	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
-	if err := pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER}); err != nil {
-		return fmt.Errorf("encode private key: %w", err)
-	}
-
-	return nil
-}
-
-func installCertificateTrust(certPath string, u *userInfo) error {
-	if err := installCertificateInUserNSSDB(certPath, u); err != nil {
-		return err
-	}
-	return installCertificateInSystemTrust(certPath)
-}
-
-// installCertificateInSystemTrust installs the CA certificate in the system trust store.
-// Supports Debian/Ubuntu, Fedora/RHEL, and Alpine Linux.
-func installCertificateInSystemTrust(certPath string) error {
-	fmt.Printf("discobot-sandbox-init: installing proxy CA certificate in system trust store...\n")
-
-	// Detect which certificate update method to use
-	// Try in order: update-ca-certificates (Debian/Alpine), update-ca-trust (Fedora)
-
-	// Debian/Ubuntu/Alpine: update-ca-certificates
-	if _, err := exec.LookPath("update-ca-certificates"); err == nil {
-		return installCertDebianStyle(certPath)
-	}
-
-	// Fedora/RHEL/CentOS: update-ca-trust
-	if _, err := exec.LookPath("update-ca-trust"); err == nil {
-		return installCertFedoraStyle(certPath)
-	}
-
-	// If no cert update tool found, warn but don't fail
-	fmt.Printf("discobot-sandbox-init: warning: no certificate update tool found (update-ca-certificates or update-ca-trust)\n")
-	fmt.Printf("discobot-sandbox-init: warning: proxy CA certificate not installed in system trust store\n")
-	fmt.Printf("discobot-sandbox-init: warning: HTTPS interception may not work for some clients\n")
-	return nil
-}
-
-// installCertDebianStyle installs the certificate on Debian/Ubuntu/Alpine systems.
-func installCertDebianStyle(certPath string) error {
-	const bundlePath = "/etc/ssl/certs/ca-certificates.crt"
-
-	// Copy certificate to /usr/local/share/ca-certificates/
-	destDir := "/usr/local/share/ca-certificates"
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create ca-certificates dir: %w", err)
-	}
-
-	destPath := filepath.Join(destDir, "discobot-proxy-ca.crt")
-
-	// Read source certificate
-	data, err := os.ReadFile(certPath)
-	if err != nil {
-		return fmt.Errorf("failed to read certificate: %w", err)
-	}
-
-	// Write to destination
-	if err := os.WriteFile(destPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write certificate to %s: %w", destPath, err)
-	}
-
-	if err := runUpdateCACertificates(); err != nil {
-		return err
-	}
-
-	installed, err := pemFileContainsCertificate(bundlePath, certPath)
-	if err != nil {
-		return fmt.Errorf("failed to verify system CA bundle %s: %w", bundlePath, err)
-	}
-	if !installed {
-		fmt.Printf("discobot-sandbox-init: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
-		if err := runUpdateCACertificates("--fresh"); err != nil {
-			return err
-		}
-		installed, err = pemFileContainsCertificate(bundlePath, certPath)
-		if err != nil {
-			return fmt.Errorf("failed to verify rebuilt system CA bundle %s: %w", bundlePath, err)
-		}
-		if !installed {
-			return fmt.Errorf("proxy CA certificate still missing from %s after update-ca-certificates --fresh", bundlePath)
-		}
-	}
-
-	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
-	return nil
-}
-
-func runUpdateCACertificates(args ...string) error {
-	cmd := exec.Command("update-ca-certificates", args...)
+	cmd := exec.Command(proxyBinary, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run update-ca-certificates %s: %w", strings.Join(args, " "), err)
-	}
-	return nil
-}
-
-func pemFileContainsCertificate(pemPath, certPath string) (bool, error) {
-	certData, err := os.ReadFile(certPath)
-	if err != nil {
-		return false, fmt.Errorf("read certificate %s: %w", certPath, err)
-	}
-	want, err := parseFirstCertificate(certData)
-	if err != nil {
-		return false, fmt.Errorf("parse certificate %s: %w", certPath, err)
+		return fmt.Errorf("failed to initialize proxy certificates: %w", err)
 	}
 
-	pemData, err := os.ReadFile(pemPath)
-	if err != nil {
-		return false, fmt.Errorf("read PEM file %s: %w", pemPath, err)
-	}
-
-	for len(pemData) > 0 {
-		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
-		if block == nil {
-			break
-		}
-		if block.Type != "CERTIFICATE" {
-			continue
-		}
-		if len(block.Bytes) == len(want.Raw) && string(block.Bytes) == string(want.Raw) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func parseFirstCertificate(data []byte) (*x509.Certificate, error) {
-	for len(data) > 0 {
-		block, rest := pem.Decode(data)
-		if block == nil {
-			break
-		}
-		data = rest
-		if block.Type != "CERTIFICATE" {
-			continue
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, err
-		}
-		return cert, nil
-	}
-
-	return nil, fmt.Errorf("no PEM certificate found")
-}
-
-// installCertFedoraStyle installs the certificate on Fedora/RHEL/CentOS systems.
-func installCertFedoraStyle(certPath string) error {
-	// Copy certificate to /etc/pki/ca-trust/source/anchors/
-	destDir := "/etc/pki/ca-trust/source/anchors"
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create ca-trust dir: %w", err)
-	}
-
-	destPath := filepath.Join(destDir, "discobot-proxy-ca.crt")
-
-	// Read source certificate
-	data, err := os.ReadFile(certPath)
-	if err != nil {
-		return fmt.Errorf("failed to read certificate: %w", err)
-	}
-
-	// Write to destination
-	if err := os.WriteFile(destPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write certificate to %s: %w", destPath, err)
-	}
-
-	// Run update-ca-trust
-	cmd := exec.Command("update-ca-trust", "extract")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run update-ca-trust: %w", err)
-	}
-
-	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
-	return nil
-}
-
-// installCertificateInUserNSSDB installs the CA certificate into the runtime user's
-// NSS database so Chromium-based browsers trust the proxy certificate.
-func installCertificateInUserNSSDB(certPath string, u *userInfo) error {
-	if u == nil {
-		return nil
-	}
-
-	if _, err := exec.LookPath("certutil"); err != nil {
-		fmt.Printf("discobot-sandbox-init: warning: certutil not found; skipping Chromium/NSS trust setup\n")
-		return nil
-	}
-
-	nssDBDir := filepath.Join(u.homeDir, ".pki", "nssdb")
-	if err := os.MkdirAll(nssDBDir, 0755); err != nil {
-		return fmt.Errorf("failed to create NSS DB directory %s: %w", nssDBDir, err)
-	}
-	if err := os.Chown(filepath.Join(u.homeDir, ".pki"), u.uid, u.gid); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to chown NSS parent directory: %w", err)
-	}
-	if err := os.Chown(nssDBDir, u.uid, u.gid); err != nil {
-		return fmt.Errorf("failed to chown NSS DB directory: %w", err)
-	}
-
-	nssDB := "sql:" + nssDBDir
-	if _, err := os.Stat(filepath.Join(nssDBDir, "cert9.db")); os.IsNotExist(err) {
-		cmd := exec.Command("certutil", "-d", nssDB, "-N", "--empty-password")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to initialize NSS DB %s: %w", nssDBDir, err)
-		}
-	}
-
-	_ = exec.Command("certutil", "-d", nssDB, "-D", "-n", "discobot-proxy-ca").Run()
-
-	addCmd := exec.Command("certutil", "-d", nssDB, "-A", "-t", "C,,", "-n", "discobot-proxy-ca", "-i", certPath)
-	addCmd.Stdout = os.Stdout
-	addCmd.Stderr = os.Stderr
-	if err := addCmd.Run(); err != nil {
-		return fmt.Errorf("failed to import proxy CA into NSS DB %s: %w", nssDBDir, err)
-	}
-
-	if err := chownRecursive(nssDBDir, u.uid, u.gid); err != nil {
-		return fmt.Errorf("failed to set ownership on NSS DB %s: %w", nssDBDir, err)
-	}
-
-	fmt.Printf("discobot-sandbox-init: proxy CA certificate installed in NSS DB for %s at %s\n", u.username, nssDBDir)
 	return nil
 }
 

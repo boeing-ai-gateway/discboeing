@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -24,10 +25,6 @@ type Manager struct {
 // NewManager creates a new certificate manager.
 func NewManager(certDir string) (*Manager, error) {
 	certDir = filepath.Clean(certDir)
-	if err := os.MkdirAll(certDir, 0750); err != nil {
-		return nil, fmt.Errorf("create cert dir: %w", err)
-	}
-
 	m := &Manager{certDir: certDir}
 
 	ca, err := m.getOrCreateCA()
@@ -53,30 +50,80 @@ func (m *Manager) getOrCreateCA() (*tls.Certificate, error) {
 	certPath := filepath.Join(m.certDir, "ca.crt")
 	keyPath := filepath.Join(m.certDir, "ca.key")
 
-	// Try to load existing CA
-	if cert, err := tls.LoadX509KeyPair(certPath, keyPath); err == nil {
-		return &cert, nil
+	if _, _, err := EnsureCA(m.certDir); err != nil {
+		return nil, err
 	}
 
-	// Generate new CA
-	return m.generateCA(certPath, keyPath)
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("load CA certificate: %w", err)
+	}
+
+	return &cert, nil
 }
 
-func (m *Manager) generateCA(certPath, keyPath string) (*tls.Certificate, error) {
-	// Clean paths to satisfy gosec G304
+// EnsureCA creates a proxy CA certificate and private key if the configured
+// pair does not already exist or cannot be loaded.
+func EnsureCA(certDir string) (certPath string, generated bool, err error) {
+	certDir = filepath.Clean(certDir)
+	if err := os.MkdirAll(certDir, 0755); err != nil {
+		return "", false, fmt.Errorf("create cert dir: %w", err)
+	}
+	if err := os.Chmod(certDir, 0755); err != nil {
+		return "", false, fmt.Errorf("chmod cert dir: %w", err)
+	}
+
+	certPath = filepath.Join(certDir, "ca.crt")
+	keyPath := filepath.Join(certDir, "ca.key")
+	if usable, err := hasUsableCA(certPath, keyPath); err != nil {
+		return "", false, err
+	} else if usable {
+		return certPath, false, nil
+	}
+
+	if err := generateCA(certPath, keyPath); err != nil {
+		return "", false, err
+	}
+
+	return certPath, true, nil
+}
+
+func hasUsableCA(certPath, keyPath string) (bool, error) {
+	if _, err := os.Stat(certPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat CA certificate: %w", err)
+	}
+
+	if _, err := os.Stat(keyPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat CA key: %w", err)
+	}
+
+	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func generateCA(certPath, keyPath string) error {
 	certPath = filepath.Clean(certPath)
 	keyPath = filepath.Clean(keyPath)
 
 	// Generate private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return nil, fmt.Errorf("generate key: %w", err)
+		return fmt.Errorf("generate key: %w", err)
 	}
 
 	// Generate serial number
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, fmt.Errorf("generate serial: %w", err)
+		return fmt.Errorf("generate serial: %w", err)
 	}
 
 	// Create certificate template
@@ -94,42 +141,44 @@ func (m *Manager) generateCA(certPath, keyPath string) (*tls.Certificate, error)
 		IsCA:                  true,
 		MaxPathLen:            0,
 		MaxPathLenZero:        true,
+		DNSNames:              []string{"localhost"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
 	}
 
 	// Create certificate
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return nil, fmt.Errorf("create certificate: %w", err)
+		return fmt.Errorf("create certificate: %w", err)
 	}
 
 	// Save certificate
-	certFile, err := os.Create(certPath)
+	certFile, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return nil, fmt.Errorf("create cert file: %w", err)
+		return fmt.Errorf("create cert file: %w", err)
 	}
 	defer func() { _ = certFile.Close() }()
 
 	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		return nil, fmt.Errorf("encode cert: %w", err)
+		return fmt.Errorf("encode cert: %w", err)
+	}
+	if err := os.Chmod(certPath, 0644); err != nil {
+		return fmt.Errorf("chmod cert file: %w", err)
 	}
 
 	// Save private key
 	keyFile, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("create key file: %w", err)
+		return fmt.Errorf("create key file: %w", err)
 	}
 	defer func() { _ = keyFile.Close() }()
 
 	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
 	if err := pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER}); err != nil {
-		return nil, fmt.Errorf("encode key: %w", err)
+		return fmt.Errorf("encode key: %w", err)
+	}
+	if err := os.Chmod(keyPath, 0600); err != nil {
+		return fmt.Errorf("chmod key file: %w", err)
 	}
 
-	// Parse and return the certificate
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("load generated cert: %w", err)
-	}
-
-	return &cert, nil
+	return nil
 }

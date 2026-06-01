@@ -355,13 +355,13 @@ The MITM proxy runs inside each agent container to:
 
 - **Docker registry caching**: Content-addressable caching of immutable blob layers and manifests
 - **Multi-protocol**: HTTP, HTTPS (MITM), and SOCKS5 support
-- **Automatic CA trust**: Generates CA certificate and installs in system trust store on startup
+- **Automatic CA trust**: `proxy init-certs` generates the CA and installs system/NSS trust during startup
 - **Node.js support**: Sets `NODE_EXTRA_CA_CERTS` for Node.js and Electron-based tooling
 - **Header injection**: Per-domain rules for setting/removing headers
 - **Domain filtering**: Glob-pattern allowlists (e.g., `*.anthropic.com`)
 - **TLS interception**: Dynamic certificate generation signed by container CA
 - **Runtime configuration**: REST API for updating rules without restart
-- **Workspace-aware**: Custom config via `.discobot/proxy/config.yaml`
+- **Safe defaults**: Sandbox init writes an embedded proxy config instead of reading untrusted workspace files
 
 ### Data Flow
 
@@ -379,8 +379,8 @@ The proxy caches Docker registry responses:
 - **Blob layers**: `sha256:*` digests are immutable and safe to cache indefinitely
 - **Manifests by digest**: Also immutable when referenced by `sha256:*`
 - **LRU eviction**: 20GB cache limit with least-recently-used eviction
-- **Persistent storage**: Cache survives container restarts at `/.data/proxy/cache`
-- **Workspace config**: Teams can customize caching patterns per workspace
+- **Persistent storage**: Cache survives container restarts at `/.data/cache/proxy`
+- **Safe config source**: Startup uses the embedded proxy config written by sandbox-init
 
 See [sandbox-init/docs/design/proxy-integration.md](../sandbox-init/docs/design/proxy-integration.md) for implementation details.
 

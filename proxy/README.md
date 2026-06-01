@@ -319,23 +319,22 @@ proxy/
 
 ## Certificate Installation
 
-For HTTPS interception, the proxy generates a CA certificate on first run. Install it in your system/browser trust store:
+For HTTPS interception, initialize the proxy CA before starting the proxy:
 
 ```bash
-# Certificate is saved to:
-# ./certs/ca.crt (public cert - install this)
-# ./certs/ca.key (private key - keep secure)
+# Generate or reuse the CA from tls.cert_dir in config.yaml and install it in
+# the local Linux system trust store.
+sudo ./discobot-proxy init-certs -config config.yaml
 
-# macOS
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./certs/ca.crt
-
-# Linux (Ubuntu/Debian)
-sudo cp ./certs/ca.crt /usr/local/share/ca-certificates/discobot-proxy.crt
-sudo update-ca-certificates
-
-# Windows (PowerShell as Admin)
-Import-Certificate -FilePath .\certs\ca.crt -CertStoreLocation Cert:\LocalMachine\Root
+# Also import the CA into a runtime user's NSS DB for Chromium-based browsers.
+sudo /opt/discobot/bin/proxy init-certs -config /.data/proxy/config.yaml -user discobot
 ```
+
+The command writes `ca.crt` and `ca.key` under the configured `tls.cert_dir`,
+installs the public certificate via `update-ca-certificates` or
+`update-ca-trust`, and optionally imports it into the named user's
+`~/.pki/nssdb`. The proxy server still creates a missing CA on startup as a
+fallback, but trust-store installation is handled by `init-certs`.
 
 ## Usage
 

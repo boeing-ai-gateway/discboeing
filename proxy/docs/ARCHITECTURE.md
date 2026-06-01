@@ -213,33 +213,21 @@ PATCH merge behavior:
 
 ### 7. Certificate Management
 
-On first run, a CA certificate is generated and saved:
+The proxy owns CA certificate creation and exposes it through the
+`init-certs` CLI subcommand:
 
 ```go
-func (m *Manager) GetOrCreateCA() (*tls.Certificate, error) {
-    certPath := filepath.Join(m.certDir, "ca.crt")
-    keyPath := filepath.Join(m.certDir, "ca.key")
-
-    // Try to load existing
-    if cert, err := tls.LoadX509KeyPair(certPath, keyPath); err == nil {
-        return &cert, nil
-    }
-
-    // Generate new CA
-    ca, err := m.generateCA()
-    if err != nil {
-        return nil, err
-    }
-
-    // Save to disk
-    m.saveCert(certPath, ca.Certificate)
-    m.saveKey(keyPath, ca.PrivateKey)
-
-    return ca, nil
-}
+func EnsureCA(certDir string) (certPath string, generated bool, err error)
 ```
 
-The CA is used by goproxy to sign certificates for intercepted HTTPS connections.
+`proxy init-certs -config config.yaml -user discobot` loads `tls.cert_dir`,
+generates or reuses `ca.crt`/`ca.key`, installs the CA into the Linux system
+trust store, and optionally imports it into the runtime user's NSS database for
+Chromium-based browsers. The server also calls the same CA initialization path
+as a startup fallback, but the trust-store setup happens in the CLI subcommand.
+
+The CA is used by goproxy to sign certificates for intercepted HTTPS
+connections.
 
 ## Request Flow
 

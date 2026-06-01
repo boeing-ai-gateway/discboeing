@@ -10,7 +10,7 @@ The `discobot-sandbox-init` binary serves as the container's PID 1 process, prov
 2. Workspace initialization (git clone)
 3. AgentFS setup (copy-on-write filesystem)
 4. HTTP proxy with Docker registry caching
-5. CA certificate generation and system trust installation
+5. Proxy CA initialization through the proxy binary
 6. Docker daemon startup (if available, with proxy configuration)
 7. Process reaping for zombie collection
 8. Privilege separation (root → discobot user)
@@ -124,19 +124,17 @@ The `discobot-sandbox-init` binary serves as the container's PID 1 process, prov
 │  • Use embedded default config only (security: no workspace │
 │    config reading before sandbox is ready)                  │
 │  • Write config to /.data/proxy/config.yaml (session)       │
-│  • Proxy data (certs, cache) at /.data/cache/proxy (project)│
+│  • Certs at /.data/proxy/certs; cache at /.data/cache/proxy│
 │  • Default enables Docker registry caching (20GB)           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Step 7: Generate CA Certificate & Install System Trust     │
+│  Step 7: Initialize Proxy CA & Trust Stores                 │
 │  ─────────────────────────────────────────────────────────  │
-│  • Check if /.data/proxy/certs/ca.crt exists                │
-│  • If not, generate CA cert using Go crypto/x509            │
-│  • Install in /usr/local/share/ca-certificates/ (Debian)    │
-│  • Or /etc/pki/ca-trust/source/anchors/ (RHEL)              │
-│  • Run update-ca-certificates or update-ca-trust            │
+│  • Run /opt/discobot/bin/proxy init-certs                  │
+│  • Proxy generates or reuses /.data/proxy/certs/ca.crt      │
+│  • Proxy installs system trust and Chromium/NSS trust       │
 │  • Enables transparent HTTPS MITM without warnings          │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -249,7 +247,7 @@ Integrates with the AgentFS copy-on-write filesystem:
 Manages the HTTP/HTTPS/SOCKS5 proxy with Docker registry caching:
 
 - Uses embedded default configuration only (security: never reads untrusted workspace config)
-- Generates CA certificate using Go crypto/x509 and installs in system trust store
+- Delegates CA generation and trust-store setup to `proxy init-certs`
 - Starts proxy daemon on port 17080 (proxy) and 17081 (API)
 - Waits for health check before proceeding
 - Writes proxy environment variables to `/etc/profile.d/discobot-proxy.sh`
@@ -330,12 +328,11 @@ Responsible for:
 │  ├── .overlayfs/                (OverlayFS layers)          │
 │  │   └── {sessionID}/          (upper + work dirs)         │
 │  ├── proxy/                     (session-scoped)            │
-│  │   └── config.yaml            (proxy configuration)       │
+│  │   ├── config.yaml            (proxy configuration)       │
+│  │   └── certs/                 (CA certificates)           │
 │  ├── tmp/                       (backing storage for /tmp)  │
 │  └── cache/                     (project-scoped volume)     │
-│      └── proxy/                 (proxy cache & certs)       │
-│          ├── certs/             (CA certificates)           │
-│          └── cache/             (Docker registry cache)     │
+│      └── proxy/                 (Docker registry cache)     │
 │                                                             │
 │  /home/discobot                  (AgentFS/OverlayFS mount)   │
 │  ├── .config/discobot/           (agent-api persistence)     │

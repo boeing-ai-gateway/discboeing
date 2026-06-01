@@ -2,7 +2,7 @@
 
 ## Overview
 
-The agent automatically generates a CA certificate for the proxy and installs it during container startup in:
+During container startup, sandbox-init runs `proxy init-certs` so the proxy binary generates a CA certificate and installs it in:
 
 - the system trust store
 - the runtime user's NSS database (`~/.pki/nssdb`) for Chromium-based browsers
@@ -25,59 +25,39 @@ Without the CA in the appropriate trust stores, clients would see certificate er
 
 ### Step 1: Certificate Generation
 
-**Location**: `sandbox-init/cmd/sandbox-init/main.go` - `setupProxyCertificate()` and `generateCACertificate()`
+**Location**:
+
+- `proxy/cmd/proxy/main.go` - `init-certs` CLI subcommand
+- `proxy/internal/cert/manager.go` - `EnsureCA()` and CA generation
 
 **Process**:
-```go
-// Check if certificate already exists
-if _, err := os.Stat("/.data/proxy/certs/ca.crt"); err == nil {
-    fmt.Printf("Certificate exists, reusing...\n")
-    return installCertificateTrust(certPath, userInfo)
-}
 
-// Generate using Go crypto libraries
-privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-
-template := x509.Certificate{
-    SerialNumber: serialNumber,
-    Subject: pkix.Name{
-        Organization: []string{"Discobot Proxy"},
-        CommonName:   "Discobot Proxy CA",
-    },
-    NotBefore:             time.Now(),
-    NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
-    KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-    ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-    BasicConstraintsValid: true,
-    IsCA:                  true,
-    MaxPathLen:            0,
-    MaxPathLenZero:        true,
-    // SANs for localhost
-    DNSNames:    []string{"localhost"},
-    IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
-}
-
-certDER, _ := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-
-// Save as PEM files with appropriate permissions
-// ca.crt: mode 0644, ca.key: mode 0600
+```bash
+/opt/discobot/bin/proxy init-certs \
+  -config /.data/proxy/config.yaml \
+  -user discobot
 ```
+
+The subcommand loads `tls.cert_dir` from the proxy config, checks for a
+loadable `ca.crt`/`ca.key` pair, and generates a replacement pair when either
+file is missing or unusable. The proxy server uses the same `EnsureCA` path as
+a startup fallback, but trust-store installation is intentionally handled by the
+CLI subcommand.
 
 **Key Details**:
 - **Implementation**: Pure Go using `crypto/x509` and `crypto/rsa` (no external dependencies)
 - **Subject**: `O=Discobot Proxy, CN=Discobot Proxy CA`
-- **SANs (Subject Alternative Names)**: `localhost`, `127.0.0.1`, `::1` (for proper proxy identification)
+- **SANs (Subject Alternative Names)**: `localhost`, `127.0.0.1`, `::1`
 - **Validity**: 10 years (3650 days)
 - **Key Size**: 2048-bit RSA
 - **Storage**: `/.data/proxy/certs/` (persistent if `/.data` is a volume)
-- **Reuse**: Existing certificates are detected and reused
+- **Reuse**: Existing usable certificate/key pairs are reused
 
 ### Step 2: Browser and System Trust Installation
 
 **Chromium / NSS**:
 
-The agent imports the proxy CA into the runtime user's NSS database with `certutil`:
+The proxy subcommand imports the proxy CA into the runtime user's NSS database with `certutil`:
 
 ```bash
 mkdir -p /home/discobot/.pki/nssdb
@@ -90,7 +70,7 @@ certutil -d sql:/home/discobot/.pki/nssdb -A \
 
 This is the trust path Chromium-based browsers actually consult in this environment.
 
-**Location**: `sandbox-init/cmd/sandbox-init/main.go` - `installCertificateInSystemTrust()`
+**Location**: `proxy/internal/cert/trust.go` - `InstallSystemTrust()` and `InstallUserNSSDB()`
 
 **Detection Logic**:
 ```go
@@ -122,7 +102,7 @@ cp /.data/proxy/certs/ca.crt /usr/local/share/ca-certificates/discobot-proxy-ca.
 update-ca-certificates
 ```
 
-After updating, the agent verifies that the exact proxy CA certificate is
+After updating, the proxy subcommand verifies that the exact proxy CA certificate is
 present in `/etc/ssl/certs/ca-certificates.crt`. If the bundle is still stale
 after a normal update, the agent forces a full rebuild with
 `update-ca-certificates --fresh` before continuing.
@@ -159,11 +139,12 @@ Container Startup
     ↓
 [Steps 1-5: Home, workspace, filesystem setup]
     ↓
-Step 5b: Setup proxy config (from workspace or defaults)
+Step 5b: Setup proxy config from embedded defaults
     ↓
-Step 5c: Generate CA certificate & install in system trust  ← THIS IS NEW
-    ├─ Check if /.data/proxy/certs/ca.crt exists
-    ├─ Generate with OpenSSL if not found
+Step 5c: Run proxy init-certs
+    ├─ Load /.data/proxy/config.yaml
+    ├─ Generate or reuse /.data/proxy/certs/ca.{crt,key}
+    ├─ Import CA into the runtime user's NSS DB
     ├─ Detect OS (Debian/Fedora/Alpine/other)
     ├─ Copy to system trust directory
     └─ Run update command (update-ca-certificates or update-ca-trust)
@@ -205,7 +186,7 @@ Step 8: Start agent-api (with proxy env vars)
 ### Private Key Protection
 - Key file: `/.data/proxy/certs/ca.key`
 - Permissions: `0600` (owner read/write only)
-- Owner: root (agent runs as PID 1)
+- Owner: root (the init command runs as root)
 - Not exposed outside container
 
 ### Certificate Trust Scope
@@ -282,7 +263,7 @@ docker pull ubuntu:latest
 - Startup step skipped due to earlier error
 - Go crypto library error (RSA key generation or certificate creation)
 
-**Solution**: Check agent logs for errors during Step 5c
+**Solution**: Check sandbox-init logs for `proxy init-certs` errors during Step 5c
 
 ### Certificate Not Trusted
 **Symptom**: Certificate errors when making HTTPS requests through proxy
@@ -306,7 +287,7 @@ grep "Discobot Proxy" /etc/ssl/certs/ca-certificates.crt
 ```
 
 ### Certificate Generation Fails
-**Symptom**: Agent logs show errors like "generate RSA key" or "create certificate"
+**Symptom**: Logs show errors like "generate key" or "create certificate"
 
 **Possible causes**:
 - Insufficient entropy for random number generation (rare in containers)
@@ -319,27 +300,23 @@ grep "Discobot Proxy" /etc/ssl/certs/ca-certificates.crt
 
 ## Files Modified
 
-### Agent Code
+### Proxy Code
+- **`proxy/cmd/proxy/main.go`**:
+  - Added `init-certs` subcommand.
+  - Loads proxy config, initializes the CA, and installs trust stores.
+- **`proxy/internal/cert/manager.go`**:
+  - Added reusable `EnsureCA()` generation/reuse logic.
+- **`proxy/internal/cert/trust.go`**:
+  - Owns system trust and runtime-user NSS setup.
+
+### Sandbox Init Code
 - **`sandbox-init/cmd/sandbox-init/main.go`**:
-  - Added crypto imports: `crypto/rand`, `crypto/rsa`, `crypto/x509`, `crypto/x509/pkix`, `encoding/pem`, `math/big`
-  - `setupProxyCertificate()` - Main orchestration
-  - `generateCACertificate()` - Go crypto certificate generation with localhost SANs
-  - `installCertificateInSystemTrust()` - OS detection and delegation
-  - `installCertDebianStyle()` - Debian/Ubuntu/Alpine installation
-  - `installCertFedoraStyle()` - Fedora/RHEL installation
-  - Modified `run()` to call `setupProxyCertificate()` before starting proxy
-
-### Dockerfile
-- **`Dockerfile`**: No changes needed - certificate generation uses pure Go (no external dependencies)
-
-### Documentation
-- **`PROXY_INTEGRATION.md`**: Added "CA Certificate Generation & System Trust" section
-- **`PROXY_IMPLEMENTATION_SUMMARY.md`**: Updated startup flow and key changes
-- **`PROXY_CERT_SETUP.md`**: This file (detailed implementation guide)
+  - Removed inline certificate generation and trust-store implementation.
+  - Delegates certificate setup to `/opt/discobot/bin/proxy init-certs`.
 
 ## References
 
-- [OpenSSL Certificate Generation](https://www.openssl.org/docs/man3.0/man1/openssl-req.html)
+- [Go x509 package](https://pkg.go.dev/crypto/x509)
 - [Debian CA Certificates](https://wiki.debian.org/Self-Signed_Certificate)
 - [RHEL CA Trust](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/using-shared-system-certificates_security-hardening)
 - [Alpine CA Certificates](https://wiki.alpinelinux.org/wiki/Setting_up_a_Certificate_Authority)

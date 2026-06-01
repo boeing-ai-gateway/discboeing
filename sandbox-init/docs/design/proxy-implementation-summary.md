@@ -55,7 +55,7 @@ Container Start (PID 1: agent init)
 2. Workspace cloning
 3. Filesystem setup (OverlayFS/AgentFS)
 4. >>> Setup proxy config <<<
-5. >>> Generate CA cert & install in system trust ← NEW!
+5. >>> Run proxy init-certs for CA/trust setup <<<
 6. >>> Start proxy daemon <<<
 7. Start Docker daemon (with proxy env vars) ← Docker uses proxy!
 8. Start agent-api (with proxy env vars)
@@ -83,26 +83,11 @@ This ensures:
 - ✅ Localhost traffic bypasses proxy (prevents infinite loops)
 - ✅ Node.js processes trust the proxy CA for HTTPS MITM
 
-### 4. Configuration Priority
+### 4. Configuration Source
 
-1. **Workspace config** (highest priority): `.discobot/proxy/config.yaml` in workspace
-2. **Built-in default** (fallback): Embedded in agent binary with Docker caching enabled
-
-**Workspace Config Example:**
-```yaml
-# .discobot/proxy/config.yaml
-proxy:
-  port: 17080
-  api_port: 17081
-
-cache:
-  enabled: true
-  dir: /.data/proxy/cache
-  max_size: 53687091200  # 50GB (increase for team usage)
-  patterns:
-    - "^/v2/.*/blobs/sha256:.*"
-    - "^/v2/.*/manifests/sha256:.*"
-```
+Sandbox-init writes the embedded default proxy config to
+`/.data/proxy/config.yaml`. It does not read workspace proxy config during init
+because workspace files are untrusted before the sandbox is fully established.
 
 **Built-in Default:**
 - Docker caching: **enabled by default**
@@ -152,13 +137,9 @@ const (
 //go:embed default-proxy-config.yaml
 var defaultProxyConfig []byte
 
-// New functions
+// Proxy setup functions
 func setupProxyConfig(userInfo *userInfo) error
-func setupProxyCertificate() error                            // NEW: Auto-generates & installs CA cert
-func generateCACertificate(certPath, keyPath string) error    // NEW: OpenSSL cert generation
-func installCertificateInSystemTrust(certPath string) error   // NEW: Multi-distro trust install
-func installCertDebianStyle(certPath string) error            // NEW: Debian/Ubuntu/Alpine
-func installCertFedoraStyle(certPath string) error            // NEW: Fedora/RHEL
+func setupProxyCertificate(u *userInfo) error                 // Delegates to proxy init-certs
 func getProxyEnvVars() []string                               // NEW: DRY helper for proxy env vars
 func startProxyDaemon(userInfo *userInfo) (*exec.Cmd, error)
 func waitForProxyReady() error
@@ -172,7 +153,8 @@ func eventLoop(u *userInfo, signalCh <-chan os.Signal, agentCmd, dockerCmd, prox
 
 **Critical Changes**:
 1. Docker daemon now starts **after** proxy and receives proxy environment variables, ensuring all Docker image pulls use the cache from the very first pull.
-2. CA certificate is **automatically generated** and **installed in system trust store**, enabling transparent HTTPS interception without certificate errors.
+2. CA certificate setup is delegated to `proxy init-certs`, which generates or
+   reuses the CA and installs system/NSS trust stores.
 
 ### Dockerfile
 
