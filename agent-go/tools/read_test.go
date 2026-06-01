@@ -218,6 +218,205 @@ func TestRead_DefaultsToFirst2000Lines(t *testing.T) {
 	}
 }
 
+func TestRead_PositiveLimitLessThanMinimumReadsTenLines(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "twenty-lines.txt")
+	lines := make([]string, 0, 20)
+	for i := range 20 {
+		lines = append(lines, fmt.Sprintf("line%d", i+1))
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     3,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "10→line10") {
+		t.Fatalf("expected minimum limit to include line 10, got %q", text.Value)
+	}
+	if strings.Contains(text.Value, "11→line11") {
+		t.Fatalf("did not expect line 11 in output, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=11 to continue") {
+		t.Fatalf("expected continuation hint after line 10, got %q", text.Value)
+	}
+}
+
+func TestRead_ExtendsSlightlyToBalanceBraces(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "braces.go")
+	lines := make([]string, 0, 105)
+	lines = append(lines, "func example() {")
+	for i := 2; i <= 100; i++ {
+		lines = append(lines, fmt.Sprintf("\tline%d()", i))
+	}
+	lines = append(lines, "\tline101()")
+	lines = append(lines, "\tline102()")
+	lines = append(lines, "}")
+	lines = append(lines, "after()")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     100,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "103→}") {
+		t.Fatalf("expected read to extend through balancing brace, got %q", text.Value)
+	}
+	if strings.Contains(text.Value, "104→after()") {
+		t.Fatalf("did not expect lines after the balancing brace, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=104 to continue") {
+		t.Fatalf("expected continuation hint after extended lines, got %q", text.Value)
+	}
+}
+
+func TestRead_DoesNotExtendWhenBraceBalanceExceedsBudget(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "braces.go")
+	lines := make([]string, 0, 111)
+	lines = append(lines, "func example() {")
+	for i := 2; i <= 109; i++ {
+		lines = append(lines, fmt.Sprintf("\tline%d()", i))
+	}
+	lines = append(lines, "}")
+	lines = append(lines, "after()")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     100,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if strings.Contains(text.Value, "101→") {
+		t.Fatalf("did not expect extension past budget, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=101 to continue") {
+		t.Fatalf("expected continuation hint after requested limit, got %q", text.Value)
+	}
+}
+
+func TestRead_DoesNotExtendWhenBraceBalancesAtLimit(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "braces.go")
+	lines := make([]string, 0, 101)
+	lines = append(lines, "func example() {")
+	for i := 2; i <= 99; i++ {
+		lines = append(lines, fmt.Sprintf("\tline%d()", i))
+	}
+	lines = append(lines, "}")
+	lines = append(lines, "after()")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     100,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "100→}") {
+		t.Fatalf("expected balancing brace at requested limit, got %q", text.Value)
+	}
+	if strings.Contains(text.Value, "101→after()") {
+		t.Fatalf("did not expect extension when braces balanced at limit, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=101 to continue") {
+		t.Fatalf("expected continuation hint after requested limit, got %q", text.Value)
+	}
+}
+
+func TestRead_ExtendsToBalanceBracesAtEOF(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "braces.go")
+	lines := make([]string, 0, 103)
+	lines = append(lines, "func example() {")
+	for i := 2; i <= 100; i++ {
+		lines = append(lines, fmt.Sprintf("\tline%d()", i))
+	}
+	lines = append(lines, "\tline101()")
+	lines = append(lines, "\tline102()")
+	lines = append(lines, "}")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     100,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if !strings.Contains(text.Value, "103→}") {
+		t.Fatalf("expected read to extend through EOF balancing brace, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "End of file - total 103 lines") {
+		t.Fatalf("expected EOF marker after balanced extension, got %q", text.Value)
+	}
+}
+
+func TestRead_DoesNotExtendForUnbalancedClosingBrace(t *testing.T) {
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, "braces.go")
+	lines := make([]string, 0, 101)
+	for i := 1; i <= 100; i++ {
+		lines = append(lines, fmt.Sprintf("line%d()", i))
+	}
+	lines = append(lines, "}")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(cwd, t.TempDir(), t.Name())
+	output := executeRead(t, e, nil, map[string]any{
+		"file_path": path,
+		"limit":     100,
+	})
+
+	text, ok := output.(message.TextOutput)
+	if !ok {
+		t.Fatalf("expected TextOutput, got %T", output)
+	}
+	if strings.Contains(text.Value, "101→}") {
+		t.Fatalf("did not expect extension for unmatched closing brace, got %q", text.Value)
+	}
+	if !strings.Contains(text.Value, "Use offset=101 to continue") {
+		t.Fatalf("expected continuation hint after requested limit, got %q", text.Value)
+	}
+}
+
 func TestRead_OffsetBeyondEOFReturnsError(t *testing.T) {
 	cwd := t.TempDir()
 	path := filepath.Join(cwd, "short.txt")

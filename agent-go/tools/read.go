@@ -21,6 +21,7 @@ import (
 
 const (
 	defaultReadLimit = 2000
+	minReadLimit     = 10
 	maxReadLineLen   = 2000
 	maxReadBytes     = 50 * 1024
 	readFooterBytes  = 128
@@ -468,6 +469,18 @@ func maxOf(a, b int) int {
 	return b
 }
 
+func updateBraceBalance(balance int, line string) int {
+	for _, r := range line {
+		switch r {
+		case '{':
+			balance++
+		case '}':
+			balance--
+		}
+	}
+	return balance
+}
+
 type textReadResult struct {
 	lines  []string
 	count  int
@@ -510,45 +523,70 @@ func readTextFile(path string, offset, limit int) (textReadResult, error) {
 
 	if limit <= 0 {
 		limit = defaultReadLimit
+	} else if limit < minReadLimit {
+		limit = minReadLimit
 	}
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 
 	start := offset - 1
-	lines := make([]string, 0, min(limit, 128))
+	braceBudget := (limit - 1) / 10
+	lines := make([]string, 0, min(limit+braceBudget, 128))
+	extraLines := 0
 	bytesRead := 0
 	count := 0
 	more := false
 	cut := false
+	braceBalance := 0
+	inBraceExtension := false
+	braceExtensionComplete := false
 
 	for scanner.Scan() {
 		count++
 		if count <= start {
 			continue
 		}
+
 		if len(lines) >= limit {
-			more = true
-			continue
+			if !inBraceExtension {
+				inBraceExtension = braceBalance > 0 && braceBudget > 0
+			}
+			if !inBraceExtension || extraLines >= braceBudget || braceExtensionComplete {
+				more = true
+				continue
+			}
 		}
 
 		line := scanner.Text()
-		if len(line) > maxReadLineLen {
-			line = line[:maxReadLineLen] + maxReadLineSuffix
+		braceBalance = updateBraceBalance(braceBalance, line)
+		displayLine := line
+		if len(displayLine) > maxReadLineLen {
+			displayLine = displayLine[:maxReadLineLen] + maxReadLineSuffix
 		}
 
-		numbered := fmt.Sprintf("%6d→%s\n", count, line)
+		numbered := fmt.Sprintf("%6d→%s\n", count, displayLine)
 		if bytesRead+len(numbered) > maxReadBytes-readFooterBytes {
 			cut = true
 			more = true
 			break
 		}
 
-		lines = append(lines, line)
+		lines = append(lines, displayLine)
 		bytesRead += len(numbered)
+		if len(lines) > limit {
+			extraLines++
+			if braceBalance <= 0 {
+				braceExtensionComplete = true
+			}
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return textReadResult{}, err
+	}
+	if inBraceExtension && !braceExtensionComplete && len(lines) > limit {
+		lines = lines[:limit]
+		more = true
 	}
 
 	return textReadResult{

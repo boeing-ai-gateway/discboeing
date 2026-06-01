@@ -2,7 +2,7 @@ name: Read
 description: |-
   Read a file from the local filesystem.
 
-  `file_path` must be absolute. By default this reads from line 1 and returns up to 2000 lines. Use `offset` and `limit` for large files. Read output is capped at 50 KB, and very long lines are truncated. PDFs may use `pages`. This tool can also read images and notebooks.
+  `file_path` must be absolute. By default this reads from line 1 and returns up to 2000 lines. Positive limits below 10 are treated as 10. Use `offset` and `limit` for large files. Read output is capped at 50 KB, and very long lines are truncated. PDFs may use `pages`. This tool can also read images and notebooks.
 inputSchema:
   type: object
   additionalProperties: false
@@ -15,7 +15,7 @@ inputSchema:
       description: Starting line number for partial reads.
     limit:
       type: number
-      description: Number of lines to read for partial reads. Defaults to 2000.
+      description: Number of lines to read for partial reads. Defaults to 2000. Positive values below 10 are treated as 10.
     pages:
       type: string
       description: PDF page range such as "1-5" or "3".
