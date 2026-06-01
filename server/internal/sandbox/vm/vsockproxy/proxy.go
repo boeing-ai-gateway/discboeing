@@ -1,4 +1,5 @@
-package main
+// Package vsockproxy forwards VM-hosted Docker container published ports over VSOCK.
+package vsockproxy
 
 import (
 	"context"
@@ -17,38 +18,34 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// runProxy implements the VSOCK port proxy for VZ VMs.
-// It watches Docker events for containers with published ports and creates
-// socat VSOCK listeners that forward those ports to the host.
-func runProxy() error {
-	fmt.Println("discobot-sandbox-init-proxy: starting VSOCK port proxy")
+const logPrefix = "discobot-vsock-port-proxy"
+
+// Run watches Docker events for managed containers with published ports and
+// creates socat VSOCK listeners that forward those ports to the host.
+func Run() error {
+	fmt.Printf("%s: starting VSOCK port proxy\n", logPrefix)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Connect to Docker
 	cli, err := client.NewClientWithOpts(
 		client.WithHost("unix:///var/run/docker.sock"),
 		client.WithAPIVersionNegotiation(),
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to create docker client: %w", err)
 	}
 	defer cli.Close()
 
-	// Wait for Docker to be ready
 	if err := waitForDockerReady(ctx, cli); err != nil {
 		return fmt.Errorf("docker not ready: %w", err)
 	}
 
-	fmt.Println("discobot-sandbox-init-proxy: connected to Docker")
+	fmt.Printf("%s: connected to Docker\n", logPrefix)
 
-	// Track socat processes: containerID -> []*exec.Cmd
 	mu := &sync.Mutex{}
 	socatProcs := make(map[string][]*exec.Cmd)
 
-	// Handle existing containers
 	containers, err := cli.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("label", "discobot.managed=true"),
@@ -66,20 +63,16 @@ func runProxy() error {
 		}
 	}
 
-	// Handle shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
-
 	go func() {
 		<-sigCh
-		fmt.Println("discobot-sandbox-init-proxy: shutting down")
+		fmt.Printf("%s: shutting down\n", logPrefix)
 		cancel()
 	}()
 
-	// Watch Docker events with auto-reconnect
-	watchDockerEventsProxy(ctx, cli, mu, socatProcs)
+	watchDockerEvents(ctx, cli, mu, socatProcs)
 
-	// Cleanup all socat processes
 	mu.Lock()
 	for containerID, cmds := range socatProcs {
 		for _, cmd := range cmds {
@@ -91,11 +84,10 @@ func runProxy() error {
 	}
 	mu.Unlock()
 
-	fmt.Println("discobot-sandbox-init-proxy: stopped")
+	fmt.Printf("%s: stopped\n", logPrefix)
 	return nil
 }
 
-// waitForDockerReady polls Docker until it responds to ping.
 func waitForDockerReady(ctx context.Context, cli *client.Client) error {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
@@ -114,7 +106,6 @@ func waitForDockerReady(ctx context.Context, cli *client.Client) error {
 	}
 }
 
-// extractPublishedPorts returns the host ports from a container's port list.
 func extractPublishedPorts(ports []container.Port) []int {
 	seen := make(map[int]bool)
 	var result []int
@@ -127,7 +118,6 @@ func extractPublishedPorts(ports []container.Port) []int {
 	return result
 }
 
-// extractPublishedPortsFromInspect extracts published host ports from a container inspect result.
 func extractPublishedPortsFromInspect(info container.InspectResponse) []int {
 	seen := make(map[int]bool)
 	var result []int
@@ -143,12 +133,10 @@ func extractPublishedPortsFromInspect(info container.InspectResponse) []int {
 	return result
 }
 
-// startSocatForContainer starts socat VSOCK listeners for the given ports.
 func startSocatForContainer(mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, containerID string, ports []int) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Kill any existing socat processes for this container
 	if cmds, exists := socatProcs[containerID]; exists {
 		for _, cmd := range cmds {
 			if cmd.Process != nil {
@@ -168,23 +156,21 @@ func startSocatForContainer(mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, c
 		cmd.Stderr = os.Stderr
 
 		if err := cmd.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "discobot-sandbox-init-proxy: failed to start socat for port %d: %v\n", port, err)
+			fmt.Fprintf(os.Stderr, "%s: failed to start socat for port %d: %v\n", logPrefix, port, err)
 			continue
 		}
 
-		fmt.Printf("discobot-sandbox-init-proxy: forwarding VSOCK port %d -> localhost:%d (container %s)\n", port, port, containerID[:12])
+		fmt.Printf("%s: forwarding VSOCK port %d -> localhost:%d (container %s)\n", logPrefix, port, port, shortContainerID(containerID))
 		cmds = append(cmds, cmd)
 
-		// Reap socat process when it exits
-		go func(c *exec.Cmd, p int) {
+		go func(c *exec.Cmd) {
 			_ = c.Wait()
-		}(cmd, port)
+		}(cmd)
 	}
 
 	socatProcs[containerID] = cmds
 }
 
-// stopSocatForContainer kills all socat processes for a container.
 func stopSocatForContainer(mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, containerID string) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -200,12 +186,10 @@ func stopSocatForContainer(mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, co
 		}
 	}
 	delete(socatProcs, containerID)
-	fmt.Printf("discobot-sandbox-init-proxy: stopped forwarding for container %s\n", containerID[:12])
+	fmt.Printf("%s: stopped forwarding for container %s\n", logPrefix, shortContainerID(containerID))
 }
 
-// watchDockerEventsProxy watches Docker events and manages socat processes.
-// Auto-reconnects on stream errors.
-func watchDockerEventsProxy(ctx context.Context, cli *client.Client, mu *sync.Mutex, socatProcs map[string][]*exec.Cmd) {
+func watchDockerEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex, socatProcs map[string][]*exec.Cmd) {
 	filterArgs := filters.NewArgs(
 		filters.Arg("type", string(events.ContainerEventType)),
 		filters.Arg("event", "start"),
@@ -225,24 +209,21 @@ func watchDockerEventsProxy(ctx context.Context, cli *client.Client, mu *sync.Mu
 			Filters: filterArgs,
 		})
 
-		done := processProxyEvents(ctx, cli, mu, socatProcs, msgCh, errCh)
+		done := processEvents(ctx, cli, mu, socatProcs, msgCh, errCh)
 		if !done {
 			return
 		}
 
-		// Recoverable error — wait before reconnecting
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):
-			fmt.Println("discobot-sandbox-init-proxy: reconnecting to Docker events...")
+			fmt.Printf("%s: reconnecting to Docker events...\n", logPrefix)
 		}
 	}
 }
 
-// processProxyEvents processes Docker events from channels.
-// Returns true if reconnection should be attempted, false if we should exit.
-func processProxyEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, msgCh <-chan events.Message, errCh <-chan error) bool {
+func processEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex, socatProcs map[string][]*exec.Cmd, msgCh <-chan events.Message, errCh <-chan error) bool {
 	for {
 		select {
 		case <-ctx.Done():
@@ -255,7 +236,7 @@ func processProxyEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex,
 			if ctx.Err() != nil {
 				return false
 			}
-			fmt.Fprintf(os.Stderr, "discobot-sandbox-init-proxy: docker events error: %v, reconnecting...\n", err)
+			fmt.Fprintf(os.Stderr, "%s: docker events error: %v, reconnecting...\n", logPrefix, err)
 			return true
 
 		case msg := <-msgCh:
@@ -263,18 +244,15 @@ func processProxyEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex,
 			if containerID == "" {
 				continue
 			}
-
-			// Check if this is a managed container
 			if msg.Actor.Attributes["discobot.managed"] != "true" {
 				continue
 			}
 
 			switch msg.Action {
 			case "start":
-				// Inspect container to get published ports
 				info, err := cli.ContainerInspect(ctx, containerID)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "discobot-sandbox-init-proxy: failed to inspect container %s: %v\n", containerID[:12], err)
+					fmt.Fprintf(os.Stderr, "%s: failed to inspect container %s: %v\n", logPrefix, shortContainerID(containerID), err)
 					continue
 				}
 
@@ -288,4 +266,11 @@ func processProxyEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex,
 			}
 		}
 	}
+}
+
+func shortContainerID(id string) string {
+	if len(id) <= 12 {
+		return id
+	}
+	return id[:12]
 }

@@ -14,6 +14,8 @@ This module provides the sandbox runtime abstraction for managing execution envi
 | `internal/sandbox/docker/cache.go`         | Cache volume management                                  |
 | `internal/sandbox/exedev/provider.go`      | exe.dev VM implementation                                |
 | `internal/sandbox/vm/manager.go`           | VM abstraction layer (interfaces for VZ, KVM, WSL2)      |
+| `internal/sandbox/vm/proxy_container.go`   | Starts the VM-side published-port VSOCK proxy container   |
+| `internal/sandbox/vm/vsockproxy/`          | Docker event watcher for VSOCK published-port forwarding  |
 | `internal/sandbox/vz/vz_vm_manager.go`     | Apple Virtualization.framework VM manager (macOS)        |
 | `internal/sandbox/vz/vz_docker.go`         | Hybrid provider: VZ VMs with Docker containers (macOS)   |
 | `internal/sandbox/vz/vsock.go`             | VSOCK communication types                                |

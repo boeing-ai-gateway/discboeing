@@ -44,6 +44,16 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sandbox-init ./sandbox-init/cmd/sandbox-init
 
+# Stage 1c: Build the VSOCK port proxy used by VZ VMs
+FROM root-go-deps AS vsock-port-proxy-builder
+
+COPY server/cmd/vsock-port-proxy/ ./server/cmd/vsock-port-proxy/
+COPY server/internal/sandbox/vm/vsockproxy/ ./server/internal/sandbox/vm/vsockproxy/
+
+RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-vsock-port-proxy ./server/cmd/vsock-port-proxy
+
 # Stage 2: Download shared Go module dependencies for agent-go
 FROM golang:1.26 AS agent-go-deps
 
@@ -376,6 +386,7 @@ FROM scratch AS runtime-overlay
 COPY --from=agent-go-builder --chmod=755 /discobot-agent-api /opt/discobot/bin/discobot-agent-api
 COPY --from=proxy-builder --chmod=755 /proxy /opt/discobot/bin/proxy
 COPY --from=sandbox-init-builder --chmod=755 /discobot-sandbox-init /opt/discobot/bin/discobot-sandbox-init
+COPY --from=vsock-port-proxy-builder --chmod=755 /discobot-vsock-port-proxy /opt/discobot/bin/discobot-vsock-port-proxy
 
 # Copy browser-harness runtime and expose it at /usr/local/bin/browser-harness
 COPY --from=browser-harness-builder /opt/browser-harness /opt/browser-harness

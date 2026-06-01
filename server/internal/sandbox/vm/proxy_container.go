@@ -48,7 +48,7 @@ func startProxyContainer(ctx context.Context, projectID string, dockerProv *dock
 
 	containerConfig := &containerTypes.Config{
 		Image: sandboxImage,
-		Cmd:   []string{"/opt/discobot/bin/discobot-sandbox-init", "proxy"},
+		Cmd:   []string{"/opt/discobot/bin/discobot-vsock-port-proxy"},
 		Labels: map[string]string{
 			"discobot.proxy":      "true",
 			"discobot.project.id": projectID,

@@ -1,7 +1,6 @@
 // Package main is the entry point for the discobot-sandbox-init init process.
-// This binary provides two subcommands:
-// - setup: Container initialization (workspace, overlayfs, certs, env files)
-// - proxy: VSOCK port proxy for VZ VMs (Docker event watching + socat forwarding)
+// This binary provides container initialization for workspace, overlayfs,
+// certificates, and environment files.
 package main
 
 import (
@@ -46,7 +45,7 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: discobot-sandbox-init <setup|proxy>\n")
+		fmt.Fprintf(os.Stderr, "usage: discobot-sandbox-init <setup>\n")
 		os.Exit(1)
 	}
 
@@ -54,10 +53,8 @@ func main() {
 	switch os.Args[1] {
 	case "setup":
 		err = runSetup()
-	case "proxy":
-		err = runProxy()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\nusage: discobot-sandbox-init <setup|proxy>\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "unknown command: %s\nusage: discobot-sandbox-init <setup>\n", os.Args[1])
 		os.Exit(1)
 	}
 
