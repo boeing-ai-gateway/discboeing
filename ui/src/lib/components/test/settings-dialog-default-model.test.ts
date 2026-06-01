@@ -6,6 +6,22 @@ const source = readFileSync(
 	new URL("../app/SettingsDialog.svelte", import.meta.url),
 	"utf8",
 );
+const uiStateSource = readFileSync(
+	new URL("../../store/ui-state.store.svelte.ts", import.meta.url),
+	"utf8",
+);
+
+test("settings dialog uses one as the disabled recent-list option", () => {
+	assert.match(
+		uiStateSource,
+		/export const DEFAULT_RECENT_THREADS_VISIBLE_LIMIT = 1;/,
+	);
+	assert.match(
+		uiStateSource,
+		/export const RECENT_THREADS_VISIBLE_LIMIT_PRESETS = \[1, 4, 8, 12\] as const;/,
+	);
+	assert.match(source, /\{limit === 1 \? "Off" : limit\}/);
+});
 
 test("settings dialog groups default models by provider with optgroups", () => {
 	assert.match(
