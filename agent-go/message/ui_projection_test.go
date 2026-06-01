@@ -451,6 +451,182 @@ func TestProjectUIMessages_DeniedApproval(t *testing.T) {
 	}
 }
 
+func TestUIMessageUnmarshalAcceptsCurrentAssistantParts(t *testing.T) {
+	var message UIMessage
+	err := json.Unmarshal([]byte(`{
+		"id":"assistant-custom",
+		"role":"assistant",
+		"parts":[
+			{"type":"reasoning","text":"Thinking through the approval flow.","state":"done"},
+			{
+				"type":"dynamic-tool",
+				"toolCallId":"tool-123",
+				"toolName":"AskUserQuestion",
+				"state":"approval-requested",
+				"input":{"questions":[{"header":"Filename","question":"What filename do you want?","multiSelect":false,"options":[{"label":"test.db.sql","description":"Keep the SQL extension."}]}]},
+				"approval":{"id":"approval-123"}
+			},
+			{"type":"step-start"},
+			{"type":"text","text":"Waiting for your answer.","state":"done"}
+		]
+	}`), &message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message.ID != "assistant-custom" || message.Role != "assistant" {
+		t.Fatalf("message = %#v, want assistant-custom assistant", message)
+	}
+	if len(message.Parts) != 4 {
+		t.Fatalf("parts len = %d, want 4", len(message.Parts))
+	}
+	if _, ok := message.Parts[0].(UIReasoningPart); !ok {
+		t.Fatalf("part 0 = %T, want UIReasoningPart", message.Parts[0])
+	}
+	part, ok := message.Parts[1].(DynamicToolPart)
+	if !ok {
+		t.Fatalf("part 1 = %T, want DynamicToolPart", message.Parts[1])
+	}
+	if part.ToolName != "AskUserQuestion" || part.Approval == nil || part.Approval.ID != "approval-123" {
+		t.Fatalf("dynamic tool = %#v, want AskUserQuestion approval-123", part)
+	}
+	if _, ok := message.Parts[2].(UIStepStartPart); !ok {
+		t.Fatalf("part 2 = %T, want UIStepStartPart", message.Parts[2])
+	}
+	if _, ok := message.Parts[3].(UITextPart); !ok {
+		t.Fatalf("part 3 = %T, want UITextPart", message.Parts[3])
+	}
+}
+
+func TestUIMessageUnmarshalAcceptsDataParts(t *testing.T) {
+	var message UIMessage
+	err := json.Unmarshal([]byte(`{
+		"id":"user-1",
+		"role":"user",
+		"parts":[
+			{"type":"text","text":"Prompt","state":"done"},
+			{"type":"data-attachment","id":"attachment-1","data":{"filename":"demo.txt"}}
+		]
+	}`), &message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(message.Parts) != 2 {
+		t.Fatalf("parts len = %d, want 2", len(message.Parts))
+	}
+	part, ok := message.Parts[1].(UIDataPart)
+	if !ok {
+		t.Fatalf("part 1 = %T, want UIDataPart", message.Parts[1])
+	}
+	if part.Type != "data-attachment" || part.ID != "attachment-1" {
+		t.Fatalf("data part = %#v, want data-attachment attachment-1", part)
+	}
+}
+
+func TestProjectUIMessages_CompletedApprovalWithoutResponseIsApproved(t *testing.T) {
+	msgs := []Message{
+		{Role: "assistant", Parts: []Part{
+			ToolCallPart{ToolCallID: "tc1", ToolName: "ask", Input: `{}`},
+			ToolApprovalRequest{ApprovalID: "a1", ToolCallID: "tc1"},
+		}},
+		{Role: "tool", Parts: []Part{
+			ToolResultPart{ToolCallID: "tc1", ToolName: "ask", Output: TextOutput{Value: "answered"}},
+		}},
+	}
+
+	result, err := ProjectUIMessages(msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ui struct {
+		Parts []json.RawMessage `json:"parts"`
+	}
+	json.Unmarshal(mustMarshal(t, result[0]), &ui)
+
+	var dp struct {
+		State    string `json:"state"`
+		Approval *struct {
+			ID       string `json:"id"`
+			Approved *bool  `json:"approved"`
+		} `json:"approval"`
+	}
+	json.Unmarshal(ui.Parts[0], &dp)
+
+	if dp.State != "output-available" {
+		t.Fatalf("state: got %q", dp.State)
+	}
+	if dp.Approval == nil || dp.Approval.ID != "a1" {
+		t.Fatalf("approval: got %+v", dp.Approval)
+	}
+	if dp.Approval.Approved == nil || !*dp.Approval.Approved {
+		t.Fatal("expected approved=true")
+	}
+}
+
+func TestProjectUIMessages_DeniedResultEmitsApprovalOutcome(t *testing.T) {
+	msgs := []Message{
+		{Role: "assistant", Parts: []Part{
+			ToolCallPart{ToolCallID: "tc1", ToolName: "rm", Input: `{}`},
+		}},
+		{Role: "tool", Parts: []Part{
+			ToolResultPart{ToolCallID: "tc1", ToolName: "rm", Output: ExecutionDeniedOutput{Reason: "user declined"}},
+		}},
+	}
+
+	result, err := ProjectUIMessages(msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ui struct {
+		Parts []json.RawMessage `json:"parts"`
+	}
+	json.Unmarshal(mustMarshal(t, result[0]), &ui)
+
+	var dp struct {
+		State    string `json:"state"`
+		Approval *struct {
+			ID       string `json:"id"`
+			Approved *bool  `json:"approved"`
+		} `json:"approval"`
+	}
+	json.Unmarshal(ui.Parts[0], &dp)
+
+	if dp.State != "output-denied" {
+		t.Fatalf("state: got %q", dp.State)
+	}
+	if dp.Approval == nil || dp.Approval.ID != "tc1" {
+		t.Fatalf("approval: got %+v", dp.Approval)
+	}
+	if dp.Approval.Approved == nil || *dp.Approval.Approved {
+		t.Fatal("expected approved=false")
+	}
+}
+
+func TestDynamicToolPartUnmarshalAcceptsDeniedApproval(t *testing.T) {
+	var part DynamicToolPart
+	if err := json.Unmarshal([]byte(`{
+		"type":"dynamic-tool",
+		"toolCallId":"tool-denied",
+		"toolName":"Bash",
+		"state":"output-denied",
+		"input":{"command":"rm -rf /tmp/demo"},
+		"approval":{"id":"approval-denied","approved":false,"reason":"continue"}
+	}`), &part); err != nil {
+		t.Fatal(err)
+	}
+	if part.Approval == nil || part.Approval.ID != "approval-denied" || part.Approval.Approved == nil || *part.Approval.Approved || part.Approval.Reason != "continue" {
+		t.Fatalf("approval = %#v, want denied approval with reason", part.Approval)
+	}
+}
+
+func TestUnmarshalUIPartRejectsUnsupportedPartTypes(t *testing.T) {
+	_, err := UnmarshalUIPart([]byte(`{"type":"unsupported","value":true}`))
+	if err == nil {
+		t.Fatal("expected unsupported part type error")
+	}
+}
+
 // --- Projection field-coverage tests ---
 //
 // Each test below creates a source Part with every projectable field set to a

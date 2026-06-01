@@ -33,7 +33,7 @@ type ToolApproval struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-// UIMessage is the JSON wire format for a UIMessage in the AI SDK v6 protocol.
+// UIMessage is the JSON wire format Discobot exposes to the UI.
 // Parts are marshaled via the UIPart interface.
 type UIMessage struct {
 	ID       string          `json:"id"`
@@ -84,8 +84,8 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 }
 
 // ProjectUIMessages converts a slice of Messages (which may include "tool" role
-// messages) into the AI SDK v6 UIMessage format. Consecutive assistant/tool
-// runs are merged into single assistant UIMessages with DynamicToolParts.
+// messages) into Discobot's UI message format. Consecutive assistant/tool
+// runs are merged into single assistant UI messages with DynamicToolParts.
 func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 	var result []UIMessage
 	i := 0
@@ -295,13 +295,23 @@ func applyToolResultToDynamicPart(dp *DynamicToolPart, result ToolResultPart) {
 		dp.ErrorText = string(o.Value)
 	case ExecutionDeniedOutput:
 		dp.State = "output-denied"
-		if dp.Approval != nil && dp.Approval.Approved == nil {
-			approved := false
-			dp.Approval.Approved = &approved
-		}
 	default:
 		dp.State = "output-available"
 		data, _ := MarshalToolResultOutput(result.Output)
 		dp.Output = data
+	}
+
+	switch dp.State {
+	case "output-available":
+		if dp.Approval != nil && dp.Approval.Approved == nil {
+			dp.Approval.Approved = new(true)
+		}
+	case "output-denied":
+		if dp.Approval == nil {
+			dp.Approval = &ToolApproval{ID: dp.ToolCallID}
+		}
+		if dp.Approval.Approved == nil {
+			dp.Approval.Approved = new(false)
+		}
 	}
 }
