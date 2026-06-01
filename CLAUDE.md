@@ -186,44 +186,16 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
 - **PowerShell**: PSScriptAnalyzer for linting and Invoke-Formatter formatting on Windows
 - **Git commit messages**: use Conventional Commits for every commit, with a type-based subject like `feat(scope): short description` (for example, `feat(ui): add session filter`). Keep the subject line to 50 characters or fewer when possible. Always include a commit body after a blank line, even for small changes, and use it to explain the nature of the change, the key decisions, and any important context. Wrap body lines to 72 characters or fewer
-- **Code style**:
-  - Optimize for code that a maintainer can read once and understand. Prefer
-    boring, direct control flow over clever abstractions.
-  - Keep simple code simple. Do not add helpers, layers, interfaces, or
-    temporary variables unless they make the code easier to scan or remove a
-    real repetition problem.
-  - Avoid one-line or two-line helper functions for simple templ expressions.
-    Inline simple expressions in templ files. For Datastar attributes, prefer
-    object syntax for grouped `data-class` and `data-style` expressions instead
-    of adding trivial Go helpers.
-  - Give complex setup code a visible shape. For long constructors,
-    lifecycle/orchestration flows, or HTTP server wiring, prefer an explicit
-    state struct and named phases such as `initCredentials`, `initRuntime`,
-    `routes`, and `close`.
-  - Split by meaningful lifecycle boundaries, not by arbitrary line count. Good
-    boundaries include configuration loading, dependency construction,
-    background process startup, route registration, and cleanup.
-  - Avoid dense "blob" functions: a function with many unrelated local
-    variables, callbacks, and cleanup steps should usually become a small
-    object with clear methods or a short top-level outline.
-  - Keep related logic together. Do not scatter a straightforward operation
-    across many tiny helpers just to make individual functions short.
-  - Separate concerns when the lifecycle is non-trivial: runtime object
-    construction, HTTP route assembly, background process startup, and cleanup
-    should be easy to identify independently.
-  - Prefer descriptive names in broad scopes (`runtime`, `router`,
-    `credentialManager`, `providerRegistry`) over terse names (`r`, `h`,
-    `mgr`, `reg`). Short names are fine only in very small, obvious scopes.
-  - Do not compress multi-field structs, long function calls, or callbacks into
-    hard-to-scan one-liners just to save vertical space. Use vertical space to
-    make important structure visible.
-  - Accept small, local duplication when it avoids premature abstraction or
-    keeps a call site easier to understand.
-  - Add comments when they help the reader understand intent: function comments
-    for non-trivial code, short section comments for setup phases, and inline
-    comments for dependency ordering, tricky logic, edge cases, or behavior that
-    is surprising from the code alone. Avoid comments that simply restate the
-    next line.
+
+### General code style
+
+Follow idiomatic Go style, close to the Go standard library and Effective Go:
+
+- Prefer simple, explicit code over clever abstractions.
+- Keep related logic together; split code by real responsibilities.
+- Avoid tiny helpers unless they remove meaningful repetition or clarify intent.
+- Use descriptive names in broad scopes; short names are fine in small scopes.
+- Add comments for intent, edge cases, or surprising behavior—not for obvious code.
 
 ## Documentation
 
