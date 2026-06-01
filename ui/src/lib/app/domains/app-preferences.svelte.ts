@@ -106,9 +106,6 @@ export function createAppPreferencesDomain(
 		get showRefreshButton() {
 			return uiStateStore.showRefreshButton;
 		},
-		get showEditorButton() {
-			return uiStateStore.showEditorButton;
-		},
 		get autoScrollOnStream() {
 			return uiStateStore.autoScrollOnStream;
 		},
@@ -155,9 +152,6 @@ export function createAppPreferencesDomain(
 		},
 		setShowRefreshButton: (value) => {
 			uiStateStore.setShowRefreshButton(value);
-		},
-		setShowEditorButton: (value) => {
-			uiStateStore.setShowEditorButton(value);
 		},
 		setAutoScrollOnStream: (value) => {
 			uiStateStore.setAutoScrollOnStream(value);

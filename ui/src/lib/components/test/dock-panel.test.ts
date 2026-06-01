@@ -33,14 +33,7 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 	);
 	assert.match(source, /\{#if mountedDockPanelKinds\.includes\("terminal"\)\}/);
 	assert.match(source, /\{#if mountedDockPanelKinds\.includes\("desktop"\)\}/);
-	assert.match(
-		source,
-		/const editorEnabled = \$derived\.by\(\(\) => app\.preferences\.showEditorButton\);/,
-	);
-	assert.match(
-		source,
-		/\{#if editorEnabled && mountedDockPanelKinds\.includes\("vscode"\)\}/,
-	);
+	assert.match(source, /\{#if mountedDockPanelKinds\.includes\("vscode"\)\}/);
 	assert.match(source, /\{#if mountedDockPanelKinds\.includes\("file"\)\}/);
 	assert.match(
 		source,
@@ -58,11 +51,7 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 		source,
 		/class=\{sessionView\.activeView\.kind === "vscode" \? "contents" : "hidden"\}/,
 	);
-	assert.match(
-		source,
-		/if \(!editorEnabled && sessionView\.activeView\.kind === "vscode"\) \{/,
-	);
-	assert.match(source, /sessionView\.openChat\(\);/);
+	assert.doesNotMatch(source, /editorEnabled/);
 	assert.match(source, /async function handleOpenDiffFile\(path: string\)/);
 	assert.match(
 		source,

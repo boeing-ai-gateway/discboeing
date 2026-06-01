@@ -7,11 +7,8 @@ const source = readFileSync(
 	"utf8",
 );
 
-test("session toolbar gates the editor button behind the user preference", () => {
-	assert.match(
-		source,
-		/const showEditorButton = \$derived\.by\(\(\) => preferences\.showEditorButton\);/,
-	);
-	assert.match(source, /\{#if showEditorButton\}[\s\S]*Editor[\s\S]*\{\/if\}/);
+test("session toolbar always shows the editor button", () => {
+	assert.doesNotMatch(source, /showEditorButton/);
+	assert.match(source, /<Button[\s\S]*Editor[\s\S]*<\/Button>/);
 	assert.match(source, /disabled=\{!vscodeAvailable\}/);
 });

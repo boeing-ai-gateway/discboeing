@@ -34,7 +34,6 @@
 	const desktopAvailable = $derived.by(() =>
 		session.services.list.some((service) => service.id === DESKTOP_SERVICE_ID),
 	);
-	const editorEnabled = $derived.by(() => app.preferences.showEditorButton);
 	const vscodeAvailable = $derived.by(() =>
 		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
 	);
@@ -63,12 +62,6 @@
 		}
 
 		mountedDockPanelKinds = [...mountedDockPanelKinds, activeKind];
-	});
-
-	$effect(() => {
-		if (!editorEnabled && sessionView.activeView.kind === "vscode") {
-			sessionView.openChat();
-		}
 	});
 
 	function buildDiffSelectionSnippet({
@@ -112,7 +105,7 @@ ${selectedText}
 	}
 
 	async function handleOpenDiffFile(path: string) {
-		if (!editorEnabled || !vscodeAvailable) {
+		if (!vscodeAvailable) {
 			await session.files.open(path);
 			return;
 		}
@@ -159,7 +152,7 @@ ${selectedText}
 		</div>
 	{/if}
 
-	{#if editorEnabled && mountedDockPanelKinds.includes("vscode")}
+	{#if mountedDockPanelKinds.includes("vscode")}
 		<div
 			class={sessionView.activeView.kind === "vscode" ? "contents" : "hidden"}
 		>

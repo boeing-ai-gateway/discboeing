@@ -78,7 +78,6 @@
 	const vscodeAvailable = $derived.by(() =>
 		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
 	);
-	const showEditorButton = $derived.by(() => preferences.showEditorButton);
 
 	function isJetBrainsIdeOption(
 		option: IdeOption,
@@ -423,18 +422,16 @@
 			>
 				Desktop
 			</Button>
-			{#if showEditorButton}
-				<Button
-					variant={sessionView.activeView.kind === "vscode"
-						? "secondary"
-						: "ghost"}
-					size="xs"
-					onclick={toggleVSCode}
-					disabled={!vscodeAvailable}
-				>
-					Editor
-				</Button>
-			{/if}
+			<Button
+				variant={sessionView.activeView.kind === "vscode"
+					? "secondary"
+					: "ghost"}
+				size="xs"
+				onclick={toggleVSCode}
+				disabled={!vscodeAvailable}
+			>
+				Editor
+			</Button>
 			<Button
 				variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
 				size="xs"
