@@ -226,9 +226,11 @@
 		void currentEntries;
 		void currentDiffTarget;
 
-		loadGeneration += 1;
-		clearDiffStates();
-		ignoreWhitespaceByPath = {};
+		untrack(() => {
+			loadGeneration += 1;
+			clearDiffStates();
+			ignoreWhitespaceByPath = {};
+		});
 
 		if (!currentSessionId || currentEntries.length === 0) {
 			expandedPath = null;
