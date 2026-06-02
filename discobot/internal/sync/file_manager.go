@@ -82,15 +82,4 @@ func mergeFileData(current *state.Data, fixture state.Data) {
 			current.Project[projectID] = project
 		}
 	}
-	if len(fixture.Services) > 0 {
-		current.Services = fixture.Services
-	}
-	if len(fixture.Service) > 0 {
-		if current.Service == nil {
-			current.Service = map[string]state.ServiceData{}
-		}
-		for serviceID, service := range fixture.Service {
-			current.Service[serviceID] = service
-		}
-	}
 }

@@ -1,18 +1,7 @@
-// Package state owns Discobot's server-side application and view state.
+// Package state owns Discobot's server-side application state.
 package state
 
-// Shell is the render model for the full-page shell.
-type Shell struct {
-	Data Data
-	View View
-}
-
-// NewShell packages server app and view state for templ rendering.
-func NewShell(data Data, view View) Shell {
-	data = cloneData(data)
-	view = normalizeShellView(data, NormalizeView(view))
-	return Shell{
-		Data: data,
-		View: view,
-	}
+// NewData returns an immutable snapshot clone of server application state.
+func NewData(data Data) Data {
+	return cloneData(data)
 }

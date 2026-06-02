@@ -20,8 +20,17 @@ type Data struct {
 	App      App
 	Projects []serverapi.Project
 	Project  map[string]ProjectData
-	Services []serverapi.Service
-	Service  map[string]ServiceData
+}
+
+// App describes the running app shown by clients.
+type App struct {
+	Name        string
+	Description string
+}
+
+// ServiceData mirrors service-scoped state that is not part of the server API.
+type ServiceData struct {
+	Logs []string
 }
 
 // ProjectData mirrors one Discobot server project using generated client types.
@@ -37,6 +46,8 @@ type ProjectData struct {
 // SessionData mirrors session-scoped state for one generated session.
 type SessionData struct {
 	Session   serverapi.Session
+	Services  []serverapi.Service
+	Service   map[string]ServiceData
 	Threads   []serverapi.Thread
 	Thread    map[string]ThreadData
 	Files     []FileNode
@@ -51,17 +62,6 @@ type ThreadData struct {
 	Messages        []serverapi.Message
 	PendingHistory  bool
 	PendingMessages []serverapi.Message
-}
-
-// App describes the running Discobot application.
-type App struct {
-	Name        string
-	Description string
-}
-
-// ServiceData mirrors service-scoped UI state for one generated service.
-type ServiceData struct {
-	Logs []string
 }
 
 // ServiceStatus describes whether a service is running.
@@ -124,25 +124,14 @@ const (
 
 // FileNode is a server-owned file tree node scoped to a session.
 type FileNode struct {
+	serverapi.WorkspaceFileEntry
 	ID                    string
 	SessionID             string
 	ParentID              string
-	Name                  string
-	Kind                  FileKind
 	GitStatus             FileGitStatus
 	Approved              bool
 	HasChangedDescendants bool
 }
-
-// FileKind describes whether a file tree node is a file or directory.
-type FileKind string
-
-const (
-	// FileKindDirectory is an expandable directory node.
-	FileKindDirectory FileKind = "directory"
-	// FileKindFile is a leaf file node.
-	FileKindFile FileKind = "file"
-)
 
 // FileGitStatus describes a file's workspace diff state.
 type FileGitStatus string
@@ -220,226 +209,226 @@ func DefaultData() Data {
 					sampleMessage("message-cobra-main-20", "assistant", "I’ll add enough fixture turns to exceed the available center height on common screens. That should make the scroll behavior and the top buffer easy to inspect without needing live agent output."),
 					sampleMessage("message-cobra-main-21", "user", "The goal is not perfect copy. The goal is visual pressure on the layout."),
 					sampleMessage("message-cobra-main-22", "assistant", "Understood. I’ll optimize the sample data for visual density and layout coverage, not for production-quality conversation content."),
-					sampleMessage("message-cobra-main-23", "user", "Make sure checks still pass after templ generation."),
-					sampleMessage("message-cobra-main-24", "assistant", "I’ll regenerate templ output after the layout changes and run the Discobot check command so the generated Go and Tailwind output stay in sync."),
+					sampleMessage("message-cobra-main-23", "user", "Make sure checks still pass."),
+					sampleMessage("message-cobra-main-24", "assistant", "I’ll run the Discobot checks after the layout changes so the Go output stays in sync."),
 				},
 			},
 			Files: []FileNode{
-				{ID: "file-cobra-root", SessionID: "session-cobra", Name: "discobot", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-agent", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "agent-go", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-agent-provider", SessionID: "session-cobra", ParentID: "file-cobra-agent", Name: "provider", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-agent-provider-openai", SessionID: "session-cobra", ParentID: "file-cobra-agent-provider", Name: "openai", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-agent-provider-openai-client", SessionID: "session-cobra", ParentID: "file-cobra-agent-provider-openai", Name: "client.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-server", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "server", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-ui", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "ui", Kind: FileKindDirectory},
-				{ID: "file-cobra-vm", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "vm-assets", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-vm-network", SessionID: "session-cobra", ParentID: "file-cobra-vm", Name: "network", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-vm-network-bridge", SessionID: "session-cobra", ParentID: "file-cobra-vm-network", Name: "bridge.sh", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-vm-scripts", SessionID: "session-cobra", ParentID: "file-cobra-vm", Name: "scripts", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-vm-scripts-start", SessionID: "session-cobra", ParentID: "file-cobra-vm-scripts", Name: "start.sh", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-vm-fstab", SessionID: "session-cobra", ParentID: "file-cobra-vm", Name: "fstab", Kind: FileKindFile, GitStatus: FileGitStatusDeleted},
-				{ID: "file-cobra-readme", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "README.md", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-package", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "package.json", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-go-mod", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "go.mod", Kind: FileKindFile, GitStatus: FileGitStatusRenamed, Approved: true},
-				{ID: "file-cobra-cmd", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "cmd", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-cmd-discobot", SessionID: "session-cobra", ParentID: "file-cobra-cmd", Name: "discobot", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-internal", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "internal", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-internal-command", SessionID: "session-cobra", ParentID: "file-cobra-internal", Name: "command", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-internal-state", SessionID: "session-cobra", ParentID: "file-cobra-internal", Name: "state", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-internal-server", SessionID: "session-cobra", ParentID: "file-cobra-internal", Name: "server", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-content", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "content", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-content-components", SessionID: "session-cobra", ParentID: "file-cobra-content", Name: "components", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-content-app", SessionID: "session-cobra", ParentID: "file-cobra-content-components", Name: "app", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-content-ui", SessionID: "session-cobra", ParentID: "file-cobra-content-components", Name: "ui", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-static", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "static", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-static-lib", SessionID: "session-cobra", ParentID: "file-cobra-static", Name: "lib", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-styles", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "styles", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-docs", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "docs", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-docs-design", SessionID: "session-cobra", ParentID: "file-cobra-docs", Name: "design", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-tests", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "tests", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-tests-fixtures", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixtures", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-scripts", SessionID: "session-cobra", ParentID: "file-cobra-root", Name: "scripts", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-cobra-cmd-main", SessionID: "session-cobra", ParentID: "file-cobra-cmd-discobot", Name: "main.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-command-handler", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "handler.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-command-layout", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "layout_resize.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-command-panel", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "panel.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-command-response", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "response.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-state-model", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "state.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-state-test", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "state_test.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-server-router", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "server.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-app-shell", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "app_shell.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-session-workspace", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "session_workspace.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-conversation", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "conversation.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-sidebar-details", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "sessions_sidebar_session_details.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-panel-templ", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "panel.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-resize-templ", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "resize_handle.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-static-resize", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "resize.js", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-styles-app", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "app.css", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-docs-guidelines", SessionID: "session-cobra", ParentID: "file-cobra-docs", Name: "GUIDELINES.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-docs-file-tree", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "file-tree-feature-gap.md", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-e2e-layout", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "panel-layout.spec.ts", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-log", SessionID: "session-cobra", ParentID: "file-cobra-tests-fixtures", Name: "long-session.json", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-script-check", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "check-layout.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-001", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_001.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-002", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_002.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-003", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_003.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-004", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_004.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-005", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_005.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-006", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_006.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-007", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_007.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked, Approved: true},
-				{ID: "file-cobra-fixture-008", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_008.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-009", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_009.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-010", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_010.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-011", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_011.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-012", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_012.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-013", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_013.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-014", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_014.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-015", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_015.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-016", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_016.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-017", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_017.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-018", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_018.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-019", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_019.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-020", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_020.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-021", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_021.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-022", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_022.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-023", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_023.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-024", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_024.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-025", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_025.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-026", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_026.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-027", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_027.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-028", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_028.js", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-029", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_029.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-030", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_030.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-031", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_031.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-032", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_032.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-033", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_033.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-034", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_034.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-035", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_035.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-036", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_036.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-037", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_037.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-038", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_038.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-039", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_039.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-040", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_040.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-041", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_041.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-042", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_042.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked, Approved: true},
-				{ID: "file-cobra-fixture-043", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_043.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-044", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_044.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-045", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_045.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-046", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_046.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-047", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_047.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-048", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_048.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-049", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_049.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-050", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_050.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-051", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_051.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-052", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_052.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-053", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_053.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-054", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_054.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-055", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_055.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-056", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_056.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-057", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_057.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-058", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_058.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-059", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_059.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-060", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_060.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-061", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_061.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-062", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_062.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-063", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_063.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-064", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_064.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-065", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_065.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-066", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_066.js", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-067", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_067.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-068", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_068.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-069", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_069.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-070", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_070.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-071", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_071.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-072", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_072.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-073", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_073.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-074", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_074.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-075", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_075.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-076", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_076.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-077", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_077.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-078", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_078.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-079", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_079.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-080", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_080.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-081", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_081.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-082", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_082.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-083", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_083.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-084", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_084.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-085", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_085.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-086", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_086.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-087", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_087.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-088", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_088.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked, Approved: true},
-				{ID: "file-cobra-fixture-089", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_089.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-090", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_090.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-091", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_091.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-092", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_092.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-093", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_093.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-094", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_094.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-095", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_095.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-096", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_096.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-097", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_097.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-098", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_098.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-099", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_099.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-100", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_100.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-101", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_101.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-102", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_102.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-103", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_103.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-104", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_104.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-105", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_105.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-106", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_106.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-107", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_107.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-108", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_108.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-109", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_109.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-110", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_110.css", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-111", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_111.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-112", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_112.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-113", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_113.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-114", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_114.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-115", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_115.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-116", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_116.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-117", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_117.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-118", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_118.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-119", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_119.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-120", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_120.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-121", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_121.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-122", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_122.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-123", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_123.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-124", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_124.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-125", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_125.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-126", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_126.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-127", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_127.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-128", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_128.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-129", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_129.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-130", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_130.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-131", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_131.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-132", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_132.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-133", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_133.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-134", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_134.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-135", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_135.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-136", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_136.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-137", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_137.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-138", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_138.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-139", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_139.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-140", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_140.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-141", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_141.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-142", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_142.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-143", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_143.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-cobra-fixture-144", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_144.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-145", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_145.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-146", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_146.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-147", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_147.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-148", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_148.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-149", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_149.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-150", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_150.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-151", SessionID: "session-cobra", ParentID: "file-cobra-content-app", Name: "fixture_151.templ", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-152", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", Name: "fixture_152.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-153", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", Name: "fixture_153.go", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-154", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", Name: "fixture_154.go", Kind: FileKindFile, GitStatus: FileGitStatusAdded, Approved: true},
-				{ID: "file-cobra-fixture-155", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", Name: "fixture_155.go", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-156", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", Name: "fixture_156.js", Kind: FileKindFile, GitStatus: FileGitStatusModified},
-				{ID: "file-cobra-fixture-157", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", Name: "fixture_157.md", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-158", SessionID: "session-cobra", ParentID: "file-cobra-tests", Name: "fixture_158.ts", Kind: FileKindFile, GitStatus: FileGitStatusUntracked},
-				{ID: "file-cobra-fixture-159", SessionID: "session-cobra", ParentID: "file-cobra-scripts", Name: "fixture_159.mjs", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-cobra-fixture-160", SessionID: "session-cobra", ParentID: "file-cobra-styles", Name: "fixture_160.css", Kind: FileKindFile, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-root", SessionID: "session-cobra", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-agent", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/agent-go", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-agent-provider", SessionID: "session-cobra", ParentID: "file-cobra-agent", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/agent-go/provider", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-agent-provider-openai", SessionID: "session-cobra", ParentID: "file-cobra-agent-provider", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/agent-go/provider/openai", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-agent-provider-openai-client", SessionID: "session-cobra", ParentID: "file-cobra-agent-provider-openai", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/agent-go/provider/openai/client.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-server", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/server", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-ui", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/ui", IsDir: true}},
+				{ID: "file-cobra-vm", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-vm-network", SessionID: "session-cobra", ParentID: "file-cobra-vm", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets/network", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-vm-network-bridge", SessionID: "session-cobra", ParentID: "file-cobra-vm-network", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets/network/bridge.sh", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-vm-scripts", SessionID: "session-cobra", ParentID: "file-cobra-vm", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets/scripts", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-vm-scripts-start", SessionID: "session-cobra", ParentID: "file-cobra-vm-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets/scripts/start.sh", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-vm-fstab", SessionID: "session-cobra", ParentID: "file-cobra-vm", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/vm-assets/fstab", IsDir: false}, GitStatus: FileGitStatusDeleted},
+				{ID: "file-cobra-readme", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/README.md", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-package", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/package.json", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-go-mod", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/go.mod", IsDir: false}, GitStatus: FileGitStatusRenamed, Approved: true},
+				{ID: "file-cobra-cmd", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/cmd", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-cmd-discobot", SessionID: "session-cobra", ParentID: "file-cobra-cmd", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/cmd/discobot", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-internal", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-internal-command", SessionID: "session-cobra", ParentID: "file-cobra-internal", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-internal-state", SessionID: "session-cobra", ParentID: "file-cobra-internal", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-internal-server", SessionID: "session-cobra", ParentID: "file-cobra-internal", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-content", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-content-components", SessionID: "session-cobra", ParentID: "file-cobra-content", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-content-app", SessionID: "session-cobra", ParentID: "file-cobra-content-components", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-content-ui", SessionID: "session-cobra", ParentID: "file-cobra-content-components", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-static", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-static-lib", SessionID: "session-cobra", ParentID: "file-cobra-static", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-styles", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-docs", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-docs-design", SessionID: "session-cobra", ParentID: "file-cobra-docs", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-tests", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-tests-fixtures", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixtures", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-scripts", SessionID: "session-cobra", ParentID: "file-cobra-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-cobra-cmd-main", SessionID: "session-cobra", ParentID: "file-cobra-cmd-discobot", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/cmd/discobot/main.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-command-handler", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/handler.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-command-layout", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/layout_resize.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-command-panel", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/panel.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-command-response", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/response.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-state-model", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/state.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-state-test", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/state_test.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-server-router", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/server.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-app-shell", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/app_shell.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-session-workspace", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/session_workspace.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-conversation", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/conversation.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-sidebar-details", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/sessions_sidebar_session_details.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-panel-ui", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/panel.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-resize-ui", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/resize_handle.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-static-resize", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/resize.js", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-styles-app", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/app.css", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-docs-guidelines", SessionID: "session-cobra", ParentID: "file-cobra-docs", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/GUIDELINES.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-docs-file-tree", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/file-tree-feature-gap.md", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-e2e-layout", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/panel-layout.spec.ts", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-log", SessionID: "session-cobra", ParentID: "file-cobra-tests-fixtures", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixtures/long-session.json", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-script-check", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/check-layout.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-001", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_001.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-002", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_002.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-003", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_003.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-004", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_004.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-005", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_005.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-006", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_006.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-007", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_007.go", IsDir: false}, GitStatus: FileGitStatusUntracked, Approved: true},
+				{ID: "file-cobra-fixture-008", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_008.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-009", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_009.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-010", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_010.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-011", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_011.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-012", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_012.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-013", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_013.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-014", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_014.md", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-015", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_015.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-016", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_016.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-017", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_017.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-018", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_018.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-019", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_019.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-020", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_020.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-021", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_021.go", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-022", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_022.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-023", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_023.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-024", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_024.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-025", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_025.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-026", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_026.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-027", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_027.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-028", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_028.js", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-029", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_029.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-030", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_030.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-031", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_031.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-032", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_032.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-033", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_033.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-034", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_034.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-035", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_035.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-036", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_036.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-037", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_037.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-038", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_038.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-039", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_039.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-040", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_040.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-041", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_041.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-042", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_042.go", IsDir: false}, GitStatus: FileGitStatusUntracked, Approved: true},
+				{ID: "file-cobra-fixture-043", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_043.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-044", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_044.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-045", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_045.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-046", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_046.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-047", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_047.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-048", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_048.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-049", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_049.md", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-050", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_050.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-051", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_051.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-052", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_052.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-053", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_053.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-054", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_054.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-055", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_055.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-056", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_056.go", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-057", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_057.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-058", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_058.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-059", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_059.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-060", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_060.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-061", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_061.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-062", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_062.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-063", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_063.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-064", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_064.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-065", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_065.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-066", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_066.js", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-067", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_067.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-068", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_068.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-069", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_069.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-070", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_070.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-071", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_071.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-072", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_072.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-073", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_073.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-074", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_074.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-075", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_075.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-076", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_076.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-077", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_077.md", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-078", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_078.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-079", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_079.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-080", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_080.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-081", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_081.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-082", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_082.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-083", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_083.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-084", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_084.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-085", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_085.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-086", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_086.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-087", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_087.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-088", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_088.ts", IsDir: false}, GitStatus: FileGitStatusUntracked, Approved: true},
+				{ID: "file-cobra-fixture-089", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_089.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-090", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_090.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-091", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_091.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-092", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_092.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-093", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_093.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-094", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_094.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-095", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_095.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-096", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_096.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-097", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_097.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-098", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_098.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-099", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_099.mjs", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-100", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_100.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-101", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_101.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-102", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_102.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-103", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_103.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-104", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_104.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-105", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_105.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-106", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_106.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-107", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_107.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-108", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_108.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-109", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_109.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-110", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_110.css", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-111", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_111.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-112", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_112.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-113", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_113.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-114", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_114.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-115", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_115.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-116", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_116.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-117", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_117.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-118", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_118.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-119", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_119.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-120", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_120.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-121", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_121.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-122", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_122.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-123", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_123.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-124", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_124.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-125", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_125.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-126", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_126.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-127", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_127.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-128", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_128.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-129", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_129.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-130", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_130.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-131", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_131.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-132", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_132.go", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-133", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_133.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-134", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_134.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-135", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_135.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-136", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_136.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-137", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_137.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-138", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_138.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-139", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_139.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-140", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_140.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-141", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_141.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-142", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_142.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-143", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_143.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-cobra-fixture-144", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_144.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-145", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_145.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-146", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_146.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-147", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_147.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-148", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_148.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-149", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_149.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-150", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_150.css", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-151", SessionID: "session-cobra", ParentID: "file-cobra-content-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/fixture_151.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-152", SessionID: "session-cobra", ParentID: "file-cobra-content-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/fixture_152.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-153", SessionID: "session-cobra", ParentID: "file-cobra-internal-command", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/command/fixture_153.go", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-154", SessionID: "session-cobra", ParentID: "file-cobra-internal-state", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/state/fixture_154.go", IsDir: false}, GitStatus: FileGitStatusAdded, Approved: true},
+				{ID: "file-cobra-fixture-155", SessionID: "session-cobra", ParentID: "file-cobra-internal-server", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/internal/server/fixture_155.go", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-156", SessionID: "session-cobra", ParentID: "file-cobra-static-lib", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/static/lib/fixture_156.js", IsDir: false}, GitStatus: FileGitStatusModified},
+				{ID: "file-cobra-fixture-157", SessionID: "session-cobra", ParentID: "file-cobra-docs-design", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/docs/design/fixture_157.md", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-158", SessionID: "session-cobra", ParentID: "file-cobra-tests", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/tests/fixture_158.ts", IsDir: false}, GitStatus: FileGitStatusUntracked},
+				{ID: "file-cobra-fixture-159", SessionID: "session-cobra", ParentID: "file-cobra-scripts", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/scripts/fixture_159.mjs", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-cobra-fixture-160", SessionID: "session-cobra", ParentID: "file-cobra-styles", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/styles/fixture_160.css", IsDir: false}, GitStatus: FileGitStatusModified},
 			},
 			Hooks: []SessionHook{
 				{ID: "hook-cobra-tests", Name: "Go tests", Type: "test", Status: HookRunStatusSuccess, RunCount: 2},
@@ -464,12 +453,12 @@ func DefaultData() Data {
 					ID:           "thread-cobra-terminal",
 					Title:        "Terminal output",
 					RelativeTime: "1h",
-					Preview:      "go test ./... is clean after regenerating templ output.",
+					Preview:      "go test ./... is clean.",
 					Messages: []serverapi.Message{
-						sampleMessage("message-cobra-terminal-1", "user", "Run the checks after regenerating templ output."),
+						sampleMessage("message-cobra-terminal-1", "user", "Run the checks."),
 						sampleMessage("message-cobra-terminal-2", "assistant", "go test ./... is clean."),
 						sampleMessage("message-cobra-terminal-3", "user", "Any generated files changed?"),
-						sampleMessage("message-cobra-terminal-4", "assistant", "Only the expected templ outputs changed."),
+						sampleMessage("message-cobra-terminal-4", "assistant", "Only the expected files changed."),
 						sampleMessage("message-cobra-terminal-5", "user", "Keep the terminal summary short."),
 						sampleMessage("message-cobra-terminal-6", "assistant", "Checks passed."),
 						sampleMessage("message-cobra-terminal-7", "assistant", "No follow-up failures."),
@@ -492,17 +481,17 @@ func DefaultData() Data {
 				},
 			},
 			Files: []FileNode{
-				{ID: "file-sidebar-root", SessionID: "session-sidebar", Name: "discobot", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-sidebar-content", SessionID: "session-sidebar", ParentID: "file-sidebar-root", Name: "content", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-sidebar-components", SessionID: "session-sidebar", ParentID: "file-sidebar-content", Name: "components", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-sidebar-app", SessionID: "session-sidebar", ParentID: "file-sidebar-components", Name: "app", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-sidebar-session", SessionID: "session-sidebar", ParentID: "file-sidebar-app", Name: "sessions_sidebar.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
-				{ID: "file-sidebar-ui", SessionID: "session-sidebar", ParentID: "file-sidebar-components", Name: "ui", Kind: FileKindDirectory, HasChangedDescendants: true},
-				{ID: "file-sidebar-tree", SessionID: "session-sidebar", ParentID: "file-sidebar-ui", Name: "file_tree.templ", Kind: FileKindFile, GitStatus: FileGitStatusAdded},
-				{ID: "file-sidebar-state", SessionID: "session-sidebar", ParentID: "file-sidebar-root", Name: "state.go", Kind: FileKindFile, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-sidebar-root", SessionID: "session-sidebar", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-sidebar-content", SessionID: "session-sidebar", ParentID: "file-sidebar-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-sidebar-components", SessionID: "session-sidebar", ParentID: "file-sidebar-content", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-sidebar-app", SessionID: "session-sidebar", ParentID: "file-sidebar-components", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-sidebar-session", SessionID: "session-sidebar", ParentID: "file-sidebar-app", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/app/sessions_sidebar.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
+				{ID: "file-sidebar-ui", SessionID: "session-sidebar", ParentID: "file-sidebar-components", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui", IsDir: true}, HasChangedDescendants: true},
+				{ID: "file-sidebar-tree", SessionID: "session-sidebar", ParentID: "file-sidebar-ui", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/content/components/ui/file_tree.go", IsDir: false}, GitStatus: FileGitStatusAdded},
+				{ID: "file-sidebar-state", SessionID: "session-sidebar", ParentID: "file-sidebar-root", WorkspaceFileEntry: serverapi.WorkspaceFileEntry{Path: "discobot/state.go", IsDir: false}, GitStatus: FileGitStatusModified, Approved: true},
 			},
 			Hooks: []SessionHook{
-				{ID: "hook-sidebar-templ", Name: "templ guidelines", Type: "review", Status: HookRunStatusRunning, RunCount: 1},
+				{ID: "hook-sidebar-ui", Name: "UI guidelines", Type: "review", Status: HookRunStatusRunning, RunCount: 1},
 				{ID: "hook-sidebar-security", Name: "Security reviewer", Type: "review", Status: HookRunStatusPending},
 			},
 			SideChats: []Thread{
@@ -593,35 +582,7 @@ func DefaultData() Data {
 		Title: "Discobot",
 		App: App{
 			Name:        "discobot",
-			Description: "A small Datastar + templ scaffold for the Discobot UI.",
-		},
-		Services: []serverapi.Service{
-			{
-				ID:     new("dev-server"),
-				Name:   new("Dev Server"),
-				Status: new(string(ServiceStatusRunning)),
-				URL:    new("http://localhost:3100"),
-			},
-			{
-				ID:     new("api-server"),
-				Name:   new("API Server"),
-				Status: new(string(ServiceStatusStopped)),
-			},
-		},
-		Service: map[string]ServiceData{
-			"dev-server": {
-				Logs: []string{
-					"21:40:04 [dev-server] starting pnpm dev",
-					"21:40:05 [dev-server] local: http://localhost:3100",
-					"21:40:06 [dev-server] ready in 812ms",
-				},
-			},
-			"api-server": {
-				Logs: []string{
-					"21:35:11 [api-server] stopped",
-					"21:35:11 [api-server] exit status 0",
-				},
-			},
+			Description: "Server-owned Discobot UI state streamed as JSON.",
 		},
 		Project: defaultProjectData(workspaces, defaultSessions),
 	}
@@ -659,6 +620,8 @@ func defaultProjectData(workspaces []serverapi.Workspace, sessions []Session) ma
 		}
 		project.Session[session.ID] = SessionData{
 			Session:   project.Sessions[len(project.Sessions)-1],
+			Services:  defaultSessionServices(session.ID),
+			Service:   defaultSessionServiceData(session.ID),
 			Threads:   threads,
 			Thread:    threadData,
 			Files:     session.Files,
@@ -668,6 +631,46 @@ func defaultProjectData(workspaces []serverapi.Workspace, sessions []Session) ma
 		}
 	}
 	return map[string]ProjectData{project.Project.ID: project}
+}
+
+func defaultSessionServices(sessionID string) []serverapi.Service {
+	if sessionID != "session-cobra" {
+		return nil
+	}
+	return []serverapi.Service{
+		{
+			ID:     new("dev-server"),
+			Name:   new("Dev Server"),
+			Status: new(string(ServiceStatusRunning)),
+			URL:    new("http://localhost:3100"),
+		},
+		{
+			ID:     new("api-server"),
+			Name:   new("API Server"),
+			Status: new(string(ServiceStatusStopped)),
+		},
+	}
+}
+
+func defaultSessionServiceData(sessionID string) map[string]ServiceData {
+	if sessionID != "session-cobra" {
+		return nil
+	}
+	return map[string]ServiceData{
+		"dev-server": {
+			Logs: []string{
+				"21:40:04 [dev-server] starting pnpm dev",
+				"21:40:05 [dev-server] local: http://localhost:3100",
+				"21:40:06 [dev-server] ready in 812ms",
+			},
+		},
+		"api-server": {
+			Logs: []string{
+				"21:35:11 [api-server] stopped",
+				"21:35:11 [api-server] exit status 0",
+			},
+		},
+	}
 }
 
 // Sessions returns rendered session summaries derived from project data.
@@ -834,16 +837,6 @@ func cloneData(data Data) Data {
 		}
 		data.Project = projects
 	}
-	if data.Services != nil {
-		data.Services = append([]serverapi.Service(nil), data.Services...)
-	}
-	if data.Service != nil {
-		services := make(map[string]ServiceData, len(data.Service))
-		for serviceID, serviceData := range data.Service {
-			services[serviceID] = cloneServiceData(serviceData)
-		}
-		data.Service = services
-	}
 	return data
 }
 
@@ -899,6 +892,16 @@ func cloneServiceData(service ServiceData) ServiceData {
 }
 
 func cloneSessionData(session SessionData) SessionData {
+	if session.Services != nil {
+		session.Services = append([]serverapi.Service(nil), session.Services...)
+	}
+	if session.Service != nil {
+		services := make(map[string]ServiceData, len(session.Service))
+		for serviceID, serviceData := range session.Service {
+			services[serviceID] = cloneServiceData(serviceData)
+		}
+		session.Service = services
+	}
 	if session.Threads != nil {
 		session.Threads = append([]serverapi.Thread(nil), session.Threads...)
 	}

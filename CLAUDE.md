@@ -111,10 +111,7 @@ Project → Workspace (git repo or local folder) → Session (chat thread + cont
 
 ### Frontend Patterns
 
-- The UI is being migrated from the SvelteKit frontend in `./ui` to the
-  Go + templ + Datastar implementation in `./discobot`. New migration UI work
-  should happen in `./discobot` unless a task explicitly targets the legacy
-  SvelteKit frontend.
+- The Svelte UI in `./ui` is the active frontend.
 - **Styling**: Tailwind CSS v4 with CSS custom properties. Use design tokens (`bg-background`, `text-foreground`, `border-border`) and IDE tokens (`bg-tree-hover`, `bg-diff-add`)
 - **Icons**: Theme-aware via `IconRenderer` component. SVGs with `currentColor` must be inlined, not `<img>`
 
@@ -167,8 +164,7 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 ### Adding Features
 
 1. Add Go handler/service/store in `server/internal/`
-2. Build current Svelte UI changes in `ui/src/`, or migration UI changes in
-   `discobot/content` and `discobot/static`
+2. Build current Svelte UI changes in `ui/src/`
 
 ## Testing
 

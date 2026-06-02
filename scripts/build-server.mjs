@@ -79,17 +79,6 @@ function syncEmbeddedUI() {
   cpSync(uiBuildDir, embeddedUIDir, { recursive: true, force: true });
 }
 
-function prepareNextUI() {
-  console.log("Preparing Datastar UI assets...");
-  execSync(
-    "pnpm --dir ./discobot assets:build && pnpm --dir ./discobot generate",
-    {
-      cwd: projectRoot,
-      stdio: "inherit",
-    },
-  );
-}
-
 // Get target triple from environment or detect from current platform
 function getTargetTriple() {
   // Use DISCOBOT_TARGET_TRIPLE if set (from CI workflow).
@@ -151,7 +140,6 @@ console.log(
 );
 
 syncEmbeddedUI();
-prepareNextUI();
 
 // Build with version and compiled-in client IDs injected via ldflags
 const ldflags = [

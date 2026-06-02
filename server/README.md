@@ -121,11 +121,8 @@ For a standalone server binary with the embedded Svelte SPA, build from the repo
 pnpm build:server
 ```
 
-This builds `ui/build`, copies it into `server/static/ui/dist`, prepares the
-vendored Datastar UI in `discobot/`, and then compiles the Go server.
-
-The Svelte SPA remains mounted at `/`. The vendored Datastar UI is mounted at
-`/ui-next` so the Electron shell can switch to it during the migration.
+This builds `ui/build`, copies it into `server/static/ui/dist`, and then
+compiles the Go server.
 
 If you only run `go build` directly inside `server/`, the binary will not include the freshly built SPA assets.
 

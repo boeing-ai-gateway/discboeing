@@ -19,7 +19,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	github.com/things-go/go-socks5 v0.0.5
 	go.uber.org/zap v1.27.0
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
@@ -31,25 +31,21 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-oidc/v3 v3.16.0
 	github.com/docker/go-sdk/context v0.1.0-alpha012
+	github.com/getkin/kin-openapi v0.137.0
 	github.com/go-chi/cors v1.2.2
 	github.com/google/go-containerregistry v0.19.0
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.18.6
-	github.com/obot-platform/discobot/discobot v0.0.0-00010101000000-000000000000
+	github.com/obot-platform/discobot/agent-go v0.0.0
 	github.com/ulikunitz/xz v0.5.15
-	golang.org/x/crypto v0.48.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/crypto v0.50.0
+	golang.org/x/sys v0.43.0
 )
 
 require (
 	aidanwoods.dev/go-result v0.3.1 // indirect
-	github.com/CAFxX/httpcompression v0.0.9 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/a-h/templ v0.3.1020 // indirect
-	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/bryanvaz/go-templ-lucide-icons v0.480.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
-	github.com/getkin/kin-openapi v0.137.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.4 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -61,9 +57,7 @@ require (
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
-	github.com/starfederation/datastar-go v1.0.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
-	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )
@@ -212,7 +206,7 @@ require (
 	github.com/ldez/tagliatelle v0.7.2 // indirect
 	github.com/ldez/usetesting v0.5.0 // indirect
 	github.com/leonklingele/grouper v1.1.2 // indirect
-	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/macabu/inamedparam v0.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
@@ -222,7 +216,7 @@ require (
 	github.com/maratori/testpackage v1.1.2 // indirect
 	github.com/matoous/godox v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.20 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mgechev/revive v1.13.0 // indirect
@@ -318,12 +312,12 @@ require (
 	golang.org/x/arch v0.24.0 // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/exp/typeparams v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/mod v0.33.0 // indirect
-	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260213145524-e0ab670178e1 // indirect
-	golang.org/x/text v0.34.0 // indirect
-	golang.org/x/tools v0.42.0 // indirect
+	golang.org/x/mod v0.34.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260311193753-579e4da9a98c // indirect
+	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/tools v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -351,3 +345,5 @@ tool (
 replace github.com/obot-platform/discobot/controlsocket => ./controlsocket
 
 replace github.com/obot-platform/discobot/discobot => ./discobot
+
+replace github.com/obot-platform/discobot/agent-go => ./agent-go
