@@ -1371,11 +1371,9 @@
 								>
 									Output
 								</div>
-								<div
-									class="overflow-x-auto rounded-md border border-border bg-background"
-								>
+								<div class="rounded-md border border-border bg-background">
 									<pre
-										class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
+										class="whitespace-pre-wrap break-words p-3 font-mono text-foreground text-xs leading-5 [overflow-wrap:anywhere]"><code
 											>{metadata.output}</code
 										></pre>
 								</div>
@@ -1403,11 +1401,9 @@
 										>
 											Last 15 lines
 										</div>
-										<div
-											class="overflow-x-auto rounded-md border border-border bg-background"
-										>
+										<div class="rounded-md border border-border bg-background">
 											<pre
-												class="min-w-max whitespace-pre p-3 font-mono text-foreground text-xs leading-5"><code
+												class="whitespace-pre-wrap break-words p-3 font-mono text-foreground text-xs leading-5 [overflow-wrap:anywhere]"><code
 													>{metadata.outputTail}</code
 												></pre>
 										</div>
