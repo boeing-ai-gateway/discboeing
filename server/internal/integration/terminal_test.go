@@ -136,7 +136,7 @@ func TestCreateSession_CreatesSandbox(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Sessions are created implicitly via the chat endpoint
-	// Format matches AI SDK's DefaultChatTransport with UIMessage format
+	// Format matches the thread chat UIMessage payload
 	sessionID := "test-sandbox-session-1"
 	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
 		"messages": []map[string]any{

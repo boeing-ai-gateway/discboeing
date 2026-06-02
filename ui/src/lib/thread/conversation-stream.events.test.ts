@@ -8,7 +8,7 @@ import {
 	parseChatStreamMessageValue,
 } from "./conversation-stream.events";
 
-test("parseChatStreamMessageValue accepts current AI SDK assistant parts", async () => {
+test("parseChatStreamMessageValue accepts current assistant parts", async () => {
 	const parsed = await parseChatStreamMessageValue({
 		id: "assistant-1",
 		role: "assistant",

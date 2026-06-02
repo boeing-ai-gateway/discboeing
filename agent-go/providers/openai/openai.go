@@ -1100,8 +1100,8 @@ func (s *streamState) handleOutputItemDone(data []byte, yield func(message.Provi
 	}
 	switch itemHeader.Type {
 	case "reasoning":
-		// Wrap the reasoning item under "openai" for the Vercel AI SDK v6
-		// nested providerMetadata format: {"openai": {...}}.
+		// Wrap the reasoning item under "openai" for the nested
+		// providerMetadata format: {"openai": {...}}.
 		wrapped, wrapErr := json.Marshal(map[string]json.RawMessage{
 			providerID: event.Item,
 		})

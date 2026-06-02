@@ -847,7 +847,7 @@ func TestParseSSEStream(t *testing.T) {
 		}
 	})
 
-	// --- Tests ported from @ai-sdk/openai-compatible ---
+	// --- OpenAI-compatible streaming edge cases ---
 
 	t.Run("tool call name and first args arrive in same chunk", func(t *testing.T) {
 		// Some providers (e.g. xAI Grok) send the name and initial arguments

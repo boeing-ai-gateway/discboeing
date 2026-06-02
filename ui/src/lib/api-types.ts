@@ -582,7 +582,7 @@ export interface ModelsResponse {
 	models: ModelInfo[];
 }
 
-// ChatMessage extends the AI SDK UIMessage with local-only UI state.
+// ChatMessage extends the base UIMessage with local-only UI state.
 export type ChatMessage = UIMessage<
 	ChatMessageMetadata,
 	ChatMessageDataTypes

@@ -41,7 +41,7 @@ func TestCreateSession_ViaChat(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Sessions are created implicitly via the chat endpoint
-	// Format matches AI SDK's DefaultChatTransport with UIMessage format
+	// Format matches the thread chat UIMessage payload
 	sessionID := "test-session-id-1"
 	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
 		"messages": []map[string]any{
@@ -309,7 +309,7 @@ func TestCreateSession_ViaChatWithWorkspace(t *testing.T) {
 	client := ts.AuthenticatedClient(user)
 
 	// Sessions are created implicitly via the chat endpoint with workspace
-	// Format matches AI SDK's DefaultChatTransport with UIMessage format
+	// Format matches the thread chat UIMessage payload
 	sessionID := "test-session-id-2"
 	resp := client.Post(threadChatPath(project.ID, sessionID, sessionID), map[string]any{
 		"messages": []map[string]any{

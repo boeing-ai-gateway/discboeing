@@ -5616,7 +5616,7 @@
             "items": {
               "$ref": "#/components/schemas/Message"
             },
-            "description": "AI SDK UIMessage values accepted by the sandbox agent API.",
+            "description": "Discobot UIMessage values accepted by the sandbox agent API.",
             "x-go-type-skip-optional-pointer": true
           },
           "trigger": {
@@ -8409,7 +8409,7 @@
         ]
       },
       "Message": {
-        "description": "AI SDK v6 UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.",
+        "description": "Discobot UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.",
         "type": "object",
         "required": [
           "id",
@@ -8859,7 +8859,7 @@
         "additionalProperties": false
       },
       "MessageChunk": {
-        "description": "AI SDK UIMessageChunk / Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
+        "description": "Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
         "type": "object",
         "required": [
           "type"

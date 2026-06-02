@@ -12,7 +12,7 @@ type UIPart interface {
 	uiPartType() string
 }
 
-// UITextPart is a text content part in the AI SDK v6 UIMessage format.
+// UITextPart is a text content part in the Discobot UIMessage format.
 type UITextPart struct {
 	Type             string          `json:"type"`
 	Text             string          `json:"text"`
@@ -22,7 +22,7 @@ type UITextPart struct {
 
 func (UITextPart) uiPartType() string { return "text" }
 
-// UIReasoningPart is a reasoning/thinking content part in the AI SDK v6 UIMessage format.
+// UIReasoningPart is a reasoning/thinking content part in the Discobot UIMessage format.
 type UIReasoningPart struct {
 	Type             string          `json:"type"`
 	Text             string          `json:"text"`
@@ -32,7 +32,7 @@ type UIReasoningPart struct {
 
 func (UIReasoningPart) uiPartType() string { return "reasoning" }
 
-// UIFilePart is a file content part in the AI SDK v6 UIMessage format.
+// UIFilePart is a file content part in the Discobot UIMessage format.
 type UIFilePart struct {
 	Type             string          `json:"type"`
 	URL              string          `json:"url"`
@@ -43,14 +43,14 @@ type UIFilePart struct {
 
 func (UIFilePart) uiPartType() string { return "file" }
 
-// UIStepStartPart marks the start of an agent step in the AI SDK v6 UIMessage format.
+// UIStepStartPart marks the start of an agent step in the Discobot UIMessage format.
 type UIStepStartPart struct {
 	Type string `json:"type"`
 }
 
 func (UIStepStartPart) uiPartType() string { return "step-start" }
 
-// UISourceURLPart is a URL source reference in the AI SDK v6 UIMessage format.
+// UISourceURLPart is a URL source reference in the Discobot UIMessage format.
 type UISourceURLPart struct {
 	Type             string          `json:"type"`
 	SourceID         string          `json:"sourceId"`
@@ -61,7 +61,7 @@ type UISourceURLPart struct {
 
 func (UISourceURLPart) uiPartType() string { return "source-url" }
 
-// UISourceDocumentPart is a document source reference in the AI SDK v6 UIMessage format.
+// UISourceDocumentPart is a document source reference in the Discobot UIMessage format.
 type UISourceDocumentPart struct {
 	Type             string          `json:"type"`
 	SourceID         string          `json:"sourceId"`
@@ -73,7 +73,7 @@ type UISourceDocumentPart struct {
 
 func (UISourceDocumentPart) uiPartType() string { return "source-document" }
 
-// UIDataPart is a custom data part in the AI SDK v6 UIMessage format.
+// UIDataPart is a custom data part in the Discobot UIMessage format.
 // Type contains the full "data-{dataType}" discriminator string.
 type UIDataPart struct {
 	Type string          `json:"type"`

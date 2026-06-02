@@ -75,7 +75,7 @@ This document outlines the plan to replace the mock TypeScript API with a full G
 
 ### Phase 9: AI Chat Streaming 🔲
 - Messages API (store/retrieve chat history)
-- Streaming chat endpoint (Vercel AI SDK compatible)
+- Streaming chat endpoint
 - Multi-provider support (Anthropic, OpenAI, etc.)
 - Tool use / function calling
 

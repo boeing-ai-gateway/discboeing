@@ -258,7 +258,6 @@ For detailed UI architecture, see [UI Architecture](./ui/ARCHITECTURE.md).
 - **Styling**: Tailwind CSS v4 with CSS custom properties
 - **UI Components**: shadcn/ui (Radix primitives)
 - **State Management**: SWR for data fetching
-- **AI SDK**: Vercel AI SDK v5
 - **Terminal**: xterm.js v6
 
 ### Layout Structure

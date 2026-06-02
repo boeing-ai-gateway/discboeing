@@ -24,7 +24,7 @@ import (
 type ChatRequest struct {
 	// Messages is the array of UIMessages to send.
 	// Kept as raw JSON to pass through without requiring Go to understand
-	// the full UIMessage structure from the AI SDK.
+	// the full Discobot UIMessage structure.
 	Messages json.RawMessage `json:"messages"`
 	// Model is the optional model to use for this chat request.
 	Model string `json:"model,omitempty"`
@@ -319,9 +319,9 @@ type UpdateQueuedPromptResponse struct {
 	Queue   *QueuedPrompt `json:"queue,omitempty"`
 }
 
-// UIMessage represents a message in AI SDK UIMessage format.
+// UIMessage represents a message in Discobot UIMessage format.
 // This is a minimal representation - the full structure is passed through
-// as raw JSON where possible to avoid tight coupling with AI SDK internals.
+// as raw JSON where possible to avoid tight coupling with UI internals.
 type UIMessage struct {
 	ID        string          `json:"id"`
 	Role      string          `json:"role"` // "user", "assistant", "system"

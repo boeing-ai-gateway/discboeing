@@ -14,7 +14,7 @@ type Part interface {
 
 // DiscobotPartMetadata holds discobot-specific metadata attached to a part's
 // ProviderMetadata field. It is serialized as {"discobot": {...}} to match the
-// AI SDK ProviderMetadata shape (Record<providerNamespace, JSONObject>).
+// nested ProviderMetadata shape (Record<providerNamespace, JSONObject>).
 type DiscobotPartMetadata struct {
 	// OriginalCommand is the raw slash-command string the user typed (e.g.
 	// "/commit fix the bug").
@@ -27,7 +27,7 @@ type DiscobotPartMetadata struct {
 }
 
 // MarshalProviderMetadata encodes a DiscobotPartMetadata value into the
-// ProviderMetadata wire format expected by the AI SDK:
+// ProviderMetadata wire format:
 //
 //	{"discobot": {"originalCommand": "..."}}
 //
@@ -41,7 +41,7 @@ func MarshalProviderMetadata(meta DiscobotPartMetadata) json.RawMessage {
 }
 
 // UnmarshalProviderMetadata decodes Discobot provider metadata from the nested
-// AI SDK providerMetadata shape. It returns false when no discobot metadata is present.
+// providerMetadata shape. It returns false when no discobot metadata is present.
 func UnmarshalProviderMetadata(data json.RawMessage) (DiscobotPartMetadata, bool) {
 	if len(data) == 0 {
 		return DiscobotPartMetadata{}, false
@@ -117,7 +117,7 @@ func (ReasoningPart) partType() string { return "reasoning" }
 // before passing it back to the API. Returns "" when metadata is absent or
 // does not contain a recognisable "type" field.
 //
-// ProviderMetadata uses the Vercel AI SDK v6 nested format:
+// ProviderMetadata uses the nested provider format:
 // {"<provider>": {"type": "<type>", ...}} e.g. {"anthropic": {"type": "thinking"}}.
 //
 // Example: Anthropic checks p.MetadataType() == "thinking"; OpenAI checks

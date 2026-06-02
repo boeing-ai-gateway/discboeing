@@ -1,21 +1,21 @@
 # Provider Support in agent-go
 
-This document catalogs all providers from [models.dev](https://models.dev) and their corresponding npm packages (from the Vercel AI SDK), maps them to Go implementation status, and prioritizes remaining work.
+This document catalogs all providers from [models.dev](https://models.dev), maps them to Go implementation status, and prioritizes remaining work.
 
 ## Implementation Status Overview
 
-| Go Implementation | npm Package Covered | Providers Covered |
+| Go Implementation | Provider Groups Covered | Providers Covered |
 |---|---|---|
-| `providers/anthropic` | `@ai-sdk/anthropic` | 7 providers |
-| `providers/openai` | `@ai-sdk/openai`, `@ai-sdk/openai-compatible` | 2 + 67 providers |
-| **Not yet implemented** | 21 distinct npm packages | ~20 providers |
+| `providers/anthropic` | Anthropic-compatible APIs | 7 providers |
+| `providers/openai` | OpenAI native and OpenAI-compatible APIs | 2 + 67 providers |
+| **Not yet implemented** | Distinct provider protocols | ~20 providers |
 
 The two existing Go implementations cover **76 of 96 providers** (79%) by routing through:
 - Anthropic Messages API (`/v1/messages`) — for anthropic-protocol providers
 - OpenAI Responses API (`/v1/responses`, via HTTP SSE or pooled WebSocket mode) — for OpenAI native providers
 - OpenAI Chat Completions API (`/v1/chat/completions`) — for openai-compatible providers
 
-The remaining 20 providers use distinct wire protocols or SDKs that require dedicated implementations.
+The remaining 20 providers use distinct wire protocols that require dedicated implementations.
 
 ---
 
@@ -23,13 +23,13 @@ The remaining 20 providers use distinct wire protocols or SDKs that require dedi
 
 These providers have large enterprise/consumer adoption and distinct APIs that cannot be served by the existing openai-compatible path.
 
-| Provider ID | npm Package | Status | Notes |
-|---|---|---|---|
-| `google` | `@ai-sdk/google` | Not implemented | Gemini models; uses Google AI Studio API — distinct auth (API key or service account) and REST format |
-| `google-vertex` | `@ai-sdk/google-vertex` | Not implemented | Gemini via GCP Vertex AI; OAuth2/service account, regional endpoints |
-| `amazon-bedrock` | `@ai-sdk/amazon-bedrock` | Not implemented | Multi-model AWS service; AWS SigV4 auth, distinct converse/invoke APIs |
-| `azure` | `@ai-sdk/azure` | Not implemented | OpenAI models via Azure; Azure AD / API key auth, versioned deployment URLs |
-| `azure-cognitive-services` | `@ai-sdk/azure` | Not implemented | Shares implementation with `azure` |
+| Provider ID | Status | Notes |
+|---|---|---|
+| `google` | Not implemented | Gemini models; uses Google AI Studio API — distinct auth (API key or service account) and REST format |
+| `google-vertex` | Not implemented | Gemini via GCP Vertex AI; OAuth2/service account, regional endpoints |
+| `amazon-bedrock` | Not implemented | Multi-model AWS service; AWS SigV4 auth, distinct converse/invoke APIs |
+| `azure` | Not implemented | OpenAI models via Azure; Azure AD / API key auth, versioned deployment URLs |
+| `azure-cognitive-services` | Not implemented | Shares implementation with `azure` |
 
 ---
 
@@ -37,13 +37,13 @@ These providers have large enterprise/consumer adoption and distinct APIs that c
 
 Popular providers that are not openai-compatible or have important behavioural differences.
 
-| Provider ID | npm Package | Status | Notes |
-|---|---|---|---|
-| `openrouter` | `@openrouter/ai-sdk-provider` | Not implemented | Meta-provider over many models; OpenAI-compatible API but with `HTTP-Referer` / `X-Title` headers and model routing semantics |
-| `groq` | `@ai-sdk/groq` | Not implemented | OpenAI-compatible endpoint but dedicated SDK for tool call and reasoning quirks |
-| `mistral` | `@ai-sdk/mistral` | Not implemented | Own REST API; function calling format differs from OpenAI |
-| `cohere` | `@ai-sdk/cohere` | Not implemented | Distinct Chat API (`/v2/chat`); connector / RAG features |
-| `xai` | `@ai-sdk/xai` | Not implemented | Grok models; largely OpenAI-compatible but dedicated SDK handles Grok-specific fields |
+| Provider ID | Status | Notes |
+|---|---|---|
+| `openrouter` | Not implemented | Meta-provider over many models; OpenAI-compatible API but with `HTTP-Referer` / `X-Title` headers and model routing semantics |
+| `groq` | Not implemented | OpenAI-compatible endpoint with tool call and reasoning quirks |
+| `mistral` | Not implemented | Own REST API; function calling format differs from OpenAI |
+| `cohere` | Not implemented | Distinct Chat API (`/v2/chat`); connector / RAG features |
+| `xai` | Not implemented | Grok models; largely OpenAI-compatible with Grok-specific fields |
 
 ---
 
@@ -51,15 +51,15 @@ Popular providers that are not openai-compatible or have important behavioural d
 
 Providers with meaningful user bases or useful routing/gateway functionality.
 
-| Provider ID | npm Package | Status | Notes |
-|---|---|---|---|
-| `cloudflare-ai-gateway` | `ai-gateway-provider` | Not implemented | Acts as a caching/routing proxy in front of other providers; auth via Cloudflare account ID + gateway ID |
-| `vercel` | `@ai-sdk/gateway` | Not implemented | Vercel's unified AI Gateway; token-based, routes to multiple backends |
-| `togetherai` | `@ai-sdk/togetherai` | Not implemented | Open-weight model hosting; mostly OpenAI-compatible |
-| `perplexity` | `@ai-sdk/perplexity` | Not implemented | Search-augmented completions; OpenAI-compatible endpoint with `search_domain_filter` etc. |
-| `deepinfra` | `@ai-sdk/deepinfra` | Not implemented | Open model hosting; OpenAI-compatible |
-| `cerebras` | `@ai-sdk/cerebras` | Not implemented | Wafer-scale inference; OpenAI-compatible |
-| `google-vertex-anthropic` | `@ai-sdk/google-vertex/anthropic` | Not implemented | Claude models served through GCP Vertex AI; shares Vertex auth but uses Anthropic message format |
+| Provider ID | Status | Notes |
+|---|---|---|
+| `cloudflare-ai-gateway` | Not implemented | Acts as a caching/routing proxy in front of other providers; auth via Cloudflare account ID + gateway ID |
+| `vercel` | Not implemented | Vercel's unified AI Gateway; token-based, routes to multiple backends |
+| `togetherai` | Not implemented | Open-weight model hosting; mostly OpenAI-compatible |
+| `perplexity` | Not implemented | Search-augmented completions; OpenAI-compatible endpoint with `search_domain_filter` etc. |
+| `deepinfra` | Not implemented | Open model hosting; OpenAI-compatible |
+| `cerebras` | Not implemented | Wafer-scale inference; OpenAI-compatible |
+| `google-vertex-anthropic` | Not implemented | Claude models served through GCP Vertex AI; shares Vertex auth but uses Anthropic message format |
 
 ---
 
@@ -67,12 +67,12 @@ Providers with meaningful user bases or useful routing/gateway functionality.
 
 Providers with narrower audiences, third-party SDKs, or less urgency.
 
-| Provider ID | npm Package | Status | Notes |
-|---|---|---|---|
-| `v0` | `@ai-sdk/vercel` | Not implemented | Vercel v0 code-gen service; Vercel token auth |
-| `gitlab` | `@gitlab/gitlab-ai-provider` | Not implemented | GitLab Duo AI; enterprise GitLab auth |
-| `sap-ai-core` | `@jerome-benoit/sap-ai-provider-v2` | Not implemented | SAP Business Technology Platform AI; complex service key auth |
-| `venice` | `venice-ai-sdk-provider` | Not implemented | Privacy-focused inference; OpenAI-compatible but distinct auth |
+| Provider ID | Status | Notes |
+|---|---|---|
+| `v0` | Not implemented | Vercel v0 code-gen service; Vercel token auth |
+| `gitlab` | Not implemented | GitLab Duo AI; enterprise GitLab auth |
+| `sap-ai-core` | Not implemented | SAP Business Technology Platform AI; complex service key auth |
+| `venice` | Not implemented | Privacy-focused inference; OpenAI-compatible but distinct auth |
 
 ---
 
@@ -103,7 +103,7 @@ These use the OpenAI Responses API (`POST /v1/responses`). The Go implementation
 
 ### Via `providers/openai` — OpenAI-compatible (67 providers)
 
-All use `@ai-sdk/openai-compatible` (Chat Completions API, `POST /v1/chat/completions`) with a provider-specific base URL resolved from the models.dev metadata.
+All use the Chat Completions API (`POST /v1/chat/completions`) with a provider-specific base URL resolved from the models.dev metadata.
 
 <details>
 <summary>Show all 67 providers</summary>
@@ -122,35 +122,16 @@ zai-coding-plan, zhipuai, zhipuai-coding-plan
 
 ---
 
-## npm Package → Go Implementation Mapping
+## Provider Group → Go Implementation Mapping
 
-| npm Package | # Providers | Go Implementation |
+| Provider Group | # Providers | Go Implementation |
 |---|---|---|
-| `@ai-sdk/openai-compatible` | 67 | `providers/openai` (chat completions path) |
-| `@ai-sdk/anthropic` | 7 | `providers/anthropic` |
-| `@ai-sdk/openai` | 2 | `providers/openai` (responses API path) |
-| `@ai-sdk/google` | 1 | **TODO** |
-| `@ai-sdk/google-vertex` | 1 | **TODO** |
-| `@ai-sdk/google-vertex/anthropic` | 1 | **TODO** |
-| `@ai-sdk/amazon-bedrock` | 1 | **TODO** |
-| `@ai-sdk/azure` | 2 | **TODO** |
-| `@ai-sdk/groq` | 1 | **TODO** |
-| `@ai-sdk/mistral` | 1 | **TODO** |
-| `@ai-sdk/cohere` | 1 | **TODO** |
-| `@ai-sdk/xai` | 1 | **TODO** |
-| `@ai-sdk/togetherai` | 1 | **TODO** |
-| `@ai-sdk/perplexity` | 1 | **TODO** |
-| `@ai-sdk/deepinfra` | 1 | **TODO** |
-| `@ai-sdk/cerebras` | 1 | **TODO** |
-| `@ai-sdk/gateway` | 1 | **TODO** |
-| `@ai-sdk/vercel` | 1 | **TODO** |
-| `@openrouter/ai-sdk-provider` | 1 | **TODO** |
-| `ai-gateway-provider` | 1 | **TODO** |
-| `@gitlab/gitlab-ai-provider` | 1 | **TODO** |
-| `@jerome-benoit/sap-ai-provider-v2` | 1 | **TODO** |
-| `venice-ai-sdk-provider` | 1 | **TODO** |
+| OpenAI-compatible Chat Completions | 67 | `providers/openai` (chat completions path) |
+| Anthropic-compatible Messages | 7 | `providers/anthropic` |
+| OpenAI Responses | 2 | `providers/openai` (responses API path) |
+| Distinct provider protocols | 21 | **TODO** |
 
-**Total: 23 unique npm packages → 2 implemented, 21 TODO**
+**Total: 23 provider groups → 2 implemented, 21 TODO**
 
 ---
 
@@ -158,7 +139,7 @@ zai-coding-plan, zhipuai, zhipuai-coding-plan
 
 ### OpenAI-Compatible Shortcuts
 
-Several of the "not yet implemented" providers actually expose an OpenAI-compatible Chat Completions endpoint. If strict SDK parity is not required, the following could be added quickly by registering an alias in the `openai` provider with a custom base URL:
+Several of the "not yet implemented" providers actually expose an OpenAI-compatible Chat Completions endpoint. The following could be added quickly by registering an alias in the `openai` provider with a custom base URL:
 
 - `groq` — `https://api.groq.com/openai/v1`
 - `xai` — `https://api.x.ai/v1`

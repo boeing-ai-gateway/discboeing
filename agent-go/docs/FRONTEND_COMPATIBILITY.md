@@ -92,7 +92,7 @@ The agent-go message format is compatible with the existing UI. Key points:
 - Part types (`text`, `tool-call`, `tool-result`, `reasoning`, etc.) are the same
 - UI projection (`ProjectUIMessages`) produces the same JSON format
 - SSE streaming uses the same chunk format
-- Response timing is exposed through standard AI SDK `message.metadata`
+- Response timing is exposed through standard `message.metadata`
   fields (for example `startedAt` / `finishedAt`) rather than custom
   top-level `UIMessage` fields or custom chunk shapes
 - Chat SSE additionally emits `ping` events with `{}` payloads to keep the

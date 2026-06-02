@@ -1,7 +1,7 @@
 // Package openaicompatible implements providers.Provider for the 60+ LLM
 // providers that expose a standard OpenAI Chat Completions API
-// (POST /chat/completions). These providers are identified in models.dev by
-// npm: "@ai-sdk/openai-compatible".
+// (POST /chat/completions). These providers are identified from
+// models.dev metadata.
 //
 // The init function reads models.dev metadata and registers a factory for
 // every such provider, keyed by its models.dev ID (e.g. "deepseek",

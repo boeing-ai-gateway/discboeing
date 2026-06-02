@@ -321,7 +321,7 @@ func (s *SessionCommitLog) BeforeCreate(_ *gorm.DB) error {
 }
 
 // Message represents a chat message in a session.
-// Stored in UIMessage format compatible with AI SDK.
+// Stored in Discobot UIMessage format.
 type Message struct {
 	ID        string          `gorm:"primaryKey;type:text" json:"id"`
 	SessionID string          `gorm:"column:session_id;not null;type:text;index" json:"sessionId"`

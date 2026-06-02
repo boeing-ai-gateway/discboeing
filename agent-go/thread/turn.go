@@ -179,7 +179,7 @@ func RunTurn(
 			}
 		}
 
-		// Emit the outer start envelope so the AI SDK can bind the stream to a message ID.
+		// Emit the outer start envelope so clients can bind the stream to a message ID.
 		// Include the model in messageMetadata so the server can record which model was used.
 		if !yield(message.StartChunk{
 			MessageID:       turnState.AssistantMsgID,

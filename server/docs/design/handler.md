@@ -169,7 +169,7 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 
 ### Chat Handler (chat.go)
 
-The chat handler provides thread-scoped endpoints for AI SDK integration:
+The chat handler provides thread-scoped endpoints for chat streaming:
 
 **POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/chat** - Create/validate a session and start a chat request
 **GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/stream** - Stream or resume chat events
@@ -254,7 +254,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/stream
-// Resumes an in-progress chat stream (for AI SDK resume functionality)
+// Resumes an in-progress chat stream
 func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
     sessionID := r.PathValue("sessionId")
     threadID := r.PathValue("threadId")
@@ -326,7 +326,7 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 
 **Stream Resume Fix:**
 
-The `ChatStream` handler includes a critical fix for stream resumption. When checking if a channel has data using a non-blocking `select`, any consumed message is stored in `firstLine` and sent after setting headers. This prevents message loss during the channel check, which was causing state corruption in the AI SDK.
+The `ChatStream` handler includes a critical fix for stream resumption. When checking if a channel has data using a non-blocking `select`, any consumed message is stored in `firstLine` and sent after setting headers. This prevents message loss during the channel check, which was causing stream state corruption.
 
 ### Events Handler (events.go)
 

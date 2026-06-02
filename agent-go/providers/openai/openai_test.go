@@ -1252,7 +1252,7 @@ func TestParseSSEStream(t *testing.T) {
 		if len(re.ProviderMetadata) == 0 {
 			t.Fatal("expected ProviderMetadata on ReasoningEndChunk")
 		}
-		// Outer map should be {"openai": {...}} (nested Vercel AI SDK v6 format).
+		// Outer map should be {"openai": {...}} (nested provider metadata format).
 		var outerMap map[string]map[string]any
 		if err := json.Unmarshal(re.ProviderMetadata, &outerMap); err != nil {
 			t.Fatalf("expected nested JSON ProviderMetadata: %v", err)

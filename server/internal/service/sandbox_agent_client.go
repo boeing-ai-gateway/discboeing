@@ -233,7 +233,7 @@ func retryWithBackoff[T any](ctx context.Context, fn func() (T, int, error)) (T,
 
 // SSELine represents a raw SSE event from the sandbox.
 // The content is passed through without parsing - the sandbox
-// is expected to send data in AI SDK UIMessage Stream format.
+// is expected to send data in Discobot UIMessage stream format.
 type SSELine struct {
 	// ID is the optional SSE event id.
 	ID string
@@ -841,7 +841,7 @@ func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID 
 }
 
 // SendMessages sends messages to the sandbox and returns a channel of raw SSE lines.
-// The sandbox is expected to respond with SSE events in AI SDK UIMessage Stream format.
+// The sandbox is expected to respond with SSE events in Discobot UIMessage stream format.
 // Messages and responses are passed through without parsing.
 // Retries with exponential backoff on connection errors and 5xx responses.
 func (c *SandboxAgentClient) SendMessages(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (<-chan SSELine, error) {

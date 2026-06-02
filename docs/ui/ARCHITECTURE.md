@@ -85,7 +85,7 @@ All server data is fetched via `ui/src/lib/api-client.ts`. App-level project eve
 
 ### 4. Chat Streaming
 
-The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes AI SDK-style data frames:
+The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes Discobot chat stream data frames:
 
 - Buffers `history-start`/`history-message`/`history-end` replay events
 - Applies `chunk`/`done` events to materialize live AI messages

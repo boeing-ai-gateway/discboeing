@@ -74,7 +74,7 @@ type ProviderInfo struct {
 	ID      string
 	Name    string
 	API     string   // default base URL
-	NPM     string   // npm package used by models.dev (e.g. "@ai-sdk/openai-compatible")
+	NPM     string   // npm package used by models.dev
 	EnvVars []string // required env var names (e.g. ["ANTHROPIC_API_KEY"])
 	Doc     string   // documentation URL or description
 }

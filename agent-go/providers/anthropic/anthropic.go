@@ -818,7 +818,7 @@ func handleContentBlockStop(data []byte, state *streamState, yield func(message.
 	case "tool_use":
 		return yield(message.ToolInputEndChunk{ToolCallID: state.toolCallIDs[idx]}, nil)
 	case "thinking":
-		// Build the ProviderMetadata in the Vercel AI SDK v6 nested format:
+		// Build the ProviderMetadata in the nested provider format:
 		// {"anthropic": {"type": "thinking", "thinking": "...", "signature": "..."}}.
 		// The anthropic block contains the signature required for multi-turn
 		// continuity; convertAssistantMessage extracts it when replaying turns.
