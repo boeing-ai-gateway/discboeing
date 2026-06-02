@@ -16,6 +16,6 @@ test("startup gate does not mount app children until startup is ready", () => {
 	const source = readStartupGateSource();
 
 	assert.match(source, /\{#if ready && startupPhase !== "auth"\}/);
-	assert.match(source, /\{@render children\?\.\(\)\}/);
-	assert.doesNotMatch(source, /opacity-0[\s\S]*\{@render children\?\.\(\)\}/);
+	assert.match(source, /\{@render children\(\)\}/);
+	assert.doesNotMatch(source, /opacity-0[\s\S]*\{@render children\(\)\}/);
 });

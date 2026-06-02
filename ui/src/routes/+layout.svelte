@@ -11,7 +11,7 @@
 	import { readInitialThreadSelection } from "$lib/store/recent-threads.store.svelte";
 
 	type Props = {
-		children?: Snippet;
+		children: Snippet;
 	};
 
 	let { children }: Props = $props();
@@ -33,5 +33,5 @@
 <DevErrorOverlay />
 
 <StartupGate {app}>
-	{@render children?.()}
+	{@render children()}
 </StartupGate>

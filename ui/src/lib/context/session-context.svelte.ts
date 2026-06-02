@@ -34,18 +34,21 @@ export function createSessionContext(
 ): SessionContextValue {
 	let selectedThreadId = $state<string | null>(null);
 
-	const current = $derived.by(() => {
+	function getCurrentSession() {
 		return app.sessions.peek(sessionId);
-	});
+	}
 
-	const hasSession = $derived.by(() => current !== null);
-	const isPending = $derived.by(() => !hasSession);
-	const canLoadSandboxData = $derived.by(
-		() => current?.sandboxStatus === SessionStatus.READY,
-	);
-	const canLoadThreadData = $derived.by(() =>
-		canLoadSessionThreads(current?.sandboxStatus),
-	);
+	function hasCurrentSession() {
+		return getCurrentSession() !== null;
+	}
+
+	function canLoadCurrentSandboxData() {
+		return getCurrentSession()?.sandboxStatus === SessionStatus.READY;
+	}
+
+	function canLoadCurrentThreadData() {
+		return canLoadSessionThreads(getCurrentSession()?.sandboxStatus);
+	}
 
 	const ui = createSessionViewState({
 		getFiles: () => filesDomain.list,
@@ -62,13 +65,13 @@ export function createSessionContext(
 	const stores: SessionStores = {
 		threads: new ThreadStore({
 			sessionId,
-			enabled: () => canLoadThreadData,
+			enabled: canLoadCurrentThreadData,
 		}),
 	};
 
 	const filesDomain = createSessionFilesDomain({
 		sessionId,
-		hasSession: () => canLoadSandboxData,
+		hasSession: canLoadCurrentSandboxData,
 		getSelectedFile: () => ui.selectedFile,
 		openFile: ui.openFile,
 	});
@@ -76,8 +79,8 @@ export function createSessionContext(
 	const threads = createSessionThreadsDomain({
 		store: stores.threads,
 		sessionId,
-		hasSession: () => canLoadThreadData,
-		getSession: () => current,
+		hasSession: canLoadCurrentThreadData,
+		getSession: getCurrentSession,
 		getSelectedId: () => selectedThreadId,
 		setSelectedId: (threadId) => {
 			selectedThreadId = threadId;
@@ -90,12 +93,12 @@ export function createSessionContext(
 
 	const hooks = createSessionHooksDomain({
 		sessionId,
-		hasSession: () => canLoadSandboxData,
+		hasSession: canLoadCurrentSandboxData,
 	});
 
 	const services = createSessionServicesDomain({
 		sessionId,
-		hasSession: () => canLoadSandboxData,
+		hasSession: canLoadCurrentSandboxData,
 		getActiveServiceId: () => ui.activeServiceId,
 		openService: ui.openService,
 	});
@@ -131,7 +134,7 @@ export function createSessionContext(
 	const commands = createSessionCommandsDomain({
 		app,
 		sessionId,
-		hasSession: () => canLoadThreadData,
+		hasSession: canLoadCurrentThreadData,
 		getSelectedThreadId: () => threads.selectedId ?? sessionId,
 		submit,
 	});
@@ -149,10 +152,10 @@ export function createSessionContext(
 			return sessionId;
 		},
 		get isPending() {
-			return isPending;
+			return !hasCurrentSession();
 		},
 		get current() {
-			return current;
+			return getCurrentSession();
 		},
 		dispose,
 		ensureThread,

@@ -17,7 +17,7 @@
 
 	type Props = {
 		app: AppContext;
-		children?: Snippet;
+		children: Snippet;
 	};
 
 	type StartupPhase =
@@ -436,7 +436,7 @@
 
 {#if ready && startupPhase !== "auth"}
 	<div class="transition-opacity duration-200 opacity-100">
-		{@render children?.()}
+		{@render children()}
 	</div>
 {/if}
 
