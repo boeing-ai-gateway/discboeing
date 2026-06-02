@@ -1,5 +1,4 @@
 <script lang="ts">
-	import BrainIcon from "@lucide/svelte/icons/brain";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import type { ModelInfo } from "$lib/api-types";
 	import {
@@ -95,13 +94,13 @@
 		<InputGroupButton
 			size="xs"
 			variant="ghost"
-			class="h-6 max-w-[160px] gap-1.5 px-2 text-xs"
+			class="h-6 max-w-[160px] px-0.5 text-xs"
 			title={selectedModel ? `Model: ${selectedModel.name}` : "Model"}
 		>
 			{#if selectedModel}
 				<span class="truncate">{selectedModel.name}</span>
 			{:else}
-				<BrainIcon class="size-3.5 shrink-0" />
+				<span>Model</span>
 			{/if}
 		</InputGroupButton>
 	</DropdownMenuTrigger>

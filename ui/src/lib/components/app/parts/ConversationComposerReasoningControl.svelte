@@ -1,5 +1,4 @@
 <script lang="ts">
-	import BrainIcon from "@lucide/svelte/icons/brain";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import {
 		DropdownMenu,
@@ -33,6 +32,23 @@
 		return level.charAt(0).toUpperCase() + level.slice(1);
 	}
 
+	function formatReasoningButtonLabel(level: string | undefined) {
+		switch (level) {
+			case "none":
+				return "None";
+			case "low":
+				return "Low";
+			case "medium":
+				return "Med";
+			case "high":
+				return "High";
+			case "xhigh":
+				return "XHi";
+			default:
+				return formatReasoningLabel(level);
+		}
+	}
+
 	const resolvedDefaultValue = $derived.by(() => defaultValue ?? undefined);
 	const resolvedValue = $derived.by(() =>
 		value === undefined || value === "default" ? resolvedDefaultValue : value,
@@ -42,7 +58,10 @@
 			? levels.filter((level) => level !== resolvedDefaultValue)
 			: levels,
 	);
-	const buttonLabel = $derived.by(() => formatReasoningLabel(resolvedValue));
+	const buttonLabel = $derived.by(() =>
+		formatReasoningButtonLabel(resolvedValue),
+	);
+	const titleLabel = $derived.by(() => formatReasoningLabel(resolvedValue));
 	const defaultLabel = $derived.by(() =>
 		resolvedDefaultValue
 			? `${formatReasoningLabel(resolvedDefaultValue)} (default)`
@@ -60,10 +79,9 @@
 		<InputGroupButton
 			size="xs"
 			variant="ghost"
-			class="h-6 gap-1.5 px-2 text-xs"
-			title={`Reasoning: ${buttonLabel}`}
+			class="h-6 px-0.5 text-xs"
+			title={`Reasoning: ${titleLabel}`}
 		>
-			<BrainIcon class="size-3.5 shrink-0" />
 			<span>{buttonLabel}</span>
 		</InputGroupButton>
 	</DropdownMenuTrigger>

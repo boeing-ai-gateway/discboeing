@@ -1,6 +1,5 @@
 <script lang="ts">
 	import CheckIcon from "@lucide/svelte/icons/check";
-	import ZapIcon from "@lucide/svelte/icons/zap";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
@@ -27,6 +26,16 @@
 		}
 	}
 
+	function formatServiceTierButtonLabel(tier: string | undefined) {
+		switch (tier?.toLowerCase()) {
+			case "priority":
+			case "fast":
+				return "Fast";
+			default:
+				return "Std";
+		}
+	}
+
 	function formatServiceTierDescription(tier: string) {
 		switch (tier.toLowerCase()) {
 			case "priority":
@@ -38,18 +47,18 @@
 	}
 
 	const normalizedValue = $derived.by(() => value?.toLowerCase());
-	const buttonLabel = $derived.by(() => formatServiceTierLabel(value));
+	const buttonLabel = $derived.by(() => formatServiceTierButtonLabel(value));
+	const titleLabel = $derived.by(() => formatServiceTierLabel(value));
 </script>
 
 <DropdownMenu>
 	<DropdownMenuTrigger class="desktop-no-drag">
 		<InputGroupButton
 			size="xs"
-			variant={value ? "secondary" : "ghost"}
-			class="h-6 gap-1.5 px-2 text-xs"
-			title={`Service tier: ${buttonLabel}`}
+			variant="ghost"
+			class="h-6 px-0.5 text-xs"
+			title={`Service tier: ${titleLabel}`}
 		>
-			<ZapIcon class="size-3.5 shrink-0" />
 			<span>{buttonLabel}</span>
 		</InputGroupButton>
 	</DropdownMenuTrigger>

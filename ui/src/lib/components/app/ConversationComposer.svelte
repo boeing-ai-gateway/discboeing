@@ -1431,28 +1431,36 @@
 							{#if !session.isPending}
 								<ConversationCredentialsControl />
 							{/if}
-							<ConversationComposerModelControl
-								value={thread.nextModelId !== undefined
-									? thread.nextModelId
-									: thread.modelId}
-								onSelect={handleModelSelect}
-								models={models.list}
-							/>
-							{#if selectedModel?.reasoning}
-								<ConversationComposerReasoningControl
-									value={effectiveReasoning}
-									defaultValue={selectedModel.defaultReasoning}
-									levels={reasoningLevels}
-									onSelect={handleReasoningSelect}
+							<div class="flex min-w-0 items-center gap-0">
+								<ConversationComposerModelControl
+									value={thread.nextModelId !== undefined
+										? thread.nextModelId
+										: thread.modelId}
+									onSelect={handleModelSelect}
+									models={models.list}
 								/>
-							{/if}
-							{#if serviceTiers.length > 0}
-								<ConversationComposerServiceTierControl
-									value={effectiveServiceTier}
-									tiers={serviceTiers}
-									onSelect={handleServiceTierSelect}
-								/>
-							{/if}
+								{#if selectedModel?.reasoning}
+									<span class="shrink-0 text-xs text-muted-foreground/60"
+										>·</span
+									>
+									<ConversationComposerReasoningControl
+										value={effectiveReasoning}
+										defaultValue={selectedModel.defaultReasoning}
+										levels={reasoningLevels}
+										onSelect={handleReasoningSelect}
+									/>
+								{/if}
+								{#if serviceTiers.length > 0}
+									<span class="shrink-0 text-xs text-muted-foreground/60"
+										>·</span
+									>
+									<ConversationComposerServiceTierControl
+										value={effectiveServiceTier}
+										tiers={serviceTiers}
+										onSelect={handleServiceTierSelect}
+									/>
+								{/if}
+							</div>
 							{#if tokenUsageSummary}
 								<div class="flex items-center gap-1">
 									<div class="group relative">
