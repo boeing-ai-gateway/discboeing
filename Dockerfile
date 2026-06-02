@@ -3,7 +3,7 @@
 ARG UBUNTU_MIRROR=http://mirrors.edge.kernel.org/ubuntu
 ARG UBUNTU_PORTS_MIRROR=http://ports.ubuntu.com/ubuntu-ports
 
-# Stage 0: Download shared Go module dependencies for root-module binaries
+# Root-module Go dependency cache
 FROM golang:1.26 AS root-go-deps
 
 WORKDIR /build
@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     go mod download
 
-# Stage 1: Build the proxy binary from source
+# Proxy binary builder
 FROM root-go-deps AS proxy-builder
 
 # Copy proxy source
@@ -33,7 +33,7 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
-# Stage 1c: Build the VSOCK port proxy used by VZ VMs
+# VSOCK port proxy builder
 FROM root-go-deps AS vsock-port-proxy-builder
 
 COPY server/cmd/vsock-port-proxy/ ./server/cmd/vsock-port-proxy/
@@ -43,7 +43,7 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-vsock-port-proxy ./server/cmd/vsock-port-proxy
 
-# Stage 2: Download shared Go module dependencies for agent-go
+# Agent API Go dependency cache
 FROM golang:1.26 AS agent-go-deps
 
 WORKDIR /build
@@ -62,7 +62,7 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
     go mod download
 
-# Stage 2b: Build agent-go as the discobot-agent-api binary
+# Agent API binary builder
 FROM agent-go-deps AS agent-go-builder
 
 # Copy modelsdev source (required for compilation, not just module resolution)
@@ -79,11 +79,13 @@ RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -tags mcp_go_client_oauth -ldflags="-s -w" -o /discobot-agent-api ./cmd/agent-api \
     && CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sudo-gate ./cmd/sudo-gate
 
-# Stage 3: Shared Ubuntu runtime base
+# Shared Ubuntu runtime base
 FROM ubuntu:24.04 AS runtime-base
 
 ARG UBUNTU_MIRROR
 ARG UBUNTU_PORTS_MIRROR
+
+COPY --chmod=755 container-assets/configure-ubuntu-mirrors.sh /usr/local/bin/configure-ubuntu-mirrors
 
 # Label for image identification and cleanup
 LABEL io.discobot.sandbox-image=true
@@ -102,17 +104,7 @@ ENV container=docker
 # docker-buildx is needed for multi-arch builds and advanced build features
 # docker-compose-v2 provides the Docker Compose v2 CLI plugin
 # iptables and iproute2 are needed by dockerd and runtime diagnostics for network management
-RUN if [ -n "${UBUNTU_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
-    && if [ -n "${UBUNTU_PORTS_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://ports.ubuntu.com/ubuntu-ports|${UBUNTU_PORTS_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
+RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     && apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -252,7 +244,7 @@ EXPOSE 3002
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 
-# Stage 3b: Shared graphical runtime base
+# Shared graphical runtime base
 FROM runtime-base AS runtime-gui-base
 
 # Install graphical packages: virtual X11 display, VNC, window manager, browser.
@@ -354,7 +346,7 @@ ENV DISPLAY=:0
 # Desktop access is served through the localhost-bound websockify proxy socket.
 EXPOSE 6080
 
-# Stage 3b: Package browser-harness under its upstream command name
+# Browser harness package builder
 FROM runtime-base AS browser-harness-builder
 
 ARG BROWSER_HARNESS_REPO=https://github.com/browser-use/browser-harness.git
@@ -368,7 +360,7 @@ RUN git clone --depth 1 --branch "${BROWSER_HARNESS_REF}" "${BROWSER_HARNESS_REP
     && ln -s /opt/browser-harness/bin/browser-harness /usr/local/bin/browser-harness \
     && rm -rf /tmp/browser-harness /root/.cache/uv
 
-# Stage 3c: Runtime overlay with frequently-changing binaries and container assets
+# Runtime overlay with frequently-changing binaries and container assets
 FROM scratch AS runtime-overlay
 
 # Copy binaries to /opt/discobot/bin
@@ -389,7 +381,8 @@ COPY --chmod=755 container-assets/docker-wrapper.sh /usr/local/bin/docker
 COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobot-session-env
 COPY --chmod=755 container-assets/discobot-vnc-websockify /usr/local/bin/discobot-vnc-websockify
 
-# Copy systemd service files for container service management
+# Copy systemd service files and setup helper for container service management
+COPY --chmod=755 container-assets/configure-container-systemd.sh /opt/discobot/bin/configure-container-systemd
 COPY container-assets/systemd/ /etc/systemd/system/
 COPY container-assets/xorg-dummy.conf /etc/X11/xorg-dummy.conf
 
@@ -399,7 +392,7 @@ COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-d
 # Copy container-specific Discobot docs.
 COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
 
-# Stage 3d: Minimal runtime without graphical tools
+# Minimal runtime without graphical tools
 FROM runtime-base AS runtime-shell
 
 COPY --from=runtime-overlay / /
@@ -407,21 +400,9 @@ COPY --from=runtime-overlay / /
 # Configure systemd for container environment
 # Disable docker.service so it only starts via docker.socket activation
 # (the Ubuntu docker.io package preset enables it by default)
-RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
-    && systemctl mask \
-    console-getty.service \
-    getty@.service \
-    serial-getty@.service \
-    && systemctl disable docker.service containerd.service \
-    && systemctl enable \
-    tmp.mount \
-    discobot-sandbox-init.service \
-    discobot-proxy.service \
-    docker.socket \
-    discobot-agent-api.service \
-    discobot-vscode.socket
+RUN configure-container-systemd shell
 
-# Stage 3e: Full runtime with graphical desktop tools (X11, VNC, browser)
+# Full runtime with graphical desktop tools (X11, VNC, browser)
 FROM runtime-gui-base AS runtime
 
 COPY --from=runtime-overlay / /
@@ -429,25 +410,9 @@ COPY --from=runtime-overlay / /
 # Configure systemd for container environment
 # Disable docker.service so it only starts via docker.socket activation
 # (the Ubuntu docker.io package preset enables it by default)
-RUN ln -s /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco \
-    && systemctl mask \
-    console-getty.service \
-    getty@.service \
-    serial-getty@.service \
-    systemd-logind.service \
-    && systemctl disable docker.service containerd.service \
-    && systemctl enable \
-    tmp.mount \
-    discobot-sandbox-init.service \
-    discobot-proxy.service \
-    docker.socket \
-    discobot-agent-api.service \
-    discobot-vscode.socket \
-    x11-display.socket \
-    x11vnc.socket \
-    websockify-proxy.socket
+RUN configure-container-systemd gui
 
-# Stage 4: VZ root filesystem builder with systemd and Docker
+# VZ/WSL root filesystem builder with systemd and Docker
 # Build with: docker build --target vz-image -t discobot-vz .
 # Then extract /vmlinuz and /discobot-rootfs.squashfs with docker cp from a
 # temporary container. The watcher uses this flow so local Windows/WSL builds
@@ -459,6 +424,8 @@ FROM ubuntu:24.04 AS vz-rootfs-builder
 ARG UBUNTU_MIRROR
 ARG UBUNTU_PORTS_MIRROR
 
+COPY --chmod=755 container-assets/configure-ubuntu-mirrors.sh /usr/local/bin/configure-ubuntu-mirrors
+
 # Docker image to preload into the VM at build time (pulled via crane as OCI tarball)
 # Defaults to the main tag of the discobot runtime image
 ARG PRELOAD_IMAGE=ghcr.io/obot-platform/discobot:main
@@ -468,17 +435,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install kernel, systemd, Docker, and minimal tools
 # Use a specific stable kernel version with virtio drivers built-in
-RUN if [ -n "${UBUNTU_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
-    && if [ -n "${UBUNTU_PORTS_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://ports.ubuntu.com/ubuntu-ports|${UBUNTU_PORTS_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
+RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     && apt-get update && apt-get install -y --no-install-recommends \
     # Kernel with virtio support built-in (no modules needed)
     # Using specific version to avoid metapackage dependency issues
@@ -585,25 +542,17 @@ RUN useradd -m -s /bin/bash -u 1000 discobot || \
 RUN mkdir -p /.data /.workspace /Users \
     && chown discobot:discobot /.data
 
-# Stage 5: Extract kernel and initrd, create root filesystem image
+# VZ/WSL image artifact builder
 FROM ubuntu:24.04 AS vz-image-builder
 
 ARG UBUNTU_MIRROR
 ARG UBUNTU_PORTS_MIRROR
 
+COPY --chmod=755 container-assets/configure-ubuntu-mirrors.sh /usr/local/bin/configure-ubuntu-mirrors
+
 # Install tools for image creation and kernel extraction
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-    && if [ -n "${UBUNTU_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
-    && if [ -n "${UBUNTU_PORTS_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://ports.ubuntu.com/ubuntu-ports|${UBUNTU_PORTS_MIRROR}|g" \
-            /etc/apt/sources.list.d/ubuntu.sources; \
-    fi \
+    && configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     && apt-get update && apt-get install -y --no-install-recommends \
     squashfs-tools \
     zstd \
@@ -656,14 +605,14 @@ RUN set -ex \
     && TAR_RATIO=$((100 - (ROOTFS_TAR_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
     && echo "WSL rootfs archive: ${ROOTFS_TAR_SIZE_MB}MB (${TAR_RATIO}% reduction)"
 
-# Stage 6: Output stage with kernel and SquashFS root filesystem (no initrd needed)
+# VZ output with kernel and SquashFS root filesystem
 # This target is published as the macOS VZ guest image.
 FROM scratch AS vz-image
 COPY --from=vz-image-builder /vmlinuz /vmlinuz
 COPY --from=vz-image-builder /kernel-version /kernel-version
 COPY --from=vz-image-builder /rootfs.squashfs /discobot-rootfs.squashfs
 
-# Stage 7: Output stage with WSL rootfs archive
+# WSL output with rootfs archive
 # This target is published as the Windows WSL guest image.
 FROM scratch AS wsl-image
 COPY --from=vz-image-builder /discobot-rootfs.tar.zst /discobot-rootfs.tar.zst
