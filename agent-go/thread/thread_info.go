@@ -210,8 +210,15 @@ func (s *Store) DeleteThreadInfo(threadID string) error {
 // ThreadInfoFromConfig projects a persisted config into the public thread view.
 func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 	pendingQuestion := false
-	if state, err := s.LoadTurnState(threadID); err == nil && state != nil {
-		pendingQuestion = state.Phase == PhaseWaitingForAnswer
+	activeTurn, err := s.LoadTurnState(threadID)
+	if err == nil && activeTurn != nil {
+		pendingQuestion = activeTurn.Phase == PhaseWaitingForAnswer
+	}
+	tokenUsage := cfg.TokenUsage
+	if activeTurn != nil {
+		if usage, err := aggregateThreadUsage(s, threadID, activeTurn); err == nil {
+			tokenUsage = usage
+		}
 	}
 	serviceTier := cfg.ServiceTier
 	if strings.TrimSpace(serviceTier) == "" {
@@ -228,7 +235,7 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 		Reasoning:       string(cfg.Reasoning),
 		ServiceTier:     serviceTier,
 		State:           cfg.LastTurnState,
-		TokenUsage:      cfg.TokenUsage,
+		TokenUsage:      tokenUsage,
 		PendingQuestion: pendingQuestion,
 		ActiveCommand:   strings.TrimSpace(cfg.ActiveCommand),
 		Metadata:        cfg.Metadata.RawMessage(),

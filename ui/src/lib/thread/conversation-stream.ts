@@ -36,6 +36,7 @@ export type ChatStreamStateOptions = {
 	onHistoryReplayEnd?: () => void | Promise<void>;
 	onChunkError?: (errorText: string) => void | Promise<void>;
 	onRetryStatus?: (message: string) => void | Promise<void>;
+	onFinishStep?: () => void | Promise<void>;
 	onThreadUpdate?: (thread: Thread) => void | Promise<void>;
 	onHooksStatusUpdate?: (status: HooksStatusResponse) => void | Promise<void>;
 	onBrowserEvent?: (event: BrowserEventChunkData) => void | Promise<void>;
@@ -845,6 +846,7 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 				return;
 
 			case "finish-step":
+				runCallbackInBackground("onFinishStep", options.onFinishStep);
 				return;
 
 			case "abort":

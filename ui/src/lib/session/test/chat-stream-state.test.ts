@@ -140,6 +140,7 @@ function createHarness(
 			return overrides.onCompletionStatus?.(info);
 		},
 		onFinish: overrides.onFinish,
+		onFinishStep: overrides.onFinishStep,
 		onHistoryReplayEnd: overrides.onHistoryReplayEnd,
 		onChunkError: overrides.onChunkError,
 		onRetryStatus: overrides.onRetryStatus,
@@ -1093,6 +1094,26 @@ test("reasoning chunks mark the active assistant message as streaming until fini
 			state: "done",
 		},
 	]);
+});
+
+test("finish-step notifies the caller", async () => {
+	let finishStepCount = 0;
+	const harness = createHarness([], {
+		onFinishStep: () => {
+			finishStepCount += 1;
+		},
+	});
+
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "start", messageId: "assistant-1" }),
+	});
+	await harness.state.handleStreamEvent({
+		event: "chunk",
+		data: JSON.stringify({ type: "finish-step" }),
+	});
+
+	assert.equal(finishStepCount, 1);
 });
 
 test("tool approval requests finalize the active assistant message", async () => {

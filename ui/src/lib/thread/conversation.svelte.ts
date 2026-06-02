@@ -271,6 +271,9 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 		onRetryStatus: (message) => {
 			return showRetryToast(args.threadId, message);
 		},
+		onFinishStep: () => {
+			return args.refreshThread();
+		},
 		onThreadUpdate: (thread) => {
 			args.applyThreadUpdate?.(thread);
 		},

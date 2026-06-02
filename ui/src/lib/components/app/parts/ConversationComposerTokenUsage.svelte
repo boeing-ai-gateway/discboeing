@@ -87,7 +87,6 @@
 				aria-label={tokenUsageSummary.ariaLabel}
 			>
 				<span>{tokenUsageSummary.primaryText}</span>
-				<span class="text-border">/</span>
 				<span>{tokenUsageSummary.totalText}</span>
 			</Button>
 		</PopoverTrigger>

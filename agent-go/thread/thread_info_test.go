@@ -3,6 +3,8 @@ package thread
 import (
 	"strings"
 	"testing"
+
+	"github.com/obot-platform/discobot/agent-go/message"
 )
 
 func TestThreadInfoPhaseCreateAndUpdate(t *testing.T) {
@@ -65,5 +67,76 @@ func TestThreadInfoRejectsInvalidPhase(t *testing.T) {
 		Phase: &invalid,
 	}); err == nil || !strings.Contains(err.Error(), "invalid thread phase") {
 		t.Fatalf("UpdateThreadInfo() error = %v, want invalid thread phase", err)
+	}
+}
+
+func TestThreadInfoExposesActiveTurnUsage(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-1"
+	if _, err := store.CreateThreadInfo("/workspace", CreateThreadRequest{
+		ID: threadID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	completedUsage := message.Usage{
+		InputTokens:  message.InputTokens{Total: 100},
+		OutputTokens: message.OutputTokens{Total: 20},
+	}
+	if err := store.SaveTurnState(threadID, TurnState{
+		ID:       "turn-1",
+		ThreadID: threadID,
+		TokenUsage: TokenUsageInfo{
+			Total: completedUsage,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteTurnState(threadID); err != nil {
+		t.Fatal(err)
+	}
+
+	lastStepUsage := message.Usage{
+		InputTokens:  message.InputTokens{Total: 50},
+		OutputTokens: message.OutputTokens{Total: 10},
+	}
+	activeTotalUsage := message.Usage{
+		InputTokens:  message.InputTokens{Total: 75},
+		OutputTokens: message.OutputTokens{Total: 15},
+	}
+	prices := message.TokenPrices{Input: 1.25, Output: 5}
+	if err := store.SaveTurnState(threadID, TurnState{
+		ID:          "turn-2",
+		ThreadID:    threadID,
+		CurrentStep: 1,
+		TokenUsage: TokenUsageInfo{
+			Total:           activeTotalUsage,
+			LastStep:        lastStepUsage,
+			ModelMaxTokens:  200000,
+			MaxOutputTokens: 16000,
+			Prices:          prices,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := store.GetThreadInfo(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.TokenUsage.LastTurn != activeTotalUsage {
+		t.Fatalf("expected active last turn %+v, got %+v", activeTotalUsage, info.TokenUsage.LastTurn)
+	}
+	if info.TokenUsage.LastStep != lastStepUsage {
+		t.Fatalf("expected active last step %+v, got %+v", lastStepUsage, info.TokenUsage.LastStep)
+	}
+	if info.TokenUsage.Total.InputTokens.Total != 175 || info.TokenUsage.Total.OutputTokens.Total != 35 {
+		t.Fatalf("unexpected total usage: %+v", info.TokenUsage.Total)
+	}
+	if info.TokenUsage.ModelMaxTokens != 200000 || info.TokenUsage.MaxOutputTokens != 16000 {
+		t.Fatalf("unexpected model limits: %+v", info.TokenUsage)
+	}
+	if info.TokenUsage.Prices != prices {
+		t.Fatalf("expected prices %+v, got %+v", prices, info.TokenUsage.Prices)
 	}
 }
