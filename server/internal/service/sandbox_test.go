@@ -31,6 +31,8 @@ import (
 var testImage = config.DefaultSandboxImage()
 var testEncryptionKey = []byte("0123456789abcdef0123456789abcdef")
 
+const testAgentExecStdoutFrame = byte(1)
+
 // sandboxCreatingInitializer provides a SessionInitializer for tests
 // that actually creates sandboxes (unlike the no-op testSessionInitializer in perform_commit_test.go)
 type sandboxCreatingInitializer struct {
@@ -1273,7 +1275,7 @@ func TestSandboxService_Attach(t *testing.T) {
 				return
 			}
 			defer conn.Close(websocket.StatusNormalClosure, "done")
-			if err := conn.Write(r.Context(), websocket.MessageBinary, []byte("$ ")); err != nil {
+			if err := conn.Write(r.Context(), websocket.MessageBinary, append([]byte{testAgentExecStdoutFrame}, []byte("$ ")...)); err != nil {
 				return
 			}
 			for {
