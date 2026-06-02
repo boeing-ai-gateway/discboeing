@@ -12,7 +12,6 @@
 	import { Label } from "$lib/components/ui/label";
 	import { NativeSelect } from "$lib/components/ui/native-select";
 	import { Switch } from "$lib/components/ui/switch";
-	import { Textarea } from "$lib/components/ui/textarea";
 	import {
 		Item,
 		ItemMedia,
@@ -24,6 +23,7 @@
 		ItemTitle,
 	} from "$lib/components/ui/item";
 	import ProviderIcon from "$lib/components/app/parts/ProviderIcon.svelte";
+	import SandboxProviderConfigFieldControl from "$lib/components/app/parts/SandboxProviderConfigField.svelte";
 	import ProjectSettingsTabContent from "$lib/components/app/parts/ProjectSettingsTabContent.svelte";
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { useAppContext } from "$lib/context/app-context.svelte";
@@ -270,13 +270,6 @@
 		);
 	}
 
-	function credentialDisplayName(credential: {
-		name: string;
-		provider: string;
-	}) {
-		return credential.name.trim() || credential.provider;
-	}
-
 	function credentialDefaultName(field: SandboxProviderConfigField): string {
 		const driver = selectedType?.name || credentialProvider(field);
 		return `${driver} API key`;
@@ -290,6 +283,40 @@
 				[field.key]: credentialDefaultName(field),
 			};
 		}
+	}
+
+	function cancelCreateCredential() {
+		creatingCredentialField = null;
+	}
+
+	function handleConfigFieldValueChange(
+		field: SandboxProviderConfigField,
+		value: string,
+	) {
+		if (creatingCredentialField === field.key) {
+			creatingCredentialField = null;
+		}
+		setConfigFieldValue(field, value);
+	}
+
+	function setNewCredentialName(
+		field: SandboxProviderConfigField,
+		value: string,
+	) {
+		newCredentialNames = {
+			...newCredentialNames,
+			[field.key]: value,
+		};
+	}
+
+	function setNewCredentialSecret(
+		field: SandboxProviderConfigField,
+		value: string,
+	) {
+		newCredentialSecrets = {
+			...newCredentialSecrets,
+			[field.key]: value,
+		};
 	}
 
 	async function createCredentialForField(field: SandboxProviderConfigField) {
@@ -430,149 +457,6 @@
 		void refresh();
 	});
 </script>
-
-{#snippet configField(field: SandboxProviderConfigField)}
-	<div
-		class={field.type === "textarea"
-			? "space-y-1.5 sm:col-span-2"
-			: "space-y-1.5"}
-	>
-		<div class="flex items-center justify-between gap-2">
-			<Label for={`sandbox-provider-config-${field.key}`}>
-				{field.label}{field.required ? " *" : ""}
-			</Label>
-			<span class="text-xs text-muted-foreground">
-				{field.required ? "Required" : "Optional"}
-			</span>
-		</div>
-		{#if field.type === "credential"}
-			<NativeSelect
-				id={`sandbox-provider-config-${field.key}`}
-				value={configFieldValue(field) || "__none__"}
-				disabled={saving}
-				onchange={(event) => {
-					const next = (event.currentTarget as HTMLSelectElement).value;
-					if (next === "__create__") {
-						beginCreateCredential(field);
-						return;
-					}
-					creatingCredentialField =
-						creatingCredentialField === field.key
-							? null
-							: creatingCredentialField;
-					setConfigFieldValue(field, next === "__none__" ? "" : next);
-				}}
-			>
-				<option value="__none__">No credential</option>
-				{#each credentialOptions(field) as credential (credential.id)}
-					<option value={credential.id}
-						>{credentialDisplayName(credential)}</option
-					>
-				{/each}
-				<option value="__create__">Create new API key...</option>
-			</NativeSelect>
-			{#if credentialOptions(field).length === 0 && creatingCredentialField !== field.key}
-				<p class="text-xs text-muted-foreground">
-					No active {credentialProvider(field)}
-					{credentialAuthType(field)}
-					credentials found.
-				</p>
-			{/if}
-			{#if creatingCredentialField === field.key}
-				<div class="space-y-2 rounded-md border border-border p-3">
-					<div class="space-y-1.5">
-						<Label for={`sandbox-provider-config-${field.key}-credential-name`}>
-							Credential name
-						</Label>
-						<Input
-							id={`sandbox-provider-config-${field.key}-credential-name`}
-							value={newCredentialNames[field.key] ||
-								credentialDefaultName(field)}
-							disabled={saving}
-							oninput={(event) => {
-								newCredentialNames = {
-									...newCredentialNames,
-									[field.key]: (event.currentTarget as HTMLInputElement).value,
-								};
-							}}
-						/>
-					</div>
-					<div class="space-y-1.5">
-						<Label
-							for={`sandbox-provider-config-${field.key}-credential-secret`}
-						>
-							API key
-						</Label>
-						<Input
-							id={`sandbox-provider-config-${field.key}-credential-secret`}
-							type="password"
-							value={newCredentialSecrets[field.key] ?? ""}
-							disabled={saving}
-							placeholder={`Paste ${credentialProvider(field)} API key`}
-							oninput={(event) => {
-								newCredentialSecrets = {
-									...newCredentialSecrets,
-									[field.key]: (event.currentTarget as HTMLInputElement).value,
-								};
-							}}
-						/>
-					</div>
-					<div class="flex justify-end gap-2">
-						<Button
-							variant="ghost"
-							size="xs"
-							disabled={saving}
-							onclick={() => {
-								creatingCredentialField = null;
-							}}
-						>
-							Cancel
-						</Button>
-						<Button
-							size="xs"
-							disabled={saving || credentialAuthType(field) !== "api_key"}
-							onclick={() => void createCredentialForField(field)}
-						>
-							Create credential
-						</Button>
-					</div>
-				</div>
-			{/if}
-		{:else if field.type === "textarea"}
-			<Textarea
-				id={`sandbox-provider-config-${field.key}`}
-				value={configFieldValue(field)}
-				disabled={saving}
-				placeholder={field.placeholder}
-				oninput={(event) => {
-					setConfigFieldValue(
-						field,
-						(event.currentTarget as HTMLTextAreaElement).value,
-					);
-				}}
-			/>
-		{:else}
-			<Input
-				id={`sandbox-provider-config-${field.key}`}
-				type={field.type === "number" ? "number" : "text"}
-				value={configFieldValue(field)}
-				disabled={saving}
-				placeholder={field.placeholder}
-				oninput={(event) => {
-					setConfigFieldValue(
-						field,
-						(event.currentTarget as HTMLInputElement).value,
-					);
-				}}
-			/>
-		{/if}
-		{#if field.description}
-			<p class="text-xs text-muted-foreground">
-				{field.description}
-			</p>
-		{/if}
-	</div>
-{/snippet}
 
 <div class="space-y-4">
 	<Tooltip.Provider>
@@ -723,7 +607,25 @@
 						</p>
 					</div>
 					{#each basicConfigFields as field (field.key)}
-						{@render configField(field)}
+						<SandboxProviderConfigFieldControl
+							{field}
+							value={configFieldValue(field)}
+							{saving}
+							creatingCredential={creatingCredentialField === field.key}
+							credentialOptions={credentialOptions(field)}
+							credentialProvider={credentialProvider(field)}
+							credentialAuthType={credentialAuthType(field)}
+							credentialDefaultName={credentialDefaultName(field)}
+							newCredentialName={newCredentialNames[field.key] ?? ""}
+							newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
+							onValueChange={handleConfigFieldValueChange}
+							onBeginCreateCredential={beginCreateCredential}
+							onCancelCreateCredential={cancelCreateCredential}
+							onNewCredentialNameChange={setNewCredentialName}
+							onNewCredentialSecretChange={setNewCredentialSecret}
+							onCreateCredential={(field) =>
+								void createCredentialForField(field)}
+						/>
 					{/each}
 				</div>
 				{#if type}
@@ -774,7 +676,25 @@
 									</p>
 								</div>
 								{#each advancedConfigFields as field (field.key)}
-									{@render configField(field)}
+									<SandboxProviderConfigFieldControl
+										{field}
+										value={configFieldValue(field)}
+										{saving}
+										creatingCredential={creatingCredentialField === field.key}
+										credentialOptions={credentialOptions(field)}
+										credentialProvider={credentialProvider(field)}
+										credentialAuthType={credentialAuthType(field)}
+										credentialDefaultName={credentialDefaultName(field)}
+										newCredentialName={newCredentialNames[field.key] ?? ""}
+										newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
+										onValueChange={handleConfigFieldValueChange}
+										onBeginCreateCredential={beginCreateCredential}
+										onCancelCreateCredential={cancelCreateCredential}
+										onNewCredentialNameChange={setNewCredentialName}
+										onNewCredentialSecretChange={setNewCredentialSecret}
+										onCreateCredential={(field) =>
+											void createCredentialForField(field)}
+									/>
 								{/each}
 							</div>
 						{/if}

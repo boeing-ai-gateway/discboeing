@@ -27,7 +27,6 @@
 		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
-	let iframeElement = $state<HTMLIFrameElement | null>(null);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
 	let refreshKey = $state(0);
@@ -148,9 +147,11 @@
 				{#if isLoading}
 					<div
 						class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+						role="status"
+						aria-live="polite"
 					>
 						<div class="flex items-center gap-2 text-sm text-muted-foreground">
-							<Loader2Icon class="size-4 animate-spin" />
+							<Loader2Icon class="size-4 animate-spin" aria-hidden="true" />
 							<span>Loading editor…</span>
 						</div>
 					</div>
@@ -159,6 +160,7 @@
 				{#if error}
 					<div
 						class="absolute inset-0 z-20 flex items-center justify-center bg-background/90"
+						role="alert"
 					>
 						<div class="space-y-3 text-center text-sm text-muted-foreground">
 							<p>{error}</p>
@@ -173,7 +175,6 @@
 
 				{#key iframeKey}
 					<iframe
-						bind:this={iframeElement}
 						src={serviceUrl}
 						class="size-full border-0"
 						onload={handleIframeLoad}

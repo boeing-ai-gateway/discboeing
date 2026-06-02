@@ -106,6 +106,7 @@
 			</p>
 			{#if !startup.hasActiveTasks}
 				<button
+					type="button"
 					class="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground"
 					onclick={() => (dismissed = true)}
 					aria-label="Dismiss"
@@ -117,15 +118,17 @@
 
 		<div class="mt-2 flex flex-col gap-2">
 			{#each startup.visibleTasks as task (task.id)}
+				{@const detail = getTaskDetail(task)}
+				{@const progress = getTaskProgress(task)}
 				<div class="rounded-md border border-border bg-background/80 px-3 py-2">
 					<div class="flex items-start justify-between gap-3">
 						<div class="min-w-0">
 							<p class="truncate text-sm font-medium">{task.name}</p>
-							{#if getTaskDetail(task)}
+							{#if detail}
 								<p
 									class={`mt-0.5 line-clamp-2 text-xs ${task.state === "failed" ? "text-destructive" : "text-muted-foreground"}`}
 								>
-									{getTaskDetail(task)}
+									{detail}
 								</p>
 							{/if}
 						</div>
@@ -134,14 +137,11 @@
 						</Badge>
 					</div>
 
-					{#if getTaskProgress(task) !== null}
+					{#if progress !== null}
 						<div class="mt-2 flex items-center gap-2">
-							<Progress
-								value={getTaskProgress(task) ?? 0}
-								class="h-1.5 flex-1"
-							/>
+							<Progress value={progress} class="h-1.5 flex-1" />
 							<span class="text-[11px] tabular-nums text-muted-foreground">
-								{getTaskProgress(task)}%
+								{progress}%
 							</span>
 						</div>
 					{/if}

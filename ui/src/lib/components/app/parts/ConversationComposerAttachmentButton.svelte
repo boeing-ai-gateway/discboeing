@@ -1,11 +1,5 @@
 <script lang="ts">
 	import PaperclipIcon from "@lucide/svelte/icons/paperclip";
-	import {
-		DropdownMenu,
-		DropdownMenuContent,
-		DropdownMenuItem,
-		DropdownMenuTrigger,
-	} from "$lib/components/ui/dropdown-menu";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 
 	type Props = {
@@ -42,20 +36,13 @@
 	onchange={handleFileInputChange}
 />
 
-<DropdownMenu>
-	<DropdownMenuTrigger class="desktop-no-drag" {disabled}>
-		<InputGroupButton
-			size="icon-sm"
-			variant="ghost"
-			aria-label="Attachment actions"
-			{disabled}
-		>
-			<PaperclipIcon class="size-4" />
-		</InputGroupButton>
-	</DropdownMenuTrigger>
-	<DropdownMenuContent align="start" class="w-48">
-		<DropdownMenuItem onclick={openFileDialog}
-			>Add photos or files</DropdownMenuItem
-		>
-	</DropdownMenuContent>
-</DropdownMenu>
+<InputGroupButton
+	size="icon-sm"
+	variant="ghost"
+	class="desktop-no-drag"
+	aria-label="Add photos or files"
+	{disabled}
+	onclick={openFileDialog}
+>
+	<PaperclipIcon class="size-4" />
+</InputGroupButton>

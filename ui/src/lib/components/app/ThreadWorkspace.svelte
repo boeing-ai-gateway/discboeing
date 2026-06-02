@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
-	import { untrack } from "svelte";
 	import {
 		canLoadSessionThreads,
 		isSessionTransitioningStatus,
@@ -10,14 +9,15 @@
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { setThreadContext } from "$lib/context/thread-context.svelte";
+	import { untrack } from "svelte";
 
 	type Props = {
 		threadId: string;
 		visible: boolean;
 		mainClass: string;
+		sidebarOpen?: boolean;
 		reserveSidebarSpace?: boolean;
 		mode?: "full" | "conversation-only";
-		sidebarOpen?: boolean;
 	};
 
 	let { threadId, visible, mainClass, reserveSidebarSpace, mode }: Props =

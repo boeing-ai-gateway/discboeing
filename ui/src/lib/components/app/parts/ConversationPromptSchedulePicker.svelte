@@ -107,14 +107,17 @@
 		</Button>
 	</div>
 	<div class="space-y-2">
-		<div class="text-xs font-medium text-muted-foreground">Custom time</div>
-		<Input
-			type="datetime-local"
-			value={customLaterValue}
-			oninput={(event) => {
-				customLaterValue = event.currentTarget.value;
-			}}
-		/>
+		<label class="block text-xs font-medium text-muted-foreground">
+			Custom time
+			<Input
+				type="datetime-local"
+				value={customLaterValue}
+				{disabled}
+				oninput={(event) => {
+					customLaterValue = event.currentTarget.value;
+				}}
+			/>
+		</label>
 		<div class="flex justify-between gap-2">
 			<Button
 				variant="outline"

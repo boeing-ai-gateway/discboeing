@@ -53,15 +53,27 @@
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
 
-	const app = useAppContext();
-	const models = app.models;
-	const preferences = app.preferences;
+	function getCleanModelName(name: string) {
+		return name.replace(/\s*\(latest\)\s*/gi, "").trim();
+	}
 
-	const dedupedModels = $derived.by(() => {
+	function getModelBaseName(name: string) {
+		return getCleanModelName(name)
+			.replace(/\s+v\d+\s*/gi, "")
+			.replace(/\s+[\d.]+\s*$/, "")
+			.trim();
+	}
+
+	function extractModelVersion(name: string) {
+		const matches = name.match(/(\d+(?:\.\d+)?)/g);
+		return matches?.length ? Number.parseFloat(matches[matches.length - 1]) : 0;
+	}
+
+	function getDedupedModels(modelList: ModelInfo[]) {
 		const modelByProviderAndName: Record<string, ModelInfo> = {};
 
-		for (const model of models.list) {
-			const cleanName = model.name.replace(/\s*\(latest\)\s*/gi, "").trim();
+		for (const model of modelList) {
+			const cleanName = getCleanModelName(model.name);
 			const isLatest = /\(latest\)/i.test(model.name);
 			const dedupeKey = `${model.provider || "Other"}::${cleanName}`;
 			const existing = modelByProviderAndName[dedupeKey];
@@ -71,30 +83,21 @@
 			}
 		}
 
-		const getBaseName = (name: string) =>
-			name
-				.replace(/\s*\(latest\)\s*/gi, "")
-				.replace(/\s+v\d+\s*/gi, "")
-				.replace(/\s+[\d.]+\s*$/, "")
-				.trim();
-
-		const extractVersion = (name: string) => {
-			const matches = name.match(/(\d+(?:\.\d+)?)/g);
-			return matches?.length
-				? Number.parseFloat(matches[matches.length - 1])
-				: 0;
-		};
-
 		return Object.values(modelByProviderAndName).sort((a, b) => {
-			const baseCompare = getBaseName(a.name).localeCompare(
-				getBaseName(b.name),
+			const baseCompare = getModelBaseName(a.name).localeCompare(
+				getModelBaseName(b.name),
 			);
 			if (baseCompare !== 0) return baseCompare;
-			const versionDiff = extractVersion(b.name) - extractVersion(a.name);
+			const versionDiff =
+				extractModelVersion(b.name) - extractModelVersion(a.name);
 			if (versionDiff !== 0) return versionDiff;
 			return a.name.localeCompare(b.name);
 		});
-	});
+	}
+
+	const app = useAppContext();
+	const models = app.models;
+	const preferences = app.preferences;
 
 	const selectedDefaultModel = $derived.by(() =>
 		preferences.defaultModel
@@ -104,7 +107,9 @@
 	);
 
 	const modelProviderEntries = $derived.by(() => {
+		const dedupedModels = getDedupedModels(models.list);
 		const grouped: Record<string, ModelInfo[]> = {};
+
 		for (const model of dedupedModels) {
 			const provider = model.provider || "Other";
 			if (!grouped[provider]) grouped[provider] = [];
@@ -260,7 +265,7 @@
 							Update
 							{#if updates.showBadge}
 								<span
-									class="absolute -right-1 top-0 h-2 w-2 rounded-full bg-blue-500"
+									class="absolute -right-1 top-0 h-2 w-2 rounded-full bg-primary"
 								></span>
 							{/if}
 						</span>
@@ -394,6 +399,7 @@
 									<ItemActions>
 										<Switch
 											id="settings-show-refresh-button"
+											aria-label="Show refresh button"
 											checked={preferences.showRefreshButton}
 											onCheckedChange={(checked) => {
 												preferences.setShowRefreshButton(checked === true);
@@ -461,6 +467,7 @@
 									<ItemActions>
 										<Switch
 											id="settings-chat-width"
+											aria-label="Full width conversation"
 											checked={preferences.chatWidthMode === "full"}
 											onCheckedChange={(checked) => {
 												preferences.setChatWidthMode(
@@ -482,6 +489,7 @@
 									<ItemActions>
 										<Switch
 											id="settings-auto-scroll"
+											aria-label="Auto-scroll"
 											checked={preferences.autoScrollOnStream}
 											onCheckedChange={(checked) => {
 												preferences.setAutoScrollOnStream(checked === true);
@@ -551,6 +559,7 @@
 											</p>
 										</div>
 										<Switch
+											aria-label="Track pre-releases"
 											checked={updates.trackPrereleases}
 											onCheckedChange={(checked) =>
 												void updates.setTrackPrereleases(checked === true)}

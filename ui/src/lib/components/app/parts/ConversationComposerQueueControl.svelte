@@ -10,27 +10,29 @@
 
 	let { expanded = $bindable(false), entries }: Props = $props();
 
-	function queueCompletedCount() {
-		return entries.filter((entry) => entry.status === "completed").length;
-	}
-
-	function queueTotalCount() {
-		return entries.length;
-	}
+	let queueCompletedCount = $derived(
+		entries.filter((entry) => entry.status === "completed").length,
+	);
+	let queueTotalCount = $derived(entries.length);
+	let queueToggleLabel = $derived(
+		`Toggle queued plan entries, ${queueCompletedCount} of ${queueTotalCount} complete`,
+	);
 </script>
 
-{#if queueTotalCount() > 0}
+{#if queueTotalCount > 0}
 	<Button
 		variant="ghost"
 		size="xs"
 		class="h-8 gap-1.5 px-2"
+		aria-label={queueToggleLabel}
+		aria-expanded={expanded}
 		onclick={() => {
 			expanded = !expanded;
 		}}
 	>
-		<CheckCircleIcon class="size-3.5" />
+		<CheckCircleIcon class="size-3.5" aria-hidden="true" />
 		<span class="text-xs font-medium"
-			>{queueCompletedCount()}/{queueTotalCount()}</span
+			>{queueCompletedCount}/{queueTotalCount}</span
 		>
 	</Button>
 {/if}

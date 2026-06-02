@@ -11,26 +11,16 @@
 	import type { Thread, Workspace } from "$lib/api-types";
 	import AppSessionStatus from "$lib/components/app/AppSessionStatus.svelte";
 	import AppThreadStatus from "$lib/components/app/AppThreadStatus.svelte";
+	import AppSidebarDeleteDialog from "$lib/components/app/parts/AppSidebarDeleteDialog.svelte";
+	import AppSidebarRenameDialog from "$lib/components/app/parts/AppSidebarRenameDialog.svelte";
 	import * as Collapsible from "$lib/components/ui/collapsible";
-	import {
-		AlertDialog,
-		AlertDialogAction,
-		AlertDialogCancel,
-		AlertDialogContent,
-		AlertDialogDescription,
-		AlertDialogFooter,
-		AlertDialogHeader,
-		AlertDialogTitle,
-	} from "$lib/components/ui/alert-dialog";
 	import { Button } from "$lib/components/ui/button";
-	import * as Dialog from "$lib/components/ui/dialog";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
 		DropdownMenuItem,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
-	import { Input } from "$lib/components/ui/input";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 
 	type Props = {
@@ -339,20 +329,6 @@
 		renamingThread = false;
 		if (renamed) {
 			closeRenameThreadDialog();
-		}
-	}
-
-	function handleRenameInputKeydown(event: KeyboardEvent) {
-		if (event.key === "Enter") {
-			event.preventDefault();
-			void handleRenameSession();
-		}
-	}
-
-	function handleRenameThreadInputKeydown(event: KeyboardEvent) {
-		if (event.key === "Enter") {
-			event.preventDefault();
-			void handleRenameThread();
 		}
 	}
 
@@ -719,6 +695,58 @@
 	</button>
 {/snippet}
 
+{#snippet workspaceGroup(group: SessionGroup)}
+	<div class="space-y-1.5">
+		<div
+			class="group flex items-center gap-1.5 px-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60"
+		>
+			{#if group.sourceType === "git"}
+				<GitBranchIcon class="size-3 shrink-0" />
+			{:else if group.sourceType === "local"}
+				<FolderIcon class="size-3 shrink-0" />
+			{:else}
+				<PackageIcon class="size-3 shrink-0" />
+			{/if}
+			<span class="min-w-0 flex-1 truncate">{group.label}</span>
+			{#if group.workspaceId}
+				<DropdownMenu>
+					<DropdownMenuTrigger>
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							class="h-6 w-6 rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+							aria-label={`Workspace actions for ${group.label}`}
+							onclick={(event) => event.stopPropagation()}
+						>
+							<EllipsisIcon
+								class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+							/>
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" class="w-32">
+						<DropdownMenuItem
+							onclick={() => openRenameWorkspaceDialog(group.workspaceId!)}
+						>
+							Rename
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							variant="destructive"
+							onclick={() => openDeleteWorkspaceDialog(group.workspaceId!)}
+						>
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			{/if}
+		</div>
+		<div class="space-y-0.5">
+			{#each group.sessions as sessionObj (sessionObj.id)}
+				{@render sessionItem(sessionObj, sessions.selectedId === sessionObj.id)}
+			{/each}
+		</div>
+	</div>
+{/snippet}
+
 <aside
 	bind:this={shellRef}
 	class={`flex min-h-0 flex-col overflow-hidden text-sidebar-foreground ${dropdownMode ? "max-h-[min(70vh,32rem)] min-w-64 bg-sidebar" : floatingMode ? `${showSidebarBody ? "max-h-[calc(100vh-7rem)] w-fit max-w-[calc(100vw-1.5rem)] rounded-md border border-sidebar-border bg-sidebar shadow-sm" : "w-fit bg-transparent shadow-none border-transparent"} pointer-events-auto` : "h-full min-w-64 w-full rounded-md border border-sidebar-border bg-sidebar shadow-sm"}`}
@@ -848,66 +876,7 @@
 								>
 									{#if preferences.sidebarAllGroupedByWorkspace}
 										{#each workspaceSessionGroups as group (group.key)}
-											<div class="space-y-1.5">
-												<div
-													class="group flex items-center gap-1.5 px-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60"
-												>
-													{#if group.sourceType === "git"}
-														<GitBranchIcon class="size-3 shrink-0" />
-													{:else if group.sourceType === "local"}
-														<FolderIcon class="size-3 shrink-0" />
-													{:else}
-														<PackageIcon class="size-3 shrink-0" />
-													{/if}
-													<span class="min-w-0 flex-1 truncate"
-														>{group.label}</span
-													>
-													{#if group.workspaceId}
-														<DropdownMenu>
-															<DropdownMenuTrigger>
-																<Button
-																	variant="ghost"
-																	size="icon-xs"
-																	class="h-6 w-6 rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-																	aria-label={`Workspace actions for ${group.label}`}
-																	onclick={(event) => event.stopPropagation()}
-																>
-																	<EllipsisIcon
-																		class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-																	/>
-																</Button>
-															</DropdownMenuTrigger>
-															<DropdownMenuContent align="end" class="w-32">
-																<DropdownMenuItem
-																	onclick={() =>
-																		openRenameWorkspaceDialog(
-																			group.workspaceId!,
-																		)}
-																>
-																	Rename
-																</DropdownMenuItem>
-																<DropdownMenuItem
-																	variant="destructive"
-																	onclick={() =>
-																		openDeleteWorkspaceDialog(
-																			group.workspaceId!,
-																		)}
-																>
-																	Delete
-																</DropdownMenuItem>
-															</DropdownMenuContent>
-														</DropdownMenu>
-													{/if}
-												</div>
-												<div class="space-y-0.5">
-													{#each group.sessions as sessionObj (sessionObj.id)}
-														{@render sessionItem(
-															sessionObj,
-															sessions.selectedId === sessionObj.id,
-														)}
-													{/each}
-												</div>
-											</div>
+											{@render workspaceGroup(group)}
 										{/each}
 									{:else}
 										{#each sessions.list as sessionObj (sessionObj.id)}
@@ -927,62 +896,7 @@
 							>
 								{#if preferences.sidebarAllGroupedByWorkspace}
 									{#each workspaceSessionGroups as group (group.key)}
-										<div class="space-y-1.5">
-											<div
-												class="group flex items-center gap-1.5 px-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60"
-											>
-												{#if group.sourceType === "git"}
-													<GitBranchIcon class="size-3 shrink-0" />
-												{:else if group.sourceType === "local"}
-													<FolderIcon class="size-3 shrink-0" />
-												{:else}
-													<PackageIcon class="size-3 shrink-0" />
-												{/if}
-												<span class="min-w-0 flex-1 truncate"
-													>{group.label}</span
-												>
-												{#if group.workspaceId}
-													<DropdownMenu>
-														<DropdownMenuTrigger>
-															<Button
-																variant="ghost"
-																size="icon-xs"
-																class="h-6 w-6 rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-																aria-label={`Workspace actions for ${group.label}`}
-																onclick={(event) => event.stopPropagation()}
-															>
-																<EllipsisIcon
-																	class="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-																/>
-															</Button>
-														</DropdownMenuTrigger>
-														<DropdownMenuContent align="end" class="w-32">
-															<DropdownMenuItem
-																onclick={() =>
-																	openRenameWorkspaceDialog(group.workspaceId!)}
-															>
-																Rename
-															</DropdownMenuItem>
-															<DropdownMenuItem
-																variant="destructive"
-																onclick={() =>
-																	openDeleteWorkspaceDialog(group.workspaceId!)}
-															>
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-												{/if}
-											</div>
-											<div class="space-y-0.5">
-												{#each group.sessions as sessionObj (sessionObj.id)}
-													{@render sessionItem(
-														sessionObj,
-														sessions.selectedId === sessionObj.id,
-													)}
-												{/each}
-											</div>
-										</div>
+										{@render workspaceGroup(group)}
 									{/each}
 								{:else}
 									{#each sessions.list as sessionObj (sessionObj.id)}
@@ -1000,205 +914,89 @@
 		</div>
 	{/if}
 
-	<Dialog.Root bind:open={renameDialogOpen}>
-		<Dialog.Content class="sm:max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Rename session</Dialog.Title>
-				<Dialog.Description
-					>Choose a new name for this session.</Dialog.Description
-				>
-			</Dialog.Header>
-			<Input
-				value={renameDraft}
-				oninput={(event) => {
-					renameDraft = (event.currentTarget as HTMLInputElement).value;
-				}}
-				onkeydown={handleRenameInputKeydown}
-				maxlength={120}
-				placeholder="Session name"
-			/>
-			<Dialog.Footer>
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={closeRenameDialog}
-					disabled={renamingSession}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="default"
-					size="sm"
-					onclick={() => {
-						void handleRenameSession();
-					}}
-					disabled={renamingSession || renameDraft.trim().length === 0}
-				>
-					Save
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<AppSidebarRenameDialog
+		bind:open={renameDialogOpen}
+		title="Rename session"
+		description="Choose a new name for this session."
+		label="Session name"
+		value={renameDraft}
+		placeholder="Session name"
+		saving={renamingSession}
+		saveDisabled={renameDraft.trim().length === 0}
+		onValueChange={(value) => {
+			renameDraft = value;
+		}}
+		onCancel={closeRenameDialog}
+		onSave={() => {
+			void handleRenameSession();
+		}}
+	/>
 
-	<Dialog.Root bind:open={renameThreadDialogOpen}>
-		<Dialog.Content class="sm:max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Rename thread</Dialog.Title>
-				<Dialog.Description
-					>Choose a new name for this thread.</Dialog.Description
-				>
-			</Dialog.Header>
-			<Input
-				value={renameThreadDraft}
-				oninput={(event) => {
-					renameThreadDraft = (event.currentTarget as HTMLInputElement).value;
-				}}
-				onkeydown={handleRenameThreadInputKeydown}
-				maxlength={120}
-				placeholder="Thread name"
-			/>
-			<Dialog.Footer>
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={closeRenameThreadDialog}
-					disabled={renamingThread}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="default"
-					size="sm"
-					onclick={() => {
-						void handleRenameThread();
-					}}
-					disabled={renamingThread || renameThreadDraft.trim().length === 0}
-				>
-					Save
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<AppSidebarRenameDialog
+		bind:open={renameThreadDialogOpen}
+		title="Rename thread"
+		description="Choose a new name for this thread."
+		label="Thread name"
+		value={renameThreadDraft}
+		placeholder="Thread name"
+		saving={renamingThread}
+		saveDisabled={renameThreadDraft.trim().length === 0}
+		onValueChange={(value) => {
+			renameThreadDraft = value;
+		}}
+		onCancel={closeRenameThreadDialog}
+		onSave={() => {
+			void handleRenameThread();
+		}}
+	/>
 
-	<Dialog.Root bind:open={renameWorkspaceDialogOpen}>
-		<Dialog.Content class="sm:max-w-md">
-			<Dialog.Header>
-				<Dialog.Title>Rename workspace</Dialog.Title>
-				<Dialog.Description
-					>Choose a new name for this workspace.</Dialog.Description
-				>
-			</Dialog.Header>
-			<Input
-				value={renameWorkspaceDraft}
-				oninput={(event) => {
-					renameWorkspaceDraft = (event.currentTarget as HTMLInputElement)
-						.value;
-				}}
-				maxlength={120}
-				placeholder="Workspace name"
-			/>
-			<Dialog.Footer>
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={closeRenameWorkspaceDialog}
-					disabled={renamingWorkspace}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="default"
-					size="sm"
-					onclick={() => {
-						void handleRenameWorkspace();
-					}}
-					disabled={renamingWorkspace}
-				>
-					Save
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
+	<AppSidebarRenameDialog
+		bind:open={renameWorkspaceDialogOpen}
+		title="Rename workspace"
+		description="Choose a new name for this workspace."
+		label="Workspace name"
+		value={renameWorkspaceDraft}
+		placeholder="Workspace name"
+		saving={renamingWorkspace}
+		onValueChange={(value) => {
+			renameWorkspaceDraft = value;
+		}}
+		onCancel={closeRenameWorkspaceDialog}
+		onSave={() => {
+			void handleRenameWorkspace();
+		}}
+	/>
 
-	<AlertDialog bind:open={deleteDialogOpen}>
-		<AlertDialogContent>
-			<AlertDialogHeader>
-				<AlertDialogTitle>Delete session?</AlertDialogTitle>
-				<AlertDialogDescription>
-					This will permanently delete {deleteDialogSessionName()}.
-				</AlertDialogDescription>
-			</AlertDialogHeader>
-			<AlertDialogFooter>
-				<AlertDialogCancel
-					onclick={closeDeleteDialog}
-					disabled={deletingSession}
-				>
-					Cancel
-				</AlertDialogCancel>
-				<AlertDialogAction
-					onclick={(event) => {
-						event.preventDefault();
-						void handleDeleteSession();
-					}}
-					disabled={deletingSession}
-				>
-					Delete
-				</AlertDialogAction>
-			</AlertDialogFooter>
-		</AlertDialogContent>
-	</AlertDialog>
+	<AppSidebarDeleteDialog
+		bind:open={deleteDialogOpen}
+		title="Delete session?"
+		description={`This will permanently delete ${deleteDialogSessionName()}.`}
+		deleting={deletingSession}
+		onCancel={closeDeleteDialog}
+		onDelete={() => {
+			void handleDeleteSession();
+		}}
+	/>
 
-	<AlertDialog bind:open={deleteThreadDialogOpen}>
-		<AlertDialogContent>
-			<AlertDialogHeader>
-				<AlertDialogTitle>Delete thread?</AlertDialogTitle>
-				<AlertDialogDescription>
-					Delete "{deleteDialogThreadName()}"? This action cannot be undone.
-				</AlertDialogDescription>
-			</AlertDialogHeader>
-			<AlertDialogFooter>
-				<AlertDialogCancel
-					onclick={closeDeleteThreadDialog}
-					disabled={deletingThread}
-				>
-					Cancel
-				</AlertDialogCancel>
-				<AlertDialogAction
-					onclick={() => {
-						void handleDeleteThread();
-					}}
-					disabled={deletingThread}
-				>
-					Delete
-				</AlertDialogAction>
-			</AlertDialogFooter>
-		</AlertDialogContent>
-	</AlertDialog>
+	<AppSidebarDeleteDialog
+		bind:open={deleteThreadDialogOpen}
+		title="Delete thread?"
+		description={`Delete "${deleteDialogThreadName()}"? This action cannot be undone.`}
+		deleting={deletingThread}
+		onCancel={closeDeleteThreadDialog}
+		onDelete={() => {
+			void handleDeleteThread();
+		}}
+	/>
 
-	<AlertDialog bind:open={deleteWorkspaceDialogOpen}>
-		<AlertDialogContent>
-			<AlertDialogHeader>
-				<AlertDialogTitle>Delete workspace?</AlertDialogTitle>
-				<AlertDialogDescription>
-					Delete "{deleteDialogWorkspaceName()}"? This action cannot be undone.
-				</AlertDialogDescription>
-			</AlertDialogHeader>
-			<AlertDialogFooter>
-				<AlertDialogCancel
-					onclick={closeDeleteWorkspaceDialog}
-					disabled={deletingWorkspace}
-				>
-					Cancel
-				</AlertDialogCancel>
-				<AlertDialogAction
-					onclick={() => {
-						void handleDeleteWorkspace();
-					}}
-					disabled={deletingWorkspace}
-				>
-					Delete
-				</AlertDialogAction>
-			</AlertDialogFooter>
-		</AlertDialogContent>
-	</AlertDialog>
+	<AppSidebarDeleteDialog
+		bind:open={deleteWorkspaceDialogOpen}
+		title="Delete workspace?"
+		description={`Delete "${deleteDialogWorkspaceName()}"? This action cannot be undone.`}
+		deleting={deletingWorkspace}
+		onCancel={closeDeleteWorkspaceDialog}
+		onDelete={() => {
+			void handleDeleteWorkspace();
+		}}
+	/>
 </aside>

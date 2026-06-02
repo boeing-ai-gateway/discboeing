@@ -15,14 +15,18 @@
 		class="pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/20 px-4 pt-24 backdrop-blur-[2px]"
 	>
 		<div
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="keyboard-shortcuts-title"
 			class="pointer-events-auto w-full max-w-xl overflow-hidden rounded-2xl border border-border/80 bg-background/95 shadow-2xl"
 		>
 			<div class="border-b border-border/70 px-4 py-3">
-				<p
+				<h2
+					id="keyboard-shortcuts-title"
 					class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
 				>
 					Keyboard shortcuts
-				</p>
+				</h2>
 			</div>
 
 			<div class="space-y-1 p-2">

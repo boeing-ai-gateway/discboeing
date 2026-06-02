@@ -141,6 +141,10 @@
 		);
 	}
 
+	function hasFailedStartupTasks(tasks: StartupTask[]) {
+		return tasks.some((task) => task.state === "failed");
+	}
+
 	function dismissStartupOverlay() {
 		startupOverlayDismissed = true;
 		ready = true;
@@ -152,11 +156,13 @@
 		return status;
 	}
 
-	const startupScreen = $derived.by((): StartupScreenData => {
-		const visibleTasks = startupTasks.filter(
-			(task) => task.state !== "completed",
-		);
-		const hasFailedTask = visibleTasks.some((task) => task.state === "failed");
+	function buildStartupScreenData(
+		phase: StartupPhase,
+		tasks: StartupTask[],
+		retries: number,
+	): StartupScreenData {
+		const visibleTasks = tasks.filter((task) => task.state !== "completed");
+		const hasFailedTask = hasFailedStartupTasks(visibleTasks);
 		const hasRunningTask = visibleTasks.some(
 			(task) => task.state === "in_progress",
 		);
@@ -169,23 +175,20 @@
 						visibleTasks.reduce((sum, task) => sum + getTaskProgress(task), 0) /
 							visibleTasks.length,
 					)
-				: startupPhase === "ready"
+				: phase === "ready"
 					? 100
-					: startupPhase === "loading"
+					: phase === "loading"
 						? 80
-						: startupPhase === "waiting"
+						: phase === "waiting"
 							? 30
 							: 15;
-		const steps: StartupScreenStep[] =
-			visibleTasks.length > 0
-				? visibleTasks.map((task) => ({
-						label: task.name,
-						detail: getTaskDetail(task),
-						state: mapTaskState(task),
-					}))
-				: [];
+		const steps: StartupScreenStep[] = visibleTasks.map((task) => ({
+			label: task.name,
+			detail: getTaskDetail(task),
+			state: mapTaskState(task),
+		}));
 
-		if (startupPhase === "error") {
+		if (phase === "error") {
 			return {
 				headline: "Discobot could not connect to the backend",
 				detail:
@@ -194,7 +197,7 @@
 				statusVariant: "destructive",
 				progress,
 				apiState: "offline",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
@@ -208,7 +211,7 @@
 				statusVariant: "destructive",
 				progress,
 				apiState: "online",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
@@ -224,12 +227,12 @@
 				statusVariant: hasRunningTask ? "secondary" : "outline",
 				progress,
 				apiState: "online",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
 
-		if (startupPhase === "auth") {
+		if (phase === "auth") {
 			return {
 				headline: "Sign in to Discobot",
 				detail:
@@ -238,12 +241,12 @@
 				statusVariant: "outline",
 				progress: 100,
 				apiState: "online",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
 
-		if (startupPhase === "loading") {
+		if (phase === "loading") {
 			return {
 				headline: "Loading the workspace shell",
 				detail:
@@ -252,31 +255,31 @@
 				statusVariant: "secondary",
 				progress,
 				apiState: "online",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
 
-		if (startupPhase === "waiting") {
+		if (phase === "waiting") {
 			return {
 				headline:
-					retryCount > 0
+					retries > 0
 						? "Retrying backend startup checks"
 						: "Waiting for the backend API",
 				detail:
-					retryCount > 0
+					retries > 0
 						? "Discobot is polling the live status endpoint until the backend is reachable."
 						: "Discobot is waiting for the backend status endpoint before it reveals the shell.",
-				statusLabel: retryCount > 0 ? "Retrying API" : "Waiting for API",
-				statusVariant: retryCount > 0 ? "outline" : "secondary",
+				statusLabel: retries > 0 ? "Retrying API" : "Waiting for API",
+				statusVariant: retries > 0 ? "outline" : "secondary",
 				progress,
-				apiState: retryCount > 0 ? "retrying" : "offline",
-				retryCount,
+				apiState: retries > 0 ? "retrying" : "offline",
+				retryCount: retries,
 				steps,
 			};
 		}
 
-		if (startupPhase === "ready") {
+		if (phase === "ready") {
 			return {
 				headline: "Discobot is ready",
 				detail:
@@ -285,7 +288,7 @@
 				statusVariant: "secondary",
 				progress: 100,
 				apiState: "online",
-				retryCount,
+				retryCount: retries,
 				steps,
 			};
 		}
@@ -298,17 +301,22 @@
 			statusVariant: "outline",
 			progress,
 			apiState: "offline",
-			retryCount,
+			retryCount: retries,
 			steps,
 		};
-	});
+	}
+
+	const startupScreen = $derived(
+		buildStartupScreenData(startupPhase, startupTasks, retryCount),
+	);
 
 	const canDismissStartupOverlay = $derived.by(
 		() =>
 			!startupOverlayDismissed &&
 			startupPhase !== "initializing" &&
 			startupPhase !== "waiting" &&
-			hasActiveStartupTasks(startupTasks),
+			hasActiveStartupTasks(startupTasks) &&
+			!hasFailedStartupTasks(startupTasks),
 	);
 
 	function getStartupErrorMessage(error: unknown) {

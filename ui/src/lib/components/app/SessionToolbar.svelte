@@ -448,8 +448,8 @@
 					onclick={toggleDiffReview}
 					class="gap-1"
 				>
-					<span class="text-green-500">+{diffStats.additions}</span>
-					<span class="text-red-500">-{diffStats.deletions}</span>
+					<span class="text-diff-add-line">+{diffStats.additions}</span>
+					<span class="text-diff-remove-line">-{diffStats.deletions}</span>
 					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
 				</Button>
 			{/if}
@@ -475,8 +475,8 @@
 				onclick={toggleDiffReview}
 				class="gap-1"
 			>
-				<span class="text-green-500">+{diffStats.additions}</span>
-				<span class="text-red-500">-{diffStats.deletions}</span>
+				<span class="text-diff-add-line">+{diffStats.additions}</span>
+				<span class="text-diff-remove-line">-{diffStats.deletions}</span>
 				<span class="text-muted-foreground">{diffStats.filesChanged}</span>
 			</Button>
 		</div>
@@ -572,7 +572,9 @@
 					<Loader2Icon class="size-3.5 animate-spin" />
 				{:else}
 					{@const PrimaryIcon = commandIcon(primaryCommand)}
-					<PrimaryIcon class="size-3.5" />
+					{#if PrimaryIcon}
+						<PrimaryIcon class="size-3.5" />
+					{/if}
 				{/if}
 				{operationState.buttonLabel}
 			</Button>

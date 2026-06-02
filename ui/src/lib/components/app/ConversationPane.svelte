@@ -32,7 +32,6 @@
 		Attachments,
 		Loader,
 	} from "$lib/components/ai";
-	import CodeBlock from "$lib/components/ai/code-block/CodeBlock.svelte";
 	import {
 		Message,
 		MessageContent,
@@ -47,7 +46,9 @@
 	import type { DynamicToolPart } from "$lib/components/ai/types";
 	import ConversationComposer from "$lib/components/app/ConversationComposer.svelte";
 	import AssistantMessageCopyActions from "$lib/components/app/parts/AssistantMessageCopyActions.svelte";
+	import BrowserScreenshotPreviewDialog from "$lib/components/app/parts/BrowserScreenshotPreviewDialog.svelte";
 	import ConversationSelectionComment from "$lib/components/app/parts/ConversationSelectionComment.svelte";
+	import HookPreviewDialog from "$lib/components/app/parts/HookPreviewDialog.svelte";
 	import MessageResponseWithCommand from "$lib/components/app/parts/MessageResponseWithCommand.svelte";
 	import {
 		type ConversationTurn,
@@ -57,7 +58,6 @@
 	import { Alert, AlertDescription } from "$lib/components/ui/alert";
 	import { Button } from "$lib/components/ui/button";
 	import * as Tooltip from "$lib/components/ui/tooltip";
-	import * as Dialog from "$lib/components/ui/dialog";
 	import {
 		Collapsible,
 		CollapsibleContent,
@@ -232,31 +232,6 @@
 		Partial<Record<ConversationPaneErrorBannerKey, boolean>>
 	>({});
 	let lastRestoredVisibleThreadId = $state<string | null>(null);
-
-	function getHookFileLanguage(path: string | undefined): string {
-		const extension = path?.split(".").at(-1)?.toLowerCase() ?? "";
-		switch (extension) {
-			case "sh":
-			case "bash":
-			case "zsh":
-				return "shell";
-			case "py":
-				return "python";
-			case "js":
-				return "javascript";
-			case "ts":
-				return "typescript";
-			case "rb":
-				return "ruby";
-			case "go":
-				return "go";
-			case "yaml":
-			case "yml":
-				return "yaml";
-			default:
-				return "plaintext";
-		}
-	}
 
 	async function openHookPreview(metadata: HookFailureMessageMetadata) {
 		hookPreviewMetadata = metadata;
@@ -1660,6 +1635,8 @@
 										),
 									},
 								)}
+								{@const isBrowserEventDetailsExpandable =
+									isBrowserEventDetailExpandable(browserEvent)}
 								<div
 									class="rounded-md border border-border/60 bg-background/80 px-3 py-2"
 								>
@@ -1683,24 +1660,29 @@
 									</div>
 									{#if browserEventDetails}
 										<div class="mt-1 space-y-1">
-											<button
-												class={`w-full text-left font-mono text-[11px] text-muted-foreground ${isBrowserDetailEventExpanded(browserEvent.event.eventId) ? "whitespace-pre-wrap break-words [overflow-wrap:anywhere]" : "truncate"}`}
-												onclick={() => {
-													if (!isBrowserEventDetailExpandable(browserEvent)) {
-														return;
-													}
-													setBrowserDetailEventExpanded(
-														browserEvent.event.eventId,
-														!isBrowserDetailEventExpanded(
+											{#if isBrowserEventDetailsExpandable}
+												<button
+													class={`w-full text-left font-mono text-[11px] text-muted-foreground ${isBrowserDetailEventExpanded(browserEvent.event.eventId) ? "whitespace-pre-wrap break-words [overflow-wrap:anywhere]" : "truncate"}`}
+													onclick={() => {
+														setBrowserDetailEventExpanded(
 															browserEvent.event.eventId,
-														),
-													);
-												}}
-												type="button"
-											>
-												{browserEventDetails}
-											</button>
-											{#if isBrowserEventDetailExpandable(browserEvent)}
+															!isBrowserDetailEventExpanded(
+																browserEvent.event.eventId,
+															),
+														);
+													}}
+													type="button"
+												>
+													{browserEventDetails}
+												</button>
+											{:else}
+												<div
+													class="truncate font-mono text-[11px] text-muted-foreground"
+												>
+													{browserEventDetails}
+												</div>
+											{/if}
+											{#if isBrowserEventDetailsExpandable}
 												<Button
 													class="h-auto px-0 font-normal text-xs"
 													onclick={() =>
@@ -1988,13 +1970,14 @@
 						class="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center"
 					>
 						<Button
+							aria-label="Scroll to bottom"
 							class="pointer-events-auto rounded-full shadow-sm"
 							onclick={() => scrollToBottom("smooth")}
 							size="icon"
 							type="button"
 							variant="outline"
 						>
-							<ArrowDownIcon class="size-4" />
+							<ArrowDownIcon aria-hidden="true" class="size-4" />
 						</Button>
 					</div>
 				{/if}
@@ -2013,127 +1996,24 @@
 			</div>
 		{/if}
 
-		<Dialog.Root bind:open={hookPreviewOpen}>
-			<Dialog.Content class="sm:max-w-4xl">
-				<Dialog.Header>
-					<Dialog.Title
-						>{hookPreviewMetadata?.hookName ?? "Hook file"}</Dialog.Title
-					>
-				</Dialog.Header>
-				{#if hookPreviewMetadata?.hookPath}
-					<div class="space-y-3">
-						<div class="font-mono text-muted-foreground text-xs break-all">
-							{getHookPathDisplayLabel(hookPreviewMetadata.hookPath)}
-						</div>
-						{#if hookPreviewLoading}
-							<div
-								class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
-							>
-								Loading hook file...
-							</div>
-						{:else if hookPreviewError}
-							<div
-								class="rounded-md border border-border bg-background px-3 py-4 text-destructive text-sm"
-							>
-								{hookPreviewError}
-							</div>
-						{:else if hookPreviewContent}
-							<CodeBlock
-								class="max-h-[60vh] overflow-auto"
-								code={hookPreviewContent}
-								language={getHookFileLanguage(hookPreviewMetadata.hookPath)}
-								showLineNumbers={true}
-							/>
-						{:else}
-							<div
-								class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
-							>
-								Hook file is empty.
-							</div>
-						{/if}
-					</div>
-				{/if}
-				<Dialog.Footer>
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={() => {
-							hookPreviewOpen = false;
-						}}
-					>
-						Close
-					</Button>
-					<Button
-						disabled={!hookPreviewMetadata?.hookPath}
-						size="sm"
-						onclick={() => {
-							void editHookFile();
-						}}
-					>
-						Edit
-					</Button>
-				</Dialog.Footer>
-			</Dialog.Content>
-		</Dialog.Root>
+		<HookPreviewDialog
+			bind:open={hookPreviewOpen}
+			metadata={hookPreviewMetadata}
+			content={hookPreviewContent}
+			loading={hookPreviewLoading}
+			error={hookPreviewError}
+			onEdit={() => {
+				void editHookFile();
+			}}
+		/>
 
-		<Dialog.Root bind:open={browserScreenshotPreviewOpen}>
-			<Dialog.Content class="sm:max-w-5xl">
-				<Dialog.Header>
-					<Dialog.Title
-						>{browserScreenshotPreviewFile?.filename ??
-							"Browser screenshot"}</Dialog.Title
-					>
-				</Dialog.Header>
-				<div class="space-y-3">
-					{#if browserScreenshotPreviewFile?.path}
-						<div class="font-mono text-muted-foreground text-xs break-all">
-							{browserScreenshotPreviewFile.path}
-						</div>
-					{/if}
-					{#if browserScreenshotPreviewLoading}
-						<div
-							class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
-						>
-							Loading screenshot...
-						</div>
-					{:else if browserScreenshotPreviewError}
-						<div
-							class="rounded-md border border-border bg-background px-3 py-4 text-destructive text-sm"
-						>
-							{browserScreenshotPreviewError}
-						</div>
-					{:else if browserScreenshotPreviewURL}
-						<div
-							class="overflow-auto rounded-md border border-border bg-background p-2"
-						>
-							<img
-								alt={browserScreenshotPreviewFile?.filename ??
-									"Browser screenshot"}
-								class="mx-auto h-auto max-w-full rounded"
-								src={browserScreenshotPreviewURL}
-							/>
-						</div>
-					{:else}
-						<div
-							class="rounded-md border border-border bg-background px-3 py-4 text-muted-foreground text-sm"
-						>
-							Screenshot unavailable.
-						</div>
-					{/if}
-				</div>
-				<Dialog.Footer>
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={() => {
-							browserScreenshotPreviewOpen = false;
-						}}
-					>
-						Close
-					</Button>
-				</Dialog.Footer>
-			</Dialog.Content>
-		</Dialog.Root>
+		<BrowserScreenshotPreviewDialog
+			bind:open={browserScreenshotPreviewOpen}
+			file={browserScreenshotPreviewFile}
+			url={browserScreenshotPreviewURL}
+			loading={browserScreenshotPreviewLoading}
+			error={browserScreenshotPreviewError}
+		/>
 
 		{#if canShowComposer}
 			<ConversationComposer

@@ -54,6 +54,7 @@
 		headline,
 		detail,
 		statusLabel = "Starting",
+		statusVariant = "secondary",
 		progress = 0,
 		apiState = "offline",
 		retryCount,
@@ -136,7 +137,7 @@
 								: "offline"}
 					</span>
 					<div class="flex items-center gap-2">
-						<span class="text-muted-foreground">{statusLabel}</span>
+						<Badge variant={statusVariant}>{statusLabel}</Badge>
 						{#if retryCount}
 							<span class="text-muted-foreground">retry {retryCount}</span>
 						{/if}

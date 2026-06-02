@@ -162,7 +162,7 @@
 		style={`left: ${pendingSelectionComment.left}px; top: ${pendingSelectionComment.top}px;`}
 	>
 		<Button
-			class="gap-1.5 rounded-full border-amber-300 bg-background shadow-lg"
+			class="gap-1.5 rounded-full border-primary/50 bg-background shadow-lg"
 			onclick={openSelectionComment}
 			onmousedown={(event) => event.preventDefault()}
 			size="sm"
@@ -182,11 +182,12 @@
 	>
 		<div class="mb-2 text-muted-foreground text-xs">Comment on</div>
 		<div
-			class="mb-3 line-clamp-3 border-amber-400 border-l-2 bg-amber-50/70 py-1 pl-2 text-sm italic dark:bg-amber-950/20"
+			class="mb-3 line-clamp-3 border-primary/60 border-l-2 bg-primary/5 py-1 pl-2 text-sm italic"
 		>
 			{pendingSelectionComment.snippet}
 		</div>
 		<textarea
+			aria-label="Comment"
 			bind:this={selectionCommentTextarea}
 			bind:value={selectionCommentDraft}
 			class="min-h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

@@ -19,13 +19,11 @@
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";
-	import { renderServiceOutputText } from "$lib/service-output";
 	import {
 		ToggleGroup,
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
 	import type { ServiceItem } from "$lib/session/session-context.types";
-	import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 	import { openUrl } from "$lib/shell";
 	import { cn } from "$lib/utils";
 
@@ -41,7 +39,8 @@
 		onToggleDockMaximized: () => void;
 		services: ServiceItem[];
 		sessionId: string;
-		streamManager: ChatStreamManager;
+		logEvents: RenderedServiceOutputEvent[];
+		logsConnected: boolean;
 		shiftWindowControlsForSidebar?: boolean;
 	};
 
@@ -76,7 +75,8 @@
 		onToggleDockMaximized,
 		services,
 		sessionId,
-		streamManager,
+		logEvents,
+		logsConnected,
 		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
@@ -87,8 +87,6 @@
 	let inputPath = $state("/");
 	let viewport = $state<Viewport>("desktop");
 	let viewMode = $state<ViewMode>("logs");
-	let logEvents = $state<RenderedServiceOutputEvent[]>([]);
-	let logsConnected = $state(false);
 	let logsContainer = $state<HTMLDivElement | null>(null);
 	let isLogsNearBottom = $state(true);
 	let hasUnreadLogs = $state(false);
@@ -323,20 +321,6 @@
 		hasUnreadLogs = false;
 	}
 
-	function getRenderedLogEvent(
-		event: ServiceOutputEvent,
-	): RenderedServiceOutputEvent {
-		return {
-			...event,
-			displayText:
-				typeof event.data === "string"
-					? renderServiceOutputText(event.data)
-					: event.type === "exit"
-						? `Process exited with code ${event.exitCode ?? "unknown"}`
-						: (event.error ?? ""),
-		};
-	}
-
 	async function handleServiceAction() {
 		if (isMutatingService || !isRunnable || !service) {
 			return;
@@ -412,8 +396,6 @@
 		isLoading = true;
 		error = null;
 		internalRefreshKey = 0;
-		logEvents = [];
-		logsConnected = false;
 		isLogsNearBottom = true;
 		hasUnreadLogs = false;
 		isMutatingService = false;
@@ -480,50 +462,10 @@
 	});
 
 	$effect(() => {
-		if (passive || typeof window === "undefined" || !service) {
-			logEvents = [];
-			logsConnected = false;
-			return;
+		void logEvents.length;
+		if (!isLogsNearBottom) {
+			hasUnreadLogs = true;
 		}
-
-		void service.status;
-		logEvents = [];
-		logsConnected = false;
-		const subscription = streamManager.subscribeServiceOutput({
-			sessionId,
-			serviceId: service.id,
-			onOpen: () => {
-				logsConnected = true;
-			},
-			onError: () => {
-				logsConnected = false;
-			},
-		});
-
-		const handleMessage = (event: MessageEvent<string>) => {
-			if (event.data === "[DONE]") {
-				logsConnected = false;
-				return;
-			}
-
-			try {
-				const parsed = JSON.parse(event.data) as ServiceOutputEvent;
-				if (!isLogsNearBottom) {
-					hasUnreadLogs = true;
-				}
-				logEvents = [...logEvents, getRenderedLogEvent(parsed)];
-			} catch (nextError) {
-				console.error("Failed to parse service output event:", nextError);
-			}
-		};
-
-		subscription.eventSource.addEventListener("message", handleMessage);
-
-		return () => {
-			subscription.eventSource.removeEventListener("message", handleMessage);
-			subscription.unsubscribe();
-			logsConnected = false;
-		};
 	});
 </script>
 
@@ -551,16 +493,9 @@
 			class="flex min-h-10 items-end gap-1 overflow-x-auto border-b border-sidebar-border bg-sidebar px-2 py-2"
 		>
 			{#each services as item (item.id)}
-				<div
-					role="button"
-					tabindex={0}
+				<button
+					type="button"
 					onclick={() => onSelectService(item.id)}
-					onkeydown={(event) => {
-						if (event.key === "Enter" || event.key === " ") {
-							event.preventDefault();
-							onSelectService(item.id);
-						}
-					}}
 					class={cn(
 						"flex shrink-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition",
 						activeServiceId === item.id
@@ -585,7 +520,7 @@
 							></div>
 						{/if}
 					</div>
-				</div>
+				</button>
 			{/each}
 		</div>
 	{:else}
@@ -921,6 +856,8 @@
 						size="icon"
 						type="button"
 						variant="outline"
+						aria-label="Scroll logs to bottom"
+						title="Scroll logs to bottom"
 					>
 						<ArrowDownIcon class="size-4" />
 					</Button>

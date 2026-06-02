@@ -25,7 +25,7 @@
 </script>
 
 <div class="space-y-4">
-	{#each groups as group, __key0 (__key0)}
+	{#each groups as group (group.group)}
 		<div class="space-y-2">
 			<div
 				class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
@@ -33,7 +33,7 @@
 				{group.name}
 			</div>
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-				{#each group.options as option, __key1 (__key1)}
+				{#each group.options as option (option.value)}
 					<button
 						type="button"
 						class="flex min-h-28 flex-col items-start gap-3 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-muted/40"

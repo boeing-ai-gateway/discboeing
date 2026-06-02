@@ -47,6 +47,11 @@
 				);
 			});
 	});
+	const selectedSuggestionIndex = $derived(
+		suggestions.length === 0
+			? 0
+			: Math.min(selectedIndex, suggestions.length - 1),
+	);
 	const showEmpty = $derived.by(
 		() => open && !!sessionId && !commandsLoading && suggestions.length === 0,
 	);
@@ -94,17 +99,20 @@
 		if (suggestions.length > 0) {
 			if (event.key === "ArrowDown") {
 				event.preventDefault();
-				selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+				selectedIndex = Math.min(
+					selectedSuggestionIndex + 1,
+					suggestions.length - 1,
+				);
 				return true;
 			}
 			if (event.key === "ArrowUp") {
 				event.preventDefault();
-				selectedIndex = Math.max(selectedIndex - 1, 0);
+				selectedIndex = Math.max(selectedSuggestionIndex - 1, 0);
 				return true;
 			}
 			if (event.key === "Enter" || event.key === "Tab") {
 				event.preventDefault();
-				const selected = suggestions[selectedIndex];
+				const selected = suggestions[selectedSuggestionIndex];
 				if (selected) {
 					selectCommand(selected);
 				}
@@ -126,27 +134,12 @@
 	}
 
 	$effect(() => {
-		if (!open) {
-			return;
-		}
-
-		if (suggestions.length === 0) {
-			selectedIndex = 0;
-			return;
-		}
-
-		if (selectedIndex > suggestions.length - 1) {
-			selectedIndex = suggestions.length - 1;
-		}
-	});
-
-	$effect(() => {
 		if (!open || !dropdownRef) {
 			return;
 		}
 
 		const selectedItem = dropdownRef.querySelector(
-			`[data-index="${selectedIndex}"]`,
+			`[data-index="${selectedSuggestionIndex}"]`,
 		);
 		if (selectedItem && "scrollIntoView" in selectedItem) {
 			(selectedItem as HTMLElement).scrollIntoView({ block: "nearest" });
@@ -204,11 +197,11 @@
 					<button
 						type="button"
 						data-index={index}
-						class={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors ${index === selectedIndex ? "bg-accent" : "hover:bg-accent"}`}
+						class={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors ${index === selectedSuggestionIndex ? "bg-accent" : "hover:bg-accent"}`}
 						onmousedown={(event) => {
 							event.preventDefault();
-							selectCommand(command);
 						}}
+						onclick={() => selectCommand(command)}
 					>
 						<TerminalIcon
 							class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"

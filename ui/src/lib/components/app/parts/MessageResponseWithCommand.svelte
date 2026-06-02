@@ -61,40 +61,45 @@
 	});
 </script>
 
+{#snippet commandLabel()}
+	<span class="text-[11px] uppercase tracking-[0.14em]">
+		{originalCommand?.kind === "skill"
+			? "Skill"
+			: originalCommand?.kind === "script"
+				? "Script"
+				: "Command"}: {originalCommand?.command}
+	</span>
+{/snippet}
+
 {#if originalCommand}
-	<Collapsible
-		open={isGeneratedTextExpanded}
-		onOpenChange={onGeneratedTextExpandedChange}
-	>
-		<div class="group space-y-2">
-			<CollapsibleTrigger
-				aria-label={expandedToggleLabel}
-				class="flex w-full items-center gap-2 rounded-sm text-left text-muted-foreground transition hover:text-foreground"
-				type="button"
-			>
-				<ChevronRightIcon class="size-3.5 shrink-0" />
-				<p class="text-[11px] uppercase tracking-[0.14em]">
-					{originalCommand.kind === "skill"
-						? "Skill"
-						: originalCommand.kind === "script"
-							? "Script"
-							: "Command"}: {originalCommand.command}
-				</p>
-				<ChevronDownIcon
-					class={`size-3 transition-all group-hover:opacity-100 ${isGeneratedTextExpanded ? "rotate-180 opacity-100" : "opacity-0"}`}
-				/>
-			</CollapsibleTrigger>
-			{#if originalCommand.args}
-				<MessageResponse text={originalCommand.args} />
-			{/if}
-			{#if originalCommand.kind === "script" && originalCommand.script?.suppressedLlm}
-				<div
-					class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm"
+	{#if shouldShowGeneratedText}
+		<Collapsible
+			open={isGeneratedTextExpanded}
+			onOpenChange={onGeneratedTextExpandedChange}
+		>
+			<div class="group space-y-2">
+				<CollapsibleTrigger
+					aria-label={expandedToggleLabel}
+					class="flex w-full items-center gap-2 rounded-sm text-left text-muted-foreground transition hover:text-foreground"
+					type="button"
 				>
-					The script completed without output, so no model response was started.
-				</div>
-			{/if}
-			{#if shouldShowGeneratedText}
+					<ChevronRightIcon class="size-3.5 shrink-0" />
+					{@render commandLabel()}
+					<ChevronDownIcon
+						class={`size-3 transition-all group-hover:opacity-100 ${isGeneratedTextExpanded ? "rotate-180 opacity-100" : "opacity-0"}`}
+					/>
+				</CollapsibleTrigger>
+				{#if originalCommand.args}
+					<MessageResponse text={originalCommand.args} />
+				{/if}
+				{#if originalCommand.kind === "script" && originalCommand.script?.suppressedLlm}
+					<div
+						class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm"
+					>
+						The script completed without output, so no model response was
+						started.
+					</div>
+				{/if}
 				<CollapsibleContent>
 					<div
 						class="w-full space-y-2 rounded-md border border-border/60 bg-muted/30 p-3"
@@ -113,9 +118,28 @@
 						{/if}
 					</div>
 				</CollapsibleContent>
+			</div>
+		</Collapsible>
+	{:else}
+		<div class="space-y-2">
+			<div
+				class="flex w-full items-center gap-2 rounded-sm text-left text-muted-foreground"
+			>
+				<ChevronRightIcon class="size-3.5 shrink-0" />
+				{@render commandLabel()}
+			</div>
+			{#if originalCommand.args}
+				<MessageResponse text={originalCommand.args} />
+			{/if}
+			{#if originalCommand.kind === "script" && originalCommand.script?.suppressedLlm}
+				<div
+					class="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm"
+				>
+					The script completed without output, so no model response was started.
+				</div>
 			{/if}
 		</div>
-	</Collapsible>
+	{/if}
 {:else if originalText}
 	<MessageResponse text={originalText} />
 {:else}

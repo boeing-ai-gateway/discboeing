@@ -1,7 +1,6 @@
 <script lang="ts">
 	import FileIcon from "@lucide/svelte/icons/file";
 	import FolderIcon from "@lucide/svelte/icons/folder";
-	import { api } from "$lib/api-client";
 
 	type FileMentionItem = {
 		path: string;
@@ -11,39 +10,61 @@
 	type Props = {
 		sessionId: string | null;
 		textareaRef: HTMLTextAreaElement | null;
+		suggestions: FileMentionItem[];
+		isLoading: boolean;
+		listboxId: string;
 		onDraftChange: (value: string) => void;
+		onQueryChange: (query: string, open: boolean) => void;
+		onActiveOptionChange: (optionId: string | null) => void;
 	};
 
-	let { sessionId, textareaRef, onDraftChange }: Props = $props();
+	let {
+		sessionId,
+		textareaRef,
+		suggestions,
+		isLoading,
+		listboxId,
+		onDraftChange,
+		onQueryChange,
+		onActiveOptionChange,
+	}: Props = $props();
 
 	let open = $state(false);
 	let query = $state("");
 	let triggerIndex = $state(0);
 	let selectedIndex = $state(0);
 	let dropdownRef = $state<HTMLDivElement | null>(null);
-	let suggestions = $state<FileMentionItem[]>([]);
-	let isLoading = $state(false);
-	let requestSequence = 0;
 
 	const showEmpty = $derived.by(
 		() => !isLoading && suggestions.length === 0 && query.length > 0,
 	);
+	const activeOptionId = $derived.by(() => {
+		if (!open || suggestions.length === 0) {
+			return null;
+		}
+		return `${listboxId}-option-${selectedIndex}`;
+	});
 	const shouldRender = $derived.by(
 		() =>
 			open && !!sessionId && (isLoading || suggestions.length > 0 || showEmpty),
 	);
 
+	function setOpen(value: boolean) {
+		open = value;
+		onQueryChange(query, value);
+	}
+
 	function updateMentionState(value: string, cursor: number) {
 		const beforeCursor = value.slice(0, cursor);
 		const match = beforeCursor.match(/@([^\s@]*)$/);
 		if (!match) {
-			open = false;
+			setOpen(false);
 			return;
 		}
 
 		query = match[1] ?? "";
 		triggerIndex = cursor - match[0].length;
-		open = true;
+		setOpen(true);
 		selectedIndex = 0;
 	}
 
@@ -56,7 +77,7 @@
 		const endIndex = textarea.selectionStart ?? triggerIndex;
 		textarea.setRangeText(`@${path} `, triggerIndex, endIndex, "end");
 		onDraftChange(textarea.value);
-		open = false;
+		setOpen(false);
 		textarea.focus();
 	}
 
@@ -92,7 +113,7 @@
 
 		if (event.key === "Escape") {
 			event.preventDefault();
-			open = false;
+			setOpen(false);
 			return true;
 		}
 
@@ -100,58 +121,8 @@
 	}
 
 	export function closeDropdown() {
-		open = false;
+		setOpen(false);
 	}
-
-	$effect(() => {
-		if (!open || !sessionId) {
-			suggestions = [];
-			isLoading = false;
-			return;
-		}
-
-		const requestId = requestSequence + 1;
-		requestSequence = requestId;
-		const currentQuery = query;
-		const controller = new AbortController();
-		const timeout = window.setTimeout(
-			async () => {
-				isLoading = true;
-				try {
-					const response = await api.searchSessionFiles(
-						sessionId,
-						currentQuery,
-						50,
-						{
-							signal: controller.signal,
-						},
-					);
-					if (requestSequence !== requestId) {
-						return;
-					}
-					suggestions = response.results.map((result) => ({
-						path: result.path,
-						type: result.type,
-					}));
-				} catch {
-					if (controller.signal.aborted || requestSequence !== requestId) {
-						return;
-					}
-					suggestions = [];
-				} finally {
-					if (requestSequence === requestId) {
-						isLoading = false;
-					}
-				}
-			},
-			currentQuery === "" ? 0 : 80,
-		);
-
-		return () => {
-			window.clearTimeout(timeout);
-			controller.abort();
-		};
-	});
 
 	$effect(() => {
 		if (!open) {
@@ -166,6 +137,10 @@
 		if (selectedIndex > suggestions.length - 1) {
 			selectedIndex = suggestions.length - 1;
 		}
+	});
+
+	$effect(() => {
+		onActiveOptionChange(activeOptionId);
 	});
 
 	$effect(() => {
@@ -191,7 +166,7 @@
 			if (dropdownRef?.contains(target) || textareaRef?.contains(target)) {
 				return;
 			}
-			open = false;
+			setOpen(false);
 		};
 
 		document.addEventListener("mousedown", handlePointerDown);
@@ -221,10 +196,18 @@
 				No results for &ldquo;{query}&rdquo;
 			</div>
 		{:else}
-			<div class="overflow-y-auto py-1">
+			<div
+				id={listboxId}
+				role="listbox"
+				aria-label="File suggestions"
+				class="overflow-y-auto py-1"
+			>
 				{#each suggestions as item, index (item.path)}
 					<button
 						type="button"
+						id={`${listboxId}-option-${index}`}
+						role="option"
+						aria-selected={index === selectedIndex}
 						data-index={index}
 						class={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${index === selectedIndex ? "bg-accent" : "hover:bg-accent"}`}
 						onmousedown={(event) => {
@@ -233,9 +216,7 @@
 						}}
 					>
 						{#if item.type === "directory"}
-							<FolderIcon
-								class="size-3.5 shrink-0 text-blue-400 dark:text-blue-300"
-							/>
+							<FolderIcon class="size-3.5 shrink-0 text-muted-foreground" />
 						{:else}
 							<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
 						{/if}

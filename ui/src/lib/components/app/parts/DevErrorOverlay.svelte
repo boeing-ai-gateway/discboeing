@@ -141,20 +141,20 @@
 
 {#if dev && errors.length > 0}
 	<div
-		class="fixed right-4 bottom-4 z-[99999] flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-red-500/70 bg-red-950 text-red-50 shadow-2xl"
+		class="fixed right-4 bottom-4 z-[99999] flex max-h-[80vh] w-[min(40rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-destructive/70 bg-background text-foreground shadow-2xl"
 	>
 		<div
-			class="flex items-center justify-between gap-4 border-b border-red-500/40 px-4 py-3"
+			class="flex items-center justify-between gap-4 border-b border-destructive/30 bg-destructive/10 px-4 py-3"
 		>
 			<div>
-				<p class="text-sm font-semibold">Development errors</p>
-				<p class="text-xs text-red-100/80">
+				<p class="text-sm font-semibold text-destructive">Development errors</p>
+				<p class="text-xs text-muted-foreground">
 					Showing the latest {MAX_ERRORS} console and global errors.
 				</p>
 			</div>
 			<button
 				type="button"
-				class="rounded border border-red-300/40 px-2 py-1 text-xs font-medium hover:bg-red-900"
+				class="rounded border border-border px-2 py-1 text-xs font-medium hover:bg-destructive/10"
 				onclick={clear}
 			>
 				Clear
@@ -164,12 +164,12 @@
 		<div class="overflow-auto p-3">
 			{#each errors as error (error.id)}
 				<div
-					class="mb-3 rounded-md border border-red-500/40 bg-red-900/50 p-3 last:mb-0"
+					class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 last:mb-0"
 				>
 					<div class="mb-2 flex items-start justify-between gap-3">
 						<div>
 							<p
-								class="text-xs font-semibold tracking-wide text-red-100 uppercase"
+								class="text-xs font-semibold tracking-wide text-destructive uppercase"
 							>
 								{error.title}
 							</p>
@@ -179,14 +179,14 @@
 						<div class="flex shrink-0 gap-2">
 							<button
 								type="button"
-								class="rounded border border-red-300/30 px-2 py-1 text-xs hover:bg-red-900"
+								class="rounded border border-border px-2 py-1 text-xs hover:bg-destructive/10"
 								onclick={() => copyError(error)}
 							>
 								{copiedId === error.id ? "Copied" : "Copy"}
 							</button>
 							<button
 								type="button"
-								class="rounded border border-red-300/30 px-2 py-1 text-xs hover:bg-red-900"
+								class="rounded border border-border px-2 py-1 text-xs hover:bg-destructive/10"
 								onclick={() => dismiss(error.id)}
 							>
 								Dismiss
@@ -196,7 +196,7 @@
 
 					{#if error.stack}
 						<pre
-							class="mt-2 whitespace-pre-wrap break-words border-t border-red-500/30 pt-2 font-mono text-[11px] text-red-100/80">{error.stack}</pre>
+							class="mt-2 whitespace-pre-wrap break-words border-t border-destructive/20 pt-2 font-mono text-[11px] text-muted-foreground">{error.stack}</pre>
 					{/if}
 				</div>
 			{/each}

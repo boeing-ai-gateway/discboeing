@@ -55,7 +55,7 @@
 	</button>
 	<button
 		type="button"
-		class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-[#e81123] hover:text-white"
+		class="desktop-no-drag flex h-full w-11.5 items-center justify-center bg-transparent text-foreground transition-colors duration-150 hover:bg-destructive hover:text-destructive-foreground"
 		aria-label="Close"
 		onclick={closeWindow}
 	>

@@ -23,32 +23,41 @@
 		showLabel = true,
 	}: Props = $props();
 
-	function normalizedStatus(status: SessionDisplayStatus): string {
-		return status.toLowerCase();
-	}
+	const SPINNING_STATUSES = new Set<SessionDisplayStatus>([
+		"running",
+		"queued",
+		"pending",
+		"committing",
+		"initializing",
+		"reinitializing",
+		"cloning",
+		"pulling_image",
+		"creating_sandbox",
+		"removing",
+	]);
 
-	function statusLabel(status: SessionDisplayStatus): string {
-		return status
-			.replace(/_/g, " ")
-			.replace(/\b\w/g, (char) => char.toUpperCase());
+	function normalizedStatus(
+		status: SessionDisplayStatus,
+	): SessionDisplayStatus {
+		return status;
 	}
 
 	function statusTone(status: SessionDisplayStatus): string {
-		switch (normalizedStatus(status)) {
+		switch (status) {
 			case "error":
 			case "create_failed":
 				return "text-destructive";
 			case "needs_attention":
-				return "text-amber-500";
+				return "text-destructive";
 			case "running":
-				return "text-blue-500";
+				return "text-primary";
 			case "queued":
-				return "text-yellow-500";
+				return "text-chart-5";
 			case "idle":
 			case "ready":
 			case "completed":
 			case "committed":
-				return "text-green-500";
+				return "text-diff-add-line";
 			case "pending":
 			case "committing":
 			case "initializing":
@@ -56,56 +65,42 @@
 			case "cloning":
 			case "pulling_image":
 			case "creating_sandbox":
-				return "text-yellow-500";
+				return "text-chart-5";
 			case "removing":
-				return "text-orange-500";
+				return "text-chart-3";
 			default:
 				return "text-muted-foreground";
 		}
 	}
 
-	function isSpinningStatus(status: SessionDisplayStatus): boolean {
-		switch (normalizedStatus(status)) {
-			case "running":
-			case "queued":
-			case "pending":
-			case "committing":
-			case "initializing":
-			case "reinitializing":
-			case "cloning":
-			case "pulling_image":
-			case "creating_sandbox":
-			case "removing":
-				return true;
-			default:
-				return false;
-		}
-	}
+	let label = $derived(
+		status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+	);
+	let tone = $derived(statusTone(status));
+	let isSpinning = $derived(SPINNING_STATUSES.has(status));
 </script>
 
 <span
 	class={cn("inline-flex items-center", showLabel && "gap-1.5", className)}
-	title={statusLabel(status)}
-	aria-label={statusLabel(status)}
+	title={label}
+	aria-label={label}
 >
-	<span class={cn("inline-flex items-center", statusTone(status), iconClass)}>
-		{#if isSpinningStatus(status)}
+	<span class={cn("inline-flex items-center", tone, iconClass)}>
+		{#if isSpinning}
 			<Loader2Icon class="size-3.5 animate-spin" />
-		{:else if normalizedStatus(status) === "needs_attention"}
+		{:else if status === "needs_attention"}
 			<MessageCircleQuestionMarkIcon class="size-3.5" />
 		{:else if normalizedStatus(status) === "committed"}
 			<GitCommitIcon class="size-3.5" />
-		{:else if ["ready", "completed"].includes(normalizedStatus(status))}
+		{:else if status === "ready" || status === "completed"}
 			<CircleCheckIcon class="size-3.5" />
-		{:else if normalizedStatus(status) === "unknown"}
+		{:else if status === "unknown"}
 			<CircleIcon class="size-3.5" />
 		{:else}
 			<CircleIcon class="size-2.5 fill-current" />
 		{/if}
 	</span>
 	{#if showLabel}
-		<span class={cn("text-sm text-muted-foreground", labelClass)}
-			>{statusLabel(status)}</span
-		>
+		<span class={cn("text-sm text-muted-foreground", labelClass)}>{label}</span>
 	{/if}
 </span>

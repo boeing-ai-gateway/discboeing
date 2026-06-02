@@ -100,5 +100,7 @@ test("app mac window spacer skips the spacer while native fullscreen is active",
 		source,
 		/environment\.supportsNativeWindowControls &&[\s\S]*environment\.windowControlsSide === "left" &&[\s\S]*!isMacFullscreen/,
 	);
-	assert.ok(source.includes("<LeftWindowControls />"));
+	assert.ok(
+		source.includes('<div aria-hidden="true" class="w-14 shrink-0"></div>'),
+	);
 });

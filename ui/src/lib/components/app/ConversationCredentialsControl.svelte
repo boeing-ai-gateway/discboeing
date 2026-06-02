@@ -333,7 +333,7 @@
 			return "border-border/60 bg-muted/40 text-muted-foreground opacity-50";
 		}
 		if (enabled) {
-			return "border-yellow-500/40 bg-yellow-500/12 text-yellow-600 shadow-sm dark:text-yellow-400";
+			return "border-primary/40 bg-primary/12 text-primary shadow-sm";
 		}
 		return "border-transparent bg-muted/55 text-muted-foreground hover:bg-muted";
 	}
@@ -505,7 +505,7 @@
 			aria-label="Select session credentials"
 		>
 			<KeyRoundIcon
-				class={`size-3.5 ${visibleCount > 0 ? "text-yellow-500" : "text-muted-foreground"}`}
+				class={`size-3.5 ${visibleCount > 0 ? "text-primary" : "text-muted-foreground"}`}
 			/>
 			<span
 				class={`inline-flex min-w-3 items-center justify-center text-[10px] tabular-nums ${

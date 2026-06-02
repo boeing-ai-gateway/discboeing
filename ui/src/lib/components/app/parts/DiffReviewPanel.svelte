@@ -5,8 +5,6 @@
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 
-	import { writeStorage } from "$lib/local-storage";
-	import { api } from "$lib/api-client";
 	import type {
 		SessionDiffFileEntry,
 		SessionDiffStats,
@@ -14,6 +12,7 @@
 	} from "$lib/api-types";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import DiffReviewFileRenderer from "$lib/components/app/parts/DiffReviewFileRenderer.svelte";
+	import DiffReviewSelectionCommentPopover from "$lib/components/app/parts/DiffReviewSelectionCommentPopover.svelte";
 	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import { Checkbox } from "$lib/components/ui/checkbox";
@@ -25,7 +24,6 @@
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
 	import { Input } from "$lib/components/ui/input";
-	import { Textarea } from "$lib/components/ui/textarea";
 	import {
 		buildDiffFileContents,
 		DIFF_HARD_LIMIT,
@@ -47,8 +45,6 @@
 	import { onMount, untrack } from "svelte";
 	import { SvelteMap } from "svelte/reactivity";
 
-	const APPROVAL_STORAGE_KEY = "discobot.ui.diff-review.approved";
-	const DIFF_STYLE_STORAGE_KEY = "discobot.ui.diff-review.style";
 	const APPROVAL_LOAD_CONCURRENCY = 6;
 
 	type Props = {
@@ -57,6 +53,19 @@
 		onDiffTargetChange: (target: string) => Promise<void> | void;
 		onOpenFile: (path: string) => Promise<void> | void;
 		onRefresh: () => Promise<void> | void;
+		onLoadDiff: (
+			sessionId: string,
+			params: { path: string; target: string },
+		) => Promise<SessionSingleFileDiffResponse>;
+		onReadFile: (
+			sessionId: string,
+			path: string,
+			options?: { fromBase?: boolean },
+		) => Promise<{ content: string }>;
+		onApprovalStateChange: (
+			approvedBySession: Record<string, Record<string, string>>,
+		) => void;
+		onDiffStyleChange: (diffStyle: DiffStyle) => void;
 		onQueueSelectionComment: (payload: {
 			path: string;
 			selectedText: string;
@@ -73,6 +82,8 @@
 		diffTarget: string;
 		fileContents: Record<string, string>;
 		diffStats: SessionDiffStats;
+		approvedBySession: Record<string, Record<string, string>>;
+		diffStyle: DiffStyle;
 		resolvedTheme: ResolvedTheme;
 		shiftWindowControlsForSidebar?: boolean;
 	};
@@ -127,6 +138,10 @@
 		onDiffTargetChange,
 		onOpenFile,
 		onRefresh,
+		onLoadDiff,
+		onReadFile,
+		onApprovalStateChange,
+		onDiffStyleChange,
 		onQueueSelectionComment,
 		onSubmitSelectionComment,
 		onToggleDockMaximized,
@@ -135,19 +150,14 @@
 		diffTarget,
 		fileContents,
 		diffStats,
+		approvedBySession,
+		diffStyle,
 		resolvedTheme,
 		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
 	const diffStates = new SvelteMap<string, LoadedDiffState>();
-	let approvedBySession = $state<Record<string, Record<string, string>>>({});
-	let storageLoaded = $state(false);
-	let listReady = $state(false);
-	let expandedPath = $state<string | null>(null);
-	let refreshing = $state(false);
 	let diffTargetDraft = $derived(diffTarget === "HEAD" ? "" : diffTarget);
-	let loadGeneration = 0;
-	let diffStyle = $state<DiffStyle>("unified");
 	let ignoreWhitespaceByPath = $state<Record<string, boolean>>({});
 	let resolvedApprovalCount = $state(0);
 	let approvedCount = $state(0);
@@ -163,6 +173,10 @@
 	>({});
 	let lastPointerPositionByPath: Record<string, CommentPopoverPosition | null> =
 		{};
+	let listReady = $state(false);
+	let loadGeneration = $state(0);
+	let expandedPath = $state<string | null>(null);
+	let refreshing = $state(false);
 
 	const diffCount = $derived.by(() => diff.length);
 	const sortedDiff = $derived.by(() =>
@@ -196,10 +210,6 @@
 	);
 
 	onMount(() => {
-		approvedBySession = readApprovalState();
-		diffStyle = readDiffStyle();
-		storageLoaded = true;
-
 		const frameId = requestAnimationFrame(() => {
 			listReady = true;
 		});
@@ -207,24 +217,6 @@
 		return () => {
 			cancelAnimationFrame(frameId);
 		};
-	});
-
-	$effect(() => {
-		diffTargetDraft = diffTarget === "HEAD" ? "" : diffTarget;
-	});
-
-	$effect(() => {
-		if (!storageLoaded) {
-			return;
-		}
-		writeStorage(APPROVAL_STORAGE_KEY, JSON.stringify(approvedBySession));
-	});
-
-	$effect(() => {
-		if (!storageLoaded) {
-			return;
-		}
-		writeStorage(DIFF_STYLE_STORAGE_KEY, diffStyle);
 	});
 
 	$effect(() => {
@@ -379,38 +371,14 @@
 		setDiffState(path, updater(current));
 	}
 
-	function recalculateApprovedCount() {
+	function recalculateApprovedCount(approvals = sessionApprovals) {
 		let nextApprovedCount = 0;
 		for (const file of diff) {
-			if (isApprovedState(file.path, diffStates.get(file.path))) {
+			if (isApprovedState(file.path, diffStates.get(file.path), approvals)) {
 				nextApprovedCount += 1;
 			}
 		}
 		approvedCount = nextApprovedCount;
-	}
-
-	function readApprovalState(): Record<string, Record<string, string>> {
-		if (typeof window === "undefined") {
-			return {};
-		}
-		const stored = window.localStorage.getItem(APPROVAL_STORAGE_KEY);
-		if (!stored) {
-			return {};
-		}
-		try {
-			const parsed = JSON.parse(stored);
-			return typeof parsed === "object" && parsed !== null ? parsed : {};
-		} catch {
-			return {};
-		}
-	}
-
-	function readDiffStyle(): DiffStyle {
-		if (typeof window === "undefined") {
-			return "unified";
-		}
-		const stored = window.localStorage.getItem(DIFF_STYLE_STORAGE_KEY);
-		return stored === "split" ? "split" : "unified";
 	}
 
 	function errorMessage(error: unknown): string {
@@ -437,10 +405,10 @@
 		});
 
 		try {
-			const response = (await api.getSessionDiff(currentSessionId, {
+			const response = await onLoadDiff(currentSessionId, {
 				path,
 				target: currentDiffTarget,
-			})) as SessionSingleFileDiffResponse;
+			});
 			const patchHash = response.patch
 				? await hashString(response.patch)
 				: null;
@@ -520,7 +488,7 @@
 					state.response.patch,
 				);
 				if (originalContent.length === 0 && state.response.deletions > 0) {
-					const baseFile = await api.readSessionFile(currentSessionId, path, {
+					const baseFile = await onReadFile(currentSessionId, path, {
 						fromBase: true,
 					});
 					originalContent = baseFile.content;
@@ -529,7 +497,7 @@
 			} else {
 				modifiedContent =
 					fileContents[path] ??
-					(await api.readSessionFile(currentSessionId, path)).content;
+					(await onReadFile(currentSessionId, path)).content;
 				originalContent =
 					state.response.status === "added"
 						? ""
@@ -614,11 +582,11 @@
 			nextSessionApprovals[path] = state.patchHash;
 		}
 
-		approvedBySession = {
+		onApprovalStateChange({
 			...approvedBySession,
 			[sessionId]: nextSessionApprovals,
-		};
-		recalculateApprovedCount();
+		});
+		recalculateApprovedCount(nextSessionApprovals);
 
 		if (!wasApproved && expandedPath === path) {
 			const currentIndex = sortedDiff.findIndex((file) => file.path === path);
@@ -642,11 +610,11 @@
 				nextSessionApprovals[file.path] = state.patchHash;
 			}
 		}
-		approvedBySession = {
+		onApprovalStateChange({
 			...approvedBySession,
 			[sessionId]: nextSessionApprovals,
-		};
-		recalculateApprovedCount();
+		});
+		recalculateApprovedCount(nextSessionApprovals);
 	}
 
 	function statusBadgeClass(
@@ -1156,7 +1124,7 @@
 					size="sm"
 					class="h-8 rounded-r-none px-3"
 					onclick={() => {
-						diffStyle = "unified";
+						onDiffStyleChange("unified");
 					}}
 				>
 					Unified
@@ -1166,7 +1134,7 @@
 					size="sm"
 					class="h-8 rounded-l-none border-l border-border px-3"
 					onclick={() => {
-						diffStyle = "split";
+						onDiffStyleChange("split");
 					}}
 				>
 					Split
@@ -1471,87 +1439,21 @@
 															file.path,
 														)}
 														{#if popoverPosition}
-															<div
-																class="fixed z-50 w-[min(calc(100vw-1.5rem),24rem)] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
-																style={`top: ${popoverPosition.top}px; left: ${popoverPosition.left}px;`}
-															>
-																<p
-																	class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground"
-																>
-																	Selected diff text
-																</p>
-																<pre
-																	class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 font-mono text-xs text-foreground">{getSelectedDiffText(
-																		file.path,
-																	)}</pre>
-																<Textarea
-																	class="mt-3 min-h-24"
-																	placeholder="Add a comment for the assistant"
-																	value={getCommentDraft(file.path)}
-																	oninput={(event) =>
-																		updateCommentDraft(
-																			file.path,
-																			event.currentTarget.value,
-																		)}
-																/>
-																{#if getCommentError(file.path)}
-																	<p class="mt-2 text-xs text-destructive">
-																		{getCommentError(file.path)}
-																	</p>
-																{/if}
-																<div
-																	class="mt-3 flex flex-wrap items-center gap-2"
-																>
-																	<Button
-																		size="sm"
-																		onclick={() =>
-																			void saveSelectionComment(
-																				file.path,
-																				"queue",
-																			)}
-																		disabled={queueingCommentByPath[
-																			file.path
-																		] === true ||
-																			submittingCommentByPath[file.path] ===
-																				true}
-																		variant="outline"
-																	>
-																		{queueingCommentByPath[file.path] === true
-																			? "Queueing…"
-																			: "Queue"}
-																	</Button>
-																	<Button
-																		size="sm"
-																		onclick={() =>
-																			void saveSelectionComment(
-																				file.path,
-																				"submit",
-																			)}
-																		disabled={queueingCommentByPath[
-																			file.path
-																		] === true ||
-																			submittingCommentByPath[file.path] ===
-																				true}
-																	>
-																		{submittingCommentByPath[file.path] === true
-																			? "Submitting…"
-																			: "Submit"}
-																	</Button>
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		onclick={() =>
-																			resetSelectionComment(file.path)}
-																		disabled={queueingCommentByPath[
-																			file.path
-																		] === true ||
-																			submittingCommentByPath[file.path] ===
-																				true}
-																	>
-																		Clear selection
-																	</Button>
-																</div>
-															</div>
+															<DiffReviewSelectionCommentPopover
+																path={file.path}
+																selectedText={getSelectedDiffText(file.path)}
+																draft={getCommentDraft(file.path)}
+																error={getCommentError(file.path)}
+																position={popoverPosition}
+																queueing={queueingCommentByPath[file.path] ===
+																	true}
+																submitting={submittingCommentByPath[
+																	file.path
+																] === true}
+																onDraftChange={updateCommentDraft}
+																onSave={saveSelectionComment}
+																onClear={resetSelectionComment}
+															/>
 														{/if}
 													{/if}
 												</div>

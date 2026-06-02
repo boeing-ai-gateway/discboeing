@@ -129,6 +129,7 @@ Current Electron desktop packaging notes live in `docs/ELECTRON_PORT_PLAN.md`.
 
 ## Module Documentation
 
+- `docs/ui/COMPONENT_REVIEW.md` — Svelte component review guidelines for simplicity, clean HTML/CSS, minimal JavaScript, and idiomatic Svelte 5.
 - `docs/ui/design/` — UI module design docs
 
 The app settings dialog also hosts project-scoped sandbox controls, including

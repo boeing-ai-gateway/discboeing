@@ -24,12 +24,18 @@
 	}: Props = $props();
 
 	let hovered = $state(false);
+	let focused = $state(false);
 
 	const isGenerating = $derived.by(
 		() => status === "submitted" || status === "streaming",
 	);
+	const isNewSessionAction = $derived.by(
+		() => isPending && inputEmpty && !isGenerating,
+	);
 	const showPlusIcon = $derived.by(
-		() => hovered && isPending && inputEmpty && !isGenerating,
+		() =>
+			(hovered && isPending && inputEmpty && !isGenerating) ||
+			(focused && isNewSessionAction),
 	);
 </script>
 
@@ -48,7 +54,17 @@
 	onmouseleave={() => {
 		hovered = false;
 	}}
-	aria-label={showPlusIcon ? "New session" : isGenerating ? "Stop" : "Submit"}
+	onfocus={() => {
+		focused = true;
+	}}
+	onblur={() => {
+		focused = false;
+	}}
+	aria-label={isNewSessionAction
+		? "New session"
+		: isGenerating
+			? "Stop"
+			: "Submit"}
 >
 	{#if showPlusIcon}
 		<PlusIcon class="size-4" />

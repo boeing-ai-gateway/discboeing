@@ -11,7 +11,7 @@
 	let { reserveSidebarSpace = false, title, state }: Props = $props();
 </script>
 
-<div class="flex h-10 min-w-0 items-center gap-1 bg-background px-3">
+<header class="flex h-10 min-w-0 items-center gap-1 bg-background px-3">
 	{#if reserveSidebarSpace}
 		<div class="w-[10.75rem] shrink-0" aria-hidden="true"></div>
 	{/if}
@@ -21,4 +21,4 @@
 		</p>
 		<ThreadStateBadge {state} class="px-2 text-[11px]" />
 	</div>
-</div>
+</header>

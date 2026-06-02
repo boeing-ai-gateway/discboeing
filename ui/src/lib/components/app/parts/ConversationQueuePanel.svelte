@@ -9,9 +9,9 @@
 
 	let { expanded, entries }: Props = $props();
 
-	function completedCount() {
-		return entries.filter((entry) => entry.status === "completed").length;
-	}
+	let completedCount = $derived(
+		entries.filter((entry) => entry.status === "completed").length,
+	);
 </script>
 
 {#if expanded && entries.length > 0}
@@ -19,18 +19,18 @@
 		<div
 			class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
 		>
-			Todo ({completedCount()} completed)
+			Todo ({completedCount} completed)
 		</div>
 		<div class="max-h-48 overflow-auto p-1">
 			{#each entries as entry, index (entry.content + index)}
 				<div
-					class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${entry.status === "in_progress" ? "bg-blue-500/10" : "hover:bg-muted/50"}`}
+					class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${entry.status === "in_progress" ? "bg-primary/10" : "hover:bg-muted/50"}`}
 				>
 					{#if entry.status === "in_progress"}
-						<Loader2Icon class="size-3 animate-spin text-blue-500" />
+						<Loader2Icon class="size-3 animate-spin text-primary" />
 					{:else}
 						<div
-							class={`size-3 rounded-full border ${entry.status === "completed" ? "border-green-500 bg-green-500" : "border-muted-foreground/50"}`}
+							class={`size-3 rounded-full border ${entry.status === "completed" ? "border-muted-foreground bg-muted-foreground" : "border-muted-foreground/50"}`}
 						></div>
 					{/if}
 					<div

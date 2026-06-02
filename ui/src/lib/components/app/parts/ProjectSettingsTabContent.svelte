@@ -47,9 +47,11 @@
 	}: Props = $props();
 
 	let resourcesStatus = $state<LoadStatus>("idle");
+	let resourcesProviderKey = $state<string | null | undefined>(undefined);
 	let resources = $state<ProjectResources | null>(null);
 	let resourcesError = $state<string | null>(null);
 	let inspectionStatus = $state<LoadStatus>("idle");
+	let inspectionProviderKey = $state<string | null | undefined>(undefined);
 	let inspection = $state<ProjectInspectionInfo | null>(null);
 	let inspectionError = $state<string | null>(null);
 	let memoryDraft = $state("");
@@ -77,26 +79,47 @@
 	}
 
 	async function loadResources(force = false) {
+		const requestedProviderId = providerId;
+		const requestedProviderKey = requestedProviderId ?? null;
+		const providerChanged = resourcesProviderKey !== requestedProviderKey;
+
 		if (resourcesStatus === "loading") {
 			return;
 		}
 		if (
 			!force &&
+			!providerChanged &&
 			(resourcesStatus === "ready" || resourcesStatus === "unsupported")
 		) {
 			return;
 		}
 
+		if (providerChanged) {
+			resources = null;
+			memoryDraft = "";
+			diskDraft = "";
+			saveError = null;
+			saveSuccess = null;
+		}
+		resourcesProviderKey = requestedProviderKey;
 		resourcesStatus = "loading";
 		resourcesError = null;
 		try {
-			const nextResources = providerId
-				? await api.getSandboxProviderResources(providerId)
+			const nextResources = requestedProviderId
+				? await api.getSandboxProviderResources(requestedProviderId)
 				: await api.getProjectResources();
+			if (requestedProviderKey !== (providerId ?? null)) {
+				resourcesStatus = "idle";
+				return;
+			}
 			resources = nextResources;
 			hydrateDrafts(nextResources);
 			resourcesStatus = "ready";
 		} catch (error) {
+			if (requestedProviderKey !== (providerId ?? null)) {
+				resourcesStatus = "idle";
+				return;
+			}
 			if (error instanceof ApiError && error.status === 501) {
 				resourcesStatus = "unsupported";
 				resourcesError = error.message;
@@ -109,24 +132,43 @@
 	}
 
 	async function loadInspection(force = false) {
+		const requestedProviderId = providerId;
+		const requestedProviderKey = requestedProviderId ?? null;
+		const providerChanged = inspectionProviderKey !== requestedProviderKey;
+
 		if (inspectionStatus === "loading") {
 			return;
 		}
 		if (
 			!force &&
+			!providerChanged &&
 			(inspectionStatus === "ready" || inspectionStatus === "unsupported")
 		) {
 			return;
 		}
 
+		if (providerChanged) {
+			inspection = null;
+			inspectionDialogOpen = false;
+		}
+		inspectionProviderKey = requestedProviderKey;
 		inspectionStatus = "loading";
 		inspectionError = null;
 		try {
-			inspection = providerId
-				? await api.getSandboxProviderInspection(providerId)
+			const nextInspection = requestedProviderId
+				? await api.getSandboxProviderInspection(requestedProviderId)
 				: await api.getProjectInspection();
+			if (requestedProviderKey !== (providerId ?? null)) {
+				inspectionStatus = "idle";
+				return;
+			}
+			inspection = nextInspection;
 			inspectionStatus = "ready";
 		} catch (error) {
+			if (requestedProviderKey !== (providerId ?? null)) {
+				inspectionStatus = "idle";
+				return;
+			}
 			if (error instanceof ApiError && error.status === 501) {
 				inspectionStatus = "unsupported";
 				inspectionError = error.message;

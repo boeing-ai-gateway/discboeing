@@ -247,6 +247,7 @@
 						{#if editingById[entry.id]}
 							<div class="space-y-2">
 								<Textarea
+									aria-label="Queued prompt text"
 									value={editTextById[entry.id] ?? ""}
 									oninput={(event) =>
 										setEditText(entry.id, event.currentTarget.value)}
@@ -310,6 +311,7 @@
 							size="icon-sm"
 							class="shrink-0"
 							title="Move queued prompt up"
+							aria-label="Move queued prompt up"
 							disabled={savingById[entry.id] || index === 0}
 							onclick={() => {
 								void movePrompt(entry, index - 1);
@@ -322,6 +324,7 @@
 							size="icon-sm"
 							class="shrink-0"
 							title="Move queued prompt down"
+							aria-label="Move queued prompt down"
 							disabled={savingById[entry.id] ||
 								index === displayEntries.length - 1}
 							onclick={() => {
@@ -335,6 +338,9 @@
 							size="icon-sm"
 							class="shrink-0"
 							title={editingById[entry.id]
+								? "Cancel editing queued prompt"
+								: "Edit queued prompt"}
+							aria-label={editingById[entry.id]
 								? "Cancel editing queued prompt"
 								: "Edit queued prompt"}
 							disabled={savingById[entry.id]}
@@ -359,6 +365,7 @@
 										size="icon-sm"
 										class="shrink-0"
 										title="Schedule queued prompt"
+										aria-label="Schedule queued prompt"
 										disabled={savingById[entry.id]}
 									>
 										<ClockIcon class="size-3.5" />
@@ -377,6 +384,7 @@
 								size="icon-sm"
 								class="shrink-0"
 								title="Run queued prompt now"
+								aria-label="Run queued prompt now"
 								disabled={savingById[entry.id]}
 								onclick={() => {
 									void saveLater(entry.id, null);
@@ -390,6 +398,7 @@
 								size="icon-sm"
 								class="shrink-0"
 								title="Pause queued prompt"
+								aria-label="Pause queued prompt"
 								disabled={savingById[entry.id]}
 								onclick={() => {
 									void saveLater(entry.id, buildPauseDate());
@@ -403,6 +412,7 @@
 							size="icon-sm"
 							class="shrink-0"
 							title="Delete queued prompt"
+							aria-label="Delete queued prompt"
 							disabled={savingById[entry.id]}
 							onclick={() => {
 								void onDelete(entry.id);

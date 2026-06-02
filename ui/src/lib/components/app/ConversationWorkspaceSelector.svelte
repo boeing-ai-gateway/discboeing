@@ -2,7 +2,6 @@
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import FolderIcon from "@lucide/svelte/icons/folder";
 	import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import PackageIcon from "@lucide/svelte/icons/package";
 	import { onDestroy, onMount, tick } from "svelte";
@@ -12,13 +11,6 @@
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { isDesktopShell, pickDirectory } from "$lib/shell";
-	import {
-		DropdownMenu,
-		DropdownMenuContent,
-		DropdownMenuItem,
-		DropdownMenuSeparator,
-		DropdownMenuTrigger,
-	} from "$lib/components/ui/dropdown-menu";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 	import { Input } from "$lib/components/ui/input";
 	import { NativeSelect } from "$lib/components/ui/native-select";
@@ -67,27 +59,6 @@
 			selectedExistingWorkspace !== null &&
 			isGithubWorkspace(selectedExistingWorkspace),
 	);
-	const BRANCH_SELECTOR_ENABLED = false;
-	const showBranchSelector = $derived.by(
-		() =>
-			BRANCH_SELECTOR_ENABLED &&
-			sessionView.pendingWorkspaceOption !== "new-workspace",
-	);
-	const availableWorkspaceBranches = $derived.by(() => {
-		if (sessionView.pendingWorkspaceOption === "local-directory") {
-			return ["main", "discobot-session", "feature/local-workspace"];
-		}
-
-		if (sessionView.pendingWorkspaceOption === "git-repo") {
-			return ["main", "develop", "release"];
-		}
-
-		if (selectedExistingWorkspace?.sourceType === "git") {
-			return ["main", "develop", "feature/workspace-sync"];
-		}
-
-		return ["main", "discobot-session", "feature/workspace-setup"];
-	});
 	const workspaceSourceType = $derived.by(
 		() => sessionView.pendingWorkspaceSourceType,
 	);
@@ -159,6 +130,11 @@
 		workspaceSuggestionsCloseTimeout = null;
 	}
 
+	function cancelWorkspaceValidation() {
+		clearWorkspaceValidationDebounce();
+		workspaceValidationRequestId += 1;
+	}
+
 	function focusWorkspaceSourceInput(): boolean {
 		const input = workspaceSourceInputRef;
 		if (!input || input.getClientRects().length === 0 || input.disabled) {
@@ -182,7 +158,7 @@
 		sessionView.setPendingWorkspaceSetupMessage(null);
 		sessionView.setPendingWorkspaceValidation(null);
 		sessionView.setPendingWorkspaceValidating(false);
-		clearWorkspaceValidationDebounce();
+		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 	}
 
@@ -220,7 +196,7 @@
 		sessionView.setPendingWorkspaceSetupMessage(null);
 		sessionView.setPendingWorkspaceValidation(null);
 		sessionView.setPendingWorkspaceValidating(false);
-		clearWorkspaceValidationDebounce();
+		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 		showWorkspaceSuggestions = false;
 		selectedWorkspaceSuggestionIndex = -1;
@@ -235,7 +211,7 @@
 	}
 
 	function resetWorkspaceValidationState(clearSuggestions = false) {
-		clearWorkspaceValidationDebounce();
+		cancelWorkspaceValidation();
 		sessionView.setPendingWorkspaceValidating(false);
 		sessionView.setPendingWorkspaceValidation(null);
 		if (clearSuggestions) {
@@ -418,7 +394,7 @@
 		hasUserSelectedWorkspace = false;
 		hasInitializedSelection = false;
 		sessionView.resetPendingWorkspaceSetup();
-		clearWorkspaceValidationDebounce();
+		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 		showWorkspaceSuggestions = false;
 		selectedWorkspaceSuggestionIndex = -1;
@@ -574,20 +550,6 @@
 		return false;
 	}
 
-	function syncPendingWorkspaceBranch() {
-		if (!showBranchSelector) {
-			sessionView.setPendingWorkspaceBranch("");
-			return;
-		}
-
-		if (
-			sessionView.pendingWorkspaceBranch.length > 0 &&
-			!availableWorkspaceBranches.includes(sessionView.pendingWorkspaceBranch)
-		) {
-			sessionView.setPendingWorkspaceBranch("");
-		}
-	}
-
 	onMount(() => {
 		void (async () => {
 			if (workspaces.status === "idle") {
@@ -597,7 +559,6 @@
 				}
 			}
 			syncPendingWorkspaceSelection();
-			syncPendingWorkspaceBranch();
 			scheduleWorkspaceValidation();
 			if (requiresSourceInput) {
 				requestWorkspaceSourceInputFocus();
@@ -642,7 +603,7 @@
 
 	onDestroy(() => {
 		destroyed = true;
-		clearWorkspaceValidationDebounce();
+		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 	});
 </script>
@@ -689,6 +650,17 @@
 			<div class="flex items-center gap-1.5">
 				<Input
 					id="session-setup-source-inline"
+					aria-label={workspaceSourceType === "local"
+						? "Local directory path"
+						: "Git repository URL"}
+					aria-autocomplete="list"
+					aria-controls="workspace-source-suggestions"
+					aria-expanded={showWorkspaceSuggestions &&
+						workspaceSuggestions.length > 0}
+					aria-activedescendant={selectedWorkspaceSuggestionIndex >= 0
+						? `workspace-source-suggestion-${selectedWorkspaceSuggestionIndex}`
+						: undefined}
+					role="combobox"
 					bind:ref={workspaceSourceInputRef}
 					class="h-8 {fullWidth
 						? 'w-full'
@@ -725,13 +697,19 @@
 
 			{#if showWorkspaceSuggestions && workspaceSuggestions.length > 0}
 				<div
+					id="workspace-source-suggestions"
+					role="listbox"
+					aria-label="Workspace suggestions"
 					class="absolute right-0 top-full z-50 mt-1 max-h-56 {fullWidth
 						? 'w-full'
 						: 'w-[320px]'} overflow-y-auto rounded-md border border-border bg-popover shadow-lg"
 				>
 					{#each workspaceSuggestions as suggestion, index (suggestion.value)}
 						<button
+							id={`workspace-source-suggestion-${index}`}
 							type="button"
+							role="option"
+							aria-selected={index === selectedWorkspaceSuggestionIndex}
 							class={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-accent ${index === selectedWorkspaceSuggestionIndex ? "bg-accent" : ""} ${suggestion.valid ? "" : "opacity-70"}`}
 							onmouseenter={() => {
 								selectedWorkspaceSuggestionIndex = index;
@@ -753,6 +731,7 @@
 	{:else}
 		<NativeSelect
 			id="session-setup-workspace-inline"
+			aria-label="Workspace"
 			bind:ref={workspaceSelectRef}
 			class="h-8 {fullWidth ? 'w-full' : 'w-[320px]'} min-w-0 text-xs"
 			value={sessionView.pendingWorkspaceOption}
@@ -780,48 +759,3 @@
 		</NativeSelect>
 	{/if}
 </div>
-
-{#if showBranchSelector}
-	<DropdownMenu>
-		<DropdownMenuTrigger class="desktop-no-drag">
-			<InputGroupButton
-				type="button"
-				size="icon-sm"
-				variant="ghost"
-				aria-label="Select branch"
-				title={sessionView.pendingWorkspaceBranch || "No branch selected"}
-			>
-				<GitBranchIcon
-					class={`size-4 ${sessionView.pendingWorkspaceBranch ? "text-foreground" : "text-muted-foreground"}`}
-				/>
-			</InputGroupButton>
-		</DropdownMenuTrigger>
-		<DropdownMenuContent align="end" class="w-56">
-			<DropdownMenuItem
-				onclick={() => {
-					sessionView.setPendingWorkspaceBranch("");
-				}}
-				class="justify-between"
-			>
-				<span>No branch</span>
-				{#if sessionView.pendingWorkspaceBranch === ""}
-					<CheckIcon class="size-3.5 text-primary" />
-				{/if}
-			</DropdownMenuItem>
-			<DropdownMenuSeparator />
-			{#each availableWorkspaceBranches as branch (branch)}
-				<DropdownMenuItem
-					onclick={() => {
-						sessionView.setPendingWorkspaceBranch(branch);
-					}}
-					class="justify-between"
-				>
-					<span class="truncate">{branch}</span>
-					{#if sessionView.pendingWorkspaceBranch === branch}
-						<CheckIcon class="size-3.5 text-primary" />
-					{/if}
-				</DropdownMenuItem>
-			{/each}
-		</DropdownMenuContent>
-	</DropdownMenu>
-{/if}

@@ -53,6 +53,7 @@
 		>
 			<Input
 				value={row.key}
+				aria-label="Environment variable name"
 				placeholder="KEY"
 				class="min-w-0 font-mono"
 				data-env-var-row-id={row.id}
@@ -80,6 +81,7 @@
 					<Input
 						type={row.valueFocused ? "text" : "password"}
 						value={row.value}
+						aria-label="Environment variable value"
 						placeholder={row.hasStoredValue ? "Enter a new value" : "value"}
 						class="font-mono"
 						data-env-var-row-id={row.id}
@@ -114,9 +116,10 @@
 					variant="ghost"
 					size="icon-xs"
 					class="md:self-start"
+					aria-label="Remove environment variable"
 					onclick={() => onRemoveRow(row.id)}
 				>
-					<XIcon class="size-3" />
+					<XIcon class="size-3" aria-hidden="true" />
 				</Button>
 			{/if}
 		</div>

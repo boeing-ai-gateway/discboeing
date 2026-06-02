@@ -10,11 +10,38 @@
 		helpText: string;
 		onHover: (sessionId: string, threadId: string) => void;
 		onSelect: (sessionId: string, threadId: string) => void;
+		onClose: () => void;
 	};
 
-	let { open, threads, selectedKey, helpText, onHover, onSelect }: Props =
-		$props();
+	const titleId = "recent-thread-switcher-title";
+	const helpTextId = "recent-thread-switcher-help";
+
+	let {
+		open,
+		threads,
+		selectedKey,
+		helpText,
+		onHover,
+		onSelect,
+		onClose,
+	}: Props = $props();
+	let dialogRef = $state<HTMLDivElement | null>(null);
 	let listRef = $state<HTMLDivElement | null>(null);
+
+	function handleDialogKeydown(event: KeyboardEvent) {
+		if (event.key !== "Escape") {
+			return;
+		}
+
+		event.preventDefault();
+		onClose();
+	}
+
+	$effect(() => {
+		if (open) {
+			dialogRef?.focus();
+		}
+	});
 
 	$effect(() => {
 		if (!open || !listRef || !selectedKey) {
@@ -35,17 +62,25 @@
 		class="pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/20 px-4 pt-24 backdrop-blur-[2px]"
 	>
 		<div
+			bind:this={dialogRef}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby={titleId}
+			aria-describedby={helpTextId}
+			tabindex="-1"
 			class="pointer-events-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-border/80 bg-background/95 shadow-2xl"
+			onkeydown={handleDialogKeydown}
 		>
 			<div
 				class="flex items-center justify-between border-b border-border/70 px-4 py-3"
 			>
 				<p
+					id={titleId}
 					class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
 				>
 					Threads
 				</p>
-				<p class="text-xs text-muted-foreground">{helpText}</p>
+				<p id={helpTextId} class="text-xs text-muted-foreground">{helpText}</p>
 			</div>
 
 			<div
@@ -60,6 +95,7 @@
 					<button
 						type="button"
 						data-thread-key={threadKey}
+						aria-current={selectedKey === threadKey ? "true" : undefined}
 						class={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
 							selectedKey === threadKey
 								? "bg-accent text-accent-foreground shadow-sm"

@@ -218,10 +218,26 @@
 		}
 	}
 
+	function isEditableShortcutTarget(target: EventTarget | null) {
+		if (!(target instanceof HTMLElement)) {
+			return false;
+		}
+
+		return Boolean(
+			target.closest(
+				'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+			),
+		);
+	}
+
 	function handleWindowKeydown(event: KeyboardEvent) {
 		if (event.key === "Escape" && (tabSwitcherOpen || keyboardHelpOpen)) {
 			event.preventDefault();
 			closeOverlays();
+			return;
+		}
+
+		if (isEditableShortcutTarget(event.target)) {
 			return;
 		}
 
@@ -319,6 +335,7 @@
 	helpText={switcherHelpText}
 	onHover={handleTabSwitcherHover}
 	onSelect={handleTabSwitcherSelect}
+	onClose={closeTabSwitcher}
 />
 
 <KeyboardShortcutHelpDialog

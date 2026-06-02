@@ -1,6 +1,119 @@
+<script module lang="ts">
+	import type { ModelInfo } from "$lib/api-types";
+
+	type DisplayModel = ModelInfo & {
+		selectedIds: string[];
+	};
+
+	type ModelProviderEntry = [string, DisplayModel[]];
+
+	function cleanModelName(name: string) {
+		return name.replace(/\s*\(latest\)\s*/gi, "").trim();
+	}
+
+	function getBaseName(name: string) {
+		return cleanModelName(name)
+			.replace(/\s+v\d+\s*/gi, "")
+			.replace(/\s+[\d.]+\s*$/, "")
+			.trim();
+	}
+
+	function extractVersion(name: string) {
+		const matches = name.match(/(\d+(?:\.\d+)?)/g);
+		if (!matches || matches.length === 0) {
+			return 0;
+		}
+		return Number.parseFloat(matches[matches.length - 1]);
+	}
+
+	function sortModels(left: DisplayModel, right: DisplayModel) {
+		const baseCompare = getBaseName(left.name).localeCompare(
+			getBaseName(right.name),
+		);
+		if (baseCompare !== 0) {
+			return baseCompare;
+		}
+
+		const versionLeft = extractVersion(left.name);
+		const versionRight = extractVersion(right.name);
+		if (versionLeft !== versionRight) {
+			return versionRight - versionLeft;
+		}
+
+		return left.name.localeCompare(right.name);
+	}
+
+	function toDisplayModel(model: ModelInfo): DisplayModel {
+		return {
+			...model,
+			name: cleanModelName(model.name),
+			selectedIds: [model.id],
+		};
+	}
+
+	function mergeSelectedIds(target: DisplayModel, source: ModelInfo) {
+		if (!target.selectedIds.includes(source.id)) {
+			target.selectedIds.push(source.id);
+		}
+	}
+
+	function buildModelProviderEntries(models: ModelInfo[]) {
+		const modelByProviderAndName: Record<string, DisplayModel> = {};
+
+		for (const model of models) {
+			const cleanName = cleanModelName(model.name);
+			const isLatest = /\(latest\)/i.test(model.name);
+			const dedupeKey = `${model.provider || "Other"}::${cleanName}`;
+			const existing = modelByProviderAndName[dedupeKey];
+
+			if (!existing) {
+				modelByProviderAndName[dedupeKey] = toDisplayModel(model);
+				continue;
+			}
+
+			mergeSelectedIds(existing, model);
+			if (isLatest) {
+				modelByProviderAndName[dedupeKey] = {
+					...toDisplayModel(model),
+					selectedIds: existing.selectedIds,
+				};
+			}
+		}
+
+		const grouped: Record<string, DisplayModel[]> = {};
+		for (const model of Object.values(modelByProviderAndName).sort(
+			sortModels,
+		)) {
+			const provider = model.provider || "Other";
+			if (!grouped[provider]) {
+				grouped[provider] = [];
+			}
+			grouped[provider].push(model);
+		}
+
+		return Object.entries(grouped).sort(([left], [right]) =>
+			left.localeCompare(right),
+		) as ModelProviderEntry[];
+	}
+
+	function findSelectedModel(
+		entries: ModelProviderEntry[],
+		value: string | null,
+	) {
+		if (value === null) {
+			return null;
+		}
+
+		return (
+			entries
+				.flatMap(([, providerModels]) => providerModels)
+				.find((model) => model.selectedIds.includes(value)) ?? null
+		);
+	}
+</script>
+
 <script lang="ts">
 	import CheckIcon from "@lucide/svelte/icons/check";
-	import type { ModelInfo } from "$lib/api-types";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
@@ -19,73 +132,9 @@
 
 	let { value = null, onSelect = () => {}, models }: Props = $props();
 
-	const dedupedModels = $derived.by(() => {
-		const modelByProviderAndName: Record<string, ModelInfo> = {};
-
-		for (const model of models) {
-			const cleanName = model.name.replace(/\s*\(latest\)\s*/gi, "").trim();
-			const isLatest = /\(latest\)/i.test(model.name);
-			const dedupeKey = `${model.provider || "Other"}::${cleanName}`;
-			const existing = modelByProviderAndName[dedupeKey];
-
-			if (!existing || isLatest) {
-				modelByProviderAndName[dedupeKey] = {
-					...model,
-					name: cleanName,
-				};
-			}
-		}
-
-		const getBaseName = (name: string) =>
-			name
-				.replace(/\s*\(latest\)\s*/gi, "")
-				.replace(/\s+v\d+\s*/gi, "")
-				.replace(/\s+[\d.]+\s*$/, "")
-				.trim();
-
-		const extractVersion = (name: string) => {
-			const matches = name.match(/(\d+(?:\.\d+)?)/g);
-			if (!matches || matches.length === 0) {
-				return 0;
-			}
-			return Number.parseFloat(matches[matches.length - 1]);
-		};
-
-		return Object.values(modelByProviderAndName).sort((left, right) => {
-			const baseLeft = getBaseName(left.name);
-			const baseRight = getBaseName(right.name);
-			const baseCompare = baseLeft.localeCompare(baseRight);
-			if (baseCompare !== 0) {
-				return baseCompare;
-			}
-
-			const versionLeft = extractVersion(left.name);
-			const versionRight = extractVersion(right.name);
-			if (versionLeft !== versionRight) {
-				return versionRight - versionLeft;
-			}
-
-			return left.name.localeCompare(right.name);
-		});
-	});
-
-	const modelProviderEntries = $derived.by(() => {
-		const grouped: Record<string, ModelInfo[]> = {};
-		for (const model of dedupedModels) {
-			const provider = model.provider || "Other";
-			if (!grouped[provider]) {
-				grouped[provider] = [];
-			}
-			grouped[provider].push(model);
-		}
-
-		return Object.entries(grouped).sort(([left], [right]) =>
-			left.localeCompare(right),
-		);
-	});
-
-	const selectedModel = $derived.by(
-		() => dedupedModels.find((model) => model.id === value) ?? null,
+	const modelProviderEntries = $derived(buildModelProviderEntries(models));
+	const selectedModel = $derived(
+		findSelectedModel(modelProviderEntries, value),
 	);
 </script>
 
@@ -145,7 +194,7 @@
 							</div>
 						{/if}
 					</div>
-					{#if value === model.id}
+					{#if value !== null && model.selectedIds.includes(value)}
 						<CheckIcon class="size-3.5 text-primary" />
 					{/if}
 				</DropdownMenuItem>

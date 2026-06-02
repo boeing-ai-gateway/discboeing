@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { CredentialTypeOAuthScopeOption } from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
-	import { Label } from "$lib/components/ui/label";
 
 	type ScopeGroup = {
 		group: string;
@@ -35,30 +34,32 @@
 	}: Props = $props();
 </script>
 
-<div class="space-y-2">
-	<div class="flex items-center justify-between gap-2">
-		<Label>{label}</Label>
-		<div class="flex gap-2">
-			{#if mode === "advanced" && onResetToDefaults}
-				<Button variant="outline" size="xs" onclick={onResetToDefaults}>
-					Back to defaults
-				</Button>
-			{/if}
-			<Button
-				variant={mode === "simple" ? "default" : "outline"}
-				size="xs"
-				onclick={() => onModeChange("simple")}
-			>
-				Simple
+<fieldset class="space-y-2">
+	<legend class="float-left text-sm leading-none font-medium select-none">
+		{label}
+	</legend>
+	<div class="flex justify-end gap-2">
+		{#if mode === "advanced" && onResetToDefaults}
+			<Button variant="outline" size="xs" onclick={onResetToDefaults}>
+				Back to defaults
 			</Button>
-			<Button
-				variant={mode === "advanced" ? "default" : "outline"}
-				size="xs"
-				onclick={() => onModeChange("advanced")}
-			>
-				Advanced
-			</Button>
-		</div>
+		{/if}
+		<Button
+			variant={mode === "simple" ? "default" : "outline"}
+			size="xs"
+			aria-pressed={mode === "simple"}
+			onclick={() => onModeChange("simple")}
+		>
+			Simple
+		</Button>
+		<Button
+			variant={mode === "advanced" ? "default" : "outline"}
+			size="xs"
+			aria-pressed={mode === "advanced"}
+			onclick={() => onModeChange("advanced")}
+		>
+			Advanced
+		</Button>
 	</div>
 
 	{#if mode === "simple"}
@@ -170,4 +171,4 @@
 			{/each}
 		</div>
 	{/if}
-</div>
+</fieldset>

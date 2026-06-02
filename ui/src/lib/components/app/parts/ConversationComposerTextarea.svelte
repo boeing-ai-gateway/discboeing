@@ -5,6 +5,11 @@
 	import ConversationSlashCommandDropdown from "$lib/components/app/parts/ConversationSlashCommandDropdown.svelte";
 	import { InputGroupTextarea } from "$lib/components/ui/input-group";
 
+	type FileMentionItem = {
+		path: string;
+		type: "file" | "directory";
+	};
+
 	type FileMentionDropdownHandle = {
 		handleInput: (value: string, cursor: number) => void;
 		handleKeydown: (event: KeyboardEvent) => boolean;
@@ -29,10 +34,19 @@
 		sessionId: string | null;
 		commands: AgentCommand[];
 		commandsLoading: boolean;
+		fileMentionSuggestions: FileMentionItem[];
+		fileMentionLoading: boolean;
+		promptHistory: string[];
+		pinnedPrompts: string[];
 		attachmentCount: number;
 		onAddFiles: (files: File[] | FileList) => void;
 		onRemoveLastAttachment: () => void;
+		onPinPrompt: (prompt: string) => void;
+		onUnpinPrompt: (prompt: string) => void;
+		onRemovePromptFromHistory: (prompt: string) => void;
+		isPromptPinned: (prompt: string) => boolean;
 		onSubmit: () => void | Promise<void>;
+		onFileMentionQueryChange: (query: string, open: boolean) => void;
 		onRequestAutocompleteSession?: () => void | Promise<boolean>;
 	};
 
@@ -43,10 +57,19 @@
 		sessionId,
 		commands,
 		commandsLoading,
+		fileMentionSuggestions,
+		fileMentionLoading,
+		promptHistory,
+		pinnedPrompts,
 		attachmentCount,
 		onAddFiles,
 		onRemoveLastAttachment,
+		onPinPrompt,
+		onUnpinPrompt,
+		onRemovePromptFromHistory,
+		isPromptPinned,
 		onSubmit,
+		onFileMentionQueryChange,
 		onRequestAutocompleteSession,
 	}: Props = $props();
 
@@ -57,6 +80,8 @@
 		null,
 	);
 	let fileMentionTextareaRef = $state<HTMLTextAreaElement | null>(null);
+	let fileMentionActiveOptionId = $state<string | null>(null);
+	const fileMentionListboxId = "conversation-file-mentions";
 
 	function shouldSubmitComposerOnEnter(draft: string): boolean {
 		return draft.trim().length > 0;
@@ -192,13 +217,26 @@
 	bind:this={fileMentionDropdownRef}
 	{sessionId}
 	textareaRef={fileMentionTextareaRef}
+	suggestions={fileMentionSuggestions}
+	isLoading={fileMentionLoading}
+	listboxId={fileMentionListboxId}
 	onDraftChange={(value) => onDraftChange(value)}
+	onQueryChange={onFileMentionQueryChange}
+	onActiveOptionChange={(optionId) => {
+		fileMentionActiveOptionId = optionId;
+	}}
 />
 
 <ConversationPromptHistoryDropdown
 	bind:this={promptHistoryDropdownRef}
 	textareaRef={fileMentionTextareaRef}
 	onDraftChange={(value) => onDraftChange(value)}
+	{promptHistory}
+	{pinnedPrompts}
+	{onPinPrompt}
+	{onUnpinPrompt}
+	{onRemovePromptFromHistory}
+	{isPromptPinned}
 />
 
 <InputGroupTextarea
@@ -208,6 +246,10 @@
 	value={draft}
 	{disabled}
 	placeholder="Type a message, @file, /command, or ↑ for history"
+	aria-label="Message"
+	aria-autocomplete="list"
+	aria-controls={fileMentionActiveOptionId ? fileMentionListboxId : undefined}
+	aria-activedescendant={fileMentionActiveOptionId ?? undefined}
 	oncompositionstart={() => {
 		isComposing = true;
 	}}

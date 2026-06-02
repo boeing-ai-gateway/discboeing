@@ -14,40 +14,26 @@
 
 	let { expanded = $bindable(false), hooksStatus }: Props = $props();
 
-	function hooks() {
-		return hooksStatus.hooks;
-	}
-
-	function pendingHookSet() {
-		return new Set(hooksStatus.pendingHookIds);
-	}
-
-	function isHookPassing(hook: HooksStatus["hooks"][number]) {
-		return getHookDisplayState(hook, pendingHookSet()) === "success";
-	}
-
-	function hookPassedCount() {
-		return hooks().filter((hook) => isHookPassing(hook)).length;
-	}
-
-	function hookHasRunning() {
-		return hooks().some(
-			(hook) => getHookDisplayState(hook, pendingHookSet()) === "running",
-		);
-	}
-
-	function hookHasFailures() {
-		return hooks().some(
-			(hook) => getHookDisplayState(hook, pendingHookSet()) === "failure",
-		);
-	}
-
-	function hookHasPausedExecution() {
-		return hooks().some((hook) => hook.executionPaused);
-	}
+	let hooks = $derived(hooksStatus.hooks);
+	let pendingHookSet = $derived(new Set(hooksStatus.pendingHookIds));
+	let hookDisplayStates = $derived(
+		hooks.map((hook) => getHookDisplayState(hook, pendingHookSet)),
+	);
+	let hookPassedCount = $derived(
+		hookDisplayStates.filter((state) => state === "success").length,
+	);
+	let hookHasRunning = $derived(
+		hookDisplayStates.some((state) => state === "running"),
+	);
+	let hookHasFailures = $derived(
+		hookDisplayStates.some((state) => state === "failure"),
+	);
+	let hookHasPausedExecution = $derived(
+		hooks.some((hook) => hook.executionPaused),
+	);
 </script>
 
-{#if hooks().length > 0}
+{#if hooks.length > 0}
 	<Button
 		variant="ghost"
 		size="xs"
@@ -56,15 +42,15 @@
 			expanded = !expanded;
 		}}
 	>
-		{#if hooksStatus.executionPaused || hookHasPausedExecution()}
+		{#if hooksStatus.executionPaused || hookHasPausedExecution}
 			<PauseCircleIcon class="size-3.5 text-amber-500" />
-		{:else if hookHasRunning()}
+		{:else if hookHasRunning}
 			<Loader2Icon class="size-3.5 animate-spin text-blue-500" />
-		{:else if hookHasFailures()}
+		{:else if hookHasFailures}
 			<AlertTriangleIcon class="size-3.5 text-yellow-500" />
 		{:else}
 			<ZapIcon class="size-3.5 text-green-500" />
 		{/if}
-		<span class="text-xs font-medium">{hookPassedCount()}</span>
+		<span class="text-xs font-medium">{hookPassedCount}</span>
 	</Button>
 {/if}

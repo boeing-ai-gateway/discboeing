@@ -1,4 +1,9 @@
 <script lang="ts">
+	import { api } from "$lib/api-client";
+	import type {
+		ServiceOutputEvent,
+		SessionSingleFileDiffResponse,
+	} from "$lib/api-types";
 	import DesktopPanel from "$lib/components/app/parts/DesktopPanel.svelte";
 	import DiffReviewPanel from "$lib/components/app/parts/DiffReviewPanel.svelte";
 	import FilesPanel from "$lib/components/app/parts/FilesPanel.svelte";
@@ -8,7 +13,10 @@
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { useThreadContext } from "$lib/context/thread-context.svelte";
+	import { writeStorage } from "$lib/local-storage";
+	import type { DiffStyle } from "$lib/pierre-diff";
 	import { requestVSCodeOpenFile } from "$lib/editor-control";
+	import { renderServiceOutputText } from "$lib/service-output";
 	import {
 		buildUserMessageParts,
 		formatConversationComments,
@@ -19,7 +27,13 @@
 		VSCODE_SERVICE_ID,
 	} from "$lib/session/service-ids";
 
+	const APPROVAL_STORAGE_KEY = "discobot.ui.diff-review.approved";
+	const DIFF_STYLE_STORAGE_KEY = "discobot.ui.diff-review.style";
+
 	type DockPanelKind = Exclude<SessionActiveView["kind"], "chat">;
+	type RenderedServiceOutputEvent = ServiceOutputEvent & {
+		displayText: string;
+	};
 
 	const app = useAppContext();
 	const session = useSessionContext();
@@ -30,6 +44,14 @@
 			(service) =>
 				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
 		),
+	);
+	const activeService = $derived.by(
+		() =>
+			visibleServices.find(
+				(service) => service.id === sessionView.activeServiceId,
+			) ??
+			visibleServices[0] ??
+			null,
 	);
 	const desktopAvailable = $derived.by(() =>
 		session.services.list.some((service) => service.id === DESKTOP_SERVICE_ID),
@@ -54,6 +76,13 @@
 		return kind === "chat" ? null : kind;
 	});
 	let mountedDockPanelKinds = $state<DockPanelKind[]>([]);
+	let serviceLogEvents = $state<RenderedServiceOutputEvent[]>([]);
+	let serviceLogsConnected = $state(false);
+	let diffReviewApprovals = $state<Record<string, Record<string, string>>>({});
+	let diffReviewStyle = $state<DiffStyle>("unified");
+
+	diffReviewApprovals = readDiffReviewApprovals();
+	diffReviewStyle = readDiffReviewStyle();
 
 	$effect(() => {
 		const activeKind = activeDockPanelKind;
@@ -62,6 +91,130 @@
 		}
 
 		mountedDockPanelKinds = [...mountedDockPanelKinds, activeKind];
+	});
+
+	$effect(() => {
+		writeStorage(APPROVAL_STORAGE_KEY, JSON.stringify(diffReviewApprovals));
+	});
+
+	$effect(() => {
+		writeStorage(DIFF_STYLE_STORAGE_KEY, diffReviewStyle);
+	});
+
+	function readDiffReviewApprovals(): Record<string, Record<string, string>> {
+		if (typeof window === "undefined") {
+			return {};
+		}
+		const stored = window.localStorage.getItem(APPROVAL_STORAGE_KEY);
+		if (!stored) {
+			return {};
+		}
+		try {
+			const parsed = JSON.parse(stored);
+			return typeof parsed === "object" && parsed !== null ? parsed : {};
+		} catch {
+			return {};
+		}
+	}
+
+	function readDiffReviewStyle(): DiffStyle {
+		if (typeof window === "undefined") {
+			return "unified";
+		}
+		const stored = window.localStorage.getItem(DIFF_STYLE_STORAGE_KEY);
+		return stored === "split" ? "split" : "unified";
+	}
+
+	function setDiffReviewApprovals(
+		nextApprovals: Record<string, Record<string, string>>,
+	) {
+		diffReviewApprovals = nextApprovals;
+	}
+
+	function setDiffReviewStyle(nextStyle: DiffStyle) {
+		diffReviewStyle = nextStyle;
+	}
+
+	async function loadDiffReviewEntry(
+		sessionId: string,
+		params: { path: string; target: string },
+	): Promise<SessionSingleFileDiffResponse> {
+		return (await api.getSessionDiff(
+			sessionId,
+			params,
+		)) as SessionSingleFileDiffResponse;
+	}
+
+	function readDiffReviewFile(
+		sessionId: string,
+		path: string,
+		options?: { fromBase?: boolean },
+	) {
+		return api.readSessionFile(sessionId, path, options);
+	}
+
+	function getRenderedLogEvent(
+		event: ServiceOutputEvent,
+	): RenderedServiceOutputEvent {
+		return {
+			...event,
+			displayText:
+				typeof event.data === "string"
+					? renderServiceOutputText(event.data)
+					: event.type === "exit"
+						? `Process exited with code ${event.exitCode ?? "unknown"}`
+						: (event.error ?? ""),
+		};
+	}
+
+	$effect(() => {
+		const service = activeService;
+		if (
+			!mountedDockPanelKinds.includes("services") ||
+			service?.passive ||
+			typeof window === "undefined" ||
+			!service
+		) {
+			serviceLogEvents = [];
+			serviceLogsConnected = false;
+			return;
+		}
+
+		void service.status;
+		serviceLogEvents = [];
+		serviceLogsConnected = false;
+		const subscription = app.chatStreams.subscribeServiceOutput({
+			sessionId: session.sessionId,
+			serviceId: service.id,
+			onOpen: () => {
+				serviceLogsConnected = true;
+			},
+			onError: () => {
+				serviceLogsConnected = false;
+			},
+		});
+
+		const handleMessage = (event: MessageEvent<string>) => {
+			if (event.data === "[DONE]") {
+				serviceLogsConnected = false;
+				return;
+			}
+
+			try {
+				const parsed = JSON.parse(event.data) as ServiceOutputEvent;
+				serviceLogEvents = [...serviceLogEvents, getRenderedLogEvent(parsed)];
+			} catch (error) {
+				console.error("Failed to parse service output event:", error);
+			}
+		};
+
+		subscription.eventSource.addEventListener("message", handleMessage);
+
+		return () => {
+			subscription.eventSource.removeEventListener("message", handleMessage);
+			subscription.unsubscribe();
+			serviceLogsConnected = false;
+		};
 	});
 
 	function buildDiffSelectionSnippet({
@@ -192,6 +345,10 @@ ${selectedText}
 				dockMaximized={sessionView.dockMaximized}
 				onClose={sessionView.openChat}
 				onDiffTargetChange={session.files.setDiffTarget}
+				onLoadDiff={loadDiffReviewEntry}
+				onReadFile={readDiffReviewFile}
+				onApprovalStateChange={setDiffReviewApprovals}
+				onDiffStyleChange={setDiffReviewStyle}
 				onOpenFile={handleOpenDiffFile}
 				onRefresh={() => session.files.refresh()}
 				onQueueSelectionComment={handleQueueDiffSelectionComment}
@@ -202,6 +359,8 @@ ${selectedText}
 				diffTarget={session.files.diffTarget}
 				fileContents={sessionFileContents}
 				diffStats={sessionFileDiffStats}
+				approvedBySession={diffReviewApprovals}
+				diffStyle={diffReviewStyle}
 				resolvedTheme={app.preferences.resolvedTheme}
 				{shiftWindowControlsForSidebar}
 			/>
@@ -215,7 +374,8 @@ ${selectedText}
 			<ServicePanel
 				dockMaximized={sessionView.dockMaximized}
 				sessionId={session.sessionId}
-				streamManager={app.chatStreams}
+				logEvents={serviceLogEvents}
+				logsConnected={serviceLogsConnected}
 				services={visibleServices}
 				activeServiceId={sessionView.activeServiceId}
 				onSelectService={session.services.open}

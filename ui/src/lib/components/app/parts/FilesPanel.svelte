@@ -22,6 +22,7 @@
 	import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
+	import FilesPanelTabs from "$lib/components/app/parts/FilesPanelTabs.svelte";
 	import ImageAttachment from "$lib/components/ai/image-attachment/ImageAttachment.svelte";
 	import { MessageResponse } from "$lib/components/ai/message";
 	import {
@@ -34,7 +35,6 @@
 		AlertDialogHeader,
 		AlertDialogTitle,
 	} from "$lib/components/ui/alert-dialog";
-	import { Badge } from "$lib/components/ui/badge";
 	import { Button } from "$lib/components/ui/button";
 	import {
 		ContextMenu,
@@ -119,13 +119,13 @@
 	function statusBadgeClass(status?: FileStatus) {
 		switch (status) {
 			case "added":
-				return "border-green-500/40 text-green-500";
+				return "border-chart-2/40 text-chart-2";
 			case "modified":
-				return "border-yellow-500/40 text-yellow-500";
+				return "border-chart-3/40 text-chart-3";
 			case "deleted":
-				return "border-red-500/40 text-red-500";
+				return "border-destructive/40 text-destructive";
 			case "renamed":
-				return "border-purple-500/40 text-purple-500";
+				return "border-chart-4/40 text-chart-4";
 			default:
 				return "border-border text-muted-foreground";
 		}
@@ -987,64 +987,18 @@
 			<div
 				class="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar shadow-sm"
 			>
-				<div
-					class="flex min-h-10 items-end gap-1 overflow-x-auto border-b border-sidebar-border bg-sidebar px-2 py-2"
-				>
-					{#if openPaths.length === 0}
-						<p class="px-2 text-sm text-sidebar-foreground/50">
-							Open a file from the explorer.
-						</p>
-					{:else}
-						{#each openPaths as path (path)}
-							{@const status = files.diff.find(
-								(entry) => entry.path === path,
-							)?.status}
-							<div
-								role="button"
-								tabindex={0}
-								onclick={() => files.open(path)}
-								onkeydown={(event) => {
-									if (event.key === "Enter" || event.key === " ") {
-										event.preventDefault();
-										void files.open(path);
-									}
-								}}
-								class={cn(
-									"flex shrink-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition",
-									activePath === path
-										? "border-sidebar-border bg-background text-foreground shadow-sm"
-										: "border-transparent bg-sidebar-accent/60 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-								)}
-							>
-								<span class="truncate max-w-36">{fileLabel(path)}</span>
-								{#if isDirty(path)}
-									<span class="size-2 rounded-full bg-sidebar-primary"></span>
-								{/if}
-								{#if status}
-									<Badge
-										variant="outline"
-										class={cn(
-											"px-1 py-0 text-[10px]",
-											statusBadgeClass(status),
-										)}
-									>
-										{statusLetter(status)}
-									</Badge>
-								{/if}
-								<button
-									type="button"
-									onclick={(event) => {
-										event.stopPropagation();
-										requestCloseTab(path);
-									}}
-									class="rounded p-0.5 text-sidebar-foreground/45 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-								>
-									<XIcon class="size-3.5" />
-								</button>
-							</div>
-						{/each}
-					{/if}
-				</div>
+				<FilesPanelTabs
+					{activePath}
+					{fileLabel}
+					getStatus={(path) =>
+						files.diff.find((entry) => entry.path === path)?.status}
+					{isDirty}
+					onClose={requestCloseTab}
+					onOpen={(path) => files.open(path)}
+					{openPaths}
+					{statusBadgeClass}
+					{statusLetter}
+				/>
 
 				{#if activePath && activeBuffer}
 					<div
@@ -1164,7 +1118,7 @@
 								</DialogDescription>
 							</DialogHeader>
 							<div
-								class="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-900 dark:text-yellow-100"
+								class="rounded-md border border-chart-3/30 bg-diff-modify p-3 text-sm text-foreground"
 							>
 								Choose whether to keep the disk version or overwrite it with
 								your local changes.
@@ -1204,6 +1158,7 @@
 							onkeydown={handleRenameInputKeydown}
 							maxlength={255}
 							placeholder="File name"
+							aria-label="New file name"
 						/>
 						<DialogFooter>
 							<Button
@@ -1410,16 +1365,14 @@
 							<Icon
 								class={cn(
 									"size-4 shrink-0",
-									node.type === "directory" &&
-										node.changed &&
-										"text-yellow-500",
+									node.type === "directory" && node.changed && "text-chart-3",
 									node.type === "directory" &&
 										!node.changed &&
 										"text-sidebar-foreground/55",
-									node.status === "added" && "text-green-500",
-									node.status === "modified" && "text-yellow-500",
-									node.status === "deleted" && "text-red-500",
-									node.status === "renamed" && "text-purple-500",
+									node.status === "added" && "text-chart-2",
+									node.status === "modified" && "text-chart-3",
+									node.status === "deleted" && "text-destructive",
+									node.status === "renamed" && "text-chart-4",
 									node.type === "file" &&
 										!node.status &&
 										"text-sidebar-foreground/55",

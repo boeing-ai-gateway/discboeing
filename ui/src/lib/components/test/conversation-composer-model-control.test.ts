@@ -20,3 +20,9 @@ test("conversation composer model control dedupes models by provider and cleaned
 		/const modelByName: Record<string, ModelInfo> = \{\}/,
 	);
 });
+
+test("conversation composer model control keeps duplicate selected ids visible", () => {
+	assert.match(source, /selectedIds: \[model\.id\]/);
+	assert.match(source, /mergeSelectedIds\(existing, model\);/);
+	assert.match(source, /model\.selectedIds\.includes\(value\)/);
+});

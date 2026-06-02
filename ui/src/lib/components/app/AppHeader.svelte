@@ -105,7 +105,7 @@
 			>
 				<SettingsIcon class="size-4" />
 				{#if updates.showBadge}
-					<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-blue-500"
+					<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary"
 					></span>
 				{/if}
 			</Button>

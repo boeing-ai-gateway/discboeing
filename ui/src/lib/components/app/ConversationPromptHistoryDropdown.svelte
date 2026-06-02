@@ -5,16 +5,28 @@
 	import PinIcon from "@lucide/svelte/icons/pin";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import { MAX_VISIBLE_PROMPT_HISTORY } from "$lib/prompt-history-storage";
-	import { useAppContext } from "$lib/context/app-context.svelte";
 
 	type Props = {
 		textareaRef: HTMLTextAreaElement | null;
 		onDraftChange: (value: string) => void;
+		promptHistory: string[];
+		pinnedPrompts: string[];
+		onPinPrompt: (prompt: string) => void;
+		onUnpinPrompt: (prompt: string) => void;
+		onRemovePromptFromHistory: (prompt: string) => void;
+		isPromptPinned: (prompt: string) => boolean;
 	};
 
-	let { textareaRef, onDraftChange }: Props = $props();
-
-	const app = useAppContext();
+	let {
+		textareaRef,
+		onDraftChange,
+		promptHistory,
+		pinnedPrompts,
+		onPinPrompt,
+		onUnpinPrompt,
+		onRemovePromptFromHistory,
+		isPromptPinned,
+	}: Props = $props();
 
 	let open = $state(false);
 	let historyIndex = $state(-1);
@@ -22,11 +34,8 @@
 	let dropdownRef = $state<HTMLDivElement | null>(null);
 
 	const visibleHistory = $derived.by(() =>
-		[
-			...app.preferences.promptHistory.slice(0, MAX_VISIBLE_PROMPT_HISTORY),
-		].reverse(),
+		[...promptHistory.slice(0, MAX_VISIBLE_PROMPT_HISTORY)].reverse(),
 	);
-	const pinnedPrompts = $derived.by(() => app.preferences.pinnedPrompts);
 	const hasItems = $derived.by(
 		() => pinnedPrompts.length > 0 || visibleHistory.length > 0,
 	);
@@ -66,11 +75,11 @@
 	}
 
 	function pinHistoryPrompt(prompt: string) {
-		app.preferences.pinPrompt(prompt);
+		onPinPrompt(prompt);
 	}
 
 	function unpinHistoryPrompt(prompt: string) {
-		app.preferences.unpinPrompt(prompt);
+		onUnpinPrompt(prompt);
 		if (isPinnedSelection && historyIndex >= pinnedPrompts.length) {
 			historyIndex = Math.max(pinnedPrompts.length - 1, -1);
 			if (historyIndex < 0) {
@@ -80,8 +89,8 @@
 	}
 
 	function removeHistoryPrompt(prompt: string, index: number) {
-		app.preferences.removePromptFromHistory(prompt);
 		const nextVisibleHistoryLength = visibleHistory.length - 1;
+		onRemovePromptFromHistory(prompt);
 		if (isPinnedSelection) {
 			return;
 		}
@@ -253,7 +262,8 @@
 						</button>
 						<button
 							type="button"
-							class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+							class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+							aria-label="Unpin prompt"
 							title="Unpin"
 							onmousedown={(event) => {
 								event.preventDefault();
@@ -292,15 +302,18 @@
 							<span class="line-clamp-2 break-words">{prompt}</span>
 						</button>
 						<div
-							class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+							class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
 						>
 							<button
 								type="button"
-								title={app.preferences.isPromptPinned(prompt) ? "Unpin" : "Pin"}
+								aria-label={isPromptPinned(prompt)
+									? "Unpin prompt"
+									: "Pin prompt"}
+								title={isPromptPinned(prompt) ? "Unpin" : "Pin"}
 								onmousedown={(event) => {
 									event.preventDefault();
 									event.stopPropagation();
-									if (app.preferences.isPromptPinned(prompt)) {
+									if (isPromptPinned(prompt)) {
 										unpinHistoryPrompt(prompt);
 									} else {
 										pinHistoryPrompt(prompt);
@@ -308,11 +321,12 @@
 								}}
 							>
 								<PinIcon
-									class={`size-3.5 text-muted-foreground hover:text-foreground ${app.preferences.isPromptPinned(prompt) ? "fill-current" : ""}`}
+									class={`size-3.5 text-muted-foreground hover:text-foreground ${isPromptPinned(prompt) ? "fill-current" : ""}`}
 								/>
 							</button>
 							<button
 								type="button"
+								aria-label="Delete prompt from history"
 								title="Delete from history"
 								onmousedown={(event) => {
 									event.preventDefault();

@@ -57,8 +57,11 @@
 		);
 	}
 
-	function selectedLabel(request: AgentCommandCredentialRequest) {
-		const value = dialog.selectedOptionByEnvVar[request.envVar] ?? "";
+	function selectedLabel(
+		request: AgentCommandCredentialRequest,
+		selectedOption: string,
+	) {
+		const value = selectedOption;
 		if (value === CUSTOM_CREDENTIAL_OPTION) {
 			return "Custom credential";
 		}
@@ -190,7 +193,7 @@
 							}}
 						>
 							<SelectTrigger class="w-full"
-								>{selectedLabel(request)}</SelectTrigger
+								>{selectedLabel(request, selectedOption)}</SelectTrigger
 							>
 							<SelectContent>
 								{#each listAnyCredentials(dialog.projectCredentials, dialog.sessionAssignments) as match (match.credential.id)}
@@ -345,30 +348,49 @@
 							>
 								Enter new credential
 							</p>
-							<Input
-								value={dialog.createCredentialNamesByEnvVar[request.envVar] ??
-									""}
-								placeholder="Credential name"
-								oninput={(event) => {
-									dialog.setCreateCredentialName(
-										request.envVar,
-										(event.currentTarget as HTMLInputElement).value,
-									);
-								}}
-							/>
-							<Input
-								type="password"
-								value={dialog.createCredentialSecretsByEnvVar[request.envVar] ??
-									""}
-								placeholder={`Enter ${request.envVar}`}
-								class="font-mono"
-								oninput={(event) => {
-									dialog.setCreateCredentialSecret(
-										request.envVar,
-										(event.currentTarget as HTMLInputElement).value,
-									);
-								}}
-							/>
+							<div class="space-y-2">
+								<label
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+									for={`credential-name-${request.envVar}`}
+								>
+									Credential name
+								</label>
+								<Input
+									id={`credential-name-${request.envVar}`}
+									value={dialog.createCredentialNamesByEnvVar[request.envVar] ??
+										""}
+									placeholder="Credential name"
+									oninput={(event) => {
+										dialog.setCreateCredentialName(
+											request.envVar,
+											(event.currentTarget as HTMLInputElement).value,
+										);
+									}}
+								/>
+							</div>
+							<div class="space-y-2">
+								<label
+									class="font-medium text-xs uppercase tracking-wide text-muted-foreground"
+									for={`credential-secret-${request.envVar}`}
+								>
+									Credential secret
+								</label>
+								<Input
+									id={`credential-secret-${request.envVar}`}
+									type="password"
+									value={dialog.createCredentialSecretsByEnvVar[
+										request.envVar
+									] ?? ""}
+									placeholder={`Enter ${request.envVar}`}
+									class="font-mono"
+									oninput={(event) => {
+										dialog.setCreateCredentialSecret(
+											request.envVar,
+											(event.currentTarget as HTMLInputElement).value,
+										);
+									}}
+								/>
+							</div>
 						</div>
 					{/if}
 				</div>

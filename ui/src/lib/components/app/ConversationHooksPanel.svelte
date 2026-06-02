@@ -216,16 +216,7 @@
 			{#each hooksStatus.hooks as hook (hook.hookId)}
 				{@const displayState = hookDisplayState(hook)}
 				<div
-					class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${displayState === "running" ? "bg-blue-500/10" : "hover:bg-muted/50"}`}
-					role="button"
-					tabindex={0}
-					onclick={() => openHookDialog(hook.hookId)}
-					onkeydown={(event) => {
-						if (event.key === "Enter" || event.key === " ") {
-							event.preventDefault();
-							openHookDialog(hook.hookId);
-						}
-					}}
+					class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${displayState === "running" ? "bg-blue-500/10" : ""}`}
 				>
 					{#if displayState === "running"}
 						<Loader2Icon
@@ -246,12 +237,21 @@
 					</div>
 					<Button
 						variant="ghost"
+						size="xs"
+						onclick={() => openHookDialog(hook.hookId)}
+					>
+						Details
+					</Button>
+					<Button
+						variant="ghost"
 						size="icon-xs"
-						onclick={(event) => {
-							event.stopPropagation();
+						onclick={() => {
 							onSetHookExecutionPaused(hook.hookId, !hookPaused(hook));
 						}}
 						title={hookPaused(hook) ? "Resume this hook" : "Pause this hook"}
+						aria-label={hookPaused(hook)
+							? "Resume this hook"
+							: "Pause this hook"}
 					>
 						{#if hookPaused(hook)}
 							<PlayCircleIcon class="size-3 text-amber-500" />
@@ -263,11 +263,11 @@
 						<Button
 							variant="ghost"
 							size="icon-xs"
-							onclick={(event) => {
-								event.stopPropagation();
+							onclick={() => {
 								onRerunHook(hook.hookId);
 							}}
 							title="Rerun hook"
+							aria-label="Rerun hook"
 						>
 							<RotateCcwIcon class="size-3" />
 						</Button>

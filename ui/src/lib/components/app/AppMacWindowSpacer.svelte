@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { withCurrentDesktopWindow } from "$lib/shell";
 	import { onMount } from "svelte";
-	import LeftWindowControls from "$lib/components/app/parts/LeftWindowControls.svelte";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 
 	const environment = useAppContext().environment;
@@ -16,19 +15,30 @@
 		}
 
 		let unlisten: (() => void) | undefined;
+		let disposed = false;
 
 		void withCurrentDesktopWindow(async (window) => {
 			const syncFullscreen = async () => {
-				isMacFullscreen = await window.isFullscreen();
+				const fullscreen = await window.isFullscreen();
+				if (!disposed) {
+					isMacFullscreen = fullscreen;
+				}
 			};
 
 			await syncFullscreen();
-			unlisten = await window.onResized(() => {
+			const stopListening = await window.onResized(() => {
 				void syncFullscreen();
 			});
+
+			if (disposed) {
+				stopListening();
+				return;
+			}
+			unlisten = stopListening;
 		});
 
 		return () => {
+			disposed = true;
 			unlisten?.();
 		};
 	});
@@ -41,5 +51,5 @@
 </script>
 
 {#if showMacSpacer}
-	<LeftWindowControls />
+	<div aria-hidden="true" class="w-14 shrink-0"></div>
 {/if}

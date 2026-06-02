@@ -1508,7 +1508,11 @@
 										</div>
 									{:else}
 										<div class="space-y-1">
-											<Label>
+											<Label
+												for={selectedOAuthKind === "authorization_code"
+													? "credential-oauth-code"
+													: undefined}
+											>
 												{selectedOAuthKind === "device_code"
 													? "Device code"
 													: (selectedOAuthConfig?.inputLabel ??
@@ -1616,6 +1620,7 @@
 														variant="outline"
 														size="icon"
 														class="h-14 w-14"
+														aria-label="Copy OAuth device code"
 														disabled={pollingOAuth}
 														onclick={() => void copyOAuthCode()}
 													>
@@ -1680,7 +1685,7 @@
 													</div>
 												{/if}
 												<Input
-													id="credential-secret"
+													id="credential-oauth-code"
 													value={oauthInputDraft}
 													placeholder={selectedOAuthConfig?.inputPlaceholder ??
 														"Paste authorization code"}
@@ -1855,7 +1860,7 @@
 								</div>
 								{#if visibilityDraft.tools}
 									<div
-										class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100"
+										class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
 									>
 										<div class="font-medium">
 											Warning: tool visibility increases exposure.

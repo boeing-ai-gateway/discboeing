@@ -218,6 +218,7 @@
 										size="icon"
 										class="h-7 w-7 shrink-0"
 										disabled={startingOAuth || pollingOAuth}
+										aria-label="Copy sign-in URL"
 										onclick={() => void onCopyOAuthAuthUrl()}
 									>
 										<CopyIcon class="size-4" />
@@ -229,9 +230,12 @@
 							class="space-y-3 rounded-md border border-border bg-background p-3"
 						>
 							<div class="space-y-1">
-								<div class="text-sm font-medium">
+								<label
+									class="text-sm font-medium"
+									for="oauth-authorization-input"
+								>
 									Paste the redirect URL or authorization code
-								</div>
+								</label>
 								<p class="text-sm text-muted-foreground">
 									If the browser does not return here automatically, paste the
 									full callback URL or just the <code>code</code> value and Discobot
@@ -239,6 +243,7 @@
 								</p>
 							</div>
 							<Input
+								id="oauth-authorization-input"
 								placeholder="http://127.0.0.1:1455/auth/callback?... or code"
 								value={oauthInputDraft}
 								oninput={(event) =>
@@ -315,6 +320,7 @@
 										size="icon"
 										class="h-14 w-14"
 										disabled={pollingOAuth}
+										aria-label="Copy device code"
 										onclick={() => void onCopyOAuthCode()}
 									>
 										<CopyIcon class="size-5" />

@@ -5,10 +5,11 @@
 	type Props = {
 		dockMaximized: boolean;
 		onClose: () => void;
+		onMinimize?: () => void;
 		onToggleDockMaximized: () => void;
 		shiftWindowControlsForSidebar?: boolean;
 		closeLabel: string;
-		minimizeLabel: string;
+		minimizeLabel?: string;
 		maximizeTitle: string;
 		shellClass?: string;
 		headerClass?: string;
@@ -22,6 +23,7 @@
 	let {
 		dockMaximized,
 		onClose,
+		onMinimize,
 		onToggleDockMaximized,
 		shiftWindowControlsForSidebar = false,
 		closeLabel,
@@ -79,23 +81,25 @@
 				<button
 					type="button"
 					onclick={onClose}
-					class="size-3 rounded-full bg-red-500 transition-opacity hover:opacity-80"
+					class="size-3 rounded-full bg-destructive transition-opacity hover:opacity-80"
 					aria-label={closeLabel}
 					title={closeLabel}
 				></button>
-				<button
-					type="button"
-					onclick={onClose}
-					class="size-3 rounded-full bg-yellow-500 transition-opacity hover:opacity-80"
-					aria-label={minimizeLabel}
-					title={minimizeLabel}
-				></button>
+				{#if onMinimize && minimizeLabel}
+					<button
+						type="button"
+						onclick={onMinimize}
+						class="size-3 rounded-full bg-muted-foreground transition-opacity hover:opacity-80"
+						aria-label={minimizeLabel}
+						title={minimizeLabel}
+					></button>
+				{/if}
 				<button
 					type="button"
 					onclick={onToggleDockMaximized}
 					class={cn(
-						"size-3 rounded-full bg-green-500 transition-opacity hover:opacity-80",
-						dockMaximized && "ring-2 ring-white/60 ring-offset-2",
+						"size-3 rounded-full bg-primary transition-opacity hover:opacity-80",
+						dockMaximized && "ring-2 ring-sidebar-foreground/60 ring-offset-2",
 						dockMaximized && maximizeRingOffsetClass,
 					)}
 					aria-label={maximizeTitle}

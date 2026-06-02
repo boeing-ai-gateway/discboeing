@@ -57,9 +57,9 @@
 	let lastSize: { rows: number; cols: number } | null = null;
 
 	const statusClass = $derived.by(() => {
-		if (connectionStatus === "connected") return "bg-green-500";
-		if (connectionStatus === "connecting") return "bg-yellow-500";
-		if (connectionStatus === "error") return "bg-red-500";
+		if (connectionStatus === "connected") return "bg-terminal-fg";
+		if (connectionStatus === "connecting") return "bg-ring";
+		if (connectionStatus === "error") return "bg-destructive";
 		return "bg-muted-foreground/50";
 	});
 
@@ -519,7 +519,9 @@
 			>{sessionLabel}</span
 		>
 		<div
+			aria-label={`Terminal connection status: ${connectionStatus}`}
 			class={`size-2 shrink-0 rounded-full ${statusClass}`}
+			role="status"
 			title={connectionStatus}
 		></div>
 	{/snippet}
@@ -538,6 +540,7 @@
 				variant="ghost"
 				size="xs"
 				onclick={copySshCommand}
+				aria-label="Copy SSH command"
 				class="gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 				title={`Copy SSH command: ${sshCommand}`}
 			>
@@ -556,6 +559,7 @@
 				variant="ghost"
 				size="xs"
 				onclick={copyPullCommand}
+				aria-label="Copy pull command"
 				class="gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 				title={`Copy pull command: ${pullCommand}`}
 			>
@@ -574,10 +578,10 @@
 	<div class="relative h-full min-h-0 min-w-0 overflow-hidden p-3">
 		{#if connectionStatus !== "connected"}
 			<div
-				class="absolute inset-3 z-10 flex items-center justify-center rounded-md bg-black/35"
+				class="absolute inset-3 z-10 flex items-center justify-center rounded-md bg-background/80"
 			>
 				<div class="flex flex-col items-center gap-3 text-center">
-					<span class="text-xs text-white/70">{overlayMessage}</span>
+					<span class="text-foreground/70 text-xs">{overlayMessage}</span>
 					{#if connectionStatus === "disconnected" && sessionId}
 						<Button
 							variant="outline"
@@ -595,7 +599,7 @@
 
 		<div
 			bind:this={terminalHost}
-			class="h-full w-full cursor-text overflow-hidden rounded-md border border-white/10 bg-terminal-bg p-3 outline-none [caret-color:transparent]"
+			class="h-full w-full cursor-text overflow-hidden rounded-md border border-border bg-terminal-bg p-3 outline-none [caret-color:transparent]"
 		></div>
 	</div>
 </DockWindowChrome>

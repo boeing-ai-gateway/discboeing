@@ -58,6 +58,12 @@
 			? levels.filter((level) => level !== resolvedDefaultValue)
 			: levels,
 	);
+	const isDefaultSelected = $derived.by(
+		() =>
+			value === undefined ||
+			value === "default" ||
+			(resolvedDefaultValue !== undefined && value === resolvedDefaultValue),
+	);
 	const buttonLabel = $derived.by(() =>
 		formatReasoningButtonLabel(resolvedValue),
 	);
@@ -96,7 +102,7 @@
 				<div class="font-medium">{defaultLabel}</div>
 				<div class="text-xs text-muted-foreground">{defaultDescription}</div>
 			</div>
-			{#if value === undefined || value === "default"}
+			{#if isDefaultSelected}
 				<CheckIcon class="size-3.5 text-primary" />
 			{/if}
 		</DropdownMenuItem>

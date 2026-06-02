@@ -78,20 +78,23 @@
 >
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
-			<Button
-				aria-label="Copy assistant response"
-				class="size-7 text-muted-foreground hover:text-foreground"
-				size="icon-xs"
-				title="Copy assistant response"
-				type="button"
-				variant="ghost"
-			>
-				{#if copiedKey}
-					<CheckIcon class="size-3.5" />
-				{:else}
-					<CopyIcon class="size-3.5" />
-				{/if}
-			</Button>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					aria-label="Copy assistant response"
+					class="size-7 text-muted-foreground hover:text-foreground"
+					size="icon-xs"
+					title="Copy assistant response"
+					type="button"
+					variant="ghost"
+				>
+					{#if copiedKey}
+						<CheckIcon class="size-3.5" />
+					{:else}
+						<CopyIcon class="size-3.5" />
+					{/if}
+				</Button>
+			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="start" class="w-52">
 			<DropdownMenu.Item
