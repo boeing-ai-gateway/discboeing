@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -52,8 +53,12 @@ func TestAttachExecSeparatesStdoutAndStderr(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 
 	mgr := processes.NewManager(workDir)
+	cmd := []string{"/bin/sh", "-c", "printf stdout; printf stderr >&2"}
+	if runtime.GOOS == "windows" {
+		cmd = []string{"powershell.exe", "-NoProfile", "-Command", "[Console]::Out.Write('stdout'); [Console]::Error.Write('stderr')"}
+	}
 	session, err := mgr.Start(context.Background(), processes.CreateRequest{
-		Cmd: []string{"/bin/sh", "-c", "printf stdout; printf stderr >&2"},
+		Cmd: cmd,
 	})
 	if err != nil {
 		t.Fatalf("Start() failed: %v", err)
