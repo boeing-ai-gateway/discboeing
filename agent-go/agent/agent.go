@@ -276,6 +276,11 @@ type PromptRequest struct {
 	// UserParts is the user message content in UI message format.
 	UserParts []message.UIPart
 
+	// Synthetic marks the persisted prompt as internal. The
+	// provider still receives the content, but UI projection drops it and the
+	// live stream does not emit a user-message chunk.
+	Synthetic bool
+
 	// Metadata is attached to the persisted user message for UI rendering.
 	Metadata json.RawMessage
 

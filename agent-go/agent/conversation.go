@@ -709,10 +709,10 @@ The previous agent response was interrupted because of a transient system issue.
 
 func interruptedTurnStartupRequest() PromptRequest {
 	return PromptRequest{
+		Synthetic: true,
 		UserParts: []message.UIPart{message.UITextPart{
-			Type:  "text",
-			Text:  interruptedTurnStartupNotification,
-			State: "done",
+			Type: "text",
+			Text: interruptedTurnStartupNotification,
 			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
 				ReminderKind: "startup-interruption",
 			}),

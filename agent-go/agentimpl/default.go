@@ -315,7 +315,10 @@ func (a *DefaultAgent) promptStream(
 			return
 		}
 
-		threadNameBg := a.startBackgroundThreadName(promptCtx, threadID, env.threadCfg, req.UserParts, env.threadSummaryRef)
+		var threadNameBg *backgroundThreadName
+		if !req.Synthetic {
+			threadNameBg = a.startBackgroundThreadName(promptCtx, threadID, env.threadCfg, req.UserParts, env.threadSummaryRef)
+		}
 
 		actualSlashCommand := slashCommand
 		actualUserParts, updatedSlashCommand, execErr := a.executeScriptSlashCommand(promptCtx, resolvedUserParts, originalText, actualSlashCommand)
@@ -333,6 +336,7 @@ func (a *DefaultAgent) promptStream(
 			ServiceTier:      req.ServiceTier,
 			Metadata:         req.Metadata,
 			UserParts:        message.UIPartsToParts(actualUserParts),
+			UserSynthetic:    req.Synthetic,
 			OriginalUserText: originalText,
 			SlashCommand:     actualSlashCommand,
 			Tools:            env.tools,
@@ -376,10 +380,14 @@ func (a *DefaultAgent) promptStream(
 		// Persist the resolved model and cwd so new sessions can resume by directory.
 		cwd := a.resolveThreadCWD(env.threadCfg.CWD)
 		// Persist the resolved model and working directory.
+		lastMessage := lastUserPromptFromUIParts(req.UserParts)
+		if req.Synthetic {
+			lastMessage = env.threadCfg.LastMessage
+		}
 		cfgToSave := thread.Config{
 			Name:                         env.threadCfg.Name,
 			NameSource:                   env.threadCfg.NameSource,
-			LastMessage:                  lastUserPromptFromUIParts(req.UserParts),
+			LastMessage:                  lastMessage,
 			Model:                        cfg.ProviderID + "/" + cfg.Model,
 			Reasoning:                    cfg.Reasoning,
 			ServiceTier:                  cfg.ServiceTier,

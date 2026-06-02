@@ -158,3 +158,69 @@ func TestRunTurn_PersistsPreludeMessagesBeforeUserMessage(t *testing.T) {
 		t.Fatalf("unexpected user message %#v", storedUser.Message)
 	}
 }
+
+func TestRunTurn_SyntheticUserMessageIsHiddenFromUI(t *testing.T) {
+	store := NewStore(t.TempDir())
+	threadID := "thread-synthetic-user"
+
+	prov := &mockProvider{
+		responses: [][]message.ProviderMessageChunk{
+			{
+				message.StreamStartChunk{},
+				message.TextStartChunk{ID: "t1"},
+				message.TextDeltaChunk{ID: "t1", Delta: "Continuing."},
+				message.TextEndChunk{ID: "t1"},
+				message.FinishChunk{FinishReason: message.FinishReason{Unified: "stop"}},
+			},
+		},
+	}
+
+	chunks := collectChunks(t, RunTurn(
+		context.Background(), prov, &mockExecutor{}, store,
+		threadID, "", TurnConfig{
+			Model:         "test-model",
+			UserSynthetic: true,
+			UserParts: []message.Part{message.TextPart{
+				Text: "<system-reminder>\nContinue after startup recovery.\n</system-reminder>",
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+					ReminderKind: "startup-interruption",
+				}),
+			}},
+		},
+	))
+
+	for _, chunk := range chunks {
+		if _, ok := chunk.(message.UserMessageChunk); ok {
+			t.Fatal("synthetic user message should not be emitted to UI stream")
+		}
+	}
+	if len(prov.requests) != 1 {
+		t.Fatalf("expected one provider request, got %d", len(prov.requests))
+	}
+	if got := messageText(prov.requests[0].Messages[len(prov.requests[0].Messages)-1]); got != "<system-reminder>\nContinue after startup recovery.\n</system-reminder>" {
+		t.Fatalf("provider did not receive synthetic reminder, got %q", got)
+	}
+
+	leafID, err := store.FindLeaf(threadID)
+	if err != nil {
+		t.Fatalf("find leaf: %v", err)
+	}
+	entries, err := store.BuildHistoryWithIDs(threadID, leafID)
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+	messages := entriesToMessages(entries)
+	if len(messages) < 2 {
+		t.Fatalf("expected synthetic user and assistant messages, got %d", len(messages))
+	}
+	if !messages[0].Synthetic {
+		t.Fatal("expected stored user message to be synthetic")
+	}
+	uiMessages, err := message.ProjectUIMessages(messages)
+	if err != nil {
+		t.Fatalf("project UI messages: %v", err)
+	}
+	if len(uiMessages) != 1 || uiMessages[0].Role != "assistant" {
+		t.Fatalf("expected only assistant UI message, got %#v", uiMessages)
+	}
+}

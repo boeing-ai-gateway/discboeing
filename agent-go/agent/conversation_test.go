@@ -1028,6 +1028,9 @@ func TestConversationManager_ResumeInterruptedTurns(t *testing.T) {
 	}
 	select {
 	case req := <-reqCh:
+		if !req.Synthetic {
+			t.Fatal("expected startup recovery request to be synthetic")
+		}
 		if len(req.UserParts) != 1 {
 			t.Fatalf("expected one recovery user part, got %d", len(req.UserParts))
 		}

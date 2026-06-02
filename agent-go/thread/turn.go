@@ -50,6 +50,7 @@ type TurnConfig struct {
 	PreludeMessages  []message.Message          `json:"preludeMessages,omitempty"`
 	UserParts        []message.Part             `json:"-"`
 	UserMessage      message.Message            `json:"userMessage"` // serializable form of UserParts
+	UserSynthetic    bool                       `json:"userSynthetic,omitempty"`
 	Metadata         json.RawMessage            `json:"metadata,omitempty"`
 	OriginalUserText string                     `json:"originalUserText,omitempty"`
 	SlashCommand     *UserSlashCommandMetadata  `json:"slashCommand,omitempty"`
@@ -94,6 +95,7 @@ func RunTurn(
 			Parts:     cfg.UserParts,
 			Metadata:  buildUserMessageMetadata(cfg.Metadata, turnID, cfg.OriginalUserText, cfg.SlashCommand),
 			CreatedAt: &startedAt,
+			Synthetic: cfg.UserSynthetic,
 		}
 
 		parentID := leafID
@@ -152,25 +154,29 @@ func RunTurn(
 			return
 		}
 
-		uiUserMessages, err := message.ProjectUIMessages([]message.Message{cfg.UserMessage})
-		if err != nil {
-			yield(nil, fmt.Errorf("project user message for stream: %w", err))
-			return
-		}
-		if len(uiUserMessages) != 1 {
-			yield(nil, fmt.Errorf("project user message for stream: expected 1 UI message, got %d", len(uiUserMessages)))
-			return
-		}
+		// Synthetic user messages are internal prompts for the provider; do not
+		// emit a user-message chunk for the UI.
+		if !cfg.UserMessage.Synthetic {
+			uiUserMessages, err := message.ProjectUIMessages([]message.Message{cfg.UserMessage})
+			if err != nil {
+				yield(nil, fmt.Errorf("project user message for stream: %w", err))
+				return
+			}
+			if len(uiUserMessages) != 1 {
+				yield(nil, fmt.Errorf("project user message for stream: expected 1 UI message, got %d", len(uiUserMessages)))
+				return
+			}
 
-		// Emit the user message that initiated this turn before the start envelope,
-		// so consumers know which message triggered this response stream.
-		if !yield(message.UserMessageChunk{
-			Data: message.UserMessageData{
-				Message:               uiUserMessages[0],
-				InsertBeforeMessageID: turnState.AssistantMsgID,
-			},
-		}, nil) {
-			return
+			// Emit the user message that initiated this turn before the start envelope,
+			// so consumers know which message triggered this response stream.
+			if !yield(message.UserMessageChunk{
+				Data: message.UserMessageData{
+					Message:               uiUserMessages[0],
+					InsertBeforeMessageID: turnState.AssistantMsgID,
+				},
+			}, nil) {
+				return
+			}
 		}
 
 		// Emit the outer start envelope so the AI SDK can bind the stream to a message ID.
