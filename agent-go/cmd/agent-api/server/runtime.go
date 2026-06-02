@@ -65,6 +65,7 @@ type agentRuntime struct {
 	serviceManager *services.Manager
 	controlSocket  *controlsocket.Client
 	stopControl    context.CancelFunc
+	fileWatcher    *workspaceFileWatcher
 }
 
 // buildRuntimeHandler assembles the configured agent API and returns the
@@ -238,6 +239,13 @@ func (r *agentRuntime) initHooks() {
 	r.hookManager.SetAIHookAgent(r.defaultAgent)
 	r.hookManager.SetAIHookEvaluator(hookEvaluationResolver{registry: r.providerRegistry})
 	r.hookManager.SetRepromptRunner(r.conversations, r.promptQueue)
+
+	fileWatcher, err := startWorkspaceFileWatcher(r.cfg.AgentCwd, r.conversations.EmitEphemeralChunk)
+	if err != nil {
+		log.Printf("warn: workspace file watcher: %v", err)
+		return
+	}
+	r.fileWatcher = fileWatcher
 }
 
 func (r *agentRuntime) runStartupTasks(progress func(string)) {
@@ -364,6 +372,11 @@ func (r *agentRuntime) routes() http.Handler {
 func (r *agentRuntime) close() {
 	if r.stopControl != nil {
 		r.stopControl()
+	}
+	if r.fileWatcher != nil {
+		if err := r.fileWatcher.Close(); err != nil {
+			log.Printf("workspace file watcher shutdown: %v", err)
+		}
 	}
 	if r.defaultAgent != nil {
 		r.defaultAgent.Close()
