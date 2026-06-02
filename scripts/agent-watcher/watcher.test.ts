@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +22,9 @@ import {
 async function createTempDir(): Promise<string> {
 	const dir = join(tmpdir(), `agent-watcher-test-${randomUUID()}`);
 	await mkdir(dir, { recursive: true });
+	if (process.platform === "win32") {
+		return realpathSync.native(dir);
+	}
 	return dir;
 }
 
