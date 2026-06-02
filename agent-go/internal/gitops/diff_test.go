@@ -1,6 +1,7 @@
 package gitops
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,6 +58,34 @@ func TestGetDiff_InvalidTarget(t *testing.T) {
 	_, err := GetDiff(repo, "index.html", "does-not-exist")
 	if err == nil {
 		t.Fatal("expected invalid target error")
+	}
+}
+
+func TestGetDiffRejectsWorkspaceChangeCommitTarget(t *testing.T) {
+	repo := initDiffTestRepo(t)
+	writeRepoFile(t, repo, "secret.txt", "TOKEN=initial\n")
+	base := commitAll(t, repo, "Initial")
+
+	writeRepoFile(t, repo, "secret.txt", "TOKEN=transient-secret\n")
+	runGit(t, repo, "add", "secret.txt")
+	tree := strings.TrimSpace(runGitOutput(t, repo, "write-tree"))
+	commit := strings.TrimSpace(runGitOutput(t, repo, "commit-tree", tree, "-p", base, "-m", "workspace change"))
+	runGit(t, repo, "update-ref", "refs/discobot/workspace-change-commits/session-123/snapshot-1", commit)
+	writeRepoFile(t, repo, "secret.txt", "TOKEN=initial\n")
+
+	_, err := GetDiff(repo, "", commit)
+	if err == nil {
+		t.Fatal("expected workspace change commit target to be rejected")
+	}
+	var commitsErr *CommitsError
+	if !errors.As(err, &commitsErr) {
+		t.Fatalf("error type = %T, want *CommitsError", err)
+	}
+	if commitsErr.Code != "invalid_target" {
+		t.Fatalf("error code = %q, want invalid_target", commitsErr.Code)
+	}
+	if !strings.Contains(commitsErr.Message, "Workspace change commits cannot be rendered as diffs") {
+		t.Fatalf("error message = %q", commitsErr.Message)
 	}
 }
 
@@ -141,22 +170,23 @@ func commitAll(t *testing.T, repo, message string) string {
 
 func headCommit(t *testing.T, repo string) string {
 	t.Helper()
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repo
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("rev-parse HEAD error = %v", err)
-	}
-	return string(out[:len(out)-1])
+	return strings.TrimSpace(runGitOutput(t, repo, "rev-parse", "HEAD"))
 }
 
 func runGit(t *testing.T, repo string, args ...string) {
 	t.Helper()
+	runGitOutput(t, repo, args...)
+}
+
+func runGitOutput(t *testing.T, repo string, args ...string) string {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repo
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("git %v error = %v\n%s", args, err, string(out))
 	}
+	return string(out)
 }
 
 func containsLine(text, line string) bool {

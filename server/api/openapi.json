@@ -4636,6 +4636,36 @@
         "description": "Store MCP OAuth token from an agent container. Accepts a JSON request body when defined and returns the resulting resource or action status.",
         "operationId": "postProjectsByProjectIdCredentialsMcp"
       }
+    },
+    "/api/projects/{projectId}/sessions/{sessionId}/workspace-change-commits": {
+      "get": {
+        "tags": [
+          "Hooks"
+        ],
+        "summary": "List session workspace change commits",
+        "description": "List Discobot workspace change commits for a session sandbox.",
+        "operationId": "listSessionWorkspaceChangeCommits",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectID"
+          },
+          {
+            "$ref": "#/components/parameters/SessionID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace change commits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceChangeCommitsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8847,6 +8877,62 @@
         "x-go-type-import": {
           "path": "github.com/obot-platform/discobot/agent-go/message",
           "name": "message"
+        }
+      },
+      "WorkspaceChangeCommit": {
+        "type": "object",
+        "required": [
+          "createdAt",
+          "hash",
+          "diffstat"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "diffstat": {
+            "$ref": "#/components/schemas/WorkspaceChangeCommitDiffStat"
+          }
+        }
+      },
+      "WorkspaceChangeCommitsResponse": {
+        "type": "object",
+        "required": [
+          "commits"
+        ],
+        "properties": {
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceChangeCommit"
+            }
+          }
+        }
+      },
+      "WorkspaceChangeCommitDiffStat": {
+        "type": "object",
+        "required": [
+          "filesChanged",
+          "additions",
+          "deletions"
+        ],
+        "properties": {
+          "filesChanged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "additions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32"
+          }
         }
       }
     }

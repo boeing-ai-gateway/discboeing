@@ -42,6 +42,18 @@ type CommitsResult struct {
 	HeadCommit  string `json:"headCommit"`
 }
 
+// WorkspaceChangeCommit describes a Discobot workspace change commit.
+type WorkspaceChangeCommit struct {
+	CreatedAt string    `json:"createdAt"`
+	Hash      string    `json:"hash"`
+	DiffStat  DiffStats `json:"diffstat"`
+}
+
+// WorkspaceChangeCommitsResult is the successful result of listing workspace change commits.
+type WorkspaceChangeCommitsResult struct {
+	Commits []WorkspaceChangeCommit `json:"commits"`
+}
+
 // CommitsError represents an error during commit operations.
 type CommitsError struct {
 	Code       string // "invalid_target", "not_git_repo", "no_commits"
@@ -73,6 +85,89 @@ func HeadCommitSHA(workspaceRoot string) string {
 		return ""
 	}
 	return strings.TrimSpace(out)
+}
+
+// ListWorkspaceChangeCommits returns Discobot workspace change commits for one session. Results
+// are sorted newest-first by committer date.
+const workspaceChangeCommitRefPrefix = "refs/discobot/workspace-change-commits"
+
+func ListWorkspaceChangeCommits(workspaceRoot, sessionID string) (*WorkspaceChangeCommitsResult, error) {
+	if _, err := gitCmdCombined(workspaceRoot, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return nil, &CommitsError{Code: "not_git_repo", Message: "Not a git repository"}
+	}
+	refGlob := workspaceChangeCommitRefPrefix
+	if strings.TrimSpace(sessionID) != "" {
+		refGlob = workspaceChangeCommitRefPrefix + "/" + sanitizeRefGlobPart(sessionID)
+	}
+	out, err := gitCmdCombined(workspaceRoot, "for-each-ref",
+		"--sort=-committerdate",
+		"--format=%(objectname)%00%(committerdate:iso-strict)",
+		refGlob,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace change commit refs: %w", err)
+	}
+	result := &WorkspaceChangeCommitsResult{Commits: []WorkspaceChangeCommit{}}
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\x00", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		hash := strings.TrimSpace(parts[0])
+		stat, err := commitDiffStat(workspaceRoot, hash)
+		if err != nil {
+			return nil, err
+		}
+		result.Commits = append(result.Commits, WorkspaceChangeCommit{
+			CreatedAt: strings.TrimSpace(parts[1]),
+			Hash:      hash,
+			DiffStat:  stat,
+		})
+	}
+	return result, nil
+}
+
+func commitDiffStat(workspaceRoot, hash string) (DiffStats, error) {
+	out, err := gitCmdCombined(workspaceRoot, "diff", "--numstat", hash+"^", hash)
+	if err != nil {
+		return DiffStats{}, fmt.Errorf("diffstat for workspace change commit %s: %w", hash, err)
+	}
+	stats := DiffStats{}
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		stats.FilesChanged++
+		if fields[0] != "-" {
+			additions, _ := strconv.Atoi(fields[0])
+			stats.Additions += additions
+		}
+		if fields[1] != "-" {
+			deletions, _ := strconv.Atoi(fields[1])
+			stats.Deletions += deletions
+		}
+	}
+	return stats, nil
+}
+
+func sanitizeRefGlobPart(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 // gitCmd runs a git command in the given directory and returns stdout.
@@ -277,6 +372,15 @@ func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 	if target == "" {
 		target = defaultDiffTarget(workspaceRoot)
 	}
+	targetCommit, err := gitCmd(workspaceRoot, "rev-parse", target+"^{commit}")
+	if err != nil || strings.TrimSpace(targetCommit) == "" {
+		return DiffResult{}, fmt.Errorf("target commit %s does not exist in repository", target)
+	}
+	targetCommit = strings.TrimSpace(targetCommit)
+	if isWorkspaceChangeCommit(workspaceRoot, targetCommit) {
+		return DiffResult{}, &CommitsError{Code: "invalid_target", Message: "Workspace change commits cannot be rendered as diffs"}
+	}
+	target = targetCommit
 
 	// Build git diff command
 	args := []string{"diff", "--no-color", target}
@@ -403,15 +507,24 @@ func GetCommitPatchesAtHead(workspaceRoot, target, head string) (*CommitsResult,
 		return nil, &CommitsError{Code: "invalid_target", Message: fmt.Sprintf("Head commit %s does not exist in repository", strings.TrimSpace(head))}
 	}
 	headCommit = strings.TrimSpace(headCommit)
+	if isWorkspaceChangeCommit(workspaceRoot, headCommit) {
+		return nil, &CommitsError{Code: "invalid_target", Message: "Workspace change commits cannot be exported as patches"}
+	}
 
 	target = strings.TrimSpace(target)
 	if target == "" {
 		target = defaultCommitTarget(workspaceRoot, headCommit)
 	}
 
-	if _, err := gitCmd(workspaceRoot, "cat-file", "-e", target+"^{commit}"); err != nil {
+	targetCommit, err := gitCmd(workspaceRoot, "rev-parse", target+"^{commit}")
+	if err != nil || strings.TrimSpace(targetCommit) == "" {
 		return nil, &CommitsError{Code: "invalid_target", Message: fmt.Sprintf("Target commit %s does not exist in repository", target)}
 	}
+	targetCommit = strings.TrimSpace(targetCommit)
+	if isWorkspaceChangeCommit(workspaceRoot, targetCommit) {
+		return nil, &CommitsError{Code: "invalid_target", Message: "Workspace change commits cannot be exported as patches"}
+	}
+	target = targetCommit
 
 	diffExists, err := diffExistsBetweenCommits(workspaceRoot, target, headCommit)
 	if err != nil {
@@ -462,6 +575,23 @@ func GetCommitPatchesAtHead(workspaceRoot, target, head string) (*CommitsResult,
 		return nil, &CommitsError{Code: "no_commits", Message: fmt.Sprintf("Failed to synthesize patches against %s: %v", target, err)}
 	}
 	return &CommitsResult{Patches: patches, CommitCount: 1, HeadCommit: headCommit}, nil
+}
+
+func isWorkspaceChangeCommit(workspaceRoot, commit string) bool {
+	commit = strings.TrimSpace(commit)
+	if commit == "" {
+		return false
+	}
+	out, err := gitCmdCombined(workspaceRoot, "for-each-ref", "--format=%(objectname)", workspaceChangeCommitRefPrefix)
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.TrimSpace(line) == commit {
+			return true
+		}
+	}
+	return false
 }
 
 func diffExistsBetweenCommits(workspaceRoot, base, head string) (bool, error) {

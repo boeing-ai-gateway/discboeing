@@ -2309,6 +2309,49 @@ func (c *SandboxAgentClient) GetCommits(ctx context.Context, sessionID string, c
 	return &result, nil
 }
 
+// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+func (c *SandboxAgentClient) ListWorkspaceChangeCommits(ctx context.Context, sessionID string) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+		client := lease.Client
+
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://sandbox/workspace-change-commits", nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list workspace change commits: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.WorkspaceChangeCommitsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
+}
+
 // ============================================================================
 // Hook Methods
 // ============================================================================

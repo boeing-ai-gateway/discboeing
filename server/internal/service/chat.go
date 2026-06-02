@@ -628,6 +628,22 @@ func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, f
 	return client.GetDiff(ctx, path, format, targetCommit)
 }
 
+// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+// The sandbox is automatically reconciled if not running.
+func (c *ChatService) ListWorkspaceChangeCommits(ctx context.Context, projectID, sessionID string) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox service not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListWorkspaceChangeCommits(ctx)
+}
+
 // ============================================================================
 // Hook Methods
 // ============================================================================

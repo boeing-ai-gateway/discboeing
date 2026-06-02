@@ -2205,6 +2205,25 @@ type WorkspaceFilesEventData struct {
 	Snapshot *[]WorkspaceFileEntry `json:"snapshot,omitempty"`
 }
 
+// WorkspaceChangeCommit defines model for WorkspaceChangeCommit.
+type WorkspaceChangeCommit struct {
+	CreatedAt time.Time                     `json:"createdAt"`
+	Diffstat  WorkspaceChangeCommitDiffStat `json:"diffstat"`
+	Hash      string                        `json:"hash"`
+}
+
+// WorkspaceChangeCommitDiffStat defines model for WorkspaceChangeCommitDiffStat.
+type WorkspaceChangeCommitDiffStat struct {
+	Additions    int32 `json:"additions"`
+	Deletions    int32 `json:"deletions"`
+	FilesChanged int32 `json:"filesChanged"`
+}
+
+// WorkspaceChangeCommitsResponse defines model for WorkspaceChangeCommitsResponse.
+type WorkspaceChangeCommitsResponse struct {
+	Commits []WorkspaceChangeCommit `json:"commits"`
+}
+
 // WorkspaceUpdatedData Payload for workspace_updated project events.
 type WorkspaceUpdatedData struct {
 	Status      string `json:"status"`

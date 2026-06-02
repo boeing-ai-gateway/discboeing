@@ -308,6 +308,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/commits", Handler: h.GetCommits,
 		Meta: routes.Meta{Group: "Git", Description: "Get recent commit patches",
 			Params: []routes.Param{{Name: "parent", In: "query"}}}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/workspace-change-commits", Handler: h.ListWorkspaceChangeCommits,
+		Meta: routes.Meta{Group: "Git", Description: "List Discobot workspace change commits"}})
 
 	// Hook routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/status", Handler: h.HooksStatus,

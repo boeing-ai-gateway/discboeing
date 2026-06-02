@@ -384,7 +384,7 @@ func (m *Manager) loadHooks() error {
 		return fmt.Errorf("discover hooks: %w", err)
 	}
 
-	m.fileHooks = []Hook{builtinShadowSnapshotHook()}
+	m.fileHooks = []Hook{builtinWorkspaceChangeCommitHook()}
 	m.sessionHooks = nil
 	m.preCommitHooks = nil
 

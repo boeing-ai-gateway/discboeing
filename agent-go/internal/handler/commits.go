@@ -54,3 +54,31 @@ func (h *Handler) GetCommits(w http.ResponseWriter, r *http.Request) {
 		HeadCommit:  result.HeadCommit,
 	})
 }
+
+// ListWorkspaceChangeCommits handles GET /workspace-change-commits — returns Discobot workspace change
+// workspace change commits for this session with per-commit diffstat.
+func (h *Handler) ListWorkspaceChangeCommits(w http.ResponseWriter, _ *http.Request) {
+	result, err := gitops.ListWorkspaceChangeCommits(h.agentCwd, "")
+	if err != nil {
+		status := http.StatusInternalServerError
+		if commitsErr, ok := err.(*gitops.CommitsError); ok && commitsErr.Code == "not_git_repo" {
+			status = http.StatusBadRequest
+		}
+		h.Error(w, status, err.Error())
+		return
+	}
+
+	commits := make([]api.WorkspaceChangeCommit, 0, len(result.Commits))
+	for _, commit := range result.Commits {
+		commits = append(commits, api.WorkspaceChangeCommit{
+			CreatedAt: commit.CreatedAt,
+			Hash:      commit.Hash,
+			DiffStat: api.DiffStats{
+				FilesChanged: commit.DiffStat.FilesChanged,
+				Additions:    commit.DiffStat.Additions,
+				Deletions:    commit.DiffStat.Deletions,
+			},
+		})
+	}
+	h.JSON(w, http.StatusOK, api.WorkspaceChangeCommitsResponse{Commits: commits})
+}

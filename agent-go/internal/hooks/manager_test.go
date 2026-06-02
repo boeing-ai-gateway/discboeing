@@ -228,6 +228,88 @@ Review Go changes.
 	}
 }
 
+func TestBuiltInWorkspaceChangeSnapshotHookEmitsStatusChunks(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	runGit(t, workspaceRoot, "init")
+	runGit(t, workspaceRoot, "config", "user.name", "Test User")
+	runGit(t, workspaceRoot, "config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "tracked.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(base) failed: %v", err)
+	}
+	runGit(t, workspaceRoot, "add", "tracked.txt")
+	runGit(t, workspaceRoot, "commit", "-m", "base")
+
+	mgr := NewManager(workspaceRoot, "session-123")
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+	var chunks []message.MessageChunk
+	mgr.SetChunkEmitter(func(chunk message.MessageChunk) {
+		chunks = append(chunks, chunk)
+	})
+
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "tracked.txt"), []byte("base\nchange\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(change) failed: %v", err)
+	}
+	mgr.runBuiltinFileHooks([]Hook{builtinWorkspaceChangeCommitHook()}, []string{"tracked.txt"}, []string{"tracked.txt"})
+
+	if len(chunks) < 2 {
+		t.Fatalf("expected at least running and completed hook status chunks, got %d", len(chunks))
+	}
+	for i, chunk := range chunks[:2] {
+		data, ok := chunk.(message.DataChunk)
+		if !ok {
+			t.Fatalf("chunk %d = %T, want message.DataChunk", i, chunk)
+		}
+		if data.DataType != "hooks-status" {
+			t.Fatalf("chunk %d data type = %q, want hooks-status", i, data.DataType)
+		}
+	}
+}
+
+func TestCreateWorkspaceChangeCommitSkipsUntrackedFiles(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	testHomeDir := t.TempDir()
+	t.Setenv("HOME", testHomeDir)
+	t.Setenv("USERPROFILE", testHomeDir)
+	workspaceRoot := t.TempDir()
+	runGit(t, workspaceRoot, "init")
+	runGit(t, workspaceRoot, "config", "user.name", "Test User")
+	runGit(t, workspaceRoot, "config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "tracked.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(base) failed: %v", err)
+	}
+	runGit(t, workspaceRoot, "add", "tracked.txt")
+	runGit(t, workspaceRoot, "commit", "-m", "base")
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "tracked.txt"), []byte("base\nchange\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(tracked change) failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceRoot, ".env"), []byte("TOKEN=secret\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(secret) failed: %v", err)
+	}
+
+	if output, err := createWorkspaceChangeCommit(workspaceRoot, nil, []string{"tracked.txt", ".env"}, "session-123"); err != nil {
+		t.Fatalf("createWorkspaceChangeCommit failed: %v\n%s", err, output)
+	}
+	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/workspace-change-commits/session-123")
+	commit := runGit(t, workspaceRoot, "rev-parse", ref)
+	patch := runGit(t, workspaceRoot, "diff", commit+"^", commit)
+	if strings.Contains(patch, "TOKEN=secret") || strings.Contains(patch, ".env") {
+		t.Fatalf("workspace change commit captured untracked secret file:\n%s", patch)
+	}
+	if !strings.Contains(patch, "+change") {
+		t.Fatalf("workspace change commit did not capture tracked change:\n%s", patch)
+	}
+}
+
 func TestRerunHook_FailureWithNotifyLLMReturnsReprompt(t *testing.T) {
 	testHomeDir := t.TempDir()
 	t.Setenv("HOME", testHomeDir)        // Unix
@@ -713,7 +795,7 @@ Review Go changes.
 	}
 }
 
-func TestEvaluateFileHooks_BuiltinShadowSnapshotCreatesRefAndStatus(t *testing.T) {
+func TestEvaluateFileHooks_BuiltinWorkspaceChangeCommitCreatesRefAndStatus(t *testing.T) {
 	homeDir := t.TempDir()
 	workspaceRoot := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -728,8 +810,8 @@ func TestEvaluateFileHooks_BuiltinShadowSnapshotCreatesRefAndStatus(t *testing.T
 	runGit(t, workspaceRoot, "add", "README.md")
 	runGit(t, workspaceRoot, "commit", "-m", "initial")
 
-	if err := os.WriteFile(filepath.Join(workspaceRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(main.go) failed: %v", err)
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "README.md"), []byte("# test\nupdated\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(README.md change) failed: %v", err)
 	}
 
 	mgr := NewManager(workspaceRoot, "session-123")
@@ -739,30 +821,30 @@ func TestEvaluateFileHooks_BuiltinShadowSnapshotCreatesRefAndStatus(t *testing.T
 
 	result := mgr.EvaluateFileHooks()
 	if result.ShouldReprompt {
-		t.Fatal("expected hidden snapshot hook not to request reprompt")
+		t.Fatal("expected hidden workspace change commit hook not to request reprompt")
 	}
 
-	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/snapshots/session-123")
+	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/workspace-change-commits/session-123")
 	commit := runGit(t, workspaceRoot, "rev-parse", ref)
 	files := runGit(t, workspaceRoot, "diff-tree", "--no-commit-id", "--name-only", "-r", commit)
-	if !strings.Contains(files, "main.go") {
-		t.Fatalf("snapshot commit files = %q, want main.go", files)
+	if !strings.Contains(files, "README.md") {
+		t.Fatalf("workspace change commit files = %q, want README.md", files)
 	}
 
 	status := mgr.GetStatus()
-	snapshotStatus, ok := status.Hooks[builtinShadowSnapshotHookID]
+	commitStatus, ok := status.Hooks[builtinWorkspaceChangeCommitHookID]
 	if !ok {
-		t.Fatalf("expected built-in snapshot hook in status: %#v", status.Hooks)
+		t.Fatalf("expected built-in workspace change commit hook in status: %#v", status.Hooks)
 	}
-	if snapshotStatus.Engine != string(HookEngineBuiltin) {
-		t.Fatalf("snapshot hook engine = %q, want %q", snapshotStatus.Engine, HookEngineBuiltin)
+	if commitStatus.Engine != string(HookEngineBuiltin) {
+		t.Fatalf("workspace change commit hook engine = %q, want %q", commitStatus.Engine, HookEngineBuiltin)
 	}
-	if snapshotStatus.LastResult != "success" {
-		t.Fatalf("snapshot hook result = %q, want success", snapshotStatus.LastResult)
+	if commitStatus.LastResult != "success" {
+		t.Fatalf("workspace change commit hook result = %q, want success", commitStatus.LastResult)
 	}
 	for _, hookID := range status.PendingHooks {
-		if hookID == builtinShadowSnapshotHookID {
-			t.Fatalf("built-in snapshot hook should not be pending: %#v", status.PendingHooks)
+		if hookID == builtinWorkspaceChangeCommitHookID {
+			t.Fatalf("built-in workspace change commit hook should not be pending: %#v", status.PendingHooks)
 		}
 	}
 }

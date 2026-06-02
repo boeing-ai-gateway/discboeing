@@ -1606,6 +1606,16 @@ func main() {
 					})
 
 					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/workspace-change-commits",
+						Handler: h.ListWorkspaceChangeCommits,
+						Meta: routes.Meta{
+							Group:       "Hooks",
+							Description: "List Discobot workspace change commits",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
+						},
+					})
+
+					sidReg.Register(r, routes.Route{
 						Method: "PATCH", Pattern: "/hooks/execution",
 						Handler: h.UpdateHooksExecution,
 						Meta: routes.Meta{

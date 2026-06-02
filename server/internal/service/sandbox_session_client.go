@@ -292,6 +292,13 @@ func (c *SessionClient) GetCommits(ctx context.Context, req GetCommitsRequest) (
 	})
 }
 
+// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+func (c *SessionClient) ListWorkspaceChangeCommits(ctx context.Context) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
+		return c.inner.ListWorkspaceChangeCommits(ctx, c.sessionID)
+	})
+}
+
 // GetUserInfo retrieves the default user info from the sandbox.
 func (c *SessionClient) GetUserInfo(ctx context.Context) (*sandboxapi.UserResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.UserResponse, error) {

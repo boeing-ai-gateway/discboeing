@@ -464,6 +464,18 @@ type CommitsResponse struct {
 	HeadCommit  string `json:"headCommit"`
 }
 
+// WorkspaceChangeCommit is one Discobot workspace change commit.
+type WorkspaceChangeCommit struct {
+	CreatedAt string    `json:"createdAt"`
+	Hash      string    `json:"hash"`
+	DiffStat  DiffStats `json:"diffstat"`
+}
+
+// WorkspaceChangeCommitsResponse is the GET /workspace-change-commits response.
+type WorkspaceChangeCommitsResponse struct {
+	Commits []WorkspaceChangeCommit `json:"commits"`
+}
+
 // CommitsErrorResponse is the GET /commits error response.
 type CommitsErrorResponse struct {
 	Error      string `json:"error"` // "no_commits", "invalid_target", "not_git_repo"

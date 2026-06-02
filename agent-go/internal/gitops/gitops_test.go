@@ -194,6 +194,45 @@ func TestGetCommitPatchesAtHead_EmptyTargetDerivesBaseForDetachedWorktree(t *tes
 	}
 }
 
+func TestListWorkspaceChangeCommitsReturnsDiffStat(t *testing.T) {
+	repoDir := t.TempDir()
+	runGitCommand(t, repoDir, "init")
+	runGitCommand(t, repoDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, repoDir, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("write base file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	runGitCommand(t, repoDir, "commit", "-m", "base")
+	base := strings.TrimSpace(runGitCommand(t, repoDir, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\none\n"), 0o644); err != nil {
+		t.Fatalf("write changed file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	tree := strings.TrimSpace(runGitCommand(t, repoDir, "write-tree"))
+	commit := strings.TrimSpace(runGitCommand(t, repoDir, "commit-tree", tree, "-p", base, "-m", "workspace change"))
+	runGitCommand(t, repoDir, "update-ref", "refs/discobot/workspace-change-commits/session-123/snapshot-1", commit)
+
+	result, err := ListWorkspaceChangeCommits(repoDir, "session-123")
+	if err != nil {
+		t.Fatalf("ListWorkspaceChangeCommits: %v", err)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("commit count = %d, want 1", len(result.Commits))
+	}
+	got := result.Commits[0]
+	if got.Hash != commit {
+		t.Fatalf("hash = %q, want %q", got.Hash, commit)
+	}
+	if got.CreatedAt == "" {
+		t.Fatal("expected createdAt to be populated")
+	}
+	if got.DiffStat.FilesChanged != 1 || got.DiffStat.Additions != 1 || got.DiffStat.Deletions != 0 {
+		t.Fatalf("diffstat = %#v, want 1 file, 1 addition, 0 deletions", got.DiffStat)
+	}
+}
+
 func runGitCommand(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 
@@ -204,4 +243,37 @@ func runGitCommand(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v failed: %v\nOutput: %s", args, err, output)
 	}
 	return string(output)
+}
+
+func TestGetCommitPatchesAtHeadRejectsWorkspaceChangeCommits(t *testing.T) {
+	repoDir := t.TempDir()
+	runGitCommand(t, repoDir, "init")
+	runGitCommand(t, repoDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, repoDir, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatalf("write base file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	runGitCommand(t, repoDir, "commit", "-m", "base")
+	base := strings.TrimSpace(runGitCommand(t, repoDir, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("base\nsecret\n"), 0o644); err != nil {
+		t.Fatalf("write changed file: %v", err)
+	}
+	runGitCommand(t, repoDir, "add", "file.txt")
+	tree := strings.TrimSpace(runGitCommand(t, repoDir, "write-tree"))
+	commit := strings.TrimSpace(runGitCommand(t, repoDir, "commit-tree", tree, "-p", base, "-m", "workspace change"))
+	runGitCommand(t, repoDir, "update-ref", workspaceChangeCommitRefPrefix+"/session-123/change-1", commit)
+
+	if result, commitsErr := GetCommitPatchesAtHead(repoDir, base, commit); commitsErr == nil {
+		t.Fatalf("expected workspace change commit export to be rejected, got result %#v", result)
+	} else if commitsErr.Code != "invalid_target" {
+		t.Fatalf("error code = %q, want invalid_target", commitsErr.Code)
+	}
+
+	if result, commitsErr := GetCommitPatchesAtHead(repoDir, commit, base); commitsErr == nil {
+		t.Fatalf("expected workspace change target export to be rejected, got result %#v", result)
+	} else if commitsErr.Code != "invalid_target" {
+		t.Fatalf("target error code = %q, want invalid_target", commitsErr.Code)
+	}
 }

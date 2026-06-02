@@ -1306,6 +1306,21 @@ func (s *ThreadsService) GetTokenUsage(ctx context.Context, projectID serverapi.
 	return &out, nil
 }
 
+func (s *HooksService) ListSessionWorkspaceChangeCommits(ctx context.Context, projectID serverapi.ProjectID, sessionID serverapi.SessionID) iter.Seq2[serverapi.WorkspaceChangeCommit, error] {
+	return func(yield func(serverapi.WorkspaceChangeCommit, error) bool) {
+		var out serverapi.WorkspaceChangeCommitsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/workspace-change-commits", nil, nil, &out); err != nil {
+			yield(serverapi.WorkspaceChangeCommit{}, err)
+			return
+		}
+		for _, item := range out.Commits {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
+}
+
 func (s *ProjectsService) GetAutocompleteSuggestions(ctx context.Context, projectID serverapi.ProjectID, params *serverapi.GetProjectsByProjectIDSuggestionsParams) iter.Seq2[serverapi.Suggestion, error] {
 	return func(yield func(serverapi.Suggestion, error) bool) {
 		var out serverapi.SuggestionsResponse
@@ -2669,6 +2684,22 @@ func (s *ProjectThreadsService) GetTokenUsage(ctx context.Context, sessionID ser
 	return &out, nil
 }
 
+func (s *ProjectHooksService) ListSessionWorkspaceChangeCommits(ctx context.Context, sessionID serverapi.SessionID) iter.Seq2[serverapi.WorkspaceChangeCommit, error] {
+	projectID := s.projectID
+	return func(yield func(serverapi.WorkspaceChangeCommit, error) bool) {
+		var out serverapi.WorkspaceChangeCommitsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/workspace-change-commits", nil, nil, &out); err != nil {
+			yield(serverapi.WorkspaceChangeCommit{}, err)
+			return
+		}
+		for _, item := range out.Commits {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
+}
+
 func (s *ProjectProjectsService) GetAutocompleteSuggestions(ctx context.Context, params *serverapi.GetProjectsByProjectIDSuggestionsParams) iter.Seq2[serverapi.Suggestion, error] {
 	projectID := s.projectID
 	return func(yield func(serverapi.Suggestion, error) bool) {
@@ -3453,4 +3484,21 @@ func (s *SessionThreadsService) GetTokenUsage(ctx context.Context, threadID serv
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (s *SessionHooksService) ListWorkspaceChangeCommits(ctx context.Context) iter.Seq2[serverapi.WorkspaceChangeCommit, error] {
+	projectID := s.projectID
+	sessionID := s.sessionID
+	return func(yield func(serverapi.WorkspaceChangeCommit, error) bool) {
+		var out serverapi.WorkspaceChangeCommitsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/workspace-change-commits", nil, nil, &out); err != nil {
+			yield(serverapi.WorkspaceChangeCommit{}, err)
+			return
+		}
+		for _, item := range out.Commits {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
 }
