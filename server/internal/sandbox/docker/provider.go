@@ -60,6 +60,8 @@ const (
 
 	sessionEnvWrapperCmd     = "discobot-session-env"
 	hostInspectContainerName = "discobot-host-inspect"
+
+	httpClientTargetCacheTTL = 10 * time.Second
 )
 
 // DetectDockerHost resolves the Docker host from the current Docker context.
@@ -91,7 +93,9 @@ type Provider struct {
 	// lifecycleMu serializes cache clearing against sandbox lifecycle mutations.
 	lifecycleMu sync.RWMutex
 
-	httpClients *sandbox.HTTPClientCache
+	httpClients         *sandbox.HTTPClientCache
+	httpClientTargets   map[string]cachedHTTPClientTarget
+	httpClientTargetsMu sync.Mutex
 
 	// vsockDialer is an optional custom dialer for VSOCK connections
 	vsockDialer func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -113,6 +117,11 @@ type Provider struct {
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
+}
+
+type cachedHTTPClientTarget struct {
+	BaseURL   string
+	ExpiresAt time.Time
 }
 
 // SystemManager interface for tracking startup tasks
@@ -164,6 +173,7 @@ func NewProvider(cfg *config.Config, sessionProjectResolver SessionProjectResolv
 		cfg:                    cfg,
 		containerIDs:           make(map[string]string),
 		httpClients:            sandbox.NewHTTPClientCache(),
+		httpClientTargets:      make(map[string]cachedHTTPClientTarget),
 		sessionProjectResolver: sessionProjectResolver,
 		stopCh:                 make(chan struct{}),
 	}
@@ -1047,7 +1057,7 @@ func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([
 func (p *Provider) Stop(ctx context.Context, state []byte, sessionID string, timeout time.Duration) ([]byte, error) {
 	p.lifecycleMu.RLock()
 	defer p.lifecycleMu.RUnlock()
-	p.httpClients.Remove(sessionID)
+	p.removeHTTPClientCaches(sessionID)
 
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
@@ -1100,7 +1110,7 @@ func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, o
 		p.containerIDsMu.Unlock()
 	}
 
-	p.httpClients.Remove(sessionID)
+	p.removeHTTPClientCaches(sessionID)
 
 	// Explicitly remove the named data volume if requested
 	if cfg.RemoveVolumes {
@@ -1436,6 +1446,7 @@ func (p *Provider) clearContainerID(sessionID string) {
 	p.containerIDsMu.Lock()
 	delete(p.containerIDs, sessionID)
 	p.containerIDsMu.Unlock()
+	p.removeHTTPClientCaches(sessionID)
 }
 
 // Client returns the underlying Docker client.
@@ -1513,14 +1524,18 @@ func (p *dockerPTY) Wait(ctx context.Context) (int, error) {
 
 // AcquireHTTPClient returns a leased HTTP client configured to communicate with the sandbox.
 func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionID string) (*sandbox.HTTPClientLease, error) {
+	if baseURL, ok := p.getCachedHTTPClientTarget(sessionID); ok {
+		return p.acquireHTTPClientForTarget(sessionID, baseURL)
+	}
+
 	sb, err := p.Get(ctx, state, sessionID)
 	if err != nil {
-		p.httpClients.Remove(sessionID)
+		p.removeHTTPClientCaches(sessionID)
 		return nil, err
 	}
 
 	if sb.Status != sandbox.StatusRunning {
-		p.httpClients.Remove(sessionID)
+		p.removeHTTPClientCaches(sessionID)
 		return nil, fmt.Errorf("sandbox is not running: %s", sb.Status)
 	}
 
@@ -1533,7 +1548,7 @@ func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionI
 		}
 	}
 	if httpPort == nil {
-		p.httpClients.Remove(sessionID)
+		p.removeHTTPClientCaches(sessionID)
 		return nil, fmt.Errorf("sandbox does not expose port %d", containerPort)
 	}
 
@@ -1544,6 +1559,11 @@ func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionI
 
 	// Create a custom transport that always dials to the sandbox's mapped port
 	baseURL := fmt.Sprintf("%s:%d", hostIP, httpPort.HostPort)
+	p.setCachedHTTPClientTarget(sessionID, baseURL)
+	return p.acquireHTTPClientForTarget(sessionID, baseURL)
+}
+
+func (p *Provider) acquireHTTPClientForTarget(sessionID, baseURL string) (*sandbox.HTTPClientLease, error) {
 	return p.httpClients.Acquire(sessionID, baseURL, func() (*http.Client, error) {
 		return &http.Client{
 			Transport: &http.Transport{
@@ -1562,6 +1582,37 @@ func (p *Provider) AcquireHTTPClient(ctx context.Context, state []byte, sessionI
 			Timeout: 60 * time.Second,
 		}, nil
 	})
+}
+
+func (p *Provider) getCachedHTTPClientTarget(sessionID string) (string, bool) {
+	p.httpClientTargetsMu.Lock()
+	defer p.httpClientTargetsMu.Unlock()
+
+	target, ok := p.httpClientTargets[sessionID]
+	if !ok {
+		return "", false
+	}
+	if time.Now().After(target.ExpiresAt) {
+		delete(p.httpClientTargets, sessionID)
+		return "", false
+	}
+	return target.BaseURL, true
+}
+
+func (p *Provider) setCachedHTTPClientTarget(sessionID, baseURL string) {
+	p.httpClientTargetsMu.Lock()
+	p.httpClientTargets[sessionID] = cachedHTTPClientTarget{
+		BaseURL:   baseURL,
+		ExpiresAt: time.Now().Add(httpClientTargetCacheTTL),
+	}
+	p.httpClientTargetsMu.Unlock()
+}
+
+func (p *Provider) removeHTTPClientCaches(sessionID string) {
+	p.httpClients.Remove(sessionID)
+	p.httpClientTargetsMu.Lock()
+	delete(p.httpClientTargets, sessionID)
+	p.httpClientTargetsMu.Unlock()
 }
 
 // Watch returns a channel that receives sandbox state change events.

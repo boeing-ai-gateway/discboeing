@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,6 +133,8 @@ func TestServiceSubdomainPattern(t *testing.T) {
 type mockSandboxProvider struct {
 	sandboxes    map[string]*sandbox.Sandbox
 	client       *http.Client
+	getCalls     int
+	listCalls    int
 	acquireCalls int
 }
 
@@ -163,6 +167,7 @@ func (m *mockSandboxProvider) Remove(_ context.Context, state []byte, _ string, 
 }
 
 func (m *mockSandboxProvider) GetSandbox(_ context.Context, sessionID string) (*sandbox.Sandbox, error) {
+	m.getCalls++
 	if sb, ok := m.sandboxes[sessionID]; ok {
 		return sb, nil
 	}
@@ -174,6 +179,7 @@ func (m *mockSandboxProvider) GetSecret(_ context.Context, _ []byte, _ string) (
 }
 
 func (m *mockSandboxProvider) ListSandboxes(_ context.Context) ([]*sandbox.Sandbox, error) {
+	m.listCalls++
 	var result []*sandbox.Sandbox
 	for _, sb := range m.sandboxes {
 		result = append(result, sb)
@@ -455,6 +461,106 @@ func TestServiceProxyUsesHTTPClientAcquirer(t *testing.T) {
 	}
 	if provider.acquireCalls != 1 {
 		t.Fatalf("AcquireHTTPClient called %d times, want 1", provider.acquireCalls)
+	}
+}
+
+func TestServiceProxyCachesRouteResolution(t *testing.T) {
+	sessionID := "zivnuflwywnlfxkr"
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	backendURL, _ := url.Parse(backend.URL)
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{}).DialContext,
+	}
+	provider := &mockSandboxProvider{
+		sandboxes: map[string]*sandbox.Sandbox{
+			sessionID: {SessionID: sessionID},
+		},
+		client: &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				req.URL.Scheme = backendURL.Scheme
+				req.URL.Host = backendURL.Host
+				return transport.RoundTrip(req)
+			}),
+		},
+	}
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("next handler should not be called for valid service subdomain")
+	})
+
+	middleware := ServiceProxy(provider, nil)(next)
+	host := sessionID + "-svc-ui.localhost:3001"
+	for i := range 2 {
+		req := httptest.NewRequest("GET", "http://"+host+"/asset-"+string(rune('a'+i))+".js", nil)
+		req.Host = host
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, want %d", i, rr.Code, http.StatusOK)
+		}
+		if rr.Header().Get("Server-Timing") == "" {
+			t.Fatalf("request %d missing Server-Timing header", i)
+		}
+	}
+
+	if provider.getCalls != 1 {
+		t.Fatalf("GetSandbox called %d times, want 1", provider.getCalls)
+	}
+	if provider.listCalls != 0 {
+		t.Fatalf("ListSandboxes called %d times, want 0", provider.listCalls)
+	}
+	if provider.acquireCalls != 2 {
+		t.Fatalf("AcquireHTTPClient called %d times, want 2", provider.acquireCalls)
+	}
+}
+
+func TestServiceProxyRouteCacheBoundsEntries(t *testing.T) {
+	cache := newServiceProxyRouteCache()
+	now := time.Now()
+
+	cache.Set("expired", serviceProxyRoute{
+		SessionID: "expiredsession",
+		ServiceID: "ui",
+		ExpiresAt: now.Add(-time.Second),
+	})
+
+	for i := range serviceProxyRouteCacheMaxSize + 10 {
+		cache.Set("key-"+strconv.Itoa(i), serviceProxyRoute{
+			SessionID: "zivnuflwywnlfxkr",
+			ServiceID: "ui",
+			ExpiresAt: now.Add(serviceProxyRouteCacheTTL),
+		})
+	}
+
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if len(cache.entries) > serviceProxyRouteCacheMaxSize {
+		t.Fatalf("cache size = %d, want at most %d", len(cache.entries), serviceProxyRouteCacheMaxSize)
+	}
+	if _, ok := cache.entries["expired"]; ok {
+		t.Fatal("expired entry was not pruned on insertion")
+	}
+}
+
+func TestServiceProxyRouteCacheKeyCapsInput(t *testing.T) {
+	key, ok := serviceProxyRouteCacheKey([]string{" Session12345678901-SVC-UI.Localhost:3001 "})
+	if !ok {
+		t.Fatal("expected normal host to be cacheable")
+	}
+	if key != "session12345678901-svc-ui.localhost:3001" {
+		t.Fatalf("cache key = %q, want normalized host", key)
+	}
+
+	_, ok = serviceProxyRouteCacheKey([]string{strings.Repeat("a", serviceProxyRouteCacheMaxKey+1)})
+	if ok {
+		t.Fatal("expected oversized host chain not to be cacheable")
 	}
 }
 

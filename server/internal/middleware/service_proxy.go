@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/obot-platform/discobot/server/internal/sandbox"
 )
@@ -23,6 +25,11 @@ const (
 	discobotForwardedHostHeader  = "X-Discobot-Forwarded-Host"
 	discobotForwardedPathHeader  = "X-Discobot-Forwarded-Path"
 	discobotForwardedProtoHeader = "X-Discobot-Forwarded-Proto"
+
+	serviceProxyRouteCacheTTL     = 10 * time.Second
+	serviceProxyRouteCacheMaxSize = 1024
+	serviceProxyRouteCacheMaxKey  = 512
+	serviceProxySlowLogAfter      = 100 * time.Millisecond
 )
 
 // ConnectionTracker tracks active connections per session.
@@ -40,6 +47,74 @@ type SandboxService interface {
 	GetSandbox(ctx context.Context, sessionID string) (*sandbox.Sandbox, error)
 	ListSandboxes(ctx context.Context) ([]*sandbox.Sandbox, error)
 	AcquireHTTPClient(ctx context.Context, sessionID string) (*sandbox.HTTPClientLease, error)
+}
+
+type serviceProxyRoute struct {
+	SessionID string
+	ServiceID string
+	ExpiresAt time.Time
+}
+
+type serviceProxyRouteCache struct {
+	mu      sync.Mutex
+	entries map[string]serviceProxyRoute
+}
+
+func newServiceProxyRouteCache() *serviceProxyRouteCache {
+	return &serviceProxyRouteCache{entries: make(map[string]serviceProxyRoute)}
+}
+
+func (c *serviceProxyRouteCache) Get(key string, now time.Time) (serviceProxyRoute, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	route, ok := c.entries[key]
+	if !ok {
+		return serviceProxyRoute{}, false
+	}
+	if now.After(route.ExpiresAt) {
+		delete(c.entries, key)
+		return serviceProxyRoute{}, false
+	}
+	return route, true
+}
+
+func (c *serviceProxyRouteCache) Set(key string, route serviceProxyRoute) {
+	c.mu.Lock()
+	c.pruneExpiredLocked(time.Now())
+	if len(c.entries) >= serviceProxyRouteCacheMaxSize {
+		c.pruneOldestLocked()
+	}
+	c.entries[key] = route
+	c.mu.Unlock()
+}
+
+func (c *serviceProxyRouteCache) Delete(key string) {
+	c.mu.Lock()
+	delete(c.entries, key)
+	c.mu.Unlock()
+}
+
+func (c *serviceProxyRouteCache) pruneExpiredLocked(now time.Time) {
+	for key, route := range c.entries {
+		if now.After(route.ExpiresAt) {
+			delete(c.entries, key)
+		}
+	}
+}
+
+func (c *serviceProxyRouteCache) pruneOldestLocked() {
+	var oldestKey string
+	var oldestExpiry time.Time
+	for key, route := range c.entries {
+		if oldestKey == "" || route.ExpiresAt.Before(oldestExpiry) {
+			oldestKey = key
+			oldestExpiry = route.ExpiresAt
+		}
+	}
+	if oldestKey != "" {
+		delete(c.entries, oldestKey)
+	}
 }
 
 // findSessionID finds the actual session ID with correct casing.
@@ -87,8 +162,12 @@ func findSessionID(ctx context.Context, sandboxSvc SandboxService, urlSessionID 
 // connections such as SSE and WebSocket) so that the idle monitor can avoid
 // shutting down sandboxes with live service-proxy connections.
 func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(http.Handler) http.Handler {
+	routeCache := newServiceProxyRouteCache()
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			started := time.Now()
+
 			// Check both Host and X-Forwarded-Host for service subdomains.
 			// In nested discobot, the outer proxy sets X-Forwarded-Host to
 			// the original host before rewriting, so the inner instance's
@@ -98,31 +177,51 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 				hosts = append(hosts, fwdHost)
 			}
 
-			// Split each host into subdomain components and find the first one
-			// with a valid session ID. This handles nested discobot where
-			// multiple {id}-svc-{name} components may be chained, e.g.:
-			//   inner-svc-ui.outer-svc-api.localhost:3001
-			// We need to find the component whose session ID exists on THIS instance.
 			ctx := r.Context()
 			var sessionID, serviceID string
-			for _, host := range hosts {
-				for part := range strings.SplitSeq(host, ".") {
-					matches := serviceSubdomainPattern.FindStringSubmatch(part)
-					if matches == nil {
-						continue
-					}
-					sid, err := findSessionID(ctx, sandboxSvc, matches[1])
-					if err != nil {
-						continue
-					}
-					sessionID = sid
-					serviceID = matches[2]
-					break
-				}
-				if sessionID != "" {
-					break
+			routeCacheKey, cacheableRoute := serviceProxyRouteCacheKey(hosts)
+			resolveStarted := time.Now()
+			cacheHit := false
+			if cacheableRoute {
+				if route, ok := routeCache.Get(routeCacheKey, resolveStarted); ok {
+					sessionID = route.SessionID
+					serviceID = route.ServiceID
+					cacheHit = true
 				}
 			}
+			if !cacheHit {
+				// Split each host into subdomain components and find the first one
+				// with a valid session ID. This handles nested discobot where
+				// multiple {id}-svc-{name} components may be chained, e.g.:
+				//   inner-svc-ui.outer-svc-api.localhost:3001
+				// We need to find the component whose session ID exists on THIS instance.
+				for _, host := range hosts {
+					for part := range strings.SplitSeq(host, ".") {
+						matches := serviceSubdomainPattern.FindStringSubmatch(part)
+						if matches == nil {
+							continue
+						}
+						sid, err := findSessionID(ctx, sandboxSvc, matches[1])
+						if err != nil {
+							continue
+						}
+						sessionID = sid
+						serviceID = matches[2]
+						break
+					}
+					if sessionID != "" {
+						break
+					}
+				}
+				if sessionID != "" && cacheableRoute {
+					routeCache.Set(routeCacheKey, serviceProxyRoute{
+						SessionID: sessionID,
+						ServiceID: serviceID,
+						ExpiresAt: resolveStarted.Add(serviceProxyRouteCacheTTL),
+					})
+				}
+			}
+			resolveDuration := time.Since(resolveStarted)
 
 			if sessionID == "" {
 				// No valid service subdomain found, continue to next handler
@@ -131,8 +230,13 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 			}
 
 			// Get HTTP client for the sandbox (handles transport-level routing)
+			acquireStarted := time.Now()
 			clientLease, err := sandboxSvc.AcquireHTTPClient(ctx, sessionID)
+			acquireDuration := time.Since(acquireStarted)
 			if err != nil {
+				if cacheableRoute {
+					routeCache.Delete(routeCacheKey)
+				}
 				writeJSONError(w, http.StatusBadGateway, "Failed to connect to sandbox", map[string]string{
 					"sessionId": sessionID,
 					"serviceId": serviceID,
@@ -210,9 +314,47 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 				defer release()
 			}
 
+			w.Header().Add("Server-Timing", formatServiceProxyTiming(resolveDuration, acquireDuration, started, cacheHit))
+			defer func() {
+				totalDuration := time.Since(started)
+				if totalDuration >= serviceProxySlowLogAfter {
+					log.Printf("[ServiceProxy] slow request host=%q path=%q session=%q service=%q cacheHit=%t resolve=%s acquire=%s total=%s",
+						r.Host, r.URL.Path, sessionID, serviceID, cacheHit, resolveDuration, acquireDuration, totalDuration)
+				}
+			}()
+
 			proxy.ServeHTTP(w, r)
 		})
 	}
+}
+
+func serviceProxyRouteCacheKey(hosts []string) (string, bool) {
+	normalized := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if host == "" {
+			continue
+		}
+		normalized = append(normalized, host)
+	}
+	key := strings.Join(normalized, "\x00")
+	if key == "" || len(key) > serviceProxyRouteCacheMaxKey {
+		return "", false
+	}
+	return key, true
+}
+
+func formatServiceProxyTiming(resolveDuration, acquireDuration time.Duration, started time.Time, cacheHit bool) string {
+	cacheDescription := "miss"
+	if cacheHit {
+		cacheDescription = "hit"
+	}
+	return fmt.Sprintf("discobot-resolve;dur=%.3f;desc=%q, discobot-acquire;dur=%.3f, discobot-total-start;dur=%.3f",
+		durationMillis(resolveDuration), cacheDescription, durationMillis(acquireDuration), durationMillis(time.Since(started)))
+}
+
+func durationMillis(d time.Duration) float64 {
+	return float64(d) / float64(time.Millisecond)
 }
 
 // writeJSONError writes a JSON error response.
