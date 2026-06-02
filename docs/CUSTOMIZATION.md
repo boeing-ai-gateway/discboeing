@@ -205,6 +205,7 @@ There are three hook types, set via the `type` field in front matter:
 | `type`        | string | **Yes**  | `session`, `file`, or `pre-commit`           |
 | `engine`      | string | No       | `script` default, or `ai` for AI hooks       |
 | `description` | string | No       | Human-readable description                   |
+| `phase`       | string | No       | Gate file-hook execution to `review` phase; only `review` is currently valid |
 | `subagent`    | string | No       | Sub-agent name for `engine: ai` hooks        |
 
 ### File Requirements
@@ -292,6 +293,7 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 - On failure with `notify_llm: true`: the LLM receives the hook output and attempts to fix the issue (up to 3 retries per user message)
 - On failure with `notify_llm: false`: the hook runs silently — useful for auto-fixers like formatters
 - Hooks that fail block subsequent hooks from running until fixed
+- Hooks with `phase: review` are kept pending until the thread phase is `review`
 - If agent-go restarts while a file hook is running, Discobot resets that hook to pending and re-runs it on the next eligible evaluation
 
 **Environment variables:**
@@ -378,6 +380,7 @@ name: Go reviewer
 type: file
 engine: ai
 pattern: "**/*.go"
+phase: review
 subagent: reviewer
 ---
 Review the changed Go files for correctness, missing tests, and maintainability.
@@ -402,6 +405,40 @@ and do not need to include that success/feedback wording in the hook body.
 `subagent` is optional and selects a configured session sub-agent, including its
 prompt, model override, and tool restrictions. AI `pre-commit` hooks are not
 supported.
+
+### Review Phase Hooks
+
+File hooks may include `phase: review` in front matter to defer execution until
+the thread enters the review phase. This is useful for checks that should run only
+after the agent believes the implementation is complete, such as final code
+quality reviews.
+
+Behavior, matching the `agent-go` hook manager:
+
+- The only accepted non-empty `phase` value is `review`; other values make hook
+  discovery fail for that hook set.
+- Any hook with `phase: review` makes Discobot expose the `ReadyForReview` tool
+  to the agent. Calling it records the thread phase as `review`.
+- File hooks with `phase: review` still detect matching changed files during
+  normal post-turn evaluation, but remain pending instead of executing while
+  the thread phase is empty or not `review`.
+- Pending review-phase file hooks become eligible once the thread phase is
+  `review`, and then run through the normal file-hook flow, including
+  `notify_llm` retries and blocking subsequent hooks on failure.
+
+**Example — Final AI review hook:**
+
+```markdown
+---
+name: Final code review
+type: file
+engine: ai
+pattern: "**/*"
+phase: review
+---
+Review the completed changes for correctness, maintainability, missing tests,
+and alignment with repository guidance. Approve only when the change is ready.
+```
 
 ### Pre-commit Hooks
 
