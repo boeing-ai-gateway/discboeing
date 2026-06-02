@@ -92,23 +92,23 @@ func imagePartFromPathInput(input []byte, cwd string) (message.UIFilePart, bool,
 	path = filepath.Clean(path)
 
 	fi, err := os.Stat(path)
-	if err != nil || fi.IsDir() {
-		return message.UIFilePart{}, false, nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return message.UIFilePart{}, false, err
-	}
-	mediaType := http.DetectContentType(data)
-	if !strings.HasPrefix(mediaType, "image/") {
-		extType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
-		if !strings.HasPrefix(extType, "image/") {
-			return message.UIFilePart{}, false, nil
+	if err == nil && !fi.IsDir() {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return message.UIFilePart{}, false, err
 		}
-		mediaType = extType
-	}
+		mediaType := http.DetectContentType(data)
+		if !strings.HasPrefix(mediaType, "image/") {
+			extType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+			if !strings.HasPrefix(extType, "image/") {
+				return message.UIFilePart{}, false, nil
+			}
+			mediaType = extType
+		}
 
-	return message.UIFilePart{URL: base64.StdEncoding.EncodeToString(data), MediaType: mediaType}, true, nil
+		return message.UIFilePart{URL: base64.StdEncoding.EncodeToString(data), MediaType: mediaType}, true, nil
+	}
+	return message.UIFilePart{}, false, nil
 }
 
 func imagePartFromRawBytes(input []byte) (message.UIFilePart, bool) {

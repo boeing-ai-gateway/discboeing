@@ -3,6 +3,7 @@ package hooks
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -109,10 +110,13 @@ func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
 			}
 			exitCode = 124
 			output += fmt.Sprintf("\n[Hook timed out after %ds and was killed]\n", int(timeout.Seconds()))
-		} else if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
 		} else {
-			exitCode = 126
+			exitErr := new(exec.ExitError)
+			if errors.As(err, &exitErr) {
+				exitCode = exitErr.ExitCode()
+			} else {
+				exitCode = 126
+			}
 		}
 	}
 

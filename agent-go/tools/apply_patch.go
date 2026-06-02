@@ -154,7 +154,7 @@ func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*
 				}
 			}
 			if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
-				return nil, fmt.Errorf("failed to create parent directory: %v", err)
+				return nil, fmt.Errorf("failed to create parent directory: %w", err)
 			}
 			content := ""
 			if len(op.addLines) > 0 {
@@ -164,7 +164,7 @@ func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*
 				return nil, err
 			}
 			if err := os.WriteFile(srcPath, []byte(content), 0o644); err != nil {
-				return nil, fmt.Errorf("failed to write file: %v", err)
+				return nil, fmt.Errorf("failed to write file: %w", err)
 			}
 			e.recordFileWritten(srcPath)
 			affected.added = append(affected.added, op.path)
@@ -174,7 +174,7 @@ func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*
 				return nil, err
 			}
 			if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to delete file: %v", err)
+				return nil, fmt.Errorf("failed to delete file: %w", err)
 			}
 			e.removeFileRecord(srcPath)
 			affected.deleted = append(affected.deleted, op.path)
@@ -188,7 +188,7 @@ func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*
 
 			data, err := os.ReadFile(srcPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read file to update %s: %v", op.path, err)
+				return nil, fmt.Errorf("failed to read file to update %s: %w", op.path, err)
 			}
 			if err := validateToolReadableTextFile(data, op.path); err != nil {
 				return nil, err
@@ -215,15 +215,15 @@ func (e *Executor) applyPatchOperations(baseDir string, ops []patchOperation) (*
 			}
 
 			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-				return nil, fmt.Errorf("failed to create parent directory: %v", err)
+				return nil, fmt.Errorf("failed to create parent directory: %w", err)
 			}
 			if err := os.WriteFile(destPath, []byte(update.content), 0o644); err != nil {
-				return nil, fmt.Errorf("failed to write file: %v", err)
+				return nil, fmt.Errorf("failed to write file: %w", err)
 			}
 
 			if op.movePath != "" && destPath != srcPath {
 				if err := os.Remove(srcPath); err != nil {
-					return nil, fmt.Errorf("failed to remove original %s: %v", op.path, err)
+					return nil, fmt.Errorf("failed to remove original %s: %w", op.path, err)
 				}
 				e.removeFileRecord(srcPath)
 			}

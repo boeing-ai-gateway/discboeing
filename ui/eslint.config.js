@@ -18,6 +18,7 @@ export default tseslint.config(
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	...svelte.configs.recommended,
+	...svelte.configs.prettier,
 	{
 		languageOptions: {
 			globals: {

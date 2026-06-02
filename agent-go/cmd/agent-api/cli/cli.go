@@ -6,6 +6,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -237,7 +238,7 @@ func Run(cfg *config.Config, flags *Flags) {
 	for {
 		prompt := formatPrompt(model)
 		line, err := readLineWithOptions(prompt, hist, commandCompletionOptions(rootCtx, session))
-		if err == io.EOF || err == errInterrupt {
+		if errors.Is(err, io.EOF) || errors.Is(err, errInterrupt) {
 			break // Ctrl+D or Ctrl+C at idle prompt → exit
 		}
 		if err != nil {
@@ -256,7 +257,7 @@ func Run(cfg *config.Config, flags *Flags) {
 			startTurn(func(ctx context.Context, cancel context.CancelFunc) {
 				recoverIfInterrupted(ctx, cancel)
 				parts, err := readMultilineInput("... ", "/end", cfg.AgentCwd)
-				if err == errInterrupt {
+				if errors.Is(err, errInterrupt) {
 					fmt.Fprintln(os.Stderr, "Multiline input cancelled.")
 					return
 				}

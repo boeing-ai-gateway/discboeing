@@ -126,7 +126,7 @@ func (s *searcher) searchFast(path string, data []byte) (*FileMatches, error) {
 		}
 
 		// Match: exact literal path or regex
-		matched := false
+		var matched bool
 		if s.exactMatch {
 			if s.foldCase {
 				matched = containsAnyLiteralFold(line, s.literals)

@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,7 +24,7 @@ func WaitForJobCompletion(
 ) (status string, errorMsg string, err error) {
 	// First check if a job for this resource already completed
 	job, err := s.GetJobByResourceID(ctx, resourceType, resourceID)
-	if err != nil && err != store.ErrNotFound {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return "", "", fmt.Errorf("failed to get job: %w", err)
 	}
 
@@ -77,7 +78,7 @@ func WaitForJobCompletion(
 			// Periodically check the database in case we missed an event
 			// This provides a fallback if events aren't working
 			job, err := s.GetJobByResourceID(ctx, resourceType, resourceID)
-			if err != nil && err != store.ErrNotFound {
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				// If the context expired during the DB call, return the
 				// context error directly (same as the ctx.Done() path).
 				if ctx.Err() != nil {

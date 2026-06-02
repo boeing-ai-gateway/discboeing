@@ -40,7 +40,6 @@ func Run(cfg *config.Config) {
 	// Standard middleware (no global timeout — SSE and long AI calls need
 	// unbounded connection lifetimes).
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 
 	r.Mount("/", runtimeHandler)

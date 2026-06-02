@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -146,7 +147,7 @@ func (s *upgradedResponseStream) Close() error {
 
 func (s *responseStream) finish(aborted bool, readErr error) {
 	s.finalizeOnce.Do(func() {
-		if readErr != nil && readErr != io.EOF {
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
 			s.logger.Warn("response stream read failed", "path", s.req.URL.Path, "error", readErr.Error())
 		}
 

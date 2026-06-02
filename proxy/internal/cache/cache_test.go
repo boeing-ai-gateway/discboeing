@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -23,7 +24,7 @@ func TestCache_GetPut(t *testing.T) {
 
 	// Test cache miss
 	_, err = c.Get("test-key")
-	if err != ErrCacheMiss {
+	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("expected cache miss, got %v", err)
 	}
 
@@ -167,11 +168,11 @@ func TestCache_Disabled(t *testing.T) {
 		Size:       4,
 	}
 
-	if err := c.Put("key", entry); err != ErrCacheDisabled {
+	if err := c.Put("key", entry); !errors.Is(err, ErrCacheDisabled) {
 		t.Errorf("expected ErrCacheDisabled, got %v", err)
 	}
 
-	if _, err := c.Get("key"); err != ErrCacheDisabled {
+	if _, err := c.Get("key"); !errors.Is(err, ErrCacheDisabled) {
 		t.Errorf("expected ErrCacheDisabled, got %v", err)
 	}
 }
@@ -460,7 +461,7 @@ func TestStreamingPutAbortDoesNotStoreEntry(t *testing.T) {
 		t.Fatalf("Abort failed: %v", err)
 	}
 
-	if _, err := c.Get("aborted-key"); err != ErrCacheMiss {
+	if _, err := c.Get("aborted-key"); !errors.Is(err, ErrCacheMiss) {
 		t.Fatalf("expected cache miss after abort, got %v", err)
 	}
 }

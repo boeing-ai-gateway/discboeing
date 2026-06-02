@@ -800,7 +800,7 @@ func (p *Provider) getOrCreateDockerProvider(ctx context.Context, projectID stri
 func (p *Provider) getDockerProviderForSession(ctx context.Context, sessionID string) (string, *docker.Provider, error) {
 	projectID, err := p.sessionProjectResolver(ctx, sessionID)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: failed to resolve project for session %s: %v", sandbox.ErrNotFound, sessionID, err)
+		return "", nil, fmt.Errorf("%w: failed to resolve project for session %s: %w", sandbox.ErrNotFound, sessionID, err)
 	}
 
 	p.dockerProvidersMu.RLock()

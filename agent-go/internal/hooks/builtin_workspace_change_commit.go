@@ -133,7 +133,7 @@ func workspaceChangeGitOutput(dir string, extraEnv map[string]string, stdin []by
 		if trimmed == "" {
 			return "", err
 		}
-		return "", fmt.Errorf("%v: %s", err, trimmed)
+		return "", fmt.Errorf("%w: %s", err, trimmed)
 	}
 	return trimmed, nil
 }

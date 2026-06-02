@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -119,8 +120,10 @@ func isConnectionRefused(err error) bool {
 	if err == nil {
 		return false
 	}
-	if opErr, ok := err.(*net.OpError); ok {
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
+	opErr := &net.OpError{}
+	if errors.As(err, &opErr) {
+		sysErr := &os.SyscallError{}
+		if errors.As(opErr.Err, &sysErr) {
 			sysErrStr := sysErr.Err.Error()
 			return sysErrStr == "connection refused" ||
 				// Windows WSAECONNREFUSED

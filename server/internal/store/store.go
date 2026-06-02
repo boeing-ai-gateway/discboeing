@@ -1207,11 +1207,9 @@ func (s *Store) TryAcquireLeadership(ctx context.Context, serverID string, heart
 				HeartbeatAt: now,
 				AcquiredAt:  now,
 			}
-			if err := tx.Create(&leader).Error; err != nil {
-				// Another server might have won the race
-				return nil
+			if err := tx.Create(&leader).Error; err == nil {
+				acquired = true
 			}
-			acquired = true
 			return nil
 		}
 

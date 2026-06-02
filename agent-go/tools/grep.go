@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -83,7 +84,8 @@ func (e *Executor) executeGrep(ctx context.Context, call message.ToolCallPart) (
 	err := cmd.Run()
 	// rg exits 1 when no matches, 2 on error.
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
+		exitErr := &exec.ExitError{}
+		ok := errors.As(err, &exitErr)
 		if ok && exitErr.ExitCode() == 1 {
 			return textResult(call, "No matches found"), nil
 		}
@@ -131,7 +133,7 @@ func (e *Executor) executeGrepFallback(ctx context.Context, call message.ToolCal
 
 	results, err := internalgrep.Grep(ctx, opts)
 	if err != nil {
-		return errResult(call, "grep error: "+err.Error()), nil
+		return errToolResult(call, "grep error: "+err.Error())
 	}
 
 	if len(results.Files) == 0 {

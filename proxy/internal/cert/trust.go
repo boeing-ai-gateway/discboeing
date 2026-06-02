@@ -214,7 +214,11 @@ func InstallUserNSSDB(certPath string, trustUser *TrustUser) error {
 		return nil
 	}
 
+	certutilAvailable := true
 	if _, err := exec.LookPath("certutil"); err != nil {
+		certutilAvailable = false
+	}
+	if !certutilAvailable {
 		fmt.Printf("discobot-proxy: warning: certutil not found; skipping Chromium/NSS trust setup\n")
 		return nil
 	}

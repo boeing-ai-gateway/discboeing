@@ -272,16 +272,16 @@ func (d *ImageDownloader) CheckCache() (*ImageArtifact, bool, error) {
 	cacheDir := filepath.Join(d.cfg.DataDir, "images", digest)
 	manifestPath := filepath.Join(cacheDir, "manifest.json")
 	manifestInfo, err := os.Stat(manifestPath)
-	if err != nil {
-		return nil, false, nil
+	if err == nil {
+		return &ImageArtifact{
+			Digest:          digest,
+			ArtifactPath:    paths[artifacts[0].Name],
+			ManifestPath:    manifestPath,
+			ImageRef:        d.cfg.ImageRef,
+			DownloadedAtUTC: manifestInfo.ModTime().UTC(),
+		}, true, nil
 	}
-	return &ImageArtifact{
-		Digest:          digest,
-		ArtifactPath:    paths[artifacts[0].Name],
-		ManifestPath:    manifestPath,
-		ImageRef:        d.cfg.ImageRef,
-		DownloadedAtUTC: manifestInfo.ModTime().UTC(),
-	}, true, nil
+	return nil, false, nil
 }
 
 func (d *ImageDownloader) checkCache() (map[string]string, bool) {

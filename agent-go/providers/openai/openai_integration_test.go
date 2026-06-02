@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
 	"github.com/obot-platform/discobot/agent-go/message"
 	"github.com/obot-platform/discobot/agent-go/providers"
 )

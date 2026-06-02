@@ -581,25 +581,24 @@ func convertReasoningPart(p message.ReasoningPart) (json.RawMessage, error) {
 		// OpenAI-native: extract the inner block from the nested format
 		// {"openai": {...}} and pass through with encrypted_content intact.
 		var nested map[string]json.RawMessage
-		if json.Unmarshal(p.ProviderMetadata, &nested) != nil {
-			return nil, nil
-		}
-		openaiMeta, ok := nested[providerID]
-		if !ok {
-			return nil, nil
-		}
-		// Strip "id" since with store=false the API doesn't persist items and
-		// referencing their IDs causes a 404 lookup error.
-		var item map[string]json.RawMessage
-		if err := json.Unmarshal(openaiMeta, &item); err != nil {
+		if err := json.Unmarshal(p.ProviderMetadata, &nested); err == nil {
+			openaiMeta, ok := nested[providerID]
+			if !ok {
+				return nil, nil
+			}
+			// Strip "id" since with store=false the API doesn't persist items and
+			// referencing their IDs causes a 404 lookup error.
+			var item map[string]json.RawMessage
+			if err := json.Unmarshal(openaiMeta, &item); err == nil {
+				delete(item, "id")
+				stripped, err := json.Marshal(item)
+				if err == nil {
+					return stripped, nil
+				}
+			}
 			return openaiMeta, nil
 		}
-		delete(item, "id")
-		stripped, err := json.Marshal(item)
-		if err != nil {
-			return openaiMeta, nil
-		}
-		return stripped, nil
+		return nil, nil
 	}
 	if p.Text == "" {
 		return nil, nil

@@ -405,13 +405,13 @@ func (c *SandboxAgentClient) Attach(ctx context.Context, sessionID string, rows,
 	})
 	if err != nil {
 		lease.Release()
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+		return nil, fmt.Errorf("%w: %w", sandbox.ErrAttachFailed, err)
 	}
 	stream, err := agentexec.Attach(ctx, lease, session.ID)
 	if err != nil {
 		_ = agentexec.Kill(context.Background(), lease.Client, session.ID)
 		lease.Release()
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+		return nil, fmt.Errorf("%w: %w", sandbox.ErrAttachFailed, err)
 	}
 	return stream, nil
 }
@@ -523,7 +523,7 @@ type GetCommitsRequest struct {
 // Credentials are automatically fetched unless SkipCredentials is set.
 func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Request, sessionID string, opts *RequestOptions) error {
 	// Add Authorization header with Bearer token
-	token := ""
+	var token string
 	if opts != nil && opts.authToken != "" {
 		token = opts.authToken
 	} else {

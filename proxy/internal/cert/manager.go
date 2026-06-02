@@ -103,11 +103,11 @@ func hasUsableCA(certPath, keyPath string) (bool, error) {
 		return false, fmt.Errorf("stat CA key: %w", err)
 	}
 
-	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
-		return false, nil
+	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func generateCA(certPath, keyPath string) error {

@@ -73,11 +73,15 @@ func (a *DefaultAgent) recentThreads(currentThreadID string, limit int) []sessio
 func latestThreadActivityTime(threadDir string) (time.Time, bool) {
 	var latest time.Time
 	err := filepath.WalkDir(threadDir, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
+		reachable := err == nil
+		if !reachable {
 			return nil
 		}
 		info, infoErr := d.Info()
 		if infoErr != nil {
+			reachable = false
+		}
+		if !reachable {
 			return nil
 		}
 		if info.ModTime().After(latest) {

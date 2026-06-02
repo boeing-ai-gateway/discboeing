@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -231,7 +232,7 @@ func (s *AuthService) ensureUserSandboxKeys(ctx context.Context, user *model.Use
 func (s *AuthService) ensureDefaultProjectBootstrap(ctx context.Context, userID string) error {
 	if _, err := s.store.GetProjectMember(ctx, model.DefaultProjectID, userID); err == nil {
 		return nil
-	} else if err != store.ErrNotFound {
+	} else if !errors.Is(err, store.ErrNotFound) {
 		return fmt.Errorf("failed to check default project membership: %w", err)
 	}
 
@@ -457,7 +458,7 @@ func (s *AuthService) getOrCreateInstallationID(ctx context.Context) (string, er
 	if err == nil {
 		return installation.InstallationID, nil
 	}
-	if err != store.ErrNotFound {
+	if !errors.Is(err, store.ErrNotFound) {
 		return "", fmt.Errorf("failed to load installation: %w", err)
 	}
 
@@ -483,7 +484,7 @@ func (s *AuthService) getOrCreateOIDCClientRegistration(ctx context.Context) (*o
 			ClientSecret:            clientSecret,
 			TokenEndpointAuthMethod: ptrToString(registration.TokenEndpointAuthMethod),
 		}, nil
-	} else if err != store.ErrNotFound {
+	} else if !errors.Is(err, store.ErrNotFound) {
 		return nil, fmt.Errorf("failed to load OIDC client registration: %w", err)
 	}
 

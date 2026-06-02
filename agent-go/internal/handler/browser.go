@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -88,7 +89,7 @@ func (h *Handler) ProxyBrowserCDP(w http.ResponseWriter, r *http.Request) {
 	go proxyWebSocket(r.Context(), clientConn, upstreamConn, errCh, tracker.onClientMessage)
 	go proxyWebSocket(r.Context(), upstreamConn, clientConn, errCh, tracker.onServerMessage)
 
-	if err := <-errCh; err != nil && err != io.EOF {
+	if err := <-errCh; err != nil && !errors.Is(err, io.EOF) {
 		log.Printf("browser[%s]: cdp proxy error thread=%q: %v", sessionID, threadID, err)
 		_ = clientConn.Close(websocket.StatusInternalError, err.Error())
 		_ = upstreamConn.Close(websocket.StatusInternalError, err.Error())

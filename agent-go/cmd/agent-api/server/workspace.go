@@ -83,7 +83,7 @@ func setupConfiguredWorkspace(ctx context.Context, cfg *config.Config, initialCr
 	cloneArgs := buildWorkspaceCloneArgs(cloneSource, cfg.WorkspaceRef, mirrorDir, stagingDir)
 	if err := runGit(ctx, "", initialCreds.Credentials, cloneArgs...); err != nil {
 		if cleanupErr := os.RemoveAll(stagingDir); cleanupErr != nil {
-			return fmt.Errorf("git clone failed: %w; failed to remove workspace staging directory: %v", err, cleanupErr)
+			return fmt.Errorf("git clone failed: %w; failed to remove workspace staging directory: %w", err, cleanupErr)
 		}
 		return fmt.Errorf("git clone failed: %w", err)
 	}
@@ -281,7 +281,8 @@ func ensureBranchTracksOrigin(ctx context.Context, repoDir, branchName string) e
 	upstreamRef := "origin/" + branchName
 	// Local workspace clones may not have a matching remote branch. That is not
 	// fatal; it only means later git operations cannot rely on an upstream.
-	if err := runGitQuiet(ctx, repoDir, "rev-parse", "--verify", upstreamRef); err != nil {
+	upstreamExists := runGitQuiet(ctx, repoDir, "rev-parse", "--verify", upstreamRef) == nil
+	if !upstreamExists {
 		return nil
 	}
 	if err := runGit(ctx, repoDir, nil, "branch", "--set-upstream-to", upstreamRef, branchName); err != nil {

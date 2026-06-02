@@ -3,6 +3,7 @@ package integration
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,7 +56,7 @@ func readChatSSEFrames(body io.Reader) ([]chatSSEFrame, error) {
 		frames = append(frames, current)
 	}
 
-	if err := scanner.Err(); err != nil && err != io.EOF {
+	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 

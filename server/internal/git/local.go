@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -134,17 +135,17 @@ func (p *LocalProvider) EnsureWorkspace(ctx context.Context, projectID, workspac
 	_ = os.RemoveAll(workDir)
 	if err := p.runGit(ctx, "", "-c", "core.autocrlf=false", "clone", "--", cloneSource, workDir); err != nil {
 		_ = os.RemoveAll(workDir)
-		return "", "", fmt.Errorf("%w: %v", ErrCloneFailed, err)
+		return "", "", fmt.Errorf("%w: %w", ErrCloneFailed, err)
 	}
 	if err := p.runGit(ctx, workDir, "config", "core.autocrlf", "false"); err != nil {
 		_ = os.RemoveAll(workDir)
-		return "", "", fmt.Errorf("%w: %v", ErrCloneFailed, err)
+		return "", "", fmt.Errorf("%w: %w", ErrCloneFailed, err)
 	}
 
 	if ref != "" {
 		if err := p.checkoutRef(ctx, workDir, ref); err != nil {
 			_ = os.RemoveAll(workDir)
-			return "", "", fmt.Errorf("%w: %v", ErrCheckoutFailed, err)
+			return "", "", fmt.Errorf("%w: %w", ErrCheckoutFailed, err)
 		}
 	}
 
@@ -192,7 +193,7 @@ func (p *LocalProvider) registerLocalWorkspace(ctx context.Context, workspaceID,
 
 	commit, err := p.currentCommit(ctx, absPath)
 	if err != nil {
-		if err == ErrNotARepository {
+		if errors.Is(err, ErrNotARepository) {
 			return "", "", fmt.Errorf("%w: %s", ErrNotARepository, absPath)
 		}
 		return "", "", fmt.Errorf("failed to get HEAD: %w", err)
@@ -213,7 +214,7 @@ func (p *LocalProvider) Fetch(ctx context.Context, workspaceID string) error {
 	}
 
 	if err := p.runGit(ctx, workDir, "fetch", "--prune", "--tags", "origin"); err != nil {
-		return fmt.Errorf("%w: %v", ErrFetchFailed, err)
+		return fmt.Errorf("%w: %w", ErrFetchFailed, err)
 	}
 	return nil
 }
@@ -226,7 +227,7 @@ func (p *LocalProvider) Checkout(ctx context.Context, workspaceID, ref string) e
 	}
 
 	if err := p.checkoutRef(ctx, workDir, ref); err != nil {
-		return fmt.Errorf("%w: %v", ErrCheckoutFailed, err)
+		return fmt.Errorf("%w: %w", ErrCheckoutFailed, err)
 	}
 	return nil
 }
@@ -685,7 +686,7 @@ func (p *LocalProvider) runGitWithEnv(ctx context.Context, workDir string, extra
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+		return fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, stderr.String())
 	}
 	return nil
 }
@@ -701,7 +702,7 @@ func (p *LocalProvider) runGitWithStdin(ctx context.Context, workDir string, std
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+		return fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, stderr.String())
 	}
 	return nil
 }
@@ -726,7 +727,7 @@ func (p *LocalProvider) runGitBytes(ctx context.Context, workDir string, args ..
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, stderr.String())
 	}
 	return append([]byte(nil), stdout.Bytes()...), nil
 }

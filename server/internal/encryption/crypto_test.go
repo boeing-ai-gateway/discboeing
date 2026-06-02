@@ -2,6 +2,7 @@ package encryption
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ func TestNewEncryptor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			key := make([]byte, tt.keyLen)
 			_, err := NewEncryptor(key)
-			if err != tt.wantErr {
+			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("NewEncryptor() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -87,7 +88,7 @@ func TestDecryptInvalidCiphertext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := enc.Decrypt(tt.ciphertext)
-			if err != tt.wantErr {
+			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("Decrypt() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -105,7 +106,7 @@ func TestDecryptWrongKey(t *testing.T) {
 	ciphertext, _ := enc1.Encrypt(plaintext)
 
 	_, err := enc2.Decrypt(ciphertext)
-	if err != ErrDecryptionFailed {
+	if !errors.Is(err, ErrDecryptionFailed) {
 		t.Errorf("Decrypt with wrong key should fail, got %v", err)
 	}
 }

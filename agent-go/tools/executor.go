@@ -426,6 +426,10 @@ func errResult(call message.ToolCallPart, msg string) thread.ToolExecuteResult {
 	return thread.ToolExecuteResult{Result: errorResult(call, msg)}
 }
 
+func errToolResult(call message.ToolCallPart, msg string) (thread.ToolExecuteResult, error) {
+	return errResult(call, msg), nil
+}
+
 func truncateTextOutput(text string) (string, bool) {
 	lines := strings.Split(text, "\n")
 	totalBytes := len(text)

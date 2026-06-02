@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -395,7 +396,7 @@ func main() {
 		var sandboxServiceCtx context.Context
 		sandboxServiceCtx, sandboxServiceCancel = context.WithCancel(context.Background())
 		go func() {
-			if err := sandboxSvc.Start(sandboxServiceCtx, sandboxEventHandlers...); err != nil && err != context.Canceled {
+			if err := sandboxSvc.Start(sandboxServiceCtx, sandboxEventHandlers...); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("Sandbox service stopped with error: %v", err)
 			}
 		}()
@@ -406,7 +407,6 @@ func main() {
 
 	// Global middleware
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(middleware.SanitizedLogger)
 	r.Use(chimiddleware.Recoverer)
 	// Note: No global timeout - SSE endpoints need long-lived connections
@@ -2030,14 +2030,14 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %d", cfg.Port)
-		if err := startup.ListenAndServe(srv); err != nil && err != http.ErrServerClosed {
+		if err := startup.ListenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}()
 	if httpsSrv != nil {
 		go func() {
 			log.Printf("HTTPS server starting on port %d (%s TLS)", cfg.HTTPSPort, httpsSetup.Mode)
-			if err := startup.ListenAndServeTLS(httpsSrv, "", ""); err != nil && err != http.ErrServerClosed {
+			if err := startup.ListenAndServeTLS(httpsSrv, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatalf("HTTPS server failed: %v", err)
 			}
 		}()

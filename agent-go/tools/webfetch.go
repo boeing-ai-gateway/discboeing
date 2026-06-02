@@ -103,19 +103,19 @@ type tavilyExtractResponse struct {
 func fetchWithNativeHTTP(ctx context.Context, rawURL string) (string, error) {
 	pageURL, err := url.Parse(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL: %v", err)
+		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL: %v", err)
+		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 	req.Header.Set("User-Agent", defaultWebFetchUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request failed: %v", err)
+		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -126,14 +126,14 @@ func fetchWithNativeHTTP(ctx context.Context, rawURL string) (string, error) {
 	const maxBody = 5 * 1024 * 1024 // 5 MB
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %v", err)
+		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/html") || contentType == "" {
 		markdown, err := htmlToMarkdown(body, pageURL)
 		if err != nil {
-			return "", fmt.Errorf("failed to convert page: %v", err)
+			return "", fmt.Errorf("failed to convert page: %w", err)
 		}
 		return markdown, nil
 	}

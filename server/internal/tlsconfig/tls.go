@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -136,7 +137,7 @@ type dbCache struct {
 func (c *dbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	entry, err := c.store.GetTLSCacheEntry(ctx, key)
 	if err != nil {
-		if err == store.ErrNotFound {
+		if errors.Is(err, store.ErrNotFound) {
 			return nil, autocert.ErrCacheMiss
 		}
 		return nil, err

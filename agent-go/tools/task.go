@@ -1054,7 +1054,7 @@ func taskOutputFromPersistedThread(toolCtx *thread.ToolContext, call message.Too
 
 	info, err := subAgent.GetThreadInfo(taskID)
 	if err != nil || !isTaskThreadInfo(info, taskID) {
-		return errResult(call, fmt.Sprintf("task %s not found", taskID)), nil
+		return errToolResult(call, fmt.Sprintf("task %s not found", taskID))
 	}
 
 	status := persistedTaskStatus(info)

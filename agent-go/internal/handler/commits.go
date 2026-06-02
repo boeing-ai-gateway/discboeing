@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,8 @@ func (h *Handler) ListWorkspaceChangeCommits(w http.ResponseWriter, _ *http.Requ
 	result, err := gitops.ListWorkspaceChangeCommits(h.agentCwd, "")
 	if err != nil {
 		status := http.StatusInternalServerError
-		if commitsErr, ok := err.(*gitops.CommitsError); ok && commitsErr.Code == "not_git_repo" {
+		commitsErr := &gitops.CommitsError{}
+		if errors.As(err, &commitsErr) {
 			status = http.StatusBadRequest
 		}
 		h.Error(w, status, err.Error())

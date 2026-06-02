@@ -219,8 +219,8 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			snapshot = h.conversations.PollChunks(threadID, 0)
 		}
 	}
-	freshRequest := false
-	offset := 0
+	var freshRequest bool
+	var offset int
 	if lastEventID := r.Header.Get("Last-Event-ID"); lastEventID != "" {
 		if id, n, ok := parseSSEEventID(lastEventID); ok && snapshot != nil && id == snapshot.CompletionID {
 			freshRequest = false

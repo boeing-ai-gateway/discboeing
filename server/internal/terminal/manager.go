@@ -5,6 +5,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"strings"
@@ -226,7 +227,7 @@ func (s *Session) readLoop(onExit func()) {
 			s.mu.Unlock()
 		}
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				log.Printf("terminal: PTY read error: %v", err)
 			}
 			break

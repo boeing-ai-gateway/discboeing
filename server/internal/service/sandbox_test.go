@@ -1110,7 +1110,7 @@ func TestSandboxService_GetForSession_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := svc.GetForSession(ctx, "nonexistent")
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
@@ -1242,7 +1242,7 @@ func TestSandboxService_DestroyForSession(t *testing.T) {
 
 	// Verify sandbox is gone
 	_, err = mockProvider.Get(ctx, nil, sessionID)
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Errorf("Expected ErrNotFound after destroy, got %v", err)
 	}
 }

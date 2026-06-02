@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -607,7 +608,7 @@ func readFileSample(path string, size int) ([]byte, error) {
 
 	buf := make([]byte, size)
 	n, err := file.Read(buf)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	return buf[:n], nil

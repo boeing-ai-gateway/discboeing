@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 
 	api "github.com/obot-platform/discobot/server/api"
@@ -66,7 +67,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionWorkspaceID := ""
+	var sessionWorkspaceID string
 
 	if existingSession != nil {
 		// Session exists - validate it belongs to this project
@@ -502,9 +503,9 @@ func (h *Handler) resolveSessionAndThread(w http.ResponseWriter, r *http.Request
 
 // lastUserMessageID returns the ID of the last user message in the slice, or "".
 func lastUserMessageID(messages []api.Message) string {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].ID != "" {
-			return messages[i].ID
+	for _, message := range slices.Backward(messages) {
+		if message.Role == "user" && message.ID != "" {
+			return message.ID
 		}
 	}
 	return ""

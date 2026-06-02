@@ -1065,7 +1065,7 @@ func TestSessionServicePerformDeletion_EnqueuesDeferredSandboxCleanup(t *testing
 	if queuedPayload.DeleteAt.Before(before.Add(30*24*time.Hour)) || queuedPayload.DeleteAt.After(after.Add(30*24*time.Hour)) {
 		t.Fatalf("queued delete time %s outside expected retention window", queuedPayload.DeleteAt)
 	}
-	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
+	if _, err := testStore.GetSessionByID(ctx, session.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected session to be deleted, got err=%v", err)
 	}
 }
@@ -1210,7 +1210,7 @@ func TestSessionServicePerformDeletion_RemovesCreateFailedSandboxImmediately(t *
 	if queued {
 		t.Fatal("did not expect deferred sandbox cleanup to be enqueued")
 	}
-	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
+	if _, err := testStore.GetSessionByID(ctx, session.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected session to be deleted, got err=%v", err)
 	}
 }
@@ -1263,7 +1263,7 @@ func TestSessionServicePerformDeletion_ContinuesWhenSandboxStopFails(t *testing.
 	if !queued {
 		t.Fatal("expected deferred sandbox cleanup to be enqueued")
 	}
-	if _, err := testStore.GetSessionByID(ctx, session.ID); err != store.ErrNotFound {
+	if _, err := testStore.GetSessionByID(ctx, session.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected session to be deleted, got err=%v", err)
 	}
 }

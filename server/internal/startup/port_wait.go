@@ -38,7 +38,7 @@ func waitForTCPBind(ctx context.Context, addr string, timeout, retryInterval tim
 		}
 
 		if ctx.Err() != nil {
-			return fmt.Errorf("api port %s did not become available within %s (last error: %v): %w", addr, timeout, err, ctx.Err())
+			return fmt.Errorf("api port %s did not become available within %s (last error: %w): %w", addr, timeout, err, ctx.Err())
 		}
 
 		log.Printf("API port %s is still unavailable; retrying in %s: %v", addr, retryInterval, err)

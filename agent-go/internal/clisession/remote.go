@@ -119,7 +119,8 @@ func (s *Remote) HasInterruptedTurn(context.Context, string) (bool, error) {
 func (s *Remote) PendingQuestion(ctx context.Context, threadID string) (*agent.PendingQuestion, error) {
 	var resp api.PendingQuestionResponse
 	if err := s.doJSON(ctx, http.MethodGet, "/threads/"+threadID+"/chat/question", nil, &resp); err != nil {
-		if apiErr, ok := err.(*apiError); ok && apiErr.status == http.StatusNotFound {
+		apiErr := new(apiError)
+		if errors.As(err, &apiErr) && apiErr.status == http.StatusNotFound {
 			return nil, nil
 		}
 		return nil, err

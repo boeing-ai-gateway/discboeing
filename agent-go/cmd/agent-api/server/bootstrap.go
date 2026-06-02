@@ -215,7 +215,6 @@ func runBootstrap(cfg *config.Config) {
 	state := &bootstrapState{}
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 
 	r.Get("/", func(w http.ResponseWriter, _ *http.Request) {

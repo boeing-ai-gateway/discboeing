@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -400,7 +401,7 @@ func TestReconcileSandboxes_RemovesOrphanedSandboxes(t *testing.T) {
 
 	// Verify orphaned sandbox was removed
 	_, err = setup.provider.Get(ctx, nil, orphanSessionID)
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Errorf("Expected orphaned sandbox to be removed, got error: %v", err)
 	}
 
@@ -628,7 +629,7 @@ func TestReconcileSessionStates_MarksStoppedSessionWithNoSandbox(t *testing.T) {
 
 	// Verify no sandbox exists
 	_, err := setup.provider.Get(ctx, nil, session.ID)
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Fatalf("Expected sandbox to not exist, got: %v", err)
 	}
 
@@ -747,7 +748,7 @@ func TestProvider_GetReturnsNotFoundAfterExternalContainerDeletion(t *testing.T)
 	if err == nil {
 		t.Fatal("Expected error after container deletion, got nil")
 	}
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Errorf("Expected sandbox.ErrNotFound after external deletion, got: %v", err)
 	}
 
@@ -822,7 +823,7 @@ func TestProvider_GetSecretReturnsNotFoundAfterExternalContainerDeletion(t *test
 	if err == nil {
 		t.Fatal("Expected error after container deletion, got nil")
 	}
-	if err != sandbox.ErrNotFound {
+	if !errors.Is(err, sandbox.ErrNotFound) {
 		t.Errorf("Expected sandbox.ErrNotFound after external deletion, got: %v", err)
 	}
 

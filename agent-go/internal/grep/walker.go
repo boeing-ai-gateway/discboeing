@@ -86,70 +86,73 @@ func walk(ctx context.Context, opts GrepOptions, s *searcher) (*Results, error) 
 		NumWorkers: numWorkers,
 	}
 	_ = fastwalk.Walk(conf, opts.Path, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if ctx.Err() != nil || truncated.Load() {
-			return fastwalk.ErrSkipFiles
-		}
+		if err == nil {
+			if ctx.Err() != nil || truncated.Load() {
+				return fastwalk.ErrSkipFiles
+			}
 
-		if d.IsDir() {
-			name := d.Name()
-			// Never skip the root itself, even if it is a hidden directory.
-			if path == opts.Path {
+			if d.IsDir() {
+				name := d.Name()
+				// Never skip the root itself, even if it is a hidden directory.
+				if path == opts.Path {
+					if gi != nil {
+						gi.LoadDir(path)
+					}
+					return nil
+				}
+				// Always skip .git directory
+				if name == ".git" {
+					return filepath.SkipDir
+				}
+				// Skip other hidden dirs
+				if strings.HasPrefix(name, ".") && name != "." {
+					return filepath.SkipDir
+				}
 				if gi != nil {
+					// When gitignore is active, rely on it for directory filtering
+					if gi.IsIgnored(path, true) {
+						return filepath.SkipDir
+					}
+					// Load nested .gitignore in this directory
 					gi.LoadDir(path)
+				} else {
+					// When no gitignore, apply default skip list
+					switch name {
+					case "node_modules", "__pycache__":
+						return filepath.SkipDir
+					}
 				}
 				return nil
 			}
-			// Always skip .git directory
-			if name == ".git" {
-				return filepath.SkipDir
-			}
-			// Skip other hidden dirs
-			if strings.HasPrefix(name, ".") && name != "." {
-				return filepath.SkipDir
-			}
-			if gi != nil {
-				// When gitignore is active, rely on it for directory filtering
-				if gi.IsIgnored(path, true) {
-					return filepath.SkipDir
-				}
-				// Load nested .gitignore in this directory
-				gi.LoadDir(path)
-			} else {
-				// When no gitignore, apply default skip list
-				switch name {
-				case "node_modules", "__pycache__":
-					return filepath.SkipDir
-				}
-			}
-			return nil
-		}
 
-		// Check gitignore for files
-		if gi != nil && gi.IsIgnored(path, false) {
-			return nil
-		}
-
-		// Apply file type filter
-		if opts.Type != "" && !filetypes.MatchesType(path, opts.Type) {
-			return nil
-		}
-
-		// Apply glob filter
-		if opts.Glob != "" {
-			rel, relErr := filepath.Rel(opts.Path, path)
-			if relErr != nil || !matchGlob(opts.Glob, rel) {
+			// Check gitignore for files
+			if gi != nil && gi.IsIgnored(path, false) {
 				return nil
 			}
-		}
 
-		var size int64
-		if info, err := d.Info(); err == nil {
-			size = info.Size()
+			// Apply file type filter
+			if opts.Type != "" && !filetypes.MatchesType(path, opts.Type) {
+				return nil
+			}
+
+			// Apply glob filter
+			if opts.Glob != "" {
+				rel, relErr := filepath.Rel(opts.Path, path)
+				if relErr == nil {
+					if !matchGlob(opts.Glob, rel) {
+						return nil
+					}
+				} else {
+					return nil
+				}
+			}
+
+			var size int64
+			if info, err := d.Info(); err == nil {
+				size = info.Size()
+			}
+			fileCh <- fileEntry{path: path, size: size}
 		}
-		fileCh <- fileEntry{path: path, size: size}
 		return nil
 	})
 

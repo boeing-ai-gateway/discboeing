@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -519,7 +520,7 @@ func TestReadLineReadlineTTY_CtrlCMapsToInterrupt(t *testing.T) {
 		func() (*term.State, error) { return nil, nil },
 		func(*term.State) error { return nil },
 	)
-	if err != errInterrupt {
+	if !errors.Is(err, errInterrupt) {
 		t.Fatalf("err = %v, want %v", err, errInterrupt)
 	}
 	if line != "" {

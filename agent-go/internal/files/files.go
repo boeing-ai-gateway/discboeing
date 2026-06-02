@@ -521,24 +521,22 @@ func enumerateWithRg(cwd string) ([]string, error) {
 func enumerateWithWalk(root string) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip errors
-		}
-		if d.IsDir() {
-			name := d.Name()
-			if name != "." && strings.HasPrefix(name, ".") {
-				return filepath.SkipDir
+		if err == nil {
+			if d.IsDir() {
+				name := d.Name()
+				if name != "." && strings.HasPrefix(name, ".") {
+					return filepath.SkipDir
+				}
+				if skipDirs[name] {
+					return filepath.SkipDir
+				}
+				return nil
 			}
-			if skipDirs[name] {
-				return filepath.SkipDir
+			rel, relErr := filepath.Rel(root, path)
+			if relErr == nil {
+				paths = append(paths, rel)
 			}
-			return nil
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return nil
-		}
-		paths = append(paths, rel)
 		return nil
 	})
 	return paths, err

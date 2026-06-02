@@ -2,6 +2,7 @@ package gogrep
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -151,7 +152,8 @@ func BenchmarkCLI_Rg(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				cmd := exec.Command(rgBinary, sc.RgArgs...)
 				if _, err := cmd.Output(); err != nil {
-					if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+					exitErr := &exec.ExitError{}
+					if errors.As(err, &exitErr) {
 						b.Fatal("no matches found")
 					}
 				}
@@ -329,7 +331,8 @@ func TestParityWithRg(t *testing.T) {
 			// Run rg
 			rgOut, err := exec.Command(rgBinary, tc.rgArgs...).Output()
 			if err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+				exitErr := &exec.ExitError{}
+				if errors.As(err, &exitErr) {
 					t.Fatal("rg found no matches")
 				}
 			}

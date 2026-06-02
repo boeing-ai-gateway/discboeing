@@ -1207,7 +1207,7 @@ func (s *CredentialService) GetVisibleEnvVarsForSession(ctx context.Context, ses
 	})
 	result := make(map[string]string, len(envVars))
 	for _, envVar := range envVars {
-		visible := false
+		var visible bool
 		switch visibilityContext {
 		case CredentialVisibilityContextConsole:
 			visible = envVar.ConsoleVisible

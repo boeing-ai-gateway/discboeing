@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -382,14 +383,14 @@ func (p *Provider) attachToContainer(ctx context.Context, containerID string, op
 
 	execCreate, err := p.client.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+		return nil, fmt.Errorf("%w: %w", sandbox.ErrAttachFailed, err)
 	}
 
 	resp, err := p.client.ContainerExecAttach(ctx, execCreate.ID, containerTypes.ExecStartOptions{
 		Tty: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", sandbox.ErrAttachFailed, err)
+		return nil, fmt.Errorf("%w: %w", sandbox.ErrAttachFailed, err)
 	}
 
 	if opts.Rows > 0 && opts.Cols > 0 {
@@ -522,7 +523,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 
 	// Wait for image to be available (pulled on startup or by first caller)
 	if err := p.EnsureImage(ctx); err != nil {
-		return nil, state, fmt.Errorf("%w: %v", sandbox.ErrInvalidImage, err)
+		return nil, state, fmt.Errorf("%w: %w", sandbox.ErrInvalidImage, err)
 	}
 
 	// Create data volume for persistent storage
@@ -615,7 +616,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 	if opts.WorkspacePath != "" {
 		sourcePath, err := p.resolveWorkspaceMountSource(opts.WorkspacePath)
 		if err != nil {
-			return nil, state, fmt.Errorf("%w: failed to resolve workspace mount source: %v", sandbox.ErrStartFailed, err)
+			return nil, state, fmt.Errorf("%w: failed to resolve workspace mount source: %w", sandbox.ErrStartFailed, err)
 		}
 
 		hostConfig.Mounts = append(hostConfig.Mounts, mount.Mount{
@@ -680,7 +681,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 	// Create container
 	resp, err := p.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, name)
 	if err != nil {
-		return nil, state, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
+		return nil, state, fmt.Errorf("%w: %w", sandbox.ErrStartFailed, err)
 	}
 
 	// Store mapping
@@ -1036,7 +1037,7 @@ func (p *Provider) Start(ctx context.Context, state []byte, sessionID string) ([
 	}
 
 	if err := p.client.ContainerStart(ctx, containerID, containerTypes.StartOptions{}); err != nil {
-		return state, fmt.Errorf("%w: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: %w", sandbox.ErrStartFailed, err)
 	}
 
 	return state, nil
@@ -1076,7 +1077,7 @@ func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, o
 
 	containerID, err := p.getContainerID(ctx, sessionID)
 	if err != nil {
-		if err != sandbox.ErrNotFound {
+		if !errors.Is(err, sandbox.ErrNotFound) {
 			return state, err
 		}
 		// Container not found, but continue to clean up volume if requested

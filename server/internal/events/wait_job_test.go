@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -189,7 +190,7 @@ func TestWaitForJobCompletion_Timeout(t *testing.T) {
 	_, _, err := WaitForJobCompletion(ctx, broker, s, env.ProjectID, "session", "test-session")
 
 	// Assert
-	if err != context.DeadlineExceeded {
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Expected DeadlineExceeded error, got: %v", err)
 	}
 }

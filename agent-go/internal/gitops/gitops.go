@@ -392,7 +392,8 @@ func GetDiff(workspaceRoot, singlePath, target string) (DiffResult, error) {
 	out, err := gitCmd(workspaceRoot, args...)
 	if err != nil {
 		// git diff may return exit code 1 when there are differences
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		exitErr := new(exec.ExitError)
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			// Try to get stdout from combined output
 			cmd := exec.Command("git", args...)
 			cmd.Dir = workspaceRoot

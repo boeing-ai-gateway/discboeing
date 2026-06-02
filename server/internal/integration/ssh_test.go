@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -557,7 +558,8 @@ func TestSSHServer_Integration_SessionTerminatesOnProcessExit(t *testing.T) {
 	}
 
 	// Check if we got the right exit code (42)
-	if exitErr, ok := err.(*gossh.ExitError); ok {
+	exitErr := &gossh.ExitError{}
+	if errors.As(err, &exitErr) {
 		if exitErr.ExitStatus() != 42 {
 			t.Errorf("exit code = %d, want 42", exitErr.ExitStatus())
 		}
@@ -635,7 +637,8 @@ func TestSSHServer_Integration_SessionTerminatesOnExecExit(t *testing.T) {
 	}
 
 	// Check exit code
-	if exitErr, ok := err.(*gossh.ExitError); ok {
+	exitErr := &gossh.ExitError{}
+	if errors.As(err, &exitErr) {
 		if exitErr.ExitStatus() != 5 {
 			t.Errorf("exit code = %d, want 5", exitErr.ExitStatus())
 		}
@@ -874,7 +877,7 @@ func TestSSHServer_Integration_PortForwarding(t *testing.T) {
 	// Read response
 	buf := make([]byte, 100)
 	n, err := channel.Read(buf)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		t.Fatalf("failed to read from tunnel: %v", err)
 	}
 

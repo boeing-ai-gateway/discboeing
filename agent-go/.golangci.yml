@@ -4,11 +4,16 @@ run:
 linters:
   default: none
   enable:
+    - durationcheck
     - errcheck
     - govet
     - ineffassign
+    - loggercheck
+    - misspell
     - modernize
     - revive
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
     - thelper
     - unused

@@ -111,7 +111,7 @@ func (s *Store) LoadMessage(threadID, msgID string) (StoredMessage, error) {
 	}
 	var msg StoredMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
-		return StoredMessage{}, fmt.Errorf("%w %s: %v", ErrCorruptMessage, msgID, err)
+		return StoredMessage{}, fmt.Errorf("%w %s: %w", ErrCorruptMessage, msgID, err)
 	}
 	return msg, nil
 }
@@ -747,12 +747,12 @@ func (s *Store) LoadCompaction(threadID string) (*CompactionRecord, error) {
 		return nil, fmt.Errorf("read compaction: %w", err)
 	}
 	var record CompactionRecord
-	if err := json.Unmarshal(data, &record); err != nil {
-		// Corrupted file — delete and return nil.
-		os.Remove(s.compactionPath(threadID))
-		return nil, nil
+	if err := json.Unmarshal(data, &record); err == nil {
+		return &record, nil
 	}
-	return &record, nil
+	// Corrupted file — delete and return nil.
+	os.Remove(s.compactionPath(threadID))
+	return nil, nil
 }
 
 // --- Thread Config Persistence ---
@@ -1274,7 +1274,11 @@ func (s *Store) FindLeaf(threadID string) (string, error) {
 // (i.e. it is a leaf node in the message tree).
 // Returns false (no error) when msgID does not exist.
 func (s *Store) IsLeaf(threadID, msgID string) (bool, error) {
+	messageExists := true
 	if _, err := s.LoadMessage(threadID, msgID); err != nil {
+		messageExists = false
+	}
+	if !messageExists {
 		return false, nil // message not found → not a leaf
 	}
 

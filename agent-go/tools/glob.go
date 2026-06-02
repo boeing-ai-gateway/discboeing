@@ -61,48 +61,46 @@ func (e *Executor) executeGlob(call message.ToolCallPart) (thread.ToolExecuteRes
 	// irrelevant package files.
 	var matched []string
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip unreadable entries
-		}
-		if d.IsDir() {
-			name := d.Name()
-			// Never skip the root itself, even if it's a hidden directory.
-			if path == root {
+		if err == nil {
+			if d.IsDir() {
+				name := d.Name()
+				// Never skip the root itself, even if it's a hidden directory.
+				if path == root {
+					return nil
+				}
+				// Always skip well-known non-source directories (node_modules, .git, etc.).
+				if globSkipDirs[name] {
+					return filepath.SkipDir
+				}
+				// Skip hidden directories unless the pattern explicitly targets them.
+				// For example, ".discobot/**/*" should descend into ".discobot".
+				if strings.HasPrefix(name, ".") {
+					rel, relErr := filepath.Rel(root, path)
+					if relErr != nil {
+						return filepath.SkipDir
+					}
+					rel = filepath.ToSlash(rel)
+					if !strings.HasPrefix(matchPattern, rel+"/") && matchPattern != rel {
+						return filepath.SkipDir
+					}
+				}
 				return nil
 			}
-			// Always skip well-known non-source directories (node_modules, .git, etc.).
-			if globSkipDirs[name] {
-				return filepath.SkipDir
-			}
-			// Skip hidden directories unless the pattern explicitly targets them.
-			// For example, ".discobot/**/*" should descend into ".discobot".
-			if strings.HasPrefix(name, ".") {
-				rel, relErr := filepath.Rel(root, path)
-				if relErr != nil {
-					return filepath.SkipDir
-				}
+			// Match the relative path against the pattern.
+			rel, relErr := filepath.Rel(root, path)
+			if relErr == nil {
+				// Normalize to forward slashes for consistent cross-platform output.
 				rel = filepath.ToSlash(rel)
-				if !strings.HasPrefix(matchPattern, rel+"/") && matchPattern != rel {
-					return filepath.SkipDir
+				ok, matchErr := doublestar.Match(matchPattern, rel)
+				if matchErr == nil && ok {
+					matched = append(matched, rel)
 				}
 			}
-			return nil
-		}
-		// Match the relative path against the pattern.
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return nil
-		}
-		// Normalize to forward slashes for consistent cross-platform output.
-		rel = filepath.ToSlash(rel)
-		ok, matchErr := doublestar.Match(matchPattern, rel)
-		if matchErr == nil && ok {
-			matched = append(matched, rel)
 		}
 		return nil
 	})
 	if walkErr != nil {
-		return errResult(call, "error walking directory: "+walkErr.Error()), nil
+		return errToolResult(call, "error walking directory: "+walkErr.Error())
 	}
 
 	if len(matched) == 0 {

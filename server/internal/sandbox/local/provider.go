@@ -4,6 +4,7 @@ package local
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -121,14 +122,14 @@ func (p *Provider) Create(_ context.Context, state []byte, sessionID string, opt
 	if !filepath.IsAbs(workspacePath) {
 		absPath, err := filepath.Abs(workspacePath)
 		if err != nil {
-			return nil, state, fmt.Errorf("%w: failed to resolve absolute path for workspace: %v", sandbox.ErrStartFailed, err)
+			return nil, state, fmt.Errorf("%w: failed to resolve absolute path for workspace: %w", sandbox.ErrStartFailed, err)
 		}
 		workspacePath = absPath
 	}
 
 	// Verify workspace exists
 	if stat, err := os.Stat(workspacePath); err != nil {
-		return nil, state, fmt.Errorf("%w: workspace path does not exist: %v", sandbox.ErrStartFailed, err)
+		return nil, state, fmt.Errorf("%w: workspace path does not exist: %w", sandbox.ErrStartFailed, err)
 	} else if !stat.IsDir() {
 		return nil, state, fmt.Errorf("%w: workspace path is not a directory", sandbox.ErrStartFailed)
 	}
@@ -200,7 +201,7 @@ func (p *Provider) Start(_ context.Context, state []byte, sessionID string) ([]b
 			Timestamp: time.Now(),
 			Error:     info.error,
 		})
-		return state, fmt.Errorf("%w: failed to allocate port: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: failed to allocate port: %w", sandbox.ErrStartFailed, err)
 	}
 
 	// Get the assigned port
@@ -231,7 +232,7 @@ func (p *Provider) Start(_ context.Context, state []byte, sessionID string) ([]b
 			Timestamp: time.Now(),
 			Error:     info.error,
 		})
-		return state, fmt.Errorf("%w: failed to start agent API: %v", sandbox.ErrStartFailed, err)
+		return state, fmt.Errorf("%w: failed to start agent API: %w", sandbox.ErrStartFailed, err)
 	}
 
 	// Update process info
@@ -354,7 +355,7 @@ func (p *Provider) Stop(_ context.Context, state []byte, sessionID string, timeo
 // Remove removes the sandbox (stops the process if running).
 func (p *Provider) Remove(ctx context.Context, state []byte, sessionID string, _ ...sandbox.RemoveOption) ([]byte, error) {
 	// Stop the process first if running
-	if _, err := p.Stop(ctx, state, sessionID, 5*time.Second); err != nil && err != sandbox.ErrNotFound {
+	if _, err := p.Stop(ctx, state, sessionID, 5*time.Second); err != nil && !errors.Is(err, sandbox.ErrNotFound) {
 		return state, err
 	}
 

@@ -2283,11 +2283,11 @@ func persistTurnResponseMetadata(store *Store, threadID string, turnState *TurnS
 		return nil
 	}
 	stored, err := store.LoadMessage(threadID, turnState.AssistantMsgID)
-	if err != nil {
-		return nil
+	if err == nil {
+		stored.Message.Metadata = buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt)
+		return store.SaveMessage(threadID, stored)
 	}
-	stored.Message.Metadata = buildMessageMetadata(turnState.Config, turnState.ID, turnState.StartedAt, turnState.FinishedAt)
-	return store.SaveMessage(threadID, stored)
+	return nil
 }
 
 func completeTurn(store *Store, threadID string, turnState *TurnState) error {
