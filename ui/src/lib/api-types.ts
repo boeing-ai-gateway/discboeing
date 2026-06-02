@@ -180,6 +180,32 @@ export type BrowserEventChunkData = {
 	event: BrowserEvent;
 };
 
+export type WorkspaceFileChangeKind = "created" | "modified" | "deleted";
+
+export type WorkspaceFileEntry = {
+	path: string;
+	isDir: boolean;
+	size: number;
+	mode: number;
+	modTime: string;
+};
+
+export type WorkspaceFileChange = {
+	kind: WorkspaceFileChangeKind;
+	path: string;
+	entry?: WorkspaceFileEntry;
+};
+
+export type WorkspaceFilesChunkData = {
+	root: string;
+	changes: WorkspaceFileChange[];
+	resync?: boolean;
+	snapshot?: WorkspaceFileEntry[];
+	error?: {
+		message: string;
+	};
+};
+
 export type ChatMessageDataTypes = {
 	"thread-update": {
 		thread: Thread;
@@ -207,6 +233,7 @@ export type ChatMessageDataTypes = {
 	};
 	"browser-event": BrowserEventChunkData;
 	"hooks-status": HooksStatusResponse;
+	"workspace-files": WorkspaceFilesChunkData;
 };
 
 /** User preference key-value pair */

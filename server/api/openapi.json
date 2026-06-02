@@ -8705,6 +8705,129 @@
           "id"
         ]
       },
+      "WorkspaceFileEntry": {
+        "description": "Workspace file-system entry from the session file watcher.",
+        "type": "object",
+        "required": [
+          "path",
+          "isDir",
+          "size",
+          "mode",
+          "modTime"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "isDir": {
+            "type": "boolean"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mode": {
+            "type": "integer"
+          },
+          "modTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkspaceFileChange": {
+        "description": "One authoritative workspace file-system change.",
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "created",
+              "modified",
+              "deleted"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/WorkspaceFileEntry"
+          }
+        }
+      },
+      "WorkspaceFileError": {
+        "description": "Workspace file watcher error details.",
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceFilesEventData": {
+        "description": "Payload for data-workspace-files chat stream chunks.",
+        "type": "object",
+        "required": [
+          "root",
+          "changes"
+        ],
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFileChange"
+            }
+          },
+          "resync": {
+            "type": "boolean"
+          },
+          "snapshot": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFileEntry"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/WorkspaceFileError"
+          }
+        }
+      },
+      "WorkspaceFilesChunk": {
+        "description": "Out-of-band chat stream chunk carrying workspace file watcher events.",
+        "type": "object",
+        "required": [
+          "type",
+          "data"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "data-workspace-files"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkspaceFilesEventData"
+          },
+          "transient": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "MessageChunk": {
         "description": "AI SDK UIMessageChunk / Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
         "type": "object",

@@ -232,6 +232,42 @@ func (e TextMessagePartType) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceFileChangeKind.
+const (
+	Created  WorkspaceFileChangeKind = "created"
+	Deleted  WorkspaceFileChangeKind = "deleted"
+	Modified WorkspaceFileChangeKind = "modified"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceFileChangeKind enum.
+func (e WorkspaceFileChangeKind) Valid() bool {
+	switch e {
+	case Created:
+		return true
+	case Deleted:
+		return true
+	case Modified:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkspaceFilesChunkType.
+const (
+	DataWorkspaceFiles WorkspaceFilesChunkType = "data-workspace-files"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceFilesChunkType enum.
+func (e WorkspaceFilesChunkType) Valid() bool {
+	switch e {
+	case DataWorkspaceFiles:
+		return true
+	default:
+		return false
+	}
+}
+
 // AnswerQuestionRequest answer Question Request payload accepted by the API.
 type AnswerQuestionRequest struct {
 	// Answers Collection of answer values.
@@ -2119,6 +2155,54 @@ type Workspace struct {
 
 	// UpdatedAt Time when the object was last updated.
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// WorkspaceFileChange One authoritative workspace file-system change.
+type WorkspaceFileChange struct {
+	// Entry Workspace file-system entry from the session file watcher.
+	Entry *WorkspaceFileEntry     `json:"entry,omitempty"`
+	Kind  WorkspaceFileChangeKind `json:"kind"`
+	Path  string                  `json:"path"`
+}
+
+// WorkspaceFileChangeKind defines model for WorkspaceFileChange.Kind.
+type WorkspaceFileChangeKind string
+
+// WorkspaceFileEntry Workspace file-system entry from the session file watcher.
+type WorkspaceFileEntry struct {
+	IsDir   bool      `json:"isDir"`
+	ModTime time.Time `json:"modTime"`
+	Mode    int       `json:"mode"`
+	Path    string    `json:"path"`
+	Size    int64     `json:"size"`
+}
+
+// WorkspaceFileError Workspace file watcher error details.
+type WorkspaceFileError struct {
+	Message string `json:"message"`
+}
+
+// WorkspaceFilesChunk Out-of-band chat stream chunk carrying workspace file watcher events.
+type WorkspaceFilesChunk struct {
+	// Data Payload for data-workspace-files chat stream chunks.
+	Data      WorkspaceFilesEventData `json:"data"`
+	ID        *string                 `json:"id,omitempty"`
+	Transient *bool                   `json:"transient,omitempty"`
+	Type      WorkspaceFilesChunkType `json:"type"`
+}
+
+// WorkspaceFilesChunkType defines model for WorkspaceFilesChunk.Type.
+type WorkspaceFilesChunkType string
+
+// WorkspaceFilesEventData Payload for data-workspace-files chat stream chunks.
+type WorkspaceFilesEventData struct {
+	Changes []WorkspaceFileChange `json:"changes"`
+
+	// Error Workspace file watcher error details.
+	Error    *WorkspaceFileError   `json:"error,omitempty"`
+	Resync   *bool                 `json:"resync,omitempty"`
+	Root     string                `json:"root"`
+	Snapshot *[]WorkspaceFileEntry `json:"snapshot,omitempty"`
 }
 
 // WorkspaceUpdatedData Payload for workspace_updated project events.

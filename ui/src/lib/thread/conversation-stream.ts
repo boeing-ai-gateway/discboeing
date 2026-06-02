@@ -627,6 +627,9 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 				return;
 			}
 
+			case "data-workspace-files":
+				return;
+
 			case "start": {
 				runCallbackInBackground("onStart", options.onStart, {
 					resume: false,
