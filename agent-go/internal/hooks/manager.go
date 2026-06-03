@@ -44,6 +44,9 @@ const (
 // ErrHookPaused is returned when a caller tries to execute a paused hook.
 var ErrHookPaused = errors.New("hooks are paused")
 
+// ErrHookNotFound is returned when a caller tries to execute an unknown hook.
+var ErrHookNotFound = errors.New("hook not found")
+
 // Conversation starts and resumes hook failure follow-up turns.
 type Conversation interface {
 	Chat(threadID string, req agent.PromptRequest) (string, error)
@@ -656,6 +659,19 @@ func (m *Manager) RerunHook(hookID string) (*HookRunResult, error) {
 		return m.rerunSessionHook(hook), nil
 	}
 	return nil, nil
+}
+
+// ValidateRerunHook verifies that a hook can be manually rerun without starting
+// the hook process.
+func (m *Manager) ValidateRerunHook(hookID string) error {
+	hook, ok := m.findHook(hookID)
+	if !ok {
+		return ErrHookNotFound
+	}
+	if m.hookExecutionPaused(hook.ID) {
+		return ErrHookPaused
+	}
+	return nil
 }
 
 func (m *Manager) findHook(hookID string) (Hook, bool) {

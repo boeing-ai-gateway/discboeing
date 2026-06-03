@@ -196,38 +196,47 @@ func (h *Handler) HookOutputDownload(w http.ResponseWriter, r *http.Request) {
 // RerunHook handles POST /hooks/{hookId}/rerun — manually reruns a hook.
 func (h *Handler) RerunHook(w http.ResponseWriter, r *http.Request) {
 	hookID := chi.URLParam(r, "hookId")
+	threadID := chi.URLParam(r, "id")
 
 	if h.hookManager == nil {
 		h.Error(w, http.StatusNotFound, "Hooks not enabled")
 		return
 	}
 
-	h.withManualSessionHookSudo(func() {
+	if err := h.hookManager.ValidateRerunHook(hookID); err != nil {
+		if errors.Is(err, hooks.ErrHookPaused) {
+			h.Error(w, http.StatusConflict, err.Error())
+			return
+		}
+		if errors.Is(err, hooks.ErrHookNotFound) {
+			h.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		h.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	go h.withManualSessionHookSudo(func() {
 		result, err := h.hookManager.RerunHook(hookID)
 		if err != nil {
-			if errors.Is(err, hooks.ErrHookPaused) {
-				h.Error(w, http.StatusConflict, err.Error())
-				return
-			}
-			h.Error(w, http.StatusInternalServerError, err.Error())
+			log.Printf("hooks: failed to rerun hook %q: %v", hookID, err)
 			return
 		}
 		if result == nil {
-			h.Error(w, http.StatusNotFound, "Hook not found")
+			log.Printf("hooks: rerun hook %q completed without a result", hookID)
 			return
 		}
 
 		if result.Eval.ShouldReprompt {
-			threadID := chi.URLParam(r, "id")
 			if err := h.hookManager.StartFailureReprompt(threadID, result.Eval); err != nil {
 				log.Printf("hooks: failed to start re-prompt for manual rerun: %v", err)
 			}
 		}
+	})
 
-		h.JSON(w, http.StatusOK, api.HookRerunResponse{
-			Success:  result.Result.Success,
-			ExitCode: result.Result.ExitCode,
-		})
+	h.JSON(w, http.StatusOK, api.HookRerunResponse{
+		Success:  true,
+		ExitCode: 0,
 	})
 }
 
