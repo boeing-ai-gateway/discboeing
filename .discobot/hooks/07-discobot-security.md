@@ -8,8 +8,7 @@ pattern: "{discobot,server,agent-go}/**"
 
 Review the changed files under `discobot/`, `server/`, and `agent-go/` for
 security issues. For `discobot/` UI changes, also read
-`discobot/docs/GUIDELINES.md`, especially the Datastar, command, JavaScript
-island, and security rules.
+`discobot/docs/GUIDELINES.md`, especially the security rules.
 
 Focus only on real security risks introduced by the current changes. Do not
 report style, architecture, or preference issues unless they create a security
@@ -18,11 +17,9 @@ problem.
 Check for:
 
 - secrets, tokens, credentials, private keys, or sensitive values exposed in
-  HTML, Datastar signals, `data-*` attributes, JavaScript, logs, fixtures,
-  generated output, API responses, or test data
-- handlers or command endpoints that trust client-controlled signals, DOM
-  attributes, query params, headers, path params, forms, or JSON payloads without
-  server-side validation
+  HTML, JavaScript, logs, fixtures, generated output, API responses, or test data
+- handlers that trust client-controlled DOM attributes, query params, headers,
+  path params, forms, or JSON payloads without server-side validation
 - missing authentication, authorization, ownership, path, workspace, project,
   session, thread, container, or resource checks before reading or mutating state
 - unsafe file operations, path traversal, symlink escapes, invalid parent/child
@@ -36,10 +33,6 @@ Check for:
   propagation, or untrusted input passed to subprocesses
 - container or sandbox escape risks, unsafe mounts, host path exposure, Docker
   socket access, credential leakage across sessions, or weakened isolation
-- unsafe Datastar responses, especially arbitrary `text/javascript` execution or
-  patches built from untrusted HTML
-- JavaScript islands that eval user input, build HTML from untrusted strings, or
-  leak sensitive data through events or globals
 - broad CORS, cache, cookie, CSRF, or static-file changes that expose private
   state or allow credentialed cross-origin access
 - logs or error messages that disclose secrets, sensitive local paths, request
