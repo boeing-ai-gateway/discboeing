@@ -160,6 +160,7 @@ type Client struct {
 	Hooks            *HooksService
 	Members          *MembersService
 	Models           *ModelsService
+	Ports            *PortsService
 	Preferences      *PreferencesService
 	Projects         *ProjectsService
 	Resources        *ResourcesService
@@ -210,6 +211,7 @@ func NewClient(baseURL string, opts ...Option) (*Client, error) {
 	c.Hooks = &HooksService{client: c}
 	c.Members = &MembersService{client: c}
 	c.Models = &ModelsService{client: c}
+	c.Ports = &PortsService{client: c}
 	c.Preferences = &PreferencesService{client: c}
 	c.Projects = &ProjectsService{client: c}
 	c.Resources = &ResourcesService{client: c}
@@ -346,6 +348,8 @@ type HooksService struct{ client *Client }
 type MembersService struct{ client *Client }
 
 type ModelsService struct{ client *Client }
+
+type PortsService struct{ client *Client }
 
 type PreferencesService struct{ client *Client }
 
@@ -1080,6 +1084,21 @@ func (s *HooksService) RerunAHook(ctx context.Context, projectID serverapi.Proje
 	return &out, nil
 }
 
+func (s *PortsService) List(ctx context.Context, projectID serverapi.ProjectID, sessionID serverapi.SessionID) iter.Seq2[serverapi.PortEntry, error] {
+	return func(yield func(serverapi.PortEntry, error) bool) {
+		var out serverapi.ListPortsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/ports", nil, nil, &out); err != nil {
+			yield(serverapi.PortEntry{}, err)
+			return
+		}
+		for _, item := range out.Ports {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
+}
+
 func (s *ServicesService) List(ctx context.Context, projectID serverapi.ProjectID, sessionID serverapi.SessionID) iter.Seq2[serverapi.Service, error] {
 	return func(yield func(serverapi.Service, error) bool) {
 		var out serverapi.ServicesResponse
@@ -1607,6 +1626,7 @@ type ProjectClient struct {
 	Hooks            *ProjectHooksService
 	Members          *ProjectMembersService
 	Models           *ProjectModelsService
+	Ports            *ProjectPortsService
 	Projects         *ProjectProjectsService
 	Resources        *ProjectResourcesService
 	SandboxProviders *ProjectSandboxProvidersService
@@ -1627,6 +1647,7 @@ func newProjectClient(client *Client, projectID serverapi.ProjectID) *ProjectCli
 	c.Hooks = &ProjectHooksService{client: client, projectID: projectID}
 	c.Members = &ProjectMembersService{client: client, projectID: projectID}
 	c.Models = &ProjectModelsService{client: client, projectID: projectID}
+	c.Ports = &ProjectPortsService{client: client, projectID: projectID}
 	c.Projects = &ProjectProjectsService{client: client, projectID: projectID}
 	c.Resources = &ProjectResourcesService{client: client, projectID: projectID}
 	c.SandboxProviders = &ProjectSandboxProvidersService{client: client, projectID: projectID}
@@ -1679,6 +1700,11 @@ type ProjectMembersService struct {
 }
 
 type ProjectModelsService struct {
+	client    *Client
+	projectID serverapi.ProjectID
+}
+
+type ProjectPortsService struct {
 	client    *Client
 	projectID serverapi.ProjectID
 }
@@ -2431,6 +2457,22 @@ func (s *ProjectHooksService) RerunAHook(ctx context.Context, sessionID serverap
 	return &out, nil
 }
 
+func (s *ProjectPortsService) List(ctx context.Context, sessionID serverapi.SessionID) iter.Seq2[serverapi.PortEntry, error] {
+	projectID := s.projectID
+	return func(yield func(serverapi.PortEntry, error) bool) {
+		var out serverapi.ListPortsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/ports", nil, nil, &out); err != nil {
+			yield(serverapi.PortEntry{}, err)
+			return
+		}
+		for _, item := range out.Ports {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
+}
+
 func (s *ProjectServicesService) List(ctx context.Context, sessionID serverapi.SessionID) iter.Seq2[serverapi.Service, error] {
 	projectID := s.projectID
 	return func(yield func(serverapi.Service, error) bool) {
@@ -2927,6 +2969,7 @@ type SessionClient struct {
 	Credentials *SessionCredentialsService
 	Files       *SessionFilesService
 	Hooks       *SessionHooksService
+	Ports       *SessionPortsService
 	Services    *SessionServicesService
 	Sessions    *SessionSessionsService
 	Terminal    *SessionTerminalService
@@ -2939,6 +2982,7 @@ func newSessionClient(client *Client, projectID serverapi.ProjectID, sessionID s
 	c.Credentials = &SessionCredentialsService{client: client, projectID: projectID, sessionID: sessionID}
 	c.Files = &SessionFilesService{client: client, projectID: projectID, sessionID: sessionID}
 	c.Hooks = &SessionHooksService{client: client, projectID: projectID, sessionID: sessionID}
+	c.Ports = &SessionPortsService{client: client, projectID: projectID, sessionID: sessionID}
 	c.Services = &SessionServicesService{client: client, projectID: projectID, sessionID: sessionID}
 	c.Sessions = &SessionSessionsService{client: client, projectID: projectID, sessionID: sessionID}
 	c.Terminal = &SessionTerminalService{client: client, projectID: projectID, sessionID: sessionID}
@@ -2965,6 +3009,12 @@ type SessionFilesService struct {
 }
 
 type SessionHooksService struct {
+	client    *Client
+	projectID serverapi.ProjectID
+	sessionID serverapi.SessionID
+}
+
+type SessionPortsService struct {
 	client    *Client
 	projectID serverapi.ProjectID
 	sessionID serverapi.SessionID
@@ -3204,6 +3254,23 @@ func (s *SessionHooksService) RerunAHook(ctx context.Context, hookID string) (*s
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (s *SessionPortsService) List(ctx context.Context) iter.Seq2[serverapi.PortEntry, error] {
+	projectID := s.projectID
+	sessionID := s.sessionID
+	return func(yield func(serverapi.PortEntry, error) bool) {
+		var out serverapi.ListPortsResponse
+		if err := s.client.do(ctx, http.MethodGet, ""+"/api"+"/projects"+"/"+escapePath(string(projectID))+"/sessions"+"/"+escapePath(string(sessionID))+"/ports", nil, nil, &out); err != nil {
+			yield(serverapi.PortEntry{}, err)
+			return
+		}
+		for _, item := range out.Ports {
+			if !yield(item, nil) {
+				return
+			}
+		}
+	}
 }
 
 func (s *SessionServicesService) List(ctx context.Context) iter.Seq2[serverapi.Service, error] {

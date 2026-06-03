@@ -1649,6 +1649,17 @@ func main() {
 						},
 					})
 
+					// Ports
+					sidReg.Register(r, routes.Route{
+						Method: "GET", Pattern: "/ports",
+						Handler: h.ListPorts,
+						Meta: routes.Meta{
+							Group:       "Ports",
+							Description: "List TCP listening ports",
+							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
+						},
+					})
+
 					// Services
 					sidReg.Register(r, routes.Route{
 						Method: "GET", Pattern: "/services",

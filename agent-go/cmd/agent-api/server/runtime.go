@@ -66,6 +66,7 @@ type agentRuntime struct {
 	controlSocket  *controlsocket.Client
 	stopControl    context.CancelFunc
 	fileWatcher    *workspaceFileWatcher
+	portWatcher    *workspacePortWatcher
 }
 
 // buildRuntimeHandler assembles the configured agent API and returns the
@@ -243,9 +244,13 @@ func (r *agentRuntime) initHooks() {
 	fileWatcher, err := startWorkspaceFileWatcher(r.cfg.AgentCwd, r.conversations.EmitEphemeralChunk)
 	if err != nil {
 		log.Printf("warn: workspace file watcher: %v", err)
-		return
+	} else {
+		r.fileWatcher = fileWatcher
 	}
-	r.fileWatcher = fileWatcher
+
+	portWatcher := startWorkspacePortWatcher(r.conversations.EmitEphemeralChunk)
+	r.conversations.AddCompletionListener(portWatcher)
+	r.portWatcher = portWatcher
 }
 
 func (r *agentRuntime) runStartupTasks(progress func(string)) {
@@ -377,6 +382,9 @@ func (r *agentRuntime) close() {
 		if err := r.fileWatcher.Close(); err != nil {
 			log.Printf("workspace file watcher shutdown: %v", err)
 		}
+	}
+	if r.portWatcher != nil {
+		r.portWatcher.Close()
 	}
 	if r.defaultAgent != nil {
 		r.defaultAgent.Close()

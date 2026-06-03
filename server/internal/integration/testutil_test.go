@@ -355,6 +355,7 @@ func setupRouter(s *store.Store, cfg *config.Config, h *handler.Handler) *chi.Mu
 					r.Get("/terminal/ws", h.TerminalWebSocket)
 					r.Get("/terminal/history", h.GetTerminalHistory)
 					r.Get("/terminal/status", h.GetTerminalStatus)
+					r.Get("/ports", h.ListPorts)
 				})
 			})
 

@@ -206,6 +206,31 @@ export type WorkspaceFilesChunkData = {
 	};
 };
 
+export type WorkspacePortEntry = {
+	localAddress: string;
+	port: number;
+	process?: string;
+	protocol: "http" | "https" | "unknown";
+	pid: number;
+	fd?: number;
+};
+
+export type WorkspacePortsChunkData = {
+	reason: string;
+	ports?: WorkspacePortEntry[];
+	added?: WorkspacePortEntry[];
+	removed?: WorkspacePortEntry[];
+	resync?: boolean;
+	error?: {
+		message: string;
+	};
+	scannedAt: string;
+};
+
+export type ListPortsResponse = {
+	ports: WorkspacePortEntry[];
+};
+
 export type ChatMessageDataTypes = {
 	"thread-update": {
 		thread: Thread;
@@ -234,6 +259,7 @@ export type ChatMessageDataTypes = {
 	"browser-event": BrowserEventChunkData;
 	"hooks-status": HooksStatusResponse;
 	"workspace-files": WorkspaceFilesChunkData;
+	"workspace-ports": WorkspacePortsChunkData;
 };
 
 /** User preference key-value pair */

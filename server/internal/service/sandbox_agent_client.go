@@ -2731,6 +2731,50 @@ func (c *SandboxAgentClient) ListServices(ctx context.Context, sessionID string)
 	return &result, nil
 }
 
+// ListPorts retrieves TCP listening ports from the sandbox.
+// Retries with exponential backoff on connection errors and 5xx responses.
+func (c *SandboxAgentClient) ListPorts(ctx context.Context, sessionID string) (*sandboxapi.ListPortsResponse, error) {
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer lease.Release()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://sandbox/ports", nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			return nil, 0, err
+		}
+
+		resp, err := lease.Client.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ports: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result sandboxapi.ListPortsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // StartService starts a service in the sandbox.
 // Returns immediately with status "starting" (202 Accepted).
 // Retries with exponential backoff on connection errors and 5xx responses.

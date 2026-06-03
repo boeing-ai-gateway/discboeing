@@ -781,6 +781,22 @@ func (c *ChatService) ListServices(ctx context.Context, projectID, sessionID str
 	return client.ListServices(ctx)
 }
 
+// ListPorts retrieves TCP listening ports from the sandbox.
+// The sandbox is automatically reconciled if not running.
+func (c *ChatService) ListPorts(ctx context.Context, projectID, sessionID string) (*sandboxapi.ListPortsResponse, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListPorts(ctx)
+}
+
 // StartService starts a service in the sandbox.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) StartService(ctx context.Context, projectID, sessionID, serviceID string) (*sandboxapi.StartServiceResponse, error) {

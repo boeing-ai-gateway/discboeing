@@ -580,6 +580,21 @@ type ListServicesResponse struct {
 	Services []Service `json:"services"`
 }
 
+// PortEntry describes one TCP listening socket visible to the sandbox agent user.
+type PortEntry struct {
+	LocalAddress string `json:"localAddress"`
+	Port         int    `json:"port"`
+	Process      string `json:"process,omitempty"`
+	Protocol     string `json:"protocol"`
+	PID          int    `json:"pid"`
+	FD           int    `json:"fd,omitempty"`
+}
+
+// ListPortsResponse is the GET /ports response.
+type ListPortsResponse struct {
+	Ports []PortEntry `json:"ports"`
+}
+
 // StartServiceResponse is the POST /services/:id/start response.
 type StartServiceResponse struct {
 	Status    string `json:"status"`    // "starting"

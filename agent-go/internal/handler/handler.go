@@ -168,6 +168,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Health", Description: "Current user info"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/commands", Handler: h.ListCommands,
 		Meta: routes.Meta{Group: "Commands", Description: "List available slash commands"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/ports", Handler: h.ListPorts,
+		Meta: routes.Meta{Group: "Ports", Description: "List visible TCP listening ports"}})
 	if h.controlSocket != nil {
 		reg.Register(r, routes.Route{Method: "GET", Pattern: "/control/ws", Handler: h.ControlSocket,
 			Meta: routes.Meta{Group: "Control", Description: "Server-initiated sandbox control WebSocket"}})

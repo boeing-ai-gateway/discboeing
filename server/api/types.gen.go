@@ -73,6 +73,27 @@ func (e FileMessagePartType) Valid() bool {
 	}
 }
 
+// Defines values for PortEntryProtocol.
+const (
+	HTTP    PortEntryProtocol = "http"
+	HTTPS   PortEntryProtocol = "https"
+	Unknown PortEntryProtocol = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the PortEntryProtocol enum.
+func (e PortEntryProtocol) Valid() bool {
+	switch e {
+	case HTTP:
+		return true
+	case HTTPS:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectEventName.
 const (
 	Connected          ProjectEventName = "connected"
@@ -1063,6 +1084,11 @@ type Invitation struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
+// ListPortsResponse Ports Response payload returned by the API.
+type ListPortsResponse struct {
+	Ports []PortEntry `json:"ports"`
+}
+
 // LocalhostBinding localhost Binding API object.
 type LocalhostBinding struct {
 	// Port port value for the localhost Binding object.
@@ -1164,6 +1190,21 @@ type OAuthAuthorizeResponse struct {
 	Verifier             *string                `json:"verifier,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
+
+// PortEntry TCP listening socket visible to the sandbox agent user.
+type PortEntry struct {
+	Fd           *int    `json:"fd,omitempty"`
+	LocalAddress string  `json:"localAddress"`
+	Pid          int     `json:"pid"`
+	Port         int     `json:"port"`
+	Process      *string `json:"process,omitempty"`
+
+	// Protocol Detected application protocol for the listening port.
+	Protocol PortEntryProtocol `json:"protocol"`
+}
+
+// PortEntryProtocol Detected application protocol for the listening port.
+type PortEntryProtocol string
 
 // PreferenceResponse preference Response payload returned by the API.
 type PreferenceResponse struct {

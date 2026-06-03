@@ -629,6 +629,7 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 			}
 
 			case "data-workspace-files":
+			case "data-workspace-ports":
 				return;
 
 			case "start": {

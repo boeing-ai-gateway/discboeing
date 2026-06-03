@@ -81,6 +81,7 @@ import type {
 	HookRerunResponse,
 	HooksStateResponse,
 	HooksStatusResponse,
+	ListPortsResponse,
 	ListThreadsResponse,
 	ListServicesResponse,
 	ListSessionFilesResponse,
@@ -1081,6 +1082,14 @@ class ApiClient {
 	 */
 	async getServices(sessionId: string): Promise<ListServicesResponse> {
 		return this.fetch<ListServicesResponse>(`/sessions/${sessionId}/services`);
+	}
+
+	/**
+	 * List TCP listening ports in a session's sandbox.
+	 * @param sessionId Session ID
+	 */
+	async getPorts(sessionId: string): Promise<ListPortsResponse> {
+		return this.fetch<ListPortsResponse>(`/sessions/${sessionId}/ports`);
 	}
 
 	/**

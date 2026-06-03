@@ -603,6 +603,21 @@ type ServiceIsPassiveResponse struct {
 	Message   string `json:"message"`
 }
 
+// PortEntry describes one TCP listening socket visible to the agent user.
+type PortEntry struct {
+	LocalAddress string `json:"localAddress"`
+	Port         int    `json:"port"`
+	Process      string `json:"process,omitempty"`
+	Protocol     string `json:"protocol"`
+	PID          int    `json:"pid"`
+	FD           int    `json:"fd,omitempty"`
+}
+
+// ListPortsResponse is the GET /ports response.
+type ListPortsResponse struct {
+	Ports []PortEntry `json:"ports"`
+}
+
 // ============================================================================
 // Hook Types
 // ============================================================================

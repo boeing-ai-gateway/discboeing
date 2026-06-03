@@ -4666,6 +4666,46 @@
           }
         }
       }
+    },
+    "/api/projects/{projectId}/sessions/{sessionId}/ports": {
+      "get": {
+        "tags": [
+          "Ports"
+        ],
+        "summary": "List ports",
+        "description": "List TCP listening ports in a session sandbox. Returns the requested resource or collection for the authenticated caller.",
+        "operationId": "getProjectsByProjectIdSessionsBySessionIdPorts",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ports",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPortsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8934,6 +8974,59 @@
             "format": "int32"
           }
         }
+      },
+      "PortEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "localAddress",
+          "port",
+          "protocol",
+          "pid"
+        ],
+        "properties": {
+          "localAddress": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "process": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "fd": {
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https",
+              "unknown"
+            ],
+            "description": "Detected application protocol for the listening port."
+          }
+        },
+        "description": "TCP listening socket visible to the sandbox agent user."
+      },
+      "ListPortsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ports"
+        ],
+        "properties": {
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortEntry"
+            }
+          }
+        },
+        "description": "Ports Response payload returned by the API."
       }
     }
   }

@@ -41,6 +41,26 @@ describe("createChatStreamState", () => {
 		});
 		await state.handleStreamEvent({
 			event: "chunk",
+			data: JSON.stringify({
+				type: "data-workspace-ports",
+				data: {
+					reason: "initial",
+					ports: [
+						{
+							localAddress: "127.0.0.1:3000",
+							port: 3000,
+							process: "node",
+							pid: 123,
+							fd: 9,
+						},
+					],
+					resync: true,
+					scannedAt: "2026-06-02T03:27:49Z",
+				},
+			}),
+		});
+		await state.handleStreamEvent({
+			event: "chunk",
 			data: JSON.stringify({ type: "start", messageId: "assistant-1" }),
 		});
 

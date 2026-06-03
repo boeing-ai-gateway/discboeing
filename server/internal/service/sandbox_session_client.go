@@ -362,6 +362,13 @@ func (c *SessionClient) ListServices(ctx context.Context) (*sandboxapi.ListServi
 	})
 }
 
+// ListPorts retrieves TCP listening ports from the sandbox.
+func (c *SessionClient) ListPorts(ctx context.Context) (*sandboxapi.ListPortsResponse, error) {
+	return withReconciliation(ctx, c, func() (*sandboxapi.ListPortsResponse, error) {
+		return c.inner.ListPorts(ctx, c.sessionID)
+	})
+}
+
 // StartService starts a service in the sandbox.
 func (c *SessionClient) StartService(ctx context.Context, serviceID string) (*sandboxapi.StartServiceResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.StartServiceResponse, error) {
