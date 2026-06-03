@@ -61,7 +61,9 @@ test("session status component renders a dedicated git icon for committed", () =
 test("session setup status shows creation while pending chat is starting", () => {
 	const source = readSessionSetupStatusSource();
 
-	assert.match(source, /const thread = useThreadContext\(\);/);
+	assert.match(source, /thread: ThreadContextValue;/);
+	assert.doesNotMatch(source, /legacy-context-bridge/);
+	assert.doesNotMatch(source, /useThreadBridge/);
 	assert.match(
 		source,
 		/const pendingSessionStarted = \$derived\.by\(\n\t\t\(\) => session\.isPending && thread\.isStreaming,\n\t\);/,

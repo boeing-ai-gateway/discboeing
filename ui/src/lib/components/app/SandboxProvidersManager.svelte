@@ -25,13 +25,14 @@
 	import ProviderIcon from "$lib/components/app/parts/ProviderIcon.svelte";
 	import SandboxProviderConfigFieldControl from "$lib/components/app/parts/SandboxProviderConfigField.svelte";
 	import ProjectSettingsTabContent from "$lib/components/app/parts/ProjectSettingsTabContent.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
 	import type {
 		CredentialAuthType,
 		SandboxProviderConfigField,
 		SandboxProviderInstance,
 		SandboxProviderType,
 	} from "$lib/api-types";
+	import { refreshCredentials } from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type SimpleIconData = {
 		title: string;
@@ -42,8 +43,7 @@
 		path: string;
 	};
 
-	const app = useAppContext();
-	const credentials = app.credentials;
+	const context = useContext();
 	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
 	let providerTypes = $state<SandboxProviderType[]>([]);
@@ -184,7 +184,7 @@
 			const [typesResponse, providersResponse] = await Promise.all([
 				api.getSandboxProviderTypes(),
 				api.getSandboxProviders(),
-				credentials.refresh(),
+				refreshCredentials(),
 			]);
 			providerTypes = typesResponse.providerTypes;
 			providers = providersResponse.providers;
@@ -260,7 +260,7 @@
 	function credentialOptions(field: SandboxProviderConfigField) {
 		const provider = credentialProvider(field);
 		const authType = credentialAuthType(field);
-		return credentials.list.filter(
+		return context.data.credentials.items.filter(
 			(credential) =>
 				credential.provider === provider &&
 				credential.authType === authType &&
@@ -337,12 +337,13 @@
 		saving = true;
 		error = null;
 		try {
-			const credential = await credentials.create({
+			const credential = await api.createCredential({
 				provider,
 				name,
 				authType,
 				apiKey,
 			});
+			await refreshCredentials();
 			setConfigFieldValue(field, credential.id);
 			creatingCredentialField = null;
 			newCredentialSecrets = {

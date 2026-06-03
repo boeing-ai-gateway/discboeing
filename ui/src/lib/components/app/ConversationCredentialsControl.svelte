@@ -31,11 +31,19 @@
 		DropdownMenuSeparator,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import {
+		openCredentialsDialog,
+		refreshCredentials,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
+	import type { SessionContextValue } from "$lib/session/session-context.types";
 
-	const app = useAppContext();
-	const session = useSessionContext();
+	type Props = {
+		session: SessionContextValue;
+	};
+
+	let { session }: Props = $props();
+	const context = useContext();
 	const componentId = `session-credentials-${Math.random().toString(36).slice(2)}`;
 
 	let assignments = $state<SessionCredentialAssignment[]>([]);
@@ -70,7 +78,7 @@
 				return;
 			}
 			assignments = response.credentials;
-			await app.credentials.refresh();
+			await refreshCredentials();
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 404) {
 				assignments = [];
@@ -137,7 +145,7 @@
 		if (credential.provider.startsWith("custom:")) {
 			return credential.envKeys?.join(", ") || "Custom env vars";
 		}
-		const matchedType = app.credentials.credentialTypes.find(
+		const matchedType = context.data.credentials.types.find(
 			(type) =>
 				type.backendProvider === credential.provider &&
 				type.authType === credential.authType,
@@ -325,7 +333,7 @@
 		if (!credentialId) {
 			return;
 		}
-		app.ui.openCredentialsDialog(credentialId);
+		openCredentialsDialog(credentialId);
 	}
 
 	function visibilityToggleClass(enabled: boolean, disabled: boolean) {
@@ -676,7 +684,7 @@
 				class="w-full justify-start gap-2"
 				onclick={() => {
 					dropdownOpen = false;
-					app.ui.openCredentialsDialog();
+					openCredentialsDialog();
 				}}
 			>
 				<SettingsIcon class="size-3.5" />

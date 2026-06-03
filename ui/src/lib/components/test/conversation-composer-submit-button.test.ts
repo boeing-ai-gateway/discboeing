@@ -56,11 +56,11 @@ test("conversation composer disables input when no models are available", () => 
 
 	assert.match(
 		source,
-		/const hasAvailableModels = \$derived\.by\(\(\) => models\.list\.length > 0\);/,
+		/const hasAvailableModels = \$derived\.by\(\(\) => models\.items\.length > 0\);/,
 	);
 	assert.match(source, /if \(!hasAvailableModels\) \{/);
 	assert.match(source, /Please add a valid LLM provider credential/);
-	assert.match(source, /onclick=\{ui\.openCredentialsDialog\}/);
+	assert.match(source, /onclick=\{\(\) => openCredentialsDialog\(\)\}/);
 	assert.match(
 		source,
 		/<ConversationComposerTextarea[\s\S]*disabled=\{composerDisabled\}/,
@@ -78,7 +78,7 @@ test("conversation composer keeps session credentials interactive during pending
 		source,
 		/Answer the agent's pending question before sending a new message\./,
 	);
-	assert.match(source, /<ConversationCredentialsControl \/>/);
+	assert.match(source, /<ConversationCredentialsControl \{session\} \/>/);
 	assert.doesNotMatch(
 		source,
 		/class=\{composerDisabled \? "pointer-events-none opacity-60" : undefined\}/,

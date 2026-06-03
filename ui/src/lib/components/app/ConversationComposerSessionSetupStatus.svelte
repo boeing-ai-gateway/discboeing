@@ -1,15 +1,20 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { useThreadContext } from "$lib/context/thread-context.svelte";
+	import { openGitHubCredentialFlow } from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
+	import type {
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 
-	const app = useAppContext();
-	const ui = app.ui;
-	const workspaces = app.workspaces;
-	const session = useSessionContext();
-	const thread = useThreadContext();
+	type Props = {
+		session: SessionContextValue;
+		thread: ThreadContextValue;
+	};
+
+	let { session, thread }: Props = $props();
+	const context = useContext();
 	const sessionStatus = $derived.by(
 		() => session.current?.sandboxStatus ?? null,
 	);
@@ -63,7 +68,7 @@
 			</p>
 		{/if}
 	</div>
-	{#if session.isPending && workspaces.status === "loading"}
+	{#if session.isPending && context.data.workspaces.status === "loading"}
 		<p class="mb-2 px-1 text-xs text-muted-foreground">Loading workspaces...</p>
 	{/if}
 	{#if session.isPending && session.ui.pendingWorkspaceSetupMessage}
@@ -90,7 +95,7 @@
 			<button
 				type="button"
 				class="mb-2 px-1 text-xs text-primary underline underline-offset-2 hover:text-primary/80"
-				onclick={ui.openGitHubCredentialFlow}
+				onclick={openGitHubCredentialFlow}
 			>
 				Connect GitHub credential
 			</button>

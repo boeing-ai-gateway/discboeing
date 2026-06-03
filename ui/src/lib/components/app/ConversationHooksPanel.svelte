@@ -10,13 +10,16 @@
 	import { api } from "$lib/api-client";
 	import { Button } from "$lib/components/ui/button";
 	import * as Dialog from "$lib/components/ui/dialog";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
-	import type { HookOutputState } from "$lib/session/session-context.types";
+	import type {
+		HookOutputState,
+		SessionContextValue,
+	} from "$lib/session/session-context.types";
 	import type { HooksStatus } from "$lib/session/session-context.types";
 	import { downloadFile } from "$lib/shell";
 
 	type Props = {
+		session: SessionContextValue;
 		expanded: boolean;
 		hooksStatus: HooksStatus;
 		outputById: Record<string, HookOutputState>;
@@ -26,6 +29,7 @@
 	};
 
 	let {
+		session,
 		expanded,
 		hooksStatus,
 		outputById,
@@ -34,8 +38,7 @@
 		onSetHookExecutionPaused,
 	}: Props = $props();
 
-	const session = useSessionContext();
-	const sessionView = session.ui;
+	const sessionView = $derived(session.ui);
 	let reviewPhaseSaving = $state(false);
 
 	function pendingHookSet() {

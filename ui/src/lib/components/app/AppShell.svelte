@@ -7,10 +7,15 @@
 	import StartupTasksBanner from "$lib/components/app/parts/StartupTasksBanner.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
 	import * as Sheet from "$lib/components/ui/sheet";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { useContext } from "$lib/context/context.svelte";
+	import {
+		setDesktopSidebarOpen,
+		setMobileSidebarOpen,
+		shouldLoadSessionWorkspace,
+	} from "$lib/context/commands/app-view";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
-	const app = useAppContext();
+	const context = useContext();
 	const isMobile = new IsMobile(1024);
 	const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discobot-ui-sidebar-layout";
 	const SIDEBAR_MIN_WIDTH_PX = 300;
@@ -20,35 +25,44 @@
 	let desktopSidebarPane = $state<PaneAPI | null>(null);
 	let desktopSidebarInitialized = $state(false);
 	const currentSelectedSessionId = $derived.by(
-		() => app.sessions.selectedId ?? app.sessions.pendingId,
+		() =>
+			context.view.app.selection.sessionId ??
+			context.view.app.selection.pendingSessionId,
 	);
 	const showSessionToolbar = $derived.by(() => !!currentSelectedSessionId);
-	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
+	const mountedSessionIds = $derived.by(
+		() => context.view.app.navigation.mountedSessionIds,
+	);
+	const visibleStartupTasks = $derived.by(() =>
+		context.view.app.startupTasks.visibleIds
+			.map((taskId) => context.data.startupTasks.byId[taskId])
+			.filter((task) => task !== undefined),
+	);
 
 	function toggleSidebar() {
 		if (isMobile.current) {
-			app.ui.setMobileSidebarOpen(!app.ui.mobileSidebarOpen);
+			setMobileSidebarOpen(!context.view.app.navigation.mobileSidebarOpen);
 			return;
 		}
 
 		if (!desktopSidebarPane) {
-			app.ui.setDesktopSidebarOpen(!app.ui.desktopSidebarOpen);
+			setDesktopSidebarOpen(!context.view.app.navigation.desktopSidebarOpen);
 			return;
 		}
 
 		if (desktopSidebarPane.isCollapsed()) {
 			desktopSidebarPane.expand();
-			app.ui.setDesktopSidebarOpen(true);
+			setDesktopSidebarOpen(true);
 			return;
 		}
 
 		desktopSidebarPane.collapse();
-		app.ui.setDesktopSidebarOpen(false);
+		setDesktopSidebarOpen(false);
 	}
 
 	function handleSessionSelect() {
 		if (isMobile.current) {
-			app.ui.setMobileSidebarOpen(false);
+			setMobileSidebarOpen(false);
 		}
 	}
 
@@ -94,7 +108,7 @@
 			return;
 		}
 
-		app.ui.setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
+		setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 	});
 
 	$effect(() => {
@@ -105,12 +119,12 @@
 		desktopSidebarInitialized = true;
 
 		if (hasSavedSidebarLayout()) {
-			app.ui.setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
+			setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 			return;
 		}
 
 		desktopSidebarPane.expand();
-		app.ui.setDesktopSidebarOpen(true);
+		setDesktopSidebarOpen(true);
 	});
 
 	$effect(() => {
@@ -119,12 +133,12 @@
 		}
 
 		const paneCollapsed = desktopSidebarPane.isCollapsed();
-		if (app.ui.desktopSidebarOpen && paneCollapsed) {
+		if (context.view.app.navigation.desktopSidebarOpen && paneCollapsed) {
 			desktopSidebarPane.expand();
 			return;
 		}
 
-		if (!app.ui.desktopSidebarOpen && !paneCollapsed) {
+		if (!context.view.app.navigation.desktopSidebarOpen && !paneCollapsed) {
 			desktopSidebarPane.collapse();
 		}
 	});
@@ -132,7 +146,7 @@
 
 {#snippet mountedSessions(mainClass: string)}
 	{#each mountedSessionIds as sessionId (sessionId)}
-		{#if app.sessions.shouldLoadSession(sessionId, { includePending: true })}
+		{#if shouldLoadSessionWorkspace(sessionId, { includePending: true })}
 			<SessionWorkspace
 				{sessionId}
 				visible={sessionId === currentSelectedSessionId}
@@ -145,11 +159,14 @@
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
 	<AppKeyboardShortcuts />
 	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
-	<StartupTasksBanner startup={app.startup} />
+	<StartupTasksBanner
+		tasks={visibleStartupTasks}
+		hasActiveTasks={context.view.app.startupTasks.hasActiveTasks}
+	/>
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
 		{#if isMobile.current}
-			<Sheet.Root bind:open={app.ui.mobileSidebarOpen}>
+			<Sheet.Root bind:open={context.view.app.navigation.mobileSidebarOpen}>
 				<Sheet.Content
 					side="left"
 					overlayClass="bg-transparent"
@@ -185,10 +202,10 @@
 						collapsible
 						collapsedSize={0}
 						onCollapse={() => {
-							app.ui.setDesktopSidebarOpen(false);
+							setDesktopSidebarOpen(false);
 						}}
 						onExpand={() => {
-							app.ui.setDesktopSidebarOpen(true);
+							setDesktopSidebarOpen(true);
 						}}
 					>
 						<div class="box-border h-full min-h-0 pb-3 pl-3 pr-2 pt-1">

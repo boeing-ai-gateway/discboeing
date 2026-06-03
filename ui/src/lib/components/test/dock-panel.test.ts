@@ -64,7 +64,9 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 		source,
 		/class=\{sessionView\.activeView\.kind === "services" \? "contents" : "hidden"\}/,
 	);
-	assert.match(source, /const thread = useThreadContext\(\)/);
+	assert.match(source, /thread: ThreadContextValue;/);
+	assert.doesNotMatch(source, /legacy-context-bridge/);
+	assert.doesNotMatch(source, /useThreadBridge/);
 	assert.match(
 		source,
 		/onQueueSelectionComment=\{handleQueueDiffSelectionComment\}/,

@@ -105,13 +105,51 @@ test("app header keeps the settings button outside the drag region", () => {
 
 	assert.match(
 		source,
-		/onclick=\{\(\) => ui\.openSettings\(\)\}[\s\S]*class="desktop-no-drag relative"/,
+		/import \{ useContext \} from "\$lib\/context\/context\.svelte";/,
 	);
+	assert.match(source, /const context = useContext\(\);/);
+	assert.match(source, /const environment = context\.data\.environment;/);
+	assert.match(
+		source,
+		/const updates = \$derived\(context\.view\.app\.updates\);/,
+	);
+	assert.match(
+		source,
+		/const preferences = \$derived\(context\.view\.app\.preferences\);/,
+	);
+	assert.doesNotMatch(source, /useAppContext/);
+	assert.doesNotMatch(source, /const app = context\.actions\.app!/);
+	assert.doesNotMatch(source, /const environment = app\.environment/);
+	assert.doesNotMatch(source, /const ui = app\.ui/);
+	assert.doesNotMatch(source, /const updates = app\.updates/);
+	assert.doesNotMatch(source, /const preferences = app\.preferences/);
+	assert.match(
+		source,
+		/onclick=\{\(\) => openSettingsDialog\(\)\}[\s\S]*class="desktop-no-drag relative"/,
+	);
+});
+
+test("app header starts new sessions through root commands", () => {
+	const source = readAppHeaderSource();
+
+	assert.match(
+		source,
+		/import \{[\s\S]*openSettingsDialog,[\s\S]*startNewSession,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+	);
+	assert.match(source, /onclick=\{\(\) => startNewSession\(\)\}/);
+	assert.doesNotMatch(source, /sessions\.startNew/);
 });
 
 test("app mac window spacer skips the spacer while native fullscreen is active", () => {
 	const source = readAppMacWindowSpacerSource();
 
+	assert.match(
+		source,
+		/import \{ useContext \} from "\$lib\/context\/context\.svelte";/,
+	);
+	assert.match(source, /const context = useContext\(\);/);
+	assert.match(source, /const environment = context\.data\.environment;/);
+	assert.doesNotMatch(source, /useAppContext/);
 	assert.match(
 		source,
 		/import \{ withCurrentDesktopWindow \} from "\$lib\/shell";/,

@@ -7,39 +7,52 @@
 		recentThreadKey,
 	} from "$lib/app/thread-switcher";
 	import {
-		DESKTOP_SERVICE_ID,
-		VSCODE_SERVICE_ID,
-	} from "$lib/session/service-ids";
-	import {
 		detectIsMacPlatform,
 		getGlobalShortcuts,
 		type GlobalShortcut,
 		matchGlobalShortcutKeydown,
 		shouldCommitTabSwitcherOnKeyup,
-		type SwitcherCommitModifier,
 	} from "$lib/app/global-shortcuts";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import {
+		closeKeyboardShortcutOverlays,
+		createThread,
+		openThread,
+		setKeyboardShortcutsOpen,
+		setMobileSidebarOpen,
+		setRecentThreadSwitcherCommitModifier,
+		setRecentThreadSwitcherOpen,
+		setRecentThreadSwitcherSelectedKey,
+		startNewSession,
+		toggleKeyboardShortcutsOpen,
+		toggleSelectedSessionView,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
-	const app = useAppContext();
+	const context = useContext();
 	const isMobile = new IsMobile(1024);
 	const isMacPlatform = $derived.by(() => detectIsMacPlatform());
 	const globalShortcuts = $derived.by(() => getGlobalShortcuts(isMacPlatform));
+	const keyboardShortcutsDialog = $derived.by(
+		() => context.view.app.dialogs.keyboardShortcuts,
+	);
+	const recentThreadSwitcherDialog = $derived.by(
+		() => context.view.app.dialogs.recentThreadSwitcher,
+	);
 	const selectedThreadKey = $derived.by(() => {
-		const sessionId = app.sessions.selectedId;
+		const sessionId = context.view.app.selection.sessionId;
 		if (!sessionId) {
 			return null;
 		}
-		const sessionContext = app.sessions.sessionContexts.get(sessionId);
 		return recentThreadKey(
 			sessionId,
-			sessionContext?.threads.selectedId ?? sessionId,
+			context.view.app.selection.threadId ?? sessionId,
 		);
 	});
 	const availableSwitcherThreads = $derived.by(() =>
 		getAvailableSwitcherThreads({
-			sessions: app.sessions.sessions,
-			recentThreads: app.sessions.recentThreads,
+			sessions: context.data.sessions.items,
+			recentThreads: context.data.sessions.recentThreads,
 		}),
 	);
 	const switcherThreads = $derived.by(() =>
@@ -50,22 +63,18 @@
 	);
 	const switcherHelpText =
 		"Hold the shortcut modifier, tap to cycle, release to switch";
-	let tabSwitcherOpen = $state(false);
-	let tabSwitcherSelectedKey = $state<string | null>(null);
-	let tabSwitcherCommitModifier = $state<SwitcherCommitModifier | null>(null);
-	let keyboardHelpOpen = $state(false);
 
 	function getTabSwitcherSelectedIndex() {
 		if (!switcherThreads.length) {
 			return -1;
 		}
-		if (!tabSwitcherSelectedKey) {
+		if (!recentThreadSwitcherDialog.selectedKey) {
 			return 0;
 		}
 		return switcherThreads.findIndex(
 			(thread) =>
 				recentThreadKey(thread.sessionId, thread.threadId) ===
-				tabSwitcherSelectedKey,
+				recentThreadSwitcherDialog.selectedKey,
 		);
 	}
 
@@ -75,7 +84,7 @@
 			return;
 		}
 
-		const selectedIndex = tabSwitcherOpen
+		const selectedIndex = recentThreadSwitcherDialog.open
 			? getTabSwitcherSelectedIndex()
 			: selectedThreadKey
 				? 0
@@ -86,25 +95,26 @@
 					switcherThreads.length
 				: 0;
 		const nextThread = switcherThreads[nextIndex];
-		tabSwitcherSelectedKey = nextThread
-			? recentThreadKey(nextThread.sessionId, nextThread.threadId)
-			: null;
-		tabSwitcherOpen = nextThread !== undefined;
+		setRecentThreadSwitcherSelectedKey(
+			nextThread
+				? recentThreadKey(nextThread.sessionId, nextThread.threadId)
+				: null,
+		);
+		setRecentThreadSwitcherOpen(nextThread !== undefined);
 	}
 
 	function closeTabSwitcher() {
-		tabSwitcherOpen = false;
-		tabSwitcherSelectedKey = null;
-		tabSwitcherCommitModifier = null;
+		setRecentThreadSwitcherOpen(false);
+		setRecentThreadSwitcherSelectedKey(null);
+		setRecentThreadSwitcherCommitModifier(null);
 	}
 
 	function closeOverlays() {
-		closeTabSwitcher();
-		keyboardHelpOpen = false;
+		closeKeyboardShortcutOverlays();
 	}
 
 	function commitTabSwitcherSelection() {
-		if (!tabSwitcherOpen) {
+		if (!recentThreadSwitcherDialog.open) {
 			return;
 		}
 
@@ -114,54 +124,45 @@
 		if (!selectedThread) {
 			return;
 		}
-		app.sessions.openThread(selectedThread.sessionId, selectedThread.threadId);
+		openThread(selectedThread.sessionId, selectedThread.threadId);
 	}
 
 	function handleTabSwitcherHover(sessionId: string, threadId: string) {
-		tabSwitcherSelectedKey = recentThreadKey(sessionId, threadId);
+		setRecentThreadSwitcherSelectedKey(recentThreadKey(sessionId, threadId));
 	}
 
 	function handleTabSwitcherSelect(sessionId: string, threadId: string) {
 		closeTabSwitcher();
-		app.sessions.openThread(sessionId, threadId);
+		openThread(sessionId, threadId);
 	}
 
 	function handleStartNewSessionShortcut() {
 		closeOverlays();
-		app.sessions.startNew();
+		startNewSession();
 		if (isMobile.current) {
-			app.ui.setMobileSidebarOpen(false);
+			setMobileSidebarOpen(false);
 		}
 	}
 
 	function handleStartNewThreadShortcut() {
-		const sessionId = app.sessions.selectedId;
+		const sessionId = context.view.app.selection.sessionId;
 		if (!sessionId) {
 			return;
 		}
 
 		closeOverlays();
-		void app.sessions.createThread(sessionId);
+		void createThread(sessionId);
 		if (isMobile.current) {
-			app.ui.setMobileSidebarOpen(false);
+			setMobileSidebarOpen(false);
 		}
 	}
 
 	function toggleKeyboardHelp() {
-		const nextOpen = !keyboardHelpOpen;
 		closeTabSwitcher();
-		keyboardHelpOpen = nextOpen;
+		toggleKeyboardShortcutsOpen();
 	}
 
-	function getSelectedSessionContext() {
-		const sessionId = app.sessions.selectedId;
-		if (!sessionId) {
-			return null;
-		}
-		return app.sessions.sessionContexts.get(sessionId) ?? null;
-	}
-
-	function toggleSelectedSessionView(
+	function handleToggleSelectedSessionView(
 		viewKind:
 			| "terminal"
 			| "desktop"
@@ -170,52 +171,8 @@
 			| "diff-review"
 			| "services",
 	) {
-		const sessionContext = getSelectedSessionContext();
-		if (!sessionContext) {
-			return;
-		}
-
 		closeOverlays();
-		const sessionView = sessionContext.ui;
-		if (sessionView.activeView.kind === viewKind) {
-			sessionView.openChat();
-			return;
-		}
-
-		if (viewKind === "terminal") {
-			sessionView.openTerminal();
-			return;
-		}
-		if (viewKind === "desktop") {
-			sessionView.openDesktop();
-			return;
-		}
-		if (viewKind === "vscode") {
-			if (
-				sessionContext.services.list.some(
-					(service) => service.id === VSCODE_SERVICE_ID,
-				)
-			) {
-				sessionView.openVSCode();
-			}
-			return;
-		}
-		if (viewKind === "file") {
-			void sessionContext.files.open();
-			return;
-		}
-		if (viewKind === "diff-review") {
-			sessionView.openDiffReview();
-			return;
-		}
-
-		const sessionServices = sessionContext.services.list.filter(
-			(service) =>
-				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
-		);
-		if (sessionServices.length > 0) {
-			sessionView.openServices();
-		}
+		toggleSelectedSessionView(viewKind);
 	}
 
 	function isEditableShortcutTarget(target: EventTarget | null) {
@@ -231,7 +188,10 @@
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {
-		if (event.key === "Escape" && (tabSwitcherOpen || keyboardHelpOpen)) {
+		if (
+			event.key === "Escape" &&
+			(recentThreadSwitcherDialog.open || keyboardShortcutsDialog.open)
+		) {
 			event.preventDefault();
 			closeOverlays();
 			return;
@@ -247,8 +207,8 @@
 
 		if (shortcutAction.id === "switch-recent-thread") {
 			event.preventDefault();
-			keyboardHelpOpen = false;
-			tabSwitcherCommitModifier = shortcutAction.commitModifier;
+			setKeyboardShortcutsOpen(false);
+			setRecentThreadSwitcherCommitModifier(shortcutAction.commitModifier);
 			advanceTabSwitcherSelection(shortcutAction.reverse);
 			return;
 		}
@@ -263,27 +223,27 @@
 			return;
 		}
 		if (shortcutAction.id === "toggle-terminal") {
-			toggleSelectedSessionView("terminal");
+			handleToggleSelectedSessionView("terminal");
 			return;
 		}
 		if (shortcutAction.id === "toggle-desktop") {
-			toggleSelectedSessionView("desktop");
+			handleToggleSelectedSessionView("desktop");
 			return;
 		}
 		if (shortcutAction.id === "toggle-editor") {
-			toggleSelectedSessionView("vscode");
+			handleToggleSelectedSessionView("vscode");
 			return;
 		}
 		if (shortcutAction.id === "toggle-files") {
-			toggleSelectedSessionView("file");
+			handleToggleSelectedSessionView("file");
 			return;
 		}
 		if (shortcutAction.id === "toggle-diff-review") {
-			toggleSelectedSessionView("diff-review");
+			handleToggleSelectedSessionView("diff-review");
 			return;
 		}
 		if (shortcutAction.id === "toggle-services") {
-			toggleSelectedSessionView("services");
+			handleToggleSelectedSessionView("services");
 			return;
 		}
 		toggleKeyboardHelp();
@@ -291,8 +251,11 @@
 
 	function handleWindowKeyup(event: KeyboardEvent) {
 		if (
-			tabSwitcherOpen &&
-			shouldCommitTabSwitcherOnKeyup(event, tabSwitcherCommitModifier)
+			recentThreadSwitcherDialog.open &&
+			shouldCommitTabSwitcherOnKeyup(
+				event,
+				recentThreadSwitcherDialog.commitModifier,
+			)
 		) {
 			event.preventDefault();
 			commitTabSwitcherSelection();
@@ -300,23 +263,25 @@
 	}
 
 	$effect(() => {
-		if (tabSwitcherOpen && switcherThreads.length === 0) {
+		if (recentThreadSwitcherDialog.open && switcherThreads.length === 0) {
 			closeTabSwitcher();
 			return;
 		}
 		if (
-			tabSwitcherOpen &&
-			tabSwitcherSelectedKey &&
+			recentThreadSwitcherDialog.open &&
+			recentThreadSwitcherDialog.selectedKey &&
 			!switcherThreads.some(
 				(thread) =>
 					recentThreadKey(thread.sessionId, thread.threadId) ===
-					tabSwitcherSelectedKey,
+					recentThreadSwitcherDialog.selectedKey,
 			)
 		) {
 			const firstThread = switcherThreads[0];
-			tabSwitcherSelectedKey = firstThread
-				? recentThreadKey(firstThread.sessionId, firstThread.threadId)
-				: null;
+			setRecentThreadSwitcherSelectedKey(
+				firstThread
+					? recentThreadKey(firstThread.sessionId, firstThread.threadId)
+					: null,
+			);
 		}
 	});
 </script>
@@ -328,9 +293,9 @@
 />
 
 <RecentThreadSwitcherDialog
-	open={tabSwitcherOpen}
+	open={recentThreadSwitcherDialog.open}
 	threads={switcherThreads}
-	selectedKey={tabSwitcherSelectedKey}
+	selectedKey={recentThreadSwitcherDialog.selectedKey}
 	helpText={switcherHelpText}
 	onHover={handleTabSwitcherHover}
 	onSelect={handleTabSwitcherSelect}
@@ -338,6 +303,6 @@
 />
 
 <KeyboardShortcutHelpDialog
-	open={keyboardHelpOpen}
+	open={keyboardShortcutsDialog.open}
 	shortcuts={globalShortcuts as GlobalShortcut[]}
 />

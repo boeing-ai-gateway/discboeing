@@ -6,7 +6,7 @@ import type {
 	CredentialType,
 	SessionCredentialAssignment,
 } from "$lib/api-types";
-import type { AppContext } from "$lib/context/app-context.svelte";
+import type { AppRuntime } from "$lib/app/app-runtime.svelte";
 import {
 	buildCredentialUseExpiryFromPreset,
 	buildAssignmentUses,
@@ -22,7 +22,7 @@ import { createResource } from "$lib/resource/create-resource.svelte";
 import type { SessionCommandsDomain } from "$lib/session/session-context.types";
 
 type CreateSessionCommandsDomainArgs = {
-	app: AppContext;
+	runtime: AppRuntime;
 	sessionId: string;
 	hasSession: () => boolean;
 	getSelectedThreadId: () => string;
@@ -48,7 +48,7 @@ export function createSessionCommandsDomain(
 	let credentialDialogRequests = $state<AgentCommandCredentialRequest[]>([]);
 	let credentialDialogProjectCredentials = $state<CredentialInfo[]>([]);
 	let credentialDialogCredentialTypes = $state(
-		args.app.credentials.credentialTypes,
+		args.runtime.getCredentialTypes(),
 	);
 	let credentialDialogSessionAssignments = $state<
 		SessionCredentialAssignment[]
@@ -137,10 +137,10 @@ export function createSessionCommandsDomain(
 		if (!credentialDialogOpen) {
 			return;
 		}
-		await args.app.credentials.refresh();
+		await args.runtime.refreshCredentials();
 		const assignmentsResponse = await api.getSessionCredentials(args.sessionId);
-		credentialDialogProjectCredentials = args.app.credentials.list;
-		credentialDialogCredentialTypes = args.app.credentials.credentialTypes;
+		credentialDialogProjectCredentials = args.runtime.getCredentials();
+		credentialDialogCredentialTypes = args.runtime.getCredentialTypes();
 		credentialDialogSessionAssignments = assignmentsResponse.credentials;
 		selectedOptionByEnvVar = Object.fromEntries(
 			Object.entries(selectedOptionByEnvVar).map(([envVar, value]) => {
@@ -171,13 +171,12 @@ export function createSessionCommandsDomain(
 			return;
 		}
 		credentialDialogError = null;
-		args.app.ui.openSettings("credentials");
 		if (selectedOAuthType.backendProvider === "github-git") {
-			args.app.ui.credentialFlowIntent = "github-git";
+			args.runtime.openCredentialFlow("github-git");
 			return;
 		}
 		if (selectedOAuthType.backendProvider === "codex") {
-			args.app.ui.credentialFlowIntent = "codex";
+			args.runtime.openCredentialFlow("codex");
 			return;
 		}
 		credentialDialogError = `${selectedOAuthType.name} OAuth isn't supported in this flow yet.`;
@@ -185,10 +184,10 @@ export function createSessionCommandsDomain(
 
 	async function prepareCommandCredentialDialog(command: AgentCommand) {
 		if (
-			args.app.credentials.list.length === 0 ||
-			args.app.credentials.credentialTypes.length === 0
+			args.runtime.getCredentials().length === 0 ||
+			args.runtime.getCredentialTypes().length === 0
 		) {
-			await args.app.credentials.refresh();
+			await args.runtime.refreshCredentials();
 		}
 		const assignmentsResponse = await api.getSessionCredentials(args.sessionId);
 		const sessionAssignments = assignmentsResponse.credentials;
@@ -199,7 +198,7 @@ export function createSessionCommandsDomain(
 					request.envVar,
 					findPreferredCredentialId(
 						request.envVar,
-						args.app.credentials.list,
+						args.runtime.getCredentials(),
 						sessionAssignments,
 					),
 				];
@@ -228,8 +227,8 @@ export function createSessionCommandsDomain(
 
 		credentialDialogCommand = command;
 		credentialDialogRequests = requests;
-		credentialDialogProjectCredentials = args.app.credentials.list;
-		credentialDialogCredentialTypes = args.app.credentials.credentialTypes;
+		credentialDialogProjectCredentials = args.runtime.getCredentials();
+		credentialDialogCredentialTypes = args.runtime.getCredentialTypes();
 		credentialDialogSessionAssignments = sessionAssignments;
 		selectedOptionByEnvVar = initialSelections;
 		createCredentialNamesByEnvVar = initialNames;

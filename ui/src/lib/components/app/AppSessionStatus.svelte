@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolveSessionDisplayStatus } from "$lib/app/thread-status";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
 		sessionId: string;
@@ -19,9 +19,9 @@
 		showLabel = true,
 	}: Props = $props();
 
-	const app = useAppContext();
+	const context = useContext();
 	const status = $derived.by(() => {
-		const session = app.sessions.peek(sessionId);
+		const session = context.data.sessions.byId[sessionId];
 		if (!session) {
 			return "unknown";
 		}

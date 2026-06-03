@@ -17,7 +17,7 @@ test("app shell renders mounted sessions without owning their contexts", () => {
 
 	assert.match(
 		source,
-		/const mountedSessionIds = \$derived\.by\(\(\) => app\.ui\.mountedSessionIds\)/,
+		/const mountedSessionIds = \$derived\.by\(\s*\(\) => context\.view\.app\.navigation\.mountedSessionIds,\s*\)/,
 	);
 	assert.match(
 		source,
@@ -25,7 +25,7 @@ test("app shell renders mounted sessions without owning their contexts", () => {
 	);
 	assert.match(
 		source,
-		/\{#if app\.sessions\.shouldLoadSession\(sessionId, \{ includePending: true \}\)\}/,
+		/\{#if shouldLoadSessionWorkspace\(sessionId, \{ includePending: true \}\)\}/,
 	);
 	assert.doesNotMatch(source, /function shouldRenderSessionWorkspace/);
 	assert.match(source, /visible=\{sessionId === currentSelectedSessionId\}/);
@@ -79,7 +79,7 @@ test("app shell re-syncs the desktop pane state when the selected session change
 
 	assert.match(
 		source,
-		/app\.ui\.setDesktopSidebarOpen\(!desktopSidebarPane\.isCollapsed\(\)\);/,
+		/setDesktopSidebarOpen\(!desktopSidebarPane\.isCollapsed\(\)\);/,
 	);
 	assert.match(
 		source,
@@ -87,11 +87,11 @@ test("app shell re-syncs the desktop pane state when the selected session change
 	);
 	assert.match(
 		source,
-		/if \(app\.ui\.desktopSidebarOpen && paneCollapsed\) \{\s*desktopSidebarPane\.expand\(\);/,
+		/if \(context\.view\.app\.navigation\.desktopSidebarOpen && paneCollapsed\) \{\s*desktopSidebarPane\.expand\(\);/,
 	);
 	assert.match(
 		source,
-		/if \(!app\.ui\.desktopSidebarOpen && !paneCollapsed\) \{\s*desktopSidebarPane\.collapse\(\);/,
+		/if \(!context\.view\.app\.navigation\.desktopSidebarOpen && !paneCollapsed\) \{\s*desktopSidebarPane\.collapse\(\);/,
 	);
 });
 
@@ -105,4 +105,19 @@ test("app shell renders the extracted keyboard shortcut controller", () => {
 	assert.match(source, /<AppKeyboardShortcuts \/>/);
 	assert.doesNotMatch(source, /function handleWindowKeydown/);
 	assert.doesNotMatch(source, /\{#if keyboardHelpOpen\}/);
+});
+
+test("app shell reads startup banner projections from the root context", () => {
+	const source = readAppShellSource();
+
+	assert.match(
+		source,
+		/const visibleStartupTasks = \$derived\.by\(\(\) =>\s*context\.view\.app\.startupTasks\.visibleIds[\s\S]*context\.data\.startupTasks\.byId\[taskId\]/,
+	);
+	assert.match(
+		source,
+		/<StartupTasksBanner\s+tasks=\{visibleStartupTasks\}\s+hasActiveTasks=\{context\.view\.app\.startupTasks\.hasActiveTasks\}\s+\/>/,
+	);
+	assert.doesNotMatch(source, /startup=\{app\.startup\}/);
+	assert.doesNotMatch(source, /const app = context\.actions\.app!/);
 });

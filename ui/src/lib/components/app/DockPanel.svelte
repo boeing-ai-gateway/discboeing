@@ -10,9 +10,8 @@
 	import ServicePanel from "$lib/components/app/parts/ServicePanel.svelte";
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
 	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { useThreadContext } from "$lib/context/thread-context.svelte";
+	import { subscribeServiceOutput } from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 	import { writeStorage } from "$lib/local-storage";
 	import type { DiffStyle } from "$lib/pierre-diff";
 	import { requestVSCodeOpenFile } from "$lib/editor-control";
@@ -22,6 +21,10 @@
 		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
+	import type {
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import {
 		DESKTOP_SERVICE_ID,
 		VSCODE_SERVICE_ID,
@@ -34,11 +37,14 @@
 	type RenderedServiceOutputEvent = ServiceOutputEvent & {
 		displayText: string;
 	};
+	type Props = {
+		session: SessionContextValue;
+		thread: ThreadContextValue;
+	};
 
-	const app = useAppContext();
-	const session = useSessionContext();
-	const thread = useThreadContext();
-	const sessionView = session.ui;
+	let { session, thread }: Props = $props();
+	const context = useContext();
+	const sessionView = $derived(session.ui);
 	const visibleServices = $derived.by(() =>
 		session.services.list.filter(
 			(service) =>
@@ -69,8 +75,11 @@
 	const sessionFileDiff = $derived.by(() => session.files.diff);
 	const sessionFileDiffStats = $derived.by(() => session.files.diffStats);
 	const shiftWindowControlsForSidebar = $derived.by(
-		() => !app.ui.desktopSidebarOpen && sessionView.dockMaximized,
+		() =>
+			!context.view.app.navigation.desktopSidebarOpen &&
+			sessionView.dockMaximized,
 	);
+	const preferences = $derived(context.view.app.preferences);
 	const activeDockPanelKind = $derived.by<DockPanelKind | null>(() => {
 		const { kind } = sessionView.activeView;
 		return kind === "chat" ? null : kind;
@@ -183,7 +192,7 @@
 		void service.status;
 		serviceLogEvents = [];
 		serviceLogsConnected = false;
-		const subscription = app.chatStreams.subscribeServiceOutput({
+		const subscription = subscribeServiceOutput({
 			sessionId: session.sessionId,
 			serviceId: service.id,
 			onOpen: () => {
@@ -313,7 +322,7 @@ ${selectedText}
 				dockMaximized={sessionView.dockMaximized}
 				onClose={sessionView.openChat}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
-				resolvedTheme={app.preferences.resolvedTheme}
+				resolvedTheme={preferences.resolvedTheme}
 				sessionId={session.sessionId}
 				service={vscodeService}
 				{shiftWindowControlsForSidebar}
@@ -328,8 +337,8 @@ ${selectedText}
 				onClose={sessionView.openChat}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				dockMaximized={sessionView.dockMaximized}
-				colorScheme={app.preferences.colorScheme}
-				resolvedTheme={app.preferences.resolvedTheme}
+				colorScheme={preferences.colorScheme}
+				resolvedTheme={preferences.resolvedTheme}
 				{shiftWindowControlsForSidebar}
 			/>
 		</div>
@@ -361,7 +370,7 @@ ${selectedText}
 				diffStats={sessionFileDiffStats}
 				approvedBySession={diffReviewApprovals}
 				diffStyle={diffReviewStyle}
-				resolvedTheme={app.preferences.resolvedTheme}
+				resolvedTheme={preferences.resolvedTheme}
 				{shiftWindowControlsForSidebar}
 			/>
 		</div>

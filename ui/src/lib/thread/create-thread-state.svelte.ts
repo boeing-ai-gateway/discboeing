@@ -1,5 +1,3 @@
-import { getContext, hasContext, setContext } from "svelte";
-
 import { api } from "$lib/api-client";
 import { isThreadSnapshotRunning } from "$lib/app/thread-status";
 import {
@@ -25,7 +23,7 @@ import {
 	serializeConversationComments,
 	writeConversationComments,
 } from "$lib/conversation-comment-storage";
-import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
+import type { AppRuntime, StartChat } from "$lib/app/app-runtime.svelte";
 import { createConversationDomain } from "$lib/thread/conversation.svelte";
 import { createRetryScheduler } from "$lib/resource/create-resource.svelte";
 import type {
@@ -33,8 +31,16 @@ import type {
 	SessionContextValue,
 	ThreadContextValue,
 } from "$lib/session/session-context.types";
+export {
+	normalizeThreadComposerReasoning,
+	normalizeThreadComposerServiceTier,
+	parseComposerModelSelection,
+} from "$lib/thread/thread-composer.helpers";
+import {
+	normalizeThreadComposerReasoning,
+	normalizeThreadComposerServiceTier,
+} from "$lib/thread/thread-composer.helpers";
 
-const THREAD_CONTEXT_KEY = Symbol.for("discobot-ui-thread-context");
 const COMPOSER_DRAFT_PERSIST_DELAY_MS = 300;
 const PENDING_COMMENTS_PERSIST_DELAY_MS = 300;
 
@@ -56,30 +62,6 @@ export function getThreadConversationStatus(
 	status: ThreadContextValue["status"],
 ): ThreadContextValue["status"] {
 	return status;
-}
-
-export function normalizeThreadComposerReasoning(
-	reasoning: string | null | undefined,
-): string | undefined {
-	return reasoning && reasoning.length > 0 ? reasoning : undefined;
-}
-
-export function normalizeThreadComposerServiceTier(
-	serviceTier: string | null | undefined,
-): string | undefined {
-	const normalized = serviceTier?.trim().toLowerCase();
-	if (!normalized) {
-		return undefined;
-	}
-	return normalized === "fast" ? "priority" : normalized;
-}
-
-export function parseComposerModelSelection(
-	modelId: string | null | undefined,
-): { modelId: string | null } {
-	return {
-		modelId: modelId && modelId.length > 0 ? modelId : null,
-	};
 }
 
 export function getThreadComposerValues(
@@ -187,8 +169,8 @@ export function applyStreamedThreadUpdate({
 	void reloadSession();
 }
 
-export function createThreadContext(
-	app: AppContext,
+export function createThreadState(
+	runtime: AppRuntime,
 	startChat: StartChat,
 	session: SessionContextValue,
 	threadId: string,
@@ -223,7 +205,7 @@ export function createThreadContext(
 		await Promise.all([
 			retryScheduler.run("files", () => session.files.refresh()),
 			retryScheduler.run("session", () =>
-				app.sessions.reloadSession(session.sessionId),
+				runtime.reloadSession(session.sessionId),
 			),
 		]);
 	};
@@ -245,7 +227,7 @@ export function createThreadContext(
 		hasSession: () => hasSession,
 		threadId,
 		startChat,
-		chatStreams: app.chatStreams,
+		chatStreams: runtime.chatStreams,
 		refreshThread: async () => {
 			await session.threads.refreshThread(threadId);
 			const refreshedThread = session.stores.threads.get(threadId);
@@ -272,12 +254,12 @@ export function createThreadContext(
 					if (!currentSession || currentSession.displayName) {
 						return;
 					}
-					app.stores.sessions.upsert({
+					runtime.upsertSession({
 						...currentSession,
 						name,
 					});
 				},
-				reloadSession: () => app.sessions.reloadSession(session.sessionId),
+				reloadSession: () => runtime.reloadSession(session.sessionId),
 			});
 			if (thread.id === threadId) {
 				conversation.reconcileThreadSnapshot(thread);
@@ -313,11 +295,11 @@ export function createThreadContext(
 	}
 
 	const sourceComposerValues = $derived.by(() =>
-		getThreadComposerValues(getThread(), app.preferences.defaultModel || null),
+		getThreadComposerValues(getThread(), runtime.getDefaultModel() || null),
 	);
 	const initialComposerValues = getThreadComposerValues(
 		getThread(),
-		app.preferences.defaultModel || null,
+		runtime.getDefaultModel() || null,
 	);
 	let sourceComposerValuesKey = $state(
 		getThreadComposerValuesKey(initialComposerValues),
@@ -508,7 +490,7 @@ export function createThreadContext(
 			const submittedThread = session.threads.list.find(
 				(thread) => thread.id === result.threadId,
 			);
-			app.stores.recentThreads.recordSelection({
+			runtime.recordRecentThread({
 				sessionId: result.sessionId,
 				threadId: result.threadId,
 				name:
@@ -662,30 +644,4 @@ export function createThreadContext(
 			return session.files.contents;
 		},
 	};
-}
-
-export function setThreadContext(
-	context: ThreadContextValue,
-): ThreadContextValue {
-	setContext(THREAD_CONTEXT_KEY, context);
-	return context;
-}
-
-export function useThreadContext(): ThreadContextValue {
-	const context = getContext<ThreadContextValue | undefined>(
-		THREAD_CONTEXT_KEY,
-	);
-	if (!context) {
-		throw new Error(
-			"useThreadContext must be used within a ThreadContext provider",
-		);
-	}
-	return context;
-}
-
-export function getThreadContextIfPresent(): ThreadContextValue | undefined {
-	if (!hasContext(THREAD_CONTEXT_KEY)) {
-		return undefined;
-	}
-	return getContext<ThreadContextValue | undefined>(THREAD_CONTEXT_KEY);
 }

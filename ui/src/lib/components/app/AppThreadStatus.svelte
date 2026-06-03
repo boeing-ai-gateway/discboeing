@@ -1,10 +1,7 @@
 <script lang="ts">
-	import {
-		resolveThreadContextDisplayStatus,
-		resolveThreadDisplayStatus,
-	} from "$lib/app/thread-status";
+	import { resolveThreadDisplayStatus } from "$lib/app/thread-status";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
 		sessionId: string;
@@ -14,14 +11,11 @@
 
 	let { sessionId, threadId, class: className }: Props = $props();
 
-	const app = useAppContext();
+	const context = useContext();
 	const status = $derived.by(() => {
-		const session = app.sessions.peek(sessionId);
-		const sessionContext = app.sessions.sessionContexts.get(sessionId);
-		const thread = sessionContext?.threads.list.find(
-			(threadObj) => threadObj.id === threadId,
-		);
-		const threadContext = sessionContext?.threadContexts.get(threadId);
+		const session = context.data.sessions.byId[sessionId];
+		const thread = context.data.threads.bySessionId[sessionId]?.byId[threadId];
+		const conversation = context.data.conversations.byThreadId[threadId];
 
 		if (!session) {
 			return "unknown";
@@ -34,7 +28,11 @@
 					? session.threadStatus
 					: undefined,
 			thread,
-			localActivityStatus: resolveThreadContextDisplayStatus(threadContext),
+			localActivityStatus: conversation?.isStreaming
+				? { status: "running" }
+				: conversation?.hasPendingQuestion
+					? { status: "needs_attention" }
+					: null,
 		});
 	});
 </script>

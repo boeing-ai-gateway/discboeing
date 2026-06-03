@@ -48,10 +48,28 @@
 	import SandboxProvidersManager from "$lib/components/app/SandboxProvidersManager.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
 	import { api } from "$lib/api-client";
-	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
+	import {
+		checkForUpdates,
+		closeSettingsDialog,
+		ignoreUpdate,
+		installAndRelaunch,
+		openSupportInfoDialog,
+		setAutoScrollOnStream,
+		setChatWidthMode,
+		setColorScheme,
+		setDefaultModel,
+		setRecentThreadsVisibleLimit,
+		setSettingsDialogOpen,
+		setSettingsDialogTab,
+		setShowRefreshButton,
+		setTheme,
+		setTopBarIconOnly,
+		setTrackPrereleases,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 
 	function getCleanModelName(name: string) {
 		return name.replace(/\s*\(latest\)\s*/gi, "").trim();
@@ -95,19 +113,19 @@
 		});
 	}
 
-	const app = useAppContext();
-	const models = app.models;
-	const preferences = app.preferences;
+	const context = useContext();
+	const models = $derived(context.data.models);
+	const preferences = $derived(context.view.app.preferences);
 
 	const selectedDefaultModel = $derived.by(() =>
 		preferences.defaultModel
-			? (models.list.find((model) => model.id === preferences.defaultModel) ??
+			? (models.items.find((model) => model.id === preferences.defaultModel) ??
 				null)
 			: null,
 	);
 
 	const modelProviderEntries = $derived.by(() => {
-		const dedupedModels = getDedupedModels(models.list);
+		const dedupedModels = getDedupedModels(models.items);
 		const grouped: Record<string, ModelInfo[]> = {};
 
 		for (const model of dedupedModels) {
@@ -127,9 +145,13 @@
 
 		return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
 	});
-	const ui = app.ui;
-	const updates = app.updates;
-	const environment = app.environment;
+	const settingsDialog = $derived(context.view.app.dialogs.settings);
+	const updates = $derived(context.data.updates);
+	const showUpdateBadge = $derived(context.view.app.updates.showBadge);
+	const trackPrereleases = $derived(
+		context.view.app.preferences.trackPrereleases,
+	);
+	const environment = $derived(context.data.environment);
 	const showUpdateTab = $derived(environment.supportsAppUpdates);
 	const themeModes: ThemeMode[] = ["light", "dark", "system"];
 	let clearCacheDialogOpen = $state(false);
@@ -178,15 +200,15 @@
 
 	function handleSettingsOpenChange(open: boolean) {
 		if (!open) {
-			ui.closeSettings();
+			closeSettingsDialog();
 			return;
 		}
 
-		if (!showUpdateTab && ui.settingsDialog.tab === "update") {
-			ui.settingsDialog.tab = "appearance";
+		if (!showUpdateTab && settingsDialog.tab === "update") {
+			setSettingsDialogTab("appearance");
 		}
 
-		ui.settingsDialog.open = true;
+		setSettingsDialogOpen(true);
 		void loadProviderCapabilities();
 	}
 
@@ -201,7 +223,7 @@
 			return;
 		}
 
-		ui.settingsDialog.tab = value;
+		setSettingsDialogTab(value);
 	}
 
 	function handleSettingsInteractOutside(event: Event) {
@@ -230,10 +252,7 @@
 	}
 </script>
 
-<Dialog.Root
-	open={ui.settingsDialog.open}
-	onOpenChange={handleSettingsOpenChange}
->
+<Dialog.Root open={settingsDialog.open} onOpenChange={handleSettingsOpenChange}>
 	<Dialog.Content
 		class="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
 		onInteractOutside={handleSettingsInteractOutside}
@@ -249,7 +268,7 @@
 		</Dialog.Header>
 
 		<Tabs
-			value={ui.settingsDialog.tab}
+			value={settingsDialog.tab}
 			onValueChange={handleSettingsTabChange}
 			class="mt-1"
 		>
@@ -263,7 +282,7 @@
 					<TabsTrigger value="update">
 						<span class="relative inline-flex items-center px-2">
 							Update
-							{#if updates.showBadge}
+							{#if showUpdateBadge}
 								<span
 									class="absolute -right-1 top-0 h-2 w-2 rounded-full bg-primary"
 								></span>
@@ -302,7 +321,7 @@
 													value === "dark" ||
 													value === "system"
 												) {
-													preferences.setTheme(value);
+													setTheme(value);
 												}
 											}}
 											variant="outline"
@@ -335,7 +354,7 @@
 											id="settings-theme"
 											value={preferences.colorScheme}
 											onchange={(event) => {
-												preferences.setColorScheme(
+												setColorScheme(
 													(event.currentTarget as HTMLSelectElement)
 														.value as ThemeColorScheme,
 												);
@@ -369,7 +388,7 @@
 														nextValue as (typeof RECENT_THREADS_VISIBLE_LIMIT_PRESETS)[number],
 													)
 												) {
-													preferences.setRecentThreadsVisibleLimit(nextValue);
+													setRecentThreadsVisibleLimit(nextValue);
 												}
 											}}
 											variant="outline"
@@ -402,7 +421,7 @@
 											aria-label="Show refresh button"
 											checked={preferences.showRefreshButton}
 											onCheckedChange={(checked) => {
-												preferences.setShowRefreshButton(checked === true);
+												setShowRefreshButton(checked === true);
 											}}
 										/>
 									</ItemActions>
@@ -421,7 +440,7 @@
 											aria-label="Icon-only top bar"
 											checked={preferences.topBarIconOnly}
 											onCheckedChange={(checked) => {
-												preferences.setTopBarIconOnly(checked === true);
+												setTopBarIconOnly(checked === true);
 											}}
 										/>
 									</ItemActions>
@@ -458,9 +477,7 @@
 											onchange={(event) => {
 												const next = (event.currentTarget as HTMLSelectElement)
 													.value;
-												preferences.setDefaultModel(
-													next === "__auto__" ? "" : next,
-												);
+												setDefaultModel(next === "__auto__" ? "" : next);
 											}}
 											class="w-full"
 										>
@@ -489,7 +506,7 @@
 											aria-label="Full width conversation"
 											checked={preferences.chatWidthMode === "full"}
 											onCheckedChange={(checked) => {
-												preferences.setChatWidthMode(
+												setChatWidthMode(
 													checked === true ? "full" : "constrained",
 												);
 											}}
@@ -511,7 +528,7 @@
 											aria-label="Auto-scroll"
 											checked={preferences.autoScrollOnStream}
 											onCheckedChange={(checked) => {
-												preferences.setAutoScrollOnStream(checked === true);
+												setAutoScrollOnStream(checked === true);
 											}}
 										/>
 									</ItemActions>
@@ -530,7 +547,7 @@
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							{#if ui.settingsDialog.open && ui.settingsDialog.tab === "providers"}
+							{#if settingsDialog.open && settingsDialog.tab === "providers"}
 								<SandboxProvidersManager />
 							{/if}
 						</CardContent>
@@ -550,7 +567,7 @@
 										variant="ghost"
 										size="xs"
 										onclick={() => {
-											void updates.check();
+											void checkForUpdates();
 										}}
 										disabled={updates.status === "checking" ||
 											updates.status === "downloading" ||
@@ -579,9 +596,9 @@
 										</div>
 										<Switch
 											aria-label="Track pre-releases"
-											checked={updates.trackPrereleases}
+											checked={trackPrereleases}
 											onCheckedChange={(checked) =>
-												void updates.setTrackPrereleases(checked === true)}
+												void setTrackPrereleases(checked === true)}
 										/>
 									</div>
 								{/if}
@@ -590,21 +607,19 @@
 										class="rounded-md border border-border bg-background p-3"
 									>
 										<p class="text-sm text-muted-foreground">
-											Version {updates.availableVersion} is ready to install{#if updates.trackPrereleases}
+											Version {updates.availableVersion} is ready to install{#if trackPrereleases}
 												from the pre-release channel{/if}.
 										</p>
 										<div class="mt-3 flex items-center gap-2">
 											<Button
 												variant="default"
 												size="xs"
-												onclick={() => void updates.installAndRelaunch()}
+												onclick={() => void installAndRelaunch()}
 											>
 												Restart to update
 											</Button>
-											<Button
-												variant="outline"
-												size="xs"
-												onclick={updates.ignore}>Ignore</Button
+											<Button variant="outline" size="xs" onclick={ignoreUpdate}
+												>Ignore</Button
 											>
 										</div>
 									</div>
@@ -712,7 +727,7 @@
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							{#if ui.settingsDialog.open && ui.settingsDialog.tab === "credentials"}
+							{#if settingsDialog.open && settingsDialog.tab === "credentials"}
 								<CredentialsManager />
 							{/if}
 						</CardContent>
@@ -727,14 +742,14 @@
 					<Button
 						variant="outline"
 						size="icon-sm"
-						onclick={ui.openSupportInfo}
+						onclick={openSupportInfoDialog}
 						title="Support information"
 						aria-label="Support information"
 					>
 						<InfoIcon class="size-4" />
 					</Button>
 				</div>
-				<Button variant="default" size="sm" onclick={ui.closeSettings}
+				<Button variant="default" size="sm" onclick={closeSettingsDialog}
 					>Done</Button
 				>
 			</div>
@@ -768,6 +783,6 @@
 	</AlertDialog>
 {/if}
 
-{#if ui.supportInfoDialogOpen}
+{#if context.view.app.dialogs.supportInfo.open}
 	<SupportInfoDialog />
 {/if}

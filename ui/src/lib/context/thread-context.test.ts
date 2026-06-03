@@ -5,7 +5,7 @@ import test from "node:test";
 
 const THREAD_CONTEXT_SOURCE = path.resolve(
 	import.meta.dirname,
-	"./thread-context.svelte.ts",
+	"../thread/create-thread-state.svelte.ts",
 );
 
 test("thread context treats startup transitions as streaming", () => {

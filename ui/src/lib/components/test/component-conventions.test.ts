@@ -25,6 +25,8 @@ const COMPONENTS_ROOT = path.resolve(import.meta.dirname, "..");
 // Matches unknown import from the three global context modules
 const GLOBAL_CONTEXT_IMPORT =
 	/from\s+["'][$]lib\/context\/(app|session|thread)-context(?:\.svelte)?["']/;
+const OLD_CONTEXT_ENTRY_POINT =
+	/\b(?:useAppContext|useSessionContext|useThreadContext|setAppContext|setSessionContext|setThreadContext|getAppContextIfPresent|getSessionContextIfPresent|getThreadContextIfPresent)\s*\(/;
 
 async function findSvelteFiles(dir: string): Promise<string[]> {
 	const files: string[] = [];
@@ -37,6 +39,13 @@ async function findSvelteFiles(dir: string): Promise<string[]> {
 function importsGlobalContext(filePath: string): boolean {
 	const content = readFileSync(filePath, "utf-8");
 	return GLOBAL_CONTEXT_IMPORT.test(content);
+}
+
+function usesOldContextEntryPoint(filePath: string): boolean {
+	const content = readFileSync(filePath, "utf-8");
+	return (
+		GLOBAL_CONTEXT_IMPORT.test(content) || OLD_CONTEXT_ENTRY_POINT.test(content)
+	);
 }
 
 function relPath(filePath: string): string {
@@ -71,5 +80,21 @@ test("app/parts/ components are pure — no global context imports", async () =>
 	await assertNoGlobalContext(
 		path.join(COMPONENTS_ROOT, "app/parts"),
 		"app/parts/",
+	);
+});
+
+test("app/ root components do not call old context entry points", async () => {
+	const files: string[] = [];
+	for await (const file of glob("*.svelte", {
+		cwd: path.join(COMPONENTS_ROOT, "app"),
+	})) {
+		files.push(path.join(COMPONENTS_ROOT, "app", file));
+	}
+
+	const violations = files.filter(usesOldContextEntryPoint).map(relPath);
+	assert.deepEqual(
+		violations,
+		[],
+		`app/ root components must not call old context entry points.\nViolations:\n  ${violations.join("\n  ")}`,
 	);
 });

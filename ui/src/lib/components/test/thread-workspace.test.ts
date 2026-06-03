@@ -33,9 +33,11 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /\}: Props =\s*\$props\(\);/);
 	assert.match(
 		source,
-		/const thread = session\.ensureThread\(untrack\(\(\) => threadId\)\);/,
+		/const thread: ThreadContextValue = untrack\(\(\) =>\s*session\.ensureThread\(threadId\),\s*\);/,
 	);
-	assert.match(source, /setThreadContext\(thread\);/);
+	assert.doesNotMatch(source, /session\.ensureThread\(untrack/);
+	assert.doesNotMatch(source, /legacy-context-bridge/);
+	assert.doesNotMatch(source, /setThreadBridge\(thread\);/);
 	assert.match(source, /<ThreadWorkspaceActive/);
 	assert.match(source, /const hasSelectedThread = \$derived\.by/);
 	assert.match(
@@ -104,7 +106,10 @@ test("thread workspace keeps pending sessions on the active conversation view an
 
 test("thread context stops sandbox refreshes when a session is not ready", () => {
 	const source = readFileSync(
-		path.resolve(import.meta.dirname, "../../context/thread-context.svelte.ts"),
+		path.resolve(
+			import.meta.dirname,
+			"../../thread/create-thread-state.svelte.ts",
+		),
 		"utf-8",
 	);
 
@@ -150,8 +155,13 @@ test("active thread workspace keeps the stream live while inactive conversation 
 		source,
 		/title=\{session\.threads\.selected\?\.name \?\?/,
 	);
-	assert.equal(
-		source.match(/<ConversationPane visible=\{props\.visible\} \/>/g)?.length,
-		2,
+	assert.equal(source.match(/<ConversationPane/g)?.length, 2);
+	assert.match(
+		source,
+		/<ConversationPane[\s\S]*\{session\}[\s\S]*\{thread\}[\s\S]*visible=\{props\.visible\}/,
+	);
+	assert.match(
+		source,
+		/<ConversationPane \{session\} \{thread\} visible=\{props\.visible\} \/>/,
 	);
 });

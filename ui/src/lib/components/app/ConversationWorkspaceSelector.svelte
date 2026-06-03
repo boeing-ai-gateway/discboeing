@@ -8,18 +8,24 @@
 	import type { Workspace } from "$lib/api-types";
 	import type { WorkspaceSelectionResult } from "$lib/components/app/conversation-composer.types";
 	import GithubIcon from "$lib/components/ui/icons/GithubIcon.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
 	import { isDesktopShell, pickDirectory } from "$lib/shell";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 	import { Input } from "$lib/components/ui/input";
 	import { NativeSelect } from "$lib/components/ui/native-select";
+	import {
+		refreshWorkspaces,
+		validateWorkspace,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
+	import type { SessionContextValue } from "$lib/session/session-context.types";
 
-	let { fullWidth = false }: { fullWidth?: boolean } = $props();
+	let {
+		session,
+		fullWidth = false,
+	}: { session: SessionContextValue; fullWidth?: boolean } = $props();
 
-	const workspaces = useAppContext().workspaces;
-	const session = useSessionContext();
-	const sessionView = session.ui;
+	const context = useContext();
+	const sessionView = $derived(session.ui);
 
 	let showWorkspaceSuggestions = $state(false);
 	let selectedWorkspaceSuggestionIndex = $state(-1);
@@ -35,8 +41,10 @@
 		null;
 	let destroyed = false;
 
-	const availableWorkspaces = $derived.by(() => workspaces.list);
-	const loadingWorkspaces = $derived.by(() => workspaces.status === "loading");
+	const availableWorkspaces = $derived.by(() => context.data.workspaces.items);
+	const loadingWorkspaces = $derived.by(
+		() => context.data.workspaces.status === "loading",
+	);
 	const requiresSourceInput = $derived.by(
 		() => sessionView.pendingWorkspaceRequiresSourceInput,
 	);
@@ -240,10 +248,7 @@
 
 		workspaceValidationDebounce = setTimeout(async () => {
 			try {
-				const result = await workspaces.validate(
-					currentInput,
-					currentSourceType,
-				);
+				const result = await validateWorkspace(currentInput, currentSourceType);
 
 				if (destroyed || workspaceValidationRequestId !== requestId) {
 					return;
@@ -405,7 +410,11 @@
 			const workspaceId = sessionView.pendingWorkspaceOption.slice(
 				"existing:".length,
 			);
-			if (!workspaces.list.some((workspace) => workspace.id === workspaceId)) {
+			if (
+				!context.data.workspaces.items.some(
+					(workspace) => workspace.id === workspaceId,
+				)
+			) {
 				sessionView.setPendingWorkspaceSetupMessage(
 					"Select an existing workspace.",
 				);
@@ -552,8 +561,8 @@
 
 	onMount(() => {
 		void (async () => {
-			if (workspaces.status === "idle") {
-				await workspaces.refresh();
+			if (context.data.workspaces.status === "idle") {
+				await refreshWorkspaces();
 				if (destroyed) {
 					return;
 				}

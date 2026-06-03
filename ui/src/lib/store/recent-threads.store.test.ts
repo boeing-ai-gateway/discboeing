@@ -42,7 +42,7 @@ test("initial thread restore is separate from recent entries", () => {
 });
 
 test("session context prunes recent-thread entries when a thread is removed", () => {
-	const source = readSource("../context/session-context.svelte.ts");
+	const source = readSource("../session/create-session-state.svelte.ts");
 
 	assert.match(source, /onThreadRemoved: \(threadId\) => \{/);
 	assert.match(

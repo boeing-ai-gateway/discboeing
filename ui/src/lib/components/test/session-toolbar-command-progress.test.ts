@@ -15,7 +15,7 @@ const SESSION_COMMANDS_DOMAIN = path.resolve(
 );
 const SESSION_CONTEXT = path.resolve(
 	TEST_DIR,
-	"../../context/session-context.svelte.ts",
+	"../../session/create-session-state.svelte.ts",
 );
 const COMMIT_COMMAND = path.resolve(
 	TEST_DIR,

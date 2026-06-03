@@ -38,7 +38,7 @@ test("app sessions exposes the shared session-load predicate", () => {
 		source,
 		/!!options\?\.includePending && sessionId === pendingSessionId/,
 	);
-	assert.match(source, /!!session && session\.status !== "stopped"/);
+	assert.match(source, /!!session && session\.sandboxStatus !== "stopped"/);
 	assert.match(source, /shouldLoadSession,/);
 });
 

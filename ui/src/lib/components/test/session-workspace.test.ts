@@ -24,28 +24,17 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	assert.match(source, /import \{ onDestroy, untrack \} from "svelte";/);
 	assert.match(
 		source,
-		/import \{ useAppContext \} from "\$lib\/context\/app-context\.svelte";/,
+		/import \{[\s\S]*ensureSessionState,[\s\S]*releaseSessionState,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
 	);
+	assert.doesNotMatch(source, /getAppState/);
+	assert.doesNotMatch(source, /legacy-context-bridge/);
 	assert.match(
 		source,
-		/import \{ setSessionContext \} from "\$lib\/context\/session-context\.svelte";/,
+		/const session = ensureSessionState\(untrack\(\(\) => sessionId\)\);/,
 	);
-	assert.match(source, /const app = useAppContext\(\);/);
-	assert.match(
-		source,
-		/const session = app\.ensureSession\(untrack\(\(\) => sessionId\)\);/,
-	);
-	assert.match(source, /setSessionContext\(session\);/);
+	assert.doesNotMatch(source, /setSessionBridge\(session\);/);
 	assert.match(source, /onDestroy\(\(\) => \{/);
-	assert.match(
-		source,
-		/if \(app\.sessions\.sessionContexts\.get\(session\.sessionId\) === session\) \{/,
-	);
-	assert.match(
-		source,
-		/app\.sessions\.sessionContexts\.delete\(session\.sessionId\);/,
-	);
-	assert.match(source, /session\.dispose\(\);/);
+	assert.match(source, /releaseSessionState\(session\);/);
 	assert.match(source, /const threadId = \$derived\.by\(/);
 	assert.match(source, /\{#key threadId\}/);
 	assert.match(source, /<ThreadWorkspace/);

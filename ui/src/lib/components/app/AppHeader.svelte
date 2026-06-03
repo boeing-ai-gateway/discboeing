@@ -10,7 +10,11 @@
 	import SessionToolbarStack from "$lib/components/app/SessionToolbarStack.svelte";
 	import SettingsDialog from "$lib/components/app/SettingsDialog.svelte";
 	import { Button } from "$lib/components/ui/button";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import {
+		openSettingsDialog,
+		startNewSession,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
 	type Props = {
@@ -20,12 +24,10 @@
 
 	let { showSessionToolbar = true, onToggleSidebar }: Props = $props();
 
-	const app = useAppContext();
-	const environment = app.environment;
-	const sessions = app.sessions;
-	const ui = app.ui;
-	const updates = app.updates;
-	const preferences = app.preferences;
+	const context = useContext();
+	const environment = context.data.environment;
+	const updates = $derived(context.view.app.updates);
+	const preferences = $derived(context.view.app.preferences);
 	const isMobile = new IsMobile(1024);
 
 	function showWindowsLinuxControls(): boolean {
@@ -73,7 +75,7 @@
 	<div class="relative z-20 flex min-w-0 items-center justify-end gap-2">
 		<button
 			type="button"
-			onclick={() => sessions.startNew()}
+			onclick={() => startNewSession()}
 			aria-label="New session"
 			title="New session"
 			class="desktop-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"
@@ -98,7 +100,7 @@
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				onclick={() => ui.openSettings()}
+				onclick={() => openSettingsDialog()}
 				aria-label="Settings"
 				title="Settings"
 				class="desktop-no-drag relative"

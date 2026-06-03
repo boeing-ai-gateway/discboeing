@@ -59,8 +59,6 @@
 	import SessionCommandCredentialsDialog from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
 	import { getSSHPort } from "$lib/api-config";
 	import type { AgentCommand } from "$lib/api-types";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { setSessionContext } from "$lib/context/session-context.svelte";
 	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/shell";
 	import type { IdeOption, JetBrainsIdeOption } from "$lib/app/ide-options";
@@ -68,7 +66,12 @@
 		DESKTOP_SERVICE_ID,
 		VSCODE_SERVICE_ID,
 	} from "$lib/session/service-ids";
-	import type { ServiceItem } from "$lib/session/session-context.types";
+	import {
+		ensureSessionState,
+		setPreferredIde,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
+	import type { ServiceItem } from "$lib/context/context.types";
 
 	type Props = {
 		sessionId: string;
@@ -78,7 +81,7 @@
 	type LucideIconModule = { default: LucideIcon };
 
 	let { sessionId }: Props = $props();
-	const app = useAppContext();
+	const context = useContext();
 	const isMobile = new IsMobile(1024);
 	const lucideIconModules = import.meta.glob<LucideIconModule>(
 		"../../../../node_modules/@lucide/svelte/dist/icons/*.js",
@@ -88,9 +91,8 @@
 		"git-commit": GitCommitIcon,
 	};
 	const attemptedCommandIcons = new SvelteSet<string>();
-	const preferences = app.preferences;
-	const session = app.ensureSession(untrack(() => sessionId));
-	setSessionContext(session);
+	const preferences = $derived(context.view.app.preferences);
+	const session = ensureSessionState(untrack(() => sessionId));
 	const sessionView = session.ui;
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	let servicesPopoverOpen = $state(false);
@@ -1005,7 +1007,7 @@ When you are done, respond with:
 			</DropdownMenuLabel>
 			{#each standardIdeOptions as option, __key2 (__key2)}
 				<DropdownMenuItem
-					onclick={() => preferences.setPreferredIde(option.id)}
+					onclick={() => setPreferredIde(option.id)}
 					class="justify-between gap-3"
 				>
 					<span class="flex items-center gap-2">
@@ -1044,7 +1046,7 @@ When you are done, respond with:
 				<DropdownMenuSubContent class="min-w-[13rem]">
 					{#each jetbrainsIdeOptions as option, __key3 (__key3)}
 						<DropdownMenuItem
-							onclick={() => preferences.setPreferredIde(option.id)}
+							onclick={() => setPreferredIde(option.id)}
 							class="justify-between gap-3"
 						>
 							<span class="flex items-center gap-2">

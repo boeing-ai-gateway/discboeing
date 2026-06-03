@@ -10,7 +10,7 @@ import {
 	normalizeThreadComposerServiceTier,
 	parseComposerModelSelection,
 	resolveThreadComposerSubmitValues,
-} from "./thread-context.svelte";
+} from "../thread/create-thread-state.svelte";
 import { isThreadSnapshotRunning } from "$lib/app/thread-status";
 
 test("applyStreamedThreadUpdate syncs the primary session title and reloads it", async () => {

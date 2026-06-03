@@ -6,17 +6,20 @@
 	import { onDestroy, onMount } from "svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Dialog from "$lib/components/ui/dialog";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import {
+		closeSupportInfoDialog,
+		fetchSupportInfo,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 	import { downloadFile } from "$lib/shell";
 
-	const app = useAppContext();
-	const supportInfo = app.supportInfo;
-	const ui = app.ui;
+	const context = useContext();
+	const supportInfo = $derived.by(() => context.data.supportInfo);
 	let copied = $state(false);
 	let copiedTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
 	const supportJson = $derived.by(() =>
-		supportInfo.data ? JSON.stringify(supportInfo.data, null, 2) : "",
+		supportInfo.value ? JSON.stringify(supportInfo.value, null, 2) : "",
 	);
 
 	function clearCopiedTimeout() {
@@ -66,12 +69,12 @@
 		if (open) {
 			return;
 		}
-		ui.closeSupportInfo();
+		closeSupportInfoDialog();
 	}
 
 	onMount(() => {
 		resetCopiedState();
-		void supportInfo.fetch();
+		void fetchSupportInfo();
 	});
 
 	onDestroy(() => {

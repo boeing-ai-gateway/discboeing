@@ -7,7 +7,11 @@
 	import StartupGate from "$lib/components/app/StartupGate.svelte";
 	import { Toaster } from "$lib/components/ui/sonner";
 	import { ideOptions, windowControls } from "$lib/app/app-shell-config";
-	import { setAppContext } from "$lib/context/app-context.svelte";
+	import {
+		initializeAppCommands,
+		syncAppNavigationFromBridge,
+	} from "$lib/context/commands/app-view";
+	import { setDiscobotContext } from "$lib/context/context.svelte";
 	import { readInitialThreadSelection } from "$lib/store/recent-threads.store.svelte";
 
 	type Props = {
@@ -21,17 +25,25 @@
 		| undefined;
 	const isReload = navEntry?.type === "reload";
 	const initialSelection = isReload ? readInitialThreadSelection() : null;
-	const app = setAppContext({
+	setDiscobotContext({
 		ideOptions,
 		windowControls,
 		selectedSessionId: initialSelection?.sessionId,
 		selectedThreadId: initialSelection?.threadId,
+	});
+	initializeAppCommands({
+		selectedSessionId: initialSelection?.sessionId,
+		selectedThreadId: initialSelection?.threadId,
+	});
+
+	$effect(() => {
+		syncAppNavigationFromBridge();
 	});
 </script>
 
 <Toaster />
 <DevErrorOverlay />
 
-<StartupGate {app}>
+<StartupGate>
 	{@render children()}
 </StartupGate>

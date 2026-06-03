@@ -5,20 +5,23 @@
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { useThreadContext } from "$lib/context/thread-context.svelte";
+	import type {
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
 
 	type Props = {
+		session: SessionContextValue;
+		thread: ThreadContextValue;
 		visible: boolean;
 		reserveSidebarSpace?: boolean;
 		mode?: "full" | "conversation-only";
 	};
 
 	const props: Props = $props();
-
-	const session = useSessionContext();
-	const thread = useThreadContext();
+	const session = $derived(props.session);
+	const thread = $derived(props.thread);
 
 	$effect(() => {
 		if (!props.visible || !session.current) {
@@ -58,7 +61,7 @@
 
 {#if showDock && dockMaximized}
 	<div class="min-h-0 flex-1 overflow-hidden">
-		<DockPanel />
+		<DockPanel {session} {thread} />
 	</div>
 {:else if showDock}
 	<Resizable.PaneGroup
@@ -76,7 +79,7 @@
 				/>
 				<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 					{#if props.visible}
-						<ConversationPane visible={props.visible} />
+						<ConversationPane {session} {thread} visible={props.visible} />
 					{/if}
 				</div>
 			</div>
@@ -84,7 +87,7 @@
 		<Resizable.Handle class="bg-transparent" />
 		<Resizable.Pane defaultSize={65} minSize={25} class="min-h-0 min-w-0">
 			<div class="h-full min-h-0 min-w-0 overflow-auto">
-				<DockPanel />
+				<DockPanel {session} {thread} />
 			</div>
 		</Resizable.Pane>
 	</Resizable.PaneGroup>
@@ -98,7 +101,7 @@
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 		{#if props.visible}
-			<ConversationPane visible={props.visible} />
+			<ConversationPane {session} {thread} visible={props.visible} />
 		{/if}
 	</div>
 {/if}

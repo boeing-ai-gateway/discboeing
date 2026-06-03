@@ -18,8 +18,6 @@ test("pending composer submit opens the created thread", () => {
 	assert.match(source, /const wasPending = session\.isPending;/);
 	assert.match(source, /const result = await thread\.submit\(\{/);
 	assert.match(source, /if \(wasPending && result\) \{/);
-	assert.match(
-		source,
-		/app\.sessions\.openThread\(result\.sessionId, result\.threadId\);/,
-	);
+	assert.match(source, /openThread\(result\.sessionId, result\.threadId\);/);
+	assert.doesNotMatch(source, /app\.sessions\.openThread/);
 });

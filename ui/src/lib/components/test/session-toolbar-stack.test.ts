@@ -17,11 +17,11 @@ test("session toolbar stack only shows a toolbar for a real selected session", (
 
 	assert.match(
 		source,
-		/const mountedSessionIds = \$derived\.by\(\(\) => app\.ui\.mountedSessionIds\)/,
+		/const mountedSessionIds = \$derived\.by\(\s*\(\) => context\.view\.app\.navigation\.mountedSessionIds,\s*\)/,
 	);
 	assert.match(
 		source,
-		/const selectedSessionId = \$derived\.by\(\(\) => app\.sessions\.selectedId\)/,
+		/const selectedSessionId = \$derived\.by\(\s*\(\) => context\.view\.app\.selection\.sessionId,\s*\)/,
 	);
 	assert.match(
 		source,
@@ -31,7 +31,7 @@ test("session toolbar stack only shows a toolbar for a real selected session", (
 		source,
 		/class=\{sessionId === selectedSessionId \? "contents" : "hidden"\}/,
 	);
-	assert.match(source, /\{#if app\.sessions\.shouldLoadSession\(sessionId\)\}/);
+	assert.match(source, /\{#if shouldLoadSessionToolbar\(sessionId\)\}/);
 	assert.doesNotMatch(source, /function shouldRenderSessionToolbar/);
 	assert.doesNotMatch(source, /selectedId \?\? app\.sessions\.pendingId/);
 });

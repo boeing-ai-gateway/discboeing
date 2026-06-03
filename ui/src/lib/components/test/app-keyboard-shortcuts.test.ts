@@ -52,25 +52,48 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 		source,
 		/const globalShortcuts = \$derived\.by\(\(\) => getGlobalShortcuts\(isMacPlatform\)\)/,
 	);
-	assert.match(source, /sessions: app\.sessions\.sessions,/);
-	assert.match(source, /recentThreads: app\.sessions\.recentThreads,/);
-	assert.match(source, /let tabSwitcherOpen = \$state\(false\)/);
+	assert.match(source, /sessions: context\.data\.sessions\.items,/);
 	assert.match(
 		source,
-		/let tabSwitcherCommitModifier = \$state<SwitcherCommitModifier \| null>\(null\)/,
+		/recentThreads: context\.data\.sessions\.recentThreads,/,
 	);
+	assert.doesNotMatch(source, /sessions: app\.sessions\.sessions,/);
+	assert.doesNotMatch(source, /recentThreads: app\.sessions\.recentThreads,/);
 	assert.match(
 		source,
-		/const selectedIndex = tabSwitcherOpen[\s\S]*: selectedThreadKey[\s\S]*\? 0[\s\S]*: -1;/,
+		/import \{ useContext \} from "\$lib\/context\/context\.svelte";/,
+	);
+	assert.match(source, /const context = useContext\(\);/);
+	assert.match(source, /context\.view\.app\.dialogs\.keyboardShortcuts/);
+	assert.match(source, /context\.view\.app\.dialogs\.recentThreadSwitcher/);
+	assert.match(
+		source,
+		/const selectedIndex = recentThreadSwitcherDialog\.open[\s\S]*: selectedThreadKey[\s\S]*\? 0[\s\S]*: -1;/,
 	);
 	assert.match(source, /const nextIndex =[\s\S]*selectedIndex >= 0[\s\S]*: 0;/);
 	assert.match(
 		source,
-		/shouldCommitTabSwitcherOnKeyup\(event, tabSwitcherCommitModifier\)/,
+		/shouldCommitTabSwitcherOnKeyup\([\s\S]*event,[\s\S]*recentThreadSwitcherDialog\.commitModifier,[\s\S]*\)/,
 	);
 	assert.match(source, /function handleWindowKeydown\(event: KeyboardEvent\)/);
 	assert.match(source, /function handleWindowKeyup\(event: KeyboardEvent\)/);
-	assert.match(source, /app\.ui\.setMobileSidebarOpen\(false\);/);
+	assert.match(
+		source,
+		/import \{[\s\S]*createThread,[\s\S]*openThread,[\s\S]*setMobileSidebarOpen,[\s\S]*setRecentThreadSwitcherOpen,[\s\S]*startNewSession,[\s\S]*toggleKeyboardShortcutsOpen,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+	);
+	assert.match(source, /setMobileSidebarOpen\(false\);/);
+	assert.match(source, /context\.view\.app\.selection\.sessionId/);
+	assert.match(
+		source,
+		/openThread\(selectedThread\.sessionId, selectedThread\.threadId\)/,
+	);
+	assert.match(source, /startNewSession\(\);/);
+	assert.match(source, /void createThread\(sessionId\);/);
+	assert.doesNotMatch(source, /app\.sessions\.openThread/);
+	assert.doesNotMatch(source, /app\.sessions\.startNew/);
+	assert.doesNotMatch(source, /app\.sessions\.createThread/);
+	assert.doesNotMatch(source, /let tabSwitcherOpen = \$state/);
+	assert.doesNotMatch(source, /let keyboardHelpOpen = \$state/);
 	assert.match(source, /<svelte:window\s+onkeydown=\{handleWindowKeydown\}/);
 	assert.match(source, /onkeyup=\{handleWindowKeyup\}/);
 	assert.match(source, /onblur=\{closeOverlays\}/);

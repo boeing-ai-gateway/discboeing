@@ -8,11 +8,14 @@
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
-	import { setThreadContext } from "$lib/context/thread-context.svelte";
+	import type {
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import { untrack } from "svelte";
 
 	type Props = {
+		session: SessionContextValue;
 		threadId: string;
 		visible: boolean;
 		mainClass: string;
@@ -21,11 +24,17 @@
 		mode?: "full" | "conversation-only";
 	};
 
-	let { threadId, visible, mainClass, reserveSidebarSpace, mode }: Props =
-		$props();
-	const session = useSessionContext();
-	const thread = session.ensureThread(untrack(() => threadId));
-	setThreadContext(thread);
+	let {
+		session,
+		threadId,
+		visible,
+		mainClass,
+		reserveSidebarSpace,
+		mode,
+	}: Props = $props();
+	const thread: ThreadContextValue = untrack(() =>
+		session.ensureThread(threadId),
+	);
 	const canLoadThreadData = $derived.by(
 		() =>
 			!session.isPending &&
@@ -63,7 +72,13 @@
 
 <main class={mainClass}>
 	{#if showActiveConversation}
-		<ThreadWorkspaceActive {visible} {reserveSidebarSpace} {mode} />
+		<ThreadWorkspaceActive
+			{session}
+			{thread}
+			{visible}
+			{reserveSidebarSpace}
+			{mode}
+		/>
 	{:else}
 		<ThreadWorkspaceHeader
 			reserveSidebarSpace={reserveSidebarSpace ?? false}
@@ -80,7 +95,7 @@
 		{:else}
 			<div class="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">
 				<div class="w-full max-w-sm space-y-3">
-					<ConversationComposerSessionSetupStatus />
+					<ConversationComposerSessionSetupStatus {session} {thread} />
 					{#if isLoadingThread}
 						<div
 							class="flex items-center gap-2 px-1 text-sm text-muted-foreground"

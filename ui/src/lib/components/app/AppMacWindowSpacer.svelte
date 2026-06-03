@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { withCurrentDesktopWindow } from "$lib/shell";
 	import { onMount } from "svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { useContext } from "$lib/context/context.svelte";
 
-	const environment = useAppContext().environment;
+	const context = useContext();
+	const environment = context.data.environment;
 	let isMacFullscreen = $state(false);
 
 	onMount(() => {

@@ -3,14 +3,14 @@
 	import { Badge } from "$lib/components/ui/badge";
 	import { Progress } from "$lib/components/ui/progress";
 	import { Spinner } from "$lib/components/ui/spinner";
-	import type { AppStartupStatus } from "$lib/app/app-context.types";
 	import type { StartupTask } from "$lib/api-types";
 
 	type Props = {
-		startup: AppStartupStatus;
+		tasks: StartupTask[];
+		hasActiveTasks: boolean;
 	};
 
-	let { startup }: Props = $props();
+	let { tasks, hasActiveTasks }: Props = $props();
 
 	let dismissed = $state(false);
 
@@ -93,18 +93,18 @@
 	}
 </script>
 
-{#if !dismissed && startup.visibleTasks.length > 0}
+{#if !dismissed && tasks.length > 0}
 	<div class="border-b border-border bg-muted/30 px-3 py-2">
 		<div class="flex items-center gap-2">
-			{#if startup.hasActiveTasks}
+			{#if hasActiveTasks}
 				<Spinner class="size-3.5 text-muted-foreground" />
 			{/if}
 			<p class="text-sm font-medium">Startup tasks</p>
 			<p class="text-xs text-muted-foreground">
-				{startup.visibleTasks.length}
-				{startup.visibleTasks.length === 1 ? " task" : " tasks"}
+				{tasks.length}
+				{tasks.length === 1 ? " task" : " tasks"}
 			</p>
-			{#if !startup.hasActiveTasks}
+			{#if !hasActiveTasks}
 				<button
 					type="button"
 					class="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground"
@@ -117,7 +117,7 @@
 		</div>
 
 		<div class="mt-2 flex flex-col gap-2">
-			{#each startup.visibleTasks as task (task.id)}
+			{#each tasks as task (task.id)}
 				{@const detail = getTaskDetail(task)}
 				{@const progress = getTaskProgress(task)}
 				<div class="rounded-md border border-border bg-background/80 px-3 py-2">

@@ -41,22 +41,35 @@
 		SandboxProviderInstance,
 		UpdateQueuedPromptRequest,
 	} from "$lib/api-types";
-	import type { ConversationComment } from "$lib/session/session-context.types";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { useSessionContext } from "$lib/context/session-context.svelte";
+	import type {
+		ConversationComment,
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import {
 		normalizeThreadComposerReasoning,
 		normalizeThreadComposerServiceTier,
 		parseComposerModelSelection,
-		useThreadContext,
-	} from "$lib/context/thread-context.svelte";
+	} from "$lib/thread/thread-composer.helpers";
 	import {
 		buildUserMessageParts,
 		createUserMessageAttachment,
 		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
+	import {
+		addPromptToHistory,
+		openCredentialsDialog,
+		openSettingsDialog,
+		openThread,
+		pinPrompt,
+		removePromptFromHistory,
+		unpinPrompt,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
+		session: SessionContextValue;
+		thread: ThreadContextValue;
 		onContainerChange?: (element: HTMLDivElement | null) => void;
 	};
 
@@ -65,17 +78,14 @@
 		type: "file" | "directory";
 	};
 
-	let { onContainerChange }: Props = $props();
+	let { session, thread, onContainerChange }: Props = $props();
 
-	const app = useAppContext();
-	const models = app.models;
-	const preferences = app.preferences;
-	const ui = app.ui;
-	const session = useSessionContext();
-	const thread = useThreadContext();
-	const sessionView = session.ui;
-	const sessionHooks = session.hooks;
-	const sessionCommands = session.commands;
+	const context = useContext();
+	const models = $derived(context.data.models);
+	const preferences = $derived(context.view.app.preferences);
+	const sessionView = $derived(session.ui);
+	const sessionHooks = $derived(session.hooks);
+	const sessionCommands = $derived(session.commands);
 	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
@@ -161,7 +171,7 @@
 		if (!modelId) {
 			return null;
 		}
-		return models.peek(modelId);
+		return models.byId[modelId] ?? null;
 	}
 
 	function normalizeReasoningForModel(
@@ -283,7 +293,7 @@
 		() => selectedModel?.reasoningLevels ?? [],
 	);
 	const serviceTiers = $derived.by(() => selectedModel?.serviceTiers ?? []);
-	const hasAvailableModels = $derived.by(() => models.list.length > 0);
+	const hasAvailableModels = $derived.by(() => models.items.length > 0);
 	const sessionSetupDisabled = $derived.by(
 		() =>
 			sessionView.pendingWorkspaceRequiresSourceInput &&
@@ -333,7 +343,7 @@
 		sandboxProviderMobileSelectOpen = false;
 		sandboxProviderDesktopSelectOpen = false;
 		await tick();
-		ui.openSettings("providers");
+		openSettingsDialog("providers");
 	}
 
 	function handleModelSelect(nextSelection: string | null) {
@@ -710,7 +720,7 @@
 
 		if (!preserveDraft) {
 			if (nextMessageText) {
-				preferences.addPromptToHistory(nextMessageText);
+				addPromptToHistory(nextMessageText);
 			}
 			clearCurrentDraft();
 		}
@@ -723,7 +733,7 @@
 				...pendingSubmitOptions,
 			});
 			if (wasPending && result) {
-				app.sessions.openThread(result.sessionId, result.threadId);
+				openThread(result.sessionId, result.threadId);
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
 				}
@@ -778,6 +788,7 @@
 			/>
 
 			<ConversationHooksPanel
+				{session}
 				expanded={sessionView.hooksExpanded}
 				hooksStatus={sessionHooks.status}
 				outputById={sessionHooks.outputById}
@@ -793,10 +804,11 @@
 		{/if}
 
 		{#if session.isPending || session.current?.sandboxStatus !== "ready"}
-			<ConversationComposerSessionSetupStatus />
+			<ConversationComposerSessionSetupStatus {session} {thread} />
 			{#if showPendingWorkspaceSelector}
 				<div class="mb-2 flex w-full flex-col gap-2 px-1 md:hidden">
 					<ConversationWorkspaceSelector
+						{session}
 						bind:this={sessionSetupRef}
 						fullWidth={true}
 					/>
@@ -879,7 +891,7 @@
 						variant="link"
 						size="xs"
 						class="h-auto px-0"
-						onclick={ui.openCredentialsDialog}
+						onclick={() => openCredentialsDialog()}
 					>
 						Open credentials
 					</Button>
@@ -919,11 +931,11 @@
 						attachmentCount={attachmentFiles.length}
 						onAddFiles={addFiles}
 						onRemoveLastAttachment={removeLastAttachment}
-						onPinPrompt={(prompt) => preferences.pinPrompt(prompt)}
-						onUnpinPrompt={(prompt) => preferences.unpinPrompt(prompt)}
-						onRemovePromptFromHistory={(prompt) =>
-							preferences.removePromptFromHistory(prompt)}
-						isPromptPinned={(prompt) => preferences.isPromptPinned(prompt)}
+						onPinPrompt={pinPrompt}
+						onUnpinPrompt={unpinPrompt}
+						onRemovePromptFromHistory={removePromptFromHistory}
+						isPromptPinned={(prompt) =>
+							preferences.pinnedPrompts.includes(prompt)}
 						onFileMentionQueryChange={handleFileMentionQueryChange}
 						onRequestAutocompleteSession={createSessionForComposerAutocomplete}
 						onSubmit={handleComposerSubmit}
@@ -938,7 +950,7 @@
 								disabled={composerDisabled}
 							/>
 							{#if !session.isPending}
-								<ConversationCredentialsControl />
+								<ConversationCredentialsControl {session} />
 							{/if}
 							<div class="flex min-w-0 items-center gap-0">
 								<ConversationComposerModelControl
@@ -946,7 +958,7 @@
 										? thread.nextModelId
 										: thread.modelId}
 									onSelect={handleModelSelect}
-									models={models.list}
+									models={models.items}
 								/>
 								{#if selectedModel?.reasoning}
 									<ConversationComposerReasoningControl
@@ -988,7 +1000,10 @@
 											onManageClick={handleManageSandboxProvidersClick}
 										/>
 									{/if}
-									<ConversationWorkspaceSelector bind:this={sessionSetupRef} />
+									<ConversationWorkspaceSelector
+										{session}
+										bind:this={sessionSetupRef}
+									/>
 								</div>
 							{:else if !session.isPending}
 								<ConversationComposerHooksControl

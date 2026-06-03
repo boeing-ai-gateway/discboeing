@@ -34,7 +34,7 @@ test("session sidebar keys session and recent thread rows", () => {
 
 	assert.match(
 		source,
-		/\{#each sessions\.list as sessionObj \(sessionObj\.id\)\}/,
+		/\{#each sessionItems as sessionObj \(sessionObj\.id\)\}/,
 	);
 	assert.match(
 		source,
@@ -51,7 +51,11 @@ test("session sidebar caps the visible recent thread list", () => {
 	);
 	assert.match(
 		source,
-		/const visibleRecentThreads = \$derived\(app\.ui\.visibleRecentThreads\);/,
+		/const visibleRecentThreads = \$derived\(\s*context\.view\.app\.recentThreads\.visibleItems,\s*\);/,
+	);
+	assert.match(
+		source,
+		/const preferences = \$derived\(context\.view\.app\.preferences\)/,
 	);
 	assert.match(
 		source,
@@ -91,9 +95,17 @@ test("session sidebar session actions include new thread", () => {
 		source,
 		/async function handleCreateThread\(sessionId: string\)/,
 	);
-	assert.match(source, /sessions\.select\(sessionId\)/);
-	assert.match(source, /app\.ensureSession\(sessionId\)/);
-	assert.match(source, /sessions\.createThread\(sessionId\)/);
+	assert.match(source, /selectSession\(sessionId\)/);
+	assert.match(source, /await createThread\(sessionId\)/);
+	assert.match(source, /await stopSession\(sessionId\)/);
+	assert.match(source, /await renameSession\(renameSessionId, renameDraft\)/);
+	assert.match(source, /await deleteSession\(deleteSessionId\)/);
+	assert.doesNotMatch(source, /sessions\.select\(sessionId\)/);
+	assert.doesNotMatch(source, /app\.ensureSession\(sessionId\)/);
+	assert.doesNotMatch(source, /sessions\.createThread\(sessionId\)/);
+	assert.doesNotMatch(source, /sessions\.stop\(sessionId\)/);
+	assert.doesNotMatch(source, /sessions\.rename\(/);
+	assert.doesNotMatch(source, /sessions\.remove\(/);
 	assert.doesNotMatch(
 		source,
 		/app\.ensureSession\(sessionId\)\.threads\.create\(\)/,
@@ -101,7 +113,7 @@ test("session sidebar session actions include new thread", () => {
 	assert.match(source, /New thread/);
 });
 
-test("session sidebar keeps thread children visible for loaded sessions and refreshes on session select", () => {
+test("session sidebar keeps thread children visible from root context data", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(
@@ -110,11 +122,13 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	);
 	assert.match(
 		source,
-		/const sessionContext = app\.sessions\.sessionContexts\.get\(sessionId\);/,
+		/return context\.data\.threads\.bySessionId\[sessionId\]\?\.items \?\? \[\];/,
 	);
-	assert.match(source, /if \(!sessionContext\) \{/);
-	assert.match(source, /return sessionContext\.threads\.list;/);
-	assert.match(source, /void sessionContext\?\.threads\.refresh\(\);/);
+	assert.doesNotMatch(source, /app\.sessions\.sessionContexts/);
+	assert.doesNotMatch(source, /void sessionContext\?\.threads\.refresh\(\);/);
+	assert.doesNotMatch(source, /syncAppNavigationFromBridge\(\);/);
+	assert.match(source, /openThread\(sessionId, threadId\);/);
+	assert.match(source, /startNewSession\(\);/);
 	assert.doesNotMatch(source, /void sessions\.reloadSession\(sessionId\);/);
 	assert.doesNotMatch(
 		source,
@@ -123,10 +137,6 @@ test("session sidebar keeps thread children visible for loaded sessions and refr
 	assert.doesNotMatch(
 		source,
 		/sessions\.setAwaitingInitialStatus\(sessionId\);/,
-	);
-	assert.match(
-		source,
-		/if \([\s\S]*isCurrentSession &&[\s\S]*sessionContext &&[\s\S]*sessionContext\.threads\.list\.length > 1[\s\S]*\) \{/,
 	);
 	assert.match(source, /\{#if sessionHasNestedThreads\(sessionObj\.id\)\}/);
 	assert.match(
@@ -187,11 +197,16 @@ test("session sidebar thread rows include rename and delete actions", () => {
 
 	assert.match(source, /function openRenameThreadDialog\(threadId: string\)/);
 	assert.match(source, /function openDeleteThreadDialog\(threadId: string\)/);
-	assert.match(source, /await selectedSessionContext\?\.threads\.rename\(/);
 	assert.match(
 		source,
-		/await selectedSessionContext\?\.threads\.remove\(deleteThreadId\)/,
+		/await renameThread\(\s*selectedSessionId,\s*renameThreadId,\s*renameThreadDraft,\s*\)/,
 	);
+	assert.match(
+		source,
+		/await deleteThread\(selectedSessionId, deleteThreadId\)/,
+	);
+	assert.doesNotMatch(source, /selectedSessionContext\?\.threads\.rename\(/);
+	assert.doesNotMatch(source, /selectedSessionContext\?\.threads\.remove\(/);
 	assert.match(source, /Thread actions for/);
 	assert.match(source, /Rename thread/);
 	assert.match(source, /Delete thread\?/);
@@ -201,7 +216,7 @@ test("session sidebar hides delete for the primary session thread", () => {
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /function isPrimaryThread\(threadId: string\)/);
-	assert.match(source, /threadId === sessions\.selectedId/);
+	assert.match(source, /threadId === selectedSessionId/);
 	assert.match(source, /isPrimaryThread\(threadId\) \|\|/);
 	assert.match(source, /\{#if !isPrimaryThread\(threadObj\.id\)\}/);
 });
@@ -268,9 +283,52 @@ test("session sidebar can group all sessions by workspace type", () => {
 	assert.match(source, /sidebarAllGroupedByWorkspace/);
 	assert.match(
 		source,
+		/import \{[\s\S]*setSidebarAllGroupedByWorkspace[\s\S]*setSidebarAllOpen[\s\S]*setSidebarRecentOpen[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+	);
+	assert.match(
+		source,
+		/onCheckedChange=\{\(checked\) =>\s*setSidebarAllGroupedByWorkspace\(checked === true\)\}/,
+	);
+	assert.match(source, /onOpenChange=\{setSidebarRecentOpen\}/);
+	assert.match(source, /onOpenChange=\{setSidebarAllOpen\}/);
+	assert.match(
+		source,
 		/const workspaceSessionGroups = \$derived\.by\(\(\) => \{/,
 	);
 	assert.match(source, /workspace\.sourceType === "managed"/);
+	assert.match(
+		source,
+		/const sessionItems = \$derived\(context\.data\.sessions\.items\)/,
+	);
+	assert.match(
+		source,
+		/const sessionsById = \$derived\(context\.data\.sessions\.byId\)/,
+	);
+	assert.match(
+		source,
+		/const workspacesById = \$derived\(context\.data\.workspaces\.byId\)/,
+	);
+	assert.match(
+		source,
+		/const selectedSessionId = \$derived\(context\.view\.app\.selection\.sessionId\)/,
+	);
+	assert.match(
+		source,
+		/\{#each sessionItems as sessionObj \(sessionObj\.id\)\}/,
+	);
+	assert.doesNotMatch(source, /sessions\.list/);
+	assert.doesNotMatch(source, /sessions\.selectedId/);
+	assert.doesNotMatch(source, /app\.ui\.visibleRecentThreads/);
+	assert.doesNotMatch(source, /app\.workspaces\.peek/);
+	assert.doesNotMatch(source, /app\.workspaces\.update/);
+	assert.doesNotMatch(source, /app\.workspaces\.remove/);
+	assert.doesNotMatch(source, /const preferences = app\.preferences/);
+	assert.doesNotMatch(source, /preferences\.setSidebar/);
+	assert.match(
+		source,
+		/await updateWorkspaceDisplayName\(renameWorkspaceId, renameWorkspaceDraft\)/,
+	);
+	assert.match(source, /await deleteWorkspace\(deleteWorkspaceId\)/);
 	assert.match(source, /function trimWorkspacePrefix/);
 	assert.match(source, /<GitBranchIcon class="size-3 shrink-0" \/>/);
 	assert.match(source, /<FolderIcon class="size-3 shrink-0" \/>/);

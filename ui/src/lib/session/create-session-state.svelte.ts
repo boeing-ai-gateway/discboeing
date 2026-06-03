@@ -1,9 +1,8 @@
-import { getContext, setContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
 import { canLoadSessionThreads, SessionStatus } from "$lib/api-constants";
-import type { AppContext, StartChat } from "$lib/context/app-context.svelte";
-import { createThreadContext } from "$lib/context/thread-context.svelte";
+import type { AppRuntime, StartChat } from "$lib/app/app-runtime.svelte";
+import { createThreadState } from "$lib/thread/create-thread-state.svelte";
 import { createSessionCommandsDomain } from "$lib/session/domains/session-commands.svelte";
 import { createSessionFilesDomain } from "$lib/session/domains/session-files.svelte";
 import { createSessionHooksDomain } from "$lib/session/domains/session-hooks.svelte";
@@ -25,17 +24,15 @@ import {
 	createUserMessage,
 } from "$lib/session/domains/session-domain.helpers";
 
-const SESSION_CONTEXT_KEY = Symbol.for("discobot-ui-session-context");
-
-export function createSessionContext(
-	app: AppContext,
+export function createSessionState(
+	runtime: AppRuntime,
 	startChat: StartChat,
 	sessionId: string,
 ): SessionContextValue {
 	let selectedThreadId = $state<string | null>(null);
 
 	function getCurrentSession() {
-		return app.sessions.peek(sessionId);
+		return runtime.peekSession(sessionId);
 	}
 
 	function hasCurrentSession() {
@@ -85,9 +82,9 @@ export function createSessionContext(
 		setSelectedId: (threadId) => {
 			selectedThreadId = threadId;
 		},
-		takeRequestedId: () => app.sessions.takeRequestedThreadId(sessionId),
+		takeRequestedId: () => runtime.takeRequestedThreadId(sessionId),
 		onThreadRemoved: (threadId) => {
-			app.stores.recentThreads.pruneThread(sessionId, threadId);
+			runtime.pruneRecentThread(sessionId, threadId);
 		},
 	});
 
@@ -112,7 +109,7 @@ export function createSessionContext(
 			return existing;
 		}
 
-		const thread = createThreadContext(app, startChat, context, threadId);
+		const thread = createThreadState(runtime, startChat, context, threadId);
 		threadContexts.set(threadId, thread);
 		return thread;
 	};
@@ -132,7 +129,7 @@ export function createSessionContext(
 	};
 
 	const commands = createSessionCommandsDomain({
-		app,
+		runtime,
 		sessionId,
 		hasSession: canLoadCurrentThreadData,
 		getSelectedThreadId: () => threads.selectedId ?? sessionId,
@@ -172,27 +169,4 @@ export function createSessionContext(
 	};
 
 	return context;
-}
-
-export function setSessionContext(
-	context: SessionContextValue,
-): SessionContextValue {
-	setContext(SESSION_CONTEXT_KEY, context);
-	return context;
-}
-
-export function useSessionContext(): SessionContextValue {
-	const context = getContext<SessionContextValue | undefined>(
-		SESSION_CONTEXT_KEY,
-	);
-	if (!context) {
-		throw new Error(
-			"useSessionContext must be used within SessionContext provider",
-		);
-	}
-	return context;
-}
-
-export function getSessionContextIfPresent(): SessionContextValue | undefined {
-	return getContext<SessionContextValue | undefined>(SESSION_CONTEXT_KEY);
 }

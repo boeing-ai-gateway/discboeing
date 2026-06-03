@@ -33,7 +33,13 @@
 		ItemTitle,
 	} from "$lib/components/ui/item";
 	import { Label } from "$lib/components/ui/label";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { api } from "$lib/api-client";
+	import {
+		clearCredentialFlowIntent,
+		clearCredentialsDialogTarget,
+		refreshCredentials,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 	import { openUrl, writeClipboardText } from "$lib/shell";
 
 	type EditorMode = "list" | "create" | "edit";
@@ -71,8 +77,33 @@
 	};
 
 	const CUSTOM_PROVIDER = "__custom__";
-	const app = useAppContext();
-	const credentialsApi = app.credentials;
+	const context = useContext();
+	const credentialsApi = {
+		get list() {
+			return context.data.credentials.items;
+		},
+		get credentialTypes() {
+			return context.data.credentials.types;
+		},
+		peek(id: string) {
+			return context.data.credentials.byId[id] ?? null;
+		},
+		refresh: refreshCredentials,
+		create: api.createCredential.bind(api),
+		remove: api.deleteCredential.bind(api),
+		codexAuthorize: api.codexAuthorize.bind(api),
+		codexDeviceCode: api.codexDeviceCode.bind(api),
+		codexCallbackStatus: api.codexCallbackStatus.bind(api),
+		codexPoll: api.codexPoll.bind(api),
+		codexExchange: api.codexExchange.bind(api),
+		githubAuthorize: api.githubAuthorize.bind(api),
+		githubDeviceCode: api.githubDeviceCode.bind(api),
+		githubCallbackStatus: api.githubCallbackStatus.bind(api),
+		githubPoll: api.githubPoll.bind(api),
+		githubExchange: api.githubExchange.bind(api),
+		anthropicAuthorize: api.anthropicAuthorize.bind(api),
+		anthropicExchange: api.anthropicExchange.bind(api),
+	};
 
 	let loading = $state(false);
 	let errorMessage = $state<string | null>(null);
@@ -1248,6 +1279,7 @@
 		deletingId = id;
 		try {
 			await credentialsApi.remove(id);
+			await load();
 			notifyCredentialsChanged();
 		} finally {
 			deletingId = null;
@@ -1259,15 +1291,15 @@
 	});
 
 	$effect(() => {
-		if (loading || !app.ui.credentialFlowIntent) {
+		const flowIntent = context.view.app.dialogs.credentials.flowIntent;
+		if (loading || !flowIntent) {
 			return;
 		}
 		startCreate();
 		const oauthOption =
 			providerOptions.find(
 				(option) =>
-					option.authType === "oauth" &&
-					option.backendProvider === app.ui.credentialFlowIntent,
+					option.authType === "oauth" && option.backendProvider === flowIntent,
 			) ?? null;
 		if (oauthOption) {
 			selectCredentialType(oauthOption);
@@ -1277,11 +1309,11 @@
 				openAIOAuthWizardOpen = true;
 			}
 		}
-		app.ui.credentialFlowIntent = null;
+		clearCredentialFlowIntent();
 	});
 
 	$effect(() => {
-		const targetId = app.ui.credentialsDialogTargetId;
+		const targetId = context.view.app.dialogs.credentials.targetId;
 		if (!targetId || loading) {
 			return;
 		}
@@ -1290,7 +1322,7 @@
 			return;
 		}
 		startEdit(credential);
-		app.ui.credentialsDialogTargetId = null;
+		clearCredentialsDialogTarget();
 	});
 
 	$effect(() => {

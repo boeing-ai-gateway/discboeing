@@ -13,10 +13,13 @@
 		type StartupScreenStep,
 		type StartupStatusVariant,
 	} from "$lib/components/app/parts/StartupScreen.svelte";
-	import type { AppContext } from "$lib/context/app-context.svelte";
+	import {
+		connectProjectEvents,
+		refreshAppData,
+	} from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
-		app: AppContext;
 		children: Snippet;
 	};
 
@@ -43,7 +46,8 @@
 	const STARTUP_SCREEN_FADE_MS = 180;
 	const STARTUP_STATUS_POLL_MS = 1000;
 
-	let { app, children }: Props = $props();
+	let { children }: Props = $props();
+	const context = useContext();
 
 	let ready = $state(false);
 	let errorMessage = $state<string | null>(null);
@@ -382,9 +386,9 @@
 				}
 				startupPhase = "loading";
 				await initServerConfig();
-				await app.refresh();
-				startupTasks = app.startup.tasks;
-				stopProjectEvents = app.connectProjectEvents();
+				await refreshAppData();
+				startupTasks = context.data.startupTasks.items;
+				stopProjectEvents = connectProjectEvents();
 
 				while (!abortController.signal.aborted) {
 					try {

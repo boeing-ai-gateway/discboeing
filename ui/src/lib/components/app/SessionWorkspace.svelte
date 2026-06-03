@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onDestroy, untrack } from "svelte";
 	import ThreadWorkspace from "$lib/components/app/ThreadWorkspace.svelte";
-	import { useAppContext } from "$lib/context/app-context.svelte";
-	import { setSessionContext } from "$lib/context/session-context.svelte";
+	import {
+		ensureSessionState,
+		releaseSessionState,
+	} from "$lib/context/commands/app-view";
 
 	type Props = {
 		sessionId: string;
@@ -11,24 +13,20 @@
 	};
 
 	let { sessionId, visible, mainClass }: Props = $props();
-	const app = useAppContext();
-	const session = app.ensureSession(untrack(() => sessionId));
-	setSessionContext(session);
+	const session = ensureSessionState(untrack(() => sessionId));
 	const threadId = $derived.by(
 		() => session.threads.selectedId ?? session.sessionId,
 	);
 
 	onDestroy(() => {
-		if (app.sessions.sessionContexts.get(session.sessionId) === session) {
-			app.sessions.sessionContexts.delete(session.sessionId);
-			session.dispose();
-		}
+		releaseSessionState(session);
 	});
 </script>
 
 <div class={visible ? "contents" : "hidden"}>
 	{#key threadId}
 		<ThreadWorkspace
+			{session}
 			{threadId}
 			{visible}
 			{mainClass}

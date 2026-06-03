@@ -62,11 +62,12 @@
 		CollapsibleContent,
 		CollapsibleTrigger,
 	} from "$lib/components/ui/collapsible";
-	import { getAppContextIfPresent } from "$lib/context/app-context.svelte";
-	import { getSessionContextIfPresent } from "$lib/context/session-context.svelte";
-	import { getThreadContextIfPresent } from "$lib/context/thread-context.svelte";
 	import { getErrorMessage } from "$lib/error-message";
-	import type { ThreadContextValue } from "$lib/session/session-context.types";
+	import { useContext } from "$lib/context/context.svelte";
+	import type {
+		SessionContextValue,
+		ThreadContextValue,
+	} from "$lib/session/session-context.types";
 	import {
 		buildUserMessageParts,
 		formatConversationComments,
@@ -84,6 +85,8 @@
 	};
 
 	type Props = {
+		session?: SessionContextValue;
+		thread?: ThreadContextValue;
 		contentTopPadding?: number;
 		messages?: ChatMessage[];
 		status?: ConversationPaneStatus;
@@ -101,6 +104,8 @@
 	const BROWSER_SCREENSHOT_RETRY_DELAY_MS = 200;
 
 	let {
+		session,
+		thread,
 		contentTopPadding = 0,
 		messages,
 		status,
@@ -113,11 +118,9 @@
 		visible = true,
 	}: Props = $props();
 
-	const app = getAppContextIfPresent();
-	const session = getSessionContextIfPresent();
-	const thread = getThreadContextIfPresent();
+	const context = useContext();
 	const activeSessionId = $derived.by(
-		() => session?.sessionId ?? app?.sessions.selectedId ?? null,
+		() => session?.sessionId ?? context.view.app.selection.sessionId ?? null,
 	);
 	const activeThreadId = $derived.by(() => thread?.threadId ?? null);
 	const conversationMessages = $derived.by(
@@ -164,7 +167,7 @@
 	});
 	const activeTurnId = $derived.by(() => conversationTurns.at(-1)?.id ?? null);
 	const effectiveChatWidthMode = $derived.by(
-		() => chatWidthMode ?? app?.preferences.chatWidthMode ?? "full",
+		() => chatWidthMode ?? context.view.app.preferences.chatWidthMode ?? "full",
 	);
 	const hasMessages = $derived.by(() => conversationMessages.length > 0);
 	const isLoading = $derived.by(() => conversationStatus === "loading");
@@ -186,7 +189,7 @@
 		getErrorMessage(threadErrorOverride ?? thread?.error),
 	);
 	const canShowComposer = $derived.by(
-		() => showComposer && Boolean(app) && Boolean(session) && Boolean(thread),
+		() => showComposer && Boolean(session) && Boolean(thread),
 	);
 	const latestConversationMessageId = $derived.by(
 		() => conversationMessages.at(-1)?.id ?? null,
@@ -1206,7 +1209,7 @@
 	// Disabled when the autoScrollOnStream preference is off.
 	$effect(() => {
 		const element = contentEl;
-		const autoScroll = app?.preferences.autoScrollOnStream ?? true;
+		const autoScroll = context.view.app.preferences.autoScrollOnStream;
 
 		if (!element || !autoScroll) {
 			return;
@@ -1439,7 +1442,7 @@
 				queued={isAssistantToolPartQueued(parts, index)}
 				sessionId={activeSessionId}
 				threadId={activeThreadId}
-				resolvedTheme={app?.preferences.resolvedTheme ?? "light"}
+				resolvedTheme={context.view.app.preferences.resolvedTheme}
 				previousTodoEntries={part.toolName === "TodoWrite"
 					? (previousTodoEntriesByToolCallId[part.toolCallId] ?? [])
 					: undefined}
@@ -1994,8 +1997,10 @@
 			error={browserScreenshotPreviewError}
 		/>
 
-		{#if canShowComposer}
+		{#if canShowComposer && session && thread}
 			<ConversationComposer
+				{session}
+				{thread}
 				onContainerChange={(element) => (composerContainer = element)}
 			/>
 		{/if}

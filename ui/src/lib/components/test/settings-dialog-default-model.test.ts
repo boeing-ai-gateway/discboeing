@@ -11,6 +11,17 @@ const uiStateSource = readFileSync(
 	"utf8",
 );
 
+test("settings dialog reads root context and commands", () => {
+	assert.match(
+		source,
+		/import \{ useContext \} from "\$lib\/context\/context\.svelte";/,
+	);
+	assert.match(source, /const context = useContext\(\);/);
+	assert.doesNotMatch(source, /context\.actions\.app/);
+	assert.doesNotMatch(source, /getAppState/);
+	assert.doesNotMatch(source, /useAppContext/);
+});
+
 test("settings dialog uses one as the disabled recent-list option", () => {
 	assert.match(
 		uiStateSource,
@@ -39,7 +50,7 @@ test("settings dialog preserves the selected default model when dedupe would hid
 	assert.match(source, /const selectedDefaultModel = \$derived\.by\(\(\) =>/);
 	assert.match(
 		source,
-		/models\.list\.find\(\(model\) => model\.id === preferences\.defaultModel\)/,
+		/models\.items\.find\(\(model\) => model\.id === preferences\.defaultModel\)/,
 	);
 	assert.match(
 		source,
