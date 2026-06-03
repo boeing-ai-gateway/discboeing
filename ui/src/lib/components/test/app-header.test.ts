@@ -61,13 +61,27 @@ test("app header shows the mobile Sessions toggle to the right of the logo", () 
 	assert.doesNotMatch(source, /onclick=\{\(\) => onToggleSidebar\?\.\(\)\}/);
 });
 
-test("app header shows collapsed desktop Sessions as a dropdown next to the brand", () => {
+test("app header does not show desktop sessions controls next to the brand", () => {
 	const source = readAppHeaderSource();
 
 	assert.match(
 		source,
-		/<DiscobotBrand heightClass="h-6" \/>[\s\S]*\{#if showDesktopSidebarToggle && onToggleSidebar\}[\s\S]*class="desktop-no-drag inline-flex shrink-0 p-1 translate-y-1 items-center overflow-hidden rounded-md border border-border text-foreground\/50"[\s\S]*onclick=\{\(\) => \{[\s\S]*closeDesktopSessionsPopover\(\);[\s\S]*onToggleSidebar\?\.\(\);[\s\S]*\}\}[\s\S]*aria-label="Expand sessions panel"[\s\S]*<PanelLeftIcon class="size-3 shrink-0" \/>[\s\S]*<Popover bind:open=\{desktopSessionsPopoverOpen\}>[\s\S]*<PopoverTrigger>[\s\S]*\{#snippet child\(\{ props \}\)\}[\s\S]*<button\s+\{\.\.\.props\}[\s\S]*class="inline-flex shrink-0 items-center gap-0\.5 py-0\.5 pl-0 pr-1\.5 text-xs font-medium uppercase tracking-\[0\.16em\] transition-colors hover:text-foreground\/80"[\s\S]*<span>Sessions<\/span>[\s\S]*<ChevronDownIcon[\s\S]*<PopoverContent align="start" class="w-auto bg-sidebar p-0">[\s\S]*<AppSidebar[\s\S]*mode="dropdown"[\s\S]*onThreadSelect=\{closeDesktopSessionsPopover\}/,
+		/<AppMacWindowSpacer \/>[\s\S]*<DiscobotBrand heightClass="h-6" \/>/,
 	);
+	assert.doesNotMatch(source, /\w*Desktop\w*Sidebar\w*Toggle\w*\?: boolean/);
+	assert.doesNotMatch(
+		source,
+		/\w*Desktop\w*Sidebar\w*Toggle\w* && onToggleSidebar/,
+	);
+	assert.doesNotMatch(
+		source,
+		/class="desktop-no-drag inline-flex shrink-0 translate-y-1/,
+	);
+	assert.doesNotMatch(source, /desktopSessionsPopoverOpen/);
+	assert.doesNotMatch(source, /closeDesktopSessionsPopover/);
+	assert.doesNotMatch(source, /<Popover/);
+	assert.doesNotMatch(source, /<AppSidebar/);
+	assert.doesNotMatch(source, /Open sessions menu/);
 	assert.doesNotMatch(source, /document\.addEventListener\("pointerdown"/);
 });
 

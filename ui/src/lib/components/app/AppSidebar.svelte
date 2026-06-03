@@ -6,6 +6,7 @@
 	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
 	import PackageIcon from "@lucide/svelte/icons/package";
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
+	import PinIcon from "@lucide/svelte/icons/pin";
 	import PlusIcon from "@lucide/svelte/icons/plus";
 	import { Switch } from "$lib/components/ui/switch";
 	import type { Thread, Workspace } from "$lib/api-types";
@@ -25,6 +26,7 @@
 
 	type Props = {
 		onThreadSelect?: () => void;
+		onPinSidebar?: () => void;
 		onToggleSidebar?: () => void;
 		mode?: "panel" | "dropdown" | "floating";
 		collapsed?: boolean;
@@ -32,6 +34,7 @@
 
 	let {
 		onThreadSelect,
+		onPinSidebar,
 		onToggleSidebar,
 		mode = "panel",
 		collapsed = false,
@@ -804,6 +807,18 @@
 							preferences.setSidebarAllGroupedByWorkspace(checked === true)}
 					/>
 				</label>
+			{/if}
+			{#if dropdownMode && onPinSidebar}
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					onclick={onPinSidebar}
+					aria-label="Pin sessions sidebar"
+					title="Pin sessions sidebar"
+					class="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+				>
+					<PinIcon class="size-3.5" />
+				</Button>
 			{/if}
 			<Button
 				variant="ghost"

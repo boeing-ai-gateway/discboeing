@@ -77,7 +77,24 @@ test("thread workspace keeps pending sessions on the active conversation view an
 		/import Loader2Icon from "@lucide\/svelte\/icons\/loader-2"/,
 	);
 	assert.match(source, /<Loader2Icon class="size-4 animate-spin" \/>/);
-	assert.match(source, /title=""/);
+	assert.match(
+		source,
+		/const headerTitle = \$derived\.by\(\(\) => session\.threads\.selected\?\.name \?\? ""\);/,
+	);
+	assert.match(
+		source,
+		/const sessionTitle = \$derived\.by\(\s*\(\) => session\.current\?\.displayName \|\| session\.current\?\.name \|\| "Sessions",\s*\);/,
+	);
+	assert.match(source, /import SessionHeaderDropdown/);
+	assert.match(source, /\{#snippet sessionHeaderDropdown\(\)\}/);
+	assert.match(source, /<SessionHeaderDropdown label=\{sessionTitle\} \/>/);
+	assert.match(source, /titleContent=\{sessionHeaderDropdown\}/);
+	assert.doesNotMatch(source, /const isConversationOnly = \$derived/);
+	assert.doesNotMatch(source, /const headerTitleContent = \$derived/);
+	assert.doesNotMatch(source, /displayThreadDropdown=\{isConversationOnly\}/);
+	assert.doesNotMatch(source, /\{threadList\}/);
+	assert.doesNotMatch(source, /\{selectedThreadId\}/);
+	assert.doesNotMatch(source, /onThreadChange=\{handleThreadChange\}/);
 	assert.match(
 		source,
 		/Loading the selected thread while the session starts\./,
@@ -115,6 +132,20 @@ test("active thread workspace keeps the stream live while inactive conversation 
 	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);
 	assert.match(source, /return "";\s*\}\);/);
 	assert.match(source, /title=\{headerTitle\}/);
+	assert.match(
+		source,
+		/const sessionTitle = \$derived\.by\(\s*\(\) => session\.current\?\.displayName \|\| session\.current\?\.name \|\| "Sessions",\s*\);/,
+	);
+	assert.match(source, /import SessionHeaderDropdown/);
+	assert.match(source, /\{#snippet sessionHeaderDropdown\(\)\}/);
+	assert.match(source, /<SessionHeaderDropdown label=\{sessionTitle\} \/>/);
+	assert.match(source, /titleContent=\{sessionHeaderDropdown\}/);
+	assert.doesNotMatch(source, /const isConversationOnly = \$derived/);
+	assert.doesNotMatch(source, /const headerTitleContent = \$derived/);
+	assert.doesNotMatch(source, /displayThreadDropdown=\{isConversationOnly\}/);
+	assert.doesNotMatch(source, /\{threadList\}/);
+	assert.doesNotMatch(source, /\{selectedThreadId\}/);
+	assert.doesNotMatch(source, /onThreadChange=\{handleThreadChange\}/);
 	assert.doesNotMatch(
 		source,
 		/title=\{session\.threads\.selected\?\.name \?\?/,

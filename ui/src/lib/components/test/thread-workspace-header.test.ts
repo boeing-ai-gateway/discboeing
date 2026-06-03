@@ -49,3 +49,16 @@ test("thread workspace header keeps the intended non-drag layout and avoids desk
 	assert.doesNotMatch(source, /data-desktop-drag-region/);
 	assert.doesNotMatch(source, /desktop-no-drag/);
 });
+
+test("thread workspace header accepts optional title content without owning selector data", () => {
+	const source = readThreadWorkspaceHeaderSource();
+
+	assert.match(source, /import type \{ Snippet \} from "svelte"/);
+	assert.match(source, /titleContent\?: Snippet/);
+	assert.match(source, /\{#if titleContent\}/);
+	assert.match(source, /\{@render titleContent\(\)\}/);
+	assert.doesNotMatch(source, /displayThreadDropdown\?: boolean/);
+	assert.doesNotMatch(source, /onThreadChange\?: \(threadId: string\) => void/);
+	assert.doesNotMatch(source, /threadList\?: Pick<Thread, "id" \| "name">\[\]/);
+	assert.doesNotMatch(source, /Select,/);
+});

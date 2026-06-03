@@ -24,9 +24,6 @@
 	);
 	const showSessionToolbar = $derived.by(() => !!currentSelectedSessionId);
 	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
-	const showDesktopSidebarToggle = $derived.by(
-		() => !isMobile.current && !app.ui.desktopSidebarOpen,
-	);
 
 	function toggleSidebar() {
 		if (isMobile.current) {
@@ -147,11 +144,7 @@
 
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
 	<AppKeyboardShortcuts />
-	<AppHeader
-		{showSessionToolbar}
-		{showDesktopSidebarToggle}
-		onToggleSidebar={toggleSidebar}
-	/>
+	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
 	<StartupTasksBanner startup={app.startup} />
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">

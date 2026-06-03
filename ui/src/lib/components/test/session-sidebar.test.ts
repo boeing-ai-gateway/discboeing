@@ -7,9 +7,17 @@ const SESSION_SIDEBAR_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/AppSidebar.svelte",
 );
+const SESSION_HEADER_DROPDOWN_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/SessionHeaderDropdown.svelte",
+);
 
 function readSessionSidebarSource() {
 	return readFileSync(SESSION_SIDEBAR_COMPONENT, "utf-8");
+}
+
+function readSessionHeaderDropdownSource() {
+	return readFileSync(SESSION_HEADER_DROPDOWN_COMPONENT, "utf-8");
 }
 
 test("session sidebar recent threads only render the saved display name", () => {
@@ -202,10 +210,42 @@ test("session sidebar supports dropdown reuse and closes after creating a sessio
 	const source = readSessionSidebarSource();
 
 	assert.match(source, /mode\?: "panel" \| "dropdown" \| "floating"/);
+	assert.match(source, /onPinSidebar\?: \(\) => void/);
 	assert.match(source, /const dropdownMode = \$derived\(mode === "dropdown"\)/);
 	assert.match(source, /const floatingMode = \$derived\(mode === "floating"\)/);
 	assert.match(source, /function handleStartNewSession\(\)/);
 	assert.match(source, /onclick=\{handleStartNewSession\}/);
+	assert.match(source, /import PinIcon from "@lucide\/svelte\/icons\/pin"/);
+	assert.match(source, /\{#if dropdownMode && onPinSidebar\}/);
+	assert.match(source, /onclick=\{onPinSidebar\}/);
+	assert.match(source, /aria-label="Pin sessions sidebar"/);
+	assert.match(
+		source,
+		/<PinIcon class="size-3\.5" \/>[\s\S]*<\/Button>[\s\S]*<Button[\s\S]*onclick=\{handleStartNewSession\}/,
+	);
+});
+
+test("session header dropdown can pin the sidebar open", () => {
+	const source = readSessionHeaderDropdownSource();
+
+	assert.match(source, /function pinSidebar\(\)/);
+	assert.match(source, /app\.ui\.setDesktopSidebarOpen\(true\)/);
+	assert.match(source, /onPinSidebar=\{pinSidebar\}/);
+});
+
+test("session header dropdown styles the empty Sessions label like new session", () => {
+	const source = readSessionHeaderDropdownSource();
+
+	assert.match(
+		source,
+		/const showingFallbackLabel = \$derived\(triggerLabel === "Sessions"\)/,
+	);
+	assert.match(
+		source,
+		/text-xs font-medium uppercase tracking-\[0\.16em\] text-foreground\/50/,
+	);
+	assert.match(source, /hover:text-foreground\/80/);
+	assert.match(source, /class=\{triggerClass\}/);
 });
 
 test("session sidebar owns the collapsed floating overlay state", () => {

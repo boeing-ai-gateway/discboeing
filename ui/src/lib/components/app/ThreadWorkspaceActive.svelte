@@ -2,6 +2,7 @@
 	import { onDestroy } from "svelte";
 	import ConversationPane from "$lib/components/app/ConversationPane.svelte";
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
+	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
@@ -46,7 +47,14 @@
 		}
 		return "";
 	});
+	const sessionTitle = $derived.by(
+		() => session.current?.displayName || session.current?.name || "Sessions",
+	);
 </script>
+
+{#snippet sessionHeaderDropdown()}
+	<SessionHeaderDropdown label={sessionTitle} />
+{/snippet}
 
 {#if showDock && dockMaximized}
 	<div class="min-h-0 flex-1 overflow-hidden">
@@ -64,6 +72,7 @@
 					reserveSidebarSpace={props.reserveSidebarSpace ?? false}
 					title={headerTitle}
 					state={session.threads.selected?.state}
+					titleContent={sessionHeaderDropdown}
 				/>
 				<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 					{#if props.visible}
@@ -84,6 +93,7 @@
 		reserveSidebarSpace={props.reserveSidebarSpace ?? false}
 		title={headerTitle}
 		state={session.threads.selected?.state}
+		titleContent={sessionHeaderDropdown}
 	/>
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

@@ -5,6 +5,7 @@
 		isSessionTransitioningStatus,
 	} from "$lib/api-constants";
 	import ConversationComposerSessionSetupStatus from "$lib/components/app/ConversationComposerSessionSetupStatus.svelte";
+	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
 	import { useSessionContext } from "$lib/context/session-context.svelte";
@@ -40,6 +41,10 @@
 	const showActiveConversation = $derived.by(
 		() => hasSelectedThread || hasConversationMessages,
 	);
+	const headerTitle = $derived.by(() => session.threads.selected?.name ?? "");
+	const sessionTitle = $derived.by(
+		() => session.current?.displayName || session.current?.name || "Sessions",
+	);
 	const isLoadingThread = $derived.by(
 		() =>
 			!showActiveConversation &&
@@ -52,13 +57,19 @@
 	);
 </script>
 
+{#snippet sessionHeaderDropdown()}
+	<SessionHeaderDropdown label={sessionTitle} />
+{/snippet}
+
 <main class={mainClass}>
 	{#if showActiveConversation}
 		<ThreadWorkspaceActive {visible} {reserveSidebarSpace} {mode} />
 	{:else}
 		<ThreadWorkspaceHeader
 			reserveSidebarSpace={reserveSidebarSpace ?? false}
-			title=""
+			title={headerTitle}
+			state={session.threads.selected?.state}
+			titleContent={sessionHeaderDropdown}
 		/>
 		{#if showThreadSelectionPrompt}
 			<div class="flex min-h-0 min-w-0 flex-1 items-center justify-center p-6">

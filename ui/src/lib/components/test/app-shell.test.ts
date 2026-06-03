@@ -58,18 +58,19 @@ test("app shell restores dynamic desktop sidebar sizing", () => {
 	assert.match(source, /minSize=\{desktopSidebarMinSize\}/);
 });
 
-test("app shell moves the desktop sidebar trigger into the header when collapsed", () => {
+test("app shell does not pass desktop sidebar controls to the header", () => {
 	const source = readAppShellSource();
 
-	assert.match(
+	assert.doesNotMatch(
 		source,
-		/const showDesktopSidebarToggle = \$derived\.by\(\s*\(\) => !isMobile\.current && !app\.ui\.desktopSidebarOpen,\s*\);/,
+		/const \w*Desktop\w*Sidebar\w*Toggle\w* = \$derived\.by/,
 	);
 	assert.doesNotMatch(source, /reserveSidebarSpace=/);
 	assert.match(
 		source,
-		/<AppHeader\s+\{showSessionToolbar\}\s+\{showDesktopSidebarToggle\}\s+onToggleSidebar=\{toggleSidebar\}\s+\/>/,
+		/<AppHeader\s+\{showSessionToolbar\}\s+onToggleSidebar=\{toggleSidebar\}\s+\/>/,
 	);
+	assert.doesNotMatch(source, /\{\w*Desktop\w*Sidebar\w*Toggle\w*\}/);
 	assert.doesNotMatch(source, /<AppSidebar\s+mode="floating"\s+collapsed/);
 });
 
