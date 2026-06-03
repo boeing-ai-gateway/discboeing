@@ -106,6 +106,9 @@ export function createAppPreferencesDomain(
 		get showRefreshButton() {
 			return uiStateStore.showRefreshButton;
 		},
+		get topBarIconOnly() {
+			return uiStateStore.topBarIconOnly;
+		},
 		get autoScrollOnStream() {
 			return uiStateStore.autoScrollOnStream;
 		},
@@ -152,6 +155,9 @@ export function createAppPreferencesDomain(
 		},
 		setShowRefreshButton: (value) => {
 			uiStateStore.setShowRefreshButton(value);
+		},
+		setTopBarIconOnly: (value) => {
+			uiStateStore.setTopBarIconOnly(value);
 		},
 		setAutoScrollOnStream: (value) => {
 			uiStateStore.setAutoScrollOnStream(value);

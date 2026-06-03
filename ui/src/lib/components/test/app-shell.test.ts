@@ -58,19 +58,19 @@ test("app shell restores dynamic desktop sidebar sizing", () => {
 	assert.match(source, /minSize=\{desktopSidebarMinSize\}/);
 });
 
-test("app shell renders the floating sidebar trigger when the desktop pane is collapsed", () => {
+test("app shell moves the desktop sidebar trigger into the header when collapsed", () => {
 	const source = readAppShellSource();
 
-	assert.match(source, /\{#if !app\.ui\.desktopSidebarOpen\}/);
-	assert.match(source, /<AppSidebar\s+mode="floating"\s+collapsed/);
 	assert.match(
 		source,
-		/reserveSidebarSpace=\{!isMobile\.current && !sidebarOpen\(\)\}/,
+		/const showDesktopSidebarToggle = \$derived\.by\(\s*\(\) => !isMobile\.current && !app\.ui\.desktopSidebarOpen,\s*\);/,
 	);
+	assert.doesNotMatch(source, /reserveSidebarSpace=/);
 	assert.match(
 		source,
-		/<AppHeader \{showSessionToolbar\} onToggleSidebar=\{toggleSidebar\} \/>/,
+		/<AppHeader\s+\{showSessionToolbar\}\s+\{showDesktopSidebarToggle\}\s+onToggleSidebar=\{toggleSidebar\}\s+\/>/,
 	);
+	assert.doesNotMatch(source, /<AppSidebar\s+mode="floating"\s+collapsed/);
 });
 
 test("app shell re-syncs the desktop pane state when the selected session changes", () => {

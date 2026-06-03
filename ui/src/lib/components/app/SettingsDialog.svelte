@@ -407,6 +407,25 @@
 										/>
 									</ItemActions>
 								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Icon-only top bar</ItemTitle>
+										<ItemDescription>
+											Show icons without text labels in the top toolbar.
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Switch
+											id="settings-top-bar-icon-only"
+											aria-label="Icon-only top bar"
+											checked={preferences.topBarIconOnly}
+											onCheckedChange={(checked) => {
+												preferences.setTopBarIconOnly(checked === true);
+											}}
+										/>
+									</ItemActions>
+								</Item>
 							</ItemGroup>
 						</CardContent>
 					</Card>

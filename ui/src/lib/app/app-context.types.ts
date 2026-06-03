@@ -122,6 +122,7 @@ export type AppPreferences = {
 	sidebarAllOpen: boolean;
 	sidebarAllGroupedByWorkspace: boolean;
 	showRefreshButton: boolean;
+	topBarIconOnly: boolean;
 	autoScrollOnStream: boolean;
 	setTheme: (theme: ThemeMode) => void;
 	setColorScheme: (scheme: ThemeColorScheme) => void;
@@ -139,6 +140,7 @@ export type AppPreferences = {
 	setSidebarAllOpen: (value: boolean) => void;
 	setSidebarAllGroupedByWorkspace: (value: boolean) => void;
 	setShowRefreshButton: (value: boolean) => void;
+	setTopBarIconOnly: (value: boolean) => void;
 	setAutoScrollOnStream: (value: boolean) => void;
 };
 

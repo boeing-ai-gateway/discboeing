@@ -1,11 +1,18 @@
 <script lang="ts">
+	import CheckIcon from "@lucide/svelte/icons/check";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
-	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
-	import { untrack } from "svelte";
 	import ClockIcon from "@lucide/svelte/icons/clock";
+	import CodeIcon from "@lucide/svelte/icons/code";
+	import FilesIcon from "@lucide/svelte/icons/files";
+	import GitBranchIcon from "@lucide/svelte/icons/git-branch";
+	import GitCompareIcon from "@lucide/svelte/icons/git-compare";
+	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
+	import MonitorIcon from "@lucide/svelte/icons/monitor";
+	import ServerIcon from "@lucide/svelte/icons/server";
+	import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
 	import type { Component } from "svelte";
+	import { untrack } from "svelte";
 	import { SvelteSet } from "svelte/reactivity";
 	import {
 		AlertDialog,
@@ -69,6 +76,7 @@
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	let learnMoreDialogOpen = $state(false);
 	let submittingLearnMorePrompt = $state(false);
+	const toolbarButtonTextClass = "text-sidebar-foreground/70";
 	const sessionServices = $derived.by(() =>
 		session.services.list.filter(
 			(service) =>
@@ -402,7 +410,7 @@
 >
 	{#if !isMobile.current}
 		<div
-			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 shadow-xs"
 		>
 			<Button
 				variant={sessionView.activeView.kind === "terminal"
@@ -410,8 +418,14 @@
 					: "ghost"}
 				size="xs"
 				onclick={toggleTerminal}
+				class={toolbarButtonTextClass}
+				aria-label="Terminal"
+				title="Terminal"
 			>
-				Terminal
+				<SquareTerminalIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					Terminal
+				{/if}
 			</Button>
 			<Button
 				variant={sessionView.activeView.kind === "desktop"
@@ -419,8 +433,14 @@
 					: "ghost"}
 				size="xs"
 				onclick={toggleDesktop}
+				class={toolbarButtonTextClass}
+				aria-label="Desktop"
+				title="Desktop"
 			>
-				Desktop
+				<MonitorIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					Desktop
+				{/if}
 			</Button>
 			<Button
 				variant={sessionView.activeView.kind === "vscode"
@@ -429,15 +449,27 @@
 				size="xs"
 				onclick={toggleVSCode}
 				disabled={!vscodeAvailable}
+				class={toolbarButtonTextClass}
+				aria-label="Editor"
+				title="Editor"
 			>
-				Editor
+				<CodeIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					Editor
+				{/if}
 			</Button>
 			<Button
 				variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleFiles}
+				class={toolbarButtonTextClass}
+				aria-label="Files"
+				title="Files"
 			>
-				Files
+				<FilesIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					Files
+				{/if}
 			</Button>
 			{#if diffStats.filesChanged > 0}
 				<Button
@@ -446,11 +478,16 @@
 						: "ghost"}
 					size="xs"
 					onclick={toggleDiffReview}
-					class="gap-1"
+					class={`gap-1 ${toolbarButtonTextClass}`}
+					aria-label={`Diff review: ${diffStats.additions} additions, ${diffStats.deletions} deletions, ${diffStats.filesChanged} files changed`}
+					title="Diff review"
 				>
-					<span class="text-diff-add-line">+{diffStats.additions}</span>
-					<span class="text-diff-remove-line">-{diffStats.deletions}</span>
-					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
+					<GitCompareIcon class="size-3.5" />
+					{#if !preferences.topBarIconOnly}
+						<span class="text-diff-add-line">+{diffStats.additions}</span>
+						<span class="text-diff-remove-line">-{diffStats.deletions}</span>
+						<span class="text-muted-foreground">{diffStats.filesChanged}</span>
+					{/if}
 				</Button>
 			{/if}
 			<Button
@@ -459,13 +496,19 @@
 					: "ghost"}
 				size="xs"
 				onclick={toggleServices}
+				class={toolbarButtonTextClass}
+				aria-label="Services"
+				title="Services"
 			>
-				Services
+				<ServerIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					Services
+				{/if}
 			</Button>
 		</div>
 	{:else if diffStats.filesChanged > 0}
 		<div
-			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 shadow-xs"
 		>
 			<Button
 				variant={sessionView.activeView.kind === "diff-review"
@@ -473,11 +516,16 @@
 					: "ghost"}
 				size="xs"
 				onclick={toggleDiffReview}
-				class="gap-1"
+				class={`gap-1 ${toolbarButtonTextClass}`}
+				aria-label={`Diff review: ${diffStats.additions} additions, ${diffStats.deletions} deletions, ${diffStats.filesChanged} files changed`}
+				title="Diff review"
 			>
-				<span class="text-diff-add-line">+{diffStats.additions}</span>
-				<span class="text-diff-remove-line">-{diffStats.deletions}</span>
-				<span class="text-muted-foreground">{diffStats.filesChanged}</span>
+				<GitCompareIcon class="size-3.5" />
+				{#if !preferences.topBarIconOnly}
+					<span class="text-diff-add-line">+{diffStats.additions}</span>
+					<span class="text-diff-remove-line">-{diffStats.deletions}</span>
+					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
+				{/if}
 			</Button>
 		</div>
 	{/if}
@@ -486,15 +534,16 @@
 		{#if operationState.showSplitButton}
 			<DropdownMenu>
 				<div
-					class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+					class="desktop-no-drag group inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 text-sidebar-foreground/70 shadow-xs"
 				>
 					<Button
 						variant="outline"
 						size="xs"
 						onclick={handlePrimaryCommand}
 						disabled={operationDisabled}
-						class="gap-1.5 rounded-l-[calc(var(--radius)-1px)] rounded-r-none border-0 bg-transparent shadow-none dark:bg-transparent"
+						class="gap-1.5 rounded-l-[calc(var(--radius)-1px)] rounded-r-none border-0 bg-transparent shadow-none group-hover:bg-accent group-hover:text-accent-foreground dark:bg-transparent dark:group-hover:bg-accent/50"
 						title={commandLabel(primaryCommand)}
+						aria-label={operationState.buttonLabel}
 					>
 						{#if operationState.showPending}
 							<ClockIcon class="size-3.5" />
@@ -504,9 +553,13 @@
 							{@const PrimaryIcon = commandIcon(primaryCommand)}
 							{#if PrimaryIcon}
 								<PrimaryIcon class="size-3.5" />
+							{:else}
+								<GitCommitIcon class="size-3.5" />
 							{/if}
 						{/if}
-						{operationState.buttonLabel}
+						{#if !preferences.topBarIconOnly}
+							{operationState.buttonLabel}
+						{/if}
 					</Button>
 					<DropdownMenuTrigger>
 						{#snippet child({ props })}
@@ -515,7 +568,7 @@
 								variant="outline"
 								size="xs"
 								disabled={operationDisabled}
-								class="rounded-r-[calc(var(--radius)-1px)] rounded-l-none border-0 border-l border-border bg-transparent px-2 shadow-none dark:bg-transparent"
+								class="rounded-r-[calc(var(--radius)-1px)] rounded-l-none border-0 bg-transparent px-2 shadow-none group-hover:bg-accent group-hover:text-accent-foreground dark:bg-transparent dark:group-hover:bg-accent/50"
 								aria-label="More actions"
 								title="More actions"
 							>
@@ -563,8 +616,9 @@
 				size="xs"
 				onclick={handlePrimaryCommand}
 				disabled={operationDisabled}
-				class="desktop-no-drag gap-1.5"
+				class="desktop-no-drag gap-1.5 border-0 text-sidebar-foreground/70 shadow-none"
 				title={commandLabel(primaryCommand)}
+				aria-label={operationState.buttonLabel}
 			>
 				{#if operationState.showPending}
 					<ClockIcon class="size-3.5" />
@@ -574,24 +628,43 @@
 					{@const PrimaryIcon = commandIcon(primaryCommand)}
 					{#if PrimaryIcon}
 						<PrimaryIcon class="size-3.5" />
+					{:else}
+						<GitCommitIcon class="size-3.5" />
 					{/if}
 				{/if}
-				{operationState.buttonLabel}
+				{#if !preferences.topBarIconOnly}
+					{operationState.buttonLabel}
+				{/if}
 			</Button>
 		{/if}
 	{/if}
 
 	{#if !isMobile.current}
 		<SplitDropdownButton
-			class="desktop-no-drag"
+			class="desktop-no-drag text-sidebar-foreground/70"
 			label={`Open ${selectedIdeOption?.label ?? "Cursor"}`}
 			menuAriaLabel="Select preferred IDE"
+			iconOnly={preferences.topBarIconOnly}
 			onclick={openPreferredIde}
 			primaryDisabled={preferredIdeActionDisabled}
-			variant="outline"
+			variant="ghost"
 			size="xs"
 			contentClass="min-w-[11rem]"
 		>
+			{#snippet icon()}
+				{#if selectedIdeOption?.icon}
+					<svg
+						class="size-3.5"
+						viewBox="0 0 24 24"
+						aria-hidden="true"
+						fill="currentColor"
+					>
+						<path d={selectedIdeOption.icon.path} />
+					</svg>
+				{:else}
+					<CodeIcon class="size-3.5" />
+				{/if}
+			{/snippet}
 			<DropdownMenuLabel
 				class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
 			>
@@ -602,17 +675,37 @@
 					onclick={() => preferences.setPreferredIde(option.id)}
 					class="justify-between gap-3"
 				>
-					<span>{option.label}</span>
+					<span class="flex items-center gap-2">
+						<svg
+							class="size-3.5"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+							fill="currentColor"
+						>
+							<path d={option.icon.path} />
+						</svg>
+						<span>{option.label}</span>
+					</span>
 					{#if preferences.preferredIde === option.id}
-						<span class="text-xs font-medium">Default</span>
+						<CheckIcon class="size-3.5" aria-label="Selected" />
 					{/if}
 				</DropdownMenuItem>
 			{/each}
 			<DropdownMenuSub>
 				<DropdownMenuSubTrigger class="gap-3">
-					<span>JetBrains</span>
+					<span class="flex items-center gap-2">
+						<svg
+							class="size-3.5"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+							fill="currentColor"
+						>
+							<path d={jetbrainsIdeOptions[0]?.icon.path} />
+						</svg>
+						<span>JetBrains</span>
+					</span>
 					{#if selectedIdeOption?.family === "jetbrains"}
-						<span class="text-xs font-medium">Default</span>
+						<CheckIcon class="size-3.5" aria-label="Selected" />
 					{/if}
 				</DropdownMenuSubTrigger>
 				<DropdownMenuSubContent class="min-w-[13rem]">
@@ -621,9 +714,19 @@
 							onclick={() => preferences.setPreferredIde(option.id)}
 							class="justify-between gap-3"
 						>
-							<span>{option.label}</span>
+							<span class="flex items-center gap-2">
+								<svg
+									class="size-3.5"
+									viewBox="0 0 24 24"
+									aria-hidden="true"
+									fill="currentColor"
+								>
+									<path d={option.icon.path} />
+								</svg>
+								<span>{option.label}</span>
+							</span>
 							{#if preferences.preferredIde === option.id}
-								<span class="text-xs font-medium">Default</span>
+								<CheckIcon class="size-3.5" aria-label="Selected" />
 							{/if}
 						</DropdownMenuItem>
 					{/each}

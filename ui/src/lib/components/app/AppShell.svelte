@@ -24,12 +24,9 @@
 	);
 	const showSessionToolbar = $derived.by(() => !!currentSelectedSessionId);
 	const mountedSessionIds = $derived.by(() => app.ui.mountedSessionIds);
-
-	function sidebarOpen() {
-		return isMobile.current
-			? app.ui.mobileSidebarOpen
-			: app.ui.desktopSidebarOpen;
-	}
+	const showDesktopSidebarToggle = $derived.by(
+		() => !isMobile.current && !app.ui.desktopSidebarOpen,
+	);
 
 	function toggleSidebar() {
 		if (isMobile.current) {
@@ -143,7 +140,6 @@
 				{sessionId}
 				visible={sessionId === currentSelectedSessionId}
 				{mainClass}
-				reserveSidebarSpace={!isMobile.current && !sidebarOpen()}
 			/>
 		{/if}
 	{/each}
@@ -151,7 +147,11 @@
 
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
 	<AppKeyboardShortcuts />
-	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
+	<AppHeader
+		{showSessionToolbar}
+		{showDesktopSidebarToggle}
+		onToggleSidebar={toggleSidebar}
+	/>
 	<StartupTasksBanner startup={app.startup} />
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
@@ -211,20 +211,6 @@
 						</div>
 					</Resizable.Pane>
 				</Resizable.PaneGroup>
-
-				{#if !app.ui.desktopSidebarOpen}
-					<div
-						class="pointer-events-none absolute inset-y-0 left-0 z-20 box-border pb-3 pl-3 pr-2 pt-1"
-					>
-						<div class="pointer-events-auto">
-							<AppSidebar
-								mode="floating"
-								collapsed
-								onToggleSidebar={toggleSidebar}
-							/>
-						</div>
-					</div>
-				{/if}
 			</div>
 		{/if}
 	</div>

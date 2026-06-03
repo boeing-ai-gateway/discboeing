@@ -8,10 +8,9 @@
 		sessionId: string;
 		visible: boolean;
 		mainClass: string;
-		reserveSidebarSpace?: boolean;
 	};
 
-	let { sessionId, visible, mainClass, reserveSidebarSpace }: Props = $props();
+	let { sessionId, visible, mainClass }: Props = $props();
 	const app = useAppContext();
 	const session = app.ensureSession(untrack(() => sessionId));
 	setSessionContext(session);
@@ -33,7 +32,6 @@
 			{threadId}
 			{visible}
 			{mainClass}
-			{reserveSidebarSpace}
 			mode={session.isPending ? "conversation-only" : undefined}
 		/>
 	{/key}

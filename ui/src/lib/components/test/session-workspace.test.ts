@@ -20,7 +20,7 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	assert.match(source, /visible: boolean;/);
 	assert.match(source, /mainClass: string;/);
 	assert.doesNotMatch(source, /showSidebarToggle\?: boolean;/);
-	assert.match(source, /reserveSidebarSpace\?: boolean;/);
+	assert.doesNotMatch(source, /reserveSidebarSpace\?: boolean;/);
 	assert.match(source, /import \{ onDestroy, untrack \} from "svelte";/);
 	assert.match(
 		source,
@@ -50,7 +50,7 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	assert.match(source, /\{#key threadId\}/);
 	assert.match(source, /<ThreadWorkspace/);
 	assert.match(source, /\{threadId\}/);
-	assert.match(source, /\{reserveSidebarSpace\}/);
+	assert.doesNotMatch(source, /\{reserveSidebarSpace\}/);
 	assert.doesNotMatch(source, /\{showSidebarToggle\}/);
 	assert.match(
 		source,

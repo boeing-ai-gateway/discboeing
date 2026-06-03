@@ -18,6 +18,8 @@
 	type Props = {
 		label: string;
 		menuAriaLabel: string;
+		icon?: Snippet;
+		iconOnly?: boolean;
 		class?: string;
 		contentClass?: string;
 		children?: Snippet;
@@ -34,6 +36,8 @@
 	let {
 		label,
 		menuAriaLabel,
+		icon,
+		iconOnly = false,
 		class: className,
 		contentClass,
 		children,
@@ -53,18 +57,18 @@
 	const useSharedOutlineBorder = $derived(variant === "outline");
 	const groupClass = $derived(
 		useSharedOutlineBorder
-			? "inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
-			: "inline-flex items-center",
+			? "group inline-flex items-center overflow-hidden rounded-md border border-border bg-background p-0.5 shadow-xs"
+			: "group inline-flex items-center",
 	);
 	const primaryButtonClass = $derived(
 		useSharedOutlineBorder
-			? "rounded-l-[calc(var(--radius)-1px)] rounded-r-none border-0 bg-transparent shadow-none dark:bg-transparent"
-			: "rounded-r-none",
+			? "rounded-l-[calc(var(--radius)-1px)] rounded-r-none border-0 bg-transparent shadow-none group-hover:bg-accent group-hover:text-accent-foreground dark:bg-transparent dark:group-hover:bg-accent/50"
+			: "rounded-r-none group-hover:bg-accent group-hover:text-accent-foreground dark:group-hover:bg-accent/50",
 	);
 	const triggerButtonClass = $derived(
 		useSharedOutlineBorder
-			? "rounded-r-[calc(var(--radius)-1px)] rounded-l-none border-0 border-l border-border bg-transparent px-2 shadow-none dark:bg-transparent"
-			: "rounded-l-none border-l-0 px-2",
+			? "rounded-r-[calc(var(--radius)-1px)] rounded-l-none border-0 border-l border-border bg-transparent px-2 shadow-none group-hover:bg-accent group-hover:text-accent-foreground dark:bg-transparent dark:group-hover:bg-accent/50"
+			: "rounded-l-none border-l-0 px-2 group-hover:bg-accent group-hover:text-accent-foreground dark:group-hover:bg-accent/50",
 	);
 </script>
 
@@ -78,7 +82,8 @@
 			{onclick}
 			class={primaryButtonClass}
 		>
-			{label}
+			{@render icon?.()}
+			<span class={iconOnly ? "sr-only" : undefined}>{label}</span>
 		</Button>
 		<DropdownMenuTrigger>
 			{#snippet child({ props })}

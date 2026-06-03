@@ -28,9 +28,15 @@ export type JetBrainsProductCode =
 	| "RM"
 	| "RD";
 
+export type IdeIcon = {
+	title: string;
+	path: string;
+};
+
 type BaseIdeOption = {
 	id: PreferredIde;
 	label: string;
+	icon: IdeIcon;
 };
 
 export type StandardIdeOption = BaseIdeOption & {
