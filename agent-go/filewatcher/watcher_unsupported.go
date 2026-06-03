@@ -77,7 +77,7 @@ type Watcher struct {
 // New reports that workspace file watching is unavailable on non-Linux
 // platforms. The production agent runs in Linux sandboxes, but this stub keeps
 // packages that reference filewatcher buildable on developer and CI hosts.
-func New(root string, opts Options) (*Watcher, error) {
+func New(root string, _ Options) (*Watcher, error) {
 	cleanRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root: %w", err)
