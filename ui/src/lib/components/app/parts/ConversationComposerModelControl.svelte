@@ -1,11 +1,10 @@
 <script module lang="ts">
 	import type { ModelInfo } from "$lib/api-types";
-
-	type DisplayModel = ModelInfo & {
-		selectedIds: string[];
-	};
-
-	type ModelProviderEntry = [string, DisplayModel[]];
+	import type {
+		DisplayModel,
+		ModelProviderEntry,
+	} from "./conversation-composer-model-control-search";
+	import { filterModelProviderEntries } from "./conversation-composer-model-control-search";
 
 	function cleanModelName(name: string) {
 		return name.replace(/\s*\(latest\)\s*/gi, "").trim();
@@ -122,6 +121,7 @@
 		DropdownMenuSeparator,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
+	import { Input } from "$lib/components/ui/input";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 
 	type Props = {
@@ -132,7 +132,11 @@
 
 	let { value = null, onSelect = () => {}, models }: Props = $props();
 
+	let modelSearchQuery = $state("");
 	const modelProviderEntries = $derived(buildModelProviderEntries(models));
+	const filteredModelProviderEntries = $derived.by(() =>
+		filterModelProviderEntries(modelProviderEntries, modelSearchQuery),
+	);
 	const selectedModel = $derived(
 		findSelectedModel(modelProviderEntries, value),
 	);
@@ -154,6 +158,20 @@
 		</InputGroupButton>
 	</DropdownMenuTrigger>
 	<DropdownMenuContent align="start" class="max-h-[24rem] w-80 overflow-y-auto">
+		<div
+			onmousedown={(event) => event.stopPropagation()}
+			class="p-2"
+			role="presentation"
+		>
+			<Input
+				bind:value={modelSearchQuery}
+				type="search"
+				placeholder="Search models"
+				aria-label="Search models"
+				class="h-8 text-xs"
+			/>
+		</div>
+		<DropdownMenuSeparator />
 		<DropdownMenuItem
 			onclick={() => {
 				onSelect(null);
@@ -166,39 +184,45 @@
 			{/if}
 		</DropdownMenuItem>
 
-		{#if modelProviderEntries.length > 0}
-			<DropdownMenuSeparator />
-		{/if}
-
-		{#each modelProviderEntries as [provider, providerModels], providerIndex (provider)}
-			{#if providerIndex > 0}
-				<DropdownMenuSeparator />
-			{/if}
-			<DropdownMenuLabel
-				class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
-			>
-				{provider}
-			</DropdownMenuLabel>
-			{#each providerModels as model (model.id)}
-				<DropdownMenuItem
-					onclick={() => {
-						onSelect(model.id);
-					}}
-					class="justify-between gap-3"
+		{#if filteredModelProviderEntries.length > 0}
+			{#each filteredModelProviderEntries as [provider, providerModels], providerIndex (provider)}
+				{#if providerIndex > 0}
+					<DropdownMenuSeparator />
+				{/if}
+				<DropdownMenuLabel
+					class="text-xs uppercase tracking-[0.16em] text-muted-foreground"
 				>
-					<div class="min-w-0 flex-1 pl-3">
-						<div class="truncate font-medium">{model.name}</div>
-						{#if model.description}
-							<div class="truncate text-xs text-muted-foreground">
-								{model.description}
-							</div>
+					{provider}
+				</DropdownMenuLabel>
+				{#each providerModels as model (model.id)}
+					<DropdownMenuItem
+						onclick={() => {
+							onSelect(model.id);
+						}}
+						class="justify-between gap-3"
+					>
+						<div class="min-w-0 flex-1 pl-3">
+							<div class="truncate font-medium">{model.name}</div>
+							{#if model.description}
+								<div class="truncate text-xs text-muted-foreground">
+									{model.description}
+								</div>
+							{/if}
+						</div>
+						{#if value !== null && model.selectedIds.includes(value)}
+							<CheckIcon class="size-3.5 text-primary" />
 						{/if}
-					</div>
-					{#if value !== null && model.selectedIds.includes(value)}
-						<CheckIcon class="size-3.5 text-primary" />
-					{/if}
-				</DropdownMenuItem>
+					</DropdownMenuItem>
+				{/each}
 			{/each}
-		{/each}
+		{:else}
+			<div class="px-3 py-2 text-xs text-muted-foreground">
+				{#if modelSearchQuery.trim().length > 0}
+					No models match “{modelSearchQuery}”
+				{:else}
+					No models available
+				{/if}
+			</div>
+		{/if}
 	</DropdownMenuContent>
 </DropdownMenu>
