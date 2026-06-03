@@ -483,11 +483,9 @@
 					title="Diff review"
 				>
 					<GitCompareIcon class="size-3.5" />
-					{#if !preferences.topBarIconOnly}
-						<span class="text-diff-add-line">+{diffStats.additions}</span>
-						<span class="text-diff-remove-line">-{diffStats.deletions}</span>
-						<span class="text-muted-foreground">{diffStats.filesChanged}</span>
-					{/if}
+					<span class="text-diff-add-line">+{diffStats.additions}</span>
+					<span class="text-diff-remove-line">-{diffStats.deletions}</span>
+					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
 				</Button>
 			{/if}
 			<Button
@@ -521,11 +519,9 @@
 				title="Diff review"
 			>
 				<GitCompareIcon class="size-3.5" />
-				{#if !preferences.topBarIconOnly}
-					<span class="text-diff-add-line">+{diffStats.additions}</span>
-					<span class="text-diff-remove-line">-{diffStats.deletions}</span>
-					<span class="text-muted-foreground">{diffStats.filesChanged}</span>
-				{/if}
+				<span class="text-diff-add-line">+{diffStats.additions}</span>
+				<span class="text-diff-remove-line">-{diffStats.deletions}</span>
+				<span class="text-muted-foreground">{diffStats.filesChanged}</span>
 			</Button>
 		</div>
 	{/if}
