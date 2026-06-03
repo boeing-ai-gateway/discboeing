@@ -1357,7 +1357,7 @@ func handleResponseFailed(data []byte, yield func(message.ProviderMessageChunk, 
 	if errMsg == "" {
 		errMsg = "unknown error"
 	}
-	return yield(nil, fmt.Errorf("openai: response failed: %s", errMsg))
+	return yield(nil, &openAIResponseFailedError{message: errMsg})
 }
 
 func handleStreamError(data []byte, yield func(message.ProviderMessageChunk, error) bool) bool {

@@ -87,11 +87,19 @@ type openAIStreamError struct {
 	code    string
 }
 
+type openAIResponseFailedError struct {
+	message string
+}
+
 func (e *openAIStreamError) Error() string {
 	if e.code != "" {
 		return fmt.Sprintf("openai: stream error: %s (code: %s)", e.message, e.code)
 	}
 	return fmt.Sprintf("openai: stream error: %s", e.message)
+}
+
+func (e *openAIResponseFailedError) Error() string {
+	return fmt.Sprintf("openai: response failed: %s", e.message)
 }
 
 type webSocketPeerClosedError struct {
@@ -408,6 +416,10 @@ func shouldRetryWebSocketAttempt(ctx context.Context, err error, retriesUsed int
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var responseFailed *openAIResponseFailedError
+	if errors.As(err, &responseFailed) {
 		return false
 	}
 	if ctx.Err() != nil {

@@ -114,6 +114,10 @@ func wsTestServer(t *testing.T, handler func(conn *websocket.Conn, r *http.Reque
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/responses" {
+			if r.URL.Path == "/" && r.Header.Get("Upgrade") == "" {
+				http.NotFound(w, r)
+				return
+			}
 			t.Errorf("unexpected path %q", r.URL.Path)
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -1997,10 +2001,14 @@ func TestCompleteViaWebSocket_InvalidatesOnResponseFailed(t *testing.T) {
 		Messages: []message.Message{{Role: "user", Parts: []message.Part{message.TextPart{Text: "Hi"}}}},
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var gotErr error
-	for chunk, err := range p.Complete(context.Background(), req) {
+	for chunk, err := range p.Complete(ctx, req) {
 		if err != nil {
 			gotErr = err
+			cancel()
 		}
 		_ = chunk
 	}
