@@ -192,6 +192,7 @@ type SessionCredentialUse struct {
 }
 
 const sessionCredentialUseDuration = time.Hour
+const oauthRefreshBuffer = 5 * time.Minute
 
 // CredentialService handles credential operations with encryption
 type CredentialService struct {
@@ -989,8 +990,8 @@ func (s *CredentialService) GetOAuthTokens(ctx context.Context, projectID, provi
 		return nil, ErrDecryptionFailed
 	}
 
-	// Check if token is expired (with 5 minute buffer for safety)
-	if !tokens.ExpiresAt.IsZero() && time.Now().Add(5*time.Minute).After(tokens.ExpiresAt) {
+	// Check if token is expired (with a small buffer for safety).
+	if oauthTokenNeedsRefresh(tokens, time.Now()) {
 		// Token is expired or about to expire
 		if tokens.RefreshToken != "" {
 			// Check if we recently failed to refresh this token (backoff mechanism)
@@ -1098,6 +1099,10 @@ func (s *CredentialService) RefreshOAuthTokens(ctx context.Context, projectID, p
 	}
 
 	return updatedTokens, nil
+}
+
+func oauthTokenNeedsRefresh(tokens OAuthCredential, now time.Time) bool {
+	return !tokens.ExpiresAt.IsZero() && now.Add(oauthRefreshBuffer).After(tokens.ExpiresAt)
 }
 
 // Delete removes a credential by ID.
@@ -1341,6 +1346,10 @@ func (s *CredentialService) mapCredentialsToEnvVarsWithAssignments(ctx context.C
 				tokens, err := s.GetOAuthTokens(ctx, projectID, c.Provider)
 				if err != nil {
 					log.Printf("Warning: Failed to get OAuth tokens for provider %s: %v", c.Provider, err)
+					continue
+				}
+				if oauthTokenNeedsRefresh(*tokens, time.Now()) {
+					log.Printf("Warning: Skipping expired OAuth token for provider %s because it could not be refreshed", c.Provider)
 					continue
 				}
 				if tokens.AccessToken != "" {

@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +14,12 @@ import (
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/providers"
 )
+
+type credentialRoundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (f credentialRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func clearStartupCredentialEnv(t *testing.T) {
 	t.Helper()
@@ -1112,7 +1121,7 @@ func TestRefreshBackoff_PreventsRepeatedAttempts(t *testing.T) {
 	}
 }
 
-func TestGetAllDecrypted_WithExpiredToken_AttemptsRefresh(t *testing.T) {
+func TestGetAllDecrypted_WithExpiredToken_SkipsTokenWhenRefreshFails(t *testing.T) {
 	// Create in-memory store
 	st := setupTestStore(t)
 
@@ -1143,26 +1152,90 @@ func TestGetAllDecrypted_WithExpiredToken_AttemptsRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to set OAuth tokens: %v", err)
 	}
+	credSvc.refreshFailMutex.Lock()
+	credSvc.lastRefreshFail[ProviderAnthropic] = time.Now()
+	credSvc.refreshFailMutex.Unlock()
 
-	// GetAllDecrypted should trigger auto-refresh via GetOAuthTokens
+	// GetAllDecrypted should not send an expired token to the sandbox when
+	// refresh is required but unavailable.
 	envVars, err := credSvc.GetAllDecrypted(ctx, projectID)
 	if err != nil {
 		t.Fatalf("Failed to get all decrypted: %v", err)
 	}
 
-	// Should still return the credential even though refresh failed
+	if len(envVars) != 0 {
+		t.Fatalf("Expected expired OAuth token to be skipped, got %d env vars", len(envVars))
+	}
+}
+
+func TestGetAllDecrypted_WithExpiredToken_SendsRefreshedToken(t *testing.T) {
+	originalClient := http.DefaultClient
+	defer func() {
+		http.DefaultClient = originalClient
+	}()
+	http.DefaultClient = &http.Client{Transport: credentialRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed reading request body: %v", err)
+		}
+		payload := string(body)
+		for _, expected := range []string{
+			"grant_type=refresh_token",
+			"client_id=test-client-id",
+			"refresh_token=old-refresh-token",
+		} {
+			if !strings.Contains(payload, expected) {
+				t.Fatalf("expected refresh payload to contain %q", expected)
+			}
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body: io.NopCloser(strings.NewReader(`{
+				"access_token": "refreshed-access-token",
+				"token_type": "Bearer",
+				"expires_in": 3600
+			}`)),
+		}, nil
+	})}
+
+	st := setupTestStore(t)
+	cfg := &config.Config{
+		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
+		CodexClientID: "test-client-id",
+	}
+	credSvc, err := NewCredentialService(st, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create credential service: %v", err)
+	}
+
+	ctx := context.Background()
+	projectID := "test-project"
+	_, err = credSvc.SetOAuthTokens(ctx, projectID, ProviderCodex, "Codex OAuth", &OAuthCredential{
+		AccessToken:  "expired-access-token",
+		RefreshToken: "old-refresh-token",
+		TokenType:    "Bearer",
+		ExpiresAt:    time.Now().Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Failed to set OAuth tokens: %v", err)
+	}
+
+	envVars, err := credSvc.GetAllDecrypted(ctx, projectID)
+	if err != nil {
+		t.Fatalf("Failed to get all decrypted: %v", err)
+	}
 	if len(envVars) != 1 {
 		t.Fatalf("Expected 1 credential, got %d", len(envVars))
 	}
-
-	// Should use the OAuth-specific env var
-	if envVars[0].EnvVar != "CLAUDE_CODE_OAUTH_TOKEN" {
-		t.Errorf("Expected CLAUDE_CODE_OAUTH_TOKEN, got %s", envVars[0].EnvVar)
+	if envVars[0].EnvVar != "CODEX_TOKEN" {
+		t.Fatalf("Expected CODEX_TOKEN, got %s", envVars[0].EnvVar)
 	}
-
-	// Should return the expired token since refresh failed
-	if envVars[0].Value != "expired-access-token" {
-		t.Errorf("Expected expired-access-token, got %s", envVars[0].Value)
+	if envVars[0].Value != "refreshed-access-token" {
+		t.Fatal("Expected refreshed token value")
+	}
+	if oauthTokenNeedsRefresh(OAuthCredential{ExpiresAt: time.Unix(envVars[0].ExpiresAt, 0)}, time.Now()) {
+		t.Fatalf("Expected refreshed token expiration, got %d", envVars[0].ExpiresAt)
 	}
 }
 
