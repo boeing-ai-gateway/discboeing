@@ -19,6 +19,10 @@
 /ui/build
 /ui/.svelte-kit
 
+# test output
+/test-results/
+/playwright-report/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

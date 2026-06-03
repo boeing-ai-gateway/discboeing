@@ -142,6 +142,7 @@ export function createResource<TData>(
 	let ensureScheduled = false;
 	let retryTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 	let retryAttempt = $state(0);
+	let wasEnabled = args.enabled();
 
 	function syncStaleAt(nextFetchedAt: number | null) {
 		staleAt =
@@ -192,7 +193,7 @@ export function createResource<TData>(
 		if (
 			args.retry?.mode !== "background" ||
 			retryTimer !== null ||
-			!args.enabled()
+			!isEnabled()
 		) {
 			return;
 		}
@@ -210,7 +211,7 @@ export function createResource<TData>(
 		if (
 			ensureScheduled ||
 			retryTimer !== null ||
-			!args.enabled() ||
+			!isEnabled() ||
 			loadingPromise !== null ||
 			(!force && hasUnresolvedAutomaticFailure()) ||
 			(!force && !isStale())
@@ -242,8 +243,17 @@ export function createResource<TData>(
 		loadingPromise = null;
 	}
 
+	function isEnabled() {
+		const enabled = args.enabled();
+		if (!enabled && wasEnabled) {
+			reset();
+		}
+		wasEnabled = enabled;
+		return enabled;
+	}
+
 	function isStale() {
-		if (!args.enabled()) {
+		if (!isEnabled()) {
 			return false;
 		}
 		if (fetchedAt === null) {
@@ -259,7 +269,7 @@ export function createResource<TData>(
 	}
 
 	function invalidate() {
-		if (!args.enabled()) {
+		if (!isEnabled()) {
 			return;
 		}
 		invalidatedAt = now();
@@ -277,7 +287,7 @@ export function createResource<TData>(
 	}
 
 	async function ensure(force = false): Promise<TData> {
-		if (!args.enabled()) {
+		if (!isEnabled()) {
 			reset();
 			return data;
 		}
@@ -345,19 +355,13 @@ export function createResource<TData>(
 		return promise;
 	}
 
-	$effect(() => {
-		const enabled = args.enabled();
-		if (!enabled) {
-			reset();
-		}
-	});
-
 	return {
 		get data() {
 			scheduleEnsure(false);
 			return data;
 		},
 		get status() {
+			isEnabled();
 			return status;
 		},
 		get error() {
@@ -372,7 +376,10 @@ export function createResource<TData>(
 		get fetchedAt() {
 			return fetchedAt;
 		},
-		peek: () => data,
+		peek: () => {
+			isEnabled();
+			return data;
+		},
 		ensure: () => ensure(false),
 		refresh: () => ensure(true),
 		invalidate,

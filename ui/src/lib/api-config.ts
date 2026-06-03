@@ -19,6 +19,7 @@ const DEFAULT_SSH_PORT = 3333;
 const DEFAULT_HTTP_PORT = 3001;
 const desktopLocalhost = "localhost";
 const sameOriginAPIPath = "/api";
+const viteApiRoot = import.meta.env.VITE_DISCOBOT_API_ROOT;
 
 // Server config (fetched from backend)
 let sshPort = DEFAULT_SSH_PORT;
@@ -62,6 +63,15 @@ function getInjectedApiRootBase(): string | null {
  * - Otherwise: uses the current origin's /api endpoint
  */
 export function getApiRootBase() {
+	if (viteApiRoot) {
+		if (typeof window === "undefined") {
+			return viteApiRoot.replace(/\/$/, "");
+		}
+		return new URL(viteApiRoot, window.location.origin)
+			.toString()
+			.replace(/\/$/, "");
+	}
+
 	if (typeof window === "undefined") {
 		// Server-side rendering - call backend directly
 		return "http://localhost:3001/api";

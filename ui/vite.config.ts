@@ -83,32 +83,56 @@ function trackSSRBuild(): Plugin {
 	};
 }
 
-export default defineConfig(() => ({
-	plugins: [trackSSRBuild(), fixNoVncCjs(), sveltekit(), tailwindcss()],
-	test: {
-		environment: "jsdom",
-		include: ["src/lib/**/*.vitest.ts", "src/lib/markdown/render-dom.test.ts"],
-	},
-	server: { port: 3100, strictPort: true },
-	preview: { port: 3100, strictPort: true },
-	worker: {
-		format: "es",
-	},
-	clearScreen: false,
-	build: {
-		sourcemap: true,
-		// Increase chunk size warning limit for the Svelte UI bundle.
-		chunkSizeWarningLimit: 4000,
-		rollupOptions: {
-			onwarn(warning, defaultHandler) {
-				defaultHandler(warning);
+export default defineConfig(() => {
+	const apiProxyTarget = process.env.VITE_DISCOBOT_API_PROXY_TARGET;
+
+	return {
+		plugins: [trackSSRBuild(), fixNoVncCjs(), sveltekit(), tailwindcss()],
+		test: {
+			environment: "jsdom",
+			include: [
+				"src/lib/**/*.vitest.ts",
+				"src/lib/markdown/render-dom.test.ts",
+			],
+		},
+		server: {
+			port: 3100,
+			strictPort: true,
+			proxy: apiProxyTarget
+				? {
+						"/api": {
+							target: apiProxyTarget,
+							changeOrigin: true,
+							ws: true,
+						},
+						"/auth": {
+							target: apiProxyTarget,
+							changeOrigin: true,
+						},
+					}
+				: undefined,
+		},
+		preview: { port: 3100, strictPort: true },
+		worker: {
+			format: "es",
+		},
+		clearScreen: false,
+		build: {
+			sourcemap: true,
+			// Increase chunk size warning limit for the Svelte UI bundle.
+			chunkSizeWarningLimit: 4000,
+			rollupOptions: {
+				onwarn(warning, defaultHandler) {
+					defaultHandler(warning);
+				},
 			},
 		},
-	},
-	optimizeDeps: {
-		include: ["@novnc/novnc"],
-		rolldownOptions: {
-			plugins: [fixNoVncCjs()],
+		optimizeDeps: {
+			include: ["@novnc/novnc"],
+			exclude: ["@lucide/svelte"],
+			rolldownOptions: {
+				plugins: [fixNoVncCjs()],
+			},
 		},
-	},
-}));
+	};
+});
