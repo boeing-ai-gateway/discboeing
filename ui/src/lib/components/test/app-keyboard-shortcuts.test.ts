@@ -88,6 +88,15 @@ test("app keyboard shortcuts lets the switcher render thread status", () => {
 	assert.doesNotMatch(source, /threadStatuses=/);
 });
 
+test("app keyboard shortcuts handles global shortcuts inside editable targets when they match", () => {
+	const source = readSource(APP_KEYBOARD_SHORTCUTS_COMPONENT);
+
+	assert.match(
+		source,
+		/const shortcutAction = matchGlobalShortcutKeydown\(event, isMacPlatform\);[\s\S]*if \(!shortcutAction && isEditableShortcutTarget\(event\.target\)\) \{/,
+	);
+});
+
 test("keyboard shortcut help dialog renders multiple key groups", () => {
 	const source = readSource(KEYBOARD_SHORTCUT_HELP_DIALOG_COMPONENT);
 

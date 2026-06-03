@@ -237,11 +237,10 @@
 			return;
 		}
 
-		if (isEditableShortcutTarget(event.target)) {
+		const shortcutAction = matchGlobalShortcutKeydown(event, isMacPlatform);
+		if (!shortcutAction && isEditableShortcutTarget(event.target)) {
 			return;
 		}
-
-		const shortcutAction = matchGlobalShortcutKeydown(event, isMacPlatform);
 		if (!shortcutAction) {
 			return;
 		}
