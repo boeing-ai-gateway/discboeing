@@ -36,6 +36,7 @@
 
 	const session = useSessionContext();
 	const sessionView = session.ui;
+	let reviewPhaseSaving = $state(false);
 
 	function pendingHookSet() {
 		return new Set(hooksStatus.pendingHookIds);
@@ -82,7 +83,7 @@
 		if (displayState === "failure") {
 			return "Failed";
 		}
-		return "Pending";
+		return "Not run";
 	}
 
 	function hookPaused(hook: HooksStatus["hooks"][number]) {
@@ -99,6 +100,31 @@
 			!hook.executionPaused &&
 			hookDisplayState(hook) !== "running"
 		);
+	}
+
+	const reviewHooks = $derived.by(() =>
+		hooksStatus.hooks.filter((hook) => hook.phase === "review"),
+	);
+	const draftHooks = $derived.by(() =>
+		hooksStatus.hooks.filter((hook) => hook.phase !== "review"),
+	);
+	const selectedThreadPhase = $derived(session.threads.selected?.phase ?? "");
+
+	async function toggleReviewPhase() {
+		const selectedThreadId = session.threads.selectedId;
+		if (!selectedThreadId || reviewPhaseSaving) {
+			return;
+		}
+
+		reviewPhaseSaving = true;
+		try {
+			await session.threads.setPhase(
+				selectedThreadId,
+				selectedThreadPhase === "review" ? "" : "review",
+			);
+		} finally {
+			reviewPhaseSaving = false;
+		}
 	}
 
 	function openHookDialog(hookId: string) {
@@ -185,9 +211,75 @@
 	}
 </script>
 
+{#snippet hookRow(hook: HooksStatus["hooks"][number])}
+	{@const displayState = hookDisplayState(hook)}
+	<div
+		class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${displayState === "running" ? "bg-blue-500/10" : ""}`}
+	>
+		{#if displayState === "running"}
+			<Loader2Icon class={`size-3 animate-spin ${hookStatusTone(hook)}`} />
+		{:else if displayState === "pending"}
+			<ClockIcon class={`size-3 ${hookStatusTone(hook)}`} />
+		{:else if displayState === "failure"}
+			<XCircleIcon class={`size-3 ${hookStatusTone(hook)}`} />
+		{:else if displayState === "success"}
+			<CheckCircleIcon class={`size-3 ${hookStatusTone(hook)}`} />
+		{:else}
+			<ClockIcon class={`size-3 ${hookStatusTone(hook)}`} />
+		{/if}
+		<div class="min-w-0 flex-1">
+			<div class="truncate text-foreground">{hook.hookName}</div>
+			<div class="truncate text-[11px] text-muted-foreground">
+				{hook.type}{hook.phase ? ` · ${hook.phase}` : ""} · {hookExecutionLabel(
+					hook,
+				)} · runs {hook.runCount}
+			</div>
+		</div>
+		<Button
+			variant="ghost"
+			size="xs"
+			onclick={() => openHookDialog(hook.hookId)}
+		>
+			Details
+		</Button>
+		<Button
+			variant="ghost"
+			size="icon-xs"
+			onclick={() => {
+				onSetHookExecutionPaused(hook.hookId, !hookPaused(hook));
+			}}
+			title={hookPaused(hook) ? "Resume this hook" : "Pause this hook"}
+			aria-label={hookPaused(hook) ? "Resume this hook" : "Pause this hook"}
+		>
+			{#if hookPaused(hook)}
+				<PlayCircleIcon class="size-3 text-amber-500" />
+			{:else}
+				<PauseCircleIcon class="size-3" />
+			{/if}
+		</Button>
+		{#if canRerunHook(hook)}
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				onclick={() => {
+					onRerunHook(hook.hookId);
+				}}
+				title="Rerun hook"
+				aria-label="Rerun hook"
+			>
+				<RotateCcwIcon class="size-3" />
+			</Button>
+		{/if}
+	</div>
+{/snippet}
+
 {#if expanded && hooksStatus.hooks.length > 0}
-	<div class="mb-2 rounded-lg border border-border bg-background shadow-sm">
-		<div class="flex items-center gap-2 border-b border-border px-3 py-2">
+	<div
+		class="group -mb-px rounded-t-md rounded-b-none border border-b-0 border-border bg-background shadow-sm"
+	>
+		<div
+			class="flex items-center gap-2 border-b border-border px-3 py-2 transition-colors group-hover:bg-muted/50"
+		>
 			<div class="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
 				Hooks ({hookPassedCount()} passed)
 				{#if hooksStatus.executionPaused}
@@ -212,67 +304,50 @@
 				{/if}
 			</Button>
 		</div>
-		<div class="max-h-48 overflow-auto p-1">
-			{#each hooksStatus.hooks as hook (hook.hookId)}
-				{@const displayState = hookDisplayState(hook)}
-				<div
-					class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${displayState === "running" ? "bg-blue-500/10" : ""}`}
-				>
-					{#if displayState === "running"}
-						<Loader2Icon
-							class={`size-3 animate-spin ${hookStatusTone(hook)}`}
-						/>
-					{:else if displayState === "pending"}
-						<ClockIcon class={`size-3 ${hookStatusTone(hook)}`} />
-					{:else if displayState === "failure"}
-						<XCircleIcon class={`size-3 ${hookStatusTone(hook)}`} />
-					{:else}
-						<CheckCircleIcon class={`size-3 ${hookStatusTone(hook)}`} />
-					{/if}
-					<div class="min-w-0 flex-1">
-						<div class="truncate text-foreground">{hook.hookName}</div>
-						<div class="truncate text-[11px] text-muted-foreground">
-							{hook.type} · {hookExecutionLabel(hook)} · runs {hook.runCount}
-						</div>
+		<div class="max-h-96 overflow-x-hidden overflow-y-auto px-1 pt-1 pb-3">
+			{#if reviewHooks.length > 0}
+				<div class="flex items-center gap-2 px-2 py-1">
+					<div
+						class="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+					>
+						Review hooks
 					</div>
 					<Button
-						variant="ghost"
-						size="xs"
-						onclick={() => openHookDialog(hook.hookId)}
+						variant={selectedThreadPhase === "review" ? "outline" : "default"}
+						size={selectedThreadPhase === "review" ? "xs" : "sm"}
+						class={selectedThreadPhase === "review"
+							? "h-6 gap-1.5 px-2"
+							: "h-7 gap-1.5 px-2.5 shadow-sm"}
+						onclick={toggleReviewPhase}
+						disabled={reviewPhaseSaving || !session.threads.selectedId}
+						aria-label={selectedThreadPhase === "review"
+							? "Set this thread to draft"
+							: "Mark this thread ready for review"}
+						title={selectedThreadPhase === "review"
+							? "Set this thread to draft"
+							: "Mark this thread ready for review"}
 					>
-						Details
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon-xs"
-						onclick={() => {
-							onSetHookExecutionPaused(hook.hookId, !hookPaused(hook));
-						}}
-						title={hookPaused(hook) ? "Resume this hook" : "Pause this hook"}
-						aria-label={hookPaused(hook)
-							? "Resume this hook"
-							: "Pause this hook"}
-					>
-						{#if hookPaused(hook)}
-							<PlayCircleIcon class="size-3 text-amber-500" />
-						{:else}
-							<PauseCircleIcon class="size-3" />
+						{#if reviewPhaseSaving}
+							<Loader2Icon class="size-3.5 animate-spin" />
 						{/if}
+						{selectedThreadPhase === "review"
+							? "Set to Draft"
+							: "Ready for Review"}
 					</Button>
-					{#if canRerunHook(hook)}
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							onclick={() => {
-								onRerunHook(hook.hookId);
-							}}
-							title="Rerun hook"
-							aria-label="Rerun hook"
-						>
-							<RotateCcwIcon class="size-3" />
-						</Button>
-					{/if}
 				</div>
+				{#each reviewHooks as hook (hook.hookId)}
+					{@render hookRow(hook)}
+				{/each}
+				{#if draftHooks.length > 0}
+					<div
+						class="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+					>
+						Change hooks
+					</div>
+				{/if}
+			{/if}
+			{#each draftHooks as hook (hook.hookId)}
+				{@render hookRow(hook)}
 			{/each}
 		</div>
 	</div>
@@ -293,13 +368,17 @@
 						<ClockIcon class="size-4 text-muted-foreground" />
 					{:else if displayState === "failure"}
 						<XCircleIcon class="size-4 text-red-500" />
-					{:else}
+					{:else if displayState === "success"}
 						<CheckCircleIcon class="size-4 text-green-500" />
+					{:else}
+						<ClockIcon class="size-4 text-muted-foreground" />
 					{/if}
 					{hook.hookName}
 				</Dialog.Title>
 				<Dialog.Description>
-					{hook.type} hook · last run {formatRelativeTime(hook.lastRunAt)}
+					{hook.type}{hook.phase ? ` · ${hook.phase}` : ""} hook · last run {formatRelativeTime(
+						hook.lastRunAt,
+					)}
 				</Dialog.Description>
 			</Dialog.Header>
 

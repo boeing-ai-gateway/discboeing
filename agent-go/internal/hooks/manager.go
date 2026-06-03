@@ -560,7 +560,8 @@ func (m *Manager) GetStatus() StatusFile {
 				HookName:   hook.Name,
 				Type:       string(hook.Type),
 				Engine:     string(hook.Engine),
-				LastResult: "pending",
+				Phase:      hook.Phase,
+				LastResult: "idle",
 				OutputPath: GetHookOutputPath(m.hooksDataDir, hook.ID),
 			}
 		} else {

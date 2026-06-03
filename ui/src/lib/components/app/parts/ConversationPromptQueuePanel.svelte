@@ -3,12 +3,14 @@
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
+	import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 	import PencilIcon from "@lucide/svelte/icons/pencil";
 	import PauseIcon from "@lucide/svelte/icons/pause";
 	import PlayIcon from "@lucide/svelte/icons/play";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import XIcon from "@lucide/svelte/icons/x";
 	import { onMount } from "svelte";
+	import Sortable from "sortablejs";
 
 	import type { QueuedPrompt, UpdateQueuedPromptRequest } from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
@@ -36,6 +38,7 @@
 	let editingById = $state<Record<string, boolean>>({});
 	let editTextById = $state<Record<string, string>>({});
 	let runAfterOverrideById = $state<Record<string, string | null>>({});
+	let promptListElement = $state<HTMLDivElement | null>(null);
 	let now = $state(Date.now());
 
 	onMount(() => {
@@ -45,6 +48,38 @@
 
 		return () => {
 			window.clearInterval(interval);
+		};
+	});
+
+	$effect(() => {
+		const element = promptListElement;
+		if (!element) {
+			return;
+		}
+
+		const sortable = Sortable.create(element, {
+			animation: 150,
+			draggable: ".queued-prompt-row",
+			handle: ".queued-prompt-drag-handle",
+			ghostClass: "bg-muted",
+			onEnd: (event) => {
+				if (
+					typeof event.oldIndex !== "number" ||
+					typeof event.newIndex !== "number" ||
+					event.oldIndex === event.newIndex
+				) {
+					return;
+				}
+				const movedEntry = displayEntries[event.oldIndex]?.entry;
+				if (!movedEntry) {
+					return;
+				}
+				void movePrompt(movedEntry, event.newIndex);
+			},
+		});
+
+		return () => {
+			sortable.destroy();
 		};
 	});
 
@@ -232,17 +267,25 @@
 </script>
 
 {#if entries.length > 0}
-	<div class="mb-2 rounded-lg border border-border bg-background shadow-sm">
+	<div
+		class="group -mb-px rounded-t-md rounded-b-none border border-b-0 border-border bg-background shadow-sm"
+	>
 		<div
-			class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
+			class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors group-hover:bg-muted/50"
 		>
 			Queued prompts ({entries.length})
 		</div>
-		<div class="flex flex-col gap-1 p-1">
+		<div bind:this={promptListElement} class="flex flex-col gap-1 p-1">
 			{#each displayEntries as { entry, renderKey }, index (renderKey)}
 				<div
-					class="flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
+					class="queued-prompt-row flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
 				>
+					<span
+						class="queued-prompt-drag-handle -ml-1 mt-0.5 flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+						aria-hidden="true"
+					>
+						<GripVerticalIcon class="size-3.5" />
+					</span>
 					<div class="min-w-0 flex-1">
 						{#if editingById[entry.id]}
 							<div class="space-y-2">

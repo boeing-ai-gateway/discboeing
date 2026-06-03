@@ -160,8 +160,8 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		h.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		h.Error(w, http.StatusBadRequest, "name is required")
+	if strings.TrimSpace(req.Name) == "" && req.Phase == nil {
+		h.Error(w, http.StatusBadRequest, "name or phase is required")
 		return
 	}
 

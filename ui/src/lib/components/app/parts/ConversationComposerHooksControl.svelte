@@ -3,6 +3,7 @@
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import PauseCircleIcon from "@lucide/svelte/icons/pause-circle";
 	import ZapIcon from "@lucide/svelte/icons/zap";
+	import type { ThreadPhase } from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
 	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
 	import type { HooksStatus } from "$lib/session/session-context.types";
@@ -10,9 +11,14 @@
 	type Props = {
 		expanded?: boolean;
 		hooksStatus: HooksStatus;
+		threadPhase?: ThreadPhase | "";
 	};
 
-	let { expanded = $bindable(false), hooksStatus }: Props = $props();
+	let {
+		expanded = $bindable(false),
+		hooksStatus,
+		threadPhase = "",
+	}: Props = $props();
 
 	let hooks = $derived(hooksStatus.hooks);
 	let pendingHookSet = $derived(new Set(hooksStatus.pendingHookIds));
@@ -30,6 +36,9 @@
 	);
 	let hookHasPausedExecution = $derived(
 		hooks.some((hook) => hook.executionPaused),
+	);
+	let hasReviewPhaseHooks = $derived(
+		hooks.some((hook) => hook.phase === "review"),
 	);
 </script>
 
@@ -52,5 +61,10 @@
 			<ZapIcon class="size-3.5 text-green-500" />
 		{/if}
 		<span class="text-xs font-medium">{hookPassedCount}</span>
+		{#if hasReviewPhaseHooks}
+			<span class="text-xs text-muted-foreground">
+				{threadPhase === "review" ? "Review" : "Draft"}
+			</span>
+		{/if}
 	</Button>
 {/if}

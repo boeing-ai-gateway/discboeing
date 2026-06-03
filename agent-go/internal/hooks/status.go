@@ -18,7 +18,7 @@ type HookRunStatus struct {
 	Engine              string `json:"engine,omitempty"`
 	Phase               string `json:"phase,omitempty"`
 	LastRunAt           string `json:"lastRunAt"`
-	LastResult          string `json:"lastResult"` // "success", "failure", "running", or "pending"
+	LastResult          string `json:"lastResult"` // "idle", "success", "failure", "running", or "pending"
 	LastExitCode        int    `json:"lastExitCode"`
 	OutputPath          string `json:"outputPath"`
 	RunCount            int    `json:"runCount"`
@@ -135,6 +135,7 @@ func SetHookExecutionPaused(hooksDataDir string, hook Hook, paused bool) error {
 	existing.HookName = hook.Name
 	existing.Type = string(hook.Type)
 	existing.Engine = string(hook.Engine)
+	existing.Phase = hook.Phase
 	if existing.ExecutionPaused == paused {
 		return nil
 	}

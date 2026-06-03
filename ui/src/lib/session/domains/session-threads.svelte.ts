@@ -204,6 +204,30 @@ export function createSessionThreadsDomain(
 			args.onThreadRenamed?.(updated);
 			return true;
 		},
+		setPhase: async (
+			threadId: string,
+			phase: Thread["phase"] | "",
+		): Promise<boolean> => {
+			if (!args.hasSession()) {
+				return false;
+			}
+			if (!list.some((thread) => thread.id === threadId)) {
+				return false;
+			}
+
+			if (store.list.length === 0 && threadId === args.sessionId) {
+				const created = await store.create({
+					id: threadId,
+					phase: phase || undefined,
+				});
+				args.onThreadUpdated?.(created);
+				return true;
+			}
+
+			const updated = await store.update(threadId, { phase });
+			args.onThreadUpdated?.(updated);
+			return true;
+		},
 		remove: async (threadId: string): Promise<boolean> => {
 			if (!args.hasSession()) {
 				return false;

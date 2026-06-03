@@ -172,6 +172,66 @@ exit 0
 	}
 }
 
+func TestManagerGetStatus_IncludesPhaseForSyntheticHookStatus(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceRoot := filepath.Join(t.TempDir(), "workspace")
+	t.Setenv("HOME", homeDir)        // Unix
+	t.Setenv("USERPROFILE", homeDir) // Windows
+
+	hooksDir := filepath.Join(workspaceRoot, HooksDir)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() failed: %v", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "review-check.sh")
+	hookSource := `#!/bin/bash
+#---
+# name: Review Check
+# type: file
+# phase: review
+# pattern: "*.go"
+#---
+exit 0
+`
+	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+
+	mgr := NewManager(workspaceRoot, "session-review")
+	status := mgr.GetStatus()
+
+	hookStatus, ok := status.Hooks["review-check"]
+	if !ok {
+		t.Fatalf("review-check status missing: %#v", status.Hooks)
+	}
+	if hookStatus.Phase != "review" {
+		t.Fatalf("review-check phase = %q, want review", hookStatus.Phase)
+	}
+	if hookStatus.LastResult != "idle" {
+		t.Fatalf("review-check lastResult = %q, want idle", hookStatus.LastResult)
+	}
+}
+
+func TestSetHookExecutionPaused_PreservesHookPhase(t *testing.T) {
+	hooksDataDir := t.TempDir()
+	hook := Hook{
+		ID:     "review-check",
+		Name:   "Review Check",
+		Type:   HookTypeFile,
+		Engine: HookEngineScript,
+		Phase:  "review",
+	}
+
+	if err := SetHookExecutionPaused(hooksDataDir, hook, true); err != nil {
+		t.Fatalf("SetHookExecutionPaused() failed: %v", err)
+	}
+
+	status := LoadStatus(hooksDataDir)
+	if status.Hooks["review-check"].Phase != "review" {
+		t.Fatalf("review-check phase = %q, want review", status.Hooks["review-check"].Phase)
+	}
+}
+
 func TestAddPendingHooks_SortsHookIDsAlphaNumerically(t *testing.T) {
 	hooksDataDir := t.TempDir()
 

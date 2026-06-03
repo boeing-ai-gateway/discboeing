@@ -620,6 +620,9 @@ type CreateThreadRequest struct {
 
 	// Name Human-readable name.
 	Name *string `json:"name,omitempty"`
+
+	// Phase Thread lifecycle phase; "review" when ready for review.
+	Phase *string `json:"phase,omitempty"`
 }
 
 // CreateWorkspaceRequest create Workspace Request payload accepted by the API.
@@ -1952,6 +1955,9 @@ type Thread struct {
 	// PendingQuestion pending Question value for the thread object.
 	PendingQuestion *bool `json:"pendingQuestion,omitempty"`
 
+	// Phase Thread lifecycle phase; "review" when ready for review.
+	Phase *string `json:"phase,omitempty"`
+
 	// PromptQueue Collection of prompt queue values.
 	PromptQueue *[]QueuedPrompt `json:"promptQueue,omitempty"`
 
@@ -2069,6 +2075,9 @@ type UpdateSessionRequest struct {
 type UpdateThreadRequest struct {
 	// Name Human-readable name.
 	Name *string `json:"name,omitempty"`
+
+	// Phase Thread lifecycle phase; "review" when ready for review.
+	Phase *string `json:"phase,omitempty"`
 }
 
 // UpdateWorkspaceRequest update Workspace Request payload accepted by the API.

@@ -36,7 +36,14 @@ export type HookOutputState = {
 
 export type HookRunStatus = Pick<
 	ApiHookRunStatus,
-	"hookId" | "hookName" | "type" | "lastResult" | "runCount" | "failCount"
+	| "hookId"
+	| "hookName"
+	| "type"
+	| "engine"
+	| "phase"
+	| "lastResult"
+	| "runCount"
+	| "failCount"
 > & {
 	command?: string;
 	lastRunAt?: string;
@@ -90,6 +97,7 @@ export type SessionThreadsService = {
 	select: (threadId: string | null) => void;
 	create: (name?: string) => Promise<string | null>;
 	rename: (threadId: string, nextName: string) => Promise<boolean>;
+	setPhase: (threadId: string, phase: Thread["phase"] | "") => Promise<boolean>;
 	remove: (threadId: string) => Promise<boolean>;
 	refreshThread: (threadId: string) => Promise<void>;
 };

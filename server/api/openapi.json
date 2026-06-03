@@ -5504,6 +5504,10 @@
             "type": "string",
             "description": "service Tier value for the thread object."
           },
+          "phase": {
+            "type": "string",
+            "description": "Thread lifecycle phase; \"review\" when ready for review."
+          },
           "state": {
             "type": "string",
             "description": "OAuth state correlation value."
@@ -5634,6 +5638,10 @@
           "name": {
             "type": "string",
             "description": "Human-readable name."
+          },
+          "phase": {
+            "type": "string",
+            "description": "Thread lifecycle phase; \"review\" when ready for review."
           }
         },
         "description": "create Thread Request payload accepted by the API."
@@ -5644,6 +5652,10 @@
           "name": {
             "type": "string",
             "description": "Human-readable name."
+          },
+          "phase": {
+            "type": "string",
+            "description": "Thread lifecycle phase; \"review\" when ready for review."
           }
         },
         "description": "update Thread Request payload accepted by the API."

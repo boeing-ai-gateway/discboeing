@@ -385,6 +385,8 @@ export function toHooksStatus(
 			hookId: hook.hookId,
 			hookName: hook.hookName,
 			type: hook.type,
+			engine: hook.engine,
+			phase: hook.phase,
 			lastResult: hook.lastResult,
 			lastRunAt: hook.lastRunAt,
 			lastExitCode: hook.lastExitCode,

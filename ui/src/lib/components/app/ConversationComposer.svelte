@@ -254,6 +254,12 @@
 		return (left ?? "") === (right ?? "");
 	}
 
+	const hasAttachedComposerPanel = $derived(
+		!session.isPending &&
+			(thread.promptQueue.length > 0 ||
+				(sessionView.hooksExpanded && sessionHooks.status.hooks.length > 0)),
+	);
+
 	const effectiveModelId = $derived.by(
 		() => thread.nextModelId ?? thread.modelId,
 	);
@@ -888,7 +894,11 @@
 					void submitComposer();
 				}}
 			>
-				<InputGroup class="rounded-t-md rounded-b-none md:rounded-md">
+				<InputGroup
+					class={hasAttachedComposerPanel
+						? "rounded-t-none rounded-b-md"
+						: "rounded-t-md rounded-b-none md:rounded-md"}
+				>
 					<ConversationComposerAttachments
 						files={attachmentFiles}
 						onRemove={removeAttachment}
@@ -984,6 +994,7 @@
 								<ConversationComposerHooksControl
 									bind:expanded={sessionView.hooksExpanded}
 									hooksStatus={sessionHooks.status}
+									threadPhase={session.threads.selected?.phase ?? ""}
 								/>
 							{/if}
 							<Popover bind:open={schedulePopoverOpen}>

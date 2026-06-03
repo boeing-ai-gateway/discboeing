@@ -628,8 +628,9 @@ type HookRunStatus struct {
 	HookName            string `json:"hookName"`
 	Type                string `json:"type"`
 	Engine              string `json:"engine,omitempty"`
+	Phase               string `json:"phase,omitempty"`
 	LastRunAt           string `json:"lastRunAt"`
-	LastResult          string `json:"lastResult"` // "success", "failure", "running", or "pending"
+	LastResult          string `json:"lastResult"` // "idle", "success", "failure", "running", or "pending"
 	LastExitCode        int    `json:"lastExitCode"`
 	OutputPath          string `json:"outputPath"`
 	RunCount            int    `json:"runCount"`

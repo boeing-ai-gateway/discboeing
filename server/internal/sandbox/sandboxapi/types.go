@@ -140,6 +140,7 @@ type Thread struct {
 	Model           string          `json:"model,omitempty"`           // full "providerId/modelId" ref
 	Reasoning       string          `json:"reasoning,omitempty"`       // "", "auto", "low", "medium", "high", "xhigh", "none", or "default"
 	ServiceTier     string          `json:"serviceTier,omitempty"`     // provider latency tier, such as "priority"
+	Phase           string          `json:"phase,omitempty"`           // "review" when ready for review, empty for draft
 	State           string          `json:"state,omitempty"`           // "interrupted" or "cancelled"
 	TokenUsage      TokenUsageInfo  `json:"tokenUsage,omitzero"`       // aggregate token usage for the thread
 	PendingQuestion bool            `json:"pendingQuestion,omitempty"` // true when the thread is paused for user input
@@ -289,13 +290,15 @@ type SessionActivityResponse struct {
 
 // CreateThreadRequest is the POST /threads request body.
 type CreateThreadRequest struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
+	ID    string `json:"id"`
+	Name  string `json:"name,omitempty"`
+	Phase string `json:"phase,omitempty"`
 }
 
 // UpdateThreadRequest is the PUT /threads/{id} request body.
 type UpdateThreadRequest struct {
-	Name string `json:"name,omitempty"`
+	Name  string  `json:"name,omitempty"`
+	Phase *string `json:"phase,omitempty"`
 }
 
 // DeleteThreadResponse is the DELETE /threads/{id} response body.
@@ -625,8 +628,10 @@ type HookRunStatus struct {
 	HookID              string `json:"hookId"`
 	HookName            string `json:"hookName"`
 	Type                string `json:"type"`
+	Engine              string `json:"engine,omitempty"`
+	Phase               string `json:"phase,omitempty"`
 	LastRunAt           string `json:"lastRunAt"`
-	LastResult          string `json:"lastResult"` // "success", "failure", "running", or "pending"
+	LastResult          string `json:"lastResult"` // "idle", "success", "failure", "running", or "pending"
 	LastExitCode        int    `json:"lastExitCode"`
 	OutputPath          string `json:"outputPath"`
 	RunCount            int    `json:"runCount"`

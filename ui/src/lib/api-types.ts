@@ -10,6 +10,7 @@ import type {
 } from "./api-constants";
 import type { UIMessage } from "ai";
 
+export type ThreadPhase = "review";
 export type ThreadState = "interrupted" | "cancelled";
 
 export interface Thread {
@@ -20,6 +21,7 @@ export interface Thread {
 	model?: string;
 	reasoning?: string;
 	serviceTier?: string;
+	phase?: ThreadPhase;
 	state?: ThreadState;
 	tokenUsage?: TokenUsageInfo;
 	pendingQuestion?: boolean;
@@ -1130,10 +1132,12 @@ export interface ListThreadsResponse {
 export interface CreateThreadRequest {
 	id: string;
 	name?: string;
+	phase?: ThreadPhase;
 }
 
 export interface UpdateThreadRequest {
 	name?: string;
+	phase?: ThreadPhase | "";
 }
 
 export interface DeleteThreadResponse {
@@ -1584,8 +1588,10 @@ export interface HookRunStatus {
 	hookId: string;
 	hookName: string;
 	type: "session" | "file" | "pre-commit";
+	engine?: "script" | "ai" | "builtin";
+	phase?: ThreadPhase;
 	lastRunAt: string;
-	lastResult: "success" | "failure" | "running" | "pending";
+	lastResult: "idle" | "success" | "failure" | "running" | "pending";
 	lastExitCode: number;
 	outputPath: string;
 	runCount: number;
