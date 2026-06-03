@@ -6,6 +6,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -88,6 +89,9 @@ func TestEmitThreadUpdateFallsBackToEphemeralWithoutActiveCompletion(t *testing.
 }
 
 func TestWorkspaceFileWatcherEmitsWorkspaceFilesChunks(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("workspace file watcher is Linux-only")
+	}
 	root := t.TempDir()
 	chunks := make(chan message.MessageChunk, 8)
 	watcher, err := startWorkspaceFileWatcher(root, func(chunk message.MessageChunk) {
@@ -113,6 +117,9 @@ func TestWorkspaceFileWatcherEmitsWorkspaceFilesChunks(t *testing.T) {
 }
 
 func TestWorkspaceFileWatcherRespectsGitignore(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("workspace file watcher is Linux-only")
+	}
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("ignored/\n"), 0o644); err != nil {
 		t.Fatal(err)
