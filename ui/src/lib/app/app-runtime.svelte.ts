@@ -401,6 +401,7 @@ export function syncRuntimeProjections(): void {
 	syncRecentThreads();
 	refreshMountedSessionProjections();
 	ctx.view.app.navigation.mountedSessionIds = [
+		ctx.view.app.selection.sessionId,
 		...sessionContexts.keys(),
 		ctx.view.app.selection.pendingSessionId,
 	]
