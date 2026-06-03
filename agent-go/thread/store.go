@@ -808,40 +808,16 @@ type Config struct {
 
 // ConfigMetadata stores durable typed metadata for a thread.
 type ConfigMetadata struct {
-	Type            string             `json:"type,omitempty"`
-	TaskID          string             `json:"taskId,omitempty"`
-	ParentThreadID  string             `json:"parentThreadId,omitempty"`
-	ParentTaskID    string             `json:"parentTaskId,omitempty"`
-	SubagentType    string             `json:"subagentType,omitempty"`
-	Description     string             `json:"description,omitempty"`
-	Prompt          string             `json:"prompt,omitempty"`
-	Model           string             `json:"model,omitempty"`
-	RunInBackground bool               `json:"runInBackground,omitempty"`
-	StartedAt       time.Time          `json:"startedAt,omitzero"`
-	ACPSession      ACPSessionMetadata `json:"acpSession,omitzero"`
-}
-
-// ACPSessionMetadata stores the ACP session state mapped to this Discobot
-// thread. It mirrors ACP's session info without making the core thread package
-// depend on the ACP protocol package.
-type ACPSessionMetadata struct {
-	Meta          map[string]any    `json:"_meta,omitempty"`
-	CWD           string            `json:"cwd,omitempty"`
-	SessionID     string            `json:"sessionId,omitempty"`
-	Title         *string           `json:"title,omitempty"`
-	UpdatedAt     *string           `json:"updatedAt,omitempty"`
-	ResponseMeta  map[string]any    `json:"responseMeta,omitempty"`
-	ConfigOptions []json.RawMessage `json:"configOptions,omitempty"`
-}
-
-func (m ACPSessionMetadata) IsZero() bool {
-	return len(m.Meta) == 0 &&
-		strings.TrimSpace(m.CWD) == "" &&
-		strings.TrimSpace(m.SessionID) == "" &&
-		m.Title == nil &&
-		m.UpdatedAt == nil &&
-		len(m.ResponseMeta) == 0 &&
-		len(m.ConfigOptions) == 0
+	Type            string    `json:"type,omitempty"`
+	TaskID          string    `json:"taskId,omitempty"`
+	ParentThreadID  string    `json:"parentThreadId,omitempty"`
+	ParentTaskID    string    `json:"parentTaskId,omitempty"`
+	SubagentType    string    `json:"subagentType,omitempty"`
+	Description     string    `json:"description,omitempty"`
+	Prompt          string    `json:"prompt,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	RunInBackground bool      `json:"runInBackground,omitempty"`
+	StartedAt       time.Time `json:"startedAt,omitzero"`
 }
 
 func (m ConfigMetadata) IsZero() bool {
@@ -854,8 +830,7 @@ func (m ConfigMetadata) IsZero() bool {
 		strings.TrimSpace(m.Prompt) == "" &&
 		strings.TrimSpace(m.Model) == "" &&
 		!m.RunInBackground &&
-		m.StartedAt.IsZero() &&
-		m.ACPSession.IsZero()
+		m.StartedAt.IsZero()
 }
 
 func (m ConfigMetadata) RawMessage() json.RawMessage {

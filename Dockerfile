@@ -98,7 +98,7 @@ ENV container=docker
 # systemd + dbus: init system for managing services (PID 1)
 # git is needed for workspace cloning
 # socat is needed for vsock forwarding in VZ VMs
-# nodejs is needed for claude-code-acp
+# nodejs is needed for JavaScript CLIs and pnpm
 # pnpm is needed for package management
 # docker.io provides dockerd daemon and docker CLI (runs inside container with privileged mode)
 # docker-buildx is needed for multi-arch builds and advanced build features
@@ -155,8 +155,8 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     && code-server --install-extension ms-python.python --extensions-dir /opt/discobot/code-server-defaults/extensions \
     && code-server --install-extension svelte.svelte-vscode --extensions-dir /opt/discobot/code-server-defaults/extensions \
     && rm -f /opt/discobot/code-server-defaults/extensions/extensions.json \
-    # Install Claude Code CLI and OpenCode CLI
-    && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp pnpm opencode-ai \
+    # Install pnpm
+    && npm install -g pnpm \
     # Install latest stable Go
     && GO_VERSION=$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1) \
     && curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xz \

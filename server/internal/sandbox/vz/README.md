@@ -201,7 +201,7 @@ The agent reads configuration from `/run/discobot/metadata/metadata.json`:
     "mount_point": "/.workspace.origin"
   },
   "agent": {
-    "command": "claude-code-acp",
+    "command": "agent-api",
     "args": [],
     "port": 3002
   }
