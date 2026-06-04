@@ -39,6 +39,7 @@
 		onToggleDockMaximized: () => void;
 		services: ServiceItem[];
 		sessionId: string;
+		requestedViewMode?: ViewMode;
 		logEvents: RenderedServiceOutputEvent[];
 		logsConnected: boolean;
 		shiftWindowControlsForSidebar?: boolean;
@@ -75,6 +76,7 @@
 		onToggleDockMaximized,
 		services,
 		sessionId,
+		requestedViewMode = "preview",
 		logEvents,
 		logsConnected,
 		shiftWindowControlsForSidebar = false,
@@ -401,7 +403,9 @@
 		isMutatingService = false;
 		isMutatingLocalhost = false;
 		viewMode =
-			currentService && hasHttpService(currentService) ? "preview" : "logs";
+			currentService && hasHttpService(currentService)
+				? requestedViewMode
+				: "logs";
 		previousStatus = untrack(() => currentService?.status ?? "stopped");
 	});
 

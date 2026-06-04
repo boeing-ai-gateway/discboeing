@@ -33,6 +33,7 @@ export type SessionViewState = {
 	activeView: SessionActiveView;
 	selectedFile: string;
 	activeServiceId: string | null;
+	activeServiceViewMode: "preview" | "logs";
 	terminalRootEnabled: boolean;
 	dockMaximized: boolean;
 	composerDraft: string;
@@ -58,7 +59,7 @@ export type SessionViewState = {
 	openDiffReview: () => void;
 	openFile: (file?: string) => void;
 	openServices: () => void;
-	openService: (serviceId: string) => void;
+	openService: (serviceId: string, viewMode?: "preview" | "logs") => void;
 	setTerminalRootEnabled: (value: boolean) => void;
 	toggleDockMaximized: () => void;
 	setComposerDraft: (value: string) => void;
@@ -85,6 +86,7 @@ export function createSessionViewState(
 	let activeView = $state<SessionActiveView>({ kind: "chat" });
 	let selectedFile = $state("");
 	let selectedServiceId = $state<string | null>(null);
+	let selectedServiceViewMode = $state<"preview" | "logs">("preview");
 	let terminalRootEnabled = $state(false);
 	let dockMaximized = $state(false);
 	let composerDraft = $state("");
@@ -135,11 +137,15 @@ export function createSessionViewState(
 			selectedServiceId && serviceIds.includes(selectedServiceId)
 				? selectedServiceId
 				: (serviceIds[0] ?? null);
+		selectedServiceViewMode = "preview";
 		activeView = { kind: "services" };
 	};
 
-	const openService = (serviceId: string) => {
+	const openService = (serviceId: string, viewMode?: "preview" | "logs") => {
 		selectedServiceId = serviceId;
+		if (viewMode) {
+			selectedServiceViewMode = viewMode;
+		}
 		activeView = { kind: "services" };
 	};
 
@@ -170,6 +176,9 @@ export function createSessionViewState(
 			return selectedServiceId && serviceIds.includes(selectedServiceId)
 				? selectedServiceId
 				: (serviceIds[0] ?? null);
+		},
+		get activeServiceViewMode() {
+			return selectedServiceViewMode;
 		},
 		get terminalRootEnabled() {
 			return terminalRootEnabled;
@@ -347,6 +356,7 @@ export function createSessionViewState(
 		resetForSession: (nextSelectedFile) => {
 			selectedFile = nextSelectedFile;
 			selectedServiceId = null;
+			selectedServiceViewMode = "preview";
 			activeView = { kind: "chat" };
 			terminalRootEnabled = false;
 			dockMaximized = false;

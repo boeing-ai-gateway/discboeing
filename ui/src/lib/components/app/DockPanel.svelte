@@ -378,6 +378,7 @@ ${selectedText}
 				logsConnected={serviceLogsConnected}
 				services={visibleServices}
 				activeServiceId={sessionView.activeServiceId}
+				requestedViewMode={sessionView.activeServiceViewMode}
 				onSelectService={session.services.open}
 				onClose={sessionView.openChat}
 				onStart={session.services.start}
