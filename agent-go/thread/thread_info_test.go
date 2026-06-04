@@ -20,6 +20,23 @@ func TestThreadInfoPhaseCreateAndUpdate(t *testing.T) {
 	if info.Phase != "review" {
 		t.Fatalf("created phase = %q, want review", info.Phase)
 	}
+	if phase, err := store.loadLegacyThreadConfigPhase("thread-1"); err != nil {
+		t.Fatalf("loadLegacyThreadConfigPhase() failed: %v", err)
+	} else if phase != "" {
+		t.Fatalf("thread config phase = %q, want empty", phase)
+	}
+	if _, err := store.CreateThreadInfo("/workspace", CreateThreadRequest{
+		ID: "thread-2",
+	}); err != nil {
+		t.Fatalf("CreateThreadInfo(thread-2) failed: %v", err)
+	}
+	info, err = store.GetThreadInfo("thread-2")
+	if err != nil {
+		t.Fatalf("GetThreadInfo(thread-2) failed: %v", err)
+	}
+	if info.Phase != "review" {
+		t.Fatalf("second thread phase = %q, want review", info.Phase)
+	}
 	info, err = store.GetThreadInfo("thread-1")
 	if err != nil {
 		t.Fatalf("GetThreadInfo() failed: %v", err)
@@ -31,12 +48,12 @@ func TestThreadInfoPhaseCreateAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListThreadInfos() failed: %v", err)
 	}
-	if len(infos) != 1 || infos[0].Phase != "review" {
+	if len(infos) != 2 || infos[0].Phase != "review" || infos[1].Phase != "review" {
 		t.Fatalf("listed infos = %#v, want phase review", infos)
 	}
 
 	emptyPhase := ""
-	info, err = store.UpdateThreadInfo("thread-1", UpdateThreadRequest{
+	info, err = store.UpdateThreadInfo("thread-2", UpdateThreadRequest{
 		Phase: &emptyPhase,
 	})
 	if err != nil {
@@ -44,6 +61,13 @@ func TestThreadInfoPhaseCreateAndUpdate(t *testing.T) {
 	}
 	if info.Phase != "" {
 		t.Fatalf("updated phase = %q, want empty", info.Phase)
+	}
+	info, err = store.GetThreadInfo("thread-1")
+	if err != nil {
+		t.Fatalf("GetThreadInfo(thread-1) failed: %v", err)
+	}
+	if info.Phase != "" {
+		t.Fatalf("first thread phase after session update = %q, want empty", info.Phase)
 	}
 }
 
@@ -53,8 +77,8 @@ func TestThreadInfoRejectsInvalidPhase(t *testing.T) {
 	if _, err := store.CreateThreadInfo("/workspace", CreateThreadRequest{
 		ID:    "thread-1",
 		Phase: "ship",
-	}); err == nil || !strings.Contains(err.Error(), "invalid thread phase") {
-		t.Fatalf("CreateThreadInfo() error = %v, want invalid thread phase", err)
+	}); err == nil || !strings.Contains(err.Error(), "invalid session phase") {
+		t.Fatalf("CreateThreadInfo() error = %v, want invalid session phase", err)
 	}
 
 	if _, err := store.CreateThreadInfo("/workspace", CreateThreadRequest{
@@ -65,8 +89,8 @@ func TestThreadInfoRejectsInvalidPhase(t *testing.T) {
 	invalid := "ship"
 	if _, err := store.UpdateThreadInfo("thread-2", UpdateThreadRequest{
 		Phase: &invalid,
-	}); err == nil || !strings.Contains(err.Error(), "invalid thread phase") {
-		t.Fatalf("UpdateThreadInfo() error = %v, want invalid thread phase", err)
+	}); err == nil || !strings.Contains(err.Error(), "invalid session phase") {
+		t.Fatalf("UpdateThreadInfo() error = %v, want invalid session phase", err)
 	}
 }
 

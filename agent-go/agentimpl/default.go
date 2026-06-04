@@ -136,15 +136,21 @@ func (a *DefaultAgent) newToolContext(threadID string, maxSubagentDepth int, pro
 	toolCtx.SetThreadPhase = func(phase string) error {
 		phase = strings.TrimSpace(strings.ToLower(phase))
 		if phase != "" && phase != "review" {
-			return fmt.Errorf("invalid thread phase %q", phase)
+			return fmt.Errorf("invalid session phase %q", phase)
 		}
-		cfg, err := a.store.LoadConfig(threadID)
-		if err != nil {
-			return fmt.Errorf("load thread config phase: %w", err)
+		if err := a.store.SaveSessionConfig(thread.SessionConfig{Phase: phase}); err != nil {
+			return fmt.Errorf("save session config phase: %w", err)
 		}
-		cfg.Phase = phase
-		if err := a.store.SaveConfig(threadID, cfg); err != nil {
-			return fmt.Errorf("save thread config phase: %w", err)
+		if toolCtx.EmitChunk != nil {
+			infos, err := a.store.ListThreadInfos()
+			if err != nil {
+				return fmt.Errorf("list threads for phase update: %w", err)
+			}
+			for _, info := range infos {
+				if !toolCtx.EmitChunk(thread.UpdateChunkFromInfo(info), nil) {
+					break
+				}
+			}
 		}
 		return nil
 	}
@@ -405,7 +411,12 @@ func (a *DefaultAgent) promptStream(
 			return
 		}
 		if activeCommand != "" {
-			if !yield(thread.UpdateChunkFromConfig(threadID, cfgToSave), nil) {
+			chunk, err := thread.UpdateChunkFromStore(a.store, threadID)
+			if err != nil {
+				yield(nil, fmt.Errorf("load thread update: %w", err))
+				return
+			}
+			if !yield(chunk, nil) {
 				return
 			}
 		}
@@ -593,7 +604,12 @@ func (a *DefaultAgent) Resume(ctx context.Context, threadID string, req agent.Pr
 			a.mu.Unlock()
 
 			if cfgUpdated {
-				if !yield(thread.UpdateChunkFromConfig(threadID, threadCfg), nil) {
+				chunk, err := thread.UpdateChunkFromStore(a.store, threadID)
+				if err != nil {
+					yield(nil, fmt.Errorf("load thread update: %w", err))
+					return
+				}
+				if !yield(chunk, nil) {
 					return
 				}
 			}
@@ -1342,11 +1358,11 @@ func (b *backgroundThreadName) flush(
 	if !changed {
 		return true
 	}
-	cfg, err := b.agent.store.LoadConfig(b.threadID)
+	chunk, err := thread.UpdateChunkFromStore(b.agent.store, b.threadID)
 	if err != nil {
 		return yield(nil, fmt.Errorf("load updated thread config: %w", err))
 	}
-	return yield(thread.UpdateChunkFromConfig(b.threadID, cfg), nil)
+	return yield(chunk, nil)
 }
 
 func firstThreadNameText(parts []message.UIPart) string {
@@ -1938,7 +1954,11 @@ func (a *DefaultAgent) clearActiveCommand(
 	if err := a.store.SaveConfig(threadID, cfg); err != nil {
 		return yield(nil, fmt.Errorf("save thread config: %w", err))
 	}
-	return yield(thread.UpdateChunkFromConfig(threadID, cfg), nil)
+	chunk, err := thread.UpdateChunkFromStore(a.store, threadID)
+	if err != nil {
+		return yield(nil, fmt.Errorf("load thread update: %w", err))
+	}
+	return yield(chunk, nil)
 }
 
 // builtinCommands are slash commands handled natively by the agent, independent

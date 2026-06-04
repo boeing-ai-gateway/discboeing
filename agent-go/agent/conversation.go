@@ -249,6 +249,18 @@ func (cm *ConversationManager) UpdateThread(ctx context.Context, threadID string
 	return info, nil
 }
 
+// EmitAllThreadUpdates publishes current thread snapshots for every thread.
+func (cm *ConversationManager) EmitAllThreadUpdates() error {
+	infos, err := cm.ListThreadInfos()
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		cm.EmitEphemeralChunk(threadUpdateChunkFromInfo(info))
+	}
+	return nil
+}
+
 func (cm *ConversationManager) DeleteThread(ctx context.Context, threadID string) error {
 	cm.Cancel(threadID)
 	return cm.agent.DeleteThread(ctx, threadID)

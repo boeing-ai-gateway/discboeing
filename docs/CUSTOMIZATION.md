@@ -293,7 +293,7 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 - On failure with `notify_llm: true`: the LLM receives the hook output and attempts to fix the issue (up to 3 retries per user message)
 - On failure with `notify_llm: false`: the hook runs silently — useful for auto-fixers like formatters
 - Hooks that fail block subsequent hooks from running until fixed
-- Hooks with `phase: review` are kept pending until the thread phase is `review`
+- Hooks with `phase: review` are kept pending until the session phase is `review`
 - If agent-go restarts while a file hook is running, Discobot resets that hook to pending and re-runs it on the next eligible evaluation
 
 **Environment variables:**
@@ -418,11 +418,11 @@ Behavior, matching the `agent-go` hook manager:
 - The only accepted non-empty `phase` value is `review`; other values make hook
   discovery fail for that hook set.
 - Any hook with `phase: review` makes Discobot expose the `ReadyForReview` tool
-  to the agent. Calling it records the thread phase as `review`.
+  to the agent. Calling it records the session phase as `review`.
 - File hooks with `phase: review` still detect matching changed files during
   normal post-turn evaluation, but remain pending instead of executing while
-  the thread phase is empty or not `review`.
-- Pending review-phase file hooks become eligible once the thread phase is
+  the session phase is empty or not `review`.
+- Pending review-phase file hooks become eligible once the session phase is
   `review`, and then run through the normal file-hook flow, including
   `notify_llm` retries and blocking subsequent hooks on failure.
 

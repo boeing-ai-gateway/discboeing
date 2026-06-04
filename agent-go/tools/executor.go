@@ -287,12 +287,12 @@ func (e *Executor) dispatch(ctx context.Context, toolCtx *thread.ToolContext, ca
 
 func (e *Executor) executeReadyForReview(toolCtx *thread.ToolContext, call message.ToolCallPart) (thread.ToolExecuteResult, error) {
 	if toolCtx == nil || toolCtx.SetThreadPhase == nil {
-		return errResult(call, "thread phase updates are unavailable"), nil
+		return errResult(call, "session phase updates are unavailable"), nil
 	}
 	if err := toolCtx.SetThreadPhase("review"); err != nil {
 		return errResult(call, err.Error()), nil
 	}
-	return textResult(call, "Thread phase set to review."), nil
+	return textResult(call, "Session phase set to review."), nil
 }
 
 // limitOutput checks whether a successful TextOutput exceeds the model-facing

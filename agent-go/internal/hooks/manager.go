@@ -124,7 +124,7 @@ type Manager struct {
 	hookNotificationTo map[string]string
 }
 
-// SetThreadPhaseLookup configures how phase-gated hooks read thread phase.
+// SetThreadPhaseLookup configures how phase-gated hooks read session phase.
 func (m *Manager) SetThreadPhaseLookup(fn func(threadID string) string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -141,7 +141,7 @@ func (m *Manager) currentThreadPhase(threadID string) string {
 	return strings.TrimSpace(strings.ToLower(fn(threadID)))
 }
 
-// HasPhaseHooks reports whether any hook is gated by a thread phase.
+// HasPhaseHooks reports whether any hook is gated by a session phase.
 func (m *Manager) HasPhaseHooks() bool {
 	m.mu.Lock()
 	m.reloadHooks()
@@ -1191,7 +1191,7 @@ func (m *Manager) OnTurnComplete(threadID string) {
 }
 
 // TriggerEvaluation starts hook evaluation for a thread after external state,
-// such as the thread phase, changes.
+// such as the session phase, changes.
 func (m *Manager) TriggerEvaluation(threadID string) {
 	if m == nil || !m.HasFileHooks() {
 		return

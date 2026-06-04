@@ -779,8 +779,6 @@ type Config struct {
 	ServiceTier string `json:"serviceTier,omitempty"`
 	// CWD is the working directory associated with this thread.
 	CWD string `json:"cwd,omitempty"`
-	// Phase gates phase-specific automation, such as review hooks.
-	Phase string `json:"phase,omitempty"`
 	// LastTurnState stores the last user-visible terminal turn outcome that
 	// should surface in thread chrome. Empty means no special state.
 	LastTurnState State `json:"lastTurnState,omitempty"`
@@ -1107,6 +1105,96 @@ const (
 	StateCancelled   State = "cancelled"
 )
 
+// SessionConfig holds durable settings shared by all threads in a sandbox
+// session.
+type SessionConfig struct {
+	// Phase gates phase-specific automation, such as review hooks.
+	Phase string `json:"phase,omitempty"`
+}
+
+func (s *Store) sessionConfigPath() string {
+	return filepath.Join(s.baseDir, "session-config.json")
+}
+
+// SaveSessionConfig persists durable session-level config.
+func (s *Store) SaveSessionConfig(cfg SessionConfig) error {
+	phase, err := normalizeThreadPhase(cfg.Phase)
+	if err != nil {
+		return err
+	}
+	cfg.Phase = phase
+	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
+		return fmt.Errorf("create threads dir: %w", err)
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal session config: %w", err)
+	}
+	return WriteFileAtomic(s.sessionConfigPath(), data, 0o644)
+}
+
+// LoadSessionConfig loads durable session-level config. If no session config
+// exists yet, it migrates the first valid legacy per-thread phase it finds.
+func (s *Store) LoadSessionConfig() (SessionConfig, error) {
+	data, err := os.ReadFile(s.sessionConfigPath())
+	if err == nil {
+		var cfg SessionConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return SessionConfig{}, fmt.Errorf("unmarshal session config: %w", err)
+		}
+		phase, err := normalizeThreadPhase(cfg.Phase)
+		if err != nil {
+			return SessionConfig{}, err
+		}
+		cfg.Phase = phase
+		return cfg, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return SessionConfig{}, fmt.Errorf("read session config: %w", err)
+	}
+	return s.migrateSessionConfigPhase()
+}
+
+func (s *Store) migrateSessionConfigPhase() (SessionConfig, error) {
+	threadIDs, err := s.ListThreads()
+	if err != nil {
+		return SessionConfig{}, err
+	}
+	for _, threadID := range threadIDs {
+		phase, err := s.loadLegacyThreadConfigPhase(threadID)
+		if err != nil {
+			continue
+		}
+		phase, err = normalizeThreadPhase(phase)
+		if err != nil || phase == "" {
+			continue
+		}
+		sessionCfg := SessionConfig{Phase: phase}
+		if err := s.SaveSessionConfig(sessionCfg); err != nil {
+			return SessionConfig{}, err
+		}
+		return sessionCfg, nil
+	}
+	if err := s.SaveSessionConfig(SessionConfig{}); err != nil {
+		return SessionConfig{}, err
+	}
+	return SessionConfig{}, nil
+}
+
+func (s *Store) loadLegacyThreadConfigPhase(threadID string) (string, error) {
+	data, err := os.ReadFile(s.threadConfigPath(threadID))
+	if err != nil {
+		return "", err
+	}
+	var cfg struct {
+		Phase string `json:"phase,omitempty"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", err
+	}
+	return cfg.Phase, nil
+}
+
 // threadConfigPath returns the path to the thread config file.
 func (s *Store) threadConfigPath(threadID string) string {
 	return filepath.Join(s.baseDir, threadID, "config.json")
@@ -1177,7 +1265,6 @@ func (s *Store) LoadConfig(threadID string) (Config, error) {
 		Reasoning:                    raw.Reasoning,
 		ServiceTier:                  raw.ServiceTier,
 		CWD:                          raw.CWD,
-		Phase:                        raw.Phase,
 		LastTurnState:                raw.LastTurnState,
 		TokenUsage:                   raw.TokenUsage,
 		ActiveLeafID:                 raw.ActiveLeafID,

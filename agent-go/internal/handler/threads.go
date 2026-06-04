@@ -504,7 +504,7 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	}
 	info, err := h.threadManager.UpdateThread(r.Context(), threadID, update)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid thread phase") {
+		if strings.Contains(err.Error(), "invalid session phase") {
 			h.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -514,6 +514,11 @@ func (h *Handler) UpdateThread(w http.ResponseWriter, r *http.Request) {
 
 	if req.Phase != nil && h.hookManager != nil {
 		h.hookManager.TriggerEvaluation(threadID)
+	}
+	if req.Phase != nil && h.conversations != nil {
+		if err := h.conversations.EmitAllThreadUpdates(); err != nil {
+			log.Printf("threads: failed to emit session phase updates: %v", err)
+		}
 	}
 	h.notifyActivityChanged()
 	h.JSON(w, http.StatusOK, h.threadResponse(info))

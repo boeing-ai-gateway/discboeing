@@ -7,32 +7,57 @@ import (
 )
 
 func UpdateChunkFromConfig(threadID string, cfg Config) message.ThreadUpdateChunk {
+	return UpdateChunkFromInfo(Info{
+		ID:            threadID,
+		Name:          cfg.Name,
+		CWD:           cfg.CWD,
+		LastMessage:   cfg.LastMessage,
+		ErrorMessage:  cfg.ErrorMessage,
+		Model:         cfg.Model,
+		Reasoning:     string(cfg.Reasoning),
+		ServiceTier:   cfg.ServiceTier,
+		State:         cfg.LastTurnState,
+		TokenUsage:    cfg.TokenUsage,
+		ActiveCommand: cfg.ActiveCommand,
+		Metadata:      cfg.Metadata.RawMessage(),
+	})
+}
+
+func UpdateChunkFromInfo(info Info) message.ThreadUpdateChunk {
 	return message.ThreadUpdateChunk{
 		Data: message.ThreadUpdateData{
 			Thread: message.ThreadUpdateInfo{
-				ID:           threadID,
-				Name:         cfg.Name,
-				CWD:          cfg.CWD,
-				Phase:        cfg.Phase,
-				LastMessage:  cfg.LastMessage,
-				ErrorMessage: cfg.ErrorMessage,
-				Model:        cfg.Model,
-				Reasoning:    string(cfg.Reasoning),
-				ServiceTier:  cfg.ServiceTier,
-				State:        string(cfg.LastTurnState),
+				ID:           info.ID,
+				Name:         info.Name,
+				CWD:          info.CWD,
+				Phase:        info.Phase,
+				LastMessage:  info.LastMessage,
+				ErrorMessage: info.ErrorMessage,
+				Model:        info.Model,
+				Reasoning:    info.Reasoning,
+				ServiceTier:  info.ServiceTier,
+				State:        string(info.State),
 				TokenUsage: message.TokenUsageInfo{
-					Total:           cfg.TokenUsage.Total,
-					LastStep:        cfg.TokenUsage.LastStep,
-					LastTurn:        cfg.TokenUsage.LastTurn,
-					ModelMaxTokens:  cfg.TokenUsage.ModelMaxTokens,
-					MaxOutputTokens: cfg.TokenUsage.MaxOutputTokens,
-					Prices:          cfg.TokenUsage.Prices,
+					Total:           info.TokenUsage.Total,
+					LastStep:        info.TokenUsage.LastStep,
+					LastTurn:        info.TokenUsage.LastTurn,
+					ModelMaxTokens:  info.TokenUsage.ModelMaxTokens,
+					MaxOutputTokens: info.TokenUsage.MaxOutputTokens,
+					Prices:          info.TokenUsage.Prices,
 				},
-				ActiveCommand: cfg.ActiveCommand,
-				Metadata:      cfg.Metadata.RawMessage(),
+				ActiveCommand: info.ActiveCommand,
+				Metadata:      info.Metadata,
 			},
 		},
 	}
+}
+
+func UpdateChunkFromStore(store *Store, threadID string) (message.ThreadUpdateChunk, error) {
+	info, err := store.GetThreadInfo(threadID)
+	if err != nil {
+		return message.ThreadUpdateChunk{}, err
+	}
+	return UpdateChunkFromInfo(info), nil
 }
 
 func YieldThreadUpdate(
@@ -40,9 +65,9 @@ func YieldThreadUpdate(
 	store *Store,
 	threadID string,
 ) bool {
-	cfg, err := store.LoadConfig(threadID)
+	chunk, err := UpdateChunkFromStore(store, threadID)
 	if err != nil {
 		return yield(nil, fmt.Errorf("load thread config: %w", err))
 	}
-	return yield(UpdateChunkFromConfig(threadID, cfg), nil)
+	return yield(chunk, nil)
 }

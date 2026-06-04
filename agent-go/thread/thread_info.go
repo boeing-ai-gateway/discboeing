@@ -109,11 +109,11 @@ func (s *Store) CreateThreadInfo(defaultCWD string, req CreateThreadRequest) (In
 	} else if strings.TrimSpace(cfg.CWD) == "" {
 		cfg.CWD = strings.TrimSpace(defaultCWD)
 	}
-	phase, err := normalizeThreadPhase(req.Phase)
-	if err != nil {
-		return Info{}, err
+	if strings.TrimSpace(req.Phase) != "" {
+		if err := s.SaveSessionConfig(SessionConfig{Phase: req.Phase}); err != nil {
+			return Info{}, err
+		}
 	}
-	cfg.Phase = phase
 	if trimmedName := strings.TrimSpace(req.Name); trimmedName != "" {
 		cfg.Name = trimmedName
 		cfg.NameSource = ThreadNameSourceUser
@@ -163,11 +163,9 @@ func (s *Store) UpdateThreadInfo(threadID string, req UpdateThreadRequest) (Info
 		}
 	}
 	if req.Phase != nil {
-		phase, err := normalizeThreadPhase(*req.Phase)
-		if err != nil {
+		if err := s.SaveSessionConfig(SessionConfig{Phase: *req.Phase}); err != nil {
 			return Info{}, err
 		}
-		cfg.Phase = phase
 	}
 	if req.LastMessage != nil {
 		cfg.LastMessage = *req.LastMessage
@@ -224,11 +222,15 @@ func (s *Store) ThreadInfoFromConfig(threadID string, cfg Config) Info {
 	if strings.TrimSpace(serviceTier) == "" {
 		serviceTier = s.serviceTierFromTurnHistory(threadID, cfg)
 	}
+	sessionCfg, err := s.LoadSessionConfig()
+	if err != nil {
+		sessionCfg = SessionConfig{}
+	}
 	return Info{
 		ID:              threadID,
 		Name:            strings.TrimSpace(cfg.Name),
 		CWD:             strings.TrimSpace(cfg.CWD),
-		Phase:           strings.TrimSpace(cfg.Phase),
+		Phase:           strings.TrimSpace(sessionCfg.Phase),
 		LastMessage:     strings.TrimSpace(cfg.LastMessage),
 		ErrorMessage:    strings.TrimSpace(cfg.ErrorMessage),
 		Model:           cfg.Model,
@@ -248,7 +250,7 @@ func normalizeThreadPhase(phase string) (string, error) {
 	case "", "review":
 		return phase, nil
 	default:
-		return "", fmt.Errorf("invalid thread phase %q", phase)
+		return "", fmt.Errorf("invalid session phase %q", phase)
 	}
 }
 

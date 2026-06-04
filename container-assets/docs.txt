@@ -75,7 +75,7 @@ git diff --stat -- "$1"
 
 Requirements:
 - all hooks: `type` field in front matter, file lives directly under `.discobot/hooks/`
-- optional `phase: review` gates file hooks until the thread enters review
+- optional `phase: review` gates file hooks until the session enters review
 - script hooks: executable bit and shebang line
 - AI hooks: `engine: ai`; `pre-commit` is not supported
 
@@ -117,7 +117,7 @@ FILE (type: file)
   support gitignore-specific features such as ! negation.
   If notify_llm is true and hook fails, the LLM is re-prompted (max 3 retries).
   If notify_llm is false, runs silently (useful for auto-fixers).
-  With `phase: review`, matching changes are kept pending until the thread phase
+  With `phase: review`, matching changes are kept pending until the session phase
   is `review`; the ReadyForReview tool sets that phase. Only `review` is valid.
   Glob uses picomatch: "*.go", "src/**/*.ts", "*.{ts,tsx}", "{package.json,pnpm*.yaml}"
 
@@ -140,8 +140,8 @@ REVIEW PHASE (`phase: review`)
   File hooks may set `phase: review`; the parser currently accepts only `review` as
   a non-empty phase. Any hook with `phase: review` makes Discobot expose the
   ReadyForReview tool. File hooks with `phase: review` still match changed files
-  after each LLM turn, but remain pending and do not execute until the thread
-  phase becomes `review`. Calling ReadyForReview records the thread phase as
+  after each LLM turn, but remain pending and do not execute until the session
+  phase becomes `review`. Calling ReadyForReview records the session phase as
   `review`, making pending review-phase file hooks eligible on the next
   evaluation.
 

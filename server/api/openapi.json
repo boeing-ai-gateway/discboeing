@@ -5506,7 +5506,7 @@
           },
           "phase": {
             "type": "string",
-            "description": "Thread lifecycle phase; \"review\" when ready for review."
+            "description": "Session lifecycle phase; \"review\" when ready for review."
           },
           "state": {
             "type": "string",
@@ -5641,7 +5641,7 @@
           },
           "phase": {
             "type": "string",
-            "description": "Thread lifecycle phase; \"review\" when ready for review."
+            "description": "Session lifecycle phase; \"review\" when ready for review."
           }
         },
         "description": "create Thread Request payload accepted by the API."
@@ -5655,7 +5655,7 @@
           },
           "phase": {
             "type": "string",
-            "description": "Thread lifecycle phase; \"review\" when ready for review."
+            "description": "Session lifecycle phase; \"review\" when ready for review."
           }
         },
         "description": "update Thread Request payload accepted by the API."
