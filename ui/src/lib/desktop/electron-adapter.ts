@@ -93,6 +93,13 @@ export async function pickDirectory(): Promise<string | null> {
 	return bridge.pickDirectory();
 }
 
+export function supportsFindInPage(): boolean {
+	const bridge = getElectronBridge();
+	return Boolean(
+		bridge?.findInPage && bridge.stopFindInPage && bridge.onFindInPageResult,
+	);
+}
+
 export async function findInPage(
 	text: string,
 	options?: DesktopFindInPageOptions,

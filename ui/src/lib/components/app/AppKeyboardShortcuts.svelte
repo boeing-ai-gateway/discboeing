@@ -32,10 +32,10 @@
 	} from "$lib/context/commands/session";
 	import { useContext } from "$lib/context/context.svelte";
 	import {
-		detectElectronRuntime,
 		findInPage,
 		onFindInPageResult,
 		stopFindInPage,
+		supportsFindInPage,
 	} from "$lib/desktop/electron-adapter";
 
 	const context = useContext();
@@ -192,18 +192,28 @@
 
 	function searchFindQuery(query: string, findNext = false, forward = true) {
 		const requestToken = (findRequestToken += 1);
-		if (!query) {
+		if (!query || !supportsFindInPage()) {
 			findActiveMatch = 0;
 			findMatchCount = 0;
 			latestFindRequestId = null;
-			void stopFindInPage("clearSelection");
+			if (!query) {
+				void stopFindInPage("clearSelection");
+			}
 			return;
 		}
-		void findInPage(query, { findNext, forward }).then((requestId) => {
-			if (requestToken === findRequestToken) {
-				latestFindRequestId = requestId;
-			}
-		});
+		void findInPage(query, { findNext, forward })
+			.then((requestId) => {
+				if (requestToken === findRequestToken) {
+					latestFindRequestId = requestId;
+				}
+			})
+			.catch(() => {
+				if (requestToken === findRequestToken) {
+					findActiveMatch = 0;
+					findMatchCount = 0;
+					latestFindRequestId = null;
+				}
+			});
 	}
 
 	function handleFindQueryChange(query: string) {
@@ -271,7 +281,7 @@
 			return;
 		}
 
-		if (shortcutAction.id === "find-in-page" && !detectElectronRuntime()) {
+		if (shortcutAction.id === "find-in-page" && !supportsFindInPage()) {
 			return;
 		}
 
@@ -337,7 +347,7 @@
 	}
 
 	$effect(() => {
-		if (!detectElectronRuntime()) {
+		if (!supportsFindInPage()) {
 			return;
 		}
 
