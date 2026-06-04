@@ -57,7 +57,6 @@
 	} from "$lib/components/app/conversation-pane-layout";
 	import { Alert, AlertDescription } from "$lib/components/ui/alert";
 	import { Button } from "$lib/components/ui/button";
-	import * as Tooltip from "$lib/components/ui/tooltip";
 	import {
 		Collapsible,
 		CollapsibleContent,
@@ -1486,57 +1485,41 @@
 			{#if browserActivityExpanded}
 				<div class="space-y-4">
 					<div class="flex justify-end">
-						<Tooltip.Provider>
-							<div
-								class="inline-flex items-center overflow-hidden rounded-lg border border-border/70 bg-background/80 p-0.5 shadow-xs"
-								aria-label="Browser activity view"
-								role="group"
+						<div
+							class="inline-flex items-center overflow-hidden rounded-lg border border-border/70 bg-background/80 p-0.5 shadow-xs"
+							aria-label="Browser activity view"
+							role="group"
+						>
+							<Button
+								aria-label="Show simple browser activity"
+								aria-pressed={browserActivityViewMode === "simple"}
+								class="size-6 rounded-md text-muted-foreground hover:text-foreground aria-pressed:text-foreground"
+								onclick={() => setBrowserActivityViewMode(turnId, "simple")}
+								size="icon-xs"
+								title="Simple"
+								type="button"
+								variant={browserActivityViewMode === "simple"
+									? "secondary"
+									: "ghost"}
 							>
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										<Button
-											aria-label="Show simple browser activity"
-											aria-pressed={browserActivityViewMode === "simple"}
-											class="size-6 rounded-md text-muted-foreground hover:text-foreground aria-pressed:text-foreground"
-											onclick={() =>
-												setBrowserActivityViewMode(turnId, "simple")}
-											size="icon-xs"
-											type="button"
-											variant={browserActivityViewMode === "simple"
-												? "secondary"
-												: "ghost"}
-										>
-											<GalleryHorizontalEndIcon class="size-3.5" />
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content side="top" sideOffset={6}
-										>Simple</Tooltip.Content
-									>
-								</Tooltip.Root>
-								<span class="mx-0.5 h-4 w-px bg-border/70"></span>
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										<Button
-											aria-label="Show detailed browser activity"
-											aria-pressed={browserActivityViewMode === "details"}
-											class="size-6 rounded-md text-muted-foreground hover:text-foreground aria-pressed:text-foreground"
-											onclick={() =>
-												setBrowserActivityViewMode(turnId, "details")}
-											size="icon-xs"
-											type="button"
-											variant={browserActivityViewMode === "details"
-												? "secondary"
-												: "ghost"}
-										>
-											<ListTreeIcon class="size-3.5" />
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content side="top" sideOffset={6}
-										>Details</Tooltip.Content
-									>
-								</Tooltip.Root>
-							</div>
-						</Tooltip.Provider>
+								<GalleryHorizontalEndIcon class="size-3.5" />
+							</Button>
+							<span class="mx-0.5 h-4 w-px bg-border/70"></span>
+							<Button
+								aria-label="Show detailed browser activity"
+								aria-pressed={browserActivityViewMode === "details"}
+								class="size-6 rounded-md text-muted-foreground hover:text-foreground aria-pressed:text-foreground"
+								onclick={() => setBrowserActivityViewMode(turnId, "details")}
+								size="icon-xs"
+								title="Details"
+								type="button"
+								variant={browserActivityViewMode === "details"
+									? "secondary"
+									: "ghost"}
+							>
+								<ListTreeIcon class="size-3.5" />
+							</Button>
+						</div>
 					</div>
 
 					{#if browserActivityViewMode === "simple"}

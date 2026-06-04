@@ -12,7 +12,6 @@
 		ItemMedia,
 		ItemTitle,
 	} from "$lib/components/ui/item";
-	import * as Tooltip from "$lib/components/ui/tooltip";
 
 	type Props = {
 		credential: CredentialInfo;
@@ -60,69 +59,39 @@
 		</div>
 	</ItemContent>
 	<ItemActions>
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				{#snippet child({ props })}
-					<Switch
-						{...props}
-						checked={!credential.inactive}
-						disabled={togglingInactive}
-						aria-label={credential.inactive
-							? `Enable ${title}`
-							: `Disable ${title}`}
-						onCheckedChange={(checked) => {
-							if (checked !== !credential.inactive) {
-								void onToggleInactive(credential);
-							}
-						}}
-					/>
-				{/snippet}
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				{togglingInactive
-					? "Updating"
-					: credential.inactive
-						? "Enable"
-						: "Disable"}
-				{title}
-			</Tooltip.Content>
-		</Tooltip.Root>
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				{#snippet child({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						aria-label={`Edit ${title}`}
-						onclick={() => {
-							void onEdit(credential);
-						}}
-					>
-						<PencilIcon class="size-4" />
-					</Button>
-				{/snippet}
-			</Tooltip.Trigger>
-			<Tooltip.Content>Edit {title}</Tooltip.Content>
-		</Tooltip.Root>
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				{#snippet child({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						size="icon-sm"
-						disabled={deleting}
-						aria-label={`Delete ${title}`}
-						onclick={() => {
-							void onDelete(credential);
-						}}
-					>
-						<Trash2Icon class="size-4 text-destructive" />
-					</Button>
-				{/snippet}
-			</Tooltip.Trigger>
-			<Tooltip.Content>Delete {title}</Tooltip.Content>
-		</Tooltip.Root>
+		<Switch
+			checked={!credential.inactive}
+			disabled={togglingInactive}
+			aria-label={credential.inactive ? `Enable ${title}` : `Disable ${title}`}
+			title={`${togglingInactive ? "Updating" : credential.inactive ? "Enable" : "Disable"} ${title}`}
+			onCheckedChange={(checked) => {
+				if (checked !== !credential.inactive) {
+					void onToggleInactive(credential);
+				}
+			}}
+		/>
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			aria-label={`Edit ${title}`}
+			title={`Edit ${title}`}
+			onclick={() => {
+				void onEdit(credential);
+			}}
+		>
+			<PencilIcon class="size-4" />
+		</Button>
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			disabled={deleting}
+			aria-label={`Delete ${title}`}
+			title={`Delete ${title}`}
+			onclick={() => {
+				void onDelete(credential);
+			}}
+		>
+			<Trash2Icon class="size-4 text-destructive" />
+		</Button>
 	</ItemActions>
 </Item>

@@ -33,7 +33,6 @@
 		ItemTitle,
 	} from "$lib/components/ui/item";
 	import { Label } from "$lib/components/ui/label";
-	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import { openUrl, writeClipboardText } from "$lib/shell";
 
@@ -1310,737 +1309,724 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col gap-4">
-	<Tooltip.Provider>
-		{#if loading}
-			<div class="text-sm text-muted-foreground">Loading credentials…</div>
-		{:else}
-			<div class="flex items-center justify-between gap-3">
-				<div>
-					<p class="text-sm font-medium">Configured credentials</p>
-					<p class="text-xs text-muted-foreground">
-						Manage built-in credentials and custom environment variable bundles.
-					</p>
-				</div>
-				<Button variant="default" size="xs" onclick={startCreate}>
-					<PlusIcon class="size-4" />
-					Add credential
-				</Button>
+	{#if loading}
+		<div class="text-sm text-muted-foreground">Loading credentials…</div>
+	{:else}
+		<div class="flex items-center justify-between gap-3">
+			<div>
+				<p class="text-sm font-medium">Configured credentials</p>
+				<p class="text-xs text-muted-foreground">
+					Manage built-in credentials and custom environment variable bundles.
+				</p>
 			</div>
+			<Button variant="default" size="xs" onclick={startCreate}>
+				<PlusIcon class="size-4" />
+				Add credential
+			</Button>
+		</div>
 
-			{#if errorMessage && mode === "list"}
-				<div
-					class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-				>
-					{errorMessage}
-				</div>
-			{/if}
-
-			<div class="min-h-0 flex-1 overflow-auto">
-				<ItemGroup class="rounded-md border border-border">
-					{#if credentialsApi.list.length === 0}
-						<Item size="sm">
-							<ItemContent>
-								<ItemTitle>No credentials configured</ItemTitle>
-								<ItemDescription>
-									Add a credential or environment variable bundle to make it
-									available to sessions.
-								</ItemDescription>
-							</ItemContent>
-						</Item>
-					{:else}
-						{#each credentialListEntries as entry, index (entry.credential.id)}
-							{#if index > 0}<ItemSeparator />{/if}
-							<CredentialListItem
-								credential={entry.credential}
-								title={entry.title}
-								subtitle={entry.subtitle}
-								image={entry.image}
-								imageClass={entry.imageClass}
-								monogram={entry.monogram}
-								togglingInactive={togglingInactiveId === entry.credential.id}
-								deleting={deletingId === entry.credential.id}
-								onToggleInactive={toggleCredentialInactive}
-								onEdit={startEdit}
-								onDelete={(credential) => removeCredential(credential.id)}
-							/>
-						{/each}
-					{/if}
-				</ItemGroup>
-			</div>
-
-			<Dialog.Root
-				open={mode !== "list" &&
-					!githubOAuthWizardOpen &&
-					!openAIOAuthWizardOpen}
-				onOpenChange={(open) => {
-					if (!open && !githubOAuthWizardOpen && !openAIOAuthWizardOpen) {
-						resetEditor();
-					}
-				}}
+		{#if errorMessage && mode === "list"}
+			<div
+				class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
 			>
-				<Dialog.Content class="max-h-[85vh] overflow-hidden sm:max-w-3xl">
-					<Dialog.Header>
-						<Dialog.Title>{editorDialogTitle()}</Dialog.Title>
-						<Dialog.Description>{editorDialogDescription()}</Dialog.Description>
-					</Dialog.Header>
-					<div class="max-h-[min(68vh,44rem)] space-y-4 overflow-y-auto pr-1">
-						{#if errorMessage}
-							<div class="text-sm text-destructive">{errorMessage}</div>
-						{/if}
+				{errorMessage}
+			</div>
+		{/if}
 
-						{#if mode === "create" && !hasSelectedProvider}
-							<CredentialTypePicker
-								groups={credentialPickerCardGroups}
-								onChoose={(optionValue) => {
-									const option =
-										providerOptions.find(
-											(candidate) => candidate.value === optionValue,
-										) ?? null;
-									if (option) {
-										chooseCredentialType(option);
-									}
-								}}
-							/>
-						{:else if hasSelectedProvider}
-							<div
-								class="space-y-3 rounded-lg border border-border bg-muted/20 p-3"
-							>
-								<div class="text-sm font-medium">Optional details</div>
-								<div class="grid gap-3 md:grid-cols-2">
-									<div class="space-y-1.5">
-										<Label for="credential-name">Name</Label>
-										<Input
-											id="credential-name"
-											value={nameDraft}
-											placeholder="Optional"
-											oninput={(event) =>
-												(nameDraft = (event.currentTarget as HTMLInputElement)
-													.value)}
-										/>
-									</div>
-									<div class="space-y-1.5">
-										<Label for="credential-description">Description</Label>
-										<Input
-											id="credential-description"
-											value={descriptionDraft}
-											placeholder="Optional"
-											oninput={(event) =>
-												(descriptionDraft = (
-													event.currentTarget as HTMLInputElement
-												).value)}
-										/>
-									</div>
+		<div class="min-h-0 flex-1 overflow-auto">
+			<ItemGroup class="rounded-md border border-border">
+				{#if credentialsApi.list.length === 0}
+					<Item size="sm">
+						<ItemContent>
+							<ItemTitle>No credentials configured</ItemTitle>
+							<ItemDescription>
+								Add a credential or environment variable bundle to make it
+								available to sessions.
+							</ItemDescription>
+						</ItemContent>
+					</Item>
+				{:else}
+					{#each credentialListEntries as entry, index (entry.credential.id)}
+						{#if index > 0}<ItemSeparator />{/if}
+						<CredentialListItem
+							credential={entry.credential}
+							title={entry.title}
+							subtitle={entry.subtitle}
+							image={entry.image}
+							imageClass={entry.imageClass}
+							monogram={entry.monogram}
+							togglingInactive={togglingInactiveId === entry.credential.id}
+							deleting={deletingId === entry.credential.id}
+							onToggleInactive={toggleCredentialInactive}
+							onEdit={startEdit}
+							onDelete={(credential) => removeCredential(credential.id)}
+						/>
+					{/each}
+				{/if}
+			</ItemGroup>
+		</div>
+
+		<Dialog.Root
+			open={mode !== "list" && !githubOAuthWizardOpen && !openAIOAuthWizardOpen}
+			onOpenChange={(open) => {
+				if (!open && !githubOAuthWizardOpen && !openAIOAuthWizardOpen) {
+					resetEditor();
+				}
+			}}
+		>
+			<Dialog.Content class="max-h-[85vh] overflow-hidden sm:max-w-3xl">
+				<Dialog.Header>
+					<Dialog.Title>{editorDialogTitle()}</Dialog.Title>
+					<Dialog.Description>{editorDialogDescription()}</Dialog.Description>
+				</Dialog.Header>
+				<div class="max-h-[min(68vh,44rem)] space-y-4 overflow-y-auto pr-1">
+					{#if errorMessage}
+						<div class="text-sm text-destructive">{errorMessage}</div>
+					{/if}
+
+					{#if mode === "create" && !hasSelectedProvider}
+						<CredentialTypePicker
+							groups={credentialPickerCardGroups}
+							onChoose={(optionValue) => {
+								const option =
+									providerOptions.find(
+										(candidate) => candidate.value === optionValue,
+									) ?? null;
+								if (option) {
+									chooseCredentialType(option);
+								}
+							}}
+						/>
+					{:else if hasSelectedProvider}
+						<div
+							class="space-y-3 rounded-lg border border-border bg-muted/20 p-3"
+						>
+							<div class="text-sm font-medium">Optional details</div>
+							<div class="grid gap-3 md:grid-cols-2">
+								<div class="space-y-1.5">
+									<Label for="credential-name">Name</Label>
+									<Input
+										id="credential-name"
+										value={nameDraft}
+										placeholder="Optional"
+										oninput={(event) =>
+											(nameDraft = (event.currentTarget as HTMLInputElement)
+												.value)}
+									/>
+								</div>
+								<div class="space-y-1.5">
+									<Label for="credential-description">Description</Label>
+									<Input
+										id="credential-description"
+										value={descriptionDraft}
+										placeholder="Optional"
+										oninput={(event) =>
+											(descriptionDraft = (
+												event.currentTarget as HTMLInputElement
+											).value)}
+									/>
 								</div>
 							</div>
-							{#if selectedProvider === CUSTOM_PROVIDER}
-								<CredentialEnvVarEditor
-									rows={envVarRows}
-									onAddRow={addEnvVarRow}
-									onRemoveRow={removeEnvVarRow}
-									onUpdateRow={updateEnvVarRow}
-									onShowValueInput={showEnvVarValueInput}
-									onHideValueInput={hideEnvVarValueInput}
-									onPaste={handleEnvVarPaste}
-								/>
-							{:else if selectedAuthType === "oauth"}
-								<div class="space-y-3">
-									{#if isGitHubOAuthCredential}
-										<div
-											class="space-y-3 rounded-md border border-border bg-muted/40 p-4"
-										>
-											<div class="space-y-1">
-												<div class="font-medium">GitHub sign-in wizard</div>
-												<p class="text-sm text-muted-foreground">
-													Choose how you want to sign in, review the GitHub
-													access, and finish the connection here.
-												</p>
-											</div>
-											<div class="flex flex-wrap gap-2">
-												<Button
-													variant="default"
-													size="sm"
-													class="gap-2"
-													onclick={openGitHubOAuthWizard}
-												>
-													<LogInIcon class="size-4" />
-													Open GitHub sign-in wizard
-												</Button>
-												{#if editingCredentialId}
-													<div
-														class="flex items-center text-sm text-muted-foreground"
-													>
-														GitHub is connected. Reopen the wizard if you want
-														to reconnect it.
-													</div>
-												{/if}
-											</div>
-										</div>
-									{:else if isOpenAIOAuthCredential}
-										<div
-											class="space-y-3 rounded-md border border-border bg-muted/40 p-4"
-										>
-											<div class="space-y-1">
-												<div class="font-medium">OpenAI sign-in wizard</div>
-												<p class="text-sm text-muted-foreground">
-													Choose how you want to sign in and finish the OpenAI
-													connection here.
-												</p>
-											</div>
-											<div class="flex flex-wrap gap-2">
-												<Button
-													variant="default"
-													size="sm"
-													class="gap-2"
-													onclick={openOpenAIOAuthWizard}
-												>
-													<LogInIcon class="size-4" />
-													Open OpenAI sign-in wizard
-												</Button>
-												{#if editingCredentialId}
-													<div
-														class="flex items-center text-sm text-muted-foreground"
-													>
-														OpenAI is connected. Reopen the wizard if you want
-														to reconnect it.
-													</div>
-												{/if}
-											</div>
-										</div>
-									{:else}
+						</div>
+						{#if selectedProvider === CUSTOM_PROVIDER}
+							<CredentialEnvVarEditor
+								rows={envVarRows}
+								onAddRow={addEnvVarRow}
+								onRemoveRow={removeEnvVarRow}
+								onUpdateRow={updateEnvVarRow}
+								onShowValueInput={showEnvVarValueInput}
+								onHideValueInput={hideEnvVarValueInput}
+								onPaste={handleEnvVarPaste}
+							/>
+						{:else if selectedAuthType === "oauth"}
+							<div class="space-y-3">
+								{#if isGitHubOAuthCredential}
+									<div
+										class="space-y-3 rounded-md border border-border bg-muted/40 p-4"
+									>
 										<div class="space-y-1">
-											<Label
-												for={selectedOAuthKind === "authorization_code"
-													? "credential-oauth-code"
-													: undefined}
-											>
-												{selectedOAuthKind === "device_code"
-													? "Device code"
-													: (selectedOAuthConfig?.inputLabel ??
-														"Authorization code")}
-											</Label>
+											<div class="font-medium">GitHub sign-in wizard</div>
 											<p class="text-sm text-muted-foreground">
-												{selectedOAuthConfig?.description ??
-													"Use ChatGPT device auth to connect this credential."}
+												Choose how you want to sign in, review the GitHub
+												access, and finish the connection here.
 											</p>
 										</div>
-										{#if selectedOAuthConfig?.scopeOptions?.length}
-											<CredentialOAuthScopePicker
-												mode={oauthScopePickerMode}
-												simpleOptions={simpleOAuthScopeOptions}
-												advancedGroups={advancedOAuthScopeGroups}
-												onModeChange={(mode) => {
-													oauthScopePickerMode = mode;
-												}}
-												isEnabled={isOAuthScopeEnabled}
-												onSetEnabled={setOAuthScopeEnabled}
-											/>
-										{/if}
-										{#if availableOAuthKinds.length > 1}
-											<div class="flex flex-wrap gap-2">
-												{#each availableOAuthKinds as oauthKind, __key0 (__key0)}
-													<Button
-														variant={selectedOAuthKind === oauthKind
-															? "default"
-															: "outline"}
-														size="sm"
-														onclick={() => selectOAuthKind(oauthKind)}
-													>
-														{oauthKind === "authorization_code"
-															? "Redirect Sign-In"
-															: "Device code"}
-													</Button>
-												{/each}
-											</div>
-										{/if}
 										<div class="flex flex-wrap gap-2">
 											<Button
-												variant="outline"
+												variant="default"
 												size="sm"
 												class="gap-2"
-												disabled={startingOAuth || pollingOAuth}
-												onclick={() => void startOAuthAuthorization()}
+												onclick={openGitHubOAuthWizard}
 											>
-												{#if startingOAuth}
-													<Loader2Icon class="size-4 animate-spin" />
-													Starting…
-												{:else}
-													<LogInIcon class="size-4" />
-													{selectedOAuthKind === "device_code"
-														? "Get device code"
-														: "Start sign-in"}
-												{/if}
+												<LogInIcon class="size-4" />
+												Open GitHub sign-in wizard
 											</Button>
-											{#if oauthVerificationUrl}
-												<Button
-													variant="ghost"
-													size="sm"
-													class="gap-2"
-													disabled={pollingOAuth}
-													onclick={() => void openUrl(oauthVerificationUrl)}
+											{#if editingCredentialId}
+												<div
+													class="flex items-center text-sm text-muted-foreground"
 												>
-													<ExternalLinkIcon class="size-4" />
-													Open device page
-												</Button>
-											{/if}
-											{#if oauthAuthUrl}
-												<Button
-													variant="ghost"
-													size="sm"
-													class="gap-2"
-													disabled={pollingOAuth}
-													onclick={() => void openOAuthAuthUrl()}
-												>
-													<ExternalLinkIcon class="size-4" />
-													{copiedOAuthAuthUrl
-														? "Opened and copied"
-														: "Open auth page"}
-												</Button>
+													GitHub is connected. Reopen the wizard if you want to
+													reconnect it.
+												</div>
 											{/if}
 										</div>
-										{#if selectedOAuthKind === "device_code" && oauthUserCodeDraft}
-											<div
-												class="space-y-3 rounded-md border border-border bg-muted/40 p-3"
+									</div>
+								{:else if isOpenAIOAuthCredential}
+									<div
+										class="space-y-3 rounded-md border border-border bg-muted/40 p-4"
+									>
+										<div class="space-y-1">
+											<div class="font-medium">OpenAI sign-in wizard</div>
+											<p class="text-sm text-muted-foreground">
+												Choose how you want to sign in and finish the OpenAI
+												connection here.
+											</p>
+										</div>
+										<div class="flex flex-wrap gap-2">
+											<Button
+												variant="default"
+												size="sm"
+												class="gap-2"
+												onclick={openOpenAIOAuthWizard}
 											>
-												<div class="text-sm text-muted-foreground">
-													Open
-													<code class="mx-1 font-mono"
-														>{oauthVerificationUrl}</code
-													>
-													and enter this code:
+												<LogInIcon class="size-4" />
+												Open OpenAI sign-in wizard
+											</Button>
+											{#if editingCredentialId}
+												<div
+													class="flex items-center text-sm text-muted-foreground"
+												>
+													OpenAI is connected. Reopen the wizard if you want to
+													reconnect it.
 												</div>
-												<div class="flex items-center gap-2">
-													<div
-														class="flex-1 rounded-lg bg-background p-4 text-center"
-													>
-														<code class="text-xl font-bold tracking-[0.3em]">
-															{oauthUserCodeDraft}
-														</code>
-													</div>
-													<Button
-														variant="outline"
-														size="icon"
-														class="h-14 w-14"
-														aria-label="Copy OAuth device code"
-														disabled={pollingOAuth}
-														onclick={() => void copyOAuthCode()}
-													>
-														<CopyIcon class="size-5" />
-													</Button>
-												</div>
-												{#if copiedOAuthCode}
-													<p class="text-xs text-center text-muted-foreground">
-														Copied to clipboard
-													</p>
-												{/if}
-												<div class="flex justify-end">
-													<Button
-														size="sm"
-														disabled={pollingOAuth}
-														onclick={() => void startOAuthPolling()}
-													>
-														{#if pollingOAuth}
-															<Loader2Icon class="size-4 animate-spin" />
-															Waiting for authorization…
-														{:else}
-															I've entered the code
-														{/if}
-													</Button>
-												</div>
-											</div>
-										{:else if selectedOAuthKind === "authorization_code"}
-											<div class="space-y-2">
-												{#if oauthAuthUrl}
-													<div
-														class="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
-													>
-														<p>
-															Sign in with ChatGPT. OpenAI redirects to
-															<code class="mx-1 font-mono">localhost:1455</code
-															>, and Discobot will try to catch that redirect
-															automatically.
-														</p>
-														<p class="mt-2">
-															{#if oauthCallbackListening}
-																Waiting for the local callback. If it does not
-																land, paste the full redirect URL or just the <code
-																	class="font-mono">code</code
-																> below.
-															{:else}
-																Could not bind
-																<code class="mx-1 font-mono"
-																	>localhost:1455</code
-																>. Paste the full redirect URL or just the
-																<code class="font-mono">code</code> below after signing
-																in.
-															{/if}
-														</p>
-														{#if oauthCallbackPolling}
-															<p
-																class="mt-2 flex items-center gap-2 text-foreground"
-															>
-																<Loader2Icon class="size-4 animate-spin" />
-																Waiting for the redirect…
-															</p>
-														{/if}
-													</div>
-												{/if}
-												<Input
-													id="credential-oauth-code"
-													value={oauthInputDraft}
-													placeholder={selectedOAuthConfig?.inputPlaceholder ??
-														"Paste authorization code"}
-													oninput={(event) =>
-														(oauthInputDraft = (
-															event.currentTarget as HTMLInputElement
-														).value)}
-												/>
-												{#if selectedOAuthConfig?.allowsDirectToken}
-													<p class="text-sm text-muted-foreground">
-														You can also paste a direct token starting with
-														<code class="mx-1 font-mono">sk-ant-oat0</code>.
-													</p>
-												{/if}
-												<div class="flex justify-end">
-													<Button
-														size="sm"
-														disabled={pollingOAuth}
-														onclick={() => void submitOAuthAuthorizationCode()}
-													>
-														{#if pollingOAuth}
-															<Loader2Icon class="size-4 animate-spin" />
-															Connecting…
-														{:else}
-															Connect
-														{/if}
-													</Button>
-												</div>
-											</div>
-										{/if}
-									{/if}
-								</div>
-							{:else}
-								<div class="space-y-2">
-									<Label for="credential-secret">Value</Label>
-									{#if selectedEnvVarName}
-										<p class="text-sm text-muted-foreground">
-											Stored as
-											<code class="font-mono">{selectedEnvVarName}</code>.
-										</p>
-									{/if}
-									{#if editingExistingSecret && !replaceSecretDraft}
-										<div class="text-sm text-muted-foreground">
-											A value is already stored.
+											{/if}
 										</div>
+									</div>
+								{:else}
+									<div class="space-y-1">
+										<Label
+											for={selectedOAuthKind === "authorization_code"
+												? "credential-oauth-code"
+												: undefined}
+										>
+											{selectedOAuthKind === "device_code"
+												? "Device code"
+												: (selectedOAuthConfig?.inputLabel ??
+													"Authorization code")}
+										</Label>
+										<p class="text-sm text-muted-foreground">
+											{selectedOAuthConfig?.description ??
+												"Use ChatGPT device auth to connect this credential."}
+										</p>
+									</div>
+									{#if selectedOAuthConfig?.scopeOptions?.length}
+										<CredentialOAuthScopePicker
+											mode={oauthScopePickerMode}
+											simpleOptions={simpleOAuthScopeOptions}
+											advancedGroups={advancedOAuthScopeGroups}
+											onModeChange={(mode) => {
+												oauthScopePickerMode = mode;
+											}}
+											isEnabled={isOAuthScopeEnabled}
+											onSetEnabled={setOAuthScopeEnabled}
+										/>
+									{/if}
+									{#if availableOAuthKinds.length > 1}
+										<div class="flex flex-wrap gap-2">
+											{#each availableOAuthKinds as oauthKind, __key0 (__key0)}
+												<Button
+													variant={selectedOAuthKind === oauthKind
+														? "default"
+														: "outline"}
+													size="sm"
+													onclick={() => selectOAuthKind(oauthKind)}
+												>
+													{oauthKind === "authorization_code"
+														? "Redirect Sign-In"
+														: "Device code"}
+												</Button>
+											{/each}
+										</div>
+									{/if}
+									<div class="flex flex-wrap gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											class="gap-2"
+											disabled={startingOAuth || pollingOAuth}
+											onclick={() => void startOAuthAuthorization()}
+										>
+											{#if startingOAuth}
+												<Loader2Icon class="size-4 animate-spin" />
+												Starting…
+											{:else}
+												<LogInIcon class="size-4" />
+												{selectedOAuthKind === "device_code"
+													? "Get device code"
+													: "Start sign-in"}
+											{/if}
+										</Button>
+										{#if oauthVerificationUrl}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="gap-2"
+												disabled={pollingOAuth}
+												onclick={() => void openUrl(oauthVerificationUrl)}
+											>
+												<ExternalLinkIcon class="size-4" />
+												Open device page
+											</Button>
+										{/if}
+										{#if oauthAuthUrl}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="gap-2"
+												disabled={pollingOAuth}
+												onclick={() => void openOAuthAuthUrl()}
+											>
+												<ExternalLinkIcon class="size-4" />
+												{copiedOAuthAuthUrl
+													? "Opened and copied"
+													: "Open auth page"}
+											</Button>
+										{/if}
+									</div>
+									{#if selectedOAuthKind === "device_code" && oauthUserCodeDraft}
+										<div
+											class="space-y-3 rounded-md border border-border bg-muted/40 p-3"
+										>
+											<div class="text-sm text-muted-foreground">
+												Open
+												<code class="mx-1 font-mono"
+													>{oauthVerificationUrl}</code
+												>
+												and enter this code:
+											</div>
+											<div class="flex items-center gap-2">
+												<div
+													class="flex-1 rounded-lg bg-background p-4 text-center"
+												>
+													<code class="text-xl font-bold tracking-[0.3em]">
+														{oauthUserCodeDraft}
+													</code>
+												</div>
+												<Button
+													variant="outline"
+													size="icon"
+													class="h-14 w-14"
+													aria-label="Copy OAuth device code"
+													disabled={pollingOAuth}
+													onclick={() => void copyOAuthCode()}
+												>
+													<CopyIcon class="size-5" />
+												</Button>
+											</div>
+											{#if copiedOAuthCode}
+												<p class="text-xs text-center text-muted-foreground">
+													Copied to clipboard
+												</p>
+											{/if}
+											<div class="flex justify-end">
+												<Button
+													size="sm"
+													disabled={pollingOAuth}
+													onclick={() => void startOAuthPolling()}
+												>
+													{#if pollingOAuth}
+														<Loader2Icon class="size-4 animate-spin" />
+														Waiting for authorization…
+													{:else}
+														I've entered the code
+													{/if}
+												</Button>
+											</div>
+										</div>
+									{:else if selectedOAuthKind === "authorization_code"}
+										<div class="space-y-2">
+											{#if oauthAuthUrl}
+												<div
+													class="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+												>
+													<p>
+														Sign in with ChatGPT. OpenAI redirects to
+														<code class="mx-1 font-mono">localhost:1455</code>,
+														and Discobot will try to catch that redirect
+														automatically.
+													</p>
+													<p class="mt-2">
+														{#if oauthCallbackListening}
+															Waiting for the local callback. If it does not
+															land, paste the full redirect URL or just the <code
+																class="font-mono">code</code
+															> below.
+														{:else}
+															Could not bind
+															<code class="mx-1 font-mono">localhost:1455</code
+															>. Paste the full redirect URL or just the
+															<code class="font-mono">code</code> below after signing
+															in.
+														{/if}
+													</p>
+													{#if oauthCallbackPolling}
+														<p
+															class="mt-2 flex items-center gap-2 text-foreground"
+														>
+															<Loader2Icon class="size-4 animate-spin" />
+															Waiting for the redirect…
+														</p>
+													{/if}
+												</div>
+											{/if}
+											<Input
+												id="credential-oauth-code"
+												value={oauthInputDraft}
+												placeholder={selectedOAuthConfig?.inputPlaceholder ??
+													"Paste authorization code"}
+												oninput={(event) =>
+													(oauthInputDraft = (
+														event.currentTarget as HTMLInputElement
+													).value)}
+											/>
+											{#if selectedOAuthConfig?.allowsDirectToken}
+												<p class="text-sm text-muted-foreground">
+													You can also paste a direct token starting with
+													<code class="mx-1 font-mono">sk-ant-oat0</code>.
+												</p>
+											{/if}
+											<div class="flex justify-end">
+												<Button
+													size="sm"
+													disabled={pollingOAuth}
+													onclick={() => void submitOAuthAuthorizationCode()}
+												>
+													{#if pollingOAuth}
+														<Loader2Icon class="size-4 animate-spin" />
+														Connecting…
+													{:else}
+														Connect
+													{/if}
+												</Button>
+											</div>
+										</div>
+									{/if}
+								{/if}
+							</div>
+						{:else}
+							<div class="space-y-2">
+								<Label for="credential-secret">Value</Label>
+								{#if selectedEnvVarName}
+									<p class="text-sm text-muted-foreground">
+										Stored as
+										<code class="font-mono">{selectedEnvVarName}</code>.
+									</p>
+								{/if}
+								{#if editingExistingSecret && !replaceSecretDraft}
+									<div class="text-sm text-muted-foreground">
+										A value is already stored.
+									</div>
+									<div class="flex justify-start">
+										<Button
+											variant="ghost"
+											size="xs"
+											class="h-auto px-0"
+											onclick={() => {
+												replaceSecretDraft = true;
+												apiKeyDraft = "";
+											}}
+										>
+											Update value
+										</Button>
+									</div>
+								{:else}
+									<Input
+										id="credential-secret"
+										type="password"
+										value={apiKeyDraft}
+										placeholder={editingExistingSecret
+											? "Enter a new value"
+											: "Enter value"}
+										oninput={(event) =>
+											(apiKeyDraft = (event.currentTarget as HTMLInputElement)
+												.value)}
+									/>
+									<p class="text-sm text-muted-foreground">
+										{editingExistingSecret
+											? "Saving will replace the currently stored value."
+											: "This value will be stored securely."}
+									</p>
+									{#if editingExistingSecret}
 										<div class="flex justify-start">
 											<Button
 												variant="ghost"
 												size="xs"
-												class="h-auto px-0"
 												onclick={() => {
-													replaceSecretDraft = true;
+													replaceSecretDraft = false;
 													apiKeyDraft = "";
 												}}
 											>
-												Update value
+												Keep existing value
 											</Button>
 										</div>
-									{:else}
-										<Input
-											id="credential-secret"
-											type="password"
-											value={apiKeyDraft}
-											placeholder={editingExistingSecret
-												? "Enter a new value"
-												: "Enter value"}
-											oninput={(event) =>
-												(apiKeyDraft = (event.currentTarget as HTMLInputElement)
-													.value)}
-										/>
-										<p class="text-sm text-muted-foreground">
-											{editingExistingSecret
-												? "Saving will replace the currently stored value."
-												: "This value will be stored securely."}
-										</p>
-										{#if editingExistingSecret}
-											<div class="flex justify-start">
-												<Button
-													variant="ghost"
-													size="xs"
-													onclick={() => {
-														replaceSecretDraft = false;
-														apiKeyDraft = "";
-													}}
-												>
-													Keep existing value
-												</Button>
-											</div>
-										{/if}
 									{/if}
-								</div>
-							{/if}
-
-							<div class="space-y-2">
-								<div class="flex items-center gap-2 text-sm">
-									<div class="font-medium">Runtime visibility</div>
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button
-													type="button"
-													class="text-muted-foreground hover:text-foreground inline-flex items-center"
-													aria-label="Explain credential visibility"
-													{...props}
-												>
-													<CircleHelpIcon class="size-4" />
-												</button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Content side="top" align="start" class="max-w-72">
-											Choose which runtime contexts receive this credential.
-											Tools allows the agent and developer tools to use it
-											directly. Console / SSH / IDE applies to SSH and terminal
-											sessions. Services and hooks apply to workspace automation
-											under <code>.discobot/</code>.
-										</Tooltip.Content>
-									</Tooltip.Root>
-								</div>
-								<div class="grid gap-2 sm:grid-cols-2">
-									<label class="flex items-center gap-2 text-sm">
-										<input
-											type="checkbox"
-											checked={visibilityDraft.tools}
-											onchange={(event) =>
-												(visibilityDraft = {
-													...visibilityDraft,
-													tools: (event.currentTarget as HTMLInputElement)
-														.checked,
-												})}
-										/>
-										Tools
-									</label>
-									<label class="flex items-center gap-2 text-sm">
-										<input
-											type="checkbox"
-											checked={visibilityDraft.console}
-											onchange={(event) =>
-												(visibilityDraft = {
-													...visibilityDraft,
-													console: (event.currentTarget as HTMLInputElement)
-														.checked,
-												})}
-										/>
-										Console
-									</label>
-									<label class="flex items-center gap-2 text-sm">
-										<input
-											type="checkbox"
-											checked={visibilityDraft.services}
-											onchange={(event) =>
-												(visibilityDraft = {
-													...visibilityDraft,
-													services: (event.currentTarget as HTMLInputElement)
-														.checked,
-												})}
-										/>
-										Services
-									</label>
-									<label class="flex items-center gap-2 text-sm">
-										<input
-											type="checkbox"
-											checked={visibilityDraft.hooks}
-											onchange={(event) =>
-												(visibilityDraft = {
-													...visibilityDraft,
-													hooks: (event.currentTarget as HTMLInputElement)
-														.checked,
-												})}
-										/>
-										Hooks
-									</label>
-								</div>
-								{#if visibilityDraft.tools}
-									<div
-										class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-									>
-										<div class="font-medium">
-											Warning: tool visibility increases exposure.
-										</div>
-										<div class="mt-1 text-current/90">
-											The agent and its tools may be able to read or use this
-											credential during a conversation.
-										</div>
-									</div>
 								{/if}
 							</div>
-
-							<div class="flex items-center justify-end gap-2">
-								<Button variant="ghost" size="sm" onclick={resetEditor}
-									>Cancel</Button
-								>
-								<Button
-									variant="default"
-									size="sm"
-									disabled={submitting ||
-										(selectedAuthType === "oauth" && !editingCredentialId)}
-									onclick={() => void save()}
-								>
-									{submitting ? "Saving…" : "Save credential"}
-								</Button>
-							</div>
 						{/if}
-					</div>
-				</Dialog.Content>
-			</Dialog.Root>
-		{/if}
 
-		<CredentialOAuthWizardDialog
-			open={githubOAuthWizardOpen}
-			title="Connect GitHub"
-			providerName="GitHub"
-			openVerificationLabel="Open GitHub page"
-			waitingForProviderLabel="Waiting for GitHub…"
-			deviceIntroLine1="Ask Discobot for a GitHub device code."
-			deviceIntroLine2="Open the GitHub verification page and enter the code."
-			deviceReturnText="Come back here and wait while Discobot finishes the connection."
-			{selectedOAuthKind}
-			hasScopeOptions={selectedOAuthScopeOptions.length > 0}
-			{oauthScopePickerMode}
-			{defaultOAuthScopeOptions}
-			{advancedOAuthScopeGroups}
-			{startingOAuth}
-			{pollingOAuth}
-			{copiedOAuthCode}
-			{copiedOAuthAuthUrl}
-			{oauthAuthUrl}
-			{oauthInputDraft}
-			{oauthVerifierDraft}
-			{oauthVerificationUrl}
-			{oauthUserCodeDraft}
-			{errorMessage}
-			onOpenChange={(open) => {
-				githubOAuthWizardOpen = open;
-			}}
-			onSelectOAuthKind={selectOAuthKind}
-			onSetScopePickerMode={(mode) => {
-				oauthScopePickerMode = mode;
-			}}
-			onResetScopesToDefaults={() => {
-				oauthScopesDraft = [...(selectedOAuthConfig?.defaultScopes ?? [])];
-				oauthScopePickerMode = "simple";
-			}}
-			{isOAuthScopeEnabled}
-			onSetOAuthScopeEnabled={setOAuthScopeEnabled}
-			onOpenOAuthAuthUrl={openOAuthAuthUrl}
-			onCopyOAuthAuthUrl={copyOAuthAuthUrl}
-			onSetOAuthInputDraft={(value) => {
-				oauthInputDraft = value;
-			}}
-			onSubmitOAuthAuthorizationCode={submitOAuthAuthorizationCode}
-			onStartOAuthAuthorization={startOAuthAuthorization}
-			onOpenVerificationUrl={() => openUrl(oauthVerificationUrl)}
-			onCopyOAuthCode={copyOAuthCode}
-			onStartOAuthPolling={startOAuthPolling}
-		/>
-
-		<CredentialOAuthWizardDialog
-			open={openAIOAuthWizardOpen}
-			title="Connect OpenAI"
-			providerName="OpenAI"
-			openVerificationLabel="Open verification page"
-			waitingForProviderLabel="Waiting for OpenAI…"
-			deviceIntroLine1="Ask Discobot for an OpenAI device code."
-			deviceIntroLine2="Open the verification page and enter the code."
-			deviceReturnText="Come back here and wait while Discobot finishes the connection."
-			{selectedOAuthKind}
-			hasScopeOptions={false}
-			{oauthScopePickerMode}
-			{defaultOAuthScopeOptions}
-			{advancedOAuthScopeGroups}
-			{startingOAuth}
-			{pollingOAuth}
-			{copiedOAuthCode}
-			{copiedOAuthAuthUrl}
-			{oauthAuthUrl}
-			{oauthInputDraft}
-			{oauthVerifierDraft}
-			{oauthVerificationUrl}
-			{oauthUserCodeDraft}
-			{errorMessage}
-			onOpenChange={(open) => {
-				openAIOAuthWizardOpen = open;
-			}}
-			onSelectOAuthKind={selectOAuthKind}
-			onSetScopePickerMode={(mode) => {
-				oauthScopePickerMode = mode;
-			}}
-			onResetScopesToDefaults={() => {
-				oauthScopesDraft = [...(selectedOAuthConfig?.defaultScopes ?? [])];
-				oauthScopePickerMode = "simple";
-			}}
-			{isOAuthScopeEnabled}
-			onSetOAuthScopeEnabled={setOAuthScopeEnabled}
-			onOpenOAuthAuthUrl={openOAuthAuthUrl}
-			onCopyOAuthAuthUrl={copyOAuthAuthUrl}
-			onSetOAuthInputDraft={(value) => {
-				oauthInputDraft = value;
-			}}
-			onSubmitOAuthAuthorizationCode={submitOAuthAuthorizationCode}
-			onStartOAuthAuthorization={startOAuthAuthorization}
-			onOpenVerificationUrl={() => openUrl(oauthVerificationUrl)}
-			onCopyOAuthCode={copyOAuthCode}
-			onStartOAuthPolling={startOAuthPolling}
-		/>
-
-		<Dialog.Root
-			open={pendingBulkEnvVarPaste !== null}
-			onOpenChange={(open) => {
-				if (!open) {
-					pendingBulkEnvVarPaste = null;
-				}
-			}}
-		>
-			<Dialog.Content class="z-60 sm:max-w-lg" overlayClass="z-60">
-				<Dialog.Header>
-					<Dialog.Title
-						>Create environment variables from pasted text?</Dialog.Title
-					>
-					<Dialog.Description>
-						Detected {pendingBulkEnvVarPaste?.entries.length ?? 0} newline-separated
-						assignments. You can create those environment variables now, or paste
-						the original text into the field instead.
-					</Dialog.Description>
-				</Dialog.Header>
-				{#if pendingBulkEnvVarPaste}
-					<div class="min-w-0 space-y-3">
-						<div
-							class="min-w-0 max-w-full overflow-x-auto overflow-y-auto max-h-[min(16rem,40vh)] rounded-md border border-border bg-muted/40 p-3"
-						>
-							<div class="mb-2 text-sm font-medium">Summary</div>
-							<ul class="w-max min-w-full space-y-1 text-sm">
-								{#each pendingBulkEnvVarPaste.entries as entry, __key1 (__key1)}
-									<li class="font-mono">{entry.key}={entry.value}</li>
-								{/each}
-							</ul>
+						<div class="space-y-2">
+							<div class="flex items-center gap-2 text-sm">
+								<div class="font-medium">Runtime visibility</div>
+								<span
+									class="inline-flex items-center text-muted-foreground"
+									aria-hidden="true"
+								>
+									<CircleHelpIcon class="size-4" />
+								</span>
+							</div>
+							<p class="text-muted-foreground text-xs">
+								Choose which runtime contexts receive this credential. Tools
+								allows the agent and developer tools to use it directly. Console
+								/ SSH / IDE applies to SSH and terminal sessions. Services and
+								hooks apply to workspace automation under
+								<code>.discobot/</code>.
+							</p>
+							<div class="grid gap-2 sm:grid-cols-2">
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										type="checkbox"
+										checked={visibilityDraft.tools}
+										onchange={(event) =>
+											(visibilityDraft = {
+												...visibilityDraft,
+												tools: (event.currentTarget as HTMLInputElement)
+													.checked,
+											})}
+									/>
+									Tools
+								</label>
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										type="checkbox"
+										checked={visibilityDraft.console}
+										onchange={(event) =>
+											(visibilityDraft = {
+												...visibilityDraft,
+												console: (event.currentTarget as HTMLInputElement)
+													.checked,
+											})}
+									/>
+									Console
+								</label>
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										type="checkbox"
+										checked={visibilityDraft.services}
+										onchange={(event) =>
+											(visibilityDraft = {
+												...visibilityDraft,
+												services: (event.currentTarget as HTMLInputElement)
+													.checked,
+											})}
+									/>
+									Services
+								</label>
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										type="checkbox"
+										checked={visibilityDraft.hooks}
+										onchange={(event) =>
+											(visibilityDraft = {
+												...visibilityDraft,
+												hooks: (event.currentTarget as HTMLInputElement)
+													.checked,
+											})}
+									/>
+									Hooks
+								</label>
+							</div>
+							{#if visibilityDraft.tools}
+								<div
+									class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+								>
+									<div class="font-medium">
+										Warning: tool visibility increases exposure.
+									</div>
+									<div class="mt-1 text-current/90">
+										The agent and its tools may be able to read or use this
+										credential during a conversation.
+									</div>
+								</div>
+							{/if}
 						</div>
-						<p class="text-sm text-muted-foreground">
-							Leading <code class="font-mono">export</code> prefixes were trimmed
-							and quoted values were unwrapped.
-						</p>
-					</div>
-				{/if}
-				<Dialog.Footer>
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={pasteOriginalBulkEnvVarContent}
-					>
-						Paste original text
-					</Button>
-					<Button variant="default" size="sm" onclick={confirmBulkEnvVarPaste}>
-						Create all env vars
-					</Button>
-				</Dialog.Footer>
+
+						<div class="flex items-center justify-end gap-2">
+							<Button variant="ghost" size="sm" onclick={resetEditor}
+								>Cancel</Button
+							>
+							<Button
+								variant="default"
+								size="sm"
+								disabled={submitting ||
+									(selectedAuthType === "oauth" && !editingCredentialId)}
+								onclick={() => void save()}
+							>
+								{submitting ? "Saving…" : "Save credential"}
+							</Button>
+						</div>
+					{/if}
+				</div>
 			</Dialog.Content>
 		</Dialog.Root>
-	</Tooltip.Provider>
+	{/if}
+
+	<CredentialOAuthWizardDialog
+		open={githubOAuthWizardOpen}
+		title="Connect GitHub"
+		providerName="GitHub"
+		openVerificationLabel="Open GitHub page"
+		waitingForProviderLabel="Waiting for GitHub…"
+		deviceIntroLine1="Ask Discobot for a GitHub device code."
+		deviceIntroLine2="Open the GitHub verification page and enter the code."
+		deviceReturnText="Come back here and wait while Discobot finishes the connection."
+		{selectedOAuthKind}
+		hasScopeOptions={selectedOAuthScopeOptions.length > 0}
+		{oauthScopePickerMode}
+		{defaultOAuthScopeOptions}
+		{advancedOAuthScopeGroups}
+		{startingOAuth}
+		{pollingOAuth}
+		{copiedOAuthCode}
+		{copiedOAuthAuthUrl}
+		{oauthAuthUrl}
+		{oauthInputDraft}
+		{oauthVerifierDraft}
+		{oauthVerificationUrl}
+		{oauthUserCodeDraft}
+		{errorMessage}
+		onOpenChange={(open) => {
+			githubOAuthWizardOpen = open;
+		}}
+		onSelectOAuthKind={selectOAuthKind}
+		onSetScopePickerMode={(mode) => {
+			oauthScopePickerMode = mode;
+		}}
+		onResetScopesToDefaults={() => {
+			oauthScopesDraft = [...(selectedOAuthConfig?.defaultScopes ?? [])];
+			oauthScopePickerMode = "simple";
+		}}
+		{isOAuthScopeEnabled}
+		onSetOAuthScopeEnabled={setOAuthScopeEnabled}
+		onOpenOAuthAuthUrl={openOAuthAuthUrl}
+		onCopyOAuthAuthUrl={copyOAuthAuthUrl}
+		onSetOAuthInputDraft={(value) => {
+			oauthInputDraft = value;
+		}}
+		onSubmitOAuthAuthorizationCode={submitOAuthAuthorizationCode}
+		onStartOAuthAuthorization={startOAuthAuthorization}
+		onOpenVerificationUrl={() => openUrl(oauthVerificationUrl)}
+		onCopyOAuthCode={copyOAuthCode}
+		onStartOAuthPolling={startOAuthPolling}
+	/>
+
+	<CredentialOAuthWizardDialog
+		open={openAIOAuthWizardOpen}
+		title="Connect OpenAI"
+		providerName="OpenAI"
+		openVerificationLabel="Open verification page"
+		waitingForProviderLabel="Waiting for OpenAI…"
+		deviceIntroLine1="Ask Discobot for an OpenAI device code."
+		deviceIntroLine2="Open the verification page and enter the code."
+		deviceReturnText="Come back here and wait while Discobot finishes the connection."
+		{selectedOAuthKind}
+		hasScopeOptions={false}
+		{oauthScopePickerMode}
+		{defaultOAuthScopeOptions}
+		{advancedOAuthScopeGroups}
+		{startingOAuth}
+		{pollingOAuth}
+		{copiedOAuthCode}
+		{copiedOAuthAuthUrl}
+		{oauthAuthUrl}
+		{oauthInputDraft}
+		{oauthVerifierDraft}
+		{oauthVerificationUrl}
+		{oauthUserCodeDraft}
+		{errorMessage}
+		onOpenChange={(open) => {
+			openAIOAuthWizardOpen = open;
+		}}
+		onSelectOAuthKind={selectOAuthKind}
+		onSetScopePickerMode={(mode) => {
+			oauthScopePickerMode = mode;
+		}}
+		onResetScopesToDefaults={() => {
+			oauthScopesDraft = [...(selectedOAuthConfig?.defaultScopes ?? [])];
+			oauthScopePickerMode = "simple";
+		}}
+		{isOAuthScopeEnabled}
+		onSetOAuthScopeEnabled={setOAuthScopeEnabled}
+		onOpenOAuthAuthUrl={openOAuthAuthUrl}
+		onCopyOAuthAuthUrl={copyOAuthAuthUrl}
+		onSetOAuthInputDraft={(value) => {
+			oauthInputDraft = value;
+		}}
+		onSubmitOAuthAuthorizationCode={submitOAuthAuthorizationCode}
+		onStartOAuthAuthorization={startOAuthAuthorization}
+		onOpenVerificationUrl={() => openUrl(oauthVerificationUrl)}
+		onCopyOAuthCode={copyOAuthCode}
+		onStartOAuthPolling={startOAuthPolling}
+	/>
+
+	<Dialog.Root
+		open={pendingBulkEnvVarPaste !== null}
+		onOpenChange={(open) => {
+			if (!open) {
+				pendingBulkEnvVarPaste = null;
+			}
+		}}
+	>
+		<Dialog.Content class="z-60 sm:max-w-lg" overlayClass="z-60">
+			<Dialog.Header>
+				<Dialog.Title
+					>Create environment variables from pasted text?</Dialog.Title
+				>
+				<Dialog.Description>
+					Detected {pendingBulkEnvVarPaste?.entries.length ?? 0} newline-separated
+					assignments. You can create those environment variables now, or paste the
+					original text into the field instead.
+				</Dialog.Description>
+			</Dialog.Header>
+			{#if pendingBulkEnvVarPaste}
+				<div class="min-w-0 space-y-3">
+					<div
+						class="min-w-0 max-w-full overflow-x-auto overflow-y-auto max-h-[min(16rem,40vh)] rounded-md border border-border bg-muted/40 p-3"
+					>
+						<div class="mb-2 text-sm font-medium">Summary</div>
+						<ul class="w-max min-w-full space-y-1 text-sm">
+							{#each pendingBulkEnvVarPaste.entries as entry, __key1 (__key1)}
+								<li class="font-mono">{entry.key}={entry.value}</li>
+							{/each}
+						</ul>
+					</div>
+					<p class="text-sm text-muted-foreground">
+						Leading <code class="font-mono">export</code> prefixes were trimmed and
+						quoted values were unwrapped.
+					</p>
+				</div>
+			{/if}
+			<Dialog.Footer>
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={pasteOriginalBulkEnvVarContent}
+				>
+					Paste original text
+				</Button>
+				<Button variant="default" size="sm" onclick={confirmBulkEnvVarPaste}>
+					Create all env vars
+				</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 </div>

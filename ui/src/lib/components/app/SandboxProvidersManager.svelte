@@ -25,7 +25,6 @@
 	import ProviderIcon from "$lib/components/app/parts/ProviderIcon.svelte";
 	import SandboxProviderConfigFieldControl from "$lib/components/app/parts/SandboxProviderConfigField.svelte";
 	import ProjectSettingsTabContent from "$lib/components/app/parts/ProjectSettingsTabContent.svelte";
-	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { useAppContext } from "$lib/context/app-context.svelte";
 	import type {
 		CredentialAuthType,
@@ -459,24 +458,98 @@
 </script>
 
 <div class="space-y-4">
-	<Tooltip.Provider>
-		{#if error}
-			<div
-				class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-			>
-				{error}
-			</div>
-		{/if}
+	{#if error}
+		<div
+			class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+		>
+			{error}
+		</div>
+	{/if}
 
-		{#if driverPickerOpen}
-			<div class="rounded-md border border-border p-3">
-				<div class="mb-3 flex items-center justify-between gap-3">
-					<div>
-						<p class="text-sm font-medium">Choose a sandbox driver</p>
-						<p class="text-xs text-muted-foreground">
-							Pick the driver to use for this provider instance.
-						</p>
-					</div>
+	{#if driverPickerOpen}
+		<div class="rounded-md border border-border p-3">
+			<div class="mb-3 flex items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium">Choose a sandbox driver</p>
+					<p class="text-xs text-muted-foreground">
+						Pick the driver to use for this provider instance.
+					</p>
+				</div>
+				<Button variant="ghost" size="xs" onclick={closeForm} disabled={saving}>
+					Cancel
+				</Button>
+			</div>
+
+			<ItemGroup class="rounded-md border border-border">
+				{#if availableTypes.length === 0}
+					<Item size="sm">
+						<ItemContent>
+							<ItemTitle>No sandbox drivers available</ItemTitle>
+							<ItemDescription>
+								Enable a sandbox driver before adding a provider instance.
+							</ItemDescription>
+						</ItemContent>
+					</Item>
+				{:else}
+					{#each availableTypes as providerType, index (providerType.id)}
+						{#if index > 0}<ItemSeparator />{/if}
+						<Item size="sm" class="p-0">
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class={`${props.class} w-full cursor-pointer gap-3 p-4 text-left hover:bg-accent/50`}
+									disabled={saving}
+									onclick={() => selectDriver(providerType)}
+								>
+									<ItemMedia
+										class="h-10 w-10 rounded-md border border-border bg-muted/50"
+									>
+										<ProviderIcon
+											icon={providerType.icon}
+											name={providerType.name}
+											class="size-8 border-0 bg-transparent"
+										/>
+									</ItemMedia>
+									<ItemContent>
+										<ItemTitle>{providerType.name}</ItemTitle>
+										<ItemDescription>
+											Driver: {providerType.id}{providerType.description
+												? ` · ${providerType.description}`
+												: ""}
+										</ItemDescription>
+									</ItemContent>
+								</button>
+							{/snippet}
+						</Item>
+					{/each}
+				{/if}
+			</ItemGroup>
+		</div>
+	{:else if formOpen}
+		<div class="rounded-md border border-border p-3">
+			<div class="mb-3 flex items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium">{formTitle}</p>
+					<p class="text-xs text-muted-foreground">
+						Configure an active provider instance. Credential fields store
+						references, not raw secrets.
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if !editingId}
+						<Button
+							variant="ghost"
+							size="xs"
+							onclick={() => {
+								formOpen = false;
+								driverPickerOpen = true;
+							}}
+							disabled={saving}
+						>
+							Back
+						</Button>
+					{/if}
 					<Button
 						variant="ghost"
 						size="xs"
@@ -486,523 +559,373 @@
 						Cancel
 					</Button>
 				</div>
+			</div>
 
-				<ItemGroup class="rounded-md border border-border">
-					{#if availableTypes.length === 0}
+			{#if selectedType}
+				<div
+					class="mb-3 flex items-center gap-3 rounded-md border border-border bg-muted/20 p-3"
+				>
+					<ProviderIcon
+						icon={selectedType.icon}
+						name={selectedType.name}
+						class="size-10 shrink-0 p-1"
+					/>
+					<div class="min-w-0">
+						<p class="truncate text-sm font-medium">{selectedType.name}</p>
+						<p class="text-xs text-muted-foreground">
+							Driver: {selectedType.id}{selectedType.description
+								? ` · ${selectedType.description}`
+								: ""}
+						</p>
+					</div>
+				</div>
+			{/if}
+
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div class="space-y-1.5 sm:col-span-2">
+					<Label for="sandbox-provider-name">Name</Label>
+					<Input
+						id="sandbox-provider-name"
+						value={name}
+						disabled={saving}
+						placeholder={selectedType
+							? selectedType.name
+							: "Defaults to the driver name"}
+						oninput={(event) => {
+							name = (event.currentTarget as HTMLInputElement).value;
+						}}
+					/>
+					<p class="text-xs text-muted-foreground">
+						Optional. If empty, the driver name is shown.
+					</p>
+				</div>
+				{#each basicConfigFields as field (field.key)}
+					<SandboxProviderConfigFieldControl
+						{field}
+						value={configFieldValue(field)}
+						{saving}
+						creatingCredential={creatingCredentialField === field.key}
+						credentialOptions={credentialOptions(field)}
+						credentialProvider={credentialProvider(field)}
+						credentialAuthType={credentialAuthType(field)}
+						credentialDefaultName={credentialDefaultName(field)}
+						newCredentialName={newCredentialNames[field.key] ?? ""}
+						newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
+						onValueChange={handleConfigFieldValueChange}
+						onBeginCreateCredential={beginCreateCredential}
+						onCancelCreateCredential={cancelCreateCredential}
+						onNewCredentialNameChange={setNewCredentialName}
+						onNewCredentialSecretChange={setNewCredentialSecret}
+						onCreateCredential={(field) => void createCredentialForField(field)}
+					/>
+				{/each}
+			</div>
+			{#if type}
+				<div class="mt-3">
+					<button
+						type="button"
+						class="flex w-full items-center justify-between gap-3 py-1 text-left text-sm font-medium"
+						aria-expanded={advancedConfigOpen}
+						onclick={() => {
+							advancedConfigOpen = !advancedConfigOpen;
+						}}
+					>
+						<span>Advanced configuration</span>
+						<ChevronDownIcon
+							class={`size-4 text-muted-foreground transition-transform ${advancedConfigOpen ? "rotate-180" : ""}`}
+						/>
+					</button>
+					{#if advancedConfigOpen}
+						<div class="mt-3 grid gap-3 sm:grid-cols-2">
+							<div class="space-y-1.5 sm:col-span-2">
+								<Label for="sandbox-provider-icon">Icon</Label>
+								<div class="flex items-center gap-3">
+									<ProviderIcon
+										{icon}
+										name={iconPreviewName}
+										class="size-10 shrink-0 p-1"
+									/>
+									<Input
+										id="sandbox-provider-icon"
+										value={icon}
+										disabled={saving}
+										list="sandbox-provider-simple-icons"
+										placeholder="simple:docker, <svg>, data URL, or image URL"
+										oninput={(event) => {
+											icon = (event.currentTarget as HTMLInputElement).value;
+										}}
+									/>
+									<datalist id="sandbox-provider-simple-icons">
+										{#each simpleIconOptions as option (option.value)}
+											<option value={option.value} label={option.label}
+											></option>
+										{/each}
+									</datalist>
+								</div>
+								<p class="text-xs text-muted-foreground">
+									Preview updates as you type. Supports Simple Icons, inline
+									SVG, data URL, or image URL values.
+								</p>
+							</div>
+							{#each advancedConfigFields as field (field.key)}
+								<SandboxProviderConfigFieldControl
+									{field}
+									value={configFieldValue(field)}
+									{saving}
+									creatingCredential={creatingCredentialField === field.key}
+									credentialOptions={credentialOptions(field)}
+									credentialProvider={credentialProvider(field)}
+									credentialAuthType={credentialAuthType(field)}
+									credentialDefaultName={credentialDefaultName(field)}
+									newCredentialName={newCredentialNames[field.key] ?? ""}
+									newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
+									onValueChange={handleConfigFieldValueChange}
+									onBeginCreateCredential={beginCreateCredential}
+									onCancelCreateCredential={cancelCreateCredential}
+									onNewCredentialNameChange={setNewCredentialName}
+									onNewCredentialSecretChange={setNewCredentialSecret}
+									onCreateCredential={(field) =>
+										void createCredentialForField(field)}
+								/>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+			<div class="mt-3 flex justify-end gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={closeForm}
+					disabled={saving}
+				>
+					Cancel
+				</Button>
+				<Button
+					size="sm"
+					onclick={() => void saveProvider()}
+					disabled={saving || loading}
+				>
+					{saving
+						? "Saving..."
+						: editingId
+							? "Save provider instance"
+							: "Add provider instance"}
+				</Button>
+			</div>
+		</div>
+	{:else if runtimeProvider}
+		<div class="space-y-3">
+			<div class="flex items-center justify-between gap-3">
+				<div class="flex min-w-0 items-center gap-3">
+					<ProviderIcon
+						icon={runtimeProvider.icon}
+						name={providerName(runtimeProvider)}
+						class="size-8"
+					/>
+					<div class="min-w-0">
+						<p class="truncate text-sm font-medium">
+							{providerName(runtimeProvider)} controls
+						</p>
+						<p class="text-xs text-muted-foreground">
+							Provider-scoped resources and inspection shell access.
+						</p>
+					</div>
+				</div>
+				<Button variant="ghost" size="xs" onclick={closeProviderControls}>
+					Back
+				</Button>
+			</div>
+			{#key runtimeProvider.id}
+				<ProjectSettingsTabContent
+					active={true}
+					providerId={runtimeProvider.id}
+					providerName={providerName(runtimeProvider)}
+					showResources={runtimeProvider.capabilities.resources}
+					showInspection={runtimeProvider.capabilities.inspection}
+				/>
+			{/key}
+		</div>
+	{:else}
+		<div class="space-y-2">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium">Active provider instances</p>
+					<p class="text-xs text-muted-foreground">
+						{#if projectDefaultProviderId}
+							Project default: {providerDisplayName(projectDefaultProviderId)}
+						{:else if defaultProviderId}
+							Effective default: {providerDisplayName(defaultProviderId)}
+						{:else}
+							No default provider is available
+						{/if}
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					<div class="flex items-center gap-2">
+						<Label
+							for="sandbox-provider-default"
+							class="text-xs text-muted-foreground"
+						>
+							Default
+						</Label>
+						<NativeSelect
+							id="sandbox-provider-default"
+							value={defaultProviderId || "__none__"}
+							disabled={loading || saving || providers.length === 0}
+							onchange={(event) => {
+								const next = (event.currentTarget as HTMLSelectElement).value;
+								if (next !== "__none__" && next !== projectDefaultProviderId) {
+									void setDefaultProvider(next);
+								}
+							}}
+						>
+							{#if !defaultProviderId}
+								<option value="__none__">No default</option>
+							{/if}
+							{#each providers as provider (provider.id)}
+								<option
+									value={provider.id}
+									disabled={provider.disabled || !provider.available}
+								>
+									{providerName(provider)}
+								</option>
+							{/each}
+						</NativeSelect>
+					</div>
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						onclick={() => void refresh()}
+						disabled={loading}
+						aria-label="Refresh provider instances"
+						title="Refresh provider instances"
+					>
+						<RefreshCwIcon class={loading ? "size-4 animate-spin" : "size-4"} />
+					</Button>
+					<Button
+						variant="default"
+						size="xs"
+						onclick={addProvider}
+						disabled={loading || saving || availableTypes.length === 0}
+					>
+						Add provider instance
+					</Button>
+				</div>
+			</div>
+
+			<ItemGroup class="rounded-md border border-border">
+				{#if providers.length === 0}
+					<Item size="sm">
+						<ItemContent>
+							<ItemTitle>No sandbox providers found</ItemTitle>
+							<ItemDescription>
+								Add a provider instance or use the platform default when
+								creating a session.
+							</ItemDescription>
+						</ItemContent>
+					</Item>
+				{:else}
+					{#each providers as provider, index (provider.id)}
+						{#if index > 0}<ItemSeparator />{/if}
 						<Item size="sm">
+							<ItemMedia
+								class="h-10 w-10 rounded-md border border-border bg-muted/50"
+							>
+								<ProviderIcon
+									icon={provider.icon}
+									name={providerName(provider)}
+									class="size-8 border-0 bg-transparent"
+								/>
+							</ItemMedia>
 							<ItemContent>
-								<ItemTitle>No sandbox drivers available</ItemTitle>
+								<ItemTitle>{providerName(provider)}</ItemTitle>
 								<ItemDescription>
-									Enable a sandbox driver before adding a provider instance.
+									Driver: {provider.type}{provider.id === defaultProviderId
+										? " · default"
+										: ""}{provider.builtIn
+										? " · built-in"
+										: ""}{provider.disabled
+										? " · disabled"
+										: provider.available
+											? ""
+											: " · unavailable"}
 								</ItemDescription>
 							</ItemContent>
-						</Item>
-					{:else}
-						{#each availableTypes as providerType, index (providerType.id)}
-							{#if index > 0}<ItemSeparator />{/if}
-							<Item size="sm" class="p-0">
-								{#snippet child({ props })}
-									<button
-										{...props}
-										type="button"
-										class={`${props.class} w-full cursor-pointer gap-3 p-4 text-left hover:bg-accent/50`}
-										disabled={saving}
-										onclick={() => selectDriver(providerType)}
-									>
-										<ItemMedia
-											class="h-10 w-10 rounded-md border border-border bg-muted/50"
-										>
-											<ProviderIcon
-												icon={providerType.icon}
-												name={providerType.name}
-												class="size-8 border-0 bg-transparent"
-											/>
-										</ItemMedia>
-										<ItemContent>
-											<ItemTitle>{providerType.name}</ItemTitle>
-											<ItemDescription>
-												Driver: {providerType.id}{providerType.description
-													? ` · ${providerType.description}`
-													: ""}
-											</ItemDescription>
-										</ItemContent>
-									</button>
-								{/snippet}
-							</Item>
-						{/each}
-					{/if}
-				</ItemGroup>
-			</div>
-		{:else if formOpen}
-			<div class="rounded-md border border-border p-3">
-				<div class="mb-3 flex items-center justify-between gap-3">
-					<div>
-						<p class="text-sm font-medium">{formTitle}</p>
-						<p class="text-xs text-muted-foreground">
-							Configure an active provider instance. Credential fields store
-							references, not raw secrets.
-						</p>
-					</div>
-					<div class="flex items-center gap-2">
-						{#if !editingId}
-							<Button
-								variant="ghost"
-								size="xs"
-								onclick={() => {
-									formOpen = false;
-									driverPickerOpen = true;
-								}}
-								disabled={saving}
-							>
-								Back
-							</Button>
-						{/if}
-						<Button
-							variant="ghost"
-							size="xs"
-							onclick={closeForm}
-							disabled={saving}
-						>
-							Cancel
-						</Button>
-					</div>
-				</div>
-
-				{#if selectedType}
-					<div
-						class="mb-3 flex items-center gap-3 rounded-md border border-border bg-muted/20 p-3"
-					>
-						<ProviderIcon
-							icon={selectedType.icon}
-							name={selectedType.name}
-							class="size-10 shrink-0 p-1"
-						/>
-						<div class="min-w-0">
-							<p class="truncate text-sm font-medium">{selectedType.name}</p>
-							<p class="text-xs text-muted-foreground">
-								Driver: {selectedType.id}{selectedType.description
-									? ` · ${selectedType.description}`
-									: ""}
-							</p>
-						</div>
-					</div>
-				{/if}
-
-				<div class="grid gap-3 sm:grid-cols-2">
-					<div class="space-y-1.5 sm:col-span-2">
-						<Label for="sandbox-provider-name">Name</Label>
-						<Input
-							id="sandbox-provider-name"
-							value={name}
-							disabled={saving}
-							placeholder={selectedType
-								? selectedType.name
-								: "Defaults to the driver name"}
-							oninput={(event) => {
-								name = (event.currentTarget as HTMLInputElement).value;
-							}}
-						/>
-						<p class="text-xs text-muted-foreground">
-							Optional. If empty, the driver name is shown.
-						</p>
-					</div>
-					{#each basicConfigFields as field (field.key)}
-						<SandboxProviderConfigFieldControl
-							{field}
-							value={configFieldValue(field)}
-							{saving}
-							creatingCredential={creatingCredentialField === field.key}
-							credentialOptions={credentialOptions(field)}
-							credentialProvider={credentialProvider(field)}
-							credentialAuthType={credentialAuthType(field)}
-							credentialDefaultName={credentialDefaultName(field)}
-							newCredentialName={newCredentialNames[field.key] ?? ""}
-							newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
-							onValueChange={handleConfigFieldValueChange}
-							onBeginCreateCredential={beginCreateCredential}
-							onCancelCreateCredential={cancelCreateCredential}
-							onNewCredentialNameChange={setNewCredentialName}
-							onNewCredentialSecretChange={setNewCredentialSecret}
-							onCreateCredential={(field) =>
-								void createCredentialForField(field)}
-						/>
-					{/each}
-				</div>
-				{#if type}
-					<div class="mt-3">
-						<button
-							type="button"
-							class="flex w-full items-center justify-between gap-3 py-1 text-left text-sm font-medium"
-							aria-expanded={advancedConfigOpen}
-							onclick={() => {
-								advancedConfigOpen = !advancedConfigOpen;
-							}}
-						>
-							<span>Advanced configuration</span>
-							<ChevronDownIcon
-								class={`size-4 text-muted-foreground transition-transform ${advancedConfigOpen ? "rotate-180" : ""}`}
-							/>
-						</button>
-						{#if advancedConfigOpen}
-							<div class="mt-3 grid gap-3 sm:grid-cols-2">
-								<div class="space-y-1.5 sm:col-span-2">
-									<Label for="sandbox-provider-icon">Icon</Label>
-									<div class="flex items-center gap-3">
-										<ProviderIcon
-											{icon}
-											name={iconPreviewName}
-											class="size-10 shrink-0 p-1"
-										/>
-										<Input
-											id="sandbox-provider-icon"
-											value={icon}
-											disabled={saving}
-											list="sandbox-provider-simple-icons"
-											placeholder="simple:docker, <svg>, data URL, or image URL"
-											oninput={(event) => {
-												icon = (event.currentTarget as HTMLInputElement).value;
-											}}
-										/>
-										<datalist id="sandbox-provider-simple-icons">
-											{#each simpleIconOptions as option (option.value)}
-												<option value={option.value} label={option.label}
-												></option>
-											{/each}
-										</datalist>
-									</div>
-									<p class="text-xs text-muted-foreground">
-										Preview updates as you type. Supports Simple Icons, inline
-										SVG, data URL, or image URL values.
-									</p>
-								</div>
-								{#each advancedConfigFields as field (field.key)}
-									<SandboxProviderConfigFieldControl
-										{field}
-										value={configFieldValue(field)}
-										{saving}
-										creatingCredential={creatingCredentialField === field.key}
-										credentialOptions={credentialOptions(field)}
-										credentialProvider={credentialProvider(field)}
-										credentialAuthType={credentialAuthType(field)}
-										credentialDefaultName={credentialDefaultName(field)}
-										newCredentialName={newCredentialNames[field.key] ?? ""}
-										newCredentialSecret={newCredentialSecrets[field.key] ?? ""}
-										onValueChange={handleConfigFieldValueChange}
-										onBeginCreateCredential={beginCreateCredential}
-										onCancelCreateCredential={cancelCreateCredential}
-										onNewCredentialNameChange={setNewCredentialName}
-										onNewCredentialSecretChange={setNewCredentialSecret}
-										onCreateCredential={(field) =>
-											void createCredentialForField(field)}
-									/>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				{/if}
-				<div class="mt-3 flex justify-end gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={closeForm}
-						disabled={saving}
-					>
-						Cancel
-					</Button>
-					<Button
-						size="sm"
-						onclick={() => void saveProvider()}
-						disabled={saving || loading}
-					>
-						{saving
-							? "Saving..."
-							: editingId
-								? "Save provider instance"
-								: "Add provider instance"}
-					</Button>
-				</div>
-			</div>
-		{:else if runtimeProvider}
-			<div class="space-y-3">
-				<div class="flex items-center justify-between gap-3">
-					<div class="flex min-w-0 items-center gap-3">
-						<ProviderIcon
-							icon={runtimeProvider.icon}
-							name={providerName(runtimeProvider)}
-							class="size-8"
-						/>
-						<div class="min-w-0">
-							<p class="truncate text-sm font-medium">
-								{providerName(runtimeProvider)} controls
-							</p>
-							<p class="text-xs text-muted-foreground">
-								Provider-scoped resources and inspection shell access.
-							</p>
-						</div>
-					</div>
-					<Button variant="ghost" size="xs" onclick={closeProviderControls}>
-						Back
-					</Button>
-				</div>
-				{#key runtimeProvider.id}
-					<ProjectSettingsTabContent
-						active={true}
-						providerId={runtimeProvider.id}
-						providerName={providerName(runtimeProvider)}
-						showResources={runtimeProvider.capabilities.resources}
-						showInspection={runtimeProvider.capabilities.inspection}
-					/>
-				{/key}
-			</div>
-		{:else}
-			<div class="space-y-2">
-				<div class="flex items-start justify-between gap-3">
-					<div>
-						<p class="text-sm font-medium">Active provider instances</p>
-						<p class="text-xs text-muted-foreground">
-							{#if projectDefaultProviderId}
-								Project default: {providerDisplayName(projectDefaultProviderId)}
-							{:else if defaultProviderId}
-								Effective default: {providerDisplayName(defaultProviderId)}
-							{:else}
-								No default provider is available
-							{/if}
-						</p>
-					</div>
-					<div class="flex items-center gap-2">
-						<div class="flex items-center gap-2">
-							<Label
-								for="sandbox-provider-default"
-								class="text-xs text-muted-foreground"
-							>
-								Default
-							</Label>
-							<NativeSelect
-								id="sandbox-provider-default"
-								value={defaultProviderId || "__none__"}
-								disabled={loading || saving || providers.length === 0}
-								onchange={(event) => {
-									const next = (event.currentTarget as HTMLSelectElement).value;
-									if (
-										next !== "__none__" &&
-										next !== projectDefaultProviderId
-									) {
-										void setDefaultProvider(next);
-									}
-								}}
-							>
-								{#if !defaultProviderId}
-									<option value="__none__">No default</option>
-								{/if}
-								{#each providers as provider (provider.id)}
-									<option
-										value={provider.id}
-										disabled={provider.disabled || !provider.available}
-									>
-										{providerName(provider)}
-									</option>
-								{/each}
-							</NativeSelect>
-						</div>
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								{#snippet child({ props })}
+							<ItemActions class="ml-auto gap-2">
+								{#if (provider.capabilities.resources || provider.capabilities.inspection) && provider.available && !provider.disabled}
 									<Button
-										{...props}
 										variant="ghost"
 										size="icon-sm"
-										onclick={() => void refresh()}
-										disabled={loading}
-										aria-label="Refresh provider instances"
+										disabled={saving}
+										aria-label={`Open ${providerName(provider)} controls`}
+										title="Open resources and inspection controls"
+										onclick={() => openProviderControls(provider)}
 									>
-										<RefreshCwIcon
-											class={loading ? "size-4 animate-spin" : "size-4"}
-										/>
+										<ServerCogIcon class="size-4" />
 									</Button>
-								{/snippet}
-							</Tooltip.Trigger>
-							<Tooltip.Content>Refresh provider instances</Tooltip.Content>
-						</Tooltip.Root>
-						<Button
-							variant="default"
-							size="xs"
-							onclick={addProvider}
-							disabled={loading || saving || availableTypes.length === 0}
-						>
-							Add provider instance
-						</Button>
-					</div>
-				</div>
-
-				<ItemGroup class="rounded-md border border-border">
-					{#if providers.length === 0}
-						<Item size="sm">
-							<ItemContent>
-								<ItemTitle>No sandbox providers found</ItemTitle>
-								<ItemDescription>
-									Add a provider instance or use the platform default when
-									creating a session.
-								</ItemDescription>
-							</ItemContent>
-						</Item>
-					{:else}
-						{#each providers as provider, index (provider.id)}
-							{#if index > 0}<ItemSeparator />{/if}
-							<Item size="sm">
-								<ItemMedia
-									class="h-10 w-10 rounded-md border border-border bg-muted/50"
-								>
-									<ProviderIcon
-										icon={provider.icon}
-										name={providerName(provider)}
-										class="size-8 border-0 bg-transparent"
+								{/if}
+								{#if provider.builtIn}
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										disabled={saving}
+										aria-label={`Edit ${providerName(provider)}`}
+										title="Edit provider"
+										onclick={() => editProvider(provider)}
+									>
+										<PencilIcon class="size-4" />
+									</Button>
+									<Switch
+										checked={!provider.disabled}
+										disabled={saving}
+										aria-label={provider.disabled
+											? `Enable ${providerName(provider)}`
+											: `Disable ${providerName(provider)}`}
+										title={`${provider.disabled ? "Enable" : "Disable"} ${providerName(provider)}`}
+										onCheckedChange={(checked) =>
+											void setProviderDisabled(provider, checked !== true)}
 									/>
-								</ItemMedia>
-								<ItemContent>
-									<ItemTitle>{providerName(provider)}</ItemTitle>
-									<ItemDescription>
-										Driver: {provider.type}{provider.id === defaultProviderId
-											? " · default"
-											: ""}{provider.builtIn
-											? " · built-in"
-											: ""}{provider.disabled
-											? " · disabled"
-											: provider.available
-												? ""
-												: " · unavailable"}
-									</ItemDescription>
-								</ItemContent>
-								<ItemActions class="ml-auto gap-2">
-									{#if (provider.capabilities.resources || provider.capabilities.inspection) && provider.available && !provider.disabled}
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Button
-														{...props}
-														variant="ghost"
-														size="icon-sm"
-														disabled={saving}
-														aria-label={`Open ${providerName(provider)} controls`}
-														onclick={() => openProviderControls(provider)}
-													>
-														<ServerCogIcon class="size-4" />
-													</Button>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>
-												Open resources and inspection controls
-											</Tooltip.Content>
-										</Tooltip.Root>
+								{:else}
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										disabled={saving}
+										aria-label={`Edit ${providerName(provider)}`}
+										title="Edit provider"
+										onclick={() => editProvider(provider)}
+									>
+										<PencilIcon class="size-4" />
+									</Button>
+									{#if provider.disabled}
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											disabled={saving}
+											class="text-destructive hover:text-destructive"
+											aria-label={`Delete ${providerName(provider)}`}
+											title="Delete provider"
+											onclick={() => void deleteProvider(provider)}
+										>
+											<Trash2Icon class="size-4" />
+										</Button>
 									{/if}
-									{#if provider.builtIn}
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Button
-														{...props}
-														variant="ghost"
-														size="icon-sm"
-														disabled={saving}
-														aria-label={`Edit ${providerName(provider)}`}
-														onclick={() => editProvider(provider)}
-													>
-														<PencilIcon class="size-4" />
-													</Button>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>Edit provider</Tooltip.Content>
-										</Tooltip.Root>
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Switch
-														{...props}
-														checked={!provider.disabled}
-														disabled={saving}
-														aria-label={provider.disabled
-															? `Enable ${providerName(provider)}`
-															: `Disable ${providerName(provider)}`}
-														onCheckedChange={(checked) =>
-															void setProviderDisabled(
-																provider,
-																checked !== true,
-															)}
-													/>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>
-												{provider.disabled ? "Enable" : "Disable"}
-												{providerName(provider)}
-											</Tooltip.Content>
-										</Tooltip.Root>
-									{:else}
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Button
-														{...props}
-														variant="ghost"
-														size="icon-sm"
-														disabled={saving}
-														aria-label={`Edit ${providerName(provider)}`}
-														onclick={() => editProvider(provider)}
-													>
-														<PencilIcon class="size-4" />
-													</Button>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>Edit provider</Tooltip.Content>
-										</Tooltip.Root>
-										{#if provider.disabled}
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													{#snippet child({ props })}
-														<Button
-															{...props}
-															variant="ghost"
-															size="icon-sm"
-															disabled={saving}
-															class="text-destructive hover:text-destructive"
-															aria-label={`Delete ${providerName(provider)}`}
-															onclick={() => void deleteProvider(provider)}
-														>
-															<Trash2Icon class="size-4" />
-														</Button>
-													{/snippet}
-												</Tooltip.Trigger>
-												<Tooltip.Content>Delete provider</Tooltip.Content>
-											</Tooltip.Root>
-										{/if}
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Switch
-														{...props}
-														checked={!provider.disabled}
-														disabled={saving}
-														aria-label={provider.disabled
-															? `Enable ${providerName(provider)}`
-															: `Disable ${providerName(provider)}`}
-														onCheckedChange={(checked) =>
-															void setProviderDisabled(
-																provider,
-																checked !== true,
-															)}
-													/>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>
-												{provider.disabled ? "Enable" : "Disable"}
-												{providerName(provider)}
-											</Tooltip.Content>
-										</Tooltip.Root>
-									{/if}
-								</ItemActions>
-							</Item>
-						{/each}
-					{/if}
-				</ItemGroup>
-			</div>
-		{/if}
-	</Tooltip.Provider>
+									<Switch
+										checked={!provider.disabled}
+										disabled={saving}
+										aria-label={provider.disabled
+											? `Enable ${providerName(provider)}`
+											: `Disable ${providerName(provider)}`}
+										title={`${provider.disabled ? "Enable" : "Disable"} ${providerName(provider)}`}
+										onCheckedChange={(checked) =>
+											void setProviderDisabled(provider, checked !== true)}
+									/>
+								{/if}
+							</ItemActions>
+						</Item>
+					{/each}
+				{/if}
+			</ItemGroup>
+		</div>
+	{/if}
 </div>
