@@ -57,29 +57,35 @@
 		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
 	import {
+		openCredentialsDialog,
+		openSettingsDialog,
+	} from "$lib/context/commands/dialog";
+	import {
+		rerunHook,
+		setHookPaused,
+		setHooksPaused,
+	} from "$lib/context/commands/hook";
+	import {
 		addPromptToHistory,
+		pinPrompt,
+		removePromptFromHistory,
+		unpinPrompt,
+	} from "$lib/context/commands/preference";
+	import { openThread } from "$lib/context/commands/session";
+	import {
 		cancelThread,
 		clearComposerDraft,
 		clearThreadNextComposerValues,
 		clearThreadPendingComments,
 		deleteQueuedPrompt,
-		openCredentialsDialog,
-		openSettingsDialog,
-		openThread,
-		pinPrompt,
-		removePromptFromHistory,
 		removeThreadPendingComment,
-		rerunHook,
 		setComposerDraft,
-		setHookPaused,
-		setHooksPaused,
 		setThreadNextModelId,
 		setThreadNextReasoning,
 		setThreadNextServiceTier,
 		submitThread,
-		unpinPrompt,
 		updateQueuedPrompt,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/thread";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {

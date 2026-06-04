@@ -11,8 +11,8 @@
 	import {
 		setDesktopSidebarOpen,
 		setMobileSidebarOpen,
-		shouldLoadSessionWorkspace,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/navigation";
+	import { shouldLoadSessionWorkspace } from "$lib/context/commands/session";
 
 	const context = useContext();
 	const appEnvironment = $derived(context.view.app.environment);

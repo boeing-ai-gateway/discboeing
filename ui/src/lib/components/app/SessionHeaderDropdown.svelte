@@ -6,7 +6,7 @@
 		PopoverContent,
 		PopoverTrigger,
 	} from "$lib/components/ui/popover";
-	import { setDesktopSidebarOpen } from "$lib/context/commands/app-view";
+	import { setDesktopSidebarOpen } from "$lib/context/commands/navigation";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {

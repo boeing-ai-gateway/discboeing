@@ -77,7 +77,15 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	assert.match(source, /function handleWindowKeyup\(event: KeyboardEvent\)/);
 	assert.match(
 		source,
-		/import \{[\s\S]*createThread,[\s\S]*openThread,[\s\S]*setMobileSidebarOpen,[\s\S]*setRecentThreadSwitcherOpen,[\s\S]*startNewSession,[\s\S]*toggleKeyboardShortcutsOpen,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+		/import \{[\s\S]*setRecentThreadSwitcherOpen,[\s\S]*toggleKeyboardShortcutsOpen,[\s\S]*\} from "\$lib\/context\/commands\/dialog";/,
+	);
+	assert.match(
+		source,
+		/import \{[\s\S]*setMobileSidebarOpen,[\s\S]*\} from "\$lib\/context\/commands\/navigation";/,
+	);
+	assert.match(
+		source,
+		/import \{[\s\S]*createThread,[\s\S]*openThread,[\s\S]*createSession,[\s\S]*\} from "\$lib\/context\/commands\/session";/,
 	);
 	assert.match(source, /setMobileSidebarOpen\(false\);/);
 	assert.match(source, /appEnvironment\.isMobile/);
@@ -86,7 +94,7 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 		source,
 		/openThread\(selectedThread\.sessionId, selectedThread\.threadId\)/,
 	);
-	assert.match(source, /startNewSession\(\);/);
+	assert.match(source, /createSession\(\);/);
 	assert.match(source, /void createThread\(sessionId\);/);
 	assert.doesNotMatch(source, /app\.sessions\.openThread/);
 	assert.doesNotMatch(source, /app\.sessions\.startNew/);

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import SessionToolbar from "$lib/components/app/SessionToolbar.svelte";
-	import { shouldLoadSessionToolbar } from "$lib/context/commands/app-view";
+	import { shouldLoadSessionToolbar } from "$lib/context/commands/session";
 	import { useContext } from "$lib/context/context.svelte";
 
 	const context = useContext();

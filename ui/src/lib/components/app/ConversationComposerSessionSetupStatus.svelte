@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { openGitHubCredentialFlow } from "$lib/context/commands/app-view";
+	import { openGitHubCredentialFlow } from "$lib/context/commands/dialog";
 	import { useContext } from "$lib/context/context.svelte";
 	import type {
 		SessionContextValue,

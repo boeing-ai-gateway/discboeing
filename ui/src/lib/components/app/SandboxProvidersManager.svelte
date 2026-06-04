@@ -31,7 +31,7 @@
 		SandboxProviderInstance,
 		SandboxProviderType,
 	} from "$lib/api-types";
-	import { refreshCredentials } from "$lib/context/commands/app-view";
+	import { refreshCredentials } from "$lib/context/commands/workspace";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type SimpleIconData = {

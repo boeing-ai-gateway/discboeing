@@ -15,17 +15,21 @@
 	} from "$lib/app/global-shortcuts";
 	import {
 		closeKeyboardShortcutOverlays,
-		createThread,
-		openThread,
 		setKeyboardShortcutsOpen,
-		setMobileSidebarOpen,
 		setRecentThreadSwitcherCommitModifier,
 		setRecentThreadSwitcherOpen,
 		setRecentThreadSwitcherSelectedKey,
-		startNewSession,
 		toggleKeyboardShortcutsOpen,
+	} from "$lib/context/commands/dialog";
+	import {
+		setMobileSidebarOpen,
 		toggleSelectedSessionView,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/navigation";
+	import {
+		createThread,
+		openThread,
+		createSession,
+	} from "$lib/context/commands/session";
 	import { useContext } from "$lib/context/context.svelte";
 	import {
 		detectElectronRuntime,
@@ -147,7 +151,7 @@
 
 	function handleStartNewSessionShortcut() {
 		closeOverlays();
-		startNewSession();
+		createSession();
 		if (appEnvironment.isMobile) {
 			setMobileSidebarOpen(false);
 		}

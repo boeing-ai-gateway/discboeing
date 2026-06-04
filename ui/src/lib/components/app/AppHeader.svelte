@@ -10,10 +10,8 @@
 	import SessionToolbarStack from "$lib/components/app/SessionToolbarStack.svelte";
 	import SettingsDialog from "$lib/components/app/SettingsDialog.svelte";
 	import { Button } from "$lib/components/ui/button";
-	import {
-		openSettingsDialog,
-		startNewSession,
-	} from "$lib/context/commands/app-view";
+	import { openSettingsDialog } from "$lib/context/commands/dialog";
+	import { createSession } from "$lib/context/commands/session";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
@@ -74,7 +72,7 @@
 	<div class="relative z-20 flex min-w-0 items-center justify-end gap-2">
 		<button
 			type="button"
-			onclick={() => startNewSession()}
+			onclick={() => createSession()}
 			aria-label="New session"
 			title="New session"
 			class="desktop-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"

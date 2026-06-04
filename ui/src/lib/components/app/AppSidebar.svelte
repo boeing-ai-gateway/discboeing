@@ -23,21 +23,25 @@
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
 	import {
+		setSidebarAllGroupedByWorkspace,
+		setSidebarAllOpen,
+		setSidebarRecentOpen,
+	} from "$lib/context/commands/preference";
+	import {
 		createThread,
 		deleteSession,
 		deleteThread,
-		deleteWorkspace,
 		openThread,
 		renameSession,
 		renameThread,
 		selectSession,
-		setSidebarAllGroupedByWorkspace,
-		setSidebarAllOpen,
-		setSidebarRecentOpen,
-		startNewSession,
+		createSession,
 		stopSession,
-		updateWorkspaceDisplayName,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/session";
+	import {
+		deleteWorkspace,
+		renameWorkspace,
+	} from "$lib/context/commands/workspace";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
@@ -253,7 +257,7 @@
 	}
 
 	function handleStartNewSession() {
-		startNewSession();
+		createSession();
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
@@ -468,7 +472,7 @@
 			return;
 		}
 		renamingWorkspace = true;
-		await updateWorkspaceDisplayName(renameWorkspaceId, renameWorkspaceDraft);
+		await renameWorkspace(renameWorkspaceId, renameWorkspaceDraft);
 		renamingWorkspace = false;
 		closeRenameWorkspaceDialog();
 	}

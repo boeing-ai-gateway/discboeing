@@ -52,11 +52,12 @@
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
 	import {
-		checkForUpdates,
 		closeSettingsDialog,
-		ignoreUpdate,
-		installAndRelaunch,
 		openSupportInfoDialog,
+		setSettingsDialogOpen,
+		setSettingsDialogTab,
+	} from "$lib/context/commands/dialog";
+	import {
 		setAutoScrollOnStream,
 		setChatWidthMode,
 		setColorScheme,
@@ -64,13 +65,16 @@
 		setDefaultReasoning,
 		setDefaultServiceTier,
 		setRecentThreadsVisibleLimit,
-		setSettingsDialogOpen,
-		setSettingsDialogTab,
 		setShowRefreshButton,
 		setTheme,
 		setTopBarIconOnly,
+	} from "$lib/context/commands/preference";
+	import {
+		checkForUpdates,
+		ignoreUpdate,
+		installUpdateAndRelaunch,
 		setTrackPrereleases,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/update";
 	import { useContext } from "$lib/context/context.svelte";
 
 	function getCleanModelName(name: string) {
@@ -756,7 +760,7 @@
 											<Button
 												variant="default"
 												size="xs"
-												onclick={() => void installAndRelaunch()}
+												onclick={() => void installUpdateAndRelaunch()}
 											>
 												Restart to update
 											</Button>

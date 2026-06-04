@@ -16,8 +16,6 @@
 	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
 	import {
 		acceptFileConflict,
-		addThreadPendingComment,
-		bindServiceLocalhost,
 		closeFile,
 		collapseFileTree,
 		discardFileBuffer,
@@ -26,10 +24,9 @@
 		getFileEditorModel,
 		getFileEditorViewState,
 		openFile,
-		openService,
 		refreshFiles,
 		renameFile,
-		removeFile,
+		deleteFile,
 		saveFile,
 		setFileDiffTarget,
 		setFileEditorModel,
@@ -37,12 +34,19 @@
 		toggleFileDirectory,
 		toggleFilesChangedOnly,
 		updateFileBuffer,
+	} from "$lib/context/commands/file";
+	import {
+		bindServiceLocalhost,
+		openService,
 		startService,
 		stopService,
-		submitThread,
 		subscribeServiceOutput,
 		unbindServiceLocalhost,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/service";
+	import {
+		addThreadPendingComment,
+		submitThread,
+	} from "$lib/context/commands/thread";
 	import { useContext } from "$lib/context/context.svelte";
 	import { writeStorage } from "$lib/local-storage";
 	import type { DiffStyle } from "$lib/pierre-diff";
@@ -117,7 +121,7 @@
 		getEditorViewState: (path) => getFileEditorViewState(sessionId, path),
 		openFile: (path) => openFile(sessionId, path),
 		refreshFiles: () => refreshFiles(sessionId),
-		removeFile: (path) => removeFile(sessionId, path),
+		deleteFile: (path) => deleteFile(sessionId, path),
 		renameFile: (path, nextName) => renameFile(sessionId, path, nextName),
 		saveFile: (path) => saveFile(sessionId, path),
 		setEditorModel: (path, model) => setFileEditorModel(sessionId, path, model),

@@ -4,7 +4,7 @@
 	import {
 		ensureSessionState,
 		releaseSessionState,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/session";
 
 	type Props = {
 		sessionId: string;

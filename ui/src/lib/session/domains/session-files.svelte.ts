@@ -579,7 +579,7 @@ export function createSessionFilesDomain(
 		editorRuntime.delete(path);
 	}
 
-	function removeFileRecord(path: string) {
+	function deleteFileRecord(path: string) {
 		if (!(path in fileRecords)) {
 			return;
 		}
@@ -588,7 +588,7 @@ export function createSessionFilesDomain(
 		fileRecords = nextRecords;
 	}
 
-	function removeFileBuffer(path: string) {
+	function deleteFileBuffer(path: string) {
 		if (!(path in buffers)) {
 			return;
 		}
@@ -599,9 +599,9 @@ export function createSessionFilesDomain(
 
 	function releaseClosedFileState(path: string) {
 		disposeEditorRuntimePath(path);
-		removeFileRecord(path);
+		deleteFileRecord(path);
 		if (!buffers[path]?.isDirty) {
-			removeFileBuffer(path);
+			deleteFileBuffer(path);
 		}
 	}
 

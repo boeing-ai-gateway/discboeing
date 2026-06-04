@@ -353,7 +353,7 @@ Prefer:
 
 ```svelte
 <script lang="ts">
-	import { openSettingsDialog } from "$lib/context/commands/app-view";
+	import { openSettingsDialog } from "$lib/context/commands/dialog";
 	import { useContext } from "$lib/context/context.svelte";
 
 	const context = useContext();

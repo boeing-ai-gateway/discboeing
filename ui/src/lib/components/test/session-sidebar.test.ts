@@ -128,7 +128,7 @@ test("session sidebar keeps thread children visible from root context data", () 
 	assert.doesNotMatch(source, /void sessionContext\?\.threads\.refresh\(\);/);
 	assert.doesNotMatch(source, /syncAppNavigationFromBridge\(\);/);
 	assert.match(source, /openThread\(sessionId, threadId\);/);
-	assert.match(source, /startNewSession\(\);/);
+	assert.match(source, /createSession\(\);/);
 	assert.doesNotMatch(source, /void sessions\.reloadSession\(sessionId\);/);
 	assert.doesNotMatch(
 		source,
@@ -283,7 +283,7 @@ test("session sidebar can group all sessions by workspace type", () => {
 	assert.match(source, /sidebarAllGroupedByWorkspace/);
 	assert.match(
 		source,
-		/import \{[\s\S]*setSidebarAllGroupedByWorkspace[\s\S]*setSidebarAllOpen[\s\S]*setSidebarRecentOpen[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+		/import \{[\s\S]*setSidebarAllGroupedByWorkspace[\s\S]*setSidebarAllOpen[\s\S]*setSidebarRecentOpen[\s\S]*\} from "\$lib\/context\/commands\/preference";/,
 	);
 	assert.match(
 		source,
@@ -326,7 +326,7 @@ test("session sidebar can group all sessions by workspace type", () => {
 	assert.doesNotMatch(source, /preferences\.setSidebar/);
 	assert.match(
 		source,
-		/await updateWorkspaceDisplayName\(renameWorkspaceId, renameWorkspaceDraft\)/,
+		/await renameWorkspace\(renameWorkspaceId, renameWorkspaceDraft\)/,
 	);
 	assert.match(source, /await deleteWorkspace\(deleteWorkspaceId\)/);
 	assert.match(source, /function trimWorkspacePrefix/);

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync("ui/src/lib/app/app-runtime.svelte.ts", "utf8");
-const commandSource = readFileSync(
-	"ui/src/lib/context/commands/app-view.ts",
-	"utf8",
-);
+const commandSource = readdirSync("ui/src/lib/context/commands")
+	.filter((fileName) => fileName.endsWith(".ts"))
+	.map((fileName) =>
+		readFileSync(`ui/src/lib/context/commands/${fileName}`, "utf8"),
+	)
+	.join("\n");
 const conversationComposerSource = readFileSync(
 	"ui/src/lib/components/app/ConversationComposer.svelte",
 	"utf8",
@@ -74,7 +76,7 @@ test("app commands expose root entry points for pending domains", () => {
 		"setFileEditorViewState",
 		"saveFile",
 		"renameFile",
-		"removeFile",
+		"deleteFile",
 		"refreshHooks",
 		"rerunHook",
 		"refreshServices",

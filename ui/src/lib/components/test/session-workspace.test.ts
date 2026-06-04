@@ -24,7 +24,7 @@ test("session workspace owns the per-session context for its mount lifetime", ()
 	assert.match(source, /import \{ onDestroy, untrack \} from "svelte";/);
 	assert.match(
 		source,
-		/import \{[\s\S]*ensureSessionState,[\s\S]*releaseSessionState,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+		/import \{[\s\S]*ensureSessionState,[\s\S]*releaseSessionState,[\s\S]*\} from "\$lib\/context\/commands\/session";/,
 	);
 	assert.doesNotMatch(source, /getAppState/);
 	assert.doesNotMatch(source, /legacy-context-bridge/);

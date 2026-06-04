@@ -31,10 +31,8 @@
 		DropdownMenuSeparator,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
-	import {
-		openCredentialsDialog,
-		refreshCredentials,
-	} from "$lib/context/commands/app-view";
+	import { openCredentialsDialog } from "$lib/context/commands/dialog";
+	import { refreshCredentials } from "$lib/context/commands/workspace";
 	import { useContext } from "$lib/context/context.svelte";
 	import type { SessionContextValue } from "$lib/session/session-context.types";
 

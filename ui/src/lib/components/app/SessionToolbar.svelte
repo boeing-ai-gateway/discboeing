@@ -69,9 +69,7 @@
 	import {
 		closeAgentCommandCredentialDialog,
 		confirmAgentCommandCredentialDialog,
-		ensureSessionState,
 		launchAgentCommandCredentialOAuthWizard,
-		openFile,
 		refreshAgentCommandCredentialDialogCredentials,
 		runAgentCommand,
 		selectAgentCommandCredentialOption,
@@ -80,11 +78,15 @@
 		setAgentCommandCredentialValidityPreset,
 		setAgentCommandCredentialValidityUnit,
 		setAgentCommandCredentialValidityValue,
-		setPreferredIde,
+	} from "$lib/context/commands/agent-command";
+	import { openFile } from "$lib/context/commands/file";
+	import { setPreferredIde } from "$lib/context/commands/preference";
+	import {
 		startService as startSessionService,
 		stopService as stopSessionService,
-		submitThread,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/service";
+	import { ensureSessionState } from "$lib/context/commands/session";
+	import { submitThread } from "$lib/context/commands/thread";
 	import { useContext } from "$lib/context/context.svelte";
 	import type { ServiceItem } from "$lib/context/context.types";
 	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";

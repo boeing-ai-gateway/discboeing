@@ -8,7 +8,7 @@
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
-	import { ensureThreadState } from "$lib/context/commands/app-view";
+	import { ensureThreadState } from "$lib/context/commands/session";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,

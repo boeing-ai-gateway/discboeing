@@ -37,8 +37,8 @@
 	import {
 		clearCredentialFlowIntent,
 		clearCredentialsDialogTarget,
-		refreshCredentials,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/dialog";
+	import { refreshCredentials } from "$lib/context/commands/workspace";
 	import { useContext } from "$lib/context/context.svelte";
 	import { openUrl, writeClipboardText } from "$lib/shell";
 

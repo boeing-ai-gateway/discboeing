@@ -15,7 +15,7 @@
 	import {
 		refreshWorkspaces,
 		validateWorkspace,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/workspace";
 	import { useContext } from "$lib/context/context.svelte";
 	import type { SessionContextValue } from "$lib/session/session-context.types";
 

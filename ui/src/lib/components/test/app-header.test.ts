@@ -141,9 +141,13 @@ test("app header starts new sessions through root commands", () => {
 
 	assert.match(
 		source,
-		/import \{[\s\S]*openSettingsDialog,[\s\S]*startNewSession,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
+		/import \{ openSettingsDialog \} from "\$lib\/context\/commands\/dialog";/,
 	);
-	assert.match(source, /onclick=\{\(\) => startNewSession\(\)\}/);
+	assert.match(
+		source,
+		/import \{ createSession \} from "\$lib\/context\/commands\/session";/,
+	);
+	assert.match(source, /onclick=\{\(\) => createSession\(\)\}/);
 	assert.doesNotMatch(source, /sessions\.startNew/);
 });
 

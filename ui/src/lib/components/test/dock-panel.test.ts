@@ -107,7 +107,7 @@ test("files panel receives root files data/view and callbacks", () => {
 
 	assert.doesNotMatch(
 		filesSource,
-		/SessionFilesDomain|getSessionFilesDomain|useContext|context\/commands|app-view/,
+		/SessionFilesDomain|getSessionFilesDomain|useContext|context\/commands/,
 	);
 	assert.match(filesSource, /fileData: SessionFilesData;/);
 	assert.match(filesSource, /fileView: FilesPanelView;/);

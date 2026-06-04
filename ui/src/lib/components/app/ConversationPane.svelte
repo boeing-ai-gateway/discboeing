@@ -64,13 +64,13 @@
 	} from "$lib/components/ui/collapsible";
 	import { getErrorMessage } from "$lib/error-message";
 	import { useContext } from "$lib/context/context.svelte";
+	import { openFile } from "$lib/context/commands/file";
 	import {
-		openFile,
 		refreshThread,
 		setConversationScrollTop,
 		addThreadPendingComment,
 		submitThread,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/thread";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,

@@ -8,7 +8,7 @@
 	import {
 		connectThread,
 		releaseThreadState,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/session";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,

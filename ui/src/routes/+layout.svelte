@@ -7,10 +7,8 @@
 	import StartupGate from "$lib/components/app/StartupGate.svelte";
 	import { Toaster } from "$lib/components/ui/sonner";
 	import { ideOptions, windowControls } from "$lib/app/app-shell-config";
-	import {
-		initializeAppCommands,
-		syncAppNavigationFromBridge,
-	} from "$lib/context/commands/app-view";
+	import { initializeAppCommands } from "$lib/context/commands/bootstrap";
+	import { syncAppNavigationFromBridge } from "$lib/context/commands/session";
 	import { setDiscobotContext } from "$lib/context/context.svelte";
 	import { readInitialThreadSelection } from "$lib/store/recent-threads.store.svelte";
 

@@ -6,10 +6,8 @@
 	import { onDestroy, onMount } from "svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Dialog from "$lib/components/ui/dialog";
-	import {
-		closeSupportInfoDialog,
-		fetchSupportInfo,
-	} from "$lib/context/commands/app-view";
+	import { closeSupportInfoDialog } from "$lib/context/commands/dialog";
+	import { fetchSupportInfo } from "$lib/context/commands/support";
 	import { useContext } from "$lib/context/context.svelte";
 	import { downloadFile } from "$lib/shell";
 

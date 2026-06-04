@@ -92,7 +92,7 @@
 		getEditorViewState: (path: string) => unknown | null;
 		openFile: (path?: string) => Promise<void>;
 		refreshFiles: () => Promise<void>;
-		removeFile: (path: string) => Promise<boolean>;
+		deleteFile: (path: string) => Promise<boolean>;
 		renameFile: (path: string, nextName: string) => Promise<boolean>;
 		saveFile: (path: string) => Promise<boolean>;
 		setEditorModel: (path: string, model: unknown | null) => void;
@@ -779,7 +779,7 @@
 			return;
 		}
 		deleting = true;
-		const removed = await fileActions.removeFile(deletePath);
+		const removed = await fileActions.deleteFile(deletePath);
 		deleting = false;
 		if (removed) {
 			closeDeleteDialog();

@@ -16,7 +16,7 @@
 	import {
 		connectProjectEvents,
 		refreshAppData,
-	} from "$lib/context/commands/app-view";
+	} from "$lib/context/commands/session";
 	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
