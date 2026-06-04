@@ -367,12 +367,15 @@
 		return "bg-muted-foreground/40";
 	}
 
-	function openServicePanel(
+	async function openServicePanel(
 		service: ServiceItem,
 		viewMode: "preview" | "logs",
 	) {
 		if (viewMode === "logs" && !hasServiceLogs(service)) {
 			return;
+		}
+		if (viewMode === "preview" && canStartService(service)) {
+			await startService(service);
 		}
 		sessionView.openService(service.id, viewMode);
 		servicesPopoverOpen = false;
@@ -837,7 +840,7 @@ When you are done, respond with:
 											title={hasServiceWebPage(service)
 												? "Open web page"
 												: "No web page"}
-											onclick={() => openServicePanel(service, "preview")}
+											onclick={() => void openServicePanel(service, "preview")}
 										>
 											<GlobeIcon class="size-3.5" />
 										</Button>
@@ -847,7 +850,7 @@ When you are done, respond with:
 												size="icon-xs"
 												aria-label={`Open ${service.label} logs`}
 												title="Open logs"
-												onclick={() => openServicePanel(service, "logs")}
+												onclick={() => void openServicePanel(service, "logs")}
 											>
 												<TerminalIcon class="size-3.5" />
 											</Button>
