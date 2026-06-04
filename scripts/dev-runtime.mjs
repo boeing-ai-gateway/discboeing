@@ -11,7 +11,7 @@ function getRuntimeScript(platform) {
     case "darwin":
       return "dev:vz";
     case "win32":
-      return "dev:wsl";
+      return "dev:hcs";
     default:
       return "";
   }

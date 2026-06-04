@@ -17,14 +17,14 @@ import (
 
 // PlatformDefaultProvider returns the default sandbox provider for the current OS.
 // On macOS (darwin), the default is "vz" (Virtualization.framework).
-// On Windows, the default is "wsl".
+// On Windows, the default is "hcs" (Host Compute System).
 // On all other platforms, the default is "docker".
 func PlatformDefaultProvider() string {
 	if runtime.GOOS == "darwin" {
 		return "vz"
 	}
 	if runtime.GOOS == "windows" {
-		return "wsl"
+		return "hcs"
 	}
 	return "docker"
 }

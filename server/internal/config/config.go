@@ -98,6 +98,7 @@ type Config struct {
 	VZDataDiskGB    int    // Data disk size per VM in GB (0 = 100GB default)
 
 	// WSL-specific settings (Windows Subsystem for Linux)
+	WSLEnabled       bool          // Enable WSL sandbox provider registration (default: false)
 	WSLDistroName    string        // Managed WSL distro name
 	WSLInstallDir    string        // Directory where the distro is imported and stored
 	WSLStateDir      string        // Directory for WSL runtime state and metadata
@@ -266,6 +267,7 @@ func Load() (*Config, error) {
 	// WSL-specific settings (Windows Subsystem for Linux)
 	// WSL state defaults to XDG_STATE_HOME/discobot/wsl so development builds keep
 	// all runtime-managed state under the same application directory structure.
+	cfg.WSLEnabled = getEnvBool("WSL_ENABLED", false)
 	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", "Discobot")
 	cfg.WSLInstallDir = getEnv("WSL_INSTALL_DIR", filepath.Join(xdg.StateHome, appName, "wsl", "distro"))
 	cfg.WSLStateDir = getEnv("WSL_STATE_DIR", filepath.Join(xdg.StateHome, appName, "wsl"))
