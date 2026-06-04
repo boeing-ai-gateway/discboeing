@@ -133,6 +133,35 @@ test("getThreadComposerValues falls back to the default model", () => {
 	});
 });
 
+test("getThreadComposerValues falls back to default reasoning and service tier", () => {
+	expect(
+		getThreadComposerValues(null, "openai/gpt-5", "high", "priority"),
+	).toEqual({
+		modelId: "openai/gpt-5",
+		reasoning: "high",
+		serviceTier: "priority",
+	});
+});
+
+test("getThreadComposerValues does not apply default reasoning or service tier to explicit thread models", () => {
+	expect(
+		getThreadComposerValues(
+			{
+				id: "thread-1",
+				name: "Main",
+				model: "anthropic/claude-sonnet-4-6",
+			},
+			"openai/gpt-5",
+			"high",
+			"priority",
+		),
+	).toEqual({
+		modelId: "anthropic/claude-sonnet-4-6",
+		reasoning: undefined,
+		serviceTier: undefined,
+	});
+});
+
 test("normalizeThreadComposerReasoning keeps explicit levels and drops empty values", () => {
 	expect(normalizeThreadComposerReasoning("default")).toBe("default");
 	expect(normalizeThreadComposerReasoning("medium")).toBe("medium");

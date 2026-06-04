@@ -107,6 +107,8 @@ export type AppView = {
 		ideOptions: IdeOption[];
 		chatWidthMode: ChatWidthMode;
 		defaultModel: string;
+		defaultReasoning: string;
+		defaultServiceTier: string;
 		recentThreadsVisibleLimit: number;
 		sidebarRecentOpen: boolean;
 		sidebarAllOpen: boolean;

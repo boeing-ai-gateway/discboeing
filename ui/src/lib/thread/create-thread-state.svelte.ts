@@ -67,15 +67,33 @@ export function getThreadConversationStatus(
 export function getThreadComposerValues(
 	thread: Thread | null,
 	defaultModel: string | null,
+	defaultReasoning?: string | null,
+	defaultServiceTier?: string | null,
 ): {
 	modelId: string | null;
 	reasoning: string | undefined;
 	serviceTier: string | undefined;
 } {
+	const modelId = thread?.model ?? defaultModel;
+	if (!modelId) {
+		return {
+			modelId,
+			reasoning: undefined,
+			serviceTier: undefined,
+		};
+	}
+
+	const useDefaultComposerPreferences = thread?.model === undefined;
 	return {
-		modelId: thread?.model ?? defaultModel,
-		reasoning: normalizeThreadComposerReasoning(thread?.reasoning),
-		serviceTier: normalizeThreadComposerServiceTier(thread?.serviceTier),
+		modelId,
+		reasoning: useDefaultComposerPreferences
+			? (normalizeThreadComposerReasoning(thread?.reasoning) ??
+				normalizeThreadComposerReasoning(defaultReasoning))
+			: normalizeThreadComposerReasoning(thread?.reasoning),
+		serviceTier: useDefaultComposerPreferences
+			? (normalizeThreadComposerServiceTier(thread?.serviceTier) ??
+				normalizeThreadComposerServiceTier(defaultServiceTier))
+			: normalizeThreadComposerServiceTier(thread?.serviceTier),
 	};
 }
 
@@ -295,11 +313,18 @@ export function createThreadState(
 	}
 
 	const sourceComposerValues = $derived.by(() =>
-		getThreadComposerValues(getThread(), runtime.getDefaultModel() || null),
+		getThreadComposerValues(
+			getThread(),
+			runtime.getDefaultModel() || null,
+			runtime.getDefaultReasoning() || null,
+			runtime.getDefaultServiceTier() || null,
+		),
 	);
 	const initialComposerValues = getThreadComposerValues(
 		getThread(),
 		runtime.getDefaultModel() || null,
+		runtime.getDefaultReasoning() || null,
+		runtime.getDefaultServiceTier() || null,
 	);
 	let sourceComposerValuesKey = $state(
 		getThreadComposerValuesKey(initialComposerValues),

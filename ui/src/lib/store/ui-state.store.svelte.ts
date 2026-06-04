@@ -10,6 +10,8 @@ import { isPreferredIde, type PreferredIde } from "$lib/app/ide-options";
 export const PREFERRED_IDE_STORAGE_KEY = "preferred.ide";
 export const CHAT_WIDTH_MODE_STORAGE_KEY = "chat.width.mode";
 export const DEFAULT_MODEL_STORAGE_KEY = "chat.default.model";
+export const DEFAULT_REASONING_STORAGE_KEY = "chat.default.reasoning";
+export const DEFAULT_SERVICE_TIER_STORAGE_KEY = "chat.default.serviceTier";
 export const IGNORED_UPDATE_VERSION_STORAGE_KEY = "update.ignored.version";
 export const TRACK_PRERELEASES_STORAGE_KEY = "update.track.prereleases";
 export const SIDEBAR_RECENT_OPEN_STORAGE_KEY = "sidebar.recent.open";
@@ -74,6 +76,10 @@ export class UIStateStore {
 	#preferredIde = $state<PreferredIde>(readPreferredIde());
 	#chatWidthMode = $state<ChatWidthModePreference>(readChatWidthMode());
 	#defaultModel = $state(readStorage(DEFAULT_MODEL_STORAGE_KEY) ?? "");
+	#defaultReasoning = $state(readStorage(DEFAULT_REASONING_STORAGE_KEY) ?? "");
+	#defaultServiceTier = $state(
+		readStorage(DEFAULT_SERVICE_TIER_STORAGE_KEY) ?? "",
+	);
 	#recentThreadsVisibleLimit = $state(readRecentThreadsVisibleLimit());
 	#sidebarRecentOpen = $state(
 		readBoolean(SIDEBAR_RECENT_OPEN_STORAGE_KEY, true),
@@ -110,6 +116,14 @@ export class UIStateStore {
 
 	get defaultModel(): string {
 		return this.#defaultModel;
+	}
+
+	get defaultReasoning(): string {
+		return this.#defaultReasoning;
+	}
+
+	get defaultServiceTier(): string {
+		return this.#defaultServiceTier;
 	}
 
 	get recentThreadsVisibleLimit(): number {
@@ -201,6 +215,16 @@ export class UIStateStore {
 	setDefaultModel(modelId: string): void {
 		this.#defaultModel = modelId;
 		writeStorage(DEFAULT_MODEL_STORAGE_KEY, modelId || null);
+	}
+
+	setDefaultReasoning(reasoning: string): void {
+		this.#defaultReasoning = reasoning;
+		writeStorage(DEFAULT_REASONING_STORAGE_KEY, reasoning || null);
+	}
+
+	setDefaultServiceTier(serviceTier: string): void {
+		this.#defaultServiceTier = serviceTier;
+		writeStorage(DEFAULT_SERVICE_TIER_STORAGE_KEY, serviceTier || null);
 	}
 
 	setRecentThreadsVisibleLimit(value: number): void {

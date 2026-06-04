@@ -67,6 +67,8 @@ export function createContext(bootstrap: ContextBootstrap): Context {
 					ideOptions: bootstrap.ideOptions,
 					chatWidthMode: "constrained",
 					defaultModel: "",
+					defaultReasoning: "",
+					defaultServiceTier: "",
 					recentThreadsVisibleLimit: 5,
 					sidebarRecentOpen: true,
 					sidebarAllOpen: true,

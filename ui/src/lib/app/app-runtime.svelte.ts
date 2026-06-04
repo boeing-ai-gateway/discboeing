@@ -41,6 +41,8 @@ export type AppRuntime = {
 	chatStreams: ChatStreamManager;
 	sessionContexts: SvelteMap<string, SessionContextValue>;
 	getDefaultModel: () => string;
+	getDefaultReasoning: () => string;
+	getDefaultServiceTier: () => string;
 	peekSession: (sessionId: string) => Session | null;
 	reloadSession: (sessionId: string) => Promise<void>;
 	upsertSession: (session: Session) => void;
@@ -1401,6 +1403,9 @@ export const runtime: AppRuntime = {
 		return initializeRuntimeState().sessionContexts;
 	},
 	getDefaultModel: () => context().view.app.preferences.defaultModel,
+	getDefaultReasoning: () => context().view.app.preferences.defaultReasoning,
+	getDefaultServiceTier: () =>
+		context().view.app.preferences.defaultServiceTier,
 	peekSession: (sessionId) => stores.sessions.peek(sessionId),
 	reloadSession: reloadRuntimeSession,
 	upsertSession: (session) => {

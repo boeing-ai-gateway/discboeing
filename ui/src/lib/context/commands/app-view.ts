@@ -127,6 +127,9 @@ export function initializeAppCommands(bootstrap: {
 	context.view.app.preferences.preferredIde = uiStateStore.preferredIde;
 	context.view.app.preferences.chatWidthMode = uiStateStore.chatWidthMode;
 	context.view.app.preferences.defaultModel = uiStateStore.defaultModel;
+	context.view.app.preferences.defaultReasoning = uiStateStore.defaultReasoning;
+	context.view.app.preferences.defaultServiceTier =
+		uiStateStore.defaultServiceTier;
 	context.view.app.preferences.recentThreadsVisibleLimit =
 		uiStateStore.recentThreadsVisibleLimit;
 	context.view.app.preferences.sidebarRecentOpen =
@@ -763,6 +766,16 @@ export function setTopBarIconOnly(iconOnly: boolean): void {
 export function setDefaultModel(modelId: string): void {
 	getCommandContext().view.app.preferences.defaultModel = modelId;
 	uiStateStore.setDefaultModel(modelId);
+}
+
+export function setDefaultReasoning(reasoning: string): void {
+	getCommandContext().view.app.preferences.defaultReasoning = reasoning;
+	uiStateStore.setDefaultReasoning(reasoning);
+}
+
+export function setDefaultServiceTier(serviceTier: string): void {
+	getCommandContext().view.app.preferences.defaultServiceTier = serviceTier;
+	uiStateStore.setDefaultServiceTier(serviceTier);
 }
 
 export function setChatWidthMode(mode: ChatWidthMode): void {

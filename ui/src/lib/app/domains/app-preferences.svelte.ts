@@ -91,6 +91,12 @@ export function createAppPreferencesDomain(
 		get defaultModel() {
 			return uiStateStore.defaultModel;
 		},
+		get defaultReasoning() {
+			return uiStateStore.defaultReasoning;
+		},
+		get defaultServiceTier() {
+			return uiStateStore.defaultServiceTier;
+		},
 		get recentThreadsVisibleLimit() {
 			return uiStateStore.recentThreadsVisibleLimit;
 		},
@@ -140,6 +146,12 @@ export function createAppPreferencesDomain(
 		},
 		setDefaultModel: (modelId) => {
 			uiStateStore.setDefaultModel(modelId);
+		},
+		setDefaultReasoning: (reasoning) => {
+			uiStateStore.setDefaultReasoning(reasoning);
+		},
+		setDefaultServiceTier: (serviceTier) => {
+			uiStateStore.setDefaultServiceTier(serviceTier);
 		},
 		setRecentThreadsVisibleLimit: (value) => {
 			uiStateStore.setRecentThreadsVisibleLimit(value);

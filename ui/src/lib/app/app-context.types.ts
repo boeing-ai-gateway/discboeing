@@ -117,6 +117,8 @@ export type AppPreferences = {
 	ideOptions: IdeOption[];
 	chatWidthMode: ChatWidthMode;
 	defaultModel: string;
+	defaultReasoning: string;
+	defaultServiceTier: string;
 	recentThreadsVisibleLimit: number;
 	sidebarRecentOpen: boolean;
 	sidebarAllOpen: boolean;
@@ -135,6 +137,8 @@ export type AppPreferences = {
 	setPreferredIde: (ide: PreferredIde) => void;
 	setChatWidthMode: (mode: ChatWidthMode) => void;
 	setDefaultModel: (modelId: string) => void;
+	setDefaultReasoning: (reasoning: string) => void;
+	setDefaultServiceTier: (serviceTier: string) => void;
 	setRecentThreadsVisibleLimit: (value: number) => void;
 	setSidebarRecentOpen: (value: boolean) => void;
 	setSidebarAllOpen: (value: boolean) => void;

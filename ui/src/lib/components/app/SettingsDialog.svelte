@@ -61,6 +61,8 @@
 		setChatWidthMode,
 		setColorScheme,
 		setDefaultModel,
+		setDefaultReasoning,
+		setDefaultServiceTier,
 		setRecentThreadsVisibleLimit,
 		setSettingsDialogOpen,
 		setSettingsDialogTab,
@@ -85,6 +87,23 @@
 	function extractModelVersion(name: string) {
 		const matches = name.match(/(\d+(?:\.\d+)?)/g);
 		return matches?.length ? Number.parseFloat(matches[matches.length - 1]) : 0;
+	}
+
+	function formatReasoningLabel(level: string) {
+		if (level === "xhigh") {
+			return "X-High";
+		}
+		return level.charAt(0).toUpperCase() + level.slice(1);
+	}
+
+	function formatServiceTierLabel(tier: string) {
+		switch (tier.toLowerCase()) {
+			case "priority":
+			case "fast":
+				return "Fast";
+			default:
+				return tier.charAt(0).toUpperCase() + tier.slice(1);
+		}
 	}
 
 	function getDedupedModels(modelList: ModelInfo[]) {
@@ -122,6 +141,20 @@
 			? (models.items.find((model) => model.id === preferences.defaultModel) ??
 				null)
 			: null,
+	);
+	const defaultReasoningLevels = $derived.by(() =>
+		selectedDefaultModel?.reasoning
+			? (selectedDefaultModel.reasoningLevels ?? [])
+			: [],
+	);
+	const defaultServiceTiers = $derived.by(
+		() => selectedDefaultModel?.serviceTiers ?? [],
+	);
+	const canSetDefaultReasoning = $derived.by(
+		() => defaultReasoningLevels.length > 0,
+	);
+	const canSetDefaultServiceTier = $derived.by(
+		() => defaultServiceTiers.length > 0,
 	);
 
 	const modelProviderEntries = $derived.by(() => {
@@ -232,6 +265,32 @@
 
 	function handleSettingsEscapeKeydown(event: KeyboardEvent) {
 		event.preventDefault();
+	}
+
+	function handleDefaultModelChange(modelId: string) {
+		setDefaultModel(modelId);
+
+		const nextModel = modelId
+			? (models.items.find((model) => model.id === modelId) ?? null)
+			: null;
+		if (
+			preferences.defaultReasoning &&
+			(!nextModel?.reasoning ||
+				!(nextModel.reasoningLevels ?? []).includes(
+					preferences.defaultReasoning,
+				))
+		) {
+			setDefaultReasoning("");
+		}
+		if (
+			preferences.defaultServiceTier &&
+			!(nextModel?.serviceTiers ?? []).some(
+				(tier) =>
+					tier.toLowerCase() === preferences.defaultServiceTier.toLowerCase(),
+			)
+		) {
+			setDefaultServiceTier("");
+		}
 	}
 
 	async function handleClearCache() {
@@ -477,7 +536,9 @@
 											onchange={(event) => {
 												const next = (event.currentTarget as HTMLSelectElement)
 													.value;
-												setDefaultModel(next === "__auto__" ? "" : next);
+												handleDefaultModelChange(
+													next === "__auto__" ? "" : next,
+												);
 											}}
 											class="w-full"
 										>
@@ -488,6 +549,87 @@
 														<option value={model.id}>{model.name}</option>
 													{/each}
 												</optgroup>
+											{/each}
+										</NativeSelect>
+									</ItemActions>
+								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Default reasoning</ItemTitle>
+										<ItemDescription>
+											{#if !preferences.defaultModel}
+												Choose a default model to set reasoning.
+											{:else if canSetDefaultReasoning}
+												Set the reasoning effort used with the default model.
+											{:else}
+												The selected default model does not expose reasoning
+												levels.
+											{/if}
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions class="ml-auto w-56 justify-end">
+										<Label for="settings-default-reasoning" class="sr-only"
+											>Default reasoning</Label
+										>
+										<NativeSelect
+											id="settings-default-reasoning"
+											value={preferences.defaultReasoning || "__model__"}
+											disabled={!canSetDefaultReasoning}
+											onchange={(event) => {
+												const next = (event.currentTarget as HTMLSelectElement)
+													.value;
+												setDefaultReasoning(next === "__model__" ? "" : next);
+											}}
+											class="w-full"
+										>
+											<option value="__model__">Model default</option>
+											{#each defaultReasoningLevels as level (level)}
+												<option value={level}
+													>{formatReasoningLabel(level)}</option
+												>
+											{/each}
+										</NativeSelect>
+									</ItemActions>
+								</Item>
+								<ItemSeparator />
+								<Item size="sm">
+									<ItemContent>
+										<ItemTitle>Default service tier</ItemTitle>
+										<ItemDescription>
+											{#if !preferences.defaultModel}
+												Choose a default model to set service tier.
+											{:else if canSetDefaultServiceTier}
+												Set the provider service tier used with the default
+												model.
+											{:else}
+												The selected default model does not expose service
+												tiers.
+											{/if}
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions class="ml-auto w-56 justify-end">
+										<Label for="settings-default-service-tier" class="sr-only"
+											>Default service tier</Label
+										>
+										<NativeSelect
+											id="settings-default-service-tier"
+											value={preferences.defaultServiceTier || "__standard__"}
+											disabled={!canSetDefaultServiceTier}
+											onchange={(event) => {
+												const next = (event.currentTarget as HTMLSelectElement)
+													.value;
+												setDefaultServiceTier(
+													next === "__standard__" ? "" : next,
+												);
+											}}
+											class="w-full"
+										>
+											<option value="__standard__">Standard</option>
+											{#each defaultServiceTiers as tier (tier)}
+												<option value={tier}
+													>{formatServiceTierLabel(tier)}</option
+												>
 											{/each}
 										</NativeSelect>
 									</ItemActions>

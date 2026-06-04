@@ -62,6 +62,21 @@ test("settings dialog preserves the selected default model when dedupe would hid
 	);
 });
 
+test("settings dialog exposes default reasoning and service tier controls", () => {
+	assert.match(
+		uiStateSource,
+		/export const DEFAULT_REASONING_STORAGE_KEY = "chat\.default\.reasoning";/,
+	);
+	assert.match(
+		uiStateSource,
+		/export const DEFAULT_SERVICE_TIER_STORAGE_KEY = "chat\.default\.serviceTier";/,
+	);
+	assert.match(source, /<ItemTitle>Default reasoning<\/ItemTitle>/);
+	assert.match(source, /setDefaultReasoning\(/);
+	assert.match(source, /<ItemTitle>Default service tier<\/ItemTitle>/);
+	assert.match(source, /setDefaultServiceTier\(/);
+});
+
 test("settings dialog only shows updates when the runtime supports them", () => {
 	assert.match(
 		source,
