@@ -244,7 +244,7 @@ test("session header dropdown can pin the sidebar open", () => {
 	const source = readSessionHeaderDropdownSource();
 
 	assert.match(source, /function pinSidebar\(\)/);
-	assert.match(source, /app\.ui\.setDesktopSidebarOpen\(true\)/);
+	assert.match(source, /setDesktopSidebarOpen\(true\)/);
 	assert.match(source, /onPinSidebar=\{pinSidebar\}/);
 });
 

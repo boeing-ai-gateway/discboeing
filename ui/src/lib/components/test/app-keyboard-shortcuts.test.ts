@@ -37,8 +37,9 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	);
 	assert.match(
 		source,
-		/import \{[\s\S]*detectIsMacPlatform,[\s\S]*getGlobalShortcuts,[\s\S]*matchGlobalShortcutKeydown,[\s\S]*shouldCommitTabSwitcherOnKeyup,[\s\S]*\} from "\$lib\/app\/global-shortcuts";/,
+		/import \{[\s\S]*getGlobalShortcuts,[\s\S]*matchGlobalShortcutKeydown,[\s\S]*shouldCommitTabSwitcherOnKeyup,[\s\S]*\} from "\$lib\/app\/global-shortcuts";/,
 	);
+	assert.doesNotMatch(source, /detectIsMacPlatform/);
 	assert.match(
 		source,
 		/import \{[\s\S]*getAvailableSwitcherThreads,[\s\S]*getThreadSwitcherThreads,[\s\S]*recentThreadKey,[\s\S]*\} from "\$lib\/app\/thread-switcher";/,
@@ -46,12 +47,9 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 	assert.doesNotMatch(source, /resolveThreadDisplayStatus/);
 	assert.match(
 		source,
-		/const isMacPlatform = \$derived\.by\(\(\) => detectIsMacPlatform\(\)\)/,
+		/const appEnvironment = context\.view\.app\.environment;/,
 	);
-	assert.match(
-		source,
-		/const globalShortcuts = \$derived\.by\(\(\) => getGlobalShortcuts\(isMacPlatform\)\)/,
-	);
+	assert.match(source, /getGlobalShortcuts\(appEnvironment\.isMacPlatform\)/);
 	assert.match(source, /sessions: context\.data\.sessions\.items,/);
 	assert.match(
 		source,
@@ -82,6 +80,7 @@ test("app keyboard shortcuts owns the global keyboard controller", () => {
 		/import \{[\s\S]*createThread,[\s\S]*openThread,[\s\S]*setMobileSidebarOpen,[\s\S]*setRecentThreadSwitcherOpen,[\s\S]*startNewSession,[\s\S]*toggleKeyboardShortcutsOpen,[\s\S]*\} from "\$lib\/context\/commands\/app-view";/,
 	);
 	assert.match(source, /setMobileSidebarOpen\(false\);/);
+	assert.match(source, /appEnvironment\.isMobile/);
 	assert.match(source, /context\.view\.app\.selection\.sessionId/);
 	assert.match(
 		source,
@@ -116,7 +115,7 @@ test("app keyboard shortcuts handles global shortcuts inside editable targets wh
 
 	assert.match(
 		source,
-		/const shortcutAction = matchGlobalShortcutKeydown\(event, isMacPlatform\);[\s\S]*if \(!shortcutAction && isEditableShortcutTarget\(event\.target\)\) \{/,
+		/const shortcutAction = matchGlobalShortcutKeydown\(\s*event,\s*appEnvironment\.isMacPlatform,\s*\);[\s\S]*if \(!shortcutAction && isEditableShortcutTarget\(event\.target\)\) \{/,
 	);
 });
 

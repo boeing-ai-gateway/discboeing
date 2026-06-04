@@ -59,9 +59,10 @@
 	} from "$lib/components/ui/toggle-group";
 	import type { FileStatus } from "$lib/api-types";
 	import type {
+		SessionFilesData,
 		SessionFileTreeNode,
-		SessionFilesDomain,
-	} from "$lib/session/session-context.types";
+	} from "$lib/context/context.types";
+	import type { SessionView } from "$lib/context/context.types";
 	import type { ResolvedTheme, ThemeColorScheme } from "$lib/theme";
 	import { downloadFile } from "$lib/shell";
 	import { cn } from "$lib/utils";
@@ -69,12 +70,45 @@
 
 	type MarkdownViewMode = "preview" | "split" | "editor";
 
+	export type FilesPanelView = Pick<
+		SessionView["files"],
+		| "activePath"
+		| "openPaths"
+		| "showChangedOnly"
+		| "expandedPaths"
+		| "loadingPaths"
+		| "buffers"
+	>;
+
+	export type FilesPanelActions = {
+		acceptConflict: (path: string) => void;
+		close: () => void;
+		closeFile: (path: string) => void;
+		collapseTree: () => void;
+		discardBuffer: (path: string) => void;
+		expandTree: () => Promise<void>;
+		forceSaveFile: (path: string) => Promise<boolean>;
+		getEditorModel: (path: string) => unknown | null;
+		getEditorViewState: (path: string) => unknown | null;
+		openFile: (path?: string) => Promise<void>;
+		refreshFiles: () => Promise<void>;
+		removeFile: (path: string) => Promise<boolean>;
+		renameFile: (path: string, nextName: string) => Promise<boolean>;
+		saveFile: (path: string) => Promise<boolean>;
+		setEditorModel: (path: string, model: unknown | null) => void;
+		setEditorViewState: (path: string, viewState: unknown | null) => void;
+		toggleChangedOnly: () => Promise<void>;
+		toggleDirectory: (path: string) => Promise<void>;
+		updateBuffer: (path: string, content: string) => void;
+		toggleDockMaximized: () => void;
+	};
+
 	type Props = {
 		colorScheme: ThemeColorScheme;
 		dockMaximized: boolean;
-		files: SessionFilesDomain;
-		onClose: () => void;
-		onToggleDockMaximized: () => void;
+		fileData: SessionFilesData;
+		fileView: FilesPanelView;
+		actions: FilesPanelActions;
 		resolvedTheme: ResolvedTheme;
 		shiftWindowControlsForSidebar?: boolean;
 	};
@@ -82,9 +116,9 @@
 	let {
 		colorScheme,
 		dockMaximized,
-		files,
-		onClose,
-		onToggleDockMaximized,
+		fileData,
+		fileView,
+		actions: fileActions,
 		resolvedTheme,
 		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
@@ -562,13 +596,13 @@
 	let markdownViewMode = $state<MarkdownViewMode>("preview");
 	let markdownModePath = $state<string | null>(null);
 
-	const openPaths = $derived.by(() => files.openPaths);
-	const activePath = $derived.by(() => files.activePath);
+	const openPaths = $derived.by(() => fileView.openPaths);
+	const activePath = $derived.by(() => fileView.activePath);
 	const activeBuffer = $derived.by(() =>
-		activePath ? files.getBuffer(activePath) : null,
+		activePath ? getBuffer(activePath) : null,
 	);
 	const activeDiff = $derived.by(
-		() => files.diff.find((entry) => entry.path === activePath) ?? null,
+		() => fileData.diff.find((entry) => entry.path === activePath) ?? null,
 	);
 	const activeStatus = $derived.by(() => activeDiff?.status);
 	const canRenderTextEditor = $derived.by(() =>
@@ -649,11 +683,23 @@
 	let deletePath = $state<string | null>(null);
 	let deleting = $state(false);
 
+	function getBuffer(path: string) {
+		return fileView.buffers[path] ?? null;
+	}
+
+	function isPathLoading(path: string) {
+		return fileView.loadingPaths[path] ?? false;
+	}
+
+	function hasDirtyChanges(path: string) {
+		return getBuffer(path)?.isDirty ?? false;
+	}
+
 	function canManageNode(node: SessionFileTreeNode): boolean {
 		return (
 			node.type === "file" &&
 			node.status !== "deleted" &&
-			!files.hasDirtyChanges(node.path)
+			!hasDirtyChanges(node.path)
 		);
 	}
 
@@ -678,7 +724,7 @@
 			return;
 		}
 		renaming = true;
-		const renamed = await files.rename(renamePath, renameDraft);
+		const renamed = await fileActions.renameFile(renamePath, renameDraft);
 		renaming = false;
 		if (renamed) {
 			closeRenameDialog();
@@ -712,7 +758,7 @@
 			closeTabDialogOpen = true;
 			return;
 		}
-		files.close(path);
+		fileActions.closeFile(path);
 	}
 
 	function closeCloseTabDialog() {
@@ -724,7 +770,7 @@
 		if (!closeTabPath) {
 			return;
 		}
-		files.close(closeTabPath);
+		fileActions.closeFile(closeTabPath);
 		closeCloseTabDialog();
 	}
 
@@ -733,7 +779,7 @@
 			return;
 		}
 		deleting = true;
-		const removed = await files.remove(deletePath);
+		const removed = await fileActions.removeFile(deletePath);
 		deleting = false;
 		if (removed) {
 			closeDeleteDialog();
@@ -744,11 +790,16 @@
 		if (!editorInstance || !activeEditorPath) {
 			return;
 		}
-		files.setEditorViewState(activeEditorPath, editorInstance.saveViewState());
+		fileActions.setEditorViewState(
+			activeEditorPath,
+			editorInstance.saveViewState(),
+		);
 	}
 
 	function syncActiveModelContent(path: string, content: string) {
-		const model = files.getEditorModel(path) as Monaco.editor.ITextModel | null;
+		const model = fileActions.getEditorModel(
+			path,
+		) as Monaco.editor.ITextModel | null;
 		if (!model || model.getValue() === content) {
 			return;
 		}
@@ -771,7 +822,7 @@
 			return;
 		}
 
-		let model = files.getEditorModel(
+		let model = fileActions.getEditorModel(
 			activePath,
 		) as Monaco.editor.ITextModel | null;
 		if (!model) {
@@ -780,7 +831,7 @@
 				getLanguage(activePath),
 				monacoInstance.Uri.from({ scheme: "file", path: `/${activePath}` }),
 			);
-			files.setEditorModel(activePath, model);
+			fileActions.setEditorModel(activePath, model);
 		} else {
 			monacoInstance.editor.setModelLanguage(model, getLanguage(activePath));
 			syncActiveModelContent(activePath, activeBuffer.content);
@@ -790,7 +841,7 @@
 			saveCurrentViewState();
 			activeEditorPath = activePath;
 			editorInstance.setModel(model);
-			const savedViewState = files.getEditorViewState(
+			const savedViewState = fileActions.getEditorViewState(
 				activePath,
 			) as Monaco.editor.ICodeEditorViewState | null;
 			if (savedViewState) {
@@ -839,7 +890,7 @@
 			if (!model) {
 				return;
 			}
-			files.updateBuffer(activeEditorPath, model.getValue());
+			fileActions.updateBuffer(activeEditorPath, model.getValue());
 		});
 
 		await ensureEditorForActiveFile();
@@ -857,7 +908,7 @@
 				return;
 			}
 			event.preventDefault();
-			await files.save(activePath);
+			await fileActions.saveFile(activePath);
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
@@ -913,7 +964,7 @@
 	});
 
 	function isExpanded(path: string) {
-		return files.expandedPaths.includes(path);
+		return fileView.expandedPaths.includes(path);
 	}
 
 	function isSelected(path: string) {
@@ -921,7 +972,7 @@
 	}
 
 	function isDirty(path: string) {
-		return files.getBuffer(path)?.isDirty ?? false;
+		return getBuffer(path)?.isDirty ?? false;
 	}
 
 	function treeButtonClass(node: SessionFileTreeNode, selected: boolean) {
@@ -936,8 +987,8 @@
 
 <DockWindowChrome
 	{dockMaximized}
-	{onClose}
-	{onToggleDockMaximized}
+	onClose={fileActions.close}
+	onToggleDockMaximized={fileActions.toggleDockMaximized}
 	{shiftWindowControlsForSidebar}
 	closeLabel="Close files panel"
 	minimizeLabel="Minimize files panel"
@@ -963,14 +1014,14 @@
 		<label class="flex items-center gap-2 text-xs text-sidebar-foreground/70">
 			<span>changed only</span>
 			<Switch
-				checked={files.showChangedOnly}
-				onCheckedChange={() => files.toggleChangedOnly()}
+				checked={fileView.showChangedOnly}
+				onCheckedChange={() => fileActions.toggleChangedOnly()}
 			/>
 		</label>
 		<Button
 			variant="ghost"
 			size="xs"
-			onclick={() => files.refresh()}
+			onclick={() => fileActions.refreshFiles()}
 			class="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 		>
 			<RefreshCwIcon class="size-3.5" />
@@ -991,10 +1042,10 @@
 					{activePath}
 					{fileLabel}
 					getStatus={(path) =>
-						files.diff.find((entry) => entry.path === path)?.status}
+						fileData.diff.find((entry) => entry.path === path)?.status}
 					{isDirty}
 					onClose={requestCloseTab}
-					onOpen={(path) => files.open(path)}
+					onOpen={(path) => fileActions.openFile(path)}
 					{openPaths}
 					{statusBadgeClass}
 					{statusLetter}
@@ -1086,7 +1137,7 @@
 								<Button
 									variant="outline"
 									size="sm"
-									onclick={() => files.discard(activePath)}
+									onclick={() => fileActions.discardBuffer(activePath)}
 								>
 									<XIcon class="size-4" />
 									Discard
@@ -1094,7 +1145,7 @@
 								<Button
 									size="sm"
 									disabled={!canEditActiveFile || activeBuffer.isSaving}
-									onclick={() => files.save(activePath)}
+									onclick={() => fileActions.saveFile(activePath)}
 								>
 									{#if activeBuffer.isSaving}
 										<RefreshCwIcon class="size-4 animate-spin" />
@@ -1126,12 +1177,12 @@
 							<DialogFooter>
 								<Button
 									variant="outline"
-									onclick={() => files.acceptConflict(activePath)}
+									onclick={() => fileActions.acceptConflict(activePath)}
 								>
 									<CheckIcon class="size-4" />
 									Use disk version
 								</Button>
-								<Button onclick={() => files.forceSave(activePath)}>
+								<Button onclick={() => fileActions.forceSaveFile(activePath)}>
 									<SaveIcon class="size-4" />
 									Save my changes
 								</Button>
@@ -1315,14 +1366,14 @@
 						<button
 							type="button"
 							class="hover:text-sidebar-accent-foreground"
-							onclick={() => files.expandAll()}
+							onclick={() => fileActions.expandTree()}
 						>
 							Expand all
 						</button>
 						<button
 							type="button"
 							class="hover:text-sidebar-accent-foreground"
-							onclick={files.collapseAll}
+							onclick={fileActions.collapseTree}
 						>
 							Collapse
 						</button>
@@ -1340,13 +1391,13 @@
 							type="button"
 							onclick={() =>
 								node.type === "directory"
-									? files.toggleDirectory(node.path)
-									: files.open(node.path)}
+									? fileActions.toggleDirectory(node.path)
+									: fileActions.openFile(node.path)}
 							class={treeButtonClass(node, selected)}
 							style={`padding-left: ${8 + depth * 14}px`}
 						>
 							{#if node.type === "directory"}
-								{#if files.isPathLoading(node.path)}
+								{#if isPathLoading(node.path)}
 									<RefreshCwIcon
 										class="size-3.5 animate-spin text-sidebar-foreground/40"
 									/>
@@ -1426,12 +1477,12 @@
 							{/if}
 						{/each}
 					{/snippet}
-					{#if files.tree.length === 0}
+					{#if fileData.tree.length === 0}
 						<p class="px-2 py-6 text-center text-sm text-sidebar-foreground/50">
-							{files.showChangedOnly ? "No changed files" : "No files"}
+							{fileView.showChangedOnly ? "No changed files" : "No files"}
 						</p>
 					{:else}
-						{@render renderTree(files.tree, 0)}
+						{@render renderTree(fileData.tree, 0)}
 					{/if}
 				</div>
 			</div>

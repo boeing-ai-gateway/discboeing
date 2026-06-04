@@ -5,9 +5,20 @@ import type {
 	SettingsDialogTab,
 } from "$lib/app/app-context.types";
 import { api } from "$lib/api-client";
-import type { WorkspaceValidationResult } from "$lib/api-types";
+import type {
+	AgentCommand,
+	ChatMessage,
+	WorkspaceValidationResult,
+} from "$lib/api-types";
 import type { ServiceOutputSubscription } from "$lib/thread/chat-stream-manager";
-import type { SessionContextValue } from "$lib/session/session-context.types";
+import type {
+	SessionContextValue,
+	ThreadContextValue,
+} from "$lib/session/session-context.types";
+import type {
+	CredentialValidityPreset,
+	CredentialValidityUnit,
+} from "$lib/context/context.types";
 import type { PreferredIde } from "$lib/app/ide-options";
 import type { ThemeColorScheme } from "$lib/api-types";
 import type { ThemeMode } from "$lib/theme";
@@ -28,24 +39,73 @@ import {
 } from "$lib/shell";
 import {
 	connectRuntimeProjectEvents,
+	connectRuntimeThread,
 	createRuntimeThread,
+	acceptRuntimeFileConflict,
+	addRuntimeThreadPendingComment,
+	bindRuntimeServiceLocalhost,
+	cancelRuntimeThread,
+	clearRuntimeComposerDraft,
+	clearRuntimeThreadNextComposerValues,
+	clearRuntimeThreadPendingComments,
+	closeRuntimeFile,
+	collapseRuntimeFileTree,
+	deleteRuntimeQueuedPrompt,
 	deleteRuntimeSession,
 	deleteRuntimeThread,
+	discardRuntimeFileBuffer,
 	ensureRuntimeSessionState,
+	ensureRuntimeThreadState,
+	expandRuntimeFileTree,
+	forceSaveRuntimeFile,
+	getRuntimeFileEditorModel,
+	getRuntimeFileEditorViewState,
 	initializeAppRuntime,
+	openRuntimeFile,
+	openRuntimeService,
 	openRuntimeThread,
 	refreshCredentialsData,
+	refreshRuntimeCommands,
 	refreshRuntimeData,
+	refreshRuntimeFiles,
+	refreshRuntimeHooks,
+	refreshRuntimeServices,
+	refreshRuntimeThread,
 	refreshWorkspacesData,
+	releaseRuntimeThreadState,
 	releaseRuntimeSessionState,
 	renameRuntimeSession,
 	renameRuntimeThread,
+	renameRuntimeFile,
+	removeRuntimeFile,
+	rerunRuntimeHook,
 	runtime,
+	runRuntimeCommand,
 	selectRuntimeSession,
+	saveRuntimeFile,
+	setRuntimeComposerDraft,
+	setRuntimeConversationScrollTop,
+	setRuntimeFileDiffTarget,
+	setRuntimeFileEditorModel,
+	setRuntimeFileEditorViewState,
+	setRuntimeHookPaused,
+	setRuntimeHooksPaused,
+	setRuntimeThreadNextModelId,
+	setRuntimeThreadNextReasoning,
+	setRuntimeThreadNextServiceTier,
 	shouldLoadRuntimeSession,
+	startRuntimeService,
 	startNewRuntimeSession,
+	stopRuntimeService,
 	stopRuntimeSession,
+	submitRuntimeThread,
 	syncRuntimeProjections,
+	toggleRuntimeFileDirectory,
+	toggleRuntimeFilesChangedOnly,
+	unbindRuntimeServiceLocalhost,
+	updateRuntimeFileBuffer,
+	removeRuntimeThreadPendingComment,
+	updateRuntimeQueuedPrompt,
 } from "$lib/app/app-runtime.svelte";
 import {
 	DESKTOP_SERVICE_ID,
@@ -160,6 +220,414 @@ export async function deleteThread(
 	const deleted = await deleteRuntimeThread(sessionId, threadId);
 	syncAppNavigationFromBridge();
 	return deleted;
+}
+
+export async function submitThread(
+	sessionId: string,
+	threadId: string,
+	payload: {
+		parts: ChatMessage["parts"];
+		workspaceId?: string;
+		providerId?: string;
+		workspaceType?: "local" | "git" | null;
+		workspacePath?: string | null;
+		allowEmptyPendingMessage?: boolean;
+		runAfter?: string;
+	},
+): ReturnType<typeof submitRuntimeThread> {
+	return submitRuntimeThread(sessionId, threadId, payload);
+}
+
+export async function cancelThread(
+	sessionId: string,
+	threadId: string,
+): Promise<void> {
+	await cancelRuntimeThread(sessionId, threadId);
+}
+
+export async function refreshThread(
+	sessionId: string,
+	threadId: string,
+): Promise<void> {
+	await refreshRuntimeThread(sessionId, threadId);
+}
+
+export function setComposerDraft(sessionId: string, value: string): void {
+	setRuntimeComposerDraft(sessionId, value);
+}
+
+export function clearComposerDraft(
+	sessionId: string,
+	threadId: string,
+	storageKey?: string,
+): void {
+	clearRuntimeComposerDraft(sessionId, threadId, storageKey);
+}
+
+export function setThreadNextModelId(
+	sessionId: string,
+	threadId: string,
+	modelId: string | null | undefined,
+): void {
+	setRuntimeThreadNextModelId(sessionId, threadId, modelId);
+}
+
+export function setThreadNextReasoning(
+	sessionId: string,
+	threadId: string,
+	reasoning: string | undefined,
+): void {
+	setRuntimeThreadNextReasoning(sessionId, threadId, reasoning);
+}
+
+export function setThreadNextServiceTier(
+	sessionId: string,
+	threadId: string,
+	serviceTier: string | null | undefined,
+): void {
+	setRuntimeThreadNextServiceTier(sessionId, threadId, serviceTier);
+}
+
+export function clearThreadNextComposerValues(
+	sessionId: string,
+	threadId: string,
+): void {
+	clearRuntimeThreadNextComposerValues(sessionId, threadId);
+}
+
+export function addThreadPendingComment(
+	sessionId: string,
+	threadId: string,
+	comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
+): void {
+	addRuntimeThreadPendingComment(sessionId, threadId, comment);
+}
+
+export function removeThreadPendingComment(
+	sessionId: string,
+	threadId: string,
+	commentId: string,
+): void {
+	removeRuntimeThreadPendingComment(sessionId, threadId, commentId);
+}
+
+export function clearThreadPendingComments(
+	sessionId: string,
+	threadId: string,
+): void {
+	clearRuntimeThreadPendingComments(sessionId, threadId);
+}
+
+export async function deleteQueuedPrompt(
+	sessionId: string,
+	threadId: string,
+	queueId: string,
+): Promise<void> {
+	await deleteRuntimeQueuedPrompt(sessionId, threadId, queueId);
+}
+
+export async function updateQueuedPrompt(
+	sessionId: string,
+	threadId: string,
+	queueId: string,
+	payload: Parameters<ThreadContextValue["updateQueuedPrompt"]>[1],
+): Promise<void> {
+	await updateRuntimeQueuedPrompt(sessionId, threadId, queueId, payload);
+}
+
+export function setConversationScrollTop(
+	sessionId: string,
+	threadId: string,
+	scrollTop: number,
+): void {
+	setRuntimeConversationScrollTop(sessionId, threadId, scrollTop);
+}
+
+export async function openFile(
+	sessionId: string,
+	path?: string,
+): Promise<void> {
+	await openRuntimeFile(sessionId, path);
+}
+
+export async function refreshFiles(sessionId: string): Promise<void> {
+	await refreshRuntimeFiles(sessionId);
+}
+
+export async function setFileDiffTarget(
+	sessionId: string,
+	target: string,
+): Promise<void> {
+	await setRuntimeFileDiffTarget(sessionId, target);
+}
+
+export async function saveFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	return saveRuntimeFile(sessionId, path);
+}
+
+export async function renameFile(
+	sessionId: string,
+	path: string,
+	nextName: string,
+): Promise<boolean> {
+	return renameRuntimeFile(sessionId, path, nextName);
+}
+
+export async function removeFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	return removeRuntimeFile(sessionId, path);
+}
+
+export async function refreshHooks(sessionId: string): Promise<void> {
+	await refreshRuntimeHooks(sessionId);
+}
+
+export function rerunHook(sessionId: string, hookId: string): void {
+	rerunRuntimeHook(sessionId, hookId);
+}
+
+export async function setHooksPaused(
+	sessionId: string,
+	paused: boolean,
+): Promise<void> {
+	await setRuntimeHooksPaused(sessionId, paused);
+}
+
+export async function setHookPaused(
+	sessionId: string,
+	hookId: string,
+	paused: boolean,
+): Promise<void> {
+	await setRuntimeHookPaused(sessionId, hookId, paused);
+}
+
+export async function refreshServices(sessionId: string): Promise<void> {
+	await refreshRuntimeServices(sessionId);
+}
+
+export function openService(sessionId: string, serviceId: string): void {
+	openRuntimeService(sessionId, serviceId);
+}
+
+export async function startService(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	await startRuntimeService(sessionId, serviceId);
+}
+
+export async function stopService(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	await stopRuntimeService(sessionId, serviceId);
+}
+
+export async function bindServiceLocalhost(
+	sessionId: string,
+	serviceId: string,
+	port: number,
+): Promise<void> {
+	await bindRuntimeServiceLocalhost(sessionId, serviceId, port);
+}
+
+export async function unbindServiceLocalhost(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	await unbindRuntimeServiceLocalhost(sessionId, serviceId);
+}
+
+export async function refreshAgentCommands(sessionId: string): Promise<void> {
+	await refreshRuntimeCommands(sessionId);
+}
+
+export async function runAgentCommand(
+	sessionId: string,
+	command: AgentCommand,
+): Promise<void> {
+	await runRuntimeCommand(sessionId, command);
+}
+
+export function closeAgentCommandCredentialDialog(sessionId: string): void {
+	ensureRuntimeSessionState(sessionId).commands.credentialDialog.close();
+	syncRuntimeProjections();
+}
+
+export async function confirmAgentCommandCredentialDialog(
+	sessionId: string,
+): Promise<void> {
+	await ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.confirm();
+	syncRuntimeProjections();
+}
+
+export function selectAgentCommandCredentialOption(
+	sessionId: string,
+	envVar: string,
+	value: string,
+): void {
+	ensureRuntimeSessionState(sessionId).commands.credentialDialog.selectOption(
+		envVar,
+		value,
+	);
+	syncRuntimeProjections();
+}
+
+export function setAgentCommandCredentialCreateName(
+	sessionId: string,
+	envVar: string,
+	value: string,
+): void {
+	ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.setCreateCredentialName(envVar, value);
+	syncRuntimeProjections();
+}
+
+export function setAgentCommandCredentialCreateSecret(
+	sessionId: string,
+	envVar: string,
+	value: string,
+): void {
+	ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.setCreateCredentialSecret(envVar, value);
+	syncRuntimeProjections();
+}
+
+export function setAgentCommandCredentialValidityPreset(
+	sessionId: string,
+	envVar: string,
+	value: CredentialValidityPreset,
+): void {
+	ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.setValidityPreset(envVar, value);
+	syncRuntimeProjections();
+}
+
+export function setAgentCommandCredentialValidityValue(
+	sessionId: string,
+	envVar: string,
+	value: string,
+): void {
+	ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.setValidityValue(envVar, value);
+	syncRuntimeProjections();
+}
+
+export function setAgentCommandCredentialValidityUnit(
+	sessionId: string,
+	envVar: string,
+	value: CredentialValidityUnit,
+): void {
+	ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.setValidityUnit(envVar, value);
+	syncRuntimeProjections();
+}
+
+export async function launchAgentCommandCredentialOAuthWizard(
+	sessionId: string,
+	envVar: string,
+): Promise<void> {
+	await ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.launchOAuthWizard(envVar);
+	syncRuntimeProjections();
+}
+
+export async function refreshAgentCommandCredentialDialogCredentials(
+	sessionId: string,
+): Promise<void> {
+	await ensureRuntimeSessionState(
+		sessionId,
+	).commands.credentialDialog.refreshAvailableCredentials();
+	syncRuntimeProjections();
+}
+
+export function closeFile(sessionId: string, path: string): void {
+	closeRuntimeFile(sessionId, path);
+}
+
+export async function toggleFilesChangedOnly(sessionId: string): Promise<void> {
+	await toggleRuntimeFilesChangedOnly(sessionId);
+}
+
+export async function toggleFileDirectory(
+	sessionId: string,
+	path: string,
+): Promise<void> {
+	await toggleRuntimeFileDirectory(sessionId, path);
+}
+
+export async function expandFileTree(sessionId: string): Promise<void> {
+	await expandRuntimeFileTree(sessionId);
+}
+
+export function collapseFileTree(sessionId: string): void {
+	collapseRuntimeFileTree(sessionId);
+}
+
+export function updateFileBuffer(
+	sessionId: string,
+	path: string,
+	content: string,
+): void {
+	updateRuntimeFileBuffer(sessionId, path, content);
+}
+
+export function discardFileBuffer(sessionId: string, path: string): void {
+	discardRuntimeFileBuffer(sessionId, path);
+}
+
+export function acceptFileConflict(sessionId: string, path: string): void {
+	acceptRuntimeFileConflict(sessionId, path);
+}
+
+export async function forceSaveFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	return forceSaveRuntimeFile(sessionId, path);
+}
+
+export function getFileEditorModel(
+	sessionId: string,
+	path: string,
+): unknown | null {
+	return getRuntimeFileEditorModel(sessionId, path);
+}
+
+export function setFileEditorModel(
+	sessionId: string,
+	path: string,
+	model: unknown | null,
+): void {
+	setRuntimeFileEditorModel(sessionId, path, model);
+}
+
+export function getFileEditorViewState(
+	sessionId: string,
+	path: string,
+): unknown | null {
+	return getRuntimeFileEditorViewState(sessionId, path);
+}
+
+export function setFileEditorViewState(
+	sessionId: string,
+	path: string,
+	viewState: unknown | null,
+): void {
+	setRuntimeFileEditorViewState(sessionId, path, viewState);
 }
 
 export async function updateWorkspaceDisplayName(
@@ -485,6 +953,24 @@ export function ensureSessionState(sessionId: string): SessionContextValue {
 
 export function releaseSessionState(session: SessionContextValue): void {
 	releaseRuntimeSessionState(session);
+}
+
+export function ensureThreadState(
+	sessionId: string,
+	threadId: string,
+): ThreadContextValue {
+	return ensureRuntimeThreadState(sessionId, threadId);
+}
+
+export function connectThread(sessionId: string, threadId: string): void {
+	connectRuntimeThread(sessionId, threadId);
+}
+
+export function releaseThreadState(
+	sessionId: string,
+	thread: ThreadContextValue,
+): void {
+	releaseRuntimeThreadState(sessionId, thread);
 }
 
 export function toggleSelectedSessionView(

@@ -8,6 +8,7 @@
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import ThreadWorkspaceActive from "$lib/components/app/ThreadWorkspaceActive.svelte";
+	import { ensureThreadState } from "$lib/context/commands/app-view";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,
@@ -33,7 +34,7 @@
 		mode,
 	}: Props = $props();
 	const thread: ThreadContextValue = untrack(() =>
-		session.ensureThread(threadId),
+		ensureThreadState(session.sessionId, threadId),
 	);
 	const canLoadThreadData = $derived.by(
 		() =>

@@ -5,6 +5,10 @@
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
+	import {
+		connectThread,
+		releaseThreadState,
+	} from "$lib/context/commands/app-view";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,
@@ -27,14 +31,11 @@
 		if (!props.visible || !session.current) {
 			return;
 		}
-		void thread.connect();
+		connectThread(session.sessionId, thread.threadId);
 	});
 
 	onDestroy(() => {
-		thread.dispose();
-		if (session.threadContexts.get(thread.threadId) === thread) {
-			session.threadContexts.delete(thread.threadId);
-		}
+		releaseThreadState(session.sessionId, thread);
 	});
 
 	const showDock = $derived(
@@ -61,7 +62,11 @@
 
 {#if showDock && dockMaximized}
 	<div class="min-h-0 flex-1 overflow-hidden">
-		<DockPanel {session} {thread} />
+		<DockPanel
+			sessionId={session.sessionId}
+			threadId={thread.threadId}
+			sessionView={session.ui}
+		/>
 	</div>
 {:else if showDock}
 	<Resizable.PaneGroup
@@ -87,7 +92,11 @@
 		<Resizable.Handle class="bg-transparent" />
 		<Resizable.Pane defaultSize={65} minSize={25} class="min-h-0 min-w-0">
 			<div class="h-full min-h-0 min-w-0 overflow-auto">
-				<DockPanel {session} {thread} />
+				<DockPanel
+					sessionId={session.sessionId}
+					threadId={thread.threadId}
+					sessionView={session.ui}
+				/>
 			</div>
 		</Resizable.Pane>
 	</Resizable.PaneGroup>

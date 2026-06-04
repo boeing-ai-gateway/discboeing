@@ -97,4 +97,27 @@ test.describe("Discobot app smoke", () => {
 
     await expect(sessionsMenu.or(sidebarHeading).first()).toBeVisible();
   });
+
+  test("selects an existing session from a pending new session", async ({
+    page,
+  }) => {
+    await gotoApp(page);
+
+    const existingSession = page.getByRole("button", { name: "Test" }).first();
+    if (!(await existingSession.isVisible().catch(() => false))) {
+      test.skip(true, "No local Test session fixture is available.");
+    }
+
+    await page.getByRole("button", { name: "New session" }).first().click();
+    await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
+    await expect(
+      page.getByRole("main").getByRole("button", { name: "New session" }),
+    ).toBeVisible();
+
+    await existingSession.click();
+
+    await expect(existingSession).toHaveClass(/bg-sidebar-accent/);
+    await expect(page.getByRole("button", { name: "Terminal" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit" })).toBeVisible();
+  });
 });

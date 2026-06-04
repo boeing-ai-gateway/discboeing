@@ -58,12 +58,27 @@
 	} from "$lib/session/domains/session-domain.helpers";
 	import {
 		addPromptToHistory,
+		cancelThread,
+		clearComposerDraft,
+		clearThreadNextComposerValues,
+		clearThreadPendingComments,
+		deleteQueuedPrompt,
 		openCredentialsDialog,
 		openSettingsDialog,
 		openThread,
 		pinPrompt,
 		removePromptFromHistory,
+		removeThreadPendingComment,
+		rerunHook,
+		setComposerDraft,
+		setHookPaused,
+		setHooksPaused,
+		setThreadNextModelId,
+		setThreadNextReasoning,
+		setThreadNextServiceTier,
+		submitThread,
 		unpinPrompt,
+		updateQueuedPrompt,
 	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
 
@@ -84,8 +99,26 @@
 	const models = $derived(context.data.models);
 	const preferences = $derived(context.view.app.preferences);
 	const sessionView = $derived(session.ui);
-	const sessionHooks = $derived(session.hooks);
-	const sessionCommands = $derived(session.commands);
+	const composerDraft = $derived.by(
+		() =>
+			context.view.sessions[session.sessionId]?.composer.draft ??
+			sessionView.composerDraft,
+	);
+	const sessionHooks = $derived(
+		context.data.hooks.bySessionId[session.sessionId],
+	);
+	const sessionCommands = $derived(
+		context.data.commands.bySessionId[session.sessionId],
+	);
+	const hooksStatus = $derived.by(
+		() =>
+			sessionHooks?.status ?? {
+				hooks: [],
+				pendingHookIds: [],
+				executionPaused: false,
+			},
+	);
+	const hookOutputById = $derived.by(() => sessionHooks?.outputById ?? {});
 	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
@@ -303,13 +336,13 @@
 		() => session.isPending && !thread.isStreaming,
 	);
 	const availableCommands = $derived.by(() =>
-		session.isPending ? [] : sessionCommands.list,
+		session.isPending ? [] : (sessionCommands?.items ?? []),
 	);
 	const commandsLoading = $derived.by(
 		() =>
 			!session.isPending &&
-			sessionCommands.fetchedAt === null &&
-			sessionCommands.status !== "error",
+			(sessionCommands?.fetchedAt ?? null) === null &&
+			(sessionCommands?.status ?? "idle") !== "error",
 	);
 	const selectableSandboxProviders = $derived.by(() =>
 		sandboxProviders.filter((provider) => provider.available),
@@ -363,13 +396,17 @@
 		);
 
 		if (parsedSelection.modelId === thread.modelId) {
-			thread.setNextModelId(undefined);
-			thread.setNextReasoning(
+			setThreadNextModelId(session.sessionId, thread.threadId, undefined);
+			setThreadNextReasoning(
+				session.sessionId,
+				thread.threadId,
 				isSameReasoningSelection(nextReasoning, thread.reasoning)
 					? undefined
 					: nextReasoning,
 			);
-			thread.setNextServiceTier(
+			setThreadNextServiceTier(
+				session.sessionId,
+				thread.threadId,
 				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
 					? undefined
 					: nextServiceTier,
@@ -377,16 +414,26 @@
 			return;
 		}
 
-		thread.setNextModelId(parsedSelection.modelId);
-		thread.setNextReasoning(nextReasoning);
-		thread.setNextServiceTier(nextServiceTier);
+		setThreadNextModelId(
+			session.sessionId,
+			thread.threadId,
+			parsedSelection.modelId,
+		);
+		setThreadNextReasoning(session.sessionId, thread.threadId, nextReasoning);
+		setThreadNextServiceTier(
+			session.sessionId,
+			thread.threadId,
+			nextServiceTier,
+		);
 	}
 
 	function handleReasoningSelect(nextReasoning: string | undefined) {
 		if (nextReasoning === "default") {
 			const modelDefaultReasoning = selectedModel?.defaultReasoning;
 			if (effectiveReasoning === undefined) {
-				thread.setNextReasoning(
+				setThreadNextReasoning(
+					session.sessionId,
+					thread.threadId,
 					thread.nextModelId === undefined &&
 						(thread.reasoning === undefined || thread.reasoning === "default")
 						? undefined
@@ -394,11 +441,17 @@
 				);
 				return;
 			}
-			thread.setNextReasoning(modelDefaultReasoning ?? "default");
+			setThreadNextReasoning(
+				session.sessionId,
+				thread.threadId,
+				modelDefaultReasoning ?? "default",
+			);
 			return;
 		}
 
-		thread.setNextReasoning(
+		setThreadNextReasoning(
+			session.sessionId,
+			thread.threadId,
 			thread.nextModelId === undefined &&
 				isSameReasoningSelection(nextReasoning, thread.reasoning)
 				? undefined
@@ -407,7 +460,9 @@
 	}
 
 	function handleServiceTierSelect(nextServiceTier: string | undefined) {
-		thread.setNextServiceTier(
+		setThreadNextServiceTier(
+			session.sessionId,
+			thread.threadId,
 			thread.nextModelId === undefined &&
 				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
 				? undefined
@@ -441,8 +496,7 @@
 
 	function inputEmpty() {
 		return (
-			sessionView.composerDraft.trim().length === 0 &&
-			thread.pendingComments.length === 0
+			composerDraft.trim().length === 0 && thread.pendingComments.length === 0
 		);
 	}
 
@@ -602,7 +656,7 @@
 	}
 
 	function clearCurrentDraft() {
-		thread.clearComposerDraft();
+		clearComposerDraft(session.sessionId, thread.threadId);
 	}
 
 	function parseRunAfter(value?: string | null): Date | null {
@@ -635,7 +689,7 @@
 	});
 
 	async function handleDeleteQueuedPrompt(queueId: string) {
-		await thread.deleteQueuedPrompt(queueId);
+		await deleteQueuedPrompt(session.sessionId, thread.threadId, queueId);
 	}
 
 	async function createSessionForComposerAutocomplete(): Promise<boolean> {
@@ -663,7 +717,12 @@
 		queueId: string,
 		payload: UpdateQueuedPromptRequest,
 	) {
-		await thread.updateQueuedPrompt(queueId, payload);
+		await updateQueuedPrompt(
+			session.sessionId,
+			thread.threadId,
+			queueId,
+			payload,
+		);
 	}
 
 	async function submitComposer({
@@ -682,7 +741,7 @@
 		const emptyWithoutAttachments =
 			inputEmpty() && attachmentFiles.length === 0;
 		if (isGenerating() && emptyWithoutAttachments) {
-			await thread.cancel();
+			await cancelThread(session.sessionId, thread.threadId);
 			composerTextareaRef?.closeMentionDropdown();
 			composerTextareaRef?.closeSlashCommandDropdown();
 			composerTextareaRef?.closePromptHistoryDropdown();
@@ -694,7 +753,7 @@
 
 		pendingSubmitError = null;
 		const wasPending = session.isPending;
-		const currentDraft = sessionView.composerDraft;
+		const currentDraft = composerDraft;
 		const nextMessageText = forceEmptyPendingMessage
 			? ""
 			: buildSubmitText(currentDraft, submitComments);
@@ -726,7 +785,7 @@
 		}
 
 		try {
-			const result = await thread.submit({
+			const result = await submitThread(session.sessionId, thread.threadId, {
 				parts: nextMessageParts,
 				allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
 				...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
@@ -737,12 +796,12 @@
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
 				}
-				thread.clearNextComposerValues();
+				clearThreadNextComposerValues(session.sessionId, thread.threadId);
 				sessionView.resetPendingWorkspaceSetup();
 			}
 			if (!preserveDraft) {
-				thread.clearNextComposerValues();
-				thread.clearPendingComments();
+				clearThreadNextComposerValues(session.sessionId, thread.threadId);
+				clearThreadPendingComments(session.sessionId, thread.threadId);
 				scheduledRunAfter = null;
 				schedulePopoverOpen = false;
 				composerTextareaRef?.closeMentionDropdown();
@@ -790,15 +849,15 @@
 			<ConversationHooksPanel
 				{session}
 				expanded={sessionView.hooksExpanded}
-				hooksStatus={sessionHooks.status}
-				outputById={sessionHooks.outputById}
-				onRerunHook={(hookId) => sessionHooks.rerun(hookId)}
+				{hooksStatus}
+				outputById={hookOutputById}
+				onRerunHook={(hookId) => rerunHook(session.sessionId, hookId)}
 				onSetExecutionPaused={(paused) => {
-					void sessionHooks.setExecutionPaused(paused);
+					void setHooksPaused(session.sessionId, paused);
 					sessionView.hooksExpanded = false;
 				}}
 				onSetHookExecutionPaused={(hookId, paused) => {
-					void sessionHooks.setHookExecutionPaused(hookId, paused);
+					void setHookPaused(session.sessionId, hookId, paused);
 				}}
 			/>
 		{/if}
@@ -865,7 +924,12 @@
 								<Button
 									aria-label="Remove comment"
 									class="size-6 shrink-0"
-									onclick={() => thread.removePendingComment(comment.id)}
+									onclick={() =>
+										removeThreadPendingComment(
+											session.sessionId,
+											thread.threadId,
+											comment.id,
+										)}
 									size="icon-xs"
 									type="button"
 									variant="ghost"
@@ -918,9 +982,9 @@
 
 					<ConversationComposerTextarea
 						bind:this={composerTextareaRef}
-						draft={sessionView.composerDraft}
+						draft={composerDraft}
 						disabled={composerDisabled}
-						onDraftChange={(v) => sessionView.setComposerDraft(v)}
+						onDraftChange={(v) => setComposerDraft(session.sessionId, v)}
 						sessionId={session.isPending ? null : session.sessionId}
 						commands={availableCommands}
 						{commandsLoading}
@@ -1008,7 +1072,7 @@
 							{:else if !session.isPending}
 								<ConversationComposerHooksControl
 									bind:expanded={sessionView.hooksExpanded}
-									hooksStatus={sessionHooks.status}
+									{hooksStatus}
 									threadPhase={session.threads.selected?.phase ?? ""}
 								/>
 							{/if}

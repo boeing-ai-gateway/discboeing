@@ -40,11 +40,18 @@ test("app header keeps window controls in a dedicated rightmost grid column on d
 	assert.doesNotMatch(source, /data-tauri-drag-region/);
 	assert.match(
 		source,
-		/\{#if !isMobile\.current\}[\s\S]*class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>[\s\S]*\{\/if\}/,
+		/\{#if !appEnvironment\.isMobile\}[\s\S]*class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"[\s\S]*<RightWindowControls \/>[\s\S]*\{\/if\}/,
 	);
 	assert.ok(source.includes("<SessionToolbarStack />"));
-	assert.ok(source.includes('{isMobile.current ? "New" : "New Session"}'));
+	assert.ok(
+		source.includes('{appEnvironment.isMobile ? "New" : "New Session"}'),
+	);
 	assert.match(source, /class="absolute inset-0 pointer-events-auto"/);
+	assert.match(
+		source,
+		/const appEnvironment = context\.view\.app\.environment;/,
+	);
+	assert.doesNotMatch(source, /new IsMobile/);
 });
 
 test("app header shows the mobile Sessions toggle to the right of the logo", () => {
@@ -52,7 +59,7 @@ test("app header shows the mobile Sessions toggle to the right of the logo", () 
 
 	assert.match(
 		source,
-		/\{#if isMobile\.current\}[\s\S]*<DiscobotLogo size=\{24\} \/>/,
+		/\{#if appEnvironment\.isMobile\}[\s\S]*<DiscobotLogo size=\{24\} \/>/,
 	);
 	assert.match(
 		source,

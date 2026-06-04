@@ -33,9 +33,9 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	assert.match(source, /\}: Props =\s*\$props\(\);/);
 	assert.match(
 		source,
-		/const thread: ThreadContextValue = untrack\(\(\) =>\s*session\.ensureThread\(threadId\),\s*\);/,
+		/const thread: ThreadContextValue = untrack\(\(\) =>\s*ensureThreadState\(session\.sessionId, threadId\),\s*\);/,
 	);
-	assert.doesNotMatch(source, /session\.ensureThread\(untrack/);
+	assert.doesNotMatch(source, /session\.ensureThread/);
 	assert.doesNotMatch(source, /legacy-context-bridge/);
 	assert.doesNotMatch(source, /setThreadBridge\(thread\);/);
 	assert.match(source, /<ThreadWorkspaceActive/);
@@ -128,10 +128,13 @@ test("active thread workspace keeps the stream live while inactive conversation 
 	const source = readThreadWorkspaceActiveSource();
 
 	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
-	assert.match(source, /void thread\.connect\(\);/);
 	assert.match(
 		source,
-		/\$effect\(\(\) => \{[\s\S]*void thread\.connect\(\);[\s\S]*\}\);/,
+		/connectThread\(session\.sessionId, thread\.threadId\);/,
+	);
+	assert.match(
+		source,
+		/\$effect\(\(\) => \{[\s\S]*connectThread\(session\.sessionId, thread\.threadId\);[\s\S]*\}\);/,
 	);
 	assert.match(source, /const headerTitle = \$derived\.by/);
 	assert.match(source, /if \(session\.isPending\) \{\s*return "";/);

@@ -64,9 +64,17 @@
 	} from "$lib/components/ui/collapsible";
 	import { getErrorMessage } from "$lib/error-message";
 	import { useContext } from "$lib/context/context.svelte";
+	import {
+		openFile,
+		refreshThread,
+		setConversationScrollTop,
+		addThreadPendingComment,
+		submitThread,
+	} from "$lib/context/commands/app-view";
 	import type {
 		SessionContextValue,
 		ThreadContextValue,
+		ConversationComment,
 	} from "$lib/session/session-context.types";
 	import {
 		buildUserMessageParts,
@@ -195,10 +203,13 @@
 		() => conversationMessages.at(-1)?.id ?? null,
 	);
 	const savedScrollTop = $derived.by(() => {
-		if (!activeThreadId || !session) {
+		if (!activeSessionId || !activeThreadId) {
 			return null;
 		}
-		return session.conversationScrollTopByThreadId.get(activeThreadId) ?? null;
+		return (
+			context.view.sessions[activeSessionId]?.threads[activeThreadId]
+				?.conversation.scrollTop ?? null
+		);
 	});
 
 	let viewport = $state<HTMLDivElement | null>(null);
@@ -265,7 +276,9 @@
 		if (!hookPath) {
 			return;
 		}
-		await session?.files.open(hookPath);
+		if (activeSessionId) {
+			await openFile(activeSessionId, hookPath);
+		}
 		hookPreviewOpen = false;
 	}
 
@@ -873,13 +886,16 @@
 	}
 
 	async function submitSelectionComment(
-		comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
+		comment: Omit<ConversationComment, "id">,
 	) {
 		if (!thread) {
 			return;
 		}
 		const text = formatConversationComments([comment]);
-		await thread.submit({
+		if (!activeSessionId) {
+			return;
+		}
+		await submitThread(activeSessionId, thread.threadId, {
 			parts: buildUserMessageParts(text),
 		});
 	}
@@ -904,7 +920,9 @@
 		return {
 			label: "Retry",
 			run: () => {
-				void thread.refresh();
+				if (activeSessionId) {
+					void refreshThread(activeSessionId, thread.threadId);
+				}
 			},
 		};
 	}
@@ -930,10 +948,11 @@
 	}
 
 	function saveScrollPosition(element: HTMLDivElement | null = viewport) {
-		if (!element || !activeThreadId || !session) {
+		if (!element || !activeThreadId || !activeSessionId) {
 			return;
 		}
-		session.conversationScrollTopByThreadId.set(
+		setConversationScrollTop(
+			activeSessionId,
 			activeThreadId,
 			element.scrollTop,
 		);
@@ -1944,7 +1963,11 @@
 				<ConversationSelectionComment
 					conversationRoot={contentEl}
 					scrollContainer={viewport}
-					onQueueComment={(comment) => thread?.addPendingComment(comment)}
+					onQueueComment={(comment) => {
+						if (activeSessionId && activeThreadId) {
+							addThreadPendingComment(activeSessionId, activeThreadId, comment);
+						}
+					}}
 					onSubmitComment={submitSelectionComment}
 				/>
 				{#if !isNearBottom}

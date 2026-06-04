@@ -103,7 +103,10 @@ test("conversation pane renders expandable top-level error banners with thread r
 	assert.match(source, /function getErrorBannerAction\(/);
 	assert.match(source, /if \(key !== "thread" \|\| !thread\) \{/);
 	assert.match(source, /label: "Retry"/);
-	assert.match(source, /void thread\.refresh\(\)/);
+	assert.match(
+		source,
+		/void refreshThread\(activeSessionId, thread\.threadId\)/,
+	);
 	assert.match(source, /function isDroppedModelConnectionError/);
 	assert.match(source, /The model connection dropped unexpectedly/);
 	assert.match(source, /Show details/);

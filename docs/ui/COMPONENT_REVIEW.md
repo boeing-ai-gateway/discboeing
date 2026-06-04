@@ -250,9 +250,9 @@ Prefer:
 
 ```ts
 type Props = {
-	label: string;
-	disabled?: boolean;
-	onclick?: () => void;
+  label: string;
+  disabled?: boolean;
+  onclick?: () => void;
 };
 ```
 
@@ -329,6 +329,81 @@ Review question:
 - Is this component displaying state, changing state, or coordinating app
   behavior? Is that the right role for it?
 
+## Root context and CQRS
+
+App-level state lives in one deeply reactive Svelte `$state()` root context. The
+context is split by responsibility:
+
+- `context.data` is backend, runtime, and domain data.
+- `context.view` is frontend-only UI state, including dialogs, selection,
+  navigation, preferences, and other view concerns.
+
+Keep the split strict. Dialog state, expanded panels, selected UI controls,
+temporary drafts, and similar browser-only state belong in `view`, not `data`.
+Do not add getters, setters, or property wrapper objects to the state tree; keep
+the context shape plain and directly reactive.
+
+Components should follow the CQRS direction:
+
+- Read current state from the root context.
+- Express behavior by calling command functions.
+- Let commands call backend APIs and update root context state.
+
+Prefer:
+
+```svelte
+<script lang="ts">
+	import { openSettingsDialog } from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
+
+	const context = useContext();
+</script>
+
+{#if context.view.app.updates.showBadge}
+	<span class="size-2 rounded-full bg-primary"></span>
+{/if}
+
+<button type="button" onclick={() => openSettingsDialog()}>
+	Settings
+</button>
+```
+
+Avoid:
+
+```svelte
+<script lang="ts">
+	const context = useContext();
+	const updates = $derived(context.view.app.updates);
+
+	function openSettings() {
+		context.view.app.dialogs.settings.open = true;
+	}
+</script>
+```
+
+The context is already reactive. Do not create temporary `$derived` variables
+just to rename stable context objects or single fields. A plain alias is fine
+when it reduces repeated long paths and the referenced object is stable:
+
+```svelte
+<script lang="ts">
+	const context = useContext();
+	const keyboardShortcutsDialog = context.view.app.dialogs.keyboardShortcuts;
+</script>
+```
+
+Use `$derived` when computing a new value, filtering/mapping data, combining
+multiple inputs, or intentionally tracking a potentially replaced value.
+
+Review questions:
+
+- Does new state belong in `view` or `data`?
+- Is the component calling a command for behavior instead of mutating app state
+  directly?
+- Is a `$derived` value computing something meaningful, or only renaming a
+  reactive context path?
+- Could a plain context read or stable alias make this component simpler?
+
 ## Accessibility
 
 Accessibility is part of keeping components simple and correct.
@@ -394,6 +469,10 @@ Use this checklist during Svelte component review:
 - [ ] Props are minimal and understandable.
 - [ ] Conditional rendering is simple and impossible states are avoided.
 - [ ] Data flow is clear.
+- [ ] App components follow the root-context/CQRS pattern.
+- [ ] UI-only state is in `context.view`, not `context.data`.
+- [ ] `$derived` aliases are avoided unless they compute or intentionally track
+      a value.
 - [ ] Accessibility basics are handled.
 - [ ] Tests are added where behavior is non-trivial.
 
@@ -403,6 +482,9 @@ Prioritize findings like:
 
 - The component is mostly JavaScript when it could be declarative markup.
 - State or `$effect` is used for something `$derived` or CSS can handle.
+- `$derived` is used only to rename already-reactive context state.
+- UI-only state is stored in `context.data` instead of `context.view`.
+- A component mutates root context state directly instead of calling a command.
 - A pure component consumes global app/session/thread context.
 - A component is in the wrong component folder for its context usage.
 - A condition tree hides the main UI or permits impossible states.

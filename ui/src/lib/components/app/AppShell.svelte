@@ -13,10 +13,9 @@
 		setMobileSidebarOpen,
 		shouldLoadSessionWorkspace,
 	} from "$lib/context/commands/app-view";
-	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
 	const context = useContext();
-	const isMobile = new IsMobile(1024);
+	const appEnvironment = $derived(context.view.app.environment);
 	const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discobot-ui-sidebar-layout";
 	const SIDEBAR_MIN_WIDTH_PX = 300;
 	const SIDEBAR_MIN_SIZE_FALLBACK = 10;
@@ -40,7 +39,7 @@
 	);
 
 	function toggleSidebar() {
-		if (isMobile.current) {
+		if (appEnvironment.isMobile) {
 			setMobileSidebarOpen(!context.view.app.navigation.mobileSidebarOpen);
 			return;
 		}
@@ -61,7 +60,7 @@
 	}
 
 	function handleSessionSelect() {
-		if (isMobile.current) {
+		if (appEnvironment.isMobile) {
 			setMobileSidebarOpen(false);
 		}
 	}
@@ -84,7 +83,7 @@
 	}
 
 	$effect(() => {
-		if (isMobile.current || !desktopPaneGroupElement) {
+		if (appEnvironment.isMobile || !desktopPaneGroupElement) {
 			return;
 		}
 
@@ -104,7 +103,11 @@
 	});
 
 	$effect(() => {
-		if (isMobile.current || !desktopSidebarPane || !desktopSidebarInitialized) {
+		if (
+			appEnvironment.isMobile ||
+			!desktopSidebarPane ||
+			!desktopSidebarInitialized
+		) {
 			return;
 		}
 
@@ -112,7 +115,11 @@
 	});
 
 	$effect(() => {
-		if (isMobile.current || !desktopSidebarPane || desktopSidebarInitialized) {
+		if (
+			appEnvironment.isMobile ||
+			!desktopSidebarPane ||
+			desktopSidebarInitialized
+		) {
 			return;
 		}
 
@@ -128,7 +135,11 @@
 	});
 
 	$effect(() => {
-		if (isMobile.current || !desktopSidebarPane || !desktopSidebarInitialized) {
+		if (
+			appEnvironment.isMobile ||
+			!desktopSidebarPane ||
+			!desktopSidebarInitialized
+		) {
 			return;
 		}
 
@@ -165,7 +176,7 @@
 	/>
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
-		{#if isMobile.current}
+		{#if appEnvironment.isMobile}
 			<Sheet.Root bind:open={context.view.app.navigation.mobileSidebarOpen}>
 				<Sheet.Content
 					side="left"

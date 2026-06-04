@@ -17,12 +17,25 @@ test("thread workspace active reconnects when the session becomes available", ()
 
 	assert.match(source, /\$effect\(\(\) => \{/);
 	assert.match(source, /if \(!props\.visible \|\| !session\.current\) \{/);
-	assert.match(source, /void thread\.connect\(\);/);
+	assert.match(
+		source,
+		/connectThread\(session\.sessionId, thread\.threadId\);/,
+	);
 	assert.doesNotMatch(
 		source,
 		/untrack\(\(\) => \{\s*void thread\.connect\(\);\s*\}\);/,
 	);
 	assert.doesNotMatch(source, /currentThread\.disconnect\(\)/);
 	assert.match(source, /onDestroy\(\(\) => \{/);
-	assert.match(source, /thread\.dispose\(\);/);
+	assert.match(source, /releaseThreadState\(session\.sessionId, thread\);/);
+});
+
+test("thread workspace active passes ids and view into dock panel", () => {
+	const source = readThreadWorkspaceActiveSource();
+
+	assert.match(
+		source,
+		/<DockPanel\s+sessionId=\{session\.sessionId\}\s+threadId=\{thread\.threadId\}\s+sessionView=\{session\.ui\}/,
+	);
+	assert.doesNotMatch(source, /<DockPanel \{session\} \{thread\}/);
 });

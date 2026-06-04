@@ -7,13 +7,46 @@
 	import DesktopPanel from "$lib/components/app/parts/DesktopPanel.svelte";
 	import DiffReviewPanel from "$lib/components/app/parts/DiffReviewPanel.svelte";
 	import FilesPanel from "$lib/components/app/parts/FilesPanel.svelte";
+	import type {
+		FilesPanelActions,
+		FilesPanelView,
+	} from "$lib/components/app/parts/FilesPanel.svelte";
 	import ServicePanel from "$lib/components/app/parts/ServicePanel.svelte";
 	import TerminalPanel from "$lib/components/app/parts/TerminalPanel.svelte";
 	import VSCodePanel from "$lib/components/app/parts/VSCodePanel.svelte";
-	import { subscribeServiceOutput } from "$lib/context/commands/app-view";
+	import {
+		acceptFileConflict,
+		addThreadPendingComment,
+		bindServiceLocalhost,
+		closeFile,
+		collapseFileTree,
+		discardFileBuffer,
+		expandFileTree,
+		forceSaveFile,
+		getFileEditorModel,
+		getFileEditorViewState,
+		openFile,
+		openService,
+		refreshFiles,
+		renameFile,
+		removeFile,
+		saveFile,
+		setFileDiffTarget,
+		setFileEditorModel,
+		setFileEditorViewState,
+		toggleFileDirectory,
+		toggleFilesChangedOnly,
+		updateFileBuffer,
+		startService,
+		stopService,
+		submitThread,
+		subscribeServiceOutput,
+		unbindServiceLocalhost,
+	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
 	import { writeStorage } from "$lib/local-storage";
 	import type { DiffStyle } from "$lib/pierre-diff";
+	import type { SessionFilesData } from "$lib/context/context.types";
 	import { requestVSCodeOpenFile } from "$lib/editor-control";
 	import { renderServiceOutputText } from "$lib/service-output";
 	import {
@@ -21,10 +54,7 @@
 		formatConversationComments,
 	} from "$lib/session/domains/session-domain.helpers";
 	import type { SessionActiveView } from "$lib/session/session-view.types";
-	import type {
-		SessionContextValue,
-		ThreadContextValue,
-	} from "$lib/session/session-context.types";
+	import type { SessionViewState } from "$lib/session/view/create-session-view-state.svelte";
 	import {
 		DESKTOP_SERVICE_ID,
 		VSCODE_SERVICE_ID,
@@ -38,15 +68,68 @@
 		displayText: string;
 	};
 	type Props = {
-		session: SessionContextValue;
-		thread: ThreadContextValue;
+		sessionId: string;
+		threadId: string;
+		sessionView: SessionViewState;
 	};
 
-	let { session, thread }: Props = $props();
+	let { sessionId, threadId, sessionView }: Props = $props();
 	const context = useContext();
-	const sessionView = $derived(session.ui);
+	const emptyFileData: SessionFilesData = {
+		list: [],
+		searchable: [],
+		diff: [],
+		diffStats: {
+			additions: 0,
+			deletions: 0,
+			filesChanged: 0,
+		},
+		diffTarget: "working",
+		contents: {},
+		tree: [],
+		status: "idle",
+		error: null,
+	};
+	const emptyFileView: FilesPanelView = {
+		activePath: "",
+		openPaths: [],
+		showChangedOnly: false,
+		expandedPaths: [],
+		loadingPaths: {},
+		buffers: {},
+	};
+	const serviceData = $derived(context.data.services.bySessionId[sessionId]);
+	const fileData = $derived(
+		context.data.files.bySessionId[sessionId] ?? emptyFileData,
+	);
+	const fileView = $derived(
+		context.view.sessions[sessionId]?.files ?? emptyFileView,
+	);
+	const filePanelActions: FilesPanelActions = {
+		acceptConflict: (path) => acceptFileConflict(sessionId, path),
+		close: () => sessionView.openChat(),
+		closeFile: (path) => closeFile(sessionId, path),
+		collapseTree: () => collapseFileTree(sessionId),
+		discardBuffer: (path) => discardFileBuffer(sessionId, path),
+		expandTree: () => expandFileTree(sessionId),
+		forceSaveFile: (path) => forceSaveFile(sessionId, path),
+		getEditorModel: (path) => getFileEditorModel(sessionId, path),
+		getEditorViewState: (path) => getFileEditorViewState(sessionId, path),
+		openFile: (path) => openFile(sessionId, path),
+		refreshFiles: () => refreshFiles(sessionId),
+		removeFile: (path) => removeFile(sessionId, path),
+		renameFile: (path, nextName) => renameFile(sessionId, path, nextName),
+		saveFile: (path) => saveFile(sessionId, path),
+		setEditorModel: (path, model) => setFileEditorModel(sessionId, path, model),
+		setEditorViewState: (path, viewState) =>
+			setFileEditorViewState(sessionId, path, viewState),
+		toggleChangedOnly: () => toggleFilesChangedOnly(sessionId),
+		toggleDirectory: (path) => toggleFileDirectory(sessionId, path),
+		updateBuffer: (path, content) => updateFileBuffer(sessionId, path, content),
+		toggleDockMaximized: () => sessionView.toggleDockMaximized(),
+	};
 	const visibleServices = $derived.by(() =>
-		session.services.list.filter(
+		(serviceData?.items ?? []).filter(
 			(service) =>
 				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
 		),
@@ -60,20 +143,38 @@
 			null,
 	);
 	const desktopAvailable = $derived.by(() =>
-		session.services.list.some((service) => service.id === DESKTOP_SERVICE_ID),
+		(serviceData?.items ?? []).some(
+			(service) => service.id === DESKTOP_SERVICE_ID,
+		),
 	);
 	const vscodeAvailable = $derived.by(() =>
-		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
+		(serviceData?.items ?? []).some(
+			(service) => service.id === VSCODE_SERVICE_ID,
+		),
 	);
 	const vscodeService = $derived.by(
 		() =>
-			session.services.list.find(
+			(serviceData?.items ?? []).find(
 				(service) => service.id === VSCODE_SERVICE_ID,
 			) ?? null,
 	);
-	const sessionFileContents = $derived.by(() => session.files.contents);
-	const sessionFileDiff = $derived.by(() => session.files.diff);
-	const sessionFileDiffStats = $derived.by(() => session.files.diffStats);
+	const sessionFileContents = $derived.by(() =>
+		Object.fromEntries(
+			Object.entries(fileData?.contents ?? {}).map(([path, record]) => [
+				path,
+				fileView.buffers[path]?.content ?? record.content,
+			]),
+		),
+	);
+	const sessionFileDiff = $derived.by(() => fileData?.diff ?? []);
+	const sessionFileDiffStats = $derived.by(
+		() =>
+			fileData?.diffStats ?? {
+				additions: 0,
+				deletions: 0,
+				filesChanged: 0,
+			},
+	);
 	const shiftWindowControlsForSidebar = $derived.by(
 		() =>
 			!context.view.app.navigation.desktopSidebarOpen &&
@@ -193,7 +294,7 @@
 		serviceLogEvents = [];
 		serviceLogsConnected = false;
 		const subscription = subscribeServiceOutput({
-			sessionId: session.sessionId,
+			sessionId: sessionId,
 			serviceId: service.id,
 			onOpen: () => {
 				serviceLogsConnected = true;
@@ -244,7 +345,7 @@ ${selectedText}
 		selectedText: string;
 		comment: string;
 	}) {
-		thread.addPendingComment({
+		addThreadPendingComment(sessionId, threadId, {
 			snippet: buildDiffSelectionSnippet(payload),
 			comment: payload.comment,
 		});
@@ -261,23 +362,23 @@ ${selectedText}
 				comment: payload.comment,
 			},
 		]);
-		await thread.submit({
+		await submitThread(sessionId, threadId, {
 			parts: buildUserMessageParts(text),
 		});
 	}
 
 	async function handleOpenDiffFile(path: string) {
 		if (!vscodeAvailable) {
-			await session.files.open(path);
+			await openFile(sessionId, path);
 			return;
 		}
 
 		try {
-			await requestVSCodeOpenFile(session.sessionId, path);
+			await requestVSCodeOpenFile(sessionId, path);
 			sessionView.openVSCode();
 		} catch (error) {
 			console.error("Failed to request editor open file", error);
-			await session.files.open(path);
+			await openFile(sessionId, path);
 		}
 	}
 </script>
@@ -289,7 +390,7 @@ ${selectedText}
 		>
 			<TerminalPanel
 				onClose={sessionView.openChat}
-				sessionId={session.sessionId}
+				{sessionId}
 				rootEnabled={sessionView.terminalRootEnabled}
 				onRootEnabledChange={sessionView.setTerminalRootEnabled}
 				dockMaximized={sessionView.dockMaximized}
@@ -304,7 +405,7 @@ ${selectedText}
 			class={sessionView.activeView.kind === "desktop" ? "contents" : "hidden"}
 		>
 			<DesktopPanel
-				sessionId={session.sessionId}
+				{sessionId}
 				{desktopAvailable}
 				onClose={sessionView.openChat}
 				dockMaximized={sessionView.dockMaximized}
@@ -323,7 +424,7 @@ ${selectedText}
 				onClose={sessionView.openChat}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				resolvedTheme={preferences.resolvedTheme}
-				sessionId={session.sessionId}
+				{sessionId}
 				service={vscodeService}
 				{shiftWindowControlsForSidebar}
 			/>
@@ -333,9 +434,9 @@ ${selectedText}
 	{#if mountedDockPanelKinds.includes("file")}
 		<div class={sessionView.activeView.kind === "file" ? "contents" : "hidden"}>
 			<FilesPanel
-				files={session.files}
-				onClose={sessionView.openChat}
-				onToggleDockMaximized={sessionView.toggleDockMaximized}
+				{fileData}
+				{fileView}
+				actions={filePanelActions}
 				dockMaximized={sessionView.dockMaximized}
 				colorScheme={preferences.colorScheme}
 				resolvedTheme={preferences.resolvedTheme}
@@ -353,19 +454,19 @@ ${selectedText}
 			<DiffReviewPanel
 				dockMaximized={sessionView.dockMaximized}
 				onClose={sessionView.openChat}
-				onDiffTargetChange={session.files.setDiffTarget}
+				onDiffTargetChange={(target) => setFileDiffTarget(sessionId, target)}
 				onLoadDiff={loadDiffReviewEntry}
 				onReadFile={readDiffReviewFile}
 				onApprovalStateChange={setDiffReviewApprovals}
 				onDiffStyleChange={setDiffReviewStyle}
 				onOpenFile={handleOpenDiffFile}
-				onRefresh={() => session.files.refresh()}
+				onRefresh={() => refreshFiles(sessionId)}
 				onQueueSelectionComment={handleQueueDiffSelectionComment}
 				onSubmitSelectionComment={handleSubmitDiffSelectionComment}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
-				sessionId={session.sessionId}
+				{sessionId}
 				diff={sessionFileDiff}
-				diffTarget={session.files.diffTarget}
+				diffTarget={fileData?.diffTarget ?? "HEAD"}
 				fileContents={sessionFileContents}
 				diffStats={sessionFileDiffStats}
 				approvedBySession={diffReviewApprovals}
@@ -382,18 +483,20 @@ ${selectedText}
 		>
 			<ServicePanel
 				dockMaximized={sessionView.dockMaximized}
-				sessionId={session.sessionId}
+				{sessionId}
 				logEvents={serviceLogEvents}
 				logsConnected={serviceLogsConnected}
 				services={visibleServices}
 				activeServiceId={sessionView.activeServiceId}
 				requestedViewMode={sessionView.activeServiceViewMode}
-				onSelectService={session.services.open}
+				onSelectService={(serviceId) => openService(sessionId, serviceId)}
 				onClose={sessionView.openChat}
-				onStart={session.services.start}
-				onStop={session.services.stop}
-				onBindLocalhost={session.services.bindLocalhost}
-				onUnbindLocalhost={session.services.unbindLocalhost}
+				onStart={(serviceId) => startService(sessionId, serviceId)}
+				onStop={(serviceId) => stopService(sessionId, serviceId)}
+				onBindLocalhost={(serviceId, port) =>
+					bindServiceLocalhost(sessionId, serviceId, port)}
+				onUnbindLocalhost={(serviceId) =>
+					unbindServiceLocalhost(sessionId, serviceId)}
 				onToggleDockMaximized={sessionView.toggleDockMaximized}
 				{shiftWindowControlsForSidebar}
 			/>

@@ -6,7 +6,8 @@
 		PopoverContent,
 		PopoverTrigger,
 	} from "$lib/components/ui/popover";
-	import { useAppContext } from "$lib/context/app-context.svelte";
+	import { setDesktopSidebarOpen } from "$lib/context/commands/app-view";
+	import { useContext } from "$lib/context/context.svelte";
 
 	type Props = {
 		label?: string;
@@ -14,11 +15,14 @@
 
 	let { label = "Sessions" }: Props = $props();
 
-	const app = useAppContext();
+	const context = useContext();
 	let open = $state(false);
-	const selectedSession = $derived.by(() =>
-		app.sessions.selectedId ? app.sessions.peek(app.sessions.selectedId) : null,
-	);
+	const selectedSession = $derived.by(() => {
+		const selectedSessionId = context.view.app.selection.sessionId;
+		return selectedSessionId
+			? (context.data.sessions.byId[selectedSessionId] ?? null)
+			: null;
+	});
 	const triggerLabel = $derived.by(
 		() =>
 			label ||
@@ -38,7 +42,7 @@
 	}
 
 	function pinSidebar() {
-		app.ui.setDesktopSidebarOpen(true);
+		setDesktopSidebarOpen(true);
 		close();
 	}
 </script>

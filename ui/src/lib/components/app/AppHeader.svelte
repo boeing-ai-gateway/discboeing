@@ -15,7 +15,6 @@
 		startNewSession,
 	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
-	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
 	type Props = {
 		showSessionToolbar?: boolean;
@@ -26,13 +25,13 @@
 
 	const context = useContext();
 	const environment = context.data.environment;
+	const appEnvironment = context.view.app.environment;
 	const updates = $derived(context.view.app.updates);
 	const preferences = $derived(context.view.app.preferences);
-	const isMobile = new IsMobile(1024);
 
 	function showWindowsLinuxControls(): boolean {
 		return (
-			!isMobile.current &&
+			!appEnvironment.isMobile &&
 			environment.supportsNativeWindowControls &&
 			environment.windowControlsSide === "right"
 		);
@@ -40,13 +39,13 @@
 </script>
 
 <header
-	class={`desktop-drag-region relative grid h-10 items-center bg-background ${isMobile.current ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)_auto_auto]"}`}
+	class={`desktop-drag-region relative grid h-10 items-center bg-background ${appEnvironment.isMobile ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)_auto_auto]"}`}
 	data-desktop-drag-region
 >
 	<div class="absolute inset-0 pointer-events-auto"></div>
 
 	<div class="relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3">
-		{#if isMobile.current}
+		{#if appEnvironment.isMobile}
 			<DiscobotLogo size={24} />
 			{#if onToggleSidebar}
 				<Button
@@ -81,7 +80,7 @@
 			class="desktop-no-drag inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium uppercase tracking-[0.16em] text-foreground/50 transition-colors hover:text-foreground/80"
 		>
 			<PlusIcon class="size-3 shrink-0" />
-			<span>{isMobile.current ? "New" : "New Session"}</span>
+			<span>{appEnvironment.isMobile ? "New" : "New Session"}</span>
 		</button>
 
 		<div class="flex min-w-0 items-center gap-1 pr-2">
@@ -114,7 +113,7 @@
 		</div>
 	</div>
 
-	{#if !isMobile.current}
+	{#if !appEnvironment.isMobile}
 		<div
 			class="desktop-no-drag relative z-20 flex h-full min-w-0 items-stretch justify-self-end pr-0"
 		>

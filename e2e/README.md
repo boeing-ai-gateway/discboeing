@@ -3,35 +3,29 @@
 These Playwright tests cover basic Discobot UI flows against a running app.
 They are intended for QA smoke validation after larger frontend changes.
 
-## Run against an already-running app
+## Run
+
+Start the app before running the E2E suite. Playwright does not start the server.
+
+For the default local target:
+
+```bash
+pnpm dev:backend
+```
+
+Then, in another terminal:
 
 ```bash
 pnpm test:e2e
 ```
 
-The default target is `http://localhost:3100`.
+The default target is `http://localhost:3100`. The test script checks that this
+URL is reachable before launching Playwright.
 
 To use a different target:
 
 ```bash
 E2E_BASE_URL=http://localhost:3100 pnpm test:e2e
-```
-
-## Start the app from Playwright
-
-```bash
-E2E_START_SERVER=1 pnpm test:e2e
-```
-
-By default, Playwright starts `pnpm dev:backend`. If you need to avoid an
-already-running or stale dev server, run a fresh frontend and backend on other
-ports and point the tests at them:
-
-```bash
-E2E_START_SERVER=1 \
-E2E_BASE_URL=http://localhost:3101 \
-E2E_WEB_SERVER_COMMAND='pnpm exec concurrently -n ui,server -c cyan,green "VITE_DISCOBOT_API_ROOT=/api VITE_DISCOBOT_API_PROXY_TARGET=http://localhost:3023 pnpm --dir ./ui exec vite dev --host 127.0.0.1 --port 3101 --strictPort" "PORT=3023 SSH_PORT=3335 pnpm dev:server"' \
-pnpm test:e2e
 ```
 
 ## First-time browser install

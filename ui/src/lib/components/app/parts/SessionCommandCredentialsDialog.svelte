@@ -10,8 +10,6 @@
 	} from "$lib/components/ui/select";
 	import {
 		CUSTOM_CREDENTIAL_OPTION,
-		type CredentialValidityPreset,
-		type CredentialValidityUnit,
 		credentialBindingDescription,
 		credentialDisplayName,
 		findPreferredCredentialId,
@@ -21,13 +19,34 @@
 		parseOAuthCredentialOption,
 	} from "$lib/components/ai/tool-renderers/requestusercredential-helpers";
 	import type { AgentCommandCredentialRequest } from "$lib/api-types";
-	import type { SessionCommandCredentialDialogState } from "$lib/session/session-context.types";
+	import type {
+		CredentialValidityPreset,
+		CredentialValidityUnit,
+		SessionCommandCredentialDialogView,
+	} from "$lib/context/context.types";
 
-	type Props = {
-		dialog: SessionCommandCredentialDialogState;
+	export type SessionCommandCredentialsDialogActions = {
+		close: () => void;
+		confirm: () => Promise<void> | void;
+		selectOption: (envVar: string, value: string) => void;
+		setCreateCredentialName: (envVar: string, value: string) => void;
+		setCreateCredentialSecret: (envVar: string, value: string) => void;
+		setValidityPreset: (
+			envVar: string,
+			value: CredentialValidityPreset,
+		) => void;
+		setValidityValue: (envVar: string, value: string) => void;
+		setValidityUnit: (envVar: string, value: CredentialValidityUnit) => void;
+		launchOAuthWizard: (envVar: string) => Promise<void> | void;
+		refreshCredentials: () => Promise<void> | void;
 	};
 
-	let { dialog }: Props = $props();
+	type Props = {
+		dialog: SessionCommandCredentialDialogView;
+		actions: SessionCommandCredentialsDialogActions;
+	};
+
+	let { dialog, actions }: Props = $props();
 
 	const validityUnits: Array<{
 		value: CredentialValidityUnit;
@@ -82,7 +101,7 @@
 			return;
 		}
 		const handleCredentialsChanged = () => {
-			void dialog.refreshAvailableCredentials();
+			void actions.refreshCredentials();
 		};
 		window.addEventListener(
 			"discobot:credentials-changed",
@@ -101,7 +120,7 @@
 	open={dialog.open}
 	onOpenChange={(open) => {
 		if (!open) {
-			dialog.close();
+			actions.close();
 		}
 	}}
 >
@@ -189,7 +208,7 @@
 							type="single"
 							value={selectedOption}
 							onValueChange={(value) => {
-								dialog.selectOption(request.envVar, value);
+								actions.selectOption(request.envVar, value);
 							}}
 						>
 							<SelectTrigger class="w-full"
@@ -234,14 +253,14 @@
 										variant="outline"
 										size="sm"
 										onclick={() =>
-											void dialog.launchOAuthWizard(request.envVar)}
+											void actions.launchOAuthWizard(request.envVar)}
 									>
 										Launch wizard
 									</Button>
 									<Button
 										variant="ghost"
 										size="sm"
-										onclick={() => void dialog.refreshAvailableCredentials()}
+										onclick={() => void actions.refreshCredentials()}
 									>
 										Refresh credentials
 									</Button>
@@ -260,7 +279,7 @@
 							type="single"
 							value={dialog.validityPresetByEnvVar[request.envVar] ?? "1_hour"}
 							onValueChange={(value) => {
-								dialog.setValidityPreset(
+								actions.setValidityPreset(
 									request.envVar,
 									value as CredentialValidityPreset,
 								);
@@ -298,7 +317,7 @@
 										"hours") === "never"}
 									value={dialog.validityValueByEnvVar[request.envVar] ?? "1"}
 									oninput={(event) => {
-										dialog.setValidityValue(
+										actions.setValidityValue(
 											request.envVar,
 											(event.currentTarget as HTMLInputElement).value,
 										);
@@ -315,7 +334,7 @@
 									type="single"
 									value={dialog.validityUnitByEnvVar[request.envVar] ?? "hours"}
 									onValueChange={(value) => {
-										dialog.setValidityUnit(
+										actions.setValidityUnit(
 											request.envVar,
 											value as CredentialValidityUnit,
 										);
@@ -361,7 +380,7 @@
 										""}
 									placeholder="Credential name"
 									oninput={(event) => {
-										dialog.setCreateCredentialName(
+										actions.setCreateCredentialName(
 											request.envVar,
 											(event.currentTarget as HTMLInputElement).value,
 										);
@@ -384,7 +403,7 @@
 									placeholder={`Enter ${request.envVar}`}
 									class="font-mono"
 									oninput={(event) => {
-										dialog.setCreateCredentialSecret(
+										actions.setCreateCredentialSecret(
 											request.envVar,
 											(event.currentTarget as HTMLInputElement).value,
 										);
@@ -402,8 +421,8 @@
 		{/if}
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={dialog.close}>Deny</Button>
-			<Button onclick={() => void dialog.confirm()}>Approve</Button>
+			<Button variant="outline" onclick={actions.close}>Deny</Button>
+			<Button onclick={() => void actions.confirm()}>Approve</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

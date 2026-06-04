@@ -6,6 +6,8 @@ import {
 import type { Context, ContextBootstrap } from "$lib/context/context.types";
 import { getAvailableThemes } from "$lib/theme";
 import { getAppEnvironment } from "$lib/app/app-helpers";
+import { detectIsMacPlatform } from "$lib/app/global-shortcuts";
+import { IsMobile } from "$lib/hooks/is-mobile.svelte";
 
 const CONTEXT_KEY = Symbol.for("discobot-ui-context");
 
@@ -13,9 +15,14 @@ let currentContext: Context | null = null;
 
 export function createContext(bootstrap: ContextBootstrap): Context {
 	const environment = getAppEnvironment();
+	const mobileQuery = new IsMobile(1024);
 	const context = $state<Context>({
 		view: {
 			app: {
+				environment: {
+					isMobile: mobileQuery.current,
+					isMacPlatform: detectIsMacPlatform(),
+				},
 				navigation: {
 					desktopSidebarOpen: false,
 					mobileSidebarOpen: false,
@@ -162,6 +169,12 @@ export function createContext(bootstrap: ContextBootstrap): Context {
 			},
 		},
 		actions: {},
+	});
+
+	$effect.root(() => {
+		$effect(() => {
+			context.view.app.environment.isMobile = mobileQuery.current;
+		});
 	});
 
 	return context;

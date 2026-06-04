@@ -65,6 +65,11 @@ test("app shell does not pass desktop sidebar controls to the header", () => {
 		source,
 		/const \w*Desktop\w*Sidebar\w*Toggle\w* = \$derived\.by/,
 	);
+	assert.match(
+		source,
+		/const appEnvironment = \$derived\(context\.view\.app\.environment\);/,
+	);
+	assert.doesNotMatch(source, /new IsMobile/);
 	assert.doesNotMatch(source, /reserveSidebarSpace=/);
 	assert.match(
 		source,

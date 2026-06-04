@@ -7,7 +7,6 @@
 		recentThreadKey,
 	} from "$lib/app/thread-switcher";
 	import {
-		detectIsMacPlatform,
 		getGlobalShortcuts,
 		type GlobalShortcut,
 		matchGlobalShortcutKeydown,
@@ -27,18 +26,15 @@
 		toggleSelectedSessionView,
 	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
-	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 
 	const context = useContext();
-	const isMobile = new IsMobile(1024);
-	const isMacPlatform = $derived.by(() => detectIsMacPlatform());
-	const globalShortcuts = $derived.by(() => getGlobalShortcuts(isMacPlatform));
-	const keyboardShortcutsDialog = $derived.by(
-		() => context.view.app.dialogs.keyboardShortcuts,
+	const appEnvironment = context.view.app.environment;
+	const globalShortcuts = $derived.by(() =>
+		getGlobalShortcuts(appEnvironment.isMacPlatform),
 	);
-	const recentThreadSwitcherDialog = $derived.by(
-		() => context.view.app.dialogs.recentThreadSwitcher,
-	);
+	const keyboardShortcutsDialog = context.view.app.dialogs.keyboardShortcuts;
+	const recentThreadSwitcherDialog =
+		context.view.app.dialogs.recentThreadSwitcher;
 	const selectedThreadKey = $derived.by(() => {
 		const sessionId = context.view.app.selection.sessionId;
 		if (!sessionId) {
@@ -139,7 +135,7 @@
 	function handleStartNewSessionShortcut() {
 		closeOverlays();
 		startNewSession();
-		if (isMobile.current) {
+		if (appEnvironment.isMobile) {
 			setMobileSidebarOpen(false);
 		}
 	}
@@ -152,7 +148,7 @@
 
 		closeOverlays();
 		void createThread(sessionId);
-		if (isMobile.current) {
+		if (appEnvironment.isMobile) {
 			setMobileSidebarOpen(false);
 		}
 	}
@@ -197,7 +193,10 @@
 			return;
 		}
 
-		const shortcutAction = matchGlobalShortcutKeydown(event, isMacPlatform);
+		const shortcutAction = matchGlobalShortcutKeydown(
+			event,
+			appEnvironment.isMacPlatform,
+		);
 		if (!shortcutAction && isEditableShortcutTarget(event.target)) {
 			return;
 		}

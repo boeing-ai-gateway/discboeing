@@ -57,9 +57,9 @@
 	import { SplitDropdownButton } from "$lib/components/ui/split-dropdown-button";
 	import { Textarea } from "$lib/components/ui/textarea";
 	import SessionCommandCredentialsDialog from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
+	import type { SessionCommandCredentialsDialogActions } from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
 	import { getSSHPort } from "$lib/api-config";
 	import type { AgentCommand } from "$lib/api-types";
-	import { IsMobile } from "$lib/hooks/is-mobile.svelte.js";
 	import { openUrl } from "$lib/shell";
 	import type { IdeOption, JetBrainsIdeOption } from "$lib/app/ide-options";
 	import {
@@ -67,11 +67,27 @@
 		VSCODE_SERVICE_ID,
 	} from "$lib/session/service-ids";
 	import {
+		closeAgentCommandCredentialDialog,
+		confirmAgentCommandCredentialDialog,
 		ensureSessionState,
+		launchAgentCommandCredentialOAuthWizard,
+		openFile,
+		refreshAgentCommandCredentialDialogCredentials,
+		runAgentCommand,
+		selectAgentCommandCredentialOption,
+		setAgentCommandCredentialCreateName,
+		setAgentCommandCredentialCreateSecret,
+		setAgentCommandCredentialValidityPreset,
+		setAgentCommandCredentialValidityUnit,
+		setAgentCommandCredentialValidityValue,
 		setPreferredIde,
+		startService as startSessionService,
+		stopService as stopSessionService,
+		submitThread,
 	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
 	import type { ServiceItem } from "$lib/context/context.types";
+	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
 
 	type Props = {
 		sessionId: string;
@@ -82,7 +98,7 @@
 
 	let { sessionId }: Props = $props();
 	const context = useContext();
-	const isMobile = new IsMobile(1024);
+	const appEnvironment = context.view.app.environment;
 	const lucideIconModules = import.meta.glob<LucideIconModule>(
 		"../../../../node_modules/@lucide/svelte/dist/icons/*.js",
 	);
@@ -94,6 +110,42 @@
 	const preferences = $derived(context.view.app.preferences);
 	const session = ensureSessionState(untrack(() => sessionId));
 	const sessionView = session.ui;
+	const serviceData = $derived(context.data.services.bySessionId[sessionId]);
+	const fileData = $derived(context.data.files.bySessionId[sessionId]);
+	const commandData = $derived(context.data.commands.bySessionId[sessionId]);
+	const commandView = $derived(context.view.sessions[sessionId]?.commands);
+	const commandCredentialDialog = $derived(
+		commandView?.credentialDialog ?? null,
+	);
+	const commandCredentialDialogActions: SessionCommandCredentialsDialogActions =
+		{
+			close: () => closeAgentCommandCredentialDialog(session.sessionId),
+			confirm: () => confirmAgentCommandCredentialDialog(session.sessionId),
+			selectOption: (envVar, value) =>
+				selectAgentCommandCredentialOption(session.sessionId, envVar, value),
+			setCreateCredentialName: (envVar, value) =>
+				setAgentCommandCredentialCreateName(session.sessionId, envVar, value),
+			setCreateCredentialSecret: (envVar, value) =>
+				setAgentCommandCredentialCreateSecret(session.sessionId, envVar, value),
+			setValidityPreset: (envVar, value) =>
+				setAgentCommandCredentialValidityPreset(
+					session.sessionId,
+					envVar,
+					value,
+				),
+			setValidityValue: (envVar, value) =>
+				setAgentCommandCredentialValidityValue(
+					session.sessionId,
+					envVar,
+					value,
+				),
+			setValidityUnit: (envVar, value) =>
+				setAgentCommandCredentialValidityUnit(session.sessionId, envVar, value),
+			launchOAuthWizard: (envVar) =>
+				launchAgentCommandCredentialOAuthWizard(session.sessionId, envVar),
+			refreshCredentials: () =>
+				refreshAgentCommandCredentialDialogCredentials(session.sessionId),
+		};
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	let servicesPopoverOpen = $state(false);
 	let mutatingServiceIds = $state<Record<string, boolean>>({});
@@ -104,7 +156,7 @@
 	let submittingLearnMorePrompt = $state(false);
 	const toolbarButtonTextClass = "text-sidebar-foreground/70";
 	const sessionServices = $derived.by(() =>
-		session.services.list.filter(
+		(serviceData?.items ?? []).filter(
 			(service) =>
 				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
 		),
@@ -113,7 +165,9 @@
 		sessionServices.some((service) => service.status === "running"),
 	);
 	const vscodeAvailable = $derived.by(() =>
-		session.services.list.some((service) => service.id === VSCODE_SERVICE_ID),
+		(serviceData?.items ?? []).some(
+			(service) => service.id === VSCODE_SERVICE_ID,
+		),
 	);
 
 	function isJetBrainsIdeOption(
@@ -237,7 +291,7 @@
 			return;
 		}
 
-		void session.files.open();
+		void openFile(session.sessionId);
 	}
 
 	function toggleDiffReview() {
@@ -338,7 +392,7 @@
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await session.services.start(service.id);
+			await startSessionService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
@@ -350,7 +404,7 @@
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await session.services.stop(service.id);
+			await stopSessionService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
@@ -362,8 +416,8 @@
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await session.services.stop(service.id);
-			await session.services.start(service.id);
+			await stopSessionService(sessionId, service.id);
+			await startSessionService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
@@ -383,8 +437,12 @@
 
 		submittingAddServicePrompt = true;
 		try {
-			await session.submit(
-				`Create a Discobot service for this workspace based on the user's description below.
+			await submitThread(
+				session.sessionId,
+				session.threads.selectedId ?? session.sessionId,
+				{
+					parts: buildUserMessageParts(
+						`Create a Discobot service for this workspace based on the user's description below.
 
 User description:
 ${description}
@@ -401,6 +459,8 @@ When you are done, respond with:
 - the full contents of the service file
 - how to start, restart, or stop it from Discobot when applicable
 - what web page, preview URL/path, or logs will be available`,
+					),
+				},
 			);
 			requestedServiceDescription = "";
 			addServiceDialogOpen = false;
@@ -418,8 +478,14 @@ When you are done, respond with:
 
 		submittingLearnMorePrompt = true;
 		try {
-			await session.submit(
-				"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
+			await submitThread(
+				session.sessionId,
+				session.threads.selectedId ?? session.sessionId,
+				{
+					parts: buildUserMessageParts(
+						"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
+					),
+				},
 			);
 			learnMoreDialogOpen = false;
 		} catch (error) {
@@ -430,14 +496,18 @@ When you are done, respond with:
 	}
 
 	const diffStats = $derived.by(() => {
-		const stats = session.files.diffStats;
+		const stats = fileData?.diffStats ?? {
+			additions: 0,
+			deletions: 0,
+			filesChanged: 0,
+		};
 		const additions = stats.additions;
 		const filesChanged = stats.filesChanged;
 		const deletions = stats.deletions;
 		return { additions, deletions, filesChanged };
 	});
 
-	const uiCommands = $derived.by(() => session.commands.uiVisible);
+	const uiCommands = $derived.by(() => commandData?.visibleItems ?? []);
 	const primaryCommand = $derived.by(() => uiCommands[0] ?? null);
 	const secondaryCommands = $derived.by(() => uiCommands.slice(1));
 	const commandGroups = $derived.by(() => {
@@ -525,8 +595,8 @@ When you are done, respond with:
 			!session.current ||
 			!primaryCommand ||
 			operationState.showBusy ||
-			session.commands.isSubmitting ||
-			session.commands.credentialDialog.open,
+			(commandData?.isSubmitting ?? false) ||
+			(commandView?.credentialDialog.open ?? false),
 	);
 
 	function commandLabel(command: AgentCommand): string {
@@ -569,13 +639,13 @@ When you are done, respond with:
 		if (!primaryCommand) {
 			return;
 		}
-		void session.commands.run(primaryCommand).catch((error) => {
+		void runAgentCommand(session.sessionId, primaryCommand).catch((error) => {
 			console.error(`Failed to start ${primaryCommand.name}:`, error);
 		});
 	}
 
 	function handleCommand(command: AgentCommand) {
-		void session.commands.run(command).catch((error) => {
+		void runAgentCommand(session.sessionId, command).catch((error) => {
 			console.error(`Failed to start ${command.name}:`, error);
 		});
 	}
@@ -585,7 +655,7 @@ When you are done, respond with:
 	class="flex h-full w-full min-w-0 items-center justify-end gap-2 bg-background px-2"
 	data-desktop-drag-region
 >
-	{#if !isMobile.current}
+	{#if !appEnvironment.isMobile}
 		<div
 			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 shadow-xs"
 		>
@@ -974,7 +1044,7 @@ When you are done, respond with:
 		{/if}
 	{/if}
 
-	{#if !isMobile.current}
+	{#if !appEnvironment.isMobile}
 		<SplitDropdownButton
 			class="desktop-no-drag text-sidebar-foreground/70"
 			label={`Open ${selectedIdeOption?.label ?? "Cursor"}`}
@@ -1070,7 +1140,12 @@ When you are done, respond with:
 		</SplitDropdownButton>
 	{/if}
 
-	<SessionCommandCredentialsDialog dialog={session.commands.credentialDialog} />
+	{#if commandCredentialDialog}
+		<SessionCommandCredentialsDialog
+			dialog={commandCredentialDialog}
+			actions={commandCredentialDialogActions}
+		/>
+	{/if}
 </div>
 
 <Dialog bind:open={addServiceDialogOpen}>

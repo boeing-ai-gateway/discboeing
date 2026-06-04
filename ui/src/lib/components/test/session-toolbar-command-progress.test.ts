@@ -140,8 +140,8 @@ test("session toolbar does not use committing status alone as command progress",
 test("session toolbar disables actions while a submission or credential dialog is in flight", () => {
 	const source = readSessionToolbarSource();
 
-	assert.match(source, /session\.commands\.isSubmitting/);
-	assert.match(source, /session\.commands\.credentialDialog\.open/);
+	assert.match(source, /commandData\?\.isSubmitting \?\? false/);
+	assert.match(source, /commandView\?\.credentialDialog\.open \?\? false/);
 });
 
 test("session commands only track submit-in-flight state locally", () => {

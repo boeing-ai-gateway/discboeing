@@ -16,7 +16,10 @@ import { sortSessionsByCreatedAt } from "$lib/app/domains/app-sessions.helpers";
 import type { RecentThreadEntry } from "$lib/app/thread-switcher";
 import { getCommandContext } from "$lib/context/commands";
 import { createSessionState } from "$lib/session/create-session-state.svelte";
-import type { SessionContextValue } from "$lib/session/session-context.types";
+import type {
+	SessionContextValue,
+	ThreadContextValue,
+} from "$lib/session/session-context.types";
 import { createChatStreamManager } from "$lib/thread/chat-stream-manager";
 import type { ChatStreamManager } from "$lib/thread/chat-stream-manager";
 import { SessionStore } from "$lib/store/sessions.store.svelte";
@@ -167,9 +170,200 @@ function syncRecentThreads(): void {
 	);
 }
 
+function syncSessionViewProjection(sessionContext: SessionContextValue): void {
+	const ctx = context();
+	const { sessionId, ui, files, services } = sessionContext;
+	ctx.view.sessions[sessionId] = {
+		sessionId,
+		workspace: {
+			activeView: ui.activeView,
+			selectedFile: ui.selectedFile,
+			activeServiceId: ui.activeServiceId,
+			terminalRootEnabled: ui.terminalRootEnabled,
+			dockMaximized: ui.dockMaximized,
+		},
+		composer: {
+			draft: ui.composerDraft,
+		},
+		files: {
+			selected: files.selected,
+			activePath: files.activePath,
+			openPaths: files.openPaths,
+			showChangedOnly: files.showChangedOnly,
+			expandedPaths: files.expandedPaths,
+			loadingPaths: Object.fromEntries(
+				files.list
+					.filter((path) => files.isPathLoading(path))
+					.map((path) => [path, true]),
+			),
+			buffers: Object.fromEntries(
+				files.openPaths
+					.map((path) => {
+						const buffer = files.getBuffer(path);
+						return buffer ? ([path, buffer] as const) : null;
+					})
+					.filter(
+						(entry): entry is readonly [string, NonNullable<typeof entry>[1]] =>
+							entry !== null,
+					),
+			),
+			editorModels: {},
+			editorViewStates: {},
+		},
+		hooks: {
+			expanded: ui.hooksExpanded,
+			dialog: {
+				open: ui.hookDialogOpen,
+				selectedHookId: ui.selectedHookId,
+			},
+		},
+		services: {
+			activeServiceId: services.active?.id ?? ui.activeServiceId,
+		},
+		commands: {
+			credentialDialog: {
+				open: sessionContext.commands.credentialDialog.open,
+				command: sessionContext.commands.credentialDialog.command,
+				requests: sessionContext.commands.credentialDialog.requests,
+				projectCredentials:
+					sessionContext.commands.credentialDialog.projectCredentials,
+				credentialTypes:
+					sessionContext.commands.credentialDialog.credentialTypes,
+				sessionAssignments:
+					sessionContext.commands.credentialDialog.sessionAssignments,
+				selectedOptionByEnvVar:
+					sessionContext.commands.credentialDialog.selectedOptionByEnvVar,
+				createCredentialNamesByEnvVar:
+					sessionContext.commands.credentialDialog
+						.createCredentialNamesByEnvVar,
+				createCredentialSecretsByEnvVar:
+					sessionContext.commands.credentialDialog
+						.createCredentialSecretsByEnvVar,
+				validityPresetByEnvVar:
+					sessionContext.commands.credentialDialog.validityPresetByEnvVar,
+				validityValueByEnvVar:
+					sessionContext.commands.credentialDialog.validityValueByEnvVar,
+				validityUnitByEnvVar:
+					sessionContext.commands.credentialDialog.validityUnitByEnvVar,
+				error: sessionContext.commands.credentialDialog.error,
+			},
+		},
+		queue: {
+			expanded: ui.queueExpanded,
+		},
+		pendingWorkspace: {
+			option: ui.pendingWorkspaceOption,
+			branch: ui.pendingWorkspaceBranch,
+			sourceInput: ui.pendingWorkspaceSourceInput,
+			validation: ui.pendingWorkspaceValidation,
+			validating: ui.pendingWorkspaceValidating,
+			setupMessage: ui.pendingWorkspaceSetupMessage,
+			sandboxProviderId: ui.pendingSandboxProviderId,
+		},
+		threads: Object.fromEntries(
+			[...sessionContext.threadContexts].map(([threadId, threadContext]) => [
+				threadId,
+				{
+					sessionId,
+					threadId,
+					composer: {
+						nextModelId: threadContext.nextModelId,
+						nextReasoning: threadContext.nextReasoning,
+						nextServiceTier: threadContext.nextServiceTier,
+						pendingComments: threadContext.pendingComments,
+					},
+					conversation: {
+						scrollTop:
+							sessionContext.conversationScrollTopByThreadId.get(threadId) ?? 0,
+					},
+				},
+			]),
+		),
+	};
+}
+
+function syncSessionDomainDataProjection(
+	sessionContext: SessionContextValue,
+): void {
+	const ctx = context();
+	const { sessionId, files, hooks, services, commands } = sessionContext;
+	ctx.data.files.bySessionId[sessionId] = {
+		list: files.list,
+		searchable: files.searchable,
+		diff: files.diff,
+		diffStats: files.diffStats,
+		diffTarget: files.diffTarget,
+		contents: Object.fromEntries(
+			files.openPaths
+				.map((path) => {
+					const record = files.getRecord(path);
+					return record ? ([path, record] as const) : null;
+				})
+				.filter(
+					(entry): entry is readonly [string, NonNullable<typeof entry>[1]] =>
+						entry !== null,
+				),
+		),
+		tree: files.tree,
+		status: "ready",
+		error: null,
+	};
+	ctx.data.hooks.bySessionId[sessionId] = {
+		status: hooks.status,
+		outputById: hooks.outputById,
+		resourceStatus: hooks.resourceStatus,
+		error: hooks.error,
+		isRefreshing: hooks.isRefreshing,
+		isStale: hooks.isStale,
+		fetchedAt: hooks.fetchedAt,
+	};
+	ctx.data.services.bySessionId[sessionId] = {
+		items: services.list,
+		byId: Object.fromEntries(
+			services.list.map((service) => [service.id, service]),
+		),
+		status: services.status,
+		error: services.error,
+		isRefreshing: services.isRefreshing,
+		isStale: services.isStale,
+		fetchedAt: services.fetchedAt,
+	};
+	ctx.data.commands.bySessionId[sessionId] = {
+		items: commands.list,
+		visibleItems: commands.uiVisible,
+		status: commands.status,
+		error: commands.error,
+		isRefreshing: commands.isRefreshing,
+		isStale: commands.isStale,
+		fetchedAt: commands.fetchedAt,
+		isSubmitting: commands.isSubmitting,
+	};
+}
+
+function syncThreadProjection(
+	sessionId: string,
+	threadId: string,
+	threadContext: ThreadContextValue,
+): void {
+	context().data.conversations.byThreadId[threadId] = {
+		sessionId,
+		threadId,
+		messages: threadContext.messages,
+		browserEventsByTurnId: threadContext.browserEventsByTurnId,
+		status: threadContext.status,
+		error: threadContext.error,
+		isStreaming: threadContext.isStreaming,
+		hasPendingQuestion: threadContext.hasPendingQuestion,
+		pendingQuestionId: threadContext.pendingQuestionId,
+		promptQueue: threadContext.promptQueue,
+	};
+}
+
 function refreshMountedSessionProjections(): void {
 	const ctx = context();
 	for (const [sessionId, sessionContext] of sessionContexts) {
+		syncSessionViewProjection(sessionContext);
+		syncSessionDomainDataProjection(sessionContext);
 		ctx.data.threads.bySessionId[sessionId] = {
 			items: sessionContext.threads.list,
 			byId: Object.fromEntries(
@@ -179,18 +373,7 @@ function refreshMountedSessionProjections(): void {
 			error: null,
 		};
 		for (const [threadId, threadContext] of sessionContext.threadContexts) {
-			ctx.data.conversations.byThreadId[threadId] = {
-				sessionId,
-				threadId,
-				messages: threadContext.messages,
-				browserEventsByTurnId: threadContext.browserEventsByTurnId,
-				status: threadContext.status,
-				error: threadContext.error,
-				isStreaming: threadContext.isStreaming,
-				hasPendingQuestion: threadContext.hasPendingQuestion,
-				pendingQuestionId: threadContext.pendingQuestionId,
-				promptQueue: threadContext.promptQueue,
-			};
+			syncThreadProjection(sessionId, threadId, threadContext);
 		}
 	}
 }
@@ -555,6 +738,447 @@ export async function deleteRuntimeThread(
 	}
 	syncRuntimeProjections();
 	return deleted;
+}
+
+export async function submitRuntimeThread(
+	sessionId: string,
+	threadId: string,
+	payload: Parameters<ThreadContextValue["submit"]>[0],
+): Promise<Awaited<ReturnType<ThreadContextValue["submit"]>>> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const threadContext = sessionContext.ensureThread(threadId);
+	const result = await threadContext.submit(payload);
+	syncRuntimeProjections();
+	return result;
+}
+
+export async function cancelRuntimeThread(
+	sessionId: string,
+	threadId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.ensureThread(threadId).cancel();
+	syncRuntimeProjections();
+}
+
+export async function refreshRuntimeThread(
+	sessionId: string,
+	threadId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.ensureThread(threadId).refresh();
+	syncRuntimeProjections();
+}
+
+export function setRuntimeComposerDraft(
+	sessionId: string,
+	value: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ui.setComposerDraft(value);
+	syncRuntimeProjections();
+}
+
+export function clearRuntimeComposerDraft(
+	sessionId: string,
+	threadId: string,
+	storageKey?: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).clearComposerDraft(storageKey);
+	syncRuntimeProjections();
+}
+
+export function setRuntimeThreadNextModelId(
+	sessionId: string,
+	threadId: string,
+	modelId: string | null | undefined,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).setNextModelId(modelId);
+	syncRuntimeProjections();
+}
+
+export function setRuntimeThreadNextReasoning(
+	sessionId: string,
+	threadId: string,
+	reasoning: string | undefined,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).setNextReasoning(reasoning);
+	syncRuntimeProjections();
+}
+
+export function setRuntimeThreadNextServiceTier(
+	sessionId: string,
+	threadId: string,
+	serviceTier: string | null | undefined,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).setNextServiceTier(serviceTier);
+	syncRuntimeProjections();
+}
+
+export function clearRuntimeThreadNextComposerValues(
+	sessionId: string,
+	threadId: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).clearNextComposerValues();
+	syncRuntimeProjections();
+}
+
+export function addRuntimeThreadPendingComment(
+	sessionId: string,
+	threadId: string,
+	comment: Parameters<ThreadContextValue["addPendingComment"]>[0],
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).addPendingComment(comment);
+	syncRuntimeProjections();
+}
+
+export function removeRuntimeThreadPendingComment(
+	sessionId: string,
+	threadId: string,
+	commentId: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).removePendingComment(commentId);
+	syncRuntimeProjections();
+}
+
+export function clearRuntimeThreadPendingComments(
+	sessionId: string,
+	threadId: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.ensureThread(threadId).clearPendingComments();
+	syncRuntimeProjections();
+}
+
+export async function deleteRuntimeQueuedPrompt(
+	sessionId: string,
+	threadId: string,
+	queueId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.ensureThread(threadId).deleteQueuedPrompt(queueId);
+	syncRuntimeProjections();
+}
+
+export async function updateRuntimeQueuedPrompt(
+	sessionId: string,
+	threadId: string,
+	queueId: string,
+	payload: Parameters<ThreadContextValue["updateQueuedPrompt"]>[1],
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext
+		.ensureThread(threadId)
+		.updateQueuedPrompt(queueId, payload);
+	syncRuntimeProjections();
+}
+
+export function setRuntimeConversationScrollTop(
+	sessionId: string,
+	threadId: string,
+	scrollTop: number,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.conversationScrollTopByThreadId.set(threadId, scrollTop);
+	syncRuntimeProjections();
+}
+
+export function ensureRuntimeThreadState(
+	sessionId: string,
+	threadId: string,
+): ThreadContextValue {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const threadContext = sessionContext.ensureThread(threadId);
+	syncRuntimeProjections();
+	return threadContext;
+}
+
+export function connectRuntimeThread(
+	sessionId: string,
+	threadId: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const threadContext = sessionContext.ensureThread(threadId);
+	if (!sessionContext.current) {
+		return;
+	}
+	void threadContext.connect();
+	syncRuntimeProjections();
+}
+
+export function releaseRuntimeThreadState(
+	sessionId: string,
+	thread: ThreadContextValue,
+): void {
+	const sessionContext = sessionContexts.get(sessionId);
+	thread.dispose();
+	if (sessionContext?.threadContexts.get(thread.threadId) === thread) {
+		sessionContext.threadContexts.delete(thread.threadId);
+	}
+	syncRuntimeProjections();
+}
+
+export async function openRuntimeFile(
+	sessionId: string,
+	path?: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.open(path);
+	syncRuntimeProjections();
+}
+
+export async function refreshRuntimeFiles(sessionId: string): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.refresh();
+	syncRuntimeProjections();
+}
+
+export async function setRuntimeFileDiffTarget(
+	sessionId: string,
+	target: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.setDiffTarget(target);
+	syncRuntimeProjections();
+}
+
+export async function saveRuntimeFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const saved = await sessionContext.files.save(path);
+	syncRuntimeProjections();
+	return saved;
+}
+
+export async function renameRuntimeFile(
+	sessionId: string,
+	path: string,
+	nextName: string,
+): Promise<boolean> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const renamed = await sessionContext.files.rename(path, nextName);
+	syncRuntimeProjections();
+	return renamed;
+}
+
+export async function removeRuntimeFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const removed = await sessionContext.files.remove(path);
+	syncRuntimeProjections();
+	return removed;
+}
+
+export function closeRuntimeFile(sessionId: string, path: string): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.files.close(path);
+	syncRuntimeProjections();
+}
+
+export async function toggleRuntimeFilesChangedOnly(
+	sessionId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.toggleChangedOnly();
+	syncRuntimeProjections();
+}
+
+export async function toggleRuntimeFileDirectory(
+	sessionId: string,
+	path: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.toggleDirectory(path);
+	syncRuntimeProjections();
+}
+
+export async function expandRuntimeFileTree(sessionId: string): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.files.expandAll();
+	syncRuntimeProjections();
+}
+
+export function collapseRuntimeFileTree(sessionId: string): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.files.collapseAll();
+	syncRuntimeProjections();
+}
+
+export function updateRuntimeFileBuffer(
+	sessionId: string,
+	path: string,
+	content: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.files.updateBuffer(path, content);
+	syncRuntimeProjections();
+}
+
+export function discardRuntimeFileBuffer(
+	sessionId: string,
+	path: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.files.discard(path);
+	syncRuntimeProjections();
+}
+
+export function acceptRuntimeFileConflict(
+	sessionId: string,
+	path: string,
+): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.files.acceptConflict(path);
+	syncRuntimeProjections();
+}
+
+export async function forceSaveRuntimeFile(
+	sessionId: string,
+	path: string,
+): Promise<boolean> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	const saved = await sessionContext.files.forceSave(path);
+	syncRuntimeProjections();
+	return saved;
+}
+
+export function getRuntimeFileEditorModel(
+	sessionId: string,
+	path: string,
+): unknown | null {
+	return ensureRuntimeSessionState(sessionId).files.getEditorModel(path);
+}
+
+export function setRuntimeFileEditorModel(
+	sessionId: string,
+	path: string,
+	model: unknown | null,
+): void {
+	ensureRuntimeSessionState(sessionId).files.setEditorModel(path, model);
+}
+
+export function getRuntimeFileEditorViewState(
+	sessionId: string,
+	path: string,
+): unknown | null {
+	return ensureRuntimeSessionState(sessionId).files.getEditorViewState(path);
+}
+
+export function setRuntimeFileEditorViewState(
+	sessionId: string,
+	path: string,
+	viewState: unknown | null,
+): void {
+	ensureRuntimeSessionState(sessionId).files.setEditorViewState(
+		path,
+		viewState,
+	);
+}
+
+export async function refreshRuntimeHooks(sessionId: string): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.hooks.refresh();
+	syncRuntimeProjections();
+}
+
+export function rerunRuntimeHook(sessionId: string, hookId: string): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.hooks.rerun(hookId);
+	syncRuntimeProjections();
+}
+
+export async function setRuntimeHooksPaused(
+	sessionId: string,
+	paused: boolean,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.hooks.setExecutionPaused(paused);
+	syncRuntimeProjections();
+}
+
+export async function setRuntimeHookPaused(
+	sessionId: string,
+	hookId: string,
+	paused: boolean,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.hooks.setHookExecutionPaused(hookId, paused);
+	syncRuntimeProjections();
+}
+
+export async function refreshRuntimeServices(sessionId: string): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.services.refresh();
+	syncRuntimeProjections();
+}
+
+export function openRuntimeService(sessionId: string, serviceId: string): void {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	sessionContext.services.open(serviceId);
+	syncRuntimeProjections();
+}
+
+export async function startRuntimeService(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.services.start(serviceId);
+	syncRuntimeProjections();
+}
+
+export async function stopRuntimeService(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.services.stop(serviceId);
+	syncRuntimeProjections();
+}
+
+export async function bindRuntimeServiceLocalhost(
+	sessionId: string,
+	serviceId: string,
+	port: number,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.services.bindLocalhost(serviceId, port);
+	syncRuntimeProjections();
+}
+
+export async function unbindRuntimeServiceLocalhost(
+	sessionId: string,
+	serviceId: string,
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.services.unbindLocalhost(serviceId);
+	syncRuntimeProjections();
+}
+
+export async function refreshRuntimeCommands(sessionId: string): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.commands.refresh();
+	syncRuntimeProjections();
+}
+
+export async function runRuntimeCommand(
+	sessionId: string,
+	command: Parameters<SessionContextValue["commands"]["run"]>[0],
+): Promise<void> {
+	const sessionContext = ensureRuntimeSessionState(sessionId);
+	await sessionContext.commands.run(command);
+	syncRuntimeProjections();
 }
 
 export async function reloadRuntimeSession(sessionId: string): Promise<void> {
