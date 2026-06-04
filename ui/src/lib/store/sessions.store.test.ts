@@ -89,6 +89,19 @@ test("SessionStore delegates entity cache behavior to createEntityStore", () => 
 		source,
 		/#fetchOneRequests = new RequestCoalescer<string, Session \| null>\(\);/,
 	);
+	assert.match(source, /#missingSessionIds = new SvelteSet<string>\(\);/);
+	assert.match(source, /!this\.#missingSessionIds\.has\(id\)/);
+	assert.match(source, /this\.#missingSessionIds\.add\(id\);/);
+	assert.match(source, /this\.#missingSessionIds\.delete\(session\.id\);/);
+	assert.match(source, /this\.#missingSessionIds\.clear\(\);/);
+	assert.match(
+		source,
+		/async fetchOne\(id: string\): Promise<Session \| null> \{/,
+	);
+	assert.match(
+		source,
+		/return this\.#fetchOneRequests\.run\(id, async \(\) => \{/,
+	);
 	assert.match(source, /const session = await api\.getSession\(id\);/);
 	assert.match(source, /this\.#resource\.evict\(id\);/);
 	assert.match(source, /return this\.#resource\.create\(data\);/);

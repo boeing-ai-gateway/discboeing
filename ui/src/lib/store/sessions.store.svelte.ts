@@ -65,6 +65,7 @@ export class SessionStore {
 	>(sessionStoreResourceArgs);
 	#fetchOneRequests = new RequestCoalescer<string, Session | null>();
 	#backgroundFetches = new SvelteSet<string>();
+	#missingSessionIds = new SvelteSet<string>();
 
 	get list(): Session[] {
 		return this.#resource.all().list;
@@ -82,7 +83,11 @@ export class SessionStore {
 	/** Returns the cached session and triggers a background fetchOne on cache miss. */
 	ensure(id: string): Session | null {
 		const cached = this.#resource.peek(id);
-		if (cached === null && !this.#backgroundFetches.has(id)) {
+		if (
+			cached === null &&
+			!this.#missingSessionIds.has(id) &&
+			!this.#backgroundFetches.has(id)
+		) {
 			this.#backgroundFetches.add(id);
 			void this.fetchOne(id).finally(() => this.#backgroundFetches.delete(id));
 		}
@@ -95,25 +100,35 @@ export class SessionStore {
 	}
 
 	upsert(session: Session): void {
+		this.#missingSessionIds.delete(session.id);
 		this.#resource.upsert(session);
 	}
 
 	async fetch(): Promise<void> {
 		await this.#resource.all().ensure();
+		for (const session of this.#resource.all().list) {
+			this.#missingSessionIds.delete(session.id);
+		}
 	}
 
 	invalidate(): void {
 		this.#resource.invalidateAll();
+		this.#missingSessionIds.clear();
 	}
 
-	async fetchOne(id: string): Promise<void> {
-		await this.#fetchOneRequests.run(id, async () => {
+	async fetchOne(id: string): Promise<Session | null> {
+		if (this.#missingSessionIds.has(id)) {
+			return null;
+		}
+		return this.#fetchOneRequests.run(id, async () => {
 			try {
 				const session = await api.getSession(id);
+				this.#missingSessionIds.delete(id);
 				this.#resource.upsert(session);
 				return session;
 			} catch (error) {
 				if (error instanceof ApiError && error.status === 404) {
+					this.#missingSessionIds.add(id);
 					this.#resource.evict(id);
 					return null;
 				}
