@@ -866,7 +866,7 @@ func aiHookThreadID(sessionID, hookID string) string {
 	return "hook-" + sessionID + "-" + hookID
 }
 
-const aiHookInlineDiffMaxBytes = 60 * 1024
+const aiHookInlineDiffMaxBytes = 16 * 1024
 
 type aiHookDiff struct {
 	Full      string
