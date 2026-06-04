@@ -121,6 +121,20 @@ test("matchGlobalShortcutKeydown keeps primary shortcuts platform-aware", () => 
 		),
 		{ id: "keyboard-help" },
 	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "f", ctrlKey: true }),
+			false,
+		),
+		{ id: "find-in-page" },
+	);
+	assert.deepEqual(
+		matchGlobalShortcutKeydown(
+			keyboardEvent({ key: "f", metaKey: true }),
+			true,
+		),
+		{ id: "find-in-page" },
+	);
 });
 
 test("matchGlobalShortcutKeydown starts a new thread with Control+Shift+N", () => {
@@ -216,7 +230,7 @@ test("matchGlobalShortcutKeydown uses Command for workspace views on macOS", () 
 	);
 	assert.deepEqual(
 		matchGlobalShortcutKeydown(
-			keyboardEvent({ key: "f", metaKey: true }),
+			keyboardEvent({ key: "f", metaKey: true, shiftKey: true }),
 			true,
 		),
 		{ id: "toggle-files" },

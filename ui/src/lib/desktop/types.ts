@@ -43,6 +43,24 @@ export type DesktopDownloadEvent =
 			event: "Finished";
 	  };
 
+export type DesktopFindInPageOptions = {
+	forward?: boolean;
+	findNext?: boolean;
+};
+
+export type DesktopFindInPageResult = {
+	requestId: number;
+	activeMatchOrdinal: number;
+	matches: number;
+	selectionArea?: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	};
+	finalUpdate: boolean;
+};
+
 export type DesktopUpdateMetadata = {
 	rid: number;
 	currentVersion: string;
@@ -66,6 +84,16 @@ export type DesktopRendererBridge = {
 	windowIsMaximized?: () => Promise<boolean>;
 	windowClose?: () => Promise<void>;
 	windowIsFullscreen?: () => Promise<boolean>;
+	findInPage?: (
+		text: string,
+		options?: DesktopFindInPageOptions,
+	) => Promise<number>;
+	stopFindInPage?: (
+		action: "clearSelection" | "keepSelection" | "activateSelection",
+	) => Promise<void>;
+	onFindInPageResult?: (
+		listener: (result: DesktopFindInPageResult) => void,
+	) => (() => void) | Promise<() => void>;
 	onWindowResized?: (
 		listener: () => void,
 	) => (() => void) | Promise<() => void>;

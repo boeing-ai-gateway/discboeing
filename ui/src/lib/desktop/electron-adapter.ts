@@ -1,5 +1,7 @@
 import type {
 	DesktopDownloadEvent,
+	DesktopFindInPageOptions,
+	DesktopFindInPageResult,
 	DesktopRendererBridge,
 	DesktopServerConfig,
 	DesktopUpdateMetadata,
@@ -89,6 +91,37 @@ export async function pickDirectory(): Promise<string | null> {
 		return null;
 	}
 	return bridge.pickDirectory();
+}
+
+export async function findInPage(
+	text: string,
+	options?: DesktopFindInPageOptions,
+): Promise<number> {
+	const bridge = getElectronBridge();
+	if (!bridge?.findInPage) {
+		throw new Error("Find in page is not available in this Electron build");
+	}
+	return bridge.findInPage(text, options);
+}
+
+export async function stopFindInPage(
+	action: "clearSelection" | "keepSelection" | "activateSelection",
+): Promise<void> {
+	const bridge = getElectronBridge();
+	if (!bridge?.stopFindInPage) {
+		return;
+	}
+	await bridge.stopFindInPage(action);
+}
+
+export async function onFindInPageResult(
+	listener: (result: DesktopFindInPageResult) => void,
+): Promise<() => void> {
+	const bridge = getElectronBridge();
+	if (!bridge?.onFindInPageResult) {
+		return () => {};
+	}
+	return bridge.onFindInPageResult(listener);
 }
 
 export async function withCurrentWindow<T>(

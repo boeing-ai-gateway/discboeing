@@ -1,5 +1,6 @@
 <script lang="ts">
 	import KeyboardShortcutHelpDialog from "$lib/components/app/parts/KeyboardShortcutHelpDialog.svelte";
+	import GlobalFindBar from "$lib/components/app/parts/GlobalFindBar.svelte";
 	import RecentThreadSwitcherDialog from "$lib/components/app/RecentThreadSwitcherDialog.svelte";
 	import {
 		getAvailableSwitcherThreads,
@@ -26,6 +27,12 @@
 		toggleSelectedSessionView,
 	} from "$lib/context/commands/app-view";
 	import { useContext } from "$lib/context/context.svelte";
+	import {
+		detectElectronRuntime,
+		findInPage,
+		onFindInPageResult,
+		stopFindInPage,
+	} from "$lib/desktop/electron-adapter";
 
 	const context = useContext();
 	const appEnvironment = context.view.app.environment;
@@ -59,6 +66,12 @@
 	);
 	const switcherHelpText =
 		"Hold the shortcut modifier, tap to cycle, release to switch";
+	let findOpen = $state(false);
+	let findQuery = $state("");
+	let findActiveMatch = $state(0);
+	let findMatchCount = $state(0);
+	let findRequestToken = 0;
+	let latestFindRequestId = $state<number | null>(null);
 
 	function getTabSwitcherSelectedIndex() {
 		if (!switcherThreads.length) {
@@ -158,6 +171,50 @@
 		toggleKeyboardShortcutsOpen();
 	}
 
+	function openFind() {
+		closeOverlays();
+		findOpen = true;
+		searchFindQuery(findQuery);
+	}
+
+	function closeFind() {
+		findOpen = false;
+		findActiveMatch = 0;
+		findMatchCount = 0;
+		findRequestToken += 1;
+		latestFindRequestId = null;
+		void stopFindInPage("clearSelection");
+	}
+
+	function searchFindQuery(query: string, findNext = false, forward = true) {
+		const requestToken = (findRequestToken += 1);
+		if (!query) {
+			findActiveMatch = 0;
+			findMatchCount = 0;
+			latestFindRequestId = null;
+			void stopFindInPage("clearSelection");
+			return;
+		}
+		void findInPage(query, { findNext, forward }).then((requestId) => {
+			if (requestToken === findRequestToken) {
+				latestFindRequestId = requestId;
+			}
+		});
+	}
+
+	function handleFindQueryChange(query: string) {
+		findQuery = query;
+		searchFindQuery(query);
+	}
+
+	function handleFindNext() {
+		searchFindQuery(findQuery, true, true);
+	}
+
+	function handleFindPrevious() {
+		searchFindQuery(findQuery, true, false);
+	}
+
 	function handleToggleSelectedSessionView(
 		viewKind:
 			| "terminal"
@@ -186,10 +243,16 @@
 	function handleWindowKeydown(event: KeyboardEvent) {
 		if (
 			event.key === "Escape" &&
-			(recentThreadSwitcherDialog.open || keyboardShortcutsDialog.open)
+			(recentThreadSwitcherDialog.open ||
+				keyboardShortcutsDialog.open ||
+				findOpen)
 		) {
 			event.preventDefault();
-			closeOverlays();
+			if (findOpen) {
+				closeFind();
+			} else {
+				closeOverlays();
+			}
 			return;
 		}
 
@@ -201,6 +264,10 @@
 			return;
 		}
 		if (!shortcutAction) {
+			return;
+		}
+
+		if (shortcutAction.id === "find-in-page" && !detectElectronRuntime()) {
 			return;
 		}
 
@@ -219,6 +286,10 @@
 		}
 		if (shortcutAction.id === "new-thread") {
 			handleStartNewThreadShortcut();
+			return;
+		}
+		if (shortcutAction.id === "find-in-page") {
+			openFind();
 			return;
 		}
 		if (shortcutAction.id === "toggle-terminal") {
@@ -260,6 +331,33 @@
 			commitTabSwitcherSelection();
 		}
 	}
+
+	$effect(() => {
+		if (!detectElectronRuntime()) {
+			return;
+		}
+
+		let unsubscribe: (() => void) | null = null;
+		let canceled = false;
+		void onFindInPageResult((result) => {
+			if (result.requestId !== latestFindRequestId) {
+				return;
+			}
+			findActiveMatch = result.activeMatchOrdinal;
+			findMatchCount = result.matches;
+		}).then((nextUnsubscribe) => {
+			if (canceled) {
+				nextUnsubscribe();
+				return;
+			}
+			unsubscribe = nextUnsubscribe;
+		});
+
+		return () => {
+			canceled = true;
+			unsubscribe?.();
+		};
+	});
 
 	$effect(() => {
 		if (recentThreadSwitcherDialog.open && switcherThreads.length === 0) {
@@ -304,4 +402,15 @@
 <KeyboardShortcutHelpDialog
 	open={keyboardShortcutsDialog.open}
 	shortcuts={globalShortcuts as GlobalShortcut[]}
+/>
+
+<GlobalFindBar
+	open={findOpen}
+	query={findQuery}
+	activeMatch={findActiveMatch}
+	matchCount={findMatchCount}
+	onQueryChange={handleFindQueryChange}
+	onNext={handleFindNext}
+	onPrevious={handleFindPrevious}
+	onClose={closeFind}
 />

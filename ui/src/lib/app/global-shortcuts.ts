@@ -29,7 +29,8 @@ export type GlobalShortcutAction =
 				| "toggle-editor"
 				| "toggle-files"
 				| "toggle-diff-review"
-				| "toggle-services";
+				| "toggle-services"
+				| "find-in-page";
 	  };
 
 export function detectIsMacPlatform(): boolean {
@@ -136,6 +137,11 @@ export function getGlobalShortcuts(isMacPlatform: boolean): GlobalShortcut[] {
 			keyGroups: [[primaryModifierLabel, "/"]],
 		},
 		{
+			id: "find-in-page",
+			label: "Find in page",
+			keyGroups: [[primaryModifierLabel, "F"]],
+		},
+		{
 			id: "toggle-terminal",
 			label: "Toggle terminal",
 			keyGroups: [[workspaceViewModifierLabel, "T"]],
@@ -153,7 +159,11 @@ export function getGlobalShortcuts(isMacPlatform: boolean): GlobalShortcut[] {
 		{
 			id: "toggle-files",
 			label: "Toggle files",
-			keyGroups: [[workspaceViewModifierLabel, "F"]],
+			keyGroups: [
+				isMacPlatform
+					? [workspaceViewModifierLabel, "Shift", "F"]
+					: [workspaceViewModifierLabel, "F"],
+			],
 		},
 		{
 			id: "toggle-diff-review",
@@ -200,7 +210,7 @@ export function matchGlobalShortcutKeydown(
 		if (key === "e" && !event.shiftKey) {
 			return { id: "toggle-editor" };
 		}
-		if (key === "f" && !event.shiftKey) {
+		if (key === "f" && event.shiftKey === isMacPlatform) {
 			return { id: "toggle-files" };
 		}
 		if (key === "s" && !event.shiftKey) {
@@ -227,6 +237,9 @@ export function matchGlobalShortcutKeydown(
 	}
 	if (key === "/" || key === "?") {
 		return { id: "keyboard-help" };
+	}
+	if (key === "f" && !event.shiftKey) {
+		return { id: "find-in-page" };
 	}
 	return null;
 }

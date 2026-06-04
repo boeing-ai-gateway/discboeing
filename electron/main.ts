@@ -185,6 +185,25 @@ function registerDesktopHandlers(): void {
   ipcMain.handle("desktop:window-is-fullscreen", (event) =>
     currentWindow(event).isFullScreen(),
   );
+  ipcMain.handle("desktop:find-in-page", (event, payload) => {
+    if (!payload || typeof payload.text !== "string") {
+      return;
+    }
+    return currentWindow(event).webContents.findInPage(payload.text, {
+      forward: payload.options?.forward !== false,
+      findNext: payload.options?.findNext === true,
+    });
+  });
+  ipcMain.handle("desktop:stop-find-in-page", (event, action: string) => {
+    if (
+      action !== "clearSelection" &&
+      action !== "keepSelection" &&
+      action !== "activateSelection"
+    ) {
+      return;
+    }
+    currentWindow(event).webContents.stopFindInPage(action);
+  });
   ipcMain.handle("desktop:relaunch", async () => {
     app.relaunch();
     app.quit();
@@ -271,6 +290,15 @@ async function createMainWindow(): Promise<BrowserWindow> {
   });
   window.on("leave-full-screen", () => {
     window.webContents.send("desktop:window-resized");
+  });
+  window.webContents.on("found-in-page", (_event, result) => {
+    window.webContents.send("desktop:found-in-page", {
+      requestId: result.requestId,
+      activeMatchOrdinal: result.activeMatchOrdinal,
+      matches: result.matches,
+      selectionArea: result.selectionArea,
+      finalUpdate: result.finalUpdate,
+    });
   });
   trackWindowState(window);
   restoreWindowState(window, windowState);

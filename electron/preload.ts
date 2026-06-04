@@ -51,6 +51,19 @@ const desktopAPI: DesktopRendererBridge = {
       bytesRid: bytesRid ?? null,
     }),
   relaunchApp: () => ipcRenderer.invoke("desktop:relaunch"),
+  findInPage: (text, options) =>
+    ipcRenderer.invoke("desktop:find-in-page", { text, options }),
+  stopFindInPage: (action) =>
+    ipcRenderer.invoke("desktop:stop-find-in-page", action),
+  onFindInPageResult: (listener): Unsubscribe => {
+    const eventName = "desktop:found-in-page";
+    const wrapped = (_event: unknown, result: Parameters<typeof listener>[0]) =>
+      listener(result);
+    ipcRenderer.on(eventName, wrapped);
+    return () => {
+      ipcRenderer.removeListener(eventName, wrapped);
+    };
+  },
   onWindowResized: (listener): Unsubscribe => {
     const eventName = "desktop:window-resized";
     const wrapped = () => listener();
