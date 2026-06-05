@@ -1,9 +1,14 @@
 import type { ChatMessage } from "$lib/api-types";
 
+export type ConversationMessage = ChatMessage & {
+	readonly renderId: string;
+};
+
 export type ConversationTurn = {
 	id: string;
-	userMessages: ChatMessage[];
-	assistantMessages: ChatMessage[];
+	readonly renderId: string;
+	userMessages: ConversationMessage[];
+	assistantMessages: ConversationMessage[];
 };
 
 export type ReservedTurnMinHeightArgs = {
@@ -20,55 +25,109 @@ export function groupMessagesIntoTurns(
 ): ConversationTurn[] {
 	const turns: ConversationTurn[] = [];
 	let currentTurn: ConversationTurn | null = null;
+	const turnIdCounts = new Map<string, number>();
+	const messageIdCounts = new Map<string, number>();
 
 	for (const message of messages) {
+		if (message.synthetic && !isCompactionMessage(message)) {
+			continue;
+		}
+		const renderMessage = withRenderId(
+			message,
+			nextStableRenderId(message.id, messageIdCounts),
+		);
 		const stableTurnId = getStableTurnId(message);
 		if (stableTurnId) {
 			if (!currentTurn || currentTurn.id !== stableTurnId) {
-				currentTurn = {
-					id: stableTurnId,
-					userMessages: [],
-					assistantMessages: [],
-				};
+				currentTurn = createConversationTurn(
+					stableTurnId,
+					nextStableRenderId(stableTurnId, turnIdCounts),
+				);
 				turns.push(currentTurn);
 			}
 			if (message.role === "user") {
-				currentTurn.userMessages.push(message);
+				currentTurn.userMessages.push(renderMessage);
 			} else {
-				currentTurn.assistantMessages.push(message);
+				currentTurn.assistantMessages.push(renderMessage);
 			}
 			continue;
 		}
 
 		if (message.role === "user") {
 			if (!currentTurn || currentTurn.assistantMessages.length > 0) {
-				currentTurn = {
-					id: message.id,
-					userMessages: [message],
-					assistantMessages: [],
-				};
+				currentTurn = createConversationTurn(
+					message.id,
+					nextStableRenderId(message.id, turnIdCounts),
+				);
+				currentTurn.userMessages.push(renderMessage);
 				turns.push(currentTurn);
 				continue;
 			}
 
-			currentTurn.userMessages.push(message);
+			currentTurn.userMessages.push(renderMessage);
 			continue;
 		}
 
 		if (!currentTurn) {
-			currentTurn = {
-				id: message.id,
-				userMessages: [],
-				assistantMessages: [message],
-			};
+			currentTurn = createConversationTurn(
+				message.id,
+				nextStableRenderId(message.id, turnIdCounts),
+			);
+			currentTurn.assistantMessages.push(renderMessage);
 			turns.push(currentTurn);
 			continue;
 		}
 
-		currentTurn.assistantMessages.push(message);
+		currentTurn.assistantMessages.push(renderMessage);
 	}
 
 	return turns;
+}
+
+function nextStableRenderId(id: string, counts: Map<string, number>): string {
+	const count = (counts.get(id) ?? 0) + 1;
+	counts.set(id, count);
+	return count === 1 ? id : `${id}#${count}`;
+}
+
+function createConversationTurn(
+	id: string,
+	renderId: string,
+): ConversationTurn {
+	const turn = {
+		id,
+		userMessages: [],
+		assistantMessages: [],
+	} as unknown as ConversationTurn;
+	Object.defineProperty(turn, "renderId", {
+		value: renderId,
+		enumerable: false,
+	});
+	return turn;
+}
+
+function withRenderId(
+	message: ChatMessage,
+	renderId: string,
+): ConversationMessage {
+	const renderMessage = { ...message } as ConversationMessage;
+	Object.defineProperty(renderMessage, "renderId", {
+		value: renderId,
+		enumerable: false,
+	});
+	return renderMessage;
+}
+
+export function isCompactionMessage(message: ChatMessage): boolean {
+	const metadata =
+		message.metadata && typeof message.metadata === "object"
+			? (message.metadata as Record<string, unknown>)
+			: null;
+	const discobot =
+		metadata?.discobot && typeof metadata.discobot === "object"
+			? (metadata.discobot as Record<string, unknown>)
+			: null;
+	return discobot?.kind === "compaction";
 }
 
 function getStableTurnId(message: ChatMessage): string | null {

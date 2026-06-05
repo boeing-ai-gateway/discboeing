@@ -8498,6 +8498,10 @@
           "replacedByMessageId": {
             "type": "string",
             "description": "ID of the replacement message that supersedes this message."
+          },
+          "synthetic": {
+            "type": "boolean",
+            "description": "Whether this message was generated internally rather than directly by the user or assistant."
           }
         },
         "x-go-type": "message.UIMessage",

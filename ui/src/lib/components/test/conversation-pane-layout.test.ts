@@ -154,6 +154,39 @@ test("groupMessagesIntoTurns prefers stable backend turn ids from message metada
 	]);
 });
 
+test("groupMessagesIntoTurns assigns unique stable render ids for duplicate ids", () => {
+	const turns = groupMessagesIntoTurns([
+		withTurnId(makeUserMessage("user-1", "prompt"), "turn-a"),
+		withTurnId(makeAssistantMessage("assistant-1", "reply"), "turn-a"),
+		withTurnId(makeUserMessage("user-2", "retry"), "turn-b"),
+		withTurnId(makeAssistantMessage("assistant-1", "replacement"), "turn-a"),
+	]);
+
+	assert.deepEqual(
+		turns.map((turn) => turn.renderId),
+		["turn-a", "turn-b", "turn-a#2"],
+	);
+	assert.deepEqual(
+		turns.flatMap((turn) =>
+			[...turn.userMessages, ...turn.assistantMessages].map(
+				(message) => message.renderId,
+			),
+		),
+		["user-1", "assistant-1", "user-2", "assistant-1#2"],
+	);
+	assert.deepEqual(Object.keys(turns[0] ?? {}), [
+		"id",
+		"userMessages",
+		"assistantMessages",
+	]);
+	assert.deepEqual(Object.keys(turns[0]?.userMessages[0] ?? {}), [
+		"id",
+		"role",
+		"parts",
+		"metadata",
+	]);
+});
+
 test("getReservedTurnMinHeight fills the visible viewport when the turn is short", () => {
 	assert.equal(
 		getReservedTurnMinHeight({

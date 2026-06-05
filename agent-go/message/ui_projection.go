@@ -42,6 +42,7 @@ type UIMessage struct {
 	Metadata            json.RawMessage `json:"metadata,omitempty"`
 	ReplacesMessageID   string          `json:"replacesMessageId,omitempty"`
 	ReplacedByMessageID string          `json:"replacedByMessageId,omitempty"`
+	Synthetic           bool            `json:"synthetic,omitempty"`
 }
 
 func (m UIMessage) MarshalJSON() ([]byte, error) {
@@ -60,7 +61,8 @@ func (m UIMessage) MarshalJSON() ([]byte, error) {
 		Metadata            json.RawMessage   `json:"metadata,omitempty"`
 		ReplacesMessageID   string            `json:"replacesMessageId,omitempty"`
 		ReplacedByMessageID string            `json:"replacedByMessageId,omitempty"`
-	}{m.ID, m.Role, parts, m.Metadata, m.ReplacesMessageID, m.ReplacedByMessageID})
+		Synthetic           bool              `json:"synthetic,omitempty"`
+	}{m.ID, m.Role, parts, m.Metadata, m.ReplacesMessageID, m.ReplacedByMessageID, m.Synthetic})
 }
 
 func (m *UIMessage) UnmarshalJSON(data []byte) error {
@@ -71,6 +73,7 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 		Metadata            json.RawMessage   `json:"metadata,omitempty"`
 		ReplacesMessageID   string            `json:"replacesMessageId,omitempty"`
 		ReplacedByMessageID string            `json:"replacedByMessageId,omitempty"`
+		Synthetic           bool              `json:"synthetic,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -80,6 +83,7 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 	m.Metadata = raw.Metadata
 	m.ReplacesMessageID = raw.ReplacesMessageID
 	m.ReplacedByMessageID = raw.ReplacedByMessageID
+	m.Synthetic = raw.Synthetic
 	m.Parts = make([]UIPart, 0, len(raw.Parts))
 	for _, partData := range raw.Parts {
 		p, err := UnmarshalUIPart(partData)
@@ -95,11 +99,22 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 // messages) into Discobot's UI message format. Consecutive assistant/tool
 // runs are merged into single assistant UI messages with DynamicToolParts.
 func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
+	return projectUIMessages(messages, false)
+}
+
+// ProjectUIMessagesWithSynthetic converts messages without dropping synthetic
+// messages. Synthetic messages are marked in the UI payload so callers can
+// decide whether to display them.
+func ProjectUIMessagesWithSynthetic(messages []Message) ([]UIMessage, error) {
+	return projectUIMessages(messages, true)
+}
+
+func projectUIMessages(messages []Message, includeSynthetic bool) ([]UIMessage, error) {
 	var result []UIMessage
 	i := 0
 	for i < len(messages) {
 		msg := messages[i]
-		if msg.Synthetic {
+		if msg.Synthetic && !includeSynthetic {
 			i++
 			continue
 		}
@@ -117,6 +132,7 @@ func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 				Metadata:            msg.Metadata,
 				ReplacesMessageID:   msg.ReplacesMessageID,
 				ReplacedByMessageID: msg.ReplacedByMessageID,
+				Synthetic:           msg.Synthetic,
 			}
 			for i < len(messages) && (messages[i].Role == "assistant" || messages[i].Role == "tool") {
 				if messages[i].Role == "assistant" && len(ui.Parts) > 0 && isReplacementBoundary(ui, messages[i]) {
@@ -176,6 +192,7 @@ func buildUISystemMessage(msg Message) UIMessage {
 		Metadata:            msg.Metadata,
 		ReplacesMessageID:   msg.ReplacesMessageID,
 		ReplacedByMessageID: msg.ReplacedByMessageID,
+		Synthetic:           msg.Synthetic,
 	}
 }
 
@@ -186,6 +203,7 @@ func buildUIUserMessage(msg Message) UIMessage {
 		Metadata:            msg.Metadata,
 		ReplacesMessageID:   msg.ReplacesMessageID,
 		ReplacedByMessageID: msg.ReplacedByMessageID,
+		Synthetic:           msg.Synthetic,
 	}
 	for _, p := range msg.Parts {
 		switch v := p.(type) {

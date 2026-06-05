@@ -54,6 +54,7 @@
 		type ConversationTurn,
 		getReservedTurnMinHeight,
 		groupMessagesIntoTurns,
+		isCompactionMessage,
 	} from "$lib/components/app/conversation-pane-layout";
 	import { Alert, AlertDescription } from "$lib/components/ui/alert";
 	import { Button } from "$lib/components/ui/button";
@@ -134,12 +135,17 @@
 	const conversationMessages = $derived.by(
 		() => messages ?? thread?.messages ?? [],
 	);
+	const visibleConversationMessages = $derived.by(() =>
+		conversationMessages.filter(
+			(message) => !message.synthetic || isCompactionMessage(message),
+		),
+	);
 	const conversationStatus = $derived.by(() => {
 		const nextStatus = status ?? thread?.status ?? "ready";
 		return nextStatus === "streaming" ? "ready" : nextStatus;
 	});
 	const conversationTurns = $derived.by(() =>
-		groupMessagesIntoTurns(conversationMessages),
+		groupMessagesIntoTurns(visibleConversationMessages),
 	);
 	const browserEventsByTurnId = $derived.by(
 		() => thread?.browserEventsByTurnId ?? {},
@@ -152,7 +158,7 @@
 		let previousEntries: NonNullable<ReturnType<typeof getTodoWriteEntries>> =
 			[];
 
-		for (const message of conversationMessages) {
+		for (const message of visibleConversationMessages) {
 			for (const part of message.parts) {
 				if (part.type !== "dynamic-tool" || part.toolName !== "TodoWrite") {
 					continue;
@@ -173,11 +179,13 @@
 
 		return entriesByToolCallId;
 	});
-	const activeTurnId = $derived.by(() => conversationTurns.at(-1)?.id ?? null);
+	const activeTurnId = $derived.by(
+		() => conversationTurns.at(-1)?.renderId ?? null,
+	);
 	const effectiveChatWidthMode = $derived.by(
 		() => chatWidthMode ?? context.view.app.preferences.chatWidthMode ?? "full",
 	);
-	const hasMessages = $derived.by(() => conversationMessages.length > 0);
+	const hasMessages = $derived.by(() => visibleConversationMessages.length > 0);
 	const isLoading = $derived.by(() => conversationStatus === "loading");
 	const isStreaming = $derived.by(
 		() =>
@@ -200,7 +208,7 @@
 		() => showComposer && Boolean(session) && Boolean(thread),
 	);
 	const latestConversationMessageId = $derived.by(
-		() => conversationMessages.at(-1)?.id ?? null,
+		() => visibleConversationMessages.at(-1)?.id ?? null,
 	);
 	const savedScrollTop = $derived.by(() => {
 		if (!activeSessionId || !activeThreadId) {
@@ -221,6 +229,7 @@
 	let expandedGeneratedUserMessages = $state<Record<string, boolean>>({});
 	let expandedHookFailureMessages = $state<Record<string, boolean>>({});
 	let expandedBrowserActivityMessages = $state<Record<string, boolean>>({});
+	let expandedCompactionMessages = $state<Record<string, boolean>>({});
 	let expandedBrowserDetailEvents = $state<Record<string, boolean>>({});
 	let browserActivityViewModes = $state<
 		Record<string, BrowserActivityViewMode>
@@ -743,9 +752,36 @@
 		return turn.assistantMessages.at(-1) ?? null;
 	}
 
+	function isCompactionTurn(turn: ConversationTurn): boolean {
+		return (
+			turn.userMessages.length > 0 &&
+			turn.assistantMessages.length > 0 &&
+			turn.userMessages.every(isCompactionMessage) &&
+			turn.assistantMessages.every(isCompactionMessage)
+		);
+	}
+
+	function getMessageText(message: ChatMessage | null | undefined): string {
+		if (!message) {
+			return "";
+		}
+		return message.parts
+			.filter((part) => part.type === "text")
+			.map((part) => part.text)
+			.join("");
+	}
+
+	function isCompactionExpanded(turnId: string): boolean {
+		return expandedCompactionMessages[turnId] ?? false;
+	}
+
+	function setCompactionExpanded(turnId: string, expanded: boolean): void {
+		expandedCompactionMessages[turnId] = expanded;
+	}
+
 	function getTurnGroupedAssistantMessages(
 		turn: ConversationTurn,
-	): ChatMessage[] {
+	): ConversationTurn["assistantMessages"] {
 		return turn.assistantMessages.slice(0, -1);
 	}
 
@@ -1114,7 +1150,7 @@
 
 	$effect(() => {
 		for (const turn of conversationTurns) {
-			if (!isBrowserActivityExpanded(turn.id)) {
+			if (!isBrowserActivityExpanded(turn.renderId)) {
 				continue;
 			}
 			const browserEvents = browserEventsByTurnId[turn.id] ?? [];
@@ -1165,7 +1201,7 @@
 		const element = viewport;
 		const composerElement = composerContainer;
 		const turnId = activeTurnId;
-		const latestMessage = conversationMessages.at(-1);
+		const latestMessage = visibleConversationMessages.at(-1);
 		if (!element || !turnId || !isProvisionalUserMessage(latestMessage)) {
 			return;
 		}
@@ -1201,7 +1237,7 @@
 	});
 
 	$effect(() => {
-		const latestMessage = conversationMessages.at(-1);
+		const latestMessage = visibleConversationMessages.at(-1);
 		const turnId = activeTurnId;
 		if (!viewport || !turnId || !isProvisionalUserMessage(latestMessage)) {
 			return;
@@ -1730,6 +1766,60 @@
 	</Collapsible>
 {/snippet}
 
+{#snippet renderCompactionTurn(turn: ConversationTurn)}
+	{@const requestMessage = turn.userMessages[0] ?? null}
+	{@const responseMessage = getTurnFinalAssistantMessage(turn)}
+	{@const isExpanded = isCompactionExpanded(turn.renderId)}
+	<Collapsible
+		open={isExpanded}
+		onOpenChange={(open) => setCompactionExpanded(turn.renderId, open)}
+	>
+		<CollapsibleTrigger
+			aria-label={`${isExpanded ? "Hide" : "Show"} compaction details`}
+			class="flex w-full items-center gap-3 py-1 text-left"
+			type="button"
+		>
+			<span class="h-px flex-1 bg-border"></span>
+			<span
+				class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
+			>
+				Conversation compacted
+			</span>
+			<span class="h-px flex-1 bg-border"></span>
+		</CollapsibleTrigger>
+		<CollapsibleContent class="overflow-hidden pt-3">
+			{#if isExpanded}
+				<div
+					class="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+				>
+					<div class="space-y-2">
+						<div
+							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+						>
+							Compaction request
+						</div>
+						<pre
+							class="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-foreground text-xs leading-5 [overflow-wrap:anywhere]"><code
+								>{getMessageText(requestMessage)}</code
+							></pre>
+					</div>
+					<div class="space-y-2">
+						<div
+							class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+						>
+							Compaction response
+						</div>
+						<pre
+							class="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-foreground text-xs leading-5 [overflow-wrap:anywhere]"><code
+								>{getMessageText(responseMessage)}</code
+							></pre>
+					</div>
+				</div>
+			{/if}
+		</CollapsibleContent>
+	</Collapsible>
+{/snippet}
+
 {#snippet renderErrorBanner(
 	key: ConversationPaneErrorBannerKey,
 	errorText: string,
@@ -1810,151 +1900,168 @@
 						class={`w-full min-w-0 space-y-4 ${effectiveChatWidthMode === "constrained" ? "mx-auto max-w-3xl" : ""}`}
 						bind:this={contentEl}
 					>
-						{#each conversationTurns as turn, index (turn.id)}
+						{#each conversationTurns as turn, index (turn.renderId)}
 							<div
-								data-active-turn={turn.id === activeTurnId}
-								data-conversation-turn-id={turn.id}
+								data-active-turn={turn.renderId === activeTurnId}
+								data-conversation-turn-id={turn.renderId}
 								class={`space-y-4 ${index > 0 && turn.userMessages.length > 0 ? "pt-20" : ""}`}
-								style={getTurnStyle(turn.id === activeTurnId)}
+								style={getTurnStyle(turn.renderId === activeTurnId)}
 							>
-								{#each turn.userMessages as message (message.id)}
-									{@const userParts = getUserMessageRenderableParts(message)}
-									{@const hookFailure = getHookFailureMessageMetadata(message)}
-									<Message
-										data-conversation-message-id={message.id}
-										from={hookFailure ? "assistant" : "user"}
-									>
-										<MessageContent>
-											{#if hookFailure}
-												{@render renderHookFailureMessage(
-													message.id,
-													hookFailure,
-												)}
-											{:else}
-												{@render renderUserMessageParts(message, userParts)}
-											{/if}
-										</MessageContent>
-									</Message>
-								{/each}
-								{#if turn.assistantMessages.length > 0}
-									{@const assistantMessage = getTurnFinalAssistantMessage(turn)}
-									{@const browserEvents = browserEventsByTurnId[turn.id] ?? []}
-									{@const groupedAssistantMessages =
-										getTurnGroupedAssistantMessages(turn)}
-									{@const turnAssistantRenderableParts =
-										getAssistantMessagesAllRenderableParts(
-											turn.assistantMessages,
-										)}
-									{@const partGroups = assistantMessage
-										? getAssistantMessagePartGroups(assistantMessage, {
-												isMessageComplete:
-													!isActiveStreamingAssistantMessage(assistantMessage),
-											})
-										: null}
-									{@const groupedStepCount = getTurnGroupedStepCount(
-										turn,
-										partGroups,
-									)}
-									{@const collapsedAssistantHeaderLabel =
-										getCollapsedAssistantHeaderLabel(turn, partGroups)}
-									{#if assistantMessage}
-										{@const isCollapsedStepSectionExpanded =
-											isAssistantStepMessageExpanded(turn.id)}
-										{#if groupedStepCount > 0}
-											<Collapsible
-												open={isCollapsedStepSectionExpanded}
-												onOpenChange={(open) =>
-													setAssistantStepMessageExpanded(turn.id, open)}
-											>
-												<CollapsibleTrigger
-													aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${collapsedAssistantHeaderLabel}`}
-													class="flex w-full items-center gap-3 py-1 text-left"
-													type="button"
-												>
-													<span class="h-px flex-1 bg-border"></span>
-													<span
-														class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
-													>
-														{collapsedAssistantHeaderLabel}
-													</span>
-													<span class="h-px flex-1 bg-border"></span>
-												</CollapsibleTrigger>
-												<CollapsibleContent class="overflow-hidden">
-													{#if isCollapsedStepSectionExpanded}
-														<div
-															class="flex min-w-0 flex-col gap-2 [&>[data-ai-stack]+[data-ai-stack]]:-mt-8"
-														>
-															{#each groupedAssistantMessages as groupedAssistantMessage (groupedAssistantMessage.id)}
-																<Message
-																	data-conversation-message-id={groupedAssistantMessage.id}
-																	from="assistant"
-																>
-																	<MessageContent>
-																		{@render renderAssistantMessageParts(
-																			groupedAssistantMessage,
-																			getAssistantMessageAllRenderableParts(
-																				groupedAssistantMessage,
-																			),
-																			turnAssistantRenderableParts,
-																		)}
-																	</MessageContent>
-																	<AssistantMessageCopyActions
-																		message={groupedAssistantMessage}
-																	/>
-																</Message>
-															{/each}
-															{#if partGroups && partGroups.collapsedParts.length > 0}
-																<Message
-																	data-conversation-message-id={`${assistantMessage.id}:grouped`}
-																	from="assistant"
-																>
-																	<MessageContent>
-																		{@render renderAssistantMessageParts(
-																			assistantMessage,
-																			partGroups.collapsedParts,
-																			turnAssistantRenderableParts,
-																		)}
-																	</MessageContent>
-																	<AssistantMessageCopyActions
-																		message={assistantMessage}
-																	/>
-																</Message>
-															{/if}
-														</div>
-													{/if}
-												</CollapsibleContent>
-											</Collapsible>
-										{/if}
-										{#if browserEvents.length > 0}
-											{@render renderBrowserActivity(turn.id, browserEvents)}
-										{/if}
+								{#if isCompactionTurn(turn)}
+									{@render renderCompactionTurn(turn)}
+								{:else}
+									{#each turn.userMessages as message (message.renderId)}
+										{@const userParts = getUserMessageRenderableParts(message)}
+										{@const hookFailure =
+											getHookFailureMessageMetadata(message)}
 										<Message
-											data-conversation-message-id={assistantMessage.id}
-											from="assistant"
+											data-conversation-message-id={message.id}
+											from={hookFailure ? "assistant" : "user"}
 										>
 											<MessageContent>
-												{@render renderAssistantMessageParts(
-													assistantMessage,
-													partGroups
-														? partGroups.visibleParts
-														: getAssistantMessageAllRenderableParts(
-																assistantMessage,
-															),
-													turnAssistantRenderableParts,
-												)}
+												{#if hookFailure}
+													{@render renderHookFailureMessage(
+														message.id,
+														hookFailure,
+													)}
+												{:else}
+													{@render renderUserMessageParts(message, userParts)}
+												{/if}
 											</MessageContent>
-											<AssistantMessageCopyActions message={assistantMessage} />
+										</Message>
+									{/each}
+									{#if turn.assistantMessages.length > 0}
+										{@const assistantMessage =
+											getTurnFinalAssistantMessage(turn)}
+										{@const browserEvents =
+											browserEventsByTurnId[turn.id] ?? []}
+										{@const groupedAssistantMessages =
+											getTurnGroupedAssistantMessages(turn)}
+										{@const turnAssistantRenderableParts =
+											getAssistantMessagesAllRenderableParts(
+												turn.assistantMessages,
+											)}
+										{@const partGroups = assistantMessage
+											? getAssistantMessagePartGroups(assistantMessage, {
+													isMessageComplete:
+														!isActiveStreamingAssistantMessage(
+															assistantMessage,
+														),
+												})
+											: null}
+										{@const groupedStepCount = getTurnGroupedStepCount(
+											turn,
+											partGroups,
+										)}
+										{@const collapsedAssistantHeaderLabel =
+											getCollapsedAssistantHeaderLabel(turn, partGroups)}
+										{#if assistantMessage}
+											{@const isCollapsedStepSectionExpanded =
+												isAssistantStepMessageExpanded(turn.renderId)}
+											{#if groupedStepCount > 0}
+												<Collapsible
+													open={isCollapsedStepSectionExpanded}
+													onOpenChange={(open) =>
+														setAssistantStepMessageExpanded(
+															turn.renderId,
+															open,
+														)}
+												>
+													<CollapsibleTrigger
+														aria-label={`${isCollapsedStepSectionExpanded ? "Hide" : "Show"} ${collapsedAssistantHeaderLabel}`}
+														class="flex w-full items-center gap-3 py-1 text-left"
+														type="button"
+													>
+														<span class="h-px flex-1 bg-border"></span>
+														<span
+															class="rounded-full border border-border/70 bg-background px-3 py-1 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em] transition-colors hover:border-border hover:text-foreground"
+														>
+															{collapsedAssistantHeaderLabel}
+														</span>
+														<span class="h-px flex-1 bg-border"></span>
+													</CollapsibleTrigger>
+													<CollapsibleContent class="overflow-hidden">
+														{#if isCollapsedStepSectionExpanded}
+															<div
+																class="flex min-w-0 flex-col gap-2 [&>[data-ai-stack]+[data-ai-stack]]:-mt-8"
+															>
+																{#each groupedAssistantMessages as groupedAssistantMessage (groupedAssistantMessage.renderId)}
+																	<Message
+																		data-conversation-message-id={groupedAssistantMessage.id}
+																		from="assistant"
+																	>
+																		<MessageContent>
+																			{@render renderAssistantMessageParts(
+																				groupedAssistantMessage,
+																				getAssistantMessageAllRenderableParts(
+																					groupedAssistantMessage,
+																				),
+																				turnAssistantRenderableParts,
+																			)}
+																		</MessageContent>
+																		<AssistantMessageCopyActions
+																			message={groupedAssistantMessage}
+																		/>
+																	</Message>
+																{/each}
+																{#if partGroups && partGroups.collapsedParts.length > 0}
+																	<Message
+																		data-conversation-message-id={`${assistantMessage.id}:grouped`}
+																		from="assistant"
+																	>
+																		<MessageContent>
+																			{@render renderAssistantMessageParts(
+																				assistantMessage,
+																				partGroups.collapsedParts,
+																				turnAssistantRenderableParts,
+																			)}
+																		</MessageContent>
+																		<AssistantMessageCopyActions
+																			message={assistantMessage}
+																		/>
+																	</Message>
+																{/if}
+															</div>
+														{/if}
+													</CollapsibleContent>
+												</Collapsible>
+											{/if}
+											{#if browserEvents.length > 0}
+												{@render renderBrowserActivity(
+													turn.renderId,
+													browserEvents,
+												)}
+											{/if}
+											<Message
+												data-conversation-message-id={assistantMessage.id}
+												from="assistant"
+											>
+												<MessageContent>
+													{@render renderAssistantMessageParts(
+														assistantMessage,
+														partGroups
+															? partGroups.visibleParts
+															: getAssistantMessageAllRenderableParts(
+																	assistantMessage,
+																),
+														turnAssistantRenderableParts,
+													)}
+												</MessageContent>
+												<AssistantMessageCopyActions
+													message={assistantMessage}
+												/>
+											</Message>
+										{/if}
+									{/if}
+									{#if isStreaming && turn.renderId === activeTurnId}
+										<Message from="assistant">
+											<MessageContent>
+												<div class="text-muted-foreground">
+													<Loader size={18} />
+												</div>
+											</MessageContent>
 										</Message>
 									{/if}
-								{/if}
-								{#if isStreaming && turn.id === activeTurnId}
-									<Message from="assistant">
-										<MessageContent>
-											<div class="text-muted-foreground">
-												<Loader size={18} />
-											</div>
-										</MessageContent>
-									</Message>
 								{/if}
 							</div>
 						{/each}

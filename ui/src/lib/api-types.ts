@@ -154,6 +154,11 @@ export type ChatMessageMetadata = {
 	reasoning?: string;
 	originalText?: string;
 	slashCommand?: ChatSlashCommandMetadata;
+	discobot?: {
+		kind?: string;
+		compactionFor?: string;
+		turnId?: string;
+	} & Record<string, unknown>;
 } & Record<string, unknown>;
 
 export type BrowserEventFile = {
@@ -619,6 +624,7 @@ export type ChatMessage = UIMessage<
 	replacesMessageId?: string;
 	replacedByMessageId?: string;
 	status?: "streaming";
+	synthetic?: boolean;
 };
 
 export interface Suggestion {

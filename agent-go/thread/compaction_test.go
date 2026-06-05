@@ -698,6 +698,18 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 			role = "assistant"
 		}
 		id := fmt.Sprintf("msg%d", i)
+		if id == "msg5" {
+			msgs = append(msgs, StoredMessage{
+				ID:       "synthetic-after-compaction",
+				ParentID: prevID,
+				Message: message.Message{
+					Role:      "user",
+					Parts:     []message.Part{message.TextPart{Text: "Synthetic compaction UI request."}},
+					Synthetic: true,
+				},
+			})
+			prevID = "synthetic-after-compaction"
+		}
 		msgs = append(msgs, StoredMessage{
 			ID:       id,
 			ParentID: prevID,
@@ -795,6 +807,9 @@ func TestMaybeCompact_ReCompaction(t *testing.T) {
 	}
 	if !strings.Contains(transcript.String(), "Old partial summary.") {
 		t.Error("expected old summary text to appear in summarization input")
+	}
+	if strings.Contains(transcript.String(), "Synthetic compaction UI request.") {
+		t.Error("did not expect synthetic raw message in summarization input")
 	}
 }
 

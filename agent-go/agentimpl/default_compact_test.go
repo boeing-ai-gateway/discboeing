@@ -152,7 +152,7 @@ func TestPromptCompactCommand_ForceCompactsImmediately(t *testing.T) {
 	}
 
 	assertTextStartsAfterStart(t, chunks)
-	if len(deltas) != 2 || deltas[0] != "Compacting conversation...\n" || deltas[1] != "Conversation compacted." {
+	if len(deltas) != 2 || deltas[0] != "Compacting conversation...\n" || deltas[1] != "Compacted summary." {
 		t.Fatalf("unexpected /compact response deltas: %#v", deltas)
 	}
 	if mockProvider.completeCalls != 1 {
@@ -193,6 +193,193 @@ func TestPromptCompactCommand_NoHistory(t *testing.T) {
 	if len(deltas) != 1 || deltas[0] != "Nothing to compact yet." {
 		t.Fatalf("unexpected /compact response deltas: %#v", deltas)
 	}
+}
+
+func TestPromptCompactCommand_SkippedCompactionDoesNotEmitCompactionTurn(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-compact-reminder-only"
+	messages := []thread.StoredMessage{
+		{ID: "sys", Message: message.Message{Role: "system", Parts: []message.Part{message.TextPart{Text: "system"}}}},
+		{
+			ID:       "reminder",
+			ParentID: "sys",
+			Message: message.Message{
+				Role:  "user",
+				Parts: []message.Part{message.TextPart{Text: "<system-reminder>\ninternal reminder\n</system-reminder>"}},
+			},
+		},
+	}
+	for _, sm := range messages {
+		if err := store.SaveMessage(threadID, sm); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveConfig(threadID, thread.Config{Model: "mock/test-model", ActiveLeafID: "reminder"}); err != nil {
+		t.Fatal(err)
+	}
+	registry := providers.NewProviderRegistry(nil)
+	mockProvider := &compactCommandMockProvider{}
+	registry.Add(mockProvider)
+	agentImpl := NewDefaultAgent(store, registry, nil, t.TempDir(), MCPConfig{})
+
+	var chunks []message.MessageChunk
+	var deltas []string
+	for chunk, err := range agentImpl.Compact(context.Background(), threadID, agent.PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{Text: "/compact"}},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		chunks = append(chunks, chunk)
+		if td, ok := chunk.(message.TextDeltaChunk); ok {
+			deltas = append(deltas, td.Delta)
+		}
+	}
+
+	if len(deltas) != 2 || deltas[0] != "Compacting conversation...\n" || deltas[1] != "Nothing to compact yet." {
+		t.Fatalf("unexpected /compact response deltas: %#v", deltas)
+	}
+	if mockProvider.completeCalls != 0 {
+		t.Fatalf("expected no summary call, got %d", mockProvider.completeCalls)
+	}
+	for _, chunk := range chunks {
+		if _, ok := chunk.(message.UserMessageChunk); ok {
+			t.Fatalf("skipped compaction emitted synthetic user message chunk: %#v", chunks)
+		}
+		if start, ok := chunk.(message.StartChunk); ok && strings.Contains(string(start.MessageMetadata), `"kind":"compaction"`) {
+			t.Fatalf("skipped compaction emitted compaction metadata: %#v", chunks)
+		}
+	}
+}
+
+func TestPromptCompactCommand_CompactionSummaryExcludesSyntheticMessages(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-compact-synthetic-secret"
+	messages := []thread.StoredMessage{
+		{ID: "sys", Message: message.Message{Role: "system", Parts: []message.Part{message.TextPart{Text: "system"}}}},
+		{
+			ID:       "synthetic-credentials",
+			ParentID: "sys",
+			Message: message.Message{
+				Role:      "user",
+				Parts:     []message.Part{message.TextPart{Text: "SECRET credential-id env-var approved-use-id"}},
+				Synthetic: true,
+			},
+		},
+		{
+			ID:       "user",
+			ParentID: "synthetic-credentials",
+			Message:  message.Message{Role: "user", Parts: []message.Part{message.TextPart{Text: "visible user request"}}},
+		},
+	}
+	for _, sm := range messages {
+		if err := store.SaveMessage(threadID, sm); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveConfig(threadID, thread.Config{Model: "mock/test-model", ActiveLeafID: "user"}); err != nil {
+		t.Fatal(err)
+	}
+	registry := providers.NewProviderRegistry(nil)
+	mockProvider := &compactCommandMockProvider{}
+	registry.Add(mockProvider)
+	agentImpl := NewDefaultAgent(store, registry, nil, t.TempDir(), MCPConfig{})
+
+	for _, err := range agentImpl.Compact(context.Background(), threadID, agent.PromptRequest{
+		UserParts: []message.UIPart{message.UITextPart{Text: "/compact"}},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if mockProvider.completeCalls != 1 {
+		t.Fatalf("expected one summary call, got %d", mockProvider.completeCalls)
+	}
+	requestText := completeRequestsText(mockProvider.requests)
+	if strings.Contains(requestText, "SECRET credential-id env-var approved-use-id") {
+		t.Fatalf("synthetic credential reminder leaked into summary request: %s", requestText)
+	}
+	if !strings.Contains(requestText, "visible user request") {
+		t.Fatalf("expected real user content in summary request: %s", requestText)
+	}
+}
+
+func TestMessagesWithCompactionDoesNotExposePersistedSynthetic(t *testing.T) {
+	store := thread.NewStore(t.TempDir())
+	threadID := "thread-compaction-synthetic-history"
+	messages := []thread.StoredMessage{
+		{ID: "sys", Message: message.Message{Role: "system", Parts: []message.Part{message.TextPart{Text: "system"}}}},
+		{
+			ID:       "synthetic-reminder",
+			ParentID: "sys",
+			Message: message.Message{
+				Role:      "user",
+				Parts:     []message.Part{message.TextPart{Text: "SECRET credential-use-id"}},
+				Synthetic: true,
+			},
+		},
+		{ID: "user", ParentID: "synthetic-reminder", Message: message.Message{Role: "user", Parts: []message.Part{message.TextPart{Text: "visible user"}}}},
+		{ID: "assistant", ParentID: "user", Message: message.Message{Role: "assistant", Parts: []message.Part{message.TextPart{Text: "visible assistant"}}}},
+	}
+	for _, msg := range messages {
+		if err := store.SaveMessage(threadID, msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveCompaction(threadID, thread.CompactionRecord{
+		SummaryText:   "visible compaction summary",
+		LeafMessageID: "user",
+		Model:         "test-model",
+		CreatedAt:     time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	agentImpl := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
+	uiMessages, err := agentImpl.Messages(threadID, "assistant")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	transcript := uiMessagesText(uiMessages)
+	if strings.Contains(transcript, "SECRET credential-use-id") {
+		t.Fatalf("synthetic reminder leaked into UI messages: %s", transcript)
+	}
+	if !strings.Contains(transcript, compactionUIRequestText) {
+		t.Fatalf("expected compaction request in UI messages: %s", transcript)
+	}
+	if !strings.Contains(transcript, "visible compaction summary") {
+		t.Fatalf("expected compaction summary in UI messages: %s", transcript)
+	}
+}
+
+func uiMessagesText(messages []message.UIMessage) string {
+	var sb strings.Builder
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if textPart, ok := part.(message.UITextPart); ok {
+				sb.WriteString(textPart.Text)
+				sb.WriteByte('\n')
+			}
+		}
+	}
+	return sb.String()
+}
+
+func completeRequestsText(requests []providers.CompleteRequest) string {
+	var sb strings.Builder
+	for _, req := range requests {
+		for _, msg := range req.Messages {
+			for _, part := range msg.Parts {
+				if textPart, ok := part.(message.TextPart); ok {
+					sb.WriteString(textPart.Text)
+					sb.WriteByte('\n')
+				}
+			}
+		}
+	}
+	return sb.String()
 }
 
 func assertTextStartsAfterStart(t *testing.T, chunks []message.MessageChunk) {

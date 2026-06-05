@@ -423,7 +423,7 @@ func compactionItems(store *Store, threadID string, entries []HistoryEntry, remi
 					afterExisting = entries[i].ID == existing.LeafMessageID
 					continue
 				}
-				if isSystemReminder(entries[i].Message) {
+				if entries[i].Message.Synthetic || isSystemReminder(entries[i].Message) {
 					continue
 				}
 				items = append(items, compactionItem{
@@ -443,7 +443,7 @@ func compactionItems(store *Store, threadID string, entries []HistoryEntry, remi
 func rawCompactionItems(entries []HistoryEntry, reminderEnd int) []compactionItem {
 	var items []compactionItem
 	for i := reminderEnd; i < len(entries); i++ {
-		if isSystemReminder(entries[i].Message) {
+		if entries[i].Message.Synthetic || isSystemReminder(entries[i].Message) {
 			continue
 		}
 		items = append(items, compactionItem{

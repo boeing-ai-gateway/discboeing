@@ -1535,15 +1535,15 @@ func (a *DefaultAgent) handleCompactCommand(ctx context.Context, threadID string
 		if !yield(message.TextDeltaChunk{ID: textID, Delta: "Compacting conversation...\n"}, nil) {
 			return
 		}
+
 		compacted, compactErr := thread.ForceCompactThread(ctx, provider, a.registry, a.store, threadID, leafID, turnCfg)
 		if compactErr != nil {
 			yield(nil, fmt.Errorf("force compaction: %w", compactErr))
 			return
 		}
-
-		if compacted {
-			log.Printf("agent: compacted thread %s at leaf %s", threadID, leafID)
-			if !yield(message.TextDeltaChunk{ID: textID, Delta: "Conversation compacted."}, nil) {
+		if !compacted {
+			log.Printf("agent: compact skipped for thread %s at leaf %s: nothing to compact", threadID, leafID)
+			if !yield(message.TextDeltaChunk{ID: textID, Delta: "Nothing to compact yet."}, nil) {
 				return
 			}
 			if !yield(message.TextEndChunk{ID: textID}, nil) {
@@ -1553,8 +1553,28 @@ func (a *DefaultAgent) handleCompactCommand(ctx context.Context, threadID string
 			return
 		}
 
-		log.Printf("agent: compact skipped for thread %s at leaf %s: nothing to compact", threadID, leafID)
-		if !yield(message.TextDeltaChunk{ID: textID, Delta: "Nothing to compact yet."}, nil) {
+		log.Printf("agent: compacted thread %s at leaf %s", threadID, leafID)
+		record, _ := a.store.LoadCompaction(threadID)
+		responseText := "Conversation compacted."
+		if record != nil && strings.TrimSpace(record.SummaryText) != "" {
+			responseText = record.SummaryText
+		}
+
+		userMsg := compactionUIUserMessage("compaction-user-"+leafID, leafID)
+		if uiUserMessages, err := message.ProjectUIMessagesWithSynthetic([]message.Message{userMsg}); err == nil && len(uiUserMessages) == 1 {
+			if !yield(message.UserMessageChunk{
+				Data: message.UserMessageData{
+					Message:               uiUserMessages[0],
+					InsertBeforeMessageID: messageID,
+				},
+			}, nil) {
+				return
+			}
+		}
+		if !yield(message.MessageMetadataChunk{MessageMetadata: compactionMessageMetadata(leafID)}, nil) {
+			return
+		}
+		if !yield(message.TextDeltaChunk{ID: textID, Delta: responseText}, nil) {
 			return
 		}
 		if !yield(message.TextEndChunk{ID: textID}, nil) {
@@ -1562,6 +1582,42 @@ func (a *DefaultAgent) handleCompactCommand(ctx context.Context, threadID string
 		}
 		yield(message.ResponseFinishChunk{FinishReason: "stop"}, nil)
 	}
+}
+
+const compactionUIRequestText = "Conversation compaction requested."
+
+func compactionUIUserMessage(id, leafID string) message.Message {
+	return message.Message{
+		ID:        id,
+		Role:      "user",
+		Parts:     []message.Part{message.TextPart{Text: compactionUIRequestText}},
+		Metadata:  compactionMessageMetadata(leafID),
+		Synthetic: true,
+	}
+}
+
+func compactionUIAssistantMessage(id, leafID, summaryText string) message.Message {
+	return message.Message{
+		ID:        id,
+		Role:      "assistant",
+		Parts:     []message.Part{message.TextPart{Text: summaryText}},
+		Metadata:  compactionMessageMetadata(leafID),
+		Synthetic: true,
+	}
+}
+
+func compactionMessageMetadata(leafID string) json.RawMessage {
+	data, err := json.Marshal(map[string]any{
+		"discobot": map[string]any{
+			"kind":          "compaction",
+			"compactionFor": leafID,
+			"turnId":        "compaction-" + leafID,
+		},
+	})
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 func yieldCompactStatusMessage(yield func(message.MessageChunk, error) bool, text string) bool {
@@ -1620,11 +1676,13 @@ func (a *DefaultAgent) Messages(threadID, leafID string) ([]message.UIMessage, e
 	if err != nil {
 		return nil, err
 	}
+	compaction, _ := a.store.LoadCompaction(threadID)
 	turnIDsByMessageID, err := a.store.HistoryTurnIDs(threadID)
 	if err != nil {
 		return nil, err
 	}
-	history := make([]message.Message, 0, len(historyEntries))
+	var uiMessages []message.UIMessage
+	historySegment := make([]message.Message, 0, len(historyEntries))
 	for _, entry := range historyEntries {
 		if replacedID := strings.TrimSpace(entry.ReplacesID); replacedID != "" {
 			replaced, err := a.store.LoadMessage(threadID, replacedID)
@@ -1632,19 +1690,46 @@ func (a *DefaultAgent) Messages(threadID, leafID string) ([]message.UIMessage, e
 				return nil, err
 			}
 			replacedMsg := replaced.Message
-			replacedMsg.ID = replaced.ID
-			replacedMsg.ReplacedByMessageID = entry.ID
-			history = append(history, replacedMsg)
+			if !replacedMsg.Synthetic {
+				replacedMsg.ID = replaced.ID
+				replacedMsg.ReplacedByMessageID = entry.ID
+				historySegment = append(historySegment, replacedMsg)
+			}
 		}
 		msg := entry.Message
+		if msg.Synthetic {
+			continue
+		}
 		msg.ID = entry.ID
 		msg.ReplacesMessageID = entry.ReplacesID
 		if turnID := strings.TrimSpace(turnIDsByMessageID[entry.ID]); turnID != "" {
 			msg.Metadata = mergeTurnIDIntoMessageMetadata(msg.Metadata, turnID)
 		}
-		history = append(history, msg)
+		historySegment = append(historySegment, msg)
+		if compaction != nil && compaction.LeafMessageID == entry.ID {
+			projected, err := message.ProjectUIMessages(historySegment)
+			if err != nil {
+				return nil, err
+			}
+			uiMessages = append(uiMessages, projected...)
+			historySegment = historySegment[:0]
+
+			compactionMessages, err := message.ProjectUIMessagesWithSynthetic([]message.Message{
+				compactionUIUserMessage("compaction-user-"+entry.ID, entry.ID),
+				compactionUIAssistantMessage("compaction-assistant-"+entry.ID, entry.ID, compaction.SummaryText),
+			})
+			if err != nil {
+				return nil, err
+			}
+			uiMessages = append(uiMessages, compactionMessages...)
+		}
 	}
-	return message.ProjectUIMessages(history)
+	projected, err := message.ProjectUIMessages(historySegment)
+	if err != nil {
+		return nil, err
+	}
+	uiMessages = append(uiMessages, projected...)
+	return uiMessages, nil
 }
 
 func mergeTurnIDIntoMessageMetadata(metadata json.RawMessage, turnID string) json.RawMessage {
