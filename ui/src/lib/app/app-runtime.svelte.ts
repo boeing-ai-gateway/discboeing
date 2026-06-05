@@ -1,7 +1,7 @@
 import { generateId } from "ai";
 import { SvelteMap } from "svelte/reactivity";
 
-import { api } from "$lib/api-client";
+import { ApiError, api } from "$lib/api-client";
 import type {
 	CredentialInfo,
 	CredentialType,
@@ -1281,16 +1281,35 @@ function startProjectEventsSubscription(): () => void {
 			if (!payload.data?.workspaceId) {
 				return;
 			}
-			void api.getWorkspace(payload.data.workspaceId).then((workspace) => {
-				context().data.workspaces.byId[workspace.id] = workspace;
-				context().data.workspaces.items = context().data.workspaces.items.some(
-					(item) => item.id === workspace.id,
-				)
-					? context().data.workspaces.items.map((item) =>
-							item.id === workspace.id ? workspace : item,
+			const workspaceId = payload.data.workspaceId;
+			void api
+				.getWorkspace(workspaceId)
+				.then((workspace) => {
+					context().data.workspaces.byId[workspace.id] = workspace;
+					context().data.workspaces.items =
+						context().data.workspaces.items.some(
+							(item) => item.id === workspace.id,
 						)
-					: [workspace, ...context().data.workspaces.items];
-			});
+							? context().data.workspaces.items.map((item) =>
+									item.id === workspace.id ? workspace : item,
+								)
+							: [workspace, ...context().data.workspaces.items];
+				})
+				.catch((error: unknown) => {
+					if (error instanceof ApiError && error.status === 404) {
+						delete context().data.workspaces.byId[workspaceId];
+						context().data.workspaces.items =
+							context().data.workspaces.items.filter(
+								(workspace) => workspace.id !== workspaceId,
+							);
+						return;
+					}
+					console.error(
+						"[WS] Failed to refresh workspace:",
+						workspaceId,
+						error,
+					);
+				});
 		} catch (error) {
 			console.error("[WS] Failed to parse workspace_updated event:", error);
 		}
