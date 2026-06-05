@@ -107,6 +107,7 @@ type StreamEntry = {
 	key: string;
 	state: ProjectStreamSubscriptionState;
 	wantsSubscription: boolean;
+	resumeAfterId?: string;
 	source: StreamSource;
 	consumers: Map<symbol, StreamConsumer>;
 	subscribeMessage: () => ProjectStreamSocketRequest;
@@ -525,35 +526,38 @@ export function createChatStreamManager(): ChatStreamManager {
 					let entry = entries.get(key);
 					if (!entry) {
 						const source = new StreamSource<string>();
-						entry = {
+						const createdEntry: StreamEntry = {
 							key,
 							state: "idle",
 							wantsSubscription: true,
+							resumeAfterId: afterId,
 							source,
 							consumers: new Map(),
 							subscribeMessage: () => ({
 								type: "subscribe",
 								stream: "project-events",
-								...(afterId ? { afterId } : {}),
+								...(createdEntry.resumeAfterId
+									? { afterId: createdEntry.resumeAfterId }
+									: {}),
 							}),
 							unsubscribeMessage: () => ({
 								type: "unsubscribe",
 								stream: "project-events",
 							}),
 							handleEvent: (message) => {
+								if (message.id) {
+									createdEntry.resumeAfterId = message.id;
+								}
 								if (message.event && typeof message.data === "string") {
 									source.dispatch(message.event, message.data);
 								}
 							},
 							matchesMessage: (message) => message.stream === "project-events",
 						};
+						entry = createdEntry;
 						entries.set(key, entry);
-					} else {
-						entry.subscribeMessage = () => ({
-							type: "subscribe",
-							stream: "project-events",
-							...(afterId ? { afterId } : {}),
-						});
+					} else if (afterId && !entry.resumeAfterId) {
+						entry.resumeAfterId = afterId;
 					}
 					return entry;
 				},

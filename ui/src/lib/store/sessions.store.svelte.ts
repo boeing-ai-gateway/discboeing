@@ -121,6 +121,9 @@ export class SessionStore {
 			return null;
 		}
 		return this.#fetchOneRequests.run(id, async () => {
+			if (this.#missingSessionIds.has(id)) {
+				return null;
+			}
 			try {
 				const session = await api.getSession(id);
 				this.#missingSessionIds.delete(id);

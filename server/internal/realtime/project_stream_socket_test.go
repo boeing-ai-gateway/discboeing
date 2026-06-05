@@ -14,7 +14,7 @@ import (
 	"github.com/obot-platform/discobot/server/internal/store"
 )
 
-func TestProjectEventHistoryReplaysAllWithoutAfterID(t *testing.T) {
+func TestProjectEventHistorySkipsInitialReplayWithoutAfterID(t *testing.T) {
 	ctx := context.Background()
 	cfg := &config.Config{
 		DatabaseDSN:    fmt.Sprintf("sqlite3://%s/test.db", t.TempDir()),
@@ -43,18 +43,26 @@ func TestProjectEventHistoryReplaysAllWithoutAfterID(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	second := publishProjectEvent(t, broker, project.ID, "session-2")
 
-	history, err := socket.projectEventHistory(ctx, "")
+	history, err := socket.projectEventHistory(ctx, "", false)
 	if err != nil {
-		t.Fatalf("failed to load full history: %v", err)
+		t.Fatalf("failed to load initial history: %v", err)
 	}
-	if len(history) != 2 {
-		t.Fatalf("expected 2 history events, got %d", len(history))
-	}
-	if history[0].ID != first.ID || history[1].ID != second.ID {
-		t.Fatalf("expected full history in order, got %q then %q", history[0].ID, history[1].ID)
+	if len(history) != 0 {
+		t.Fatalf("expected no initial history events, got %d", len(history))
 	}
 
-	history, err = socket.projectEventHistory(ctx, first.ID)
+	history, err = socket.projectEventHistory(ctx, "", true)
+	if err != nil {
+		t.Fatalf("failed to load replay history: %v", err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("expected 2 replay history events, got %d", len(history))
+	}
+	if history[0].ID != first.ID || history[1].ID != second.ID {
+		t.Fatalf("expected replay history in order, got %q then %q", history[0].ID, history[1].ID)
+	}
+
+	history, err = socket.projectEventHistory(ctx, first.ID, false)
 	if err != nil {
 		t.Fatalf("failed to load resumed history: %v", err)
 	}

@@ -318,11 +318,11 @@ test("chat stream manager routes service output over the shared websocket", () =
 	manager.dispose();
 });
 
-test("chat stream manager routes project events over the shared websocket", () => {
+test("chat stream manager routes project events and resumes after reconnect", async () => {
 	const manager = createChatStreamManager();
 	const connectedEvents: string[] = [];
 	const sessionEvents: string[] = [];
-	const subscription = manager.subscribeProjectEvents({ afterId: "event-1" });
+	const subscription = manager.subscribeProjectEvents();
 
 	subscription.eventSource.addEventListener("connected", (event) => {
 		connectedEvents.push(event.data);
@@ -338,7 +338,6 @@ test("chat stream manager routes project events over the shared websocket", () =
 	assert.deepEqual(JSON.parse(socket.sent[0]), {
 		type: "subscribe",
 		stream: "project-events",
-		afterId: "event-1",
 	});
 
 	socket.emitMessage({
@@ -364,8 +363,24 @@ test("chat stream manager routes project events over the shared websocket", () =
 		'{"id":"event-2","type":"session_updated"}',
 	]);
 
+	const secondSubscription = manager.subscribeProjectEvents();
+
+	socket.emitClose();
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+
+	assert.equal(MockWebSocket.instances.length, 2);
+	const reconnectSocket = MockWebSocket.instances[1];
+	reconnectSocket.emitOpen();
+	assert.deepEqual(JSON.parse(reconnectSocket.sent[0]), {
+		type: "subscribe",
+		stream: "project-events",
+		afterId: "event-2",
+	});
+
 	subscription.unsubscribe();
-	assert.deepEqual(JSON.parse(socket.sent[1]), {
+	assert.equal(reconnectSocket.sent.length, 1);
+	secondSubscription.unsubscribe();
+	assert.deepEqual(JSON.parse(reconnectSocket.sent[1]), {
 		type: "unsubscribe",
 		stream: "project-events",
 	});

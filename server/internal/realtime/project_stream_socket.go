@@ -451,7 +451,7 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 		return
 	}
 
-	history, err := s.projectEventHistory(streamCtx, req.AfterID)
+	history, err := s.projectEventHistory(streamCtx, req.AfterID, req.Replay)
 	if err != nil {
 		_ = s.writeMessage(projectStreamSocketMessage{
 			Type:   "error",
@@ -516,9 +516,12 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 	}()
 }
 
-func (s *ProjectStreamSocket) projectEventHistory(ctx context.Context, afterID string) ([]*events.Event, error) {
+func (s *ProjectStreamSocket) projectEventHistory(ctx context.Context, afterID string, replay bool) ([]*events.Event, error) {
 	if afterID != "" {
 		return s.eventBroker.GetEventsAfterID(ctx, s.projectID, afterID)
+	}
+	if !replay {
+		return nil, nil
 	}
 	return s.eventBroker.GetEventsSince(ctx, s.projectID, time.Time{})
 }
