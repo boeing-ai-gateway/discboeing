@@ -193,12 +193,12 @@ export function createThreadState(
 	session: SessionContextValue,
 	threadId: string,
 ): ThreadContextValue {
-	const hasSession = $derived.by(() =>
-		canLoadSessionThreads(session.current?.sandboxStatus),
-	);
+	function hasSession() {
+		return canLoadSessionThreads(session.current?.sandboxStatus);
+	}
 	const retryScheduler = createRetryScheduler({
 		owner: "ThreadContext",
-		enabled: () => hasSession,
+		enabled: hasSession,
 		retry: { mode: "background" },
 	});
 	const shouldIgnoreClosedStreamError = () => {
@@ -215,7 +215,7 @@ export function createThreadState(
 		}
 	};
 	const refreshSessionState = async () => {
-		if (!hasSession) {
+		if (!hasSession()) {
 			return;
 		}
 		session.services.invalidate();
@@ -242,7 +242,7 @@ export function createThreadState(
 
 	const conversation = createConversationDomain({
 		sessionId: session.sessionId,
-		hasSession: () => hasSession,
+		hasSession,
 		threadId,
 		startChat,
 		chatStreams: runtime.chatStreams,
@@ -290,7 +290,7 @@ export function createThreadState(
 		shouldIgnoreClosedStreamError,
 		onActivityStatusChange: applyLocalActivityStatus,
 		afterTurn: async () => {
-			if (!hasSession) {
+			if (!hasSession()) {
 				return;
 			}
 			await session.threads.refreshThread(threadId);
@@ -299,7 +299,7 @@ export function createThreadState(
 	});
 
 	$effect(() => {
-		if (hasSession) {
+		if (hasSession()) {
 			return;
 		}
 		retryScheduler.dispose();
@@ -589,7 +589,7 @@ export function createThreadState(
 					session.current?.threadStatus,
 					threadId,
 				) ||
-				(!hasSession &&
+				(!hasSession() &&
 					(isSessionTransitioningStatus(session.current?.sandboxStatus) ||
 						conversation.messages.some(
 							(message) => message.provisional === true,

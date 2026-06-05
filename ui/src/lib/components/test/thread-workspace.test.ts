@@ -115,13 +115,16 @@ test("thread context stops sandbox refreshes when a session is not ready", () =>
 
 	assert.match(
 		source,
-		/const refreshSessionState = async \(\) => \{\s*if \(!hasSession\) \{/,
+		/const refreshSessionState = async \(\) => \{\s*if \(!hasSession\(\)\) \{/,
 	);
 	assert.match(
 		source,
 		/retryScheduler\.dispose\(\);\s*conversation\.disconnect\(\);/,
 	);
-	assert.match(source, /afterTurn: async \(\) => \{\s*if \(!hasSession\) \{/);
+	assert.match(
+		source,
+		/afterTurn: async \(\) => \{\s*if \(!hasSession\(\)\) \{/,
+	);
 });
 
 test("active thread workspace keeps the stream live while inactive conversation nodes are unmounted", () => {

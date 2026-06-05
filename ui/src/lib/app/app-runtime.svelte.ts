@@ -920,10 +920,10 @@ export function releaseRuntimeThreadState(
 	thread: ThreadContextValue,
 ): void {
 	const sessionContext = sessionContexts.get(sessionId);
-	thread.dispose();
 	if (sessionContext?.threadContexts.get(thread.threadId) === thread) {
 		sessionContext.threadContexts.delete(thread.threadId);
 	}
+	thread.dispose();
 	syncRuntimeProjections();
 }
 

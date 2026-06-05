@@ -171,7 +171,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 	let resolvePendingLoad: (() => void) | null = null;
 	let rejectPendingLoad: ((error?: unknown) => void) | null = null;
 
-	const status = $derived.by(() => {
+	function getStatus() {
 		if (loadStatus === "loading") {
 			return "loading" as const;
 		}
@@ -182,11 +182,10 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			return "error" as const;
 		}
 		return "ready" as const;
-	});
-	const error = $derived.by(() => streamError);
-	const pendingQuestionState = $derived.by(() =>
-		getPendingQuestionState(messages, pendingQuestionId),
-	);
+	}
+	function getPendingQuestion() {
+		return getPendingQuestionState(messages, pendingQuestionId);
+	}
 
 	const handleCompletionStart = () => {
 		if (completionRunning) {
@@ -512,19 +511,19 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			return historyReplayVersion;
 		},
 		get status() {
-			return status;
+			return getStatus();
 		},
 		get isStreaming() {
 			return completionRunning;
 		},
 		get error() {
-			return error;
+			return streamError;
 		},
 		get hasPendingQuestion() {
-			return pendingQuestionState.hasPendingQuestion;
+			return getPendingQuestion().hasPendingQuestion;
 		},
 		get pendingQuestionId() {
-			return pendingQuestionState.pendingQuestionId;
+			return getPendingQuestion().pendingQuestionId;
 		},
 		reconcileThreadSnapshot,
 		connect: load,
@@ -566,7 +565,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 			const nextReasoning = reasoning ?? "";
 			const nextServiceTier = serviceTier ?? "";
 			const submittingWhileGenerating =
-				args.hasSession() && (completionRunning || status === "loading");
+				args.hasSession() && (completionRunning || getStatus() === "loading");
 			const shouldOptimisticallyInsert =
 				!submittingWhileGenerating && !runAfter;
 			const userMessage = hasMessageContent
@@ -611,7 +610,7 @@ export function createConversationDomain(args: CreateConversationDomainArgs) {
 				console.debug("[WS] Preparing chat submit", {
 					threadId: args.threadId,
 					sessionId: args.sessionId,
-					status,
+					status: getStatus(),
 					loadStatus,
 					fatalStreamError,
 					activeSubscriptionState: activeSubscription?.getState() ?? null,
