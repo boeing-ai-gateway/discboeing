@@ -129,6 +129,8 @@
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
 	let composerContainer = $state<HTMLDivElement | null>(null);
+	let hooksPanelContainer = $state<HTMLDivElement | null>(null);
+	let hooksControlContainer = $state<HTMLDivElement | null>(null);
 	let composerTextareaRef = $state<ConversationComposerTextareaHandle | null>(
 		null,
 	);
@@ -565,6 +567,26 @@
 		composerTextareaRef?.focus();
 	}
 
+	function handleDocumentPointerDown(event: PointerEvent) {
+		if (!sessionView.hooksExpanded) {
+			return;
+		}
+
+		const target = event.target;
+		if (!(target instanceof Node)) {
+			return;
+		}
+
+		if (
+			hooksPanelContainer?.contains(target) ||
+			hooksControlContainer?.contains(target)
+		) {
+			return;
+		}
+
+		sessionView.hooksExpanded = false;
+	}
+
 	onMount(() => {
 		void focusComposerTextarea();
 		void loadSandboxProviders();
@@ -575,10 +597,16 @@
 			sandboxProvidersUpdatedEvent,
 			handleSandboxProvidersUpdated,
 		);
+		document.addEventListener("pointerdown", handleDocumentPointerDown, true);
 		return () => {
 			window.removeEventListener(
 				sandboxProvidersUpdatedEvent,
 				handleSandboxProvidersUpdated,
+			);
+			document.removeEventListener(
+				"pointerdown",
+				handleDocumentPointerDown,
+				true,
 			);
 		};
 	});
@@ -852,20 +880,22 @@
 				onUpdate={handleUpdateQueuedPrompt}
 			/>
 
-			<ConversationHooksPanel
-				{session}
-				expanded={sessionView.hooksExpanded}
-				{hooksStatus}
-				outputById={hookOutputById}
-				onRerunHook={(hookId) => rerunHook(session.sessionId, hookId)}
-				onSetExecutionPaused={(paused) => {
-					void setHooksPaused(session.sessionId, paused);
-					sessionView.hooksExpanded = false;
-				}}
-				onSetHookExecutionPaused={(hookId, paused) => {
-					void setHookPaused(session.sessionId, hookId, paused);
-				}}
-			/>
+			<div bind:this={hooksPanelContainer}>
+				<ConversationHooksPanel
+					{session}
+					expanded={sessionView.hooksExpanded}
+					{hooksStatus}
+					outputById={hookOutputById}
+					onRerunHook={(hookId) => rerunHook(session.sessionId, hookId)}
+					onSetExecutionPaused={(paused) => {
+						void setHooksPaused(session.sessionId, paused);
+						sessionView.hooksExpanded = false;
+					}}
+					onSetHookExecutionPaused={(hookId, paused) => {
+						void setHookPaused(session.sessionId, hookId, paused);
+					}}
+				/>
+			</div>
 		{/if}
 
 		{#if session.isPending || session.current?.sandboxStatus !== "ready"}
@@ -1076,11 +1106,13 @@
 									/>
 								</div>
 							{:else if !session.isPending}
-								<ConversationComposerHooksControl
-									bind:expanded={sessionView.hooksExpanded}
-									{hooksStatus}
-									threadPhase={session.threads.selected?.phase ?? ""}
-								/>
+								<div bind:this={hooksControlContainer}>
+									<ConversationComposerHooksControl
+										bind:expanded={sessionView.hooksExpanded}
+										{hooksStatus}
+										threadPhase={session.threads.selected?.phase ?? ""}
+									/>
+								</div>
 							{/if}
 							<Popover bind:open={schedulePopoverOpen}>
 								<PopoverTrigger>
