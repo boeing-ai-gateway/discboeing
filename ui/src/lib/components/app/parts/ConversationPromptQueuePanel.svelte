@@ -1,8 +1,6 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
 	import CheckIcon from "@lucide/svelte/icons/check";
-	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-	import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
 	import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 	import PencilIcon from "@lucide/svelte/icons/pencil";
 	import PauseIcon from "@lucide/svelte/icons/pause";
@@ -256,6 +254,24 @@
 		}
 	}
 
+	function handleReorderKeydown(
+		event: KeyboardEvent,
+		entry: QueuedPrompt,
+		index: number,
+	) {
+		if (event.key === "ArrowUp") {
+			event.preventDefault();
+			if (index > 0 && !savingById[entry.id]) {
+				void movePrompt(entry, index - 1);
+			}
+		} else if (event.key === "ArrowDown") {
+			event.preventDefault();
+			if (index < displayEntries.length - 1 && !savingById[entry.id]) {
+				void movePrompt(entry, index + 1);
+			}
+		}
+	}
+
 	async function movePrompt(entry: QueuedPrompt, position: number) {
 		setSaving(entry.id, true);
 		try {
@@ -280,12 +296,16 @@
 				<div
 					class="queued-prompt-row flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
 				>
-					<span
-						class="queued-prompt-drag-handle -ml-1 mt-0.5 flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
-						aria-hidden="true"
+					<button
+						type="button"
+						class="queued-prompt-drag-handle -ml-1 mt-0.5 flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+						aria-label={`Reorder queued prompt ${index + 1} of ${displayEntries.length}. Use arrow keys to move it.`}
+						title="Drag to reorder, or use arrow keys"
+						disabled={savingById[entry.id]}
+						onkeydown={(event) => handleReorderKeydown(event, entry, index)}
 					>
-						<GripVerticalIcon class="size-3.5" />
-					</span>
+						<GripVerticalIcon class="size-3.5" aria-hidden="true" />
+					</button>
 					<div class="min-w-0 flex-1">
 						{#if editingById[entry.id]}
 							<div class="space-y-2">
@@ -349,33 +369,6 @@
 						</div>
 					</div>
 					<div class="flex shrink-0 items-start gap-1">
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							class="shrink-0"
-							title="Move queued prompt up"
-							aria-label="Move queued prompt up"
-							disabled={savingById[entry.id] || index === 0}
-							onclick={() => {
-								void movePrompt(entry, index - 1);
-							}}
-						>
-							<ChevronUpIcon class="size-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							class="shrink-0"
-							title="Move queued prompt down"
-							aria-label="Move queued prompt down"
-							disabled={savingById[entry.id] ||
-								index === displayEntries.length - 1}
-							onclick={() => {
-								void movePrompt(entry, index + 1);
-							}}
-						>
-							<ChevronDownIcon class="size-3.5" />
-						</Button>
 						<Button
 							variant="ghost"
 							size="icon-sm"
