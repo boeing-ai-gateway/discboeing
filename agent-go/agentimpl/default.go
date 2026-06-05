@@ -273,7 +273,7 @@ func (a *DefaultAgent) promptStream(
 	toolCtx.CurrentTaskID = req.ParentTaskID
 	toolCtx.ResolveTools = func(ctx context.Context) ([]providers.ToolDefinition, error) {
 		tools := resolvePromptTools(req, env.sessionCfg, env.subAgentCfg, env.currentDepth)
-		if hasReviewPhaseHooks(a.cwd) {
+		if shouldExposeReadyForReview(req, env.threadCfg) && hasReviewPhaseHooks(a.cwd) {
 			tools = appendToolIfMissing(tools, "ReadyForReview")
 		}
 		mcpMgr := a.resolveMCPManager(ctx)
@@ -495,6 +495,12 @@ func hasReviewPhaseHooks(cwd string) bool {
 		}
 	}
 	return false
+}
+
+func shouldExposeReadyForReview(req agent.PromptRequest, cfg thread.Config) bool {
+	return strings.TrimSpace(req.ParentTaskID) == "" &&
+		req.SubagentDepth == 0 &&
+		strings.TrimSpace(cfg.Metadata.ParentThreadID) == ""
 }
 
 func appendToolIfMissing(tools []providers.ToolDefinition, name string) []providers.ToolDefinition {
