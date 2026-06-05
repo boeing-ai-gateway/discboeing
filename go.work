@@ -5,5 +5,4 @@ use (
 	./agent-go
 	./controlsocket
 	./modelsdev
-	./discobot
 )

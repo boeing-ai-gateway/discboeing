@@ -344,6 +344,4 @@ tool (
 
 replace github.com/obot-platform/discobot/controlsocket => ./controlsocket
 
-replace github.com/obot-platform/discobot/discobot => ./discobot
-
 replace github.com/obot-platform/discobot/agent-go => ./agent-go
