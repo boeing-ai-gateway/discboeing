@@ -30,6 +30,7 @@
 	type Props = {
 		draft: string;
 		disabled?: boolean;
+		expanded?: boolean;
 		onDraftChange: (value: string) => void;
 		sessionId: string | null;
 		commands: AgentCommand[];
@@ -53,6 +54,7 @@
 	let {
 		draft,
 		disabled = false,
+		expanded = false,
 		onDraftChange,
 		sessionId,
 		commands,
@@ -242,7 +244,9 @@
 <InputGroupTextarea
 	bind:ref={fileMentionTextareaRef}
 	rows={2}
-	class="field-sizing-content max-h-48 min-h-16 transition-all"
+	class={expanded
+		? "min-h-0 flex-1 pr-12 transition-all"
+		: "field-sizing-content max-h-48 min-h-16 pr-12 transition-all"}
 	value={draft}
 	{disabled}
 	placeholder="Type a message, @file, /command, or ↑ for history"

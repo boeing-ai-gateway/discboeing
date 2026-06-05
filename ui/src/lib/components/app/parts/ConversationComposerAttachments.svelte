@@ -15,7 +15,7 @@
 {#if files.length > 0}
 	<InputGroupAddon
 		align="block-start"
-		class="w-full flex-wrap gap-1 border-b border-border px-3 pb-2 pt-3"
+		class="w-full flex-wrap gap-1 border-b border-border px-3 pb-2 pr-12 pt-3"
 	>
 		{#each files as file (file.id)}
 			<div

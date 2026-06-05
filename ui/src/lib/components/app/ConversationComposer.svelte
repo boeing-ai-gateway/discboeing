@@ -1,5 +1,7 @@
 <script lang="ts">
 	import ClockIcon from "@lucide/svelte/icons/clock";
+	import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
+	import Minimize2Icon from "@lucide/svelte/icons/minimize-2";
 	import XIcon from "@lucide/svelte/icons/x";
 	import { onDestroy, onMount, tick } from "svelte";
 	import { api } from "$lib/api-client";
@@ -151,6 +153,7 @@
 	let fileMentionSuggestions = $state<FileMentionItem[]>([]);
 	let fileMentionLoading = $state(false);
 	let fileMentionRequestSequence = 0;
+	let composerExpanded = $state(false);
 
 	function handleFileMentionQueryChange(query: string, open: boolean) {
 		fileMentionQuery = query;
@@ -587,6 +590,11 @@
 		sessionView.hooksExpanded = false;
 	}
 
+	async function toggleComposerExpanded() {
+		composerExpanded = !composerExpanded;
+		await focusComposerTextarea();
+	}
+
 	onMount(() => {
 		void focusComposerTextarea();
 		void loadSandboxProviders();
@@ -869,9 +877,14 @@
 	}
 </script>
 
-<div bind:this={composerContainer} class="shrink-0 bg-background p-0 md:p-3">
+<div
+	bind:this={composerContainer}
+	class={composerExpanded
+		? "fixed inset-0 z-50 flex min-h-0 flex-col bg-background p-3 md:p-6"
+		: "shrink-0 bg-background p-0 md:p-3"}
+>
 	<div
-		class={`w-full ${preferences.chatWidthMode === "constrained" ? "md:mx-auto md:max-w-3xl" : ""}`}
+		class={`w-full ${composerExpanded ? "flex min-h-0 flex-1 flex-col" : preferences.chatWidthMode === "constrained" ? "md:mx-auto md:max-w-3xl" : ""}`}
 	>
 		{#if !session.isPending}
 			<ConversationPromptQueuePanel
@@ -999,18 +1012,46 @@
 			</div>
 		{/if}
 
-		<div class="relative">
+		<div
+			class={composerExpanded
+				? "relative flex min-h-0 flex-1 flex-col"
+				: "relative"}
+		>
 			<form
+				class={composerExpanded ? "flex min-h-0 flex-1 flex-col" : undefined}
 				onsubmit={(event) => {
 					event.preventDefault();
 					void submitComposer();
 				}}
 			>
 				<InputGroup
-					class={hasAttachedComposerPanel
-						? "rounded-t-none rounded-b-md"
-						: "rounded-t-md rounded-b-none md:rounded-md"}
+					class={`${composerExpanded ? "min-h-0 flex-1 items-stretch has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0" : ""} ${
+						hasAttachedComposerPanel
+							? "rounded-t-none rounded-b-md"
+							: "rounded-t-md rounded-b-none md:rounded-md"
+					} group/composer`}
 				>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						class={`desktop-no-drag absolute top-2 right-2 z-10 text-muted-foreground hover:text-foreground ${
+							composerExpanded
+								? ""
+								: "transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/composer:opacity-100 focus-visible:opacity-100"
+						}`}
+						aria-label={composerExpanded
+							? "Restore composer"
+							: "Maximize composer"}
+						title={composerExpanded ? "Restore composer" : "Maximize composer"}
+						onclick={toggleComposerExpanded}
+					>
+						{#if composerExpanded}
+							<Minimize2Icon class="size-4" />
+						{:else}
+							<Maximize2Icon class="size-4" />
+						{/if}
+					</Button>
 					<ConversationComposerAttachments
 						files={attachmentFiles}
 						onRemove={removeAttachment}
@@ -1020,6 +1061,7 @@
 						bind:this={composerTextareaRef}
 						draft={composerDraft}
 						disabled={composerDisabled}
+						expanded={composerExpanded}
 						onDraftChange={(v) => setComposerDraft(session.sessionId, v)}
 						sessionId={session.isPending ? null : session.sessionId}
 						commands={availableCommands}
@@ -1041,109 +1083,111 @@
 						onSubmit={handleComposerSubmit}
 					/>
 
-					<InputGroupAddon align="block-end" class="justify-between gap-1">
-						<div
-							class="desktop-no-drag flex min-w-0 flex-1 flex-wrap items-center gap-1"
-						>
-							<ConversationComposerAttachmentButton
-								onFilesAdd={addFiles}
-								disabled={composerDisabled}
-							/>
-							{#if !session.isPending}
-								<ConversationCredentialsControl {session} />
-							{/if}
-							<div class="flex min-w-0 items-center gap-0">
-								<ConversationComposerModelControl
-									value={thread.nextModelId !== undefined
-										? thread.nextModelId
-										: thread.modelId}
-									onSelect={handleModelSelect}
-									models={models.items}
+					{#if !composerExpanded}
+						<InputGroupAddon align="block-end" class="justify-between gap-1">
+							<div
+								class="desktop-no-drag flex min-w-0 flex-1 flex-wrap items-center gap-1"
+							>
+								<ConversationComposerAttachmentButton
+									onFilesAdd={addFiles}
+									disabled={composerDisabled}
 								/>
-								{#if selectedModel?.reasoning}
-									<ConversationComposerReasoningControl
-										value={effectiveReasoning}
-										defaultValue={selectedModel.defaultReasoning}
-										levels={reasoningLevels}
-										onSelect={handleReasoningSelect}
-									/>
+								{#if !session.isPending}
+									<ConversationCredentialsControl {session} />
 								{/if}
-								{#if serviceTiers.length > 0}
-									<ConversationComposerServiceTierControl
-										value={effectiveServiceTier}
-										tiers={serviceTiers}
-										onSelect={handleServiceTierSelect}
+								<div class="flex min-w-0 items-center gap-0">
+									<ConversationComposerModelControl
+										value={thread.nextModelId !== undefined
+											? thread.nextModelId
+											: thread.modelId}
+										onSelect={handleModelSelect}
+										models={models.items}
 									/>
-								{/if}
-								<ConversationComposerTokenUsage
-									usage={thread.thread?.tokenUsage}
-									onLoadDetails={loadTokenUsageDetails}
-								/>
-							</div>
-						</div>
-
-						<div
-							class="desktop-no-drag ml-auto flex items-center justify-end gap-2"
-						>
-							{#if showPendingWorkspaceSelector}
-								<div class="hidden items-center gap-2 md:flex">
-									{#if selectableSandboxProviders.length > 0}
-										<ConversationComposerProvidersControl
-											id="pending-sandbox-provider"
-											bind:open={sandboxProviderDesktopSelectOpen}
-											value={sandboxProviderSelectValue}
-											providers={selectableSandboxProviders}
-											defaultProviderId={sandboxDefaultProviderId}
-											selectedProvider={selectedSandboxProvider}
-											selectedProviderTitle={selectedSandboxProviderTitle}
-											onSelect={handleSandboxProviderSelect}
-											onManageClick={handleManageSandboxProvidersClick}
+									{#if selectedModel?.reasoning}
+										<ConversationComposerReasoningControl
+											value={effectiveReasoning}
+											defaultValue={selectedModel.defaultReasoning}
+											levels={reasoningLevels}
+											onSelect={handleReasoningSelect}
 										/>
 									{/if}
-									<ConversationWorkspaceSelector
-										{session}
-										bind:this={sessionSetupRef}
+									{#if serviceTiers.length > 0}
+										<ConversationComposerServiceTierControl
+											value={effectiveServiceTier}
+											tiers={serviceTiers}
+											onSelect={handleServiceTierSelect}
+										/>
+									{/if}
+									<ConversationComposerTokenUsage
+										usage={thread.thread?.tokenUsage}
+										onLoadDetails={loadTokenUsageDetails}
 									/>
 								</div>
-							{:else if !session.isPending}
-								<div bind:this={hooksControlContainer}>
-									<ConversationComposerHooksControl
-										bind:expanded={sessionView.hooksExpanded}
-										{hooksStatus}
-										threadPhase={session.threads.selected?.phase ?? ""}
-									/>
-								</div>
-							{/if}
-							<Popover bind:open={schedulePopoverOpen}>
-								<PopoverTrigger>
-									<Button
-										variant={scheduledRunAfter ? "default" : "ghost"}
-										size="icon-sm"
-										title={scheduledSubmitLabel ?? "Schedule prompt"}
-										aria-label={scheduledSubmitLabel ?? "Schedule prompt"}
-										disabled={composerDisabled ||
-											(session.isPending ? sessionSetupDisabled : false)}
-									>
-										<ClockIcon class="size-4" />
-									</Button>
-								</PopoverTrigger>
-								<PopoverContent align="end" class="w-72 p-3">
-									<ConversationPromptSchedulePicker
-										currentRunAfter={scheduledRunAfter ?? undefined}
-										onSelect={handleScheduledRunAfterSelect}
-									/>
-								</PopoverContent>
-							</Popover>
-							<ConversationComposerSubmitButton
-								status={submitStatus}
-								inputEmpty={inputEmpty()}
-								isPending={session.isPending}
-								disabled={composerDisabled ||
-									(session.isPending ? sessionSetupDisabled : false)}
-								onPress={handleComposerSubmit}
-							/>
-						</div></InputGroupAddon
-					>
+							</div>
+
+							<div
+								class="desktop-no-drag ml-auto flex items-center justify-end gap-2"
+							>
+								{#if showPendingWorkspaceSelector}
+									<div class="hidden items-center gap-2 md:flex">
+										{#if selectableSandboxProviders.length > 0}
+											<ConversationComposerProvidersControl
+												id="pending-sandbox-provider"
+												bind:open={sandboxProviderDesktopSelectOpen}
+												value={sandboxProviderSelectValue}
+												providers={selectableSandboxProviders}
+												defaultProviderId={sandboxDefaultProviderId}
+												selectedProvider={selectedSandboxProvider}
+												selectedProviderTitle={selectedSandboxProviderTitle}
+												onSelect={handleSandboxProviderSelect}
+												onManageClick={handleManageSandboxProvidersClick}
+											/>
+										{/if}
+										<ConversationWorkspaceSelector
+											{session}
+											bind:this={sessionSetupRef}
+										/>
+									</div>
+								{:else if !session.isPending}
+									<div bind:this={hooksControlContainer}>
+										<ConversationComposerHooksControl
+											bind:expanded={sessionView.hooksExpanded}
+											{hooksStatus}
+											threadPhase={session.threads.selected?.phase ?? ""}
+										/>
+									</div>
+								{/if}
+								<Popover bind:open={schedulePopoverOpen}>
+									<PopoverTrigger>
+										<Button
+											variant={scheduledRunAfter ? "default" : "ghost"}
+											size="icon-sm"
+											title={scheduledSubmitLabel ?? "Schedule prompt"}
+											aria-label={scheduledSubmitLabel ?? "Schedule prompt"}
+											disabled={composerDisabled ||
+												(session.isPending ? sessionSetupDisabled : false)}
+										>
+											<ClockIcon class="size-4" />
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent align="end" class="w-72 p-3">
+										<ConversationPromptSchedulePicker
+											currentRunAfter={scheduledRunAfter ?? undefined}
+											onSelect={handleScheduledRunAfterSelect}
+										/>
+									</PopoverContent>
+								</Popover>
+								<ConversationComposerSubmitButton
+									status={submitStatus}
+									inputEmpty={inputEmpty()}
+									isPending={session.isPending}
+									disabled={composerDisabled ||
+										(session.isPending ? sessionSetupDisabled : false)}
+									onPress={handleComposerSubmit}
+								/>
+							</div>
+						</InputGroupAddon>
+					{/if}
 				</InputGroup>
 			</form>
 		</div>
