@@ -253,10 +253,17 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	streamCtx, stopStream := context.WithCancel(r.Context())
 	var writeMu sync.Mutex
 	writeEvent := func(id, event string, data []byte) {
+		if streamCtx.Err() != nil {
+			return
+		}
 		writeMu.Lock()
 		defer writeMu.Unlock()
+		if streamCtx.Err() != nil {
+			return
+		}
 		writeSSEEvent(w, id, event, data)
 		flusher.Flush()
 	}
@@ -268,7 +275,12 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	ephemeralCh, unsubscribeEphemeral := h.conversations.SubscribeEphemeral()
-	defer unsubscribeEphemeral()
+	var ephemeralWG sync.WaitGroup
+	defer func() {
+		stopStream()
+		unsubscribeEphemeral()
+		ephemeralWG.Wait()
+	}()
 
 	currentCompletionID := ""
 	lastSeenCompletionID := ""
@@ -324,10 +336,10 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		lastSeenCompletionID = snapshot.CompletionID
 	}
 
-	go func() {
+	ephemeralWG.Go(func() {
 		for {
 			select {
-			case <-r.Context().Done():
+			case <-streamCtx.Done():
 				return
 			case chunk := <-ephemeralCh:
 				if chunk == nil {
@@ -338,10 +350,13 @@ func (h *Handler) ChatStream(w http.ResponseWriter, r *http.Request) {
 					log.Printf("chat stream: failed to marshal ephemeral chunk: %v", err)
 					continue
 				}
+				if streamCtx.Err() != nil {
+					return
+				}
 				writeEvent("", "chunk", data)
 			}
 		}
-	}()
+	})
 
 	for {
 		if currentCompletionID == "" {
