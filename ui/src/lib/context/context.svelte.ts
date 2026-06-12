@@ -5,6 +5,7 @@ import {
 import { MediaQuery } from "svelte/reactivity";
 
 import { createCommands } from "$lib/context/commands";
+import { syncRecentThreads } from "$lib/context/domains/recent-threads";
 import type { Bootstrap, Context } from "$lib/context/context.types";
 import {
 	createInitialDataState,
@@ -33,6 +34,10 @@ export function createContext(bootstrap: Bootstrap = {}): Context {
 	$effect.root(() => {
 		$effect(() => {
 			context.view.app.environment.isMobile = mobileQuery.current;
+		});
+
+		$effect(() => {
+			syncRecentThreads(context);
 		});
 	});
 
