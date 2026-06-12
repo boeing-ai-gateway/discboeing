@@ -826,7 +826,7 @@
 					/>
 				</label>
 			{/if}
-			{#if dropdownMode && onPinSidebar}
+			{#if (dropdownMode || floatingMode) && onPinSidebar}
 				<Button
 					variant="ghost"
 					size="icon-xs"

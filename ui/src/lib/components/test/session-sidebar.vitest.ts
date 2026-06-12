@@ -246,7 +246,10 @@ test("session sidebar supports dropdown reuse and closes after creating a sessio
 	assert.match(source, /function handleStartNewSession\(\)/);
 	assert.match(source, /onclick=\{handleStartNewSession\}/);
 	assert.match(source, /import PinIcon from "@lucide\/svelte\/icons\/pin"/);
-	assert.match(source, /\{#if dropdownMode && onPinSidebar\}/);
+	assert.match(
+		source,
+		/\{#if \(dropdownMode \|\| floatingMode\) && onPinSidebar\}/,
+	);
 	assert.match(source, /onclick=\{onPinSidebar\}/);
 	assert.match(source, /aria-label="Pin sessions sidebar"/);
 	assert.match(
