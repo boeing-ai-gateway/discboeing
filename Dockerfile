@@ -120,6 +120,8 @@ ENV container=docker
 # socat is needed for vsock forwarding in VZ VMs
 # nodejs is needed for JavaScript CLIs and pnpm
 # pnpm is needed for package management
+# direnv is needed for project-local environment activation
+# xz-utils is needed to unpack the Nix binary tarball
 # docker.io provides dockerd daemon and docker CLI (runs inside container with privileged mode)
 # docker-buildx is needed for multi-arch builds and advanced build features
 # docker-compose-v2 provides the Docker Compose v2 CLI plugin
@@ -130,6 +132,7 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     ca-certificates \
     curl \
     dbus \
+    direnv \
     docker-buildx \
     docker-compose-v2 \
     docker.io \
@@ -157,6 +160,7 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     systemd-sysv \
     unzip \
     vim \
+    xz-utils \
     && curl -fsSL https://deb.nodesource.com/setup_25.x | bash - \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true \
     && mkdir -p /etc/apt/keyrings \
@@ -192,13 +196,54 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
 
 # Create discobot user (UID 1000)
 # Handle case where UID 1000 might already be taken by another user
-# Pre-create /nix so discobot can perform a single-user Nix install without root.
 RUN (useradd -m -s /bin/bash -u 1000 discobot 2>/dev/null \
     || (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discobot) \
     || useradd -m -s /bin/bash discobot) \
-    && usermod -aG systemd-journal discobot \
-    && mkdir -m 0755 /nix \
-    && chown discobot:discobot /nix
+    && usermod -aG systemd-journal discobot
+
+# Install Nix in multi-user mode. The installer cannot start systemd during
+# image builds, so copy the generated units explicitly. The installed /nix tree
+# is staged outside /nix so a runtime /nix cache mount can be populated from it.
+RUN curl -fsSL https://nixos.org/nix/install | sh -s -- --daemon --yes --no-channel-add \
+    && install -D -m 0644 /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service /etc/systemd/system/nix-daemon.service \
+    && install -D -m 0644 /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.socket /etc/systemd/system/nix-daemon.socket \
+    && install -D -m 0644 /nix/var/nix/profiles/default/lib/tmpfiles.d/nix-daemon.conf /etc/tmpfiles.d/nix-daemon.conf \
+    && mv /nix /nix.staging \
+    && mkdir -m 0755 /nix
+
+RUN cat > /usr/local/bin/restore-nix-staging <<'EOF' \
+    && chmod 755 /usr/local/bin/restore-nix-staging
+#!/bin/sh
+set -eu
+
+if [ -x /nix/var/nix/profiles/default/bin/nix-daemon ] && [ -d /nix/store ]; then
+    exit 0
+fi
+
+if [ ! -d /nix.staging ]; then
+    echo "Nix staging directory not found at /nix.staging" >&2
+    exit 1
+fi
+
+mkdir -p /nix
+
+unexpected=$(find /nix -mindepth 1 \
+    ! -path /nix/var \
+    ! -path /nix/var/nix \
+    ! -path /nix/var/nix/daemon-socket \
+    ! -path '/nix/var/nix/daemon-socket/*' \
+    ! -path /nix/var/nix/builds \
+    ! -path '/nix/var/nix/builds/*' \
+    -print -quit)
+if [ -n "$unexpected" ]; then
+    echo "/nix is not empty and does not contain a valid Nix installation" >&2
+    echo "unexpected path: $unexpected" >&2
+    exit 1
+fi
+
+echo "Restoring Nix installation from /nix.staging to /nix"
+(cd /nix.staging && tar cpf - .) | (cd /nix && tar xpf -)
+EOF
 
 # Install the Discobot sudo gate. The real sudo binary is kept in a
 # root-only path; /usr/bin/sudo becomes a setuid Discobot gate that calls the
@@ -245,14 +290,15 @@ RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
 RUN mkdir -p /.data /.workspace /opt/discobot/bin /opt/discobot/scripts \
     && chown discobot:discobot /.data /opt/discobot/scripts
 
-# Add discobot binaries, user-local bin, and npm global bin to PATH
+# Add discobot binaries, Nix, user-local bin, and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
 # Set PNPM_HOME to use persistent storage for pnpm cache/store
 # Add Rust cargo bin for rustc and cargo
 # Claude CLI is installed to /usr/local/bin (already in default PATH)
 ENV NPM_CONFIG_PREFIX="/home/discobot/.npm-global"
 ENV PNPM_HOME="/.data/pnpm"
-ENV PATH="/home/discobot/.cargo/bin:/usr/local/go/bin:/home/discobot/.local/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
+ENV NIX_REMOTE=daemon
+ENV PATH="/home/discobot/.cargo/bin:/nix/var/nix/profiles/default/bin:/usr/local/go/bin:/home/discobot/.local/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
 ENV WORKSPACE_PATH=/home/discobot/workspace
 
 WORKDIR /home/discobot
@@ -417,6 +463,9 @@ FROM runtime-base AS runtime-shell
 
 COPY --from=runtime-overlay / /
 
+RUN ! grep -R /opt/discobot/bin/restore-nix-staging /etc/systemd/system \
+    && grep -R /usr/local/bin/restore-nix-staging /etc/systemd/system
+
 # Configure systemd for container environment
 # Disable docker.service so it only starts via docker.socket activation
 # (the Ubuntu docker.io package preset enables it by default)
@@ -426,6 +475,9 @@ RUN configure-container-systemd shell
 FROM runtime-gui-base AS runtime
 
 COPY --from=runtime-overlay / /
+
+RUN ! grep -R /opt/discobot/bin/restore-nix-staging /etc/systemd/system \
+    && grep -R /usr/local/bin/restore-nix-staging /etc/systemd/system
 
 # Configure systemd for container environment
 # Disable docker.service so it only starts via docker.socket activation

@@ -6,7 +6,7 @@ mode="${1:-shell}"
 ln -sf /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco
 
 mask_units="console-getty.service getty@.service serial-getty@.service"
-enable_units="tmp.mount discobot-sandbox-init.service discobot-proxy.service docker.socket discobot-agent-api.service discobot-vscode.socket"
+enable_units="tmp.mount discobot-sandbox-init.service discobot-proxy.service docker.socket discobot-nix-restore.service nix-daemon.socket discobot-agent-api.service discobot-vscode.socket"
 
 case "${mode}" in
     shell)
